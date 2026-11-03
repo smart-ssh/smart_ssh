@@ -189,6 +189,12 @@ pub(crate) enum RawEvent {
     ContextLimitError,
 }
 
+impl From<AiEvent> for RawEvent {
+    fn from(event: AiEvent) -> Self {
+        RawEvent::Public(event)
+    }
+}
+
 pub(crate) fn to_raw_stream(
     inner: Pin<Box<dyn Stream<Item = AiEvent> + Send>>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
@@ -204,21 +210,16 @@ pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = Raw
 }
 
 use crate::action::{parameters_json_schema, tool_call_event};
+use crate::common::frame_loop::{self, FrameHandler};
+use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
 use crate::common::prompt_format::{message_content_text, role_str};
-use crate::error::{
-    error_stream, map_http_response, map_stream_error_object, map_transport_error,
-    provider_request_id, timeout_error, ProviderErrorInfo,
-};
+use crate::error::{error_stream, map_stream_error_object, provider_request_id, ProviderErrorInfo};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
-    log_provider_error_response_with_id, log_provider_transport_error, log_stop_reason,
-    log_tool_call_fragment,
+    log_provider_transport_error, log_stop_reason, log_tool_call_fragment,
 };
-use crate::sse::{
-    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
-    SSE_INACTIVITY_TIMEOUT,
-};
+use crate::sse::{build_http_client, SseFrame};
 use ssh_manager_core::ai::AiUsage;
 
 pub struct OpenAiCompatibleProvider {
@@ -453,159 +454,85 @@ pub(crate) async fn connect_and_stream(
         .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
         .collect();
 
-    // Diagnose "KI antwortet nicht" — s. identischer Kommentar in
-    // `crate::anthropic::connect_and_stream`.
-    tracing::debug!(
-        request_id = %request_id,
-        "AI request future started executing",
-    );
-    let retry_start = tokio::time::Instant::now();
-    let mut attempt: u32 = 0;
-    loop {
-        attempt += 1;
-        tracing::debug!(
-            request_id = %request_id,
-            attempt,
-            "about to send HTTP request to AI provider",
-        );
-        let mut req = client
-            .post(&url)
-            .bearer_auth(&api_key)
-            .header("accept", "text/event-stream");
-        for (name, value) in &extra_headers {
-            req = req.header(name, value);
-        }
-        let send = req.json(&body).send();
-        let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-            Ok(Ok(response)) => response,
-            Ok(Err(err)) => {
-                let mapped = map_transport_error(&err);
-                log_provider_transport_error(request_id, &mapped, &secrets);
-                return to_raw_stream(error_stream(mapped));
-            }
-            // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) — ohne
-            // dieses Limit würde ein hängender Verbindungsaufbau den
-            // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-            Err(_elapsed) => {
-                let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                log_provider_transport_error(request_id, &mapped, &secrets);
-                return to_raw_stream(error_stream(mapped));
-            }
-        };
-
-        // Spec 0051, Teil 1: s. identischer Kommentar in
-        // `crate::anthropic::connect_and_stream`.
-        let status = response.status();
-        let headers = response.headers().clone();
-        let provider_rid = provider_request_id(&headers);
-        if response.status().as_u16() == 429 {
-            let elapsed = retry_start.elapsed();
-            let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
-            let delay = crate::retry::retry_delay(response.headers(), attempt);
-            // Spec-Reviewer-Fund: s. identischer Kommentar in
-            // `crate::anthropic::connect_and_stream`.
-            if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt hängen"
-                // (2026-09) + spec-reviewer-Fund (Review dieses Schritts):
-                // s. identischer Kommentar in
-                // `crate::anthropic::connect_and_stream`.
-                let text =
-                    crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
-                        .await;
-                // Issue #599: a 429 that is really an exhausted quota is a
-                // billing problem — never retried.
-                if ProviderErrorInfo::from_body(&text).is_quota_exhausted() {
-                    let mapped = map_http_response(status, &headers, &text);
-                    log_provider_error_response_with_id(
-                        request_id,
-                        provider_rid.as_deref(),
-                        status.as_u16(),
-                        &text,
-                        &mapped,
-                        &secrets,
-                    );
-                    return to_raw_stream(error_stream(mapped));
+    // One shared attempt loop (issue #851), see `common::http_retry`.
+    let response = loop {
+        let outcome = send_with_retry(
+            || {
+                let mut req = client
+                    .post(&url)
+                    .bearer_auth(&api_key)
+                    .header("accept", "text/event-stream");
+                for (name, value) in &extra_headers {
+                    req = req.header(name, value);
                 }
-                crate::request_logging::log_provider_rate_limited_retry(
-                    request_id, attempt, &text, delay, &secrets,
-                );
-                tokio::time::sleep(delay).await;
-                continue;
-            }
-        }
-
-        if !response.status().is_success() {
-            // s. Kommentar beim 429-Retry-Zweig oben.
-            let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-            let mapped = map_http_response(status, &headers, &text);
-            // Issue #609: an endpoint answering 400 while `stream_options`
-            // is on the request is retried once without it — nothing else in
-            // the request changes. Remembered only once the retry succeeds.
-            if status.as_u16() == 400
-                && body.get("stream_options").is_some()
-                && !matches!(mapped, AiError::ModelNotFound(_))
-                && !is_context_length_error(&text)
-                && !text.to_lowercase().contains("context")
-            {
-                tracing::info!(
-                    request_id = %request_id,
-                    "endpoint rejected stream_options; retrying once without usage reporting",
-                );
-                body.as_object_mut().map(|o| o.remove("stream_options"));
-                dropped_stream_options = true;
-                continue;
-            }
-            // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-            // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-            // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-            // Spec 0087, A1.6: der ursprüngliche 400-Körper wird über
-            // denselben redigierenden Logpfad geloggt wie jeder andere
-            // Providerfehler — auch dann, wenn der Zweig unten
-            // `ContextLimitError` statt `error_stream(mapped)` zurückgibt.
-            log_provider_error_response_with_id(
+                req.json(&body)
+            },
+            SendLoopParams {
                 request_id,
-                provider_rid.as_deref(),
-                status.as_u16(),
-                &text,
-                &mapped,
-                &secrets,
+                secrets: &secrets,
+                on_headers: None,
+            },
+        )
+        .await;
+        let rejected = match outcome {
+            Ok(SendOutcome::Success(response)) => break response,
+            Ok(SendOutcome::Rejected(rejected)) => rejected,
+            Err(mapped) => return to_raw_stream(error_stream(mapped)),
+        };
+        let status = rejected.status;
+        let text = &rejected.text;
+        let mapped = rejected.map();
+        // Issue #609: an endpoint answering 400 while `stream_options` is on
+        // the request is retried once without it — nothing else in the
+        // request changes. Remembered only once the retry succeeds.
+        if status.as_u16() == 400
+            && body.get("stream_options").is_some()
+            && !matches!(mapped, AiError::ModelNotFound(_))
+            && !is_context_length_error(text)
+            && !text.to_lowercase().contains("context")
+        {
+            tracing::info!(
+                request_id = %request_id,
+                "endpoint rejected stream_options; retrying once without usage reporting",
             );
-            // Spec 0087, A1.1: ein 400, der NICHT schon als „Modell nicht
-            // gefunden" erkannt wurde (`mapped` bliebe dann `ModelNotFound`,
-            // s. T4), und dessen Körper einen der Kontextgrenzen-Marker
-            // enthält — nur für diesen Provider (T11b: die geteilte
-            // `map_http_status` bleibt unverändert, Anthropic ist nicht
-            // betroffen). Andere Statuscodes (T5) bleiben unverändert
-            // `ProviderUnavailable`.
-            if status.as_u16() == 400
-                && matches!(
-                    mapped,
-                    AiError::ProviderUnavailable(_)
-                        | AiError::RejectedRequest(_)
-                        | AiError::ContextTooLarge
-                )
-                && is_context_length_error(&text)
-            {
-                return raw_event_stream(RawEvent::ContextLimitError);
-            }
-            return to_raw_stream(error_stream(mapped));
+            body.as_object_mut().map(|o| o.remove("stream_options"));
+            dropped_stream_options = true;
+            continue;
         }
+        // Spec 0049, Fund 2 / Spec 0087, A1.6: logged here, also when the
+        // branch below returns `ContextLimitError` instead of an error stream.
+        rejected.log(request_id, &mapped, &secrets);
+        // Spec 0087, A1.1: a 400 not already recognised as "model not found"
+        // whose body carries a context-length marker (this provider only).
+        if status.as_u16() == 400
+            && matches!(
+                mapped,
+                AiError::ProviderUnavailable(_)
+                    | AiError::RejectedRequest(_)
+                    | AiError::ContextTooLarge
+            )
+            && is_context_length_error(text)
+        {
+            return raw_event_stream(RawEvent::ContextLimitError);
+        }
+        return to_raw_stream(error_stream(mapped));
+    };
 
-        if dropped_stream_options {
-            no_stream_options_urls()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(stream_options_key.clone());
-        }
-        return parse(
-            response,
-            native_tool_calling,
-            request_id,
-            api_key,
-            extra_headers,
-            provider_rid,
-        );
+    if dropped_stream_options {
+        no_stream_options_urls()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(stream_options_key.clone());
     }
+    let provider_rid = provider_request_id(response.headers());
+    parse(
+        response,
+        native_tool_calling,
+        request_id,
+        api_key,
+        extra_headers,
+        provider_rid,
+    )
 }
 
 /// Spec 0087, A1.4: je Aufruf von `send()` läuft höchstens EINER der beiden
@@ -705,7 +632,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             retry_used: RetryKind::None,
             inner: None,
             finished: false,
-            parse: event_stream_from_response,
+            parse: parse_sse_response,
         };
         retry_stream_with_overload("openai_compatible", &self.model, &self.last_request, state)
     }
@@ -893,9 +820,6 @@ pub(crate) struct ToolCallAccumulator {
 }
 
 pub(crate) struct OpenAiStreamState {
-    /// Issue #694: restarted only by real content frames.
-    pub(crate) content_deadline: tokio::time::Instant,
-    pub(crate) frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     pub(crate) tool_calls: BTreeMap<u64, ToolCallAccumulator>,
     pub(crate) fallback_text: String,
     /// Spec 0049, Fund 2: API-Key + jeder `extra_headers`-Wert, für die
@@ -1215,7 +1139,7 @@ impl OpenAiStreamState {
     }
 }
 
-fn event_stream_from_response(
+fn parse_sse_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
@@ -1223,106 +1147,103 @@ fn event_stream_from_response(
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    process_frame_stream(
-        Box::pin(sse_frame_stream(response)),
-        native_tool_calling,
-        request_id,
-        api_key,
-        extra_headers,
-        provider_request_id,
+    frame_loop::event_stream_from_response(
+        response,
+        OpenAiStreamState::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
     )
 }
 
-/// Von `event_stream_from_response` losgelöst, damit sich das
-/// Inaktivitäts-Timeout-Verhalten (`SSE_INACTIVITY_TIMEOUT`) direkt mit
-/// einem synthetischen, nie liefernden `frames`-Stream testen lässt — ganz
-/// ohne echten HTTP-Request/Mock-Server.
-fn process_frame_stream(
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+/// Test entry: the shared frame loop over a synthetic `frames` stream.
+#[cfg(test)]
+fn frame_stream(
+    frames: frame_loop::FrameStream,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    let secrets: Vec<String> = std::iter::once(api_key)
-        .chain(extra_headers.into_iter().map(|(_, value)| value))
-        .collect();
-    let state = OpenAiStreamState {
-        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
+    frame_loop::process_frame_stream(
         frames,
-        tool_calls: BTreeMap::new(),
-        fallback_text: String::new(),
-        secrets,
-        text_delta_total_len: 0,
-        reasoning_delta_total_len: 0,
-        native_tool_calling,
-        pending: VecDeque::new(),
-        finished: false,
-        request_id,
-        provider_request_id,
-        finish_reason: None,
-        usage: AiUsage::default(),
-    };
+        OpenAiStreamState::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
+    )
+}
 
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(event) = state.pending.pop_front() {
-                return Some((event, state));
-            }
-            if state.finished {
-                return None;
-            }
-            match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
-                Ok(Some(Ok(frame))) => {
-                    if frame_is_content(&frame) {
-                        state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
-                    }
-                    if frame.data.trim() == "[DONE]" {
-                        state.finished = true;
-                        let events = state.finalize(false);
-                        state.pending.extend(events);
-                        continue;
-                    }
-                    if let Ok(chunk) = serde_json::from_str::<Value>(&frame.data) {
-                        state.handle_chunk(&chunk);
-                    }
-                    // Nicht als JSON parsebare Frames werden ignoriert statt
-                    // den Stream mit einem Fehler abzubrechen — ein
-                    // einzelnes kaputtes Chunk soll nicht die ganze
-                    // Antwort unbrauchbar machen.
-                }
-                Ok(Some(Err(err))) => {
-                    let mapped = map_transport_error(&err);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-                Ok(None) => {
-                    state.finished = true;
-                    // Spec 0065, Teil 3: `abrupt = true` — kein `[DONE]`
-                    // gesehen, s. `finalize`-Doc-Kommentar.
-                    let events = state.finalize(true);
-                    state.pending.extend(events);
-                }
-                Err(_elapsed) => {
-                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse)
-                    // — ohne dieses Limit würde ein hängender Request den
-                    // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-            }
+impl OpenAiStreamState {
+    /// Shared by Chat Completions and Responses: both stream into this state.
+    pub(crate) fn new(
+        native_tool_calling: bool,
+        request_id: Uuid,
+        api_key: String,
+        extra_headers: Vec<(String, String)>,
+        provider_request_id: Option<String>,
+    ) -> Self {
+        let secrets: Vec<String> = std::iter::once(api_key)
+            .chain(extra_headers.into_iter().map(|(_, value)| value))
+            .collect();
+        Self {
+            tool_calls: BTreeMap::new(),
+            fallback_text: String::new(),
+            secrets,
+            text_delta_total_len: 0,
+            reasoning_delta_total_len: 0,
+            native_tool_calling,
+            pending: VecDeque::new(),
+            finished: false,
+            request_id,
+            provider_request_id,
+            finish_reason: None,
+            usage: AiUsage::default(),
         }
-    }))
+    }
+
+    /// Redacted logging of a transport/timeout error (Spec 0049, finding 2).
+    pub(crate) fn log_transport_error_redacted(&self, error: &AiError) {
+        let secrets: Vec<&str> = self.secrets.iter().map(String::as_str).collect();
+        log_provider_transport_error(self.request_id, error, &secrets);
+    }
+}
+
+impl FrameHandler for OpenAiStreamState {
+    type Event = RawEvent;
+
+    fn on_frame(&mut self, frame: &SseFrame) -> Vec<RawEvent> {
+        if frame.data.trim() == "[DONE]" {
+            self.finished = true;
+            let events = self.finalize(false);
+            self.pending.extend(events);
+        } else if let Ok(chunk) = serde_json::from_str::<Value>(&frame.data) {
+            self.handle_chunk(&chunk);
+        }
+        // Unparsable frames are ignored instead of aborting the stream: one
+        // broken chunk must not make the whole response unusable.
+        self.pending.drain(..).collect()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// Spec 0065, part 3: `abrupt = true` means no `[DONE]` was seen.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+        OpenAiStreamState::finalize(self, abrupt)
+    }
+
+    fn log_transport_error(&self, error: &AiError) {
+        self.log_transport_error_redacted(error);
+    }
 }
 #[cfg(test)]
 mod tests;

@@ -32,21 +32,17 @@ use ssh_manager_core::ai::{
 };
 
 use crate::action::{parameters_json_schema, tool_call_event};
+use crate::common::frame_loop::{self, FrameHandler};
+use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
 use crate::common::prompt_format::{message_content_text, role_str};
 use crate::content::check_attachments;
-use crate::error::{
-    error_stream, map_http_response, map_stream_error_object, map_transport_error,
-    provider_request_id, timeout_error,
-};
+use crate::error::{error_stream, map_stream_error_object, provider_request_id};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_cache_usage, log_outgoing_context, log_provider_error_response_with_id,
-    log_provider_transport_error, log_stop_reason, log_text_delta_summary, log_tool_call_fragment,
+    log_cache_usage, log_outgoing_context, log_provider_transport_error, log_stop_reason,
+    log_text_delta_summary, log_tool_call_fragment,
 };
-use crate::sse::{
-    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
-    SSE_INACTIVITY_TIMEOUT,
-};
+use crate::sse::{build_http_client, SseFrame};
 
 /// Spec 0072, B1: `pub(crate)`, damit `discovery::discover_models` (Modell-
 /// Discovery gegen `GET /v1/models`) dieselbe Version nutzt wie der
@@ -134,6 +130,12 @@ fn anthropic_default_max_tokens_for(model_max: u32) -> u32 {
 enum RawEvent {
     Public(AiEvent),
     RetryWithHigherMaxTokens,
+}
+
+impl From<AiEvent> for RawEvent {
+    fn from(event: AiEvent) -> Self {
+        RawEvent::Public(event)
+    }
 }
 
 fn to_raw_stream(
@@ -398,162 +400,57 @@ async fn connect_and_stream(
         request_id = %request_id,
         "AI request future started executing",
     );
-    let retry_start = tokio::time::Instant::now();
-    let mut attempt: u32 = 0;
-    loop {
-        attempt += 1;
-        // Diagnose (s. o.): direkt vor dem eigentlichen HTTP-Send —
-        // zusammen mit der Zeile oben lässt sich damit eingrenzen, ob der
-        // Future zwar startet, aber schon vor dem `.send()`-Aufruf hängt
-        // (z. B. beim Klonen/Serialisieren), oder ob `.send()` selbst nie
-        // erreicht wird.
-        tracing::debug!(
-            request_id = %request_id,
-            attempt,
-            "about to send HTTP request to AI provider",
-        );
-        let send = client
-            .post(&url)
-            .header("x-api-key", &api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("accept", "text/event-stream")
-            .json(&body)
-            .send();
-        let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-            Ok(Ok(response)) => response,
-            Ok(Err(err)) => {
-                let mapped = map_transport_error(&err);
-                log_provider_transport_error(request_id, &mapped, &[&api_key]);
-                return to_raw_stream(error_stream(mapped));
-            }
-            // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) — ohne
-            // dieses Limit würde ein hängender Verbindungsaufbau den
-            // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-            Err(_elapsed) => {
-                let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                log_provider_transport_error(request_id, &mapped, &[&api_key]);
-                return to_raw_stream(error_stream(mapped));
-            }
-        };
-
-        // Spec 0061, Abschnitt 1: Rate-Limit-Header auf JEDER Antwort lesen
-        // (Erfolg UND jeder Fehlerfall) — VOR jedem Zweig unten, die den
-        // `response`-Wert konsumieren (`.text()`/`sse_frame_stream`) oder
-        // ihn über `map_http_status` auf eine Unit-Variante ohne Header
-        // reduzieren. Ein Provider ohne diese Header (z. B. eine
-        // OpenAI-kompatible Gegenstelle) liefert hier einfach lauter `None`-
-        // Felder — `budget.record_headers` markiert das Vorhandensein von
-        // Headern trotzdem (auch ein leerer Snapshot zählt als "eine
-        // Antwort wurde gesehen"), s. `crate::openai_compatible`-Gegenstück,
-        // das diesen Aufruf bewusst NICHT macht (dort bleibt der Wächter
-        // dauerhaft "keine Header" -> nie blockierend, Invariante Spec
-        // 0061).
-        budget.record_headers(
-            crate::rate_limit_budget::parse_anthropic_rate_limit_headers(response.headers()),
-        );
-
-        // Spec 0051, Teil 1: 429 wird — anders als jeder andere
-        // nicht-erfolgreiche Status — automatisch mit Backoff wiederholt,
-        // statt sofort als terminaler Fehler zurückzugehen (s.
-        // `crate::retry`-Moduldoc zur Redaction-Invariante: derselbe `body`
-        // wird unverändert erneut gesendet).
-        let status = response.status();
-        let headers = response.headers().clone();
-        let provider_rid = provider_request_id(&headers);
-        if response.status().as_u16() == 429 {
-            let elapsed = retry_start.elapsed();
-            let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
-            let delay = crate::retry::retry_delay(response.headers(), attempt);
-            // Spec-Reviewer-Fund (Spec 0051, Review dieses Schritts):
-            // `delay <= remaining` statt `delay.min(remaining)` zu schlafen
-            // und danach trotzdem zu senden — ein `Retry-After`, das länger
-            // ist als das verbleibende Zeitbudget, ist ein expliziter
-            // Hinweis des Providers, es vorher nicht erneut zu versuchen;
-            // ein verfrühter Request danach wäre sinnlos (und könnte die
-            // Sperre bei manchen Providern verlängern).
-            if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt hängen"
-                // (2026-09): `response.text().await` allein hat keine obere
-                // Schranke — ein Server, der die Header eines 429 sofort
-                // schickt, den Body danach aber hängen lässt, blockierte
-                // hier für immer, VOR dem Log-Aufruf unten. Begrenzt durch
-                // `remaining` statt der vollen `SSE_INACTIVITY_TIMEOUT`
-                // (spec-reviewer-Fund, Review dieses Schritts — s.
-                // `read_error_body_with_timeout_capped`-Doc-Kommentar in
-                // `crate::sse`): sonst könnte ein hängender Body hier bis zu
-                // 90s kosten und danach im allgemeinen Fehler-Zweig NOCHMAL
-                // bis zu 90s, was die 20s-Gesamtretry-Deckelung aus Spec
-                // 0051 unterläuft.
-                let text =
-                    crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
-                        .await;
-                // Issue #599: a 429 that is really an exhausted quota is a
-                // billing problem — never retried.
-                if crate::error::ProviderErrorInfo::from_body(&text).is_quota_exhausted() {
-                    let mapped = map_http_response(status, &headers, &text);
-                    log_provider_error_response_with_id(
-                        request_id,
-                        provider_rid.as_deref(),
-                        status.as_u16(),
-                        &text,
-                        &mapped,
-                        &[&api_key],
-                    );
-                    return to_raw_stream(error_stream(mapped));
-                }
-                crate::request_logging::log_provider_rate_limited_retry(
-                    request_id,
-                    attempt,
-                    &text,
-                    delay,
-                    &[&api_key],
-                );
-                tokio::time::sleep(delay).await;
-                continue;
-            }
-        }
-
-        if !response.status().is_success() {
-            // s. Kommentar beim 429-Retry-Zweig oben — dasselbe
-            // Hänger-Risiko, hier zusätzlich zwischen dem noch ausstehenden
-            // Log-Aufruf unten und dem Nutzer.
-            let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-            // Issue #169: die Ablehnung der Web-Werkzeuge durch das Konto
-            // nur erkennen, wenn diese Anfrage überhaupt eines trug — eine
-            // Anfrage ohne Web-Werkzeug (der Wiederholversuch, jeder
-            // Nebenaufruf) bleibt beim allgemeinen Mapping und kann keinen
-            // weiteren Wiederholversuch auslösen.
+    // One shared attempt loop (issue #851): 429 back-off, send timeout,
+    // header recording and logging live in `common::http_retry`.
+    let secrets = [api_key.as_str()];
+    let on_headers = |headers: &reqwest::header::HeaderMap| {
+        // Spec 0061, Abschnitt 1: rate-limit headers on EVERY response.
+        budget
+            .record_headers(crate::rate_limit_budget::parse_anthropic_rate_limit_headers(headers));
+    };
+    let outcome = send_with_retry(
+        || {
+            client
+                .post(&url)
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .header("accept", "text/event-stream")
+                .json(&body)
+        },
+        SendLoopParams {
+            request_id,
+            secrets: &secrets,
+            on_headers: Some(&on_headers),
+        },
+    )
+    .await;
+    let response = match outcome {
+        Ok(SendOutcome::Success(response)) => response,
+        Ok(SendOutcome::Rejected(rejected)) => {
+            // Issue #169: only recognise the web-tools rejection when this
+            // request carried a web tool at all.
             let mapped = if request_has_web_tools(&body)
                 && is_web_tools_disabled_rejection(
-                    status.as_u16(),
-                    &crate::error::ProviderErrorInfo::from_body(&text),
+                    rejected.status.as_u16(),
+                    &crate::error::ProviderErrorInfo::from_body(&rejected.text),
                 ) {
-                AiError::WebResearchRejected(format!("HTTP {status}: {text}"))
+                AiError::WebResearchRejected(format!("HTTP {}: {}", rejected.status, rejected.text))
             } else {
-                map_http_response(status, &headers, &text)
+                rejected.map()
             };
-            // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-            // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-            // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-            log_provider_error_response_with_id(
-                request_id,
-                provider_rid.as_deref(),
-                status.as_u16(),
-                &text,
-                &mapped,
-                &[&api_key],
-            );
+            rejected.log(request_id, &mapped, &secrets);
             return to_raw_stream(error_stream(mapped));
         }
-
-        return event_stream_from_response(
-            response,
-            native_tool_calling,
-            request_id,
-            api_key,
-            provider_rid,
-        );
-    }
+        Err(mapped) => return to_raw_stream(error_stream(mapped)),
+    };
+    let provider_rid = provider_request_id(response.headers());
+    parse_sse_response(
+        response,
+        native_tool_calling,
+        request_id,
+        api_key,
+        provider_rid,
+    )
 }
 
 /// Issue #169: trägt der Request-Body ein serverseitiges Web-Werkzeug
@@ -801,9 +698,6 @@ struct WebCitation {
 }
 
 struct AnthropicStreamState {
-    /// Issue #694: restarted only by real content frames.
-    content_deadline: tokio::time::Instant,
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     blocks: BTreeMap<u64, BlockKind>,
     fallback_text: String,
     /// Spec 0049, Fund 2: für die Redaction bei einem Transport-Fehler
@@ -1276,36 +1170,51 @@ fn str_field<'a>(value: Option<&'a Value>, field: &str) -> Option<&'a str> {
     value.and_then(|v| v.get(field)).and_then(Value::as_str)
 }
 
-fn event_stream_from_response(
+fn parse_sse_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    process_frame_stream(
-        Box::pin(sse_frame_stream(response)),
-        native_tool_calling,
-        request_id,
-        api_key,
-        provider_request_id,
+    frame_loop::event_stream_from_response(
+        response,
+        new_stream_state(
+            native_tool_calling,
+            request_id,
+            api_key,
+            provider_request_id,
+        ),
     )
 }
 
-/// Von `event_stream_from_response` losgelöst, damit sich das
-/// Inaktivitäts-Timeout-Verhalten (`SSE_INACTIVITY_TIMEOUT`) direkt mit
-/// einem synthetischen, nie liefernden `frames`-Stream testen lässt — ganz
-/// ohne echten HTTP-Request/Mock-Server.
-fn process_frame_stream(
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+/// Test entry: the shared frame loop over a synthetic `frames` stream.
+#[cfg(test)]
+fn frame_stream(
+    frames: frame_loop::FrameStream,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    let state = AnthropicStreamState {
-        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
+    frame_loop::process_frame_stream(
         frames,
+        new_stream_state(
+            native_tool_calling,
+            request_id,
+            api_key,
+            provider_request_id,
+        ),
+    )
+}
+
+fn new_stream_state(
+    native_tool_calling: bool,
+    request_id: Uuid,
+    api_key: String,
+    provider_request_id: Option<String>,
+) -> AnthropicStreamState {
+    AnthropicStreamState {
         blocks: BTreeMap::new(),
         fallback_text: String::new(),
         api_key,
@@ -1321,75 +1230,38 @@ fn process_frame_stream(
         web_activities: Vec::new(),
         web_citations: Vec::new(),
         usage: AiUsage::default(),
-    };
+    }
+}
 
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(event) = state.pending.pop_front() {
-                return Some((event, state));
-            }
-            if state.finished {
-                return None;
-            }
-            match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
-                Ok(Some(Ok(frame))) => {
-                    if frame_is_content(&frame) {
-                        state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
-                    }
-                    let Some(event_type) = frame.event.clone() else {
-                        continue;
-                    };
-                    if let Ok(data) = serde_json::from_str::<Value>(&frame.data) {
-                        state.handle_event(&event_type, &data);
-                    }
-                    // Frames mit nicht-parsebarem JSON werden ignoriert
-                    // statt den Stream mit einem Fehler abzubrechen — s.
-                    // Begründung in `openai_compatible.rs`.
-                }
-                Ok(Some(Err(err))) => {
-                    let mapped = map_transport_error(&err);
-                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-                Ok(None) => {
-                    // Verbindung endete ohne `message_stop`-Event (z. B.
-                    // abgeschnittene Antwort) — trotzdem sauber abschließen
-                    // statt den Stream einfach verstummen zu lassen.
-                    // Spec 0065, Teil 3 (spec-reviewer-Fund, ERHÖHT): `abrupt
-                    // = true` — selbst ein bereits per `content_block_stop`
-                    // geschlossener (und damit in `held_tool_events`
-                    // liegender) Tool-Call gilt hier als unvollständig,
-                    // solange kein `message_delta`/`message_stop` den
-                    // Abschluss bestätigt hat. Vorher griff nur `has_open_
-                    // tool_block` (Block noch in `self.blocks`) — ein
-                    // Verbindungsabbruch UNMITTELBAR NACH `content_block_
-                    // stop`, aber vor `message_delta`, hätte den Tool-Call
-                    // sonst freigegeben (Ist-Befund im Review).
-                    if !state.finished {
-                        state.finished = true;
-                        let events = state.finalize(true);
-                        state.pending.extend(events);
-                    } else {
-                        return None;
-                    }
-                }
-                Err(_elapsed) => {
-                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT`: ohne
-                    // dieses Limit würde ein hängender Request den Chat-Turn
-                    // für immer ohne jede Fehlermeldung blockieren.
-                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
+impl FrameHandler for AnthropicStreamState {
+    type Event = RawEvent;
+
+    fn on_frame(&mut self, frame: &SseFrame) -> Vec<RawEvent> {
+        if let Some(event_type) = frame.event.as_deref() {
+            // Frames with unparsable JSON are ignored instead of aborting
+            // the stream (see `openai_compatible.rs`).
+            if let Ok(data) = serde_json::from_str::<Value>(&frame.data) {
+                self.handle_event(event_type, &data);
             }
         }
-    }))
+        self.pending.drain(..).collect()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// Spec 0065, part 3: the loop passes `abrupt = true` when the
+    /// connection ended without `message_stop`; even a tool call already
+    /// closed by `content_block_stop` (held in `held_tool_events`) then
+    /// counts as incomplete until `message_delta`/`message_stop` confirmed it.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+        AnthropicStreamState::finalize(self, abrupt)
+    }
+
+    fn log_transport_error(&self, error: &AiError) {
+        log_provider_transport_error(self.request_id, error, &[&self.api_key]);
+    }
 }
 #[cfg(test)]
 mod tests;

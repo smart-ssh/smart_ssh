@@ -7,7 +7,7 @@ use ssh_manager_core::ai::{ChatMessage, MessageContent, RejectionReason, Role};
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent};
 use ssh_manager_core::filter::{Decision, EvalContext, EvaluationTrace};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
-use ssh_manager_core::risk::RiskLevel;
+use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 use ssh_manager_core::ssh::CommandOutput;
 
 use crate::confirmation::ConfirmationRegistry;
@@ -49,80 +49,210 @@ pub(crate) async fn handle_action_proposed(
     origin: ActionOrigin,
     earlier_rejection: &std::sync::atomic::AtomicBool,
 ) -> bool {
-    let action_id: ActionId = Uuid::new_v4();
-    announce_second_opinion_setup_failure(session, session_id, emitter);
+    // Spec 0040, Abschnitt 4: MCP-Herkunft schreibt nie in die persistierte,
+    // wiederaufnehmbare Historie. Einmal aus `origin` abgeleitet und durch
+    // die gesamte Ausführungskette gereicht.
+    let persist = !matches!(origin, ActionOrigin::Mcp { .. });
+    let ctx = ProposeCtx {
+        session,
+        session_id,
+        emitter,
+        profile_store,
+        action_confirmations,
+        origin,
+        earlier_rejection,
+        action_id: Uuid::new_v4(),
+        persist,
+    };
 
-    // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
-    // `SuggestCommand` beschränkt (das Ledger deckt nur diesen
-    // Aktionstyp ab, s. Spec 0057 §9, Grenzen) — `ReadRemoteFile`/
-    // `WriteRemoteFile`/`ProposeNoteUpdate` folgen in einer späteren
-    // Erweiterung.
-    if let AiAction::SuggestCommand { command } = &action {
+    prepare_action(&ctx, &mut action).await;
+    let (evaluation, server_tags_unavailable) =
+        evaluate_action(session, &action, profile_store).await;
+    let escalated = apply_escalations(&ctx, &action, &evaluation, server_tags_unavailable).await;
+    let risk_assessment = escalated.risk_assessment;
+    let uses_password = escalated.uses_password;
+
+    // Spec 0088, A1.2/A1.4: registration stays BEFORE the awaits for preview
+    // and second opinion (a click in between must not be lost).
+    let Some(prepared) = prepare_decision(&ctx, escalated.decision.clone()) else {
+        return report_confirmation_conflict(&ctx).await;
+    };
+
+    let proposed_payload = announce_proposal(
+        &ctx,
+        &action,
+        &evaluation,
+        &escalated.decision,
+        uses_password,
+        risk_assessment.clone(),
+    )
+    .await;
+
+    let second_opinion = run_second_opinion(&ctx, &action, risk_assessment).await;
+
+    let Ok(prepared) =
+        escalate_after_second_opinion(&ctx, prepared, &second_opinion, proposed_payload)
+    else {
+        return report_confirmation_conflict(&ctx).await;
+    };
+
+    let matched_rule = evaluation.matched_rule.clone();
+    let matched_rule_origin = evaluation.matched_rule_origin;
+    match prepared {
+        PreparedDecision::AutoExec if auto_exec_stopped(&ctx) => {
+            skip_auto_exec_after_stop(
+                session,
+                session_id,
+                ctx.action_id,
+                &action,
+                emitter,
+                persist,
+            )
+            .await
+        }
+        PreparedDecision::AutoExec => {
+            run_approved(
+                &ctx,
+                action,
+                matched_rule,
+                matched_rule_origin,
+                uses_password,
+            )
+            .await
+        }
+        PreparedDecision::Deny { reason, code } => {
+            report_denied(
+                &ctx,
+                &action,
+                reason,
+                code,
+                matched_rule,
+                matched_rule_origin,
+            )
+            .await
+        }
+        PreparedDecision::Confirm {
+            reason,
+            code,
+            pending,
+        } => {
+            await_confirmation(
+                &ctx,
+                action,
+                pending,
+                (reason, code),
+                (matched_rule, matched_rule_origin),
+                uses_password,
+            )
+            .await
+        }
+    }
+}
+
+/// Inputs shared by all steps of one `handle_action_proposed` run.
+pub(super) struct ProposeCtx<'a> {
+    pub(super) session: &'a Session,
+    pub(super) session_id: SessionId,
+    pub(super) emitter: &'a dyn EventEmitter,
+    pub(super) profile_store: &'a dyn ProfileStore,
+    pub(super) action_confirmations: &'a ConfirmationRegistry<ActionId, ActionUserDecision>,
+    pub(super) origin: ActionOrigin,
+    pub(super) earlier_rejection: &'a std::sync::atomic::AtomicBool,
+    pub(super) action_id: ActionId,
+    /// `false` for MCP origin: nothing goes into the persisted history.
+    pub(super) persist: bool,
+}
+
+impl ProposeCtx<'_> {
+    fn is_mcp(&self) -> bool {
+        matches!(self.origin, ActionOrigin::Mcp { .. })
+    }
+}
+
+type MatchedRule = (
+    Option<ssh_manager_core::filter::RuleId>,
+    Option<ssh_manager_core::filter::RuleOrigin>,
+);
+
+/// Result of [`apply_escalations`].
+pub(super) struct Escalated {
+    pub(super) decision: Decision,
+    risk_assessment: Option<RiskAssessment>,
+    uses_password: bool,
+}
+
+/// Outcome of the second-opinion step (Spec 0026, 0092 A3, issue #102).
+pub(super) struct SecondOpinionOutcome {
+    pub(super) data_risk: Option<RiskLevel>,
+    pub(super) unavailable: bool,
+}
+
+/// How a finished confirmation wait is to be treated.
+#[derive(Debug)]
+pub(super) enum ConfirmationSettlement {
+    Decided(ActionUserDecision, RejectionReason),
+    /// Sender dropped (e.g. app shutting down): nothing runs.
+    SenderDropped,
+}
+
+/// Step 1 — prepare. Input: the raw proposal. Output: `action` with its
+/// remote path normalised exactly once; the "command proposed" ledger entry
+/// (Spec 0057) is written. Safety property: every later consumer (filter,
+/// risk, preview, execution) sees the same normalised path (Spec 0020).
+pub(super) async fn prepare_action(ctx: &ProposeCtx<'_>, action: &mut AiAction) {
+    announce_second_opinion_setup_failure(ctx.session, ctx.session_id, ctx.emitter);
+    if let AiAction::SuggestCommand { command } = &*action {
         write_ledger_entry(
-            session,
-            ledger_source_for_origin(&origin),
+            ctx.session,
+            ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::CommandProposed {
                 command: command.clone(),
             },
         )
         .await;
     }
-
-    // Spec 0040, Abschnitt 4: MCP-Herkunft schreibt nie in die persistierte,
-    // wiederaufnehmbare Historie — auch nicht, wenn dieselbe `Session`
-    // (samt `chat_session_id`) gerade einen Menschen-Tab bedient (s.
-    // `mcp_backend::AppMcpBackend::ensure_session`). Einmal hier aus
-    // `origin` abgeleitet und durch die gesamte Ausführungskette gereicht,
-    // statt an jeder `push_history`-Stelle einzeln zu entscheiden.
-    let persist = !matches!(origin, ActionOrigin::Mcp { .. });
-
-    // Unabhängiger Review-Pass (Spec 0020): Pfad-Normalisierung passiert
-    // hier, EINMALIG (via `ssh_manager_core::filter::normalize_lexical_path`,
-    // dieselbe Funktion wie in der Glob-Auswertung), bevor irgendein Konsument unten (Filter-Auswertung,
-    // Risikoeinschätzung, Vorschau, `execute_action`) den Pfad sieht — alle
-    // greifen auf dasselbe `action` zu, das ab hier bereits normalisiert
-    // ist.
-    if let AiAction::ReadRemoteFile { path } | AiAction::WriteRemoteFile { path, .. } = &mut action
-    {
+    if let AiAction::ReadRemoteFile { path } | AiAction::WriteRemoteFile { path, .. } = action {
         *path = ssh_manager_core::filter::normalize_lexical_path(path);
     }
+}
 
-    let (evaluation, server_tags_unavailable) =
-        evaluate_action(session, &action, profile_store).await;
-    let matched_rule = evaluation.matched_rule.clone();
-    let matched_rule_origin = evaluation.matched_rule_origin;
+/// Step 2 — escalate. Input: the engine's trace plus session/origin facts.
+/// Output: the final decision, the rule-based risk assessment and whether a
+/// stored sudo password is used. Safety property: the chain only combines
+/// via `Decision::stricter` (`escalation::escalate`), so the engine decision
+/// is never lowered; the one-shot flags the result names are consumed here.
+pub(super) async fn apply_escalations(
+    ctx: &ProposeCtx<'_>,
+    action: &AiAction,
+    evaluation: &EvaluationTrace,
+    server_tags_unavailable: bool,
+) -> Escalated {
+    let session = ctx.session;
     let engine_decision = evaluation.decision.clone();
     let decision = evaluation.decision.clone();
+    // `risk_assessment_for_action` is a pure function of `action`.
+    let risk_assessment = risk_assessment_for_action(action);
 
-    // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
-    // Git-Historie) — die neue Spec-0039-Eskalation unten braucht die
-    // Server-Risiko-Achse bereits hier für die `Balanced`-Stufe.
-    // `risk_assessment_for_action` ist eine reine, zustandslose Funktion
-    // von `action` allein, der Zeitpunkt der Berechnung ändert also nichts
-    // an ihrem Ergebnis.
-    let risk_assessment = risk_assessment_for_action(&action);
-
-    // The post-engine escalation chain (secret path, `sftp-server`, red risk,
-    // post-ingest, injection suspicion/unavailable, MCP origin, sudo password,
-    // inserted secret, earlier rejection) lives once in `escalation::escalate`
-    // (issue #826): a pure function that only combines via
-    // `Decision::stricter`. Here: read the facts, escalate, then consume
-    // exactly the one-shot flags the result names.
-    let uses_password = uses_stored_sudo_password(session, &action);
+    // The post-engine escalation chain lives once in `escalation::escalate`
+    // (issue #826). Here: read the facts, escalate, then consume exactly the
+    // one-shot flags the result names.
+    let uses_password = uses_stored_sudo_password(session, action);
     let transform_scope = if session.outgoing_transform.is_some() {
-        Some(super::super::outgoing::outgoing_scope(session, profile_store).await)
+        Some(super::super::outgoing::outgoing_scope(session, ctx.profile_store).await)
     } else {
         None
     };
     let mut facts = escalation_facts(
         session,
-        &action,
+        action,
         risk_assessment.as_ref(),
         transform_scope.as_ref(),
     );
-    facts.mcp_origin = matches!(origin, ActionOrigin::Mcp { .. });
+    facts.mcp_origin = ctx.is_mcp();
     facts.server_tags_unavailable = server_tags_unavailable;
-    facts.earlier_rejection = earlier_rejection.load(std::sync::atomic::Ordering::SeqCst);
+    facts.earlier_rejection = ctx
+        .earlier_rejection
+        .load(std::sync::atomic::Ordering::SeqCst);
     let escalation = super::super::escalation::escalate(decision, &facts);
     if escalation.consume_injection_suspected
         && session
@@ -138,428 +268,409 @@ pub(crate) async fn handle_action_proposed(
     }
     let decision = escalation.decision;
 
-    // Issue #688: one default-level line when the chain above turned the
-    // engine's `AutoExec` into something stricter. Logging only; the
-    // decision is not touched. Compared once after the chain so a new step
-    // cannot forget it; the code is that of the step that set the decision.
-    log_filter_escalation(session_id, &action, &engine_decision, &decision);
+    // Issue #688: one default-level line when the chain turned the engine's
+    // `AutoExec` into something stricter. Logging only.
+    log_filter_escalation(ctx.session_id, action, &engine_decision, &decision);
+    Escalated {
+        decision,
+        risk_assessment,
+        uses_password,
+    }
+}
 
-    // Spec 0088, A1.2/A1.4: Die Registrierung liegt weiterhin VOR den
-    // `await`s für Vorschau und Zweitmeinung (s. Kommentar weiter unten:
-    // ein Klick währenddessen darf nicht verloren gehen) — aber der
-    // Empfänger hängt jetzt am `Confirm`-Zweig des Ergebnistyps statt in
-    // einer getrennten `Option`, die der Zweig unten per `expect` hätte
-    // auspacken müssen. Dass im `Confirm`-Zweig ein Empfänger vorliegt,
-    // garantiert damit der Typ und nicht eine Laufzeitprüfung.
-    let prepared = match decision.clone() {
-        Decision::AutoExec => PreparedDecision::AutoExec,
-        Decision::Deny { reason, code } => PreparedDecision::Deny { reason, code },
+/// Step 3 — decide. Input: the final decision. Output: the decision with its
+/// confirmation already registered (`None` if another MCP confirmation is
+/// pending, Issue #108 / Spec 0104 §3). Safety property: a `Confirm` cannot
+/// exist without its registered receiver (Spec 0088, A1.4).
+pub(super) fn prepare_decision<'a>(
+    ctx: &ProposeCtx<'a>,
+    decision: Decision,
+) -> Option<PreparedDecision<'a>> {
+    match decision {
+        Decision::AutoExec => Some(PreparedDecision::AutoExec),
+        Decision::Deny { reason, code } => Some(PreparedDecision::Deny { reason, code }),
         Decision::Confirm { reason, code } => {
-            let Ok(pending) = PendingConfirmation::register(
-                session,
-                action_confirmations,
-                action_id,
-                matches!(origin, ActionOrigin::Mcp { .. }),
-            ) else {
-                // Issue #108 / Spec 0104 §3: höchstens eine wartende
-                // Bestätigung je MCP-Sitzung; der Vorschlag wird nicht
-                // ausgeführt und dem Client als Fehler gemeldet.
-                return emit_action_error(
-                    session,
-                    emitter,
-                    session_id,
-                    ANOTHER_CONFIRMATION_PENDING_MESSAGE.to_string(),
-                    None,
-                    persist,
-                )
-                .await;
-            };
-            PreparedDecision::Confirm {
+            let pending = PendingConfirmation::register(
+                ctx.session,
+                ctx.action_confirmations,
+                ctx.action_id,
+                ctx.is_mcp(),
+            )
+            .ok()?;
+            Some(PreparedDecision::Confirm {
                 reason,
                 code,
                 pending,
-            }
+            })
         }
-    };
+    }
+}
 
-    // Issue #696: name the rules behind an automatic run (display only; the
-    // trace is the one that made the decision, no second evaluation). Only for
-    // the final `AutoExec`: an escalation above already turned it into Confirm.
+/// Reports "another confirmation is pending" to the client; nothing runs.
+async fn report_confirmation_conflict(ctx: &ProposeCtx<'_>) -> bool {
+    emit_action_error(
+        ctx.session,
+        ctx.emitter,
+        ctx.session_id,
+        ANOTHER_CONFIRMATION_PENDING_MESSAGE.to_string(),
+        None,
+        ctx.persist,
+    )
+    .await
+}
+
+/// Step 4 — announce. Input: the final decision. Output: the
+/// `chat-action-proposed` payload, emitted and remembered. Safety property:
+/// the card shows exactly the decision that will be enforced; the rule names
+/// for an automatic run are listed only for the final `AutoExec` (#696).
+async fn announce_proposal(
+    ctx: &ProposeCtx<'_>,
+    action: &AiAction,
+    evaluation: &EvaluationTrace,
+    decision: &Decision,
+    uses_password: bool,
+    risk_assessment: Option<RiskAssessment>,
+) -> Option<serde_json::Value> {
     let auto_exec_rules = if matches!(decision, Decision::AutoExec) {
-        auto_exec_rules_for(session, profile_store, &action, &evaluation).await
+        auto_exec_rules_for(ctx.session, ctx.profile_store, action, evaluation).await
     } else {
         Vec::new()
     };
-
     let (previous_note_content, target_name) =
-        note_target_preview_for_action(&action, session, profile_store).await;
+        note_target_preview_for_action(action, ctx.session, ctx.profile_store).await;
     let (previous_file_content, previous_file_size) =
-        previous_file_content_for_action(&action, session).await;
-
-    let proposed_payload = emit_chat_action_proposed(
-        emitter,
-        session_id,
-        action_id,
+        previous_file_content_for_action(action, ctx.session).await;
+    let payload = emit_chat_action_proposed(
+        ctx.emitter,
+        ctx.session_id,
+        ctx.action_id,
         action.clone(),
-        decision,
+        decision.clone(),
         previous_note_content,
         uses_password,
         previous_file_content,
         previous_file_size,
         target_name,
-        risk_assessment.clone(),
-        origin.clone(),
+        risk_assessment,
+        ctx.origin.clone(),
         auto_exec_rules,
     );
-    session.remember_proposal(action_id, proposed_payload.clone());
+    ctx.session
+        .remember_proposal(ctx.action_id, payload.clone());
+    payload
+}
 
-    // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
-    // regelbasierten Einschätzung (das Event oben ist schon raus, das Badge
-    // also bereits sichtbar) — "asynchron" hier bewusst als "verzögert die
-    // erste Anzeige nicht" gelesen statt als losgelöster `tokio::spawn`-
-    // Task: Letzteres hätte `Arc<Session>`/`Arc<dyn EventEmitter>` bis
-    // tief in diese Aufrufkette gebraucht (`run_chat_turn`/`run_one_round`
-    // nehmen bewusst `&Session`, s. deren Doc-Kommentare zur
-    // Testbarkeit gegen `MockAiProvider`), für einen einzelnen zusätzlichen
-    // `.await` unverhältnismäßiger Umbau. Der einzige reale Unterschied:
-    // ein bereits registrierter `confirm_rx` (unten) wird trotzdem nicht
-    // "verpasst", falls der Nutzer währenddessen schon klickt — der Wert
-    // liegt im Kanal bereit, sobald `rx.await` weiter unten drankommt.
-    //
-    // Spec 0092, A3: Das Ergebnis wird zusätzlich festgehalten — hebt die
-    // Zweitmeinung das Daten-Risiko auf Rot, darf die Aktion nicht mehr
-    // automatisch laufen (s. direkt darunter).
-    let mut second_opinion_data_risk: Option<RiskLevel> = None;
-    let mut second_opinion_unavailable = false;
-    if let (Some(provider), Some(assessment)) = (
+/// Step 5 — second opinion (Spec 0026, Spec 0092 A3, issue #102). Input:
+/// action and rule-based assessment. Output: the raised data-risk level and
+/// whether the check was unavailable. Safety property: only escalates
+/// (`escalate_data_risk`); an unavailable check is reported, not ignored.
+/// Runs AFTER the proposal event, so the first display is not delayed.
+async fn run_second_opinion(
+    ctx: &ProposeCtx<'_>,
+    action: &AiAction,
+    risk_assessment: Option<RiskAssessment>,
+) -> SecondOpinionOutcome {
+    let session = ctx.session;
+    let mut outcome = SecondOpinionOutcome {
+        data_risk: None,
+        unavailable: false,
+    };
+    let (Some(provider), Some(assessment)) = (
         session.risk_second_opinion_provider.as_deref(),
         risk_assessment,
-    ) {
-        if let Some(pseudo_command) = pseudo_command_for_risk_classification(&action) {
-            wait_for_ai_request_slot(session).await;
-            if let Some(budget) = session.risk_second_opinion_budget.as_deref() {
-                wait_for_rate_limit_budget(
-                    budget,
-                    crate::compaction::estimate_tokens(&pseudo_command),
-                    emitter,
-                    session_id,
-                )
-                .await;
-            }
-            let mut request_usage = None;
-            let second_opinion = crate::second_opinion::fetch_second_opinion_with_usage(
-                provider,
-                &pseudo_command,
-                &mut request_usage,
-            )
-            .await;
-            if let Some(usage) = request_usage {
-                session
-                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::RiskSecondOpinion, usage)
-                    .await;
-            }
-            // Issue #102: "konnte nicht geprüft werden" (Provider-Fehler
-            // ODER kein erkennbares Urteil) ist vom Ergebnis "geprüft,
-            // unauffällig" unterscheidbar. Die Stufe bleibt die
-            // regelbasierte (`escalate_data_risk` kennt nur Eskalation),
-            // aber die Karte bekommt den Hinweis, und die Aktion wird
-            // unten bestätigungspflichtig.
-            second_opinion_unavailable = second_opinion.is_unavailable();
-            let (data_risk, reason) = escalate_data_risk(
-                assessment.data_risk,
-                assessment.data_risk_reason,
-                match second_opinion {
-                    crate::second_opinion::SideCallOutcome::Verdict(level, text) => {
-                        Some((level, text))
-                    }
-                    _ => None,
-                },
-            );
-            session.review_proposal(action_id, data_risk, &reason);
-            emit_risk_assessment_updated(
-                emitter,
-                session_id,
-                action_id,
-                data_risk,
-                reason,
-                second_opinion_unavailable,
-            );
-            // Spec 0092, A3: nur die STUFE festhalten, nicht den Text der
-            // Zweitmeinung — s. Kommentar unten am Grundtext.
-            second_opinion_data_risk = Some(data_risk);
-        }
+    ) else {
+        return outcome;
+    };
+    let Some(pseudo_command) = pseudo_command_for_risk_classification(action) else {
+        return outcome;
+    };
+    wait_for_ai_request_slot(session).await;
+    if let Some(budget) = session.risk_second_opinion_budget.as_deref() {
+        wait_for_rate_limit_budget(
+            budget,
+            crate::compaction::estimate_tokens(&pseudo_command),
+            ctx.emitter,
+            ctx.session_id,
+        )
+        .await;
     }
-
-    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben, nachdem
-    // `chat-action-proposed` mit `AutoExec` längst draußen ist. Die Aktion wird ab hier wie jedes
-    // andere `Confirm` behandelt — dieselbe Wartezeit, dieselbe Abbruchlogik, derselbe
-    // Tab-Indikator, dieselben Ledger-Einträge (A3.1), weil es buchstäblich derselbe
-    // `PreparedDecision::Confirm`-Zweig unten ist.
-    //
-    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das regelbasierte Rot hat NICHT
-    // gegriffen (sonst hätte das Glied oben schon eskaliert) — die Anhebung kommt also tatsächlich
-    // von der Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird hier nichts.
-    //
-    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend erfährt erst von der
-    // wartenden Bestätigung, wenn der Empfänger schon steht, ein sehr schneller Klick geht also
-    // nicht ins Leere. Und das Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot
-    // ist, bevor der Dialog erscheint.
-    //
-    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im `match` — ein während der
-    // Zweitmeinung eingetroffener Stopp soll die Aktion überspringen lassen, nicht einen Dialog
-    // zeigen. Ohne diese Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten käme
-    // nie dran.
-    //
-    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp, der NACH dieser Zeile
-    // eintrifft, sieht einen Dialog für eine gerade gestoppte Aktion — A3.3 verlangt „bekommt
-    // keinen Dialog". Das ist eine EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz
-    // Stopp": Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine Ausführung zu viel)
-    // und lässt sich nicht schließen, solange das Ereignis überhaupt gesendet werden muss, bevor
-    // der Nutzer klicken kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
-    let mut prepared = prepared;
-    let raised_to_red = second_opinion_data_risk == Some(RiskLevel::Red);
-    // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Eine
-    // aktivierte, aber ausgefallene Zweitmeinung lässt eine `AutoExec`-Aktion
-    // nicht stillschweigend durch — sie wird wie ein `Confirm` behandelt.
-    // Unabhängig von `red_risk_always_confirm`, denn das ist keine rote
-    // Einstufung, sondern eine fehlende Schutzschicht. Nur Eskalation.
-    let escalate_for_red = session.red_risk_always_confirm && raised_to_red;
-    if (escalate_for_red || second_opinion_unavailable)
-        && matches!(prepared, PreparedDecision::AutoExec)
-        && !(matches!(origin, ActionOrigin::Internal)
-            && session
-                .auto_continue_stop
-                .load(std::sync::atomic::Ordering::SeqCst))
-    {
-        // spec-reviewer-Fund (Runde 1), Spec 0092, §6 („Keine neue
-        // Datensenke … die Musterbegründung des Klassifizierers"): Der Text
-        // nennt die rote Achse und ihre Herkunft, aber **nicht** die
-        // Formulierung des Zweitmeinungs-Modells. Grund: `reason` landet
-        // über `handle_user_decision` im persistierten Ledger, und
-        // `redact_ledger_entry_content` lässt `LedgerEntryContent::Decision`
-        // bewusst unredigiert durch — mit der ausdrücklichen Begründung, dort
-        // stünden nur „von der Filter-Engine selbst erzeugte Texte". Ein
-        // freier Modelltext kann dagegen zitieren, was er gerade beurteilt
-        // (z. B. ein Passwort aus dem Kommando), und ist über
-        // Prompt-Injection mittelbar fremdgesteuert. Den Text vorher durch
-        // den Redactor zu schicken wäre Scheinsicherheit: der erkennt
-        // bekannte Secret-FORMEN (API-Keys, Private Keys, Hashes), nicht ein
-        // beliebiges Ad-hoc-Passwort.
-        //
-        // Die Begründung der Zweitmeinung geht dem Nutzer nicht verloren —
-        // sie steht im `risk-assessment-updated`-Ereignis am Badge (Spec
-        // 0092, §4) und ist damit sichtbar, ohne persistiert zu werden.
-        let (reason, code) = if escalate_for_red {
-            (
-                "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string(),
-                "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string(),
-            )
-        } else {
-            // Issue #102: fester Text, kein Provider-Fehlertext.
-            (
-                "KI-Zweitmeinung nicht verfügbar – erfordert Bestätigung".to_string(),
-                "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM".to_string(),
-            )
-        };
-        let Ok(pending) = PendingConfirmation::register(
-            session,
-            action_confirmations,
-            action_id,
-            matches!(origin, ActionOrigin::Mcp { .. }),
-        ) else {
-            return emit_action_error(
-                session,
-                emitter,
-                session_id,
-                ANOTHER_CONFIRMATION_PENDING_MESSAGE.to_string(),
-                None,
-                persist,
-            )
+    let mut request_usage = None;
+    let second_opinion = crate::second_opinion::fetch_second_opinion_with_usage(
+        provider,
+        &pseudo_command,
+        &mut request_usage,
+    )
+    .await;
+    if let Some(usage) = request_usage {
+        session
+            .report_ai_usage(crate::ai_usage::AiUsagePurpose::RiskSecondOpinion, usage)
             .await;
-        };
-        emit_action_decision_escalated(
-            emitter,
-            session_id,
-            action_id,
-            reason.clone(),
-            code.clone(),
-        );
-        session.escalate_proposal(action_id, proposed_payload, &reason, &code);
-        prepared = PreparedDecision::Confirm {
-            reason,
-            code,
-            pending,
-        };
     }
+    // Issue #102: "could not be checked" differs from "checked, unremarkable".
+    outcome.unavailable = second_opinion.is_unavailable();
+    let (data_risk, reason) = escalate_data_risk(
+        assessment.data_risk,
+        assessment.data_risk_reason,
+        match second_opinion {
+            crate::second_opinion::SideCallOutcome::Verdict(level, text) => Some((level, text)),
+            _ => None,
+        },
+    );
+    session.review_proposal(ctx.action_id, data_risk, &reason);
+    emit_risk_assessment_updated(
+        ctx.emitter,
+        ctx.session_id,
+        ctx.action_id,
+        data_risk,
+        reason,
+        outcome.unavailable,
+    );
+    // Spec 0092, A3: keep only the LEVEL, not the second opinion's text.
+    outcome.data_risk = Some(data_risk);
+    outcome
+}
 
-    match prepared {
-        // spec-reviewer-Fund (Spec 0066): ein Stopp, der eintrifft, nachdem
-        // der Vorschlag schon aus dem Stream geholt war (z. B. während der
-        // Zweitmeinung oben), verhindert eine noch NICHT gestartete
-        // Auto-Ausführung. Nur für den eigenen Chat — der Stopp gilt dem
-        // Chat-Turn, nicht MCP-Clients. Ein bereits laufendes Kommando
-        // bleibt davon unberührt (Entscheidung 2).
-        PreparedDecision::AutoExec
-            if matches!(origin, ActionOrigin::Internal)
-                && session
-                    .auto_continue_stop
-                    .load(std::sync::atomic::Ordering::SeqCst) =>
-        {
-            skip_auto_exec_after_stop(session, session_id, action_id, &action, emitter, persist)
-                .await
-        }
-        PreparedDecision::AutoExec => {
-            if let AiAction::SuggestCommand { .. } = &action {
-                write_ledger_entry(
-                    session,
-                    ledger_source_for_origin(&origin),
-                    LedgerEntryContent::Decision {
-                        outcome: LedgerDecisionOutcome::AutoApproved,
-                        reason: None,
-                        code: None,
-                        matched_rule: matched_rule.clone(),
-                        matched_rule_origin,
-                    },
-                )
-                .await;
-            }
-            execute_action(
-                session,
-                session_id,
-                action_id,
-                ApprovedAction::from_auto_exec(action),
-                emitter,
-                profile_store,
-                persist,
-                ledger_source_for_origin(&origin),
-                uses_password,
-            )
-            .await
-        }
-        PreparedDecision::Deny { reason, code } => {
-            earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
-            if let AiAction::SuggestCommand { .. } = &action {
-                write_ledger_entry(
-                    session,
-                    ledger_source_for_origin(&origin),
-                    LedgerEntryContent::Decision {
-                        outcome: LedgerDecisionOutcome::Rejected,
-                        reason: Some(reason.clone()),
-                        code: Some(code),
-                        matched_rule: matched_rule.clone(),
-                        matched_rule_origin,
-                    },
-                )
-                .await;
-            }
-            // Spec 0007 Abschnitt 5: informiert nur, keine Ausführung, kein
-            // Warten auf `respond_to_action` — das Event oben ist bereits
-            // die vollständige Reaktion an den Nutzer. Spec 0021, Abschnitt
-            // 3, Fall 4: die KI bekommt zusätzlich einen Kontext-Eintrag mit
-            // dem Blockier-Grund und automatisch eine Folgerunde, statt
-            // stillschweigend übergangen zu werden.
-            push_history_scoped(
-                session,
-                ChatMessage {
-                    role: Role::ActionResult,
-                    content: MessageContent::ActionRejected {
-                        command: describe_rejected_action(&action),
-                        reason: RejectionReason::Blocked(reason),
-                    },
-                },
-                persist,
-            )
-            .await;
-            true
-        }
-        PreparedDecision::Confirm {
-            reason: confirm_reason,
-            code: confirm_code,
-            pending,
-        } => {
-            // Spec 0017, Abschnitt 5: Grundlage für den Hintergrund-Tab-
-            // Indikator (`SessionSummaryDto.has_pending_action`) — gesetzt,
-            // solange auf die Antwort gewartet wird.
-            //
-            // Spec 0088, A1.1: Das Zurücksetzen hängt nicht mehr an einer
-            // zweiten Anweisung hinter dem `await`, sondern am `Drop` von
-            // `pending` (s. `pending_confirmation.rs`). Es läuft damit auch
-            // auf den Wegen, die dieser Code selbst nicht nimmt: Abbruch
-            // der wartenden Task und Panic im Wartepfad. Dasselbe `Drop`
-            // räumt den Registry-Eintrag ab (A1.2).
-            let (timeout_result, cleanup) = pending
-                .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
-                .await;
-            let (user_decision, deny_reason) = match timeout_result {
-                Ok(Ok(ActionUserDecision::DenyReconnect)) => {
-                    // Issue #1019: discarded by a reconnect — a deny with
-                    // its own reason; the card is told below.
-                    (ActionUserDecision::Deny, RejectionReason::Reconnect)
-                }
-                Ok(Ok(decision)) => (decision, RejectionReason::User),
-                Ok(Err(_)) => {
-                    // Sender wurde gedroppt (z. B. App beendet, bevor der
-                    // Nutzer reagiert hat) — kein Absturz, einfach nichts
-                    // ausführen.
-                    earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
-                    return false;
-                }
-                Err(_elapsed) => {
-                    // Spec 0046, Fund 4: `PENDING_ACTION_CONFIRM_TIMEOUT`
-                    // abgelaufen, ohne dass `respond_to_action` je kam (z. B.
-                    // ein Frontend-Reload, der die wartende Aktion aus seinem
-                    // eigenen State verlor, bevor der Tab-Schließen-Handler
-                    // sie ablehnen konnte). Registry-Eintrag selbst abräumen
-                    // (niemand wartet mehr auf `rx`) und als Ablehnung
-                    // behandeln — fail-safe, nie als Genehmigung.
-                    // `RejectionReason::Timeout` statt `User`: spec-reviewer-
-                    // Fund (Review dieses Schritts) — kein Mensch hat hier
-                    // tatsächlich entschieden, die KI (und ein Mensch, der
-                    // die Historie später liest) soll das nicht fälschlich
-                    // als bewusste Ablehnung lesen.
-                    //
-                    // Spec 0088: Das frühere `action_confirmations.cancel(
-                    // &action_id)` steht hier nicht mehr — es erledigt das
-                    // `Drop` von `cleanup` unten, und zwar für jeden
-                    // Ausgang statt nur für diesen einen.
-                    tracing::warn!(
-                        ?action_id,
-                        timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
-                        "pending action confirmation timed out without a response, treating as denied"
-                    );
-                    (ActionUserDecision::Deny, RejectionReason::Timeout)
-                }
-            };
-            // Erst hier fällt der Guard: Indikator und Registry-Eintrag
-            // sind abgeräumt, BEVOR die Entscheidung ausgeführt wird —
-            // dasselbe Verhalten wie zuvor das `= None` direkt hinter dem
-            // `await`. Explizit statt am Blockende, damit es nicht von der
-            // Länge des folgenden Aufrufs abhängt.
-            drop(cleanup);
-            emit_settled_for_rejection(emitter, session_id, action_id, &deny_reason);
-            if matches!(user_decision, ActionUserDecision::Deny) {
-                earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-            handle_user_decision(
-                session,
-                session_id,
-                action_id,
-                action,
-                user_decision,
-                deny_reason,
-                emitter,
-                profile_store,
-                origin,
+/// Pure part of step 6: the (reason, code) with which an `AutoExec` is turned
+/// into `Confirm` after the second opinion, or `None` when it stays.
+/// Safety property: only escalates; a stop before auto-exec (Spec 0066, A3.3)
+/// takes precedence over the dialog (internal origin only). The texts never
+/// quote the second-opinion model output (Spec 0092, §6: it ends up in the
+/// ledger).
+pub(super) fn second_opinion_escalation(
+    red_risk_always_confirm: bool,
+    outcome: &SecondOpinionOutcome,
+    is_auto_exec: bool,
+    stopped: bool,
+) -> Option<(String, String)> {
+    let escalate_for_red = red_risk_always_confirm && outcome.data_risk == Some(RiskLevel::Red);
+    // Issue #102 (fail closed, per action): an enabled but failed second
+    // opinion does not let an `AutoExec` through silently, independent of
+    // `red_risk_always_confirm`.
+    if !(escalate_for_red || outcome.unavailable) || !is_auto_exec || stopped {
+        return None;
+    }
+    Some(if escalate_for_red {
+        (
+            "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string(),
+            "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string(),
+        )
+    } else {
+        // Issue #102: fixed text, no provider error text.
+        (
+            "KI-Zweitmeinung nicht verfügbar – erfordert Bestätigung".to_string(),
+            "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM".to_string(),
+        )
+    })
+}
+
+/// Whether a stop (Spec 0066) blocks a not-yet-started auto-execution. Only
+/// for the own chat (internal origin), not MCP clients.
+fn auto_exec_stopped(ctx: &ProposeCtx<'_>) -> bool {
+    matches!(ctx.origin, ActionOrigin::Internal)
+        && ctx
+            .session
+            .auto_continue_stop
+            .load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Step 6 — escalate after the second opinion (Spec 0092, A3). Input: the
+/// prepared decision and the second-opinion outcome. Output: the same
+/// decision or a `Confirm` (`Err` when another MCP confirmation is pending).
+/// Safety property: only `AutoExec` can change, only to `Confirm`. Order:
+/// `register` BEFORE the escalation event (A3.2).
+fn escalate_after_second_opinion<'a>(
+    ctx: &ProposeCtx<'a>,
+    prepared: PreparedDecision<'a>,
+    outcome: &SecondOpinionOutcome,
+    proposed_payload: Option<serde_json::Value>,
+) -> Result<PreparedDecision<'a>, ()> {
+    let Some((reason, code)) = second_opinion_escalation(
+        ctx.session.red_risk_always_confirm,
+        outcome,
+        matches!(prepared, PreparedDecision::AutoExec),
+        auto_exec_stopped(ctx),
+    ) else {
+        return Ok(prepared);
+    };
+    let pending = PendingConfirmation::register(
+        ctx.session,
+        ctx.action_confirmations,
+        ctx.action_id,
+        ctx.is_mcp(),
+    )
+    .map_err(|_| ())?;
+    emit_action_decision_escalated(
+        ctx.emitter,
+        ctx.session_id,
+        ctx.action_id,
+        reason.clone(),
+        code.clone(),
+    );
+    ctx.session
+        .escalate_proposal(ctx.action_id, proposed_payload, &reason, &code);
+    Ok(PreparedDecision::Confirm {
+        reason,
+        code,
+        pending,
+    })
+}
+
+/// Step 7a — run an auto-approved action. Input: the action that survived all
+/// escalations. Output: whether it ran. Safety property: the ledger entry
+/// "auto approved" precedes execution; only `ApprovedAction::from_auto_exec`
+/// reaches `execute_action`.
+async fn run_approved(
+    ctx: &ProposeCtx<'_>,
+    action: AiAction,
+    matched_rule: Option<ssh_manager_core::filter::RuleId>,
+    matched_rule_origin: Option<ssh_manager_core::filter::RuleOrigin>,
+    uses_password: bool,
+) -> bool {
+    if let AiAction::SuggestCommand { .. } = &action {
+        write_ledger_entry(
+            ctx.session,
+            ledger_source_for_origin(&ctx.origin),
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::AutoApproved,
+                reason: None,
+                code: None,
                 matched_rule,
                 matched_rule_origin,
-                confirm_reason,
-                confirm_code,
-                uses_password,
-                earlier_rejection,
-            )
-            .await
+            },
+        )
+        .await;
+    }
+    execute_action(
+        ctx.session,
+        ctx.session_id,
+        ctx.action_id,
+        ApprovedAction::from_auto_exec(action),
+        ctx.emitter,
+        ctx.profile_store,
+        ctx.persist,
+        ledger_source_for_origin(&ctx.origin),
+        uses_password,
+    )
+    .await
+}
+
+/// Step 7b — report a blocked action. Output: `true` (the AI gets a follow-up
+/// round). Safety property: nothing is executed and no confirmation awaited
+/// (Spec 0007 §5); later actions of the same AI reply escalate (Spec 0068).
+async fn report_denied(
+    ctx: &ProposeCtx<'_>,
+    action: &AiAction,
+    reason: String,
+    code: String,
+    matched_rule: Option<ssh_manager_core::filter::RuleId>,
+    matched_rule_origin: Option<ssh_manager_core::filter::RuleOrigin>,
+) -> bool {
+    ctx.earlier_rejection
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    if let AiAction::SuggestCommand { .. } = action {
+        write_ledger_entry(
+            ctx.session,
+            ledger_source_for_origin(&ctx.origin),
+            LedgerEntryContent::Decision {
+                outcome: LedgerDecisionOutcome::Rejected,
+                reason: Some(reason.clone()),
+                code: Some(code),
+                matched_rule,
+                matched_rule_origin,
+            },
+        )
+        .await;
+    }
+    // Spec 0021, section 3, case 4: the AI gets a context entry with the
+    // block reason instead of being silently ignored.
+    push_history_scoped(
+        ctx.session,
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::ActionRejected {
+                command: describe_rejected_action(action),
+                reason: RejectionReason::Blocked(reason),
+            },
+        },
+        ctx.persist,
+    )
+    .await;
+    true
+}
+
+/// Pure part of step 7c: maps the wait outcome to a settlement. Safety
+/// property: a timeout or reconnect is a denial, never an approval
+/// (Spec 0046, finding 4; issue #1019).
+pub(super) fn settle_confirmation(
+    action_id: ActionId,
+    outcome: super::super::pending_confirmation::ConfirmationWaitOutcome,
+) -> ConfirmationSettlement {
+    match outcome {
+        Ok(Ok(ActionUserDecision::DenyReconnect)) => {
+            ConfirmationSettlement::Decided(ActionUserDecision::Deny, RejectionReason::Reconnect)
+        }
+        Ok(Ok(decision)) => ConfirmationSettlement::Decided(decision, RejectionReason::User),
+        Ok(Err(_)) => ConfirmationSettlement::SenderDropped,
+        Err(_elapsed) => {
+            // Spec 0046, finding 4: no response ever came. Treated as a
+            // denial (`Timeout`, not `User`: no human decided).
+            tracing::warn!(
+                ?action_id,
+                timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
+                "pending action confirmation timed out without a response, treating as denied"
+            );
+            ConfirmationSettlement::Decided(ActionUserDecision::Deny, RejectionReason::Timeout)
         }
     }
+}
+
+/// Step 7c — wait for the user. Input: the registered confirmation. Output:
+/// whether the action ran (via `handle_user_decision`). Safety property: the
+/// pending indicator and registry entry are cleaned up BEFORE the decision is
+/// executed (Spec 0088, A1.1); every non-approval marks `earlier_rejection`.
+async fn await_confirmation(
+    ctx: &ProposeCtx<'_>,
+    action: AiAction,
+    pending: PendingConfirmation<'_>,
+    (confirm_reason, confirm_code): (String, String),
+    (matched_rule, matched_rule_origin): MatchedRule,
+    uses_password: bool,
+) -> bool {
+    let (timeout_result, cleanup) = pending
+        .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
+        .await;
+    let (user_decision, deny_reason) = match settle_confirmation(ctx.action_id, timeout_result) {
+        ConfirmationSettlement::Decided(decision, reason) => (decision, reason),
+        ConfirmationSettlement::SenderDropped => {
+            ctx.earlier_rejection
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            return false;
+        }
+    };
+    drop(cleanup);
+    emit_settled_for_rejection(ctx.emitter, ctx.session_id, ctx.action_id, &deny_reason);
+    if matches!(user_decision, ActionUserDecision::Deny) {
+        ctx.earlier_rejection
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    handle_user_decision(
+        ctx.session,
+        ctx.session_id,
+        ctx.action_id,
+        action,
+        user_decision,
+        deny_reason,
+        ctx.emitter,
+        ctx.profile_store,
+        ctx.origin.clone(),
+        matched_rule,
+        matched_rule_origin,
+        confirm_reason,
+        confirm_code,
+        uses_password,
+        ctx.earlier_rejection,
+    )
+    .await
 }
 
 /// Öffentlicher Einstiegspunkt für Spec 0028 (MCP), von
