@@ -374,6 +374,7 @@ pub struct OpenedDatabase {
 /// [`lock_data_directory`]. Der Aufrufer nimmt sie **vor** diesem Aufruf
 /// und hält sie, solange der Prozess läuft; die Umwandlung (A6) verlangt
 /// sie ausdrücklich.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn open_or_prepare_database(
     db_path: &Path,
     access: RootKeyAccess<'_>,

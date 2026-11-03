@@ -571,6 +571,7 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// Wertet genau ein Teilkommando aus — Hard-Blacklist, Nutzerregeln und
     /// rekursiv jede darin gefundene Command-Substitution (als
     /// `sub_command_traces`, s. `EvaluationTrace`-Doc-Kommentar).
+    #[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
     fn evaluate_segment_explained(
         &self,
         raw_segment: &str,

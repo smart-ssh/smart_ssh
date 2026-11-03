@@ -11,27 +11,27 @@ name = "ai_providers"
 path = "src/lib.rs"
 
 [dependencies]
-chrono = "0.4.45"
-futures = "0.3.34"
-reqwest = { version = "0.13.4", default-features = false, features = ["stream", "json", "rustls"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time"] }
-tracing = "0.1.44"
-uuid = { version = "1.26.0", features = ["v4"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["stream", "json", "rustls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ssh-manager-core = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 # `RedactedContext::for_tests` (issue #833); never in `[dependencies]`.
-ssh-manager-core = { path = "../core", features = ["test-support"] }
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time", "test-util"] }
-tracing-subscriber = { version = "0.3.23", features = ["json"] }
+ssh-manager-core = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
+tracing-subscriber = { workspace = true, features = ["json"] }
 wiremock = "0.6.5"
 
 # Android (Spec 0114, ADR 0148): the platform certificate verifier needs JNI
 # initialisation, so TLS there uses the bundled webpki roots instead.
 [target.'cfg(target_os = "android")'.dependencies]
-tls-config = { path = "../tls-config" }
+tls-config = { workspace = true }
 
 [lints]
 workspace = true

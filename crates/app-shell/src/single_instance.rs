@@ -106,6 +106,7 @@ pub(crate) fn hand_over_to_running_instance(context: tauri::Context<tauri::Wry>)
 pub(crate) fn hand_over_to_running_instance(_context: tauri::Context<tauri::Wry>) {}
 
 #[cfg(not(target_os = "android"))]
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 fn focus_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let Some(window) = app.get_webview_window("main") else {
         tracing::warn!("no main window to focus for the second instance");

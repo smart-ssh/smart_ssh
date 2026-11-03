@@ -209,6 +209,7 @@ pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
 
 /// Shared turn entry. `text == None` means "resend the last user turn".
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn send_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -290,7 +291,9 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // Issue #505: hand the checked blocks to their extension only now, after
     // the busy check; an error sends nothing (the guard resets the turn).
     if !queued_only {
-        extension_parts.persist(session.extension_content_key(session_id).await)?;
+        extension_parts
+            .persist(session.extension_content_key(session_id).await)
+            .await?;
     }
     let mut extension_parts = Some(extension_parts);
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für

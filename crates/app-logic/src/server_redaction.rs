@@ -69,6 +69,21 @@ pub fn read_sudo_password_for_redaction(
     read_sudo_password_checked(credential_store, server_id).0
 }
 
+/// [`read_sudo_password_checked`] for async callers: the synchronous store
+/// read runs on the blocking pool, so no runtime worker waits on the
+/// database (issue #898). The secret stays a `SecretString` throughout.
+pub async fn read_sudo_password_checked_async(
+    credential_store: std::sync::Arc<dyn CredentialStore + Send + Sync>,
+    server_id: ServerId,
+) -> (Option<SecretString>, bool) {
+    // A panic or shutdown of the blocking pool must not read as "no
+    // password": it propagates (fail closed), see `spawn_blocking_io`.
+    persistence_sqlite::runtime_bridge::spawn_blocking_io(move || {
+        read_sudo_password_checked(credential_store.as_ref(), server_id)
+    })
+    .await
+}
+
 /// [`read_sudo_password_for_redaction`] plus whether the read was complete:
 /// `false` after a backend error (issue #843, the caller marks the session
 /// "redaction incomplete"). `NotFound` is complete.

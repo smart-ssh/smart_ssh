@@ -229,6 +229,7 @@ async fn test_summarize_note_for_shrink_uses_the_prompt_language_instruction() {
 /// Extension whose content cannot be resolved, so sealing fails.
 struct GoneExt;
 
+#[async_trait::async_trait]
 impl crate::chat_content_extension::ChatContentExtension for GoneExt {
     fn name(&self) -> &str {
         "files"
@@ -240,7 +241,7 @@ impl crate::chat_content_extension::ChatContentExtension for GoneExt {
     ) -> Option<crate::chat_content_extension::PendingContent> {
         None
     }
-    fn persist(
+    async fn persist(
         &self,
         _s: Uuid,
         _part_id: &str,
@@ -248,7 +249,7 @@ impl crate::chat_content_extension::ChatContentExtension for GoneExt {
     ) -> Result<(), crate::chat_content_extension::ChatContentError> {
         Ok(())
     }
-    fn resolve(
+    async fn resolve(
         &self,
         _s: Uuid,
         _part: &ssh_manager_core::ai::ExtensionPart,

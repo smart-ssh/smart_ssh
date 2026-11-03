@@ -11,7 +11,7 @@ use ssh_manager_core::profiles::{
 use ssh_manager_core::shared::ServerId;
 
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::ai_provider_factory::build_ai_provider_from_config;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::dto::NoteRevisionDto;
 use app_logic::error::{secret_store_error, CommandResult, StoreResultExt};
 use app_logic::orchestration::execute_note_shrink_request;
@@ -94,12 +94,13 @@ pub async fn request_note_shrink(
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
     // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config_async(
         &state.rate_limit_registry,
-        state.credential_store.as_ref(),
+        state.credential_store.clone(),
         &active_config,
         false,
     )
+    .await
     .map_err(secret_store_error)?;
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
@@ -116,11 +117,11 @@ pub async fn request_note_shrink(
     // lookup keeps the known secrets and flags the request "incomplete".
     let local_tags = app_logic::dto::is_local(server_id)
         .then(|| crate::local_server::synthetic_server(&app).tags);
-    // Read before the `await`: the credential store is not `Sync`.
-    let sudo = app_logic::server_redaction::read_sudo_password_checked(
-        state.credential_store.as_ref(),
+    let sudo = app_logic::server_redaction::read_sudo_password_checked_async(
+        state.credential_store.clone(),
         server_id,
-    );
+    )
+    .await;
     let (redactor, redaction_incomplete) =
         app_logic::session_extension::redactor_for_sessionless_request(
             state.profile_store.as_ref(),

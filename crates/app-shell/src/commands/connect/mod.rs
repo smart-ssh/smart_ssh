@@ -22,7 +22,7 @@ use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, SshError};
 
-use app_logic::ai_provider_factory::build_ai_provider_from_config;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::connect::session_builder::{
     build_session, redaction_for_reconnect, BuiltSession, SessionBuildInput,
 };
@@ -222,12 +222,13 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     };
     let active_config = active_ai_provider_config(state).await?;
     // Issue #162: Einstellung des Providers (Default an).
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config_async(
         &state.rate_limit_registry,
-        state.credential_store.as_ref(),
+        state.credential_store.clone(),
         &active_config,
         active_config.web_research_enabled,
     )
+    .await
     .map_err(secret_store_error)?;
 
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
@@ -396,7 +397,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
         let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
         let (redactor, sudo_password) =
-            redaction_for_reconnect(state, &session, server_id, &lookup);
+            redaction_for_reconnect(state, &session, server_id, &lookup).await;
         Ok::<_, CommandError>((transport, redactor, sudo_password))
     }
     .await;

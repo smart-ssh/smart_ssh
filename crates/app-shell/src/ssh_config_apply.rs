@@ -137,6 +137,7 @@ impl From<&KeyFileError> for IdentityFallbackReason {
 /// `choices` ist die Wahl des Nutzers je Eintrag; ein Eintrag ohne Wahl
 /// gilt als ausgewählt mit den Vorgaben. Konflikte werden **übersprungen**,
 /// solange kein `rename_to` gesetzt ist (§3.1.8, Vorgabe).
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn apply_import(
     plan: &ImportPlan,
     choices: &[EntryChoice],

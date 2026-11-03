@@ -170,6 +170,7 @@ fn remove_entry(path: &Path) -> std::io::Result<()> {
 /// effort: each failure is logged (path and error, never file content) and
 /// the sweep continues. A link or file in place of `dir` itself is removed
 /// as such, never followed.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(crate) fn sweep_dir(dir: &Path) -> SweepReport {
     let mut report = SweepReport::default();
     match std::fs::symlink_metadata(dir) {

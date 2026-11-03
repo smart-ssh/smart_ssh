@@ -1092,6 +1092,7 @@ async fn read_snapshot_equals_the_export_content() {
 /// Inserts, updates and deletes across all entity types give exactly the
 /// expected state and fire the data-change notification.
 #[tokio::test(flavor = "multi_thread")]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 async fn apply_changes_inserts_updates_and_deletes_across_all_types() {
     let (f, base) = seeded_fixture().await;
     let (tx, rx) = std::sync::mpsc::channel();
