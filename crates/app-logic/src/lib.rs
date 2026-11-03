@@ -30,6 +30,7 @@ pub mod compaction;
 pub mod confirmation;
 pub mod confirmation_explain;
 pub mod confirmation_settled;
+pub mod connect;
 pub mod connect_attempts;
 pub mod credential_slots;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.

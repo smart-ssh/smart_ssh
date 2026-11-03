@@ -20,7 +20,7 @@ backup and import, the DTO and the frontend.
   This returns the struct literals (production, tests, `test_support`)
   without signatures and other types. Every site gets the field, then
   `cargo check --workspace --all-targets`.
-- [ ] `crates/app-shell/src/commands/connect.rs` – where the session is
+- [ ] `crates/app-shell/src/commands/connect/mod.rs` – where the session is
       built at connect time.
 
 ### `Server` field
