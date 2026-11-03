@@ -1,6 +1,6 @@
 use ssh_manager_core::profiles::{AiAction, NoteTargetSelector};
 
-use super::{sftp_read_pseudo_command, sftp_write_pseudo_command};
+use super::propose::{sftp_read_pseudo_command, sftp_write_pseudo_command};
 
 /// Command-like text shown in the history for a rejected action.
 pub(super) fn describe_rejected_action(action: &AiAction) -> String {

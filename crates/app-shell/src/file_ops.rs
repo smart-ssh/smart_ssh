@@ -102,6 +102,23 @@ struct OpState {
 #[derive(Clone)]
 pub(crate) struct OpHandle(Arc<OpState>);
 
+/// Issue #849: `app-logic`'s file-browser logic sees the operation only
+/// through this trait.
+impl app_logic::sftp_ops::OpProgress for OpHandle {
+    fn is_user_stopped(&self) -> bool {
+        OpHandle::is_user_stopped(self)
+    }
+    fn begin_entries(&self) {
+        OpHandle::begin_entries(self);
+    }
+    fn set_files(&self, done: u64, total: Option<u64>) {
+        OpHandle::set_files(self, done, total);
+    }
+    fn add_files_done(&self) {
+        OpHandle::add_files_done(self);
+    }
+}
+
 impl OpHandle {
     pub(crate) fn id(&self) -> Uuid {
         self.0.id
