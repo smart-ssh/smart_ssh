@@ -216,8 +216,8 @@ pub(crate) async fn execute_note_update(
         target,
         new_content.clone(),
         NoteEditor::Ai {
-            provider: session.ai_provider_label.clone(),
-            model: session.ai_model.clone(),
+            provider: session.ai.label.clone(),
+            model: session.ai.model.clone(),
         },
     )
     .await
@@ -478,10 +478,10 @@ pub async fn generate_session_title_after_first_answer(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) {
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
-    if session.chat_session_store.is_none() || !claim_title_attempt(chat_session_id) {
+    if session.persistence.chat_session_store.is_none() || !claim_title_attempt(chat_session_id) {
         return;
     }
     ensure_session_title(session, session_id, emitter).await;
@@ -508,14 +508,14 @@ async fn ensure_session_title(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) {
-    let Some(store) = &session.chat_session_store else {
+    let Some(store) = &session.persistence.chat_session_store else {
         return;
     };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
 
-    let first_in_memory = first_user_text(&session.context.lock().await.history);
+    let first_in_memory = first_user_text(&session.ai.context.lock().await.history);
     let first_stored = match store.first_user_message_text(chat_session_id).await {
         Ok(text) => text,
         Err(err) => {
@@ -594,18 +594,18 @@ async fn request_ai_title(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) -> Result<String, TitleFailure> {
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // s. identischer Kommentar in `run_one_round` — geklont, um den
     // `MutexGuard` nicht über den potenziell langen `compact_for_send`-
     // Aufruf hinweg zu halten.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     request_context = crate::compaction::compact_for_send(
         session,
         session_id,
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in `run_one_round`.
@@ -624,14 +624,14 @@ async fn request_ai_title(
     let request_context = seal_for_send(
         request_context,
         session.redactor.as_ref(),
-        &session.chat_content,
+        &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
     )
     .map_err(|_| TitleFailure::SealFailed)?;
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
-        &session.ai_provider_budget,
+        &session.ai.provider_budget,
         crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
@@ -639,7 +639,7 @@ async fn request_ai_title(
     .await;
     // Issue #610: usage is reported as title usage (passive).
     let (text_buffer, end) =
-        collect_side_call_text(session.ai_provider.send(request_context), |u| {
+        collect_side_call_text(session.ai.provider.send(request_context), |u| {
             session.report_ai_usage(crate::ai_usage::AiUsagePurpose::SessionTitle, u)
         })
         .await;
@@ -784,10 +784,10 @@ pub async fn suggest_note_update_on_disconnect(
     // stehen (s. `execute_suggested_command`). Auch ein *fehlgeschlagenes*
     // Kommando (Exit-Code ≠ 0) ist potenziell notizwürdig ("Pfad X
     // existiert nicht, Y verwenden"); nur eine Sitzung ganz ohne
-    // Ausführungsversuch hat garantiert nichts beizutragen — das deckt sich
-    // mit der in der Spec genannten Begründung ("ein Vorschlag, der ohnehin
-    // nichts liefern würde").
+    // Ausführungsversuch hat garantiert nichts beizutragen — so die Spec ("ein
+    // Vorschlag, der ohnehin nichts liefern würde").
     let has_executed_command = session
+        .ai
         .context
         .lock()
         .await
@@ -798,11 +798,11 @@ pub async fn suggest_note_update_on_disconnect(
         return false;
     }
 
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // s. identischer Kommentar in `run_one_round` — geklont statt den
     // `MutexGuard` über den potenziell langen `compact_for_send`-Aufruf
     // hinweg zu halten.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     let uncompacted_system_context = request_context.system_context.clone();
     // Spec 0057, §3 / Spec 0040, Abschnitt 5: "vor jedem
     // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
@@ -813,7 +813,7 @@ pub async fn suggest_note_update_on_disconnect(
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     // spec-reviewer-Fund (Review dieses Schritts): Kompaktierung kann die
@@ -857,7 +857,7 @@ pub async fn suggest_note_update_on_disconnect(
     let Ok(request_context) = seal_for_send(
         request_context,
         session.redactor.as_ref(),
-        &session.chat_content,
+        &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
     ) else {
         tracing::info!("skipping note-update suggestion on disconnect: sealing failed");
@@ -866,13 +866,13 @@ pub async fn suggest_note_update_on_disconnect(
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
-        &session.ai_provider_budget,
+        &session.ai.provider_budget,
         crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
     .await;
-    let mut stream = session.ai_provider.send(request_context);
+    let mut stream = session.ai.provider.send(request_context);
     let mut proposed: Option<AiAction> = None;
     while let Some(event) = stream.next().await {
         match event {

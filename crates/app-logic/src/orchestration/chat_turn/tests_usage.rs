@@ -107,7 +107,7 @@ async fn test_chat_turn_reports_one_record_with_ids_and_usage() {
     )
     .with_usage_reporting(Some(reporting(vec![observer])));
     let chat_id = Uuid::new_v4();
-    *session.chat_session_id.lock().await = Some(chat_id);
+    *session.persistence.chat_session_id.lock().await = Some(chat_id);
 
     run_turn(&session).await;
 
@@ -306,7 +306,7 @@ async fn test_note_suggestion_reports_its_purpose() {
         MockSshTransport::default(),
     )
     .with_usage_reporting(Some(reporting(vec![observer])));
-    session.context.lock().await.history.push(note_history());
+    session.ai.context.lock().await.history.push(note_history());
 
     suggest_note_update_on_disconnect(
         &session,
@@ -339,7 +339,7 @@ async fn test_usage_after_the_stop_event_is_not_awaited_or_reported() {
         MockSshTransport::default(),
     )
     .with_usage_reporting(Some(reporting(vec![observer.clone()])));
-    session.context.lock().await.history.push(note_history());
+    session.ai.context.lock().await.history.push(note_history());
     tokio::time::timeout(
         Duration::from_secs(20),
         suggest_note_update_on_disconnect(

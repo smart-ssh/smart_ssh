@@ -79,7 +79,7 @@ async fn test_web_activity_is_shown_and_stored_without_followup_round() {
             || name == "chat-auto-continuation-started")
     );
 
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 2, "{history:?}");
     assert_eq!(history[0].role, Role::Assistant);
     assert_eq!(
@@ -90,6 +90,7 @@ async fn test_web_activity_is_shown_and_stored_without_followup_round() {
     assert!(matches!(history[1].content, MessageContent::WebActivity(_)));
     // Spec 0039, Abschnitt 5: Webinhalt ist nicht vertrauenswürdig.
     assert!(session
+        .safety
         .untrusted_content_ingested
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -111,7 +112,7 @@ async fn test_web_activity_is_redacted_before_display_and_storage() {
     for (_, payload) in &events {
         assert!(!payload.to_string().contains(PLANTED_KEY), "{payload}");
     }
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(!format!("{history:?}").contains(PLANTED_KEY), "{history:?}");
 }
 
@@ -140,7 +141,7 @@ async fn test_web_tool_error_is_shown_and_turn_finishes() {
         .expect("Recherche-Karte");
     assert_eq!(web.1["activity"]["errorCode"], "max_uses_exceeded");
     assert!(!events.iter().any(|(name, _)| name == "chat-error"));
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(matches!(
         history.last().map(|m| &m.content),
         Some(MessageContent::Text(t)) if t.starts_with("Ohne weitere Suche")
@@ -178,6 +179,7 @@ async fn test_injection_check_runs_on_fetched_page_text() {
     run_turn(&session, &emitter).await;
 
     assert!(session
+        .safety
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
     let checked = checked.lock().unwrap().clone();
@@ -189,6 +191,7 @@ async fn test_injection_check_runs_on_fetched_page_text() {
 
 fn flag_set(session: &Session) -> bool {
     session
+        .safety
         .untrusted_content_ingested
         .load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -243,7 +246,7 @@ async fn test_flag_set_when_response_is_stopped_after_web_result() {
     let events = emitter.events.lock().unwrap().clone();
     assert!(events.iter().any(|(n, _)| n == "chat-response-cancelled"));
     // Gestreamter Text bleibt wie bisher in der Historie.
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(
         history[0].content,
         MessageContent::Text("Laut Webseite: ".to_string())
@@ -269,7 +272,7 @@ async fn test_flag_set_when_response_fails_after_web_result() {
     assert!(events.iter().any(|(n, _)| n == "chat-error"));
     // Das Signal selbst erzeugt weder Karte noch Historieneintrag.
     assert!(!events.iter().any(|(n, _)| n == "chat-web-activity"));
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 1, "{history:?}");
 }
 

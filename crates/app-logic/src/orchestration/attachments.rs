@@ -139,6 +139,7 @@ pub async fn push_extension_parts(session: &Session, parts: PreparedExtensionPar
         return;
     }
     session
+        .safety
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
     for prepared in parts.0 {

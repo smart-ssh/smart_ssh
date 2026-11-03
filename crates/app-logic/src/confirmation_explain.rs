@@ -317,13 +317,13 @@ pub async fn explain_confirmation(
         server_id: session.server_id,
         tags,
     };
-    let transform_scope = if session.outgoing_transform.is_some() {
+    let transform_scope = if session.safety.outgoing_transform.is_some() {
         Some(crate::orchestration::outgoing_scope(session, profile_store).await)
     } else {
         None
     };
     explain(
-        session.filter_engine.as_ref(),
+        session.safety.filter_engine.as_ref(),
         &ctx,
         command,
         stored,

@@ -76,7 +76,8 @@ impl Session {
         &self,
         confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     ) -> bool {
-        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.pending_action) else {
+        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.conn.pending_action)
+        else {
             return false;
         };
         match confirmations.resolve(&action_id, ActionUserDecision::DenyReconnect) {

@@ -159,7 +159,7 @@ async fn test_transform_changes_what_the_server_receives_but_sinks_keep_the_orig
     let events = all_event_text(&emitter);
     assert!(events.contains("echo X"), "{events}");
     assert!(!events.contains("echo Y"), "{events}");
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(history.contains("echo X"), "{history}");
     assert!(!history.contains("echo Y"), "{history}");
     let ledger = format!(
@@ -328,7 +328,7 @@ async fn test_rejection_sends_nothing_and_tells_the_ai() {
     run_approved_turn(&session, &emitter).await;
 
     assert!(executed.lock().unwrap().is_empty());
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(
         history.contains("no value available for this server"),
         "{history}"
@@ -375,7 +375,7 @@ async fn test_inserted_secret_is_masked_in_the_output_of_its_own_command() {
     let events = all_event_text(&emitter);
     assert!(!events.contains("hunter-two-secret"), "{events}");
     assert!(events.contains("[REDACTED]"), "{events}");
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(!history.contains("hunter-two-secret"), "{history}");
 }
 
@@ -418,7 +418,7 @@ async fn test_prepared_command_on_the_hard_blacklist_is_rejected_without_quoting
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(shown.contains("hard blacklist"), "{shown}");
     assert!(!shown.contains("rm -rf"), "{shown}");
@@ -469,7 +469,7 @@ async fn test_confirmed_blacklisted_original_turned_into_other_blacklisted_is_se
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(!shown.contains(r#"rm -rf /""#), "{shown}");
     assert!(!shown.contains("rm -rf / "), "{shown}");
@@ -805,7 +805,7 @@ async fn sent_with(to: &'static str, original: &str) -> (Vec<String>, String) {
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     let sent = executed.lock().unwrap().clone();
     (sent, shown)
@@ -900,7 +900,7 @@ async fn test_chain_secrets_of_both_transforms_are_masked_in_the_command_output(
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(!shown.contains("alpha-secret"), "{shown}");
     assert!(!shown.contains("beta-secret"), "{shown}");
@@ -933,7 +933,7 @@ async fn test_chain_whose_final_text_is_blacklisted_is_rejected() {
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(shown.contains("hard blacklist"), "{shown}");
     assert!(!shown.contains("rm -rf"), "{shown}");

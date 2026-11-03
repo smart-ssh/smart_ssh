@@ -72,7 +72,7 @@ fn confirm_reason(payload: &serde_json::Value) -> &str {
 fn red_risk_session(transport: MockSshTransport) -> Session {
     let session = test_session_allowing_everything(vec![AiEvent::Done], transport);
     assert!(
-        session.red_risk_always_confirm,
+        session.safety.red_risk_always_confirm,
         "Spec 0092, A1.2: Test-Fixtures starten mit eingeschalteter Einstellung"
     );
     session
@@ -360,6 +360,7 @@ async fn test_t6_red_with_injection_flag_shows_injection_reason_and_keeps_the_fl
             .with_response("ls -la", output("total 0")),
     );
     session
+        .safety
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -387,6 +388,7 @@ async fn test_t6_red_with_injection_flag_shows_injection_reason_and_keeps_the_fl
     );
     assert!(
         session
+            .safety
             .injection_suspected
             .load(std::sync::atomic::Ordering::SeqCst),
         "das neue Glied darf das Verdachts-Flag nicht verbrauchen"
@@ -508,7 +510,7 @@ async fn test_t8b_sudo_form_under_a_non_sudo_allow_rule_is_escalated() {
         red_risk_session(MockSshTransport::default().with_response(&sudo_command, output("")));
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowExactIptablesFlushStore)));
     assert!(
-        session.sudo_password.is_none(),
+        session.safety.sudo_password.is_none(),
         "Vorbedingung: kein gespeichertes Sudo-Passwort"
     );
 

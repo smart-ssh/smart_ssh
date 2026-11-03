@@ -27,7 +27,9 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::TestEmitter;
 use crate::policy::NoRulesPolicyStore;
-use crate::session::{Session, SessionParts};
+use crate::session::{
+    AiConfig, ChatPersistence, SafetyState, Session, SessionParts, TransportState,
+};
 use crate::state::ActionId;
 
 use super::action_exec::handle_action_proposed;
@@ -420,63 +422,71 @@ pub(crate) fn session_with_ai_provider(
 ) -> Session {
     Session::new(SessionParts {
         transport: crate::session::SessionTransport::new(Box::new(transport)),
-        ai_provider: Box::new(ai_provider),
-        ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
-        context: AsyncMutex::new(SessionContext {
-            system_context: "Testkontext".to_string(),
-            history: Vec::new(),
-            available_actions: default_action_schemas(),
-            max_tokens_hint: None,
-        }),
-        filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
         server_id: ServerId::new(),
         tags: Vec::new(),
-        terminal: StdMutex::new(None),
         redactor: crate::session::SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
-        ai_provider_label: "test-provider".to_string(),
-        ai_model: "test-model".to_string(),
-        system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
-        model_context_window_tokens: usize::MAX / 1_000,
-        summary: AsyncMutex::new(None),
-        context_usage: Default::default(),
-        mcp_origin_flags: StdMutex::new(Vec::new()),
-        sudo_password: crate::session::SwappableSudoPassword::new(None),
-        status: StdMutex::new(crate::events::ConnectionStatus::Connected),
-        pending_action: StdMutex::new(None),
-        mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
-        risk_second_opinion_provider: None,
-        risk_second_opinion_budget: None,
-        // Spec 0092, A1.2: standardmäßig „an", damit ein Test mit rotem
-        // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
-        // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
-        // prüfen, setzen es ausdrücklich über
-        // `set_red_risk_always_confirm_for_tests(false)`.
-        red_risk_always_confirm: true,
-        running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
-        outgoing_transform: None,
-        chat_content: Default::default(),
-        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        injection_check_provider: None,
-        injection_check_budget: None,
-        injection_suspected: std::sync::atomic::AtomicBool::new(false),
-        injection_suspected_reason: std::sync::Mutex::new(None),
-        injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
-        second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
-        // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
-        // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
-        // no-opt bei `None` bereits vollständig.
-        chat_session_store: None,
-        ledger_store: None,
-        chat_session_id: AsyncMutex::new(None),
-        ai_request_paced_at: AsyncMutex::new(None),
-        auto_reconnect: Default::default(),
+        ai: AiConfig {
+            provider: Box::new(ai_provider),
+            provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
+            context: AsyncMutex::new(SessionContext {
+                system_context: "Testkontext".to_string(),
+                history: Vec::new(),
+                available_actions: default_action_schemas(),
+                max_tokens_hint: None,
+            }),
+            label: "test-provider".to_string(),
+            model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
+            request_paced_at: AsyncMutex::new(None),
+        },
+        safety: SafetyState {
+            filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
+            mcp_origin_flags: StdMutex::new(Vec::new()),
+            sudo_password: crate::session::SwappableSudoPassword::new(None),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
+            // Spec 0092, A1.2: standardmäßig „an", damit ein Test mit rotem
+            // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
+            // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
+            // prüfen, setzen es ausdrücklich über
+            // `set_red_risk_always_confirm_for_tests(false)`.
+            red_risk_always_confirm: true,
+            outgoing_transform: None,
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_check_budget: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        },
+        persistence: ChatPersistence {
+            chat_content: Default::default(),
+            // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
+            // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
+            // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
+            // no-opt bei `None` bereits vollständig.
+            chat_session_store: None,
+            ledger_store: None,
+            chat_session_id: AsyncMutex::new(None),
+        },
+        conn: TransportState {
+            terminal: StdMutex::new(None),
+            status: StdMutex::new(crate::events::ConnectionStatus::Connected),
+            pending_action: StdMutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            auto_reconnect: Default::default(),
+        },
     })
 }
 

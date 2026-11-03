@@ -118,7 +118,7 @@ async fn test_command_report_redacts_output_before_history_and_event() {
             false,
         )
         .await;
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     // `CommandOutput` bytes debug-print as numbers: decode them as well.
     let mut dump = format!("{history:?}");
     for m in &history {

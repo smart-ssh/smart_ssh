@@ -158,10 +158,10 @@ async fn escalation_step_red_risk_always_confirms() {
 async fn escalation_step_injection_suspected_confirms_and_consumes_flag() {
     let session =
         test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
-    session.injection_suspected.store(true, SeqCst);
+    session.safety.injection_suspected.store(true, SeqCst);
     let d = escalate(&session, ActionOrigin::Internal, "ls -la").await;
     assert!(matches!(d, Decision::Confirm { .. }));
-    assert!(!session.injection_suspected.load(SeqCst));
+    assert!(!session.safety.injection_suspected.load(SeqCst));
 }
 
 #[tokio::test]

@@ -241,12 +241,13 @@ async fn push_adds_one_extension_part_per_item_and_marks_untrusted() {
     );
     let prepared = accept_extension_content(&reg, &redactor(), Uuid::new_v4(), &ids(2)).unwrap();
     push_extension_parts(&session, prepared).await;
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 2);
     assert!(history
         .iter()
         .all(|m| matches!(m.content, MessageContent::Extension(_))));
     assert!(session
+        .safety
         .untrusted_content_ingested
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -263,7 +264,7 @@ async fn send_with(reg: Arc<ChatContentRegistry>, history: Vec<ChatMessage>) -> 
     let contexts = provider.received_contexts_handle();
     let mut session = session_with_ai_provider(provider, MockSshTransport::default());
     session.set_chat_content_for_tests(reg);
-    session.context.lock().await.history = history;
+    session.ai.context.lock().await.history = history;
     let emitter = TestEmitter::default();
     run_chat_turn(
         &session,
@@ -556,7 +557,7 @@ async fn hooks_use_the_chat_session_id_so_content_survives_resume() {
     let part_id = ext.store.lock().unwrap().keys().next().unwrap().1.clone();
     let mut p = part("f.txt");
     p.id = part_id;
-    session.context.lock().await.history = vec![user_text("hi"), user_part(p)];
+    session.ai.context.lock().await.history = vec![user_text("hi"), user_part(p)];
 
     // "Resume": the same session, but a different tab id, still resolves.
     run_chat_turn(
@@ -572,9 +573,9 @@ async fn hooks_use_the_chat_session_id_so_content_survives_resume() {
     assert!(sent.contains("ORIGINAL-CONTENT"), "{sent}");
 
     // After "New Chat" the key follows the new chat session id.
-    *session.chat_session_id.lock().await = Some(chat_b);
+    *session.persistence.chat_session_id.lock().await = Some(chat_b);
     assert_eq!(session.extension_content_key(tab1).await, chat_b);
     // Without a saved chat the tab id is the fallback.
-    *session.chat_session_id.lock().await = None;
+    *session.persistence.chat_session_id.lock().await = None;
     assert_eq!(session.extension_content_key(tab1).await, tab1);
 }

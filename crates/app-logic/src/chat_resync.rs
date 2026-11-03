@@ -21,7 +21,7 @@ pub struct ChatResyncDto {
 
 impl Session {
     pub(crate) fn lock_proposal(&self) -> std::sync::MutexGuard<'_, crate::session::ChatTurnState> {
-        crate::poison::lock_tolerating_poison(&self.chat_turn)
+        crate::poison::lock_tolerating_poison(&self.conn.chat_turn)
     }
 
     /// Keeps the card data of a proposal that waits for confirmation (a

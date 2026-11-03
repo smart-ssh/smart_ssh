@@ -72,7 +72,7 @@ impl<'a> CloseContext<'a> {
         let session = self.elevated.remove_session(self.sessions, session_id);
         // Issue #356: closing ends automatic reconnect attempts.
         if let Some(session) = &session {
-            session.auto_reconnect.stop();
+            session.conn.auto_reconnect.stop();
         }
         // Issue #89: local path grants expire with their session.
         self.grants.remove_session(session_id);
@@ -102,7 +102,7 @@ impl<'a> CloseContext<'a> {
         .await;
         // Dropping the sender ends the terminal actor on its next receive
         // without a second status event.
-        *session.terminal.lock().unwrap() = None;
+        *session.conn.terminal.lock().unwrap() = None;
 
         tracing::info!(session_id = %session_id, "session disconnected");
         emit_connection_status_changed(
@@ -276,7 +276,7 @@ mod tests {
             .is_ok());
         let action_id = uuid::Uuid::new_v4();
         let rx = rig.confirmations.register(action_id);
-        *rig.f.session.pending_action.lock().unwrap() = Some(action_id);
+        *rig.f.session.conn.pending_action.lock().unwrap() = Some(action_id);
         (rig, slot, op, rx)
     }
 
@@ -460,7 +460,8 @@ mod tests {
         "app-shell/src/elevated_sftp.rs",
         // Holds the scan itself (its self-test plants call text).
         "app-shell/src/sessions.rs",
-        "app-logic/src/session.rs",
+        "app-logic/src/session/mod.rs",
+        "app-logic/src/session/manager.rs",
         "app-logic/src/mcp_sessions.rs",
     ];
 

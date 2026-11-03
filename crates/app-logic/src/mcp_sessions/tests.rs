@@ -137,7 +137,7 @@ fn test_disconnected_mcp_session_is_not_reused_but_stays_marked() {
     let id = Uuid::new_v4();
     registry.register(&key, id).unwrap();
     let session = session_on(server, MockSshTransport::default());
-    *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     sessions.insert(id, Arc::new(session));
 
     assert_eq!(registry.reusable_session(&key, &sessions), None);
@@ -204,7 +204,7 @@ fn test_end_session_ignores_non_mcp_sessions() {
     let session = session_on(ServerId::new(), MockSshTransport::default());
     let action_id: ActionId = Uuid::new_v4();
     let _rx = confirmations.register(action_id);
-    *session.pending_action.lock().unwrap() = Some(action_id);
+    *session.conn.pending_action.lock().unwrap() = Some(action_id);
 
     assert!(!registry.end_session(Uuid::new_v4(), Some(&session), &confirmations));
     assert!(confirmations.contains(&action_id));
@@ -226,10 +226,16 @@ async fn test_mcp_action_runs_only_in_the_mcp_session_and_stays_confirm() {
         let user_transport = MockSshTransport::default();
         let user_executed = user_transport.executed_handle();
         let user_session = Arc::new(session_on(server, user_transport));
-        user_session.context.lock().await.history.push(ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text("geheimer Nutzer-Kontext".to_string()),
-        });
+        user_session
+            .ai
+            .context
+            .lock()
+            .await
+            .history
+            .push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("geheimer Nutzer-Kontext".to_string()),
+            });
         let user_session_id = Uuid::new_v4();
         sessions.insert(user_session_id, Arc::clone(&user_session));
 
@@ -282,14 +288,14 @@ async fn test_mcp_action_runs_only_in_the_mcp_session_and_stays_confirm() {
         assert_eq!(*mcp_executed.lock().unwrap(), vec!["ls -la".to_string()]);
         assert!(user_executed.lock().unwrap().is_empty());
 
-        let user_history = user_session.context.lock().await.history.clone();
+        let user_history = user_session.ai.context.lock().await.history.clone();
         assert_eq!(
             user_history.len(),
             1,
             "MCP-Ausgabe im Nutzer-Verlauf: {user_history:?}"
         );
 
-        let mcp_history = mcp_session.context.lock().await.history.clone();
+        let mcp_history = mcp_session.ai.context.lock().await.history.clone();
         assert!(
             mcp_history
                 .iter()
@@ -328,7 +334,7 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
         let confirmations = ConfirmationRegistry::new();
 
         let close = async {
-            while session.pending_action.lock().unwrap().is_none() {
+            while session.conn.pending_action.lock().unwrap().is_none() {
                 tokio::task::yield_now().await;
             }
             // Wie `app_shell::commands::disconnect`: erst aus dem
@@ -353,8 +359,8 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
             executed.lock().unwrap().is_empty(),
             "Aktion lief trotz Schließen"
         );
-        assert!(session.pending_action.lock().unwrap().is_none());
-        let history = session.context.lock().await.history.clone();
+        assert!(session.conn.pending_action.lock().unwrap().is_none());
+        let history = session.ai.context.lock().await.history.clone();
         assert!(
             history
                 .iter()
@@ -393,7 +399,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
         let confirmations = ConfirmationRegistry::new();
 
         let close = async {
-            while session.pending_action.lock().unwrap().is_none() {
+            while session.conn.pending_action.lock().unwrap().is_none() {
                 tokio::task::yield_now().await;
             }
             let removed = sessions.remove(session_id).expect("Sitzung fehlt");
@@ -427,7 +433,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
             executed.lock().unwrap().is_empty(),
             "Aktion lief trotz Schließen"
         );
-        let history = session.context.lock().await.history.clone();
+        let history = session.ai.context.lock().await.history.clone();
         assert!(
             history
                 .iter()
@@ -598,7 +604,7 @@ fn test_disconnected_open_mcp_session_still_counts_towards_the_cap() {
     let registry = McpSessionRegistry::new();
     let filled = fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
     let (key, id) = &filled[0];
-    *sessions.get(*id).unwrap().status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *sessions.get(*id).unwrap().conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
 
     // Derselbe Client bekommt keine neue Sitzung, solange der alte Tab offen
     // ist und die Höchstzahl erreicht ist.

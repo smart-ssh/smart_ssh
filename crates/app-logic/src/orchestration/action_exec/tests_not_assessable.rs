@@ -154,6 +154,7 @@ async fn test_injection_code_takes_precedence_over_not_assessable() {
             MockSshTransport::default().with_response(&command, output("")),
         );
         session
+            .safety
             .injection_suspected
             .store(true, std::sync::atomic::Ordering::SeqCst);
         let (decision, payload) = decide(&session, &command).await;

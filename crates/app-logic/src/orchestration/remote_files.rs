@@ -236,6 +236,7 @@ pub(crate) async fn execute_read_remote_file(
             .await;
             // Spec 0039, Abschnitt 5.
             session
+                .safety
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             check_for_injected_instructions(
@@ -485,6 +486,7 @@ pub(crate) async fn execute_write_remote_file(
             // angekündigt hat — genau der im Event gesendete Wert
             // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
             let Some(password) = session
+                .safety
                 .sudo_password
                 .get()
                 .filter(|_| sudo_fallback_announced)

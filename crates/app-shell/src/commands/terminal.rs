@@ -39,7 +39,7 @@ pub async fn open_terminal(
         open_shell_in_start_directory(&session, PtySize { cols: 80, rows: 24 }).await?;
 
     let (tx, rx) = mpsc::unbounded_channel();
-    *session.terminal.lock().unwrap() = Some(tx);
+    *session.conn.terminal.lock().unwrap() = Some(tx);
     spawn_terminal_actor(
         session_id,
         Arc::clone(&session),
@@ -52,6 +52,7 @@ pub async fn open_terminal(
 
 fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {
     session
+        .conn
         .terminal
         .lock()
         .unwrap()

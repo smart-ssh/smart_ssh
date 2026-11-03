@@ -86,7 +86,7 @@ impl AppMcpBackend {
                     if let Err(err) = orphan.transport.lock().await.disconnect().await {
                         tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
                     }
-                    *orphan.terminal.lock().unwrap() = None;
+                    *orphan.conn.terminal.lock().unwrap() = None;
                 }
             },
         )

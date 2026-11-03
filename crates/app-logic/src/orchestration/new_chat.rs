@@ -49,8 +49,9 @@ fn busy_error() -> CommandError {
 }
 
 fn is_confirmation_open(session: &Session) -> bool {
-    crate::poison::lock_tolerating_poison(&session.pending_action).is_some()
+    crate::poison::lock_tolerating_poison(&session.conn.pending_action).is_some()
         || session
+            .safety
             .mcp_confirmation_claim
             .load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -62,6 +63,7 @@ impl Drop for TurnClaim<'_> {
     fn drop(&mut self) {
         let mut turn = self
             .0
+            .conn
             .chat_turn
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -89,15 +91,15 @@ pub async fn start_new_chat(
     emitter: &dyn EventEmitter,
     provider_id: Option<Uuid>,
 ) -> Result<Option<Uuid>, CommandError> {
-    if crate::poison::lock_tolerating_poison(&session.chat_turn).running
+    if crate::poison::lock_tolerating_poison(&session.conn.chat_turn).running
         || is_confirmation_open(session)
     {
         return Err(busy_error());
     }
 
     let persisted = match (
-        &session.chat_session_store,
-        *session.chat_session_id.lock().await,
+        &session.persistence.chat_session_store,
+        *session.persistence.chat_session_id.lock().await,
     ) {
         (Some(store), Some(id)) => Some((store.clone(), id)),
         _ => None,
@@ -111,7 +113,7 @@ pub async fn start_new_chat(
     // Belegt den Turn-Slot atomar mit der Prüfung: eine währenddessen
     // eintreffende Nutzer-Nachricht wird nur eingereiht, nicht ausgeführt.
     {
-        let mut turn = crate::poison::lock_tolerating_poison(&session.chat_turn);
+        let mut turn = crate::poison::lock_tolerating_poison(&session.conn.chat_turn);
         if turn.running {
             return Err(busy_error());
         }
@@ -140,10 +142,10 @@ pub async fn start_new_chat(
     };
 
     {
-        let mut chat_session_id = session.chat_session_id.lock().await;
-        let mut context = session.context.lock().await;
-        let mut summary = session.summary.lock().await;
-        let mut flags = crate::poison::lock_tolerating_poison(&session.mcp_origin_flags);
+        let mut chat_session_id = session.persistence.chat_session_id.lock().await;
+        let mut context = session.ai.context.lock().await;
+        let mut summary = session.ai.summary.lock().await;
+        let mut flags = crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags);
         // Kontext-Lock nur für diese reinen Speicheroperationen.
         context.history.retain(is_os_banner);
         flags.clear();
@@ -156,6 +158,7 @@ pub async fn start_new_chat(
     // Issue #648: the provider-reported size belongs to the old chat. Reset
     // the tracker (so compaction ignores the old ratio) and tell the UI 0.
     *session
+        .ai
         .context_usage
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = Default::default();
@@ -163,12 +166,13 @@ pub async fn start_new_chat(
         emitter,
         session_id,
         0,
-        session.model_context_window_tokens as u64,
+        session.ai.model_context_window_tokens as u64,
     );
     // Per-Chat-Zustand der laufenden Verbindung; `untrusted_content_ingested`
     // bleibt bewusst unberührt (Issue #271, Entscheidung 2), ebenso
     // `injection_suspected`/`injection_check_unavailable`.
     session
+        .conn
         .auto_continue_stop
         .store(false, std::sync::atomic::Ordering::SeqCst);
 
@@ -213,11 +217,11 @@ mod tests {
         )
         .await;
         {
-            let mut ctx = session.context.lock().await;
+            let mut ctx = session.ai.context.lock().await;
             ctx.history.push(banner());
             ctx.history.push(user("erste Frage"));
         }
-        *session.mcp_origin_flags.lock().unwrap() = vec![false, false];
+        *session.safety.mcp_origin_flags.lock().unwrap() = vec![false, false];
         (session, store, id, tmp)
     }
 
@@ -235,7 +239,10 @@ mod tests {
             .expect("persisted tab gets a new row");
 
         assert_ne!(new_id, old_id);
-        assert_eq!(*session.chat_session_id.lock().await, Some(new_id));
+        assert_eq!(
+            *session.persistence.chat_session_id.lock().await,
+            Some(new_id)
+        );
         let rows = store
             .list_sessions_for_server(&session.server_id)
             .await
@@ -247,25 +254,30 @@ mod tests {
         let new = rows.iter().find(|r| r.id == new_id).unwrap();
         assert!(new.ended_at.is_none());
         // History is empty apart from the connection's OS banner.
-        let ctx = session.context.lock().await;
+        let ctx = session.ai.context.lock().await;
         assert_eq!(ctx.history.len(), 1);
         assert!(is_os_banner(&ctx.history[0]));
-        assert_eq!(session.mcp_origin_flags.lock().unwrap().len(), 1);
-        assert!(session.summary.lock().await.is_none());
-        assert!(!session.chat_turn.lock().unwrap().running);
+        assert_eq!(session.safety.mcp_origin_flags.lock().unwrap().len(), 1);
+        assert!(session.ai.summary.lock().await.is_none());
+        assert!(!session.conn.chat_turn.lock().unwrap().running);
     }
 
     #[tokio::test]
     async fn test_new_chat_resets_context_usage_and_emits_zero() {
         let (session, _store, _old_id, _tmp) = persisted_session().await;
-        session.context_usage.lock().unwrap().record(90_000, 40_000);
-        assert!(session.context_usage.lock().unwrap().ratio() > 2.0);
+        session
+            .ai
+            .context_usage
+            .lock()
+            .unwrap()
+            .record(90_000, 40_000);
+        assert!(session.ai.context_usage.lock().unwrap().ratio() > 2.0);
         let emitter = TestEmitter::default();
         let sid = Uuid::new_v4();
 
         start_new_chat(&session, sid, &emitter, None).await.unwrap();
 
-        let tracker = session.context_usage.lock().unwrap().clone();
+        let tracker = session.ai.context_usage.lock().unwrap().clone();
         assert_eq!(tracker, crate::compaction::ContextUsageTracker::default());
         assert_eq!(tracker.last_input_tokens, None);
         assert_eq!(tracker.ratio(), 1.0);
@@ -278,7 +290,7 @@ mod tests {
         assert_eq!(usage[0].1["inputTokens"], 0);
         assert_eq!(
             usage[0].1["windowTokens"],
-            session.model_context_window_tokens as u64
+            session.ai.model_context_window_tokens as u64
         );
     }
 
@@ -304,10 +316,15 @@ mod tests {
     async fn test_new_chat_keeps_untrusted_flag_and_connection() {
         let (session, _store, _old_id, _tmp) = persisted_session().await;
         session
+            .safety
             .untrusted_content_ingested
             .store(true, Ordering::SeqCst);
-        session.injection_suspected.store(true, Ordering::SeqCst);
         session
+            .safety
+            .injection_suspected
+            .store(true, Ordering::SeqCst);
+        session
+            .safety
             .injection_check_unavailable
             .store(true, Ordering::SeqCst);
 
@@ -315,9 +332,15 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(session.untrusted_content_ingested.load(Ordering::SeqCst));
-        assert!(session.injection_suspected.load(Ordering::SeqCst));
-        assert!(session.injection_check_unavailable.load(Ordering::SeqCst));
+        assert!(session
+            .safety
+            .untrusted_content_ingested
+            .load(Ordering::SeqCst));
+        assert!(session.safety.injection_suspected.load(Ordering::SeqCst));
+        assert!(session
+            .safety
+            .injection_check_unavailable
+            .load(Ordering::SeqCst));
         // Same transport, still usable.
         let out = session
             .transport
@@ -334,9 +357,9 @@ mod tests {
         for pending in [false, true] {
             let (session, store, old_id, _tmp) = persisted_session().await;
             if pending {
-                *session.pending_action.lock().unwrap() = Some(Uuid::new_v4());
+                *session.conn.pending_action.lock().unwrap() = Some(Uuid::new_v4());
             } else {
-                session.chat_turn.lock().unwrap().running = true;
+                session.conn.chat_turn.lock().unwrap().running = true;
             }
 
             let err = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
@@ -344,8 +367,11 @@ mod tests {
                 .unwrap_err();
 
             assert_eq!(err.code, Some(NEW_CHAT_BUSY));
-            assert_eq!(*session.chat_session_id.lock().await, Some(old_id));
-            assert_eq!(session.context.lock().await.history.len(), 2);
+            assert_eq!(
+                *session.persistence.chat_session_id.lock().await,
+                Some(old_id)
+            );
+            assert_eq!(session.ai.context.lock().await.history.len(), 2);
             let rows = store
                 .list_sessions_for_server(&session.server_id)
                 .await
@@ -362,23 +388,23 @@ mod tests {
         start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
             .await
             .unwrap();
-        let turn = session.chat_turn.lock().unwrap();
+        let turn = session.conn.chat_turn.lock().unwrap();
         assert!(!turn.running && !turn.swapping && turn.queued.is_empty());
     }
 
     #[tokio::test]
     async fn test_new_chat_in_local_tab_only_clears_context() {
         let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-        session.context.lock().await.history.push(user("hallo"));
-        *session.mcp_origin_flags.lock().unwrap() = vec![false];
+        session.ai.context.lock().await.history.push(user("hallo"));
+        *session.safety.mcp_origin_flags.lock().unwrap() = vec![false];
 
         let result = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
             .await
             .unwrap();
 
         assert_eq!(result, None);
-        assert!(session.context.lock().await.history.is_empty());
-        assert_eq!(*session.chat_session_id.lock().await, None);
-        assert!(session.chat_session_store.is_none());
+        assert!(session.ai.context.lock().await.history.is_empty());
+        assert_eq!(*session.persistence.chat_session_id.lock().await, None);
+        assert!(session.persistence.chat_session_store.is_none());
     }
 }

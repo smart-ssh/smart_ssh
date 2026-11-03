@@ -24,6 +24,7 @@ use crate::settings_store::SETTINGS_STORE_FILE;
 pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
     let app = app.clone();
     session
+        .conn
         .auto_reconnect
         .set_hook(Arc::new(move |session_id| start(&app, session_id)));
 }
@@ -51,7 +52,7 @@ fn start<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) {
     let Some(budget) = read_budget(app) else {
         return;
     };
-    let stop = session.auto_reconnect.begin_run();
+    let stop = session.conn.auto_reconnect.begin_run();
     emit_auto_reconnect_changed(
         &TauriEventEmitter(app.clone()),
         session_id,
@@ -80,7 +81,7 @@ async fn run<R: Runtime>(
         },
     )
     .await;
-    session.auto_reconnect.finish_run(&stop);
+    session.conn.auto_reconnect.finish_run(&stop);
     emit_auto_reconnect_changed(&emitter, session_id, end.into(), 0);
     tracing::info!(session_id = %session_id, end = ?end, "automatic reconnect ended");
 
@@ -111,16 +112,17 @@ async fn attempt<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) -> Attem
 /// drop and the user did not press Stop in the meantime. Takes the
 /// "interrupted" flag, so a drop leads to at most one continuation.
 pub(crate) async fn continuation_note(session: &Session) -> Option<String> {
-    if !session.auto_reconnect.take_ai_turn_interrupted() {
+    if !session.conn.auto_reconnect.take_ai_turn_interrupted() {
         return None;
     }
     if session
+        .conn
         .auto_continue_stop
         .load(std::sync::atomic::Ordering::SeqCst)
     {
         return None;
     }
-    let language = session.system_context_parts.lock().await.language;
+    let language = session.ai.system_context_parts.lock().await.language;
     Some(app_logic::system_prompt::connection_restored_notice(language).to_string())
 }
 

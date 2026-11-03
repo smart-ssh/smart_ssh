@@ -40,6 +40,7 @@ pub(crate) fn sanitize_injection_reason(session: &Session, raw: &str) -> String 
 /// Issue #693: current suspicion reason, without consuming it.
 pub(super) fn peek_injection_reason(session: &Session) -> Option<String> {
     session
+        .safety
         .injection_suspected_reason
         .lock()
         .ok()
@@ -49,6 +50,7 @@ pub(super) fn peek_injection_reason(session: &Session) -> Option<String> {
 /// Issue #693: takes the suspicion reason out together with the flag.
 pub(super) fn take_injection_reason(session: &Session) -> Option<String> {
     session
+        .safety
         .injection_suspected_reason
         .lock()
         .ok()
@@ -83,13 +85,13 @@ pub(crate) async fn check_for_injected_instructions(
     content: &str,
     source: &'static str,
 ) {
-    let Some(provider) = session.injection_check_provider.as_deref() else {
+    let Some(provider) = session.safety.injection_check_provider.as_deref() else {
         return;
     };
     // Issue #693: progress under the checked result (display only).
     emit_chat_injection_check(emitter, session_id, item_id, InjectionCheckState::Running);
     wait_for_ai_request_slot(session).await;
-    if let Some(budget) = session.injection_check_budget.as_deref() {
+    if let Some(budget) = session.safety.injection_check_budget.as_deref() {
         // Estimate on the content as it will ACTUALLY be sent, not the raw
         // `content` — `fetch_injection_check` truncates via
         // `truncate_for_second_opinion` before it ever reaches the
@@ -155,10 +157,11 @@ pub(crate) async fn check_for_injected_instructions(
             // only; the decision logic is unchanged). Reason first, flag
             // second, so a consumer that sees the flag also sees the reason.
             let reason = sanitize_injection_reason(session, &reason);
-            if let Ok(mut slot) = session.injection_suspected_reason.lock() {
+            if let Ok(mut slot) = session.safety.injection_suspected_reason.lock() {
                 *slot = Some(reason.clone());
             }
             session
+                .safety
                 .injection_suspected
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             emit_chat_injection_check(
@@ -182,6 +185,7 @@ pub(crate) async fn check_for_injected_instructions(
         crate::second_opinion::SideCallOutcome::NoVerdict
         | crate::second_opinion::SideCallOutcome::ProviderError { .. } => {
             session
+                .safety
                 .injection_check_unavailable
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             emit_chat_error(
@@ -215,6 +219,7 @@ pub(crate) fn announce_second_opinion_setup_failure(
     emitter: &dyn EventEmitter,
 ) {
     if session
+        .safety
         .second_opinion_setup_notice_pending
         .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
@@ -229,6 +234,7 @@ pub(crate) fn announce_second_opinion_setup_failure(
     }
     // Issue #231: Injection-Prüfung am Server an, aber kein Anbieter.
     if session
+        .safety
         .injection_check_inactive_notice_pending
         .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
@@ -243,6 +249,7 @@ pub(crate) fn announce_second_opinion_setup_failure(
     }
     // Issue #843: secret values for this server may not be masked.
     if session
+        .safety
         .redaction_incomplete_notice_pending
         .swap(false, std::sync::atomic::Ordering::SeqCst)
     {

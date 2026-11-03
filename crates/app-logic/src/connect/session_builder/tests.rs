@@ -286,7 +286,7 @@ async fn test_sudo_password_is_masked_by_the_built_redactor() {
         .redact_text(&format!("password is {SUDO_SECRET} ok"));
     assert!(!out.contains(SUDO_SECRET), "sudo password leaked: {out}");
     assert_eq!(
-        session.sudo_password.get().unwrap().expose_secret(),
+        session.safety.sudo_password.get().unwrap().expose_secret(),
         SUDO_SECRET
     );
 }
@@ -327,7 +327,7 @@ async fn test_uname_banner_is_the_first_history_message_and_fenced() {
     )
     .await;
     let session = run.built.unwrap().session;
-    let ctx = session.context.lock().await;
+    let ctx = session.ai.context.lock().await;
     let first = ctx.history.first().expect("banner message");
     assert_eq!(first.role, Role::ActionResult);
     let MessageContent::Text(text) = &first.content else {
@@ -389,11 +389,14 @@ async fn test_resume_loads_history_and_flags_untrusted_content() {
     let built = run.built.unwrap();
     assert_eq!(built.chat_session_id, Some(chat_id));
     let session = built.session;
-    let ctx = session.context.lock().await;
+    let ctx = session.ai.context.lock().await;
     // No banner (uname failed): exactly the stored message.
     assert_eq!(ctx.history.len(), 1);
     assert!(ctx.history[0].content == fenced.content);
-    assert!(session.untrusted_content_ingested.load(Ordering::SeqCst));
+    assert!(session
+        .safety
+        .untrusted_content_ingested
+        .load(Ordering::SeqCst));
 }
 
 #[tokio::test]
@@ -423,7 +426,7 @@ async fn test_uname_banner_precedes_resumed_stored_history() {
     )
     .await;
     let session = run.built.unwrap().session;
-    let ctx = session.context.lock().await;
+    let ctx = session.ai.context.lock().await;
     assert_eq!(ctx.history.len(), 2);
     let MessageContent::Text(first) = &ctx.history[0].content else {
         panic!("banner is text");
@@ -453,7 +456,7 @@ async fn test_local_pseudo_server_gets_no_sudo_password_and_no_root_probe() {
     local.id = local_id;
     let run = run(&fx, local_id, local, ok("Linux x 6.1"), ok("0"), None).await;
     let built = run.built.unwrap();
-    assert!(built.session.sudo_password.get().is_none());
+    assert!(built.session.safety.sudo_password.get().is_none());
     assert_eq!(built.session.is_root(), None);
     assert_eq!(built.chat_session_id, None);
     assert_eq!(run.commands.lock().unwrap().as_slice(), ["uname -a"]);

@@ -110,12 +110,12 @@ async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
     // `send()`, dessen Kontext bereits Runde 1s Riesen-Ausgabe trägt —
     // genau der Aufruf, der kompaktiert werden muss.
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.history.push(ChatMessage {
             role: Role::User,
             content: MessageContent::Text("Danke, das reicht.".to_string()),
         });
-        session.mcp_origin_flags.lock().unwrap().push(false);
+        session.safety.mcp_origin_flags.lock().unwrap().push(false);
     }
     run_chat_turn(
         &session,
@@ -219,12 +219,12 @@ async fn test_compaction_does_not_bypass_redaction_for_truncated_output() {
     )
     .await;
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.history.push(ChatMessage {
             role: Role::User,
             content: MessageContent::Text("Danke.".to_string()),
         });
-        session.mcp_origin_flags.lock().unwrap().push(false);
+        session.safety.mcp_origin_flags.lock().unwrap().push(false);
     }
     run_chat_turn(
         &session,
@@ -323,7 +323,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
     });
 
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.system_context = parts.assemble();
         ctx.history = history;
     }
@@ -348,7 +348,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
         .last()
         .expect("mindestens ein send()-Aufruf muss stattgefunden haben")
         .clone();
-    let budget = (session.model_context_window_tokens as f64 * 0.75) as usize;
+    let budget = (session.ai.model_context_window_tokens as f64 * 0.75) as usize;
     let estimated = crate::compaction::estimate_request_tokens(&sent);
     assert!(
         estimated <= budget,
@@ -384,8 +384,8 @@ fn command_result_msg(command: &str, stdout: &str) -> ChatMessage {
 /// Historie brauchen, ohne dafür jede Runde über einen echten
 /// `run_chat_turn` laufen zu lassen.
 async fn push_synthetic_rounds(session: &Session, count: usize, stdout_bytes_each: usize) {
-    let mut ctx = session.context.lock().await;
-    let mut flags = session.mcp_origin_flags.lock().unwrap();
+    let mut ctx = session.ai.context.lock().await;
+    let mut flags = session.safety.mcp_origin_flags.lock().unwrap();
     for i in 0..count {
         ctx.history.push(user_msg(&format!("Frage {i}")));
         flags.push(false);
@@ -425,192 +425,6 @@ async fn test_compact_for_send_is_noop_below_trigger_ratio() {
     );
 }
 
-/// spec-reviewer-Fund (Review dieses Schritts): der Etappe-2-Test, der
-/// die eigentliche Zusage der Leiter prüfte — "nach der Kompaktierung
-/// passt der Request unters Budget" (Spec 0057, §3.2) — ging beim
-/// Verschieben nach `orchestration::tests` (Etappe 3, `&Session`-
-/// Parameter) verloren. Hier für BEIDE Pfade wiederhergestellt: mit
-/// erfolgreicher Zusammenfassung (Schritt 1 allein reicht) und mit
-/// fehlgeschlagener Zusammenfassung (Fallback auf den Etappe-2-
-/// Platzhalter, der ebenfalls unters Budget passen muss — dafür ist
-/// `determine_round_cut_count` überhaupt konservativ anhand der
-/// Platzhalter-Größe bemessen, s. ADR 0049 Punkt 3).
-#[tokio::test]
-async fn test_compact_for_send_triggers_and_fits_under_budget_with_and_without_summary() {
-    let history = vec![
-        user_msg("Runde 1"),
-        user_msg("Runde 2"),
-        user_msg("Runde 3"),
-        user_msg("Runde 4"),
-        command_result_msg("cat big.log", &"a".repeat(100_000)),
-    ];
-    let budget = (10_000_f64 * 0.75) as usize;
-
-    // Pfad 1: Zusammenfassung gelingt.
-    {
-        let session = session_with_ai_provider(
-            MockAiProvider::new(vec![
-                AiEvent::TextDelta("Kurze Zusammenfassung.".to_string()),
-                AiEvent::Done,
-            ]),
-            MockSshTransport::default(),
-        );
-        {
-            let mut ctx = session.context.lock().await;
-            ctx.history = history.clone();
-        }
-        let request_context = session.context.lock().await.clone();
-        let parts = session.system_context_parts.lock().await.clone();
-        let result = crate::compaction::compact_for_send(
-            &session,
-            Uuid::new_v4(),
-            &TestEmitter::default(),
-            request_context,
-            &parts,
-            10_000,
-        )
-        .await;
-        let estimated = crate::compaction::estimate_request_tokens(&result);
-        assert!(
-            estimated <= budget,
-            "mit erfolgreicher Zusammenfassung muss der Request unters Budget passen \
-             (geschätzt {estimated}, Budget {budget})"
-        );
-    }
-
-    // Pfad 2: Zusammenfassung schlägt fehl -> Fallback.
-    {
-        let session = session_with_ai_provider(
-            MockAiProvider::new(vec![AiEvent::Error(AiError::RateLimited)]),
-            MockSshTransport::default(),
-        );
-        {
-            let mut ctx = session.context.lock().await;
-            ctx.history = history.clone();
-        }
-        let request_context = session.context.lock().await.clone();
-        let parts = session.system_context_parts.lock().await.clone();
-        let result = crate::compaction::compact_for_send(
-            &session,
-            Uuid::new_v4(),
-            &TestEmitter::default(),
-            request_context,
-            &parts,
-            10_000,
-        )
-        .await;
-        let estimated = crate::compaction::estimate_request_tokens(&result);
-        assert!(
-            estimated <= budget,
-            "auch der Fallback-Platzhalter (ohne Zusammenfassung) muss unters Budget \
-             passen (geschätzt {estimated}, Budget {budget})"
-        );
-    }
-}
-
-/// Spec 0057, §2.1: greift Schritt 1 der Kürzungs-Leiter, wird beim
-/// ERSTEN Mal eine echte Zusammenfassung erzeugt (kein bisheriger
-/// Stand vorhanden, der wiederverwendet werden könnte) — der
-/// Platzhalter muss den KI-generierten Text tragen, nicht den
-/// generischen Etappe-2-Hinweis, und `session.summary` muss
-/// aktualisiert sein.
-#[tokio::test]
-async fn test_compact_for_send_uses_summary_when_the_call_succeeds() {
-    let mut session = session_with_ai_provider(
-        MockAiProvider::new(vec![
-            AiEvent::TextDelta("Nutzer prüfte Logs, alles unauffällig.".to_string()),
-            AiEvent::Done,
-        ]),
-        MockSshTransport::default(),
-    );
-    session.set_model_context_window_tokens_for_tests(2_000);
-    push_synthetic_rounds(&session, 6, 5_000).await;
-
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
-    let result = crate::compaction::compact_for_send(
-        &session,
-        Uuid::new_v4(),
-        &TestEmitter::default(),
-        request_context,
-        &parts,
-        session.model_context_window_tokens,
-    )
-    .await;
-
-    let placeholder_text = result
-        .history
-        .iter()
-        .find_map(|m| match &m.content {
-            MessageContent::Text(t) if t.contains(summary_marker(parts.language)) => {
-                Some(t.clone())
-            }
-            _ => None,
-        })
-        .expect("ein Zusammenfassungs-Platzhalter muss in der gekürzten Historie stehen");
-    assert!(
-        placeholder_text.contains("Nutzer prüfte Logs, alles unauffällig."),
-        "der Platzhalter muss den tatsächlichen KI-Text tragen: {placeholder_text}"
-    );
-    assert!(
-        !placeholder_text.contains(truncation_marker(parts.language)),
-        "bei Erfolg darf NICHT der generische Etappe-2-Hinweis verwendet werden"
-    );
-    let stored = session.summary.lock().await.clone();
-    assert_eq!(
-        stored.map(|s| s.text),
-        Some("Nutzer prüfte Logs, alles unauffällig.".to_string())
-    );
-}
-
-/// Spec 0057, §2.1: "nicht jedes Mal die ganze History von vorne" —
-/// deckt eine bereits gespeicherte Zusammenfassung den benötigten
-/// `cut_count` schon ab, darf KEIN zweiter KI-Aufruf stattfinden.
-#[tokio::test]
-async fn test_compact_for_send_reuses_existing_summary_without_a_new_ai_call() {
-    let received_contexts = std::sync::Arc::new(StdMutex::new(Vec::new()));
-    let mut session = session_with_ai_provider(
-        MockAiProvider {
-            rounds: StdMutex::new(vec![vec![AiEvent::Done]].into()),
-            received_contexts: received_contexts.clone(),
-        },
-        MockSshTransport::default(),
-    );
-    session.set_model_context_window_tokens_for_tests(2_000);
-    push_synthetic_rounds(&session, 6, 5_000).await;
-    *session.summary.lock().await = Some(crate::compaction::RollingSummary {
-        text: "Bereits vorhandene Zusammenfassung.".to_string(),
-        // Großzügig: deckt mehr Runden ab, als für das aktuelle Budget
-        // überhaupt gekürzt werden müssten.
-        rounds_covered: 6,
-    });
-
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
-    let result = crate::compaction::compact_for_send(
-        &session,
-        Uuid::new_v4(),
-        &TestEmitter::default(),
-        request_context,
-        &parts,
-        session.model_context_window_tokens,
-    )
-    .await;
-
-    assert!(
-        received_contexts.lock().unwrap().is_empty(),
-        "die vorhandene Summary deckt den Bedarf bereits ab — es darf kein KI-Aufruf \
-         stattfinden"
-    );
-    assert!(
-        result
-            .history
-            .iter()
-            .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("Bereits vorhandene Zusammenfassung."))),
-        "die wiederverwendete Summary muss im gesendeten Kontext stehen"
-    );
-}
-
 /// Spec 0057, §2.1 ("rollierend"): eine bereits vorhandene, aber nicht
 /// mehr ausreichende Zusammenfassung wird nicht verworfen und neu von
 /// vorne erzeugt, sondern nur um die NEU zu kürzenden Runden ergänzt —
@@ -637,20 +451,20 @@ async fn test_compact_for_send_folds_only_newly_cut_rounds_into_existing_summary
     // 8 Runden, `rounds_covered: 2` -> die bereits abgedeckten Runden
     // 0/1 dürfen im KI-Aufruf NICHT im Rohformat auftauchen.
     push_synthetic_rounds(&session, 8, 5_000).await;
-    *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+    *session.ai.summary.lock().await = Some(crate::compaction::RollingSummary {
         text: "Alte Zusammenfassung (Runden 0-1).".to_string(),
         rounds_covered: 2,
     });
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let _ = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -697,15 +511,15 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_summary_error()
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let result = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -718,7 +532,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_summary_error()
         result.history
     );
     assert!(
-        session.summary.lock().await.is_none(),
+        session.ai.summary.lock().await.is_none(),
         "ein fehlgeschlagener Versuch darf `session.summary` nicht verändern"
     );
 }
@@ -738,15 +552,15 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_empty_summary_r
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let result = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -757,7 +571,7 @@ async fn test_compact_for_send_falls_back_to_plain_truncation_on_empty_summary_r
             .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains(truncation_marker(parts.language)))),
         "eine leere Antwort zählt als Fehlschlag, muss auf den Etappe-2-Hinweis zurückfallen"
     );
-    assert!(session.summary.lock().await.is_none());
+    assert!(session.ai.summary.lock().await.is_none());
 }
 
 /// spec-reviewer-Fund (Review dieses Schritts, Testabdeckungs-Lücke):
@@ -778,15 +592,15 @@ async fn test_compact_for_send_falls_back_when_stream_ends_without_done_or_error
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let result = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -799,7 +613,7 @@ async fn test_compact_for_send_falls_back_when_stream_ends_without_done_or_error
          als Erfolg mit unvollständigem Text: {:?}",
         result.history
     );
-    assert!(session.summary.lock().await.is_none());
+    assert!(session.ai.summary.lock().await.is_none());
 }
 
 /// Ein `AiProvider`, dessen Stream nie ein Item liefert (simuliert
@@ -828,8 +642,8 @@ async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let emitter = TestEmitter::default();
     let compaction = crate::compaction::compact_for_send(
         &session,
@@ -837,7 +651,7 @@ async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
         &emitter,
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     );
     tokio::pin!(compaction);
 
@@ -857,7 +671,7 @@ async fn test_compact_for_send_falls_back_when_summary_call_never_responds() {
          zurückfallen, nicht unbegrenzt blockieren: {:?}",
         result.history
     );
-    assert!(session.summary.lock().await.is_none());
+    assert!(session.ai.summary.lock().await.is_none());
 }
 
 /// spec-reviewer-Pflicht (CLAUDE.md, Redaction-berührende Änderungen) +
@@ -890,8 +704,8 @@ async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
     );
     session.set_model_context_window_tokens_for_tests(2_000);
     {
-        let mut ctx = session.context.lock().await;
-        let mut flags = session.mcp_origin_flags.lock().unwrap();
+        let mut ctx = session.ai.context.lock().await;
+        let mut flags = session.safety.mcp_origin_flags.lock().unwrap();
         for i in 0..6 {
             ctx.history.push(user_msg(&format!("Frage {i}")));
             flags.push(false);
@@ -911,15 +725,15 @@ async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
         }
     }
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let result = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -942,7 +756,7 @@ async fn test_generate_rolling_summary_redacts_secrets_outgoing_and_incoming() {
         placeholder_text.contains("REDACTED"),
         "muss den redigierten Platzhalter enthalten: {placeholder_text}"
     );
-    let stored = session.summary.lock().await.clone();
+    let stored = session.ai.summary.lock().await.clone();
     assert!(
         !stored.unwrap().text.contains("hunter2geheim"),
         "auch der persistierte In-Memory-Stand darf das Secret nicht enthalten"
@@ -1006,21 +820,21 @@ async fn test_generate_rolling_summary_reredacts_a_stale_previous_summary() {
         MockSshTransport::default(),
     );
     session.set_model_context_window_tokens_for_tests(2_000);
-    *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+    *session.ai.summary.lock().await = Some(crate::compaction::RollingSummary {
         text: "Alte Zusammenfassung mit password=altesecretgeheim.".to_string(),
         rounds_covered: 1,
     });
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let _ = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -1073,15 +887,15 @@ async fn test_summary_round_trips_through_persistence() {
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -1133,7 +947,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
         language: crate::system_prompt::PromptLanguage::De,
     };
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.system_context = parts.assemble();
     }
     session.set_system_context_parts_for_tests(AsyncMutex::new(parts.clone()));
@@ -1155,7 +969,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
     // Wahrheit für den nächsten `send_chat_message_impl`-Aufbau) bleibt
     // exakt wie zu Beginn.
     assert_eq!(
-        session.system_context_parts.lock().await.note_sections,
+        session.ai.system_context_parts.lock().await.note_sections,
         parts.note_sections
     );
 
@@ -1186,6 +1000,7 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
     // wurde.
     assert_eq!(
         session
+            .ai
             .summary
             .lock()
             .await
@@ -1225,8 +1040,8 @@ async fn test_untrusted_content_escalation_survives_round_summarization() {
     // `execute_suggested_command` es täte — dort wird der Flag exakt
     // an dieser Stelle gesetzt, s. dortiger Kommentar).
     {
-        let mut ctx = session.context.lock().await;
-        let mut flags = session.mcp_origin_flags.lock().unwrap();
+        let mut ctx = session.ai.context.lock().await;
+        let mut flags = session.safety.mcp_origin_flags.lock().unwrap();
         ctx.history.push(user_msg("Zeig mir die Logs"));
         flags.push(false);
         ctx.history
@@ -1234,6 +1049,7 @@ async fn test_untrusted_content_escalation_survives_round_summarization() {
         flags.push(false);
     }
     session
+        .safety
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -1242,15 +1058,15 @@ async fn test_untrusted_content_escalation_survives_round_summarization() {
 
     // Kompaktierung auslösen — Runde 0 muss dabei aus dem gesendeten
     // Kontext verschwinden (in eine Zusammenfassung verdichtet).
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let compacted = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     assert!(
@@ -1265,6 +1081,7 @@ async fn test_untrusted_content_escalation_survives_round_summarization() {
     // Das Flag bleibt gesetzt ...
     assert!(
         session
+            .safety
             .untrusted_content_ingested
             .load(std::sync::atomic::Ordering::SeqCst),
         "untrusted_content_ingested darf durch Kompaktierung/Zusammenfassung nie \
@@ -1354,7 +1171,7 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
     // Live im UI/In-Memory-Kontext erscheint der Dateiinhalt trotzdem —
     // nur der DB-Schreibzugriff wurde unterdrückt, nicht das In-Memory-
     // Verhalten (s. `push_history_scoped`-Doc-Kommentar).
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(
         history.iter().any(|m| matches!(
             &m.content,
@@ -1367,7 +1184,7 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
     // Persistenz-Unterdrückung funktionsfähig.
     assert!(
         session
-            .untrusted_content_ingested
+            .safety.untrusted_content_ingested
             .load(std::sync::atomic::Ordering::SeqCst),
         "untrusted_content_ingested darf durch die MCP-Persistenz-Unterdrückung nicht umgangen werden"
     );
@@ -1447,15 +1264,15 @@ async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger(
     // Fenster und lösen die Kompaktierung/Faltung aus.
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -1540,8 +1357,8 @@ async fn test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp() {
     );
     session.set_model_context_window_tokens_for_tests(2_000);
     {
-        let mut ctx = session.context.lock().await;
-        let mut flags = session.mcp_origin_flags.lock().unwrap();
+        let mut ctx = session.ai.context.lock().await;
+        let mut flags = session.safety.mcp_origin_flags.lock().unwrap();
         // Sechs rein MCP-originierte Runden — genug, um die Kürzung
         // auszulösen, aber ohne jeden Chat-relevanten Inhalt.
         for i in 0..6 {
@@ -1555,15 +1372,15 @@ async fn test_compaction_skips_ai_call_when_all_newly_cut_rounds_are_mcp() {
         }
     }
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     let result = crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -1643,8 +1460,8 @@ async fn test_mcp_action_within_existing_chat_round_only_excludes_the_mcp_messag
     // wodurch die Kernaussage unten selbst dann grün liefe, wenn
     // Runde 0 fälschlich komplett ausgeschlossen würde).
     {
-        let mut ctx = session.context.lock().await;
-        let mut flags = session.mcp_origin_flags.lock().unwrap();
+        let mut ctx = session.ai.context.lock().await;
+        let mut flags = session.safety.mcp_origin_flags.lock().unwrap();
         ctx.history.push(user_msg("Ursprüngliche Chat-Frage"));
         flags.push(false);
         ctx.history
@@ -1680,15 +1497,15 @@ async fn test_mcp_action_within_existing_chat_round_only_excludes_the_mcp_messag
     // Fenster und lösen die Kompaktierung/Faltung aus.
     push_synthetic_rounds(&session, 6, 5_000).await;
 
-    let request_context = session.context.lock().await.clone();
-    let parts = session.system_context_parts.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
+    let parts = session.ai.system_context_parts.lock().await.clone();
     crate::compaction::compact_for_send(
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
 
@@ -2006,7 +1823,7 @@ async fn test_read_remote_file_then_send_with_retroactive_greedy_pattern_keeps_f
     .await
     .expect("Turn muss nach der Bestätigung enden");
 
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let fenced_entry = history
         .iter()
         .find_map(|m| match &m.content {
@@ -2073,11 +1890,11 @@ async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context
     // eine ältere Redactor-Version) unredigiert in der Historie
     // gelandet ist — direkt in den In-Memory-Kontext geschrieben, ohne
     // über `push_history` bzw. dessen normalen Redaction-Pfad zu laufen.
-    session.context.lock().await.history.push(ChatMessage {
+    session.ai.context.lock().await.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(raw_secret_text.clone()),
     });
-    session.mcp_origin_flags.lock().unwrap().push(false);
+    session.safety.mcp_origin_flags.lock().unwrap().push(false);
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -2116,7 +1933,7 @@ async fn test_send_to_ai_provider_is_redacted_without_altering_persisted_context
         "das URL-Passwort muss im Request an die KI redigiert sein: {sent_text}"
     );
 
-    let context_after = session.context.lock().await.history.clone();
+    let context_after = session.ai.context.lock().await.history.clone();
     assert!(
         context_after.iter().any(|m| matches!(
             &m.content,
@@ -2201,7 +2018,7 @@ async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compactio
         MockAiProvider::new(vec![AiEvent::Done]),
         MockSshTransport::default(),
     );
-    crate::poison::poison_for_test(&session.mcp_origin_flags);
+    crate::poison::poison_for_test(&session.safety.mcp_origin_flags);
 
     // Ein Verlauf, der die Kompaktierung sicher ausloest.
     for round in 0..6 {
@@ -2209,15 +2026,15 @@ async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compactio
         push_history_scoped(&session, user_msg(&text), false).await;
     }
 
-    let history_len = session.context.lock().await.history.len();
-    let flags_len = crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).len();
+    let history_len = session.ai.context.lock().await.history.len();
+    let flags_len = crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags).len();
     assert_eq!(
         history_len, flags_len,
         "Verlauf und Flags muessen trotz vergifteter Sperre gleich lang bleiben"
     );
     assert_eq!(history_len, 6);
 
-    let context = session.context.lock().await.clone();
+    let context = session.ai.context.lock().await.clone();
     let parts = crate::compaction::SystemContextParts::default();
     let result = crate::compaction::compact_for_send(
         &session,
@@ -2244,10 +2061,10 @@ async fn compact_with_prompt_language(
     session: &Session,
     language: crate::system_prompt::PromptLanguage,
 ) -> SessionContext {
-    let request_context = session.context.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
     let parts = crate::compaction::SystemContextParts {
         language,
-        ..session.system_context_parts.lock().await.clone()
+        ..session.ai.system_context_parts.lock().await.clone()
     };
     crate::compaction::compact_for_send(
         session,
@@ -2255,7 +2072,7 @@ async fn compact_with_prompt_language(
         &TestEmitter::default(),
         request_context,
         &parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await
 }
@@ -2300,7 +2117,7 @@ async fn test_english_prompt_gets_english_truncation_notice_on_summary_failure()
             .all(|t| !t.contains(truncation_marker(PromptLanguage::De))),
         "mit Englisch darf kein deutscher Kürzungshinweis im Kontext stehen: {texts:?}"
     );
-    assert!(session.summary.lock().await.is_none());
+    assert!(session.ai.summary.lock().await.is_none());
 }
 
 /// Issue #129: eine neu erzeugte rollierende Zusammenfassung bekommt mit
@@ -2361,7 +2178,7 @@ async fn test_reused_summary_wrapper_follows_the_prompt_language() {
         );
         session.set_model_context_window_tokens_for_tests(2_000);
         push_synthetic_rounds(&session, 6, 5_000).await;
-        *session.summary.lock().await = Some(crate::compaction::RollingSummary {
+        *session.ai.summary.lock().await = Some(crate::compaction::RollingSummary {
             text: "Vorhandene Zusammenfassung.".to_string(),
             rounds_covered: 6,
         });
@@ -2430,7 +2247,7 @@ async fn test_english_fallback_notice_fits_under_budget() {
         MockSshTransport::default(),
     );
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.history = vec![
             user_msg("Runde 1"),
             user_msg("Runde 2"),
@@ -2439,7 +2256,7 @@ async fn test_english_fallback_notice_fits_under_budget() {
             command_result_msg("cat big.log", &"a".repeat(100_000)),
         ];
     }
-    let request_context = session.context.lock().await.clone();
+    let request_context = session.ai.context.lock().await.clone();
     let parts = crate::compaction::SystemContextParts {
         language: PromptLanguage::En,
         ..Default::default()
@@ -2512,7 +2329,7 @@ async fn test_compaction_uses_observed_ratio_to_trigger_earlier() {
         !compacts_with(&session, 2400, 1000).await,
         "no usage: unchanged"
     );
-    session.context_usage.lock().unwrap().record(750, 500); // 1.5x, below trigger
+    session.ai.context_usage.lock().unwrap().record(750, 500); // 1.5x, below trigger
     assert!(
         compacts_with(&session, 2400, 1000).await,
         "1.5x ratio: 60% estimate must compact"
@@ -2526,11 +2343,11 @@ async fn test_compaction_forced_when_last_real_input_exceeded_trigger() {
         MockSshTransport::default(),
     );
     {
-        let mut t = session.context_usage.lock().unwrap();
+        let mut t = session.ai.context_usage.lock().unwrap();
         t.record(800, 500); // over the 750 trigger
         t.record(100, 500); // smoothing pulls the ratio back down
     }
-    assert!(session.context_usage.lock().unwrap().ratio() < 1.5);
+    assert!(session.ai.context_usage.lock().unwrap().ratio() < 1.5);
     assert!(compacts_with(&session, 2400, 1000).await);
 }
 
@@ -2542,7 +2359,7 @@ async fn test_usage_event_is_recorded_and_emitted_after_response() {
         AiEvent::Done,
     ]]);
     let session = session_with_ai_provider(provider, MockSshTransport::default());
-    session.context.lock().await.history.push(user_msg("hi"));
+    session.ai.context.lock().await.history.push(user_msg("hi"));
     let emitter = TestEmitter::default();
     run_chat_turn(
         &session,
@@ -2562,7 +2379,7 @@ async fn test_usage_event_is_recorded_and_emitted_after_response() {
     assert!(usage[0].1["windowTokens"].is_u64());
     drop(events);
     assert_eq!(
-        session.context_usage.lock().unwrap().last_input_tokens,
+        session.ai.context_usage.lock().unwrap().last_input_tokens,
         Some(1234)
     );
 }
@@ -2632,10 +2449,12 @@ async fn test_token_dense_session_stays_below_window_with_correction() {
             max_real = max_real.max(real);
         }
         let est = crate::compaction::estimate_request_tokens(&sent);
-        session.context_usage.lock().unwrap().record(real, est);
+        session.ai.context_usage.lock().unwrap().record(real, est);
     }
     assert!(
         max_real < window as u64,
         "real input {max_real} must stay below window {window}"
     );
 }
+
+mod more;

@@ -72,7 +72,7 @@ pub(crate) async fn prepare_for_send(
     kind: OutgoingKind,
     text: &str,
 ) -> Result<Option<SecretString>, String> {
-    let Some(transform) = session.outgoing_transform.as_ref() else {
+    let Some(transform) = session.safety.outgoing_transform.as_ref() else {
         return Ok(None);
     };
     let scope = outgoing_scope(session, profile_store).await;

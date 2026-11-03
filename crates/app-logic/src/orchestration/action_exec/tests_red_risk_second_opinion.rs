@@ -495,7 +495,7 @@ async fn test_t14_a_stop_during_the_second_opinion_wins_over_the_escalation() {
         "eine gestoppte Aktion bekommt keinen Dialog: {events:?}"
     );
     assert!(
-        session.pending_action.lock().unwrap().is_none(),
+        session.conn.pending_action.lock().unwrap().is_none(),
         "kein Tab-Indikator für eine übersprungene Aktion"
     );
     // Spec 0066: übersprungen wird als abgebrochenes Kommando gemeldet.
@@ -600,7 +600,7 @@ async fn test_t15_an_escalated_confirmation_still_times_out_without_executing() 
     // einfach; die Zusicherungen unten scheitern dann sauber.
     let advancer = async {
         for _ in 0..10_000 {
-            if session.pending_action.lock().unwrap().is_some() {
+            if session.conn.pending_action.lock().unwrap().is_some() {
                 tokio::time::advance(
                     PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1),
                 )
@@ -623,7 +623,7 @@ async fn test_t15_an_escalated_confirmation_still_times_out_without_executing() 
         "ein ausgebliebener Klick darf nie als Freigabe gelten: {events:?}"
     );
     assert!(
-        session.pending_action.lock().unwrap().is_none(),
+        session.conn.pending_action.lock().unwrap().is_none(),
         "der Tab-Indikator muss nach der Zeitgrenze wieder fallen"
     );
 }
