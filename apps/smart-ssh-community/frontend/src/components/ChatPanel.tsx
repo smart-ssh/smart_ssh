@@ -1,21 +1,14 @@
-import { ContextUsageIndicator } from "./ContextUsageIndicator";
-import { type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, continueTruncatedResponse, retryChatTurn, exportDocument, listAiProviders, listPromptHistory, respondToAction, sendChatMessage, stopAutoContinuation, startNewChat } from "../api";
-import { appendToDraft, loadVoiceInputEnabled, subscribeVoiceInputEnabled } from "../voiceInputSettings";
-import { useIsNarrow } from "../hooks/useIsNarrow";
+import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, continueTruncatedResponse, retryChatTurn, exportDocument, listAiProviders, respondToAction, sendChatMessage, stopAutoContinuation, startNewChat } from "../api";
 import { useStickToBottom } from "../hooks/useStickToBottom";
-import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
-import { VoiceInputControl } from "./VoiceInputControl";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { type ComposerAction, type ComposerAttachment, type ComposerContext, listComposerActions, listComposerDropHandlers, subscribeComposer } from "../extensions/registry";
-import { isPointerInside } from "../dropZone";
-import { formatBytes } from "../format";
-import { initialHistoryNavState, navigateHistory, type HistoryNavState } from "../promptHistoryNav";
+import { Composer } from "./chat/Composer";
+import { useChatComposer } from "./chat/useChatComposer";
+import { useVoiceComposer } from "./chat/useVoiceComposer";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import type { ActionUserDecision, DocumentFormat, SuggestionVerdictDto, SuggestionPatternDto, Scope } from "../types";
 import { freshId } from "../chatResync";
-import { Button, ErrorBoundary } from "./ui";
+import { Button } from "./ui";
 import { deriveQuestionStates } from "./QuestionCard";
 import { useChatTranscript } from "./chat/useChatTranscript";
 import { ChatItemView } from "./chat/ChatItemView";
@@ -45,75 +38,11 @@ interface ChatPanelProps {
 
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState("");
-  // Issue #471: Composer-Erweiterungspunkt, ausstehende Anhänge, Fehler am Eingabefeld.
-  const composerActions = useSyncExternalStore(subscribeComposer, listComposerActions);
-  const dropHandlers = useSyncExternalStore(subscribeComposer, listComposerDropHandlers);
-  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
-  const [composerError, setComposerError] = useState<string | null>(null);
-  // Spec 0113 §6a: below 640 px the composer actions sit behind a "+" menu.
-  const narrow = useIsNarrow();
-  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
-  const invokeComposerAction = (action: ComposerAction) => {
-    setComposerError(null);
-    void Promise.resolve(action.onInvoke(composerCtx)).catch((err) =>
-      setComposerError(commandErrorMessage(err)),
-    );
-  };
   const chatAreaRef = useRef<HTMLDivElement>(null);
-  const composerCtx = useMemo<ComposerContext>(
-    () => ({
-      sessionId,
-      addAttachment: (a) =>
-        setAttachments((prev) => (prev.some((p) => p.id === a.id) ? prev : [...prev, a])),
-      removeAttachment: (id) => setAttachments((prev) => prev.filter((p) => p.id !== id)),
-    }),
-    [sessionId],
-  );
-  const composerCtxRef = useRef(composerCtx);
-  composerCtxRef.current = composerCtx;
-  const dropHandlersRef = useRef(dropHandlers);
-  dropHandlersRef.current = dropHandlers;
-  const hasDropHandler = dropHandlers.length > 0;
-  const [dropOver, setDropOver] = useState(false);
-  // Native Drops auf den Chat gehen an die registrierten Handler; ohne
-  // Handler bleibt der Listener aus und das Ablegen tut im Chat nichts.
-  // Pfade verlassen das Backend nicht (ADR 0113): der Handler holt sie dort.
-  useEffect(() => {
-    if (!hasDropHandler) return;
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        const payload = event.payload;
-        if (payload.type === "leave") {
-          setDropOver(false);
-          return;
-        }
-        // Only the visible chat area, and only under the pointer.
-        const inside = isPointerInside(chatAreaRef.current, payload.position);
-        if (payload.type === "over" || payload.type === "enter") {
-          setDropOver(inside);
-          return;
-        }
-        setDropOver(false);
-        if (!inside) return;
-        for (const handler of dropHandlersRef.current) {
-          void Promise.resolve(handler(composerCtxRef.current)).catch((err) =>
-            setComposerError(commandErrorMessage(err)),
-          );
-        }
-      })
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-      setDropOver(false);
-    };
-  }, [hasDropHandler]);
+  // Spec 0055, Teil 1: `<textarea>` (Shift+Enter / auto-grow).
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composer = useChatComposer(sessionId, serverId, inputRef, chatAreaRef);
+  const { hasDropHandler, dropOver } = composer;
   const [sending, setSending] = useState(false);
   /** Spec 0066, §2: Anzahl noch nicht aufgelöster `sendChatMessage`/
    * `continueTruncatedResponse`-Aufrufe. Eingereihte Aufrufe lösen sofort
@@ -162,7 +91,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
   // Historien-Navigationslogik unten bleibt unverändert.
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const jumpButtonRef = useRef<HTMLButtonElement>(null);
   // Issue #758: the jump button hides once the column is at the bottom. A
   // hidden element drops focus to <body>, so hand focus to the chat input
@@ -172,34 +100,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       inputRef.current?.focus();
     }
   }, [atBottom]);
-  // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
-  // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voicePhase, setVoicePhase] = useState<VoicePhase>("idle");
-  const [voiceFocusPending, setVoiceFocusPending] = useState(false);
-  const voiceBaseRef = useRef<string | null>(null);
-  useEffect(() => {
-    loadVoiceInputEnabled()
-      .then(setVoiceEnabled)
-      .catch(() => {});
-    return subscribeVoiceInputEnabled(setVoiceEnabled);
-  }, []);
-  const draftRef = useRef("");
-
-  // Spec 0015, Abschnitt 5: einmalig pro Server geladen, kein
-  // wiederholtes Nachladen bei jeder Pfeiltaste. `historyNav` verfolgt den
-  // laufenden Navigations-Modus (s. `promptHistoryNav.ts`) — beim
-  // Serverwechsel zurückgesetzt, damit kein Navigations-Zustand auf die
-  // History eines anderen Servers zeigt.
-  const [promptHistory, setPromptHistory] = useState<string[]>([]);
-  const [historyNav, setHistoryNav] = useState<HistoryNavState>(initialHistoryNavState);
-
-  useEffect(() => {
-    listPromptHistory(serverId)
-      .then(setPromptHistory)
-      .catch(() => setPromptHistory([]));
-    setHistoryNav(initialHistoryNavState);
-  }, [serverId]);
+  // Spec 0108: voice input; recognised text goes into the draft.
+  const voice = useVoiceComposer(composer.draft, composer.setDraft, inputRef);
 
   useEffect(() => {
     listAiProviders()
@@ -380,8 +282,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const { draft, attachments, setDraft, setAttachments, setComposerError } = composer;
     const text = draft.trim();
-    if (!text || voicePhase !== "idle") return;
+    if (!text || voice.voicePhase !== "idle") return;
     const sentAttachments = attachments;
     setComposerError(null);
     // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
@@ -402,7 +305,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       } });
     setDraft("");
     setAttachments([]);
-    setHistoryNav(initialHistoryNavState);
+    composer.resetHistoryNav();
     await runSend(async () => {
       try {
         if (sentAttachments.length > 0) {
@@ -417,9 +320,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         // Spec 0015, Abschnitt 5: das Backend hat den Prompt gespeichert (samt
         // Dedup und 200er-Grenze) — Liste neu laden, damit er sofort per
         // Pfeiltaste erreichbar ist. Beim lokalen Pseudo-Server bleibt sie leer.
-        void listPromptHistory(serverId)
-          .then(setPromptHistory)
-          .catch(() => {});
+        composer.reloadPromptHistory();
       } catch (err) {
         // Issue #315: „Neuer Chat" tauscht den Chat gerade aus; das Backend hat
         // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
@@ -443,108 +344,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     });
   };
 
-  // Spec 0015, Abschnitt 5: Pfeil-oben/-unten lösen Historien-Navigation nur
-  // an den jeweiligen Feldrändern aus (Cursor-Position-Gate hier, reine
-  // Index-Logik in `navigateHistory`) — sonst läuft die normale
-  // Cursor-Bewegung des Browsers unverändert durch (kein `preventDefault`).
-  const pendingCaretToEndRef = useRef(false);
-
-  const handleInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Spec 0055, Teil 1: Standard-Chat-Verhalten — Enter sendet,
-    // Shift+Enter fügt einen Zeilenumbruch ein.
-    //
-    // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets):
-    // `isComposing`/`keyCode === 229` — während einer IME-Komposition
-    // (z. B. Pinyin/Kanji-Eingabe, aber auch macOS-Tot-Tasten für Akzente)
-    // bestätigt Enter erst die Kandidatenauswahl, sendet noch nichts.
-    // Ohne diese Prüfung würde der erste Enter die halbfertige Eingabe
-    // sofort abschicken statt nur die Komposition abzuschließen —
-    // "plattformübliches Verhalten" (Spec, Teil 1) verlangt genau diese
-    // Rücksicht.
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-      e.preventDefault();
-      // `requestSubmit()` statt eines direkten `handleSubmit(e)`-Aufrufs:
-      // `handleSubmit` ist auf `FormEvent` typisiert (liest `draft`/
-      // `sending` ohnehin aus dem Komponenten-State, nicht aus dem
-      // Event) — über das Formular selbst einzureichen nutzt denselben
-      // Pfad wie ein Klick auf "Senden", statt die Sende-Logik ein
-      // zweites Mal zu duplizieren.
-      //
-      // Spec-Reviewer-Fund: `HTMLFormElement.requestSubmit` fehlt in
-      // älteren WebKit-Versionen (vor Safari 16/macOS 13) — ein rein
-      // optionaler Verkettungs-Operator (`form?.requestSubmit()`) schützt
-      // nur gegen ein fehlendes `<form>`, nicht gegen eine fehlende
-      // Methode darauf, und hätte Enter auf so einer Plattform sang- und
-      // klanglos wirkungslos gemacht (der bisherige `<input>`-Pfad hatte
-      // dieses Problem nicht, weil dort das native Browser-Default-Submit
-      // griff). `dispatchEvent` mit einem synthetischen `submit`-Ereignis
-      // ist der Standard-Fallback dafür — dasselbe Ereignis, auf das
-      // React's `onSubmit` ohnehin hört.
-      const form = e.currentTarget.form;
-      if (form) {
-        if (typeof form.requestSubmit === "function") {
-          form.requestSubmit();
-        } else {
-          form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-        }
-      }
-      return;
-    }
-    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-    const input = e.currentTarget;
-    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
-    const atEnd =
-      input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-    if (e.key === "ArrowUp" && !atStart) return;
-    if (e.key === "ArrowDown" && !atEnd) return;
-
-    const result = navigateHistory(
-      e.key === "ArrowUp" ? "up" : "down",
-      promptHistory,
-      historyNav,
-      draft,
-    );
-    if (!result) return;
-
-    e.preventDefault();
-    setHistoryNav(result.nextState);
-    setDraft(result.value);
-    pendingCaretToEndRef.current = true;
-  };
-
-  // Setzt den Cursor nach dem Einsetzen eines Historieneintrags ans Ende
-  // (Abschnitt 5: von der Spec nicht explizit vorgegeben, üblicher/
-  // sinnvoller Default). Läuft absichtlich erst *nach* dem Commit des neuen
-  // `draft`-Werts (statt synchron im Keydown-Handler) — nur dann steht der
-  // tatsächliche DOM-Wert schon fest, gegen den `setSelectionRange`
-  // rechnen muss. Der Ref-Flag verhindert, dass normales Tippen (das
-  // `draft` ebenfalls ändert) den Cursor fälschlich ans Ende zwingt.
-  useEffect(() => {
-    if (pendingCaretToEndRef.current && inputRef.current) {
-      const pos = inputRef.current.value.length;
-      inputRef.current.setSelectionRange(pos, pos);
-      pendingCaretToEndRef.current = false;
-    }
-  }, [draft]);
-
-  // Spec 0055, Teil 1: "Feld wächst mit dem Inhalt (auto-grow bis
-  // sinnvolle Maxhöhe, dann intern scrollbar)". Höhe bei jeder
-  // `draft`-Änderung neu berechnen statt per CSS `field-sizing`
-  // (Browser-Unterstützung dafür ist noch zu neu für die von Tauris
-  // WebView abgedeckte Plattformbreite) — `style.height = "auto"` vor dem
-  // Auslesen von `scrollHeight` ist nötig, sonst würde eine gekürzte
-  // Eingabe (z. B. nach Rückgängig-Historie-Navigation) die alte,
-  // größere Höhe nie wieder verkleinern. Tailwinds `max-h-40` (s.
-  // `className` unten, 10rem/160px — rund 8 Zeilen bei `text-sm`) deckelt
-  // das Wachstum; `overflow-y-auto` auf demselben Element übernimmt
-  // darüber das interne Scrollen.
-  useEffect(() => {
-    const textarea = inputRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [draft]);
-
   // Issue #271 (Entscheidung 3): gesperrt, solange ein Turn läuft oder eine
   // Bestätigung offen ist — das Backend prüft zusätzlich.
   const confirmationOpen = items.some(
@@ -564,7 +363,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       await startNewChat(sessionId);
       // Issue #648: the new chat has no usage yet; keep the window size.
       dispatch({ type: "chatCleared" });
-      setHistoryNav(initialHistoryNavState);
+      composer.resetHistoryNav();
     } catch (err) {
       setNewChatError(commandErrorMessage(err));
     } finally {
@@ -572,59 +371,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     }
   };
 
-  const handleDraftChange = (value: string) => {
-    setDraft(value);
-    // Spec 0015, Abschnitt 5, bewusste MVP-Vereinfachung: jede normale
-    // Texteingabe beendet den Navigations-Modus (kein volles
-    // Readline-Verhalten). Feuert nie für die programmatischen
-    // `setDraft`-Aufrufe aus `handleInputKeyDown` selbst — React-`onChange`
-    // löst nur bei echten Browser-Eingabe-Events aus, nicht bei
-    // State-Updates.
-    if (historyNav.historyIndex !== null) {
-      setHistoryNav(initialHistoryNavState);
-    }
-  };
-
-  draftRef.current = draft;
-  // Spec 0108 §5.2: live text. The draft before Start is kept; provisional
-  // text replaces everything after it, so no merging with edits is needed
-  // (the input is read-only meanwhile).
-  const voiceHandlers = useMemo<VoiceHandlers>(() => {
-    const showAfterBase = (text: string) => {
-      const base = voiceBaseRef.current;
-      if (base === null) return;
-      setDraft(appendToDraft(base, text));
-    };
-    return {
-      onStart: () => {
-        voiceBaseRef.current = draftRef.current;
-      },
-      onPartial: showAfterBase,
-      onFinal: (text) => {
-        showAfterBase(text);
-        voiceBaseRef.current = null;
-        setVoiceFocusPending(true);
-      },
-      onFailed: () => {
-        voiceBaseRef.current = null;
-        setVoiceFocusPending(true);
-      },
-      onCancel: () => {
-        if (voiceBaseRef.current !== null) setDraft(voiceBaseRef.current);
-        voiceBaseRef.current = null;
-      },
-    };
-  }, []);
-  const voiceLocked = voicePhase !== "idle";
-  // Once the input is editable again: focus it, caret at the end.
-  useEffect(() => {
-    if (!voiceFocusPending || voiceLocked) return;
-    setVoiceFocusPending(false);
-    const el = inputRef.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
-  }, [voiceFocusPending, voiceLocked]);
+  const voiceLocked = voice.voiceLocked;
 
   return (
     <div ref={chatAreaRef} className="relative flex h-full flex-col">
@@ -779,123 +526,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           {t("chat.noActiveProvider")}
         </div>
       ) : (
-        <div className="border-t border-border bg-surface-raised">
-          {composerError !== null && (
-            <p role="alert" className="px-3 pt-2 text-xs text-danger-fg">
-              {composerError}
-            </p>
-          )}
-          {attachments.length > 0 && (
-            <ul aria-label={t("chat.attachmentsLabel")} className="flex flex-wrap gap-2 px-3 pt-2">
-              {attachments.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center gap-2 rounded border border-border-strong bg-border px-2 py-1 text-xs text-fg"
-                >
-                  <span>
-                    {a.name} · {formatBytes(a.size)}
-                  </span>
-                  {a.unredactedHint && (
-                    <span className="text-warning-fg-soft">{t("chat.attachmentUnredacted")}</span>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={t("chat.attachmentRemove", { name: a.name })}
-                    onClick={() => composerCtx.removeAttachment(a.id)}
-                    className="text-fg-muted hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        {contextUsage && (
-          <ContextUsageIndicator
-            inputTokens={contextUsage.inputTokens}
-            windowTokens={contextUsage.windowTokens}
-          />
-        )}
-        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3 narrow:[&>textarea]:order-first narrow:[&>textarea]:basis-full">
-          <span className="self-start narrow:hidden py-1.5 font-mono text-sm leading-5 text-accent-strong">&gt;</span>
-          {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
-              Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
-              `resize-none` + die Höhen-Effekt oben ergeben das
-              Auto-Grow-bis-`max-h-40`-dann-scrollbar-Verhalten, `align`
-              bleibt sonst wie beim bisherigen `<input>`. */}
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={draft}
-            readOnly={voiceLocked}
-            data-provisional={voiceLocked ? "true" : undefined}
-            onChange={(e) => handleDraftChange(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg`}
-          />
-          {narrow ? (
-            composerActions.length > 0 && (
-              <div className="relative">
-                <Button
-                  aria-label={t("chat.composerMore")}
-                  aria-expanded={composerMenuOpen}
-                  onClick={() => setComposerMenuOpen((o) => !o)}
-                  className="min-h-11 min-w-11"
-                >
-                  +
-                </Button>
-                {composerMenuOpen && (
-                  <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-border bg-surface p-2 shadow-lg">
-                    {composerActions.map((action) => (
-                      <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><Button
-                        title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
-                        disabled={action.disabled}
-                        onClick={() => {
-                          setComposerMenuOpen(false);
-                          invokeComposerAction(action);
-                        }}
-                        className="min-h-11 w-full justify-start gap-2 text-left"
-                      >
-                        <span aria-hidden="true">{action.icon}</span>
-                        {action.label}
-                      </Button></ErrorBoundary>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          ) : (
-            composerActions.map((action) => (
-              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><button
-                type="button"
-                aria-label={action.label}
-                title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
-                disabled={action.disabled}
-                onClick={() => invokeComposerAction(action)}
-                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-50"
-              >
-                {action.icon}
-              </button></ErrorBoundary>
-            ))
-          )}
-          {voiceEnabled && (
-            <VoiceInputControl
-              handlers={voiceHandlers}
-              onPhaseChange={setVoicePhase}
-              panelRef={chatAreaRef}
-            />
-          )}
-          <Button
-            type="submit"
-            variant="primary"
-            className="narrow:ml-auto narrow:min-h-11 narrow:min-w-20"
-            disabled={draft.trim().length === 0 || voiceLocked}
-          >
-            {t("chat.send")}
-          </Button>
-        </form>
-        </div>
+        <Composer
+          draft={composer.draft}
+          attachments={composer.attachments}
+          composerError={composer.composerError}
+          composerCtx={composer.composerCtx}
+          composerActions={composer.composerActions}
+          invokeComposerAction={composer.invokeComposerAction}
+          contextUsage={contextUsage}
+          inputRef={inputRef}
+          chatAreaRef={chatAreaRef}
+          onSubmit={handleSubmit}
+          onDraftChange={composer.handleDraftChange}
+          onKeyDown={composer.handleInputKeyDown}
+          voiceEnabled={voice.voiceEnabled}
+          voiceLocked={voiceLocked}
+          voiceHandlers={voice.voiceHandlers}
+          onVoicePhaseChange={voice.setVoicePhase}
+        />
       )}
     </div>
   );

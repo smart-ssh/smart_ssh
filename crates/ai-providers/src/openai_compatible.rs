@@ -204,16 +204,16 @@ pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = Raw
 }
 
 use crate::action::{parameters_json_schema, tool_call_event};
+use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
 use crate::common::prompt_format::{message_content_text, role_str};
 use crate::error::{
-    error_stream, map_http_response, map_stream_error_object, map_transport_error,
-    provider_request_id, timeout_error, ProviderErrorInfo,
+    error_stream, map_stream_error_object, map_transport_error, provider_request_id, timeout_error,
+    ProviderErrorInfo,
 };
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
-    log_provider_error_response_with_id, log_provider_transport_error, log_stop_reason,
-    log_tool_call_fragment,
+    log_provider_transport_error, log_stop_reason, log_tool_call_fragment,
 };
 use crate::sse::{
     build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
@@ -453,159 +453,85 @@ pub(crate) async fn connect_and_stream(
         .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
         .collect();
 
-    // Diagnose "KI antwortet nicht" — s. identischer Kommentar in
-    // `crate::anthropic::connect_and_stream`.
-    tracing::debug!(
-        request_id = %request_id,
-        "AI request future started executing",
-    );
-    let retry_start = tokio::time::Instant::now();
-    let mut attempt: u32 = 0;
-    loop {
-        attempt += 1;
-        tracing::debug!(
-            request_id = %request_id,
-            attempt,
-            "about to send HTTP request to AI provider",
-        );
-        let mut req = client
-            .post(&url)
-            .bearer_auth(&api_key)
-            .header("accept", "text/event-stream");
-        for (name, value) in &extra_headers {
-            req = req.header(name, value);
-        }
-        let send = req.json(&body).send();
-        let response = match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, send).await {
-            Ok(Ok(response)) => response,
-            Ok(Err(err)) => {
-                let mapped = map_transport_error(&err);
-                log_provider_transport_error(request_id, &mapped, &secrets);
-                return to_raw_stream(error_stream(mapped));
-            }
-            // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse) — ohne
-            // dieses Limit würde ein hängender Verbindungsaufbau den
-            // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-            Err(_elapsed) => {
-                let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                log_provider_transport_error(request_id, &mapped, &secrets);
-                return to_raw_stream(error_stream(mapped));
-            }
-        };
-
-        // Spec 0051, Teil 1: s. identischer Kommentar in
-        // `crate::anthropic::connect_and_stream`.
-        let status = response.status();
-        let headers = response.headers().clone();
-        let provider_rid = provider_request_id(&headers);
-        if response.status().as_u16() == 429 {
-            let elapsed = retry_start.elapsed();
-            let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
-            let delay = crate::retry::retry_delay(response.headers(), attempt);
-            // Spec-Reviewer-Fund: s. identischer Kommentar in
-            // `crate::anthropic::connect_and_stream`.
-            if crate::retry::retry_allowed(attempt + 1, elapsed) && delay <= remaining {
-                // Bug-Diagnose "AI-Provider-Aufruf kann unbegrenzt hängen"
-                // (2026-09) + spec-reviewer-Fund (Review dieses Schritts):
-                // s. identischer Kommentar in
-                // `crate::anthropic::connect_and_stream`.
-                let text =
-                    crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
-                        .await;
-                // Issue #599: a 429 that is really an exhausted quota is a
-                // billing problem — never retried.
-                if ProviderErrorInfo::from_body(&text).is_quota_exhausted() {
-                    let mapped = map_http_response(status, &headers, &text);
-                    log_provider_error_response_with_id(
-                        request_id,
-                        provider_rid.as_deref(),
-                        status.as_u16(),
-                        &text,
-                        &mapped,
-                        &secrets,
-                    );
-                    return to_raw_stream(error_stream(mapped));
+    // One shared attempt loop (issue #851), see `common::http_retry`.
+    let response = loop {
+        let outcome = send_with_retry(
+            || {
+                let mut req = client
+                    .post(&url)
+                    .bearer_auth(&api_key)
+                    .header("accept", "text/event-stream");
+                for (name, value) in &extra_headers {
+                    req = req.header(name, value);
                 }
-                crate::request_logging::log_provider_rate_limited_retry(
-                    request_id, attempt, &text, delay, &secrets,
-                );
-                tokio::time::sleep(delay).await;
-                continue;
-            }
-        }
-
-        if !response.status().is_success() {
-            // s. Kommentar beim 429-Retry-Zweig oben.
-            let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-            let mapped = map_http_response(status, &headers, &text);
-            // Issue #609: an endpoint answering 400 while `stream_options`
-            // is on the request is retried once without it — nothing else in
-            // the request changes. Remembered only once the retry succeeds.
-            if status.as_u16() == 400
-                && body.get("stream_options").is_some()
-                && !matches!(mapped, AiError::ModelNotFound(_))
-                && !is_context_length_error(&text)
-                && !text.to_lowercase().contains("context")
-            {
-                tracing::info!(
-                    request_id = %request_id,
-                    "endpoint rejected stream_options; retrying once without usage reporting",
-                );
-                body.as_object_mut().map(|o| o.remove("stream_options"));
-                dropped_stream_options = true;
-                continue;
-            }
-            // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
-            // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
-            // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-            // Spec 0087, A1.6: der ursprüngliche 400-Körper wird über
-            // denselben redigierenden Logpfad geloggt wie jeder andere
-            // Providerfehler — auch dann, wenn der Zweig unten
-            // `ContextLimitError` statt `error_stream(mapped)` zurückgibt.
-            log_provider_error_response_with_id(
+                req.json(&body)
+            },
+            SendLoopParams {
                 request_id,
-                provider_rid.as_deref(),
-                status.as_u16(),
-                &text,
-                &mapped,
-                &secrets,
+                secrets: &secrets,
+                on_headers: None,
+            },
+        )
+        .await;
+        let rejected = match outcome {
+            Ok(SendOutcome::Success(response)) => break response,
+            Ok(SendOutcome::Rejected(rejected)) => rejected,
+            Err(mapped) => return to_raw_stream(error_stream(mapped)),
+        };
+        let status = rejected.status;
+        let text = &rejected.text;
+        let mapped = rejected.map();
+        // Issue #609: an endpoint answering 400 while `stream_options` is on
+        // the request is retried once without it — nothing else in the
+        // request changes. Remembered only once the retry succeeds.
+        if status.as_u16() == 400
+            && body.get("stream_options").is_some()
+            && !matches!(mapped, AiError::ModelNotFound(_))
+            && !is_context_length_error(text)
+            && !text.to_lowercase().contains("context")
+        {
+            tracing::info!(
+                request_id = %request_id,
+                "endpoint rejected stream_options; retrying once without usage reporting",
             );
-            // Spec 0087, A1.1: ein 400, der NICHT schon als „Modell nicht
-            // gefunden" erkannt wurde (`mapped` bliebe dann `ModelNotFound`,
-            // s. T4), und dessen Körper einen der Kontextgrenzen-Marker
-            // enthält — nur für diesen Provider (T11b: die geteilte
-            // `map_http_status` bleibt unverändert, Anthropic ist nicht
-            // betroffen). Andere Statuscodes (T5) bleiben unverändert
-            // `ProviderUnavailable`.
-            if status.as_u16() == 400
-                && matches!(
-                    mapped,
-                    AiError::ProviderUnavailable(_)
-                        | AiError::RejectedRequest(_)
-                        | AiError::ContextTooLarge
-                )
-                && is_context_length_error(&text)
-            {
-                return raw_event_stream(RawEvent::ContextLimitError);
-            }
-            return to_raw_stream(error_stream(mapped));
+            body.as_object_mut().map(|o| o.remove("stream_options"));
+            dropped_stream_options = true;
+            continue;
         }
+        // Spec 0049, Fund 2 / Spec 0087, A1.6: logged here, also when the
+        // branch below returns `ContextLimitError` instead of an error stream.
+        rejected.log(request_id, &mapped, &secrets);
+        // Spec 0087, A1.1: a 400 not already recognised as "model not found"
+        // whose body carries a context-length marker (this provider only).
+        if status.as_u16() == 400
+            && matches!(
+                mapped,
+                AiError::ProviderUnavailable(_)
+                    | AiError::RejectedRequest(_)
+                    | AiError::ContextTooLarge
+            )
+            && is_context_length_error(text)
+        {
+            return raw_event_stream(RawEvent::ContextLimitError);
+        }
+        return to_raw_stream(error_stream(mapped));
+    };
 
-        if dropped_stream_options {
-            no_stream_options_urls()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(stream_options_key.clone());
-        }
-        return parse(
-            response,
-            native_tool_calling,
-            request_id,
-            api_key,
-            extra_headers,
-            provider_rid,
-        );
+    if dropped_stream_options {
+        no_stream_options_urls()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(stream_options_key.clone());
     }
+    let provider_rid = provider_request_id(response.headers());
+    parse(
+        response,
+        native_tool_calling,
+        request_id,
+        api_key,
+        extra_headers,
+        provider_rid,
+    )
 }
 
 /// Spec 0087, A1.4: je Aufruf von `send()` läuft höchstens EINER der beiden
