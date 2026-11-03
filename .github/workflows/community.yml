@@ -501,8 +501,12 @@ jobs:
     name: Android debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Line tables only instead of full debug info keeps `target/` small (#1086,
+    # as #1043 for the test job). Local builds keep the `[profile.dev]` from
+    # Cargo.toml.
     env:
       NDK_VERSION: 27.3.13750724
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -538,6 +542,12 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: android
+
+      - name: Disk usage after cache restore
+        shell: bash
+        run: |
+          df -h
+          du -sh target 2>/dev/null || echo "target/: absent"
 
       - name: Cache Gradle
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -584,6 +594,13 @@ jobs:
         working-directory: apps/smart-ssh-community
         # No `--locked`: `cargo tauri android build` does not forward it to Cargo.
         run: cargo tauri android build --debug --apk --target aarch64 --target x86_64 --ci
+
+      - name: Disk usage after Android build
+        if: always()
+        shell: bash
+        run: |
+          df -h
+          du -sh target 2>/dev/null || echo "target/: absent"
 
       # Android 15+ with 16 KB pages needs every .so aligned to 0x4000+.
       - name: Check 16 KB page alignment of native libraries
