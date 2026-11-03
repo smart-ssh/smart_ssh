@@ -1,5 +1,6 @@
 import type {
   AuthMethodInput,
+  AuthMethodKind,
   PostIngestPolicy,
   ServerDto,
 } from "../../types";
@@ -232,4 +233,22 @@ export function serverFormReducer(state: ServerFormState, action: ServerFormActi
     case "saved":
       return state.dirty ? { ...state, dirty: false } : state;
   }
+}
+
+/** `t` wird als Parameter durchgereicht statt selbst `useTranslation()`
+ * aufzurufen — diese Funktion läuft außerhalb einer Komponente, Hooks sind
+ * hier nicht erlaubt. */
+export function authKindLabels(
+  t: (key: string) => string,
+): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
+  return {
+    password: t("serverForm.authKind.password"),
+    no_password: t("serverForm.authKind.password"),
+    private_key: t("serverForm.authKind.privateKey"),
+    privateKey: t("serverForm.authKind.privateKey"),
+    agent: t("serverForm.authKind.agent"),
+    certificate: t("serverForm.authKind.certificate"),
+    identity_file: t("serverForm.authKind.identityFile"),
+    identityFile: t("serverForm.authKind.identityFile"),
+  };
 }
