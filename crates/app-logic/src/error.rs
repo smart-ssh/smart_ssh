@@ -393,7 +393,9 @@ mod code_tests {
             )),
         ));
 
-        assert_eq!(err.code, None);
+        // The kind survives as a code; a missing rule is not a store failure.
+        assert!(err.code.is_some());
+        assert_ne!(err.code, Some(ssh_manager_core::profiles::STORE_FAILED));
     }
 }
 
@@ -556,7 +558,8 @@ mod secret_store_code_tests {
         let err = secret_store_error(CredentialError::NotFound(CredentialRef::new(
             "server:1:sudo_password".to_string(),
         )));
-        assert_eq!(err.code, None);
+        assert_eq!(err.code, Some(CREDENTIAL_NOT_FOUND));
+        assert_ne!(err.code, Some(SECRET_STORE_FAILED));
     }
 
     /// Spec 0101, A9.1, zweiter Weg (§1): derselbe Code aus der
@@ -619,15 +622,14 @@ mod feature_locked_tests {
         assert_eq!(feature_locked.tier, TierId::FREE);
     }
 
-    /// Gegentest: ein gewöhnlicher Fehler (über den blanket `From<E:
-    /// Display>`) darf `feature_locked` nicht setzen — sonst könnte das
+    /// Gegentest: ein gewöhnlicher Fehler (über `with_code`) darf `feature_locked` nicht setzen — sonst könnte das
     /// Frontend jeden Fehler fälschlich als gesperrtes Feature behandeln.
     #[test]
     fn test_ordinary_error_leaves_feature_locked_none() {
         let command_error = CommandError::with_code("irgendein fachlicher Fehler", "TEST_ERROR");
 
         assert!(command_error.feature_locked.is_none());
-        assert_eq!(command_error.code, None);
+        assert_eq!(command_error.code, Some("TEST_ERROR"));
     }
 }
 
