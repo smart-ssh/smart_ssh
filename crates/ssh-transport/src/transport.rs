@@ -47,6 +47,9 @@ pub struct RusshTransport {
     pub(crate) max_output_bytes: usize,
     /// Issue #353: set when any hop's session ends.
     pub(crate) loss: ssh_manager_core::ssh::ConnectionLossWatch,
+    /// Issue #881: where the SFTP tap pumps run (the session scope). `None`
+    /// until the application sets it; see `sftp_tap::tap`.
+    pub(crate) spawner: Option<ssh_manager_core::ssh::TaskSpawner>,
 }
 
 /// Treibt `channel.wait()`, bis der Channel schließt — akkumuliert dabei
@@ -258,7 +261,7 @@ impl SshTransport for RusshTransport {
             .request_subsystem(true, "sftp")
             .await
             .map_err(map_session_russh_error)?;
-        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream(), self.spawner.as_ref());
         let client = russh_sftp::client::SftpSession::new(stream)
             .await
             .map_err(|e| {
@@ -298,6 +301,10 @@ impl SshTransport for RusshTransport {
             .disconnect(russh::Disconnect::ByApplication, "", "")
             .await
             .map_err(map_session_russh_error)
+    }
+
+    fn set_task_spawner(&mut self, spawner: ssh_manager_core::ssh::TaskSpawner) {
+        self.spawner = Some(spawner);
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
@@ -357,7 +364,7 @@ impl RusshTransport {
             request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
             ..Default::default()
         };
-        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream(), self.spawner.as_ref());
         let client = russh_sftp::client::SftpSession::new_with_config(stream, config)
             .await
             .map_err(|e| {

@@ -147,6 +147,11 @@ pub trait SshTransport: Send + Sync {
     /// Kommentar).
     fn set_max_output_bytes(&mut self, _limit: usize) {}
 
+    /// Issue #881: where this transport starts its own background tasks
+    /// (SFTP tap pumps). The application passes the session scope, so
+    /// closing the session cancels them. Default: no-op (mocks start none).
+    fn set_task_spawner(&mut self, _spawner: super::TaskSpawner) {}
+
     /// Issue #353: a watch that turns to `Some` once the connection is
     /// gone (keepalive timeout, server disconnect, stream error, local
     /// close). Lets the application notice a dead connection without an

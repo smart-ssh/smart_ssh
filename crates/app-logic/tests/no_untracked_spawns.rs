@@ -24,12 +24,10 @@ const PATTERNS: &[&str] = &[
 
 /// (file relative to `crates/`, number of sites, reason). May only shrink.
 const ALLOWLIST: &[(&str, usize, &str)] = &[
-    ("app-logic/src/ai_usage.rs", 2, "usage write is fire-and-forget by design and short; no await point to cancel"),
+    ("app-logic/src/ai_usage.rs", 1, "the one usage worker, a tracked blocking task of the app scope"),
     ("app-logic/src/backup/import.rs", 1, "awaited"),
     ("app-logic/src/backup/key.rs", 1, "awaited by the caller (blocking key derivation helper)"),
-    ("app-logic/src/session/mod.rs", 2, "session-scoped tasks; move to the session scope in #881"),
-    ("app-shell/src/android_service.rs", 3, "Android foreground-service plumbing; lives for the process"),
-    ("app-shell/src/auto_reconnect.rs", 1, "session-scoped (stop flag); move to the session scope in #881"),
+    ("app-shell/src/android_service.rs", 1, "Android foreground-service call thread; blocks on a channel that lives for the process"),
     ("app-shell/src/commands/sftp/copy_content.rs", 2, "awaited"),
     ("app-shell/src/commands/sftp/download.rs", 1, "awaited"),
     ("app-shell/src/commands/sftp/edit_session.rs", 2, "awaited"),
@@ -38,12 +36,11 @@ const ALLOWLIST: &[(&str, usize, &str)] = &[
     ("app-shell/src/commands/sftp/upload_clipboard.rs", 1, "awaited"),
     ("core/src/data_change.rs", 1, "short-lived flush thread of the change coalescer; core has no supervisor access"),
     ("mcp-server/src/config.rs", 1, "server task owned by its own CancellationToken and handle (mcp-server lifecycle)"),
-    ("mcp-server/src/tool_server.rs", 1, "per-request task owned by the MCP server lifecycle"),
     ("speech/src/audio.rs", 1, "audio capture thread owned by the recorder; speech cannot depend on app-logic"),
     ("speech/src/lib.rs", 1, "model download task with its own cancel channel; speech cannot depend on app-logic (#879 open question, option b)"),
     ("speech/src/recorder.rs", 4, "recorder timer/live tasks and awaited blocking work, owned by the recorder; speech cannot depend on app-logic"),
     ("ssh-transport/src/local.rs", 2, "awaited"),
-    ("ssh-transport/src/sftp_tap.rs", 2, "transport-owned tap tasks; ssh-transport cannot depend on app-logic"),
+    ("ssh-transport/src/sftp_tap.rs", 1, "fallback when no spawner was injected (transport used standalone); the app injects the session scope"),
 ];
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
