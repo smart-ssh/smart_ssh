@@ -16,7 +16,7 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "sudo fallback of a confirmed WriteRemoteFile: execute_privileged takes an ApprovedFileWrite",
     ),
     (
-        "app-shell/src/commands/connect.rs",
+        "app-shell/src/commands/connect/mod.rs",
         "fixed connect probes `uname -a` and `id -u`, no external input",
     ),
     (
