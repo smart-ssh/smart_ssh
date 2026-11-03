@@ -1,13 +1,13 @@
-//! Fehlertyp für Tauri-Commands. Tauri serialisiert das `Err`-Ergebnis
-//! eines `#[tauri::command]` per `serde::Serialize` zurück ans Frontend —
-//! ein flacher `{ message: String }` reicht für Teil 1 (die einzelnen
-//! Rust-Fehlertypen aus `core`/`persistence-sqlite` unterscheiden sich zu
-//! sehr, um sie 1:1 über die IPC-Grenze zu spiegeln; das Frontend braucht
-//! ohnehin nur eine anzeigbare Meldung). Ein blanket `From<E: Display>`
-//! deckt alle projektinternen Fehlertypen ab (`ProfileError`,
-//! `CredentialError`, `persistence_sqlite::AiProviderStoreError`,
-//! `keyring`-Fehler über `credentials-keyring`), die allesamt `Display`
-//! implementieren — kein separater `From`-Impl pro Fehlertyp nötig.
+//! The error type of Tauri commands and the conversions into it.
+//!
+//! [`CommandError`] (defined in `ssh_manager_core::ipc_error`) always carries
+//! a stable `code` (Spec 0024, section 5). There is no blanket
+//! `From<E: Display>`: an error type reaches `?` only if it implements
+//! [`ErrorCode`] (or has an explicit `From`, like `FeatureLocked` and
+//! `RuleWriteError`). Credential-store errors are deliberately **not**
+//! `ErrorCode` — they go through [`secret_store_error`] so the backend
+//! payload never reaches the message. Plain strings are not convertible: use
+//! `CommandError::with_code(message, CODE)`.
 
 use ssh_manager_core::profiles::CredentialError;
 use ssh_manager_core::ssh::SshError;
@@ -29,6 +29,10 @@ pub use ssh_manager_core::profiles::KEYCHAIN_ACCESS_FAILED;
 /// Wohnt aus demselben Grund in `core` wie [`KEYCHAIN_ACCESS_FAILED`] —
 /// `SshError::code` vergibt ihn für die Verbindungskette ebenfalls.
 pub use ssh_manager_core::profiles::SECRET_STORE_FAILED;
+
+/// A credential reference without a stored entry (a statement about the
+/// stock, not a store failure).
+pub const CREDENTIAL_NOT_FOUND: &str = "CREDENTIAL_NOT_FOUND";
 
 /// Spec 0098 A1/A2/A7, seit Spec 0101 A9.1 auf den Secret-Speicher
 /// umgestellt: der eine Ort, an dem ein [`CredentialError::Backend`] zu
@@ -84,7 +88,7 @@ pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK
 
 /// Spec 0077, 3.1.3: Das Muster einer Filterregel lässt sich nicht
 /// übersetzen — die Regel wurde deshalb **nicht** gespeichert.
-pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
+pub use persistence_sqlite::FILTER_RULE_PATTERN_INVALID;
 
 /// Issue #357, Spec 0086 A1.1: „Dateiinhalt kopieren" lehnt eine Datei über
 /// 50 MB ab. Das Frontend übersetzt den Code (`errorCodes.ts`), der Text hier
@@ -117,72 +121,33 @@ pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIR
 /// preference, or a value outside the shape registered for it.
 pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
 
-/// Issue #885: a SQLite store failed because the database was busy/locked.
-pub const STORE_BUSY: &str = "STORE_BUSY";
-/// Issue #885: a store write violated a database constraint.
-pub const STORE_CONSTRAINT: &str = "STORE_CONSTRAINT";
-/// Issue #885: the database is corrupt or not a database.
-pub const STORE_CORRUPT: &str = "STORE_CORRUPT";
-/// Issue #885: the database file could not be read or written.
-pub const STORE_IO: &str = "STORE_IO";
-/// Issue #885: any other store failure (including "not found" of a row).
-pub const STORE_FAILED: &str = "STORE_FAILED";
+pub use ssh_manager_core::profiles::{
+    STORE_BUSY, STORE_CONSTRAINT, STORE_CORRUPT, STORE_FAILED, STORE_IO,
+};
 
-/// Issue #885: the stable code for a store failure kind. Unknown frontend
-/// codes fall back to the message, so this adds no UI text.
-pub fn store_error_code(kind: persistence_sqlite::StoreErrorKind) -> &'static str {
-    use persistence_sqlite::StoreErrorKind as K;
-    match kind {
-        K::Busy => STORE_BUSY,
-        K::Constraint => STORE_CONSTRAINT,
-        K::Corrupt => STORE_CORRUPT,
-        K::Io => STORE_IO,
-        K::NotFound | K::Other => STORE_FAILED,
-    }
-}
-
-/// Errors of the SQLite stores (not the credential store, which has its own
-/// path: [`secret_store_error`]).
-pub trait StoreFailure: std::fmt::Display {
-    fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind>;
-}
-
-macro_rules! store_failure {
-    ($($t:ty),* $(,)?) => {$(
-        impl StoreFailure for $t {
-            fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind> {
-                self.kind()
-            }
-        }
-    )*};
-}
-store_failure!(
-    ssh_manager_core::profiles::ProfileError,
-    persistence_sqlite::ChatSessionStoreError,
-    persistence_sqlite::AiProviderStoreError,
-    persistence_sqlite::PolicyStoreError,
-    persistence_sqlite::LedgerStoreError,
-    persistence_sqlite::PromptHistoryStoreError,
-);
-
-/// Turns a store error into a [`CommandError`] with a `STORE_*` code when the
-/// error carries a kind; domain errors (e.g. `ServerNotFound`) keep the plain
-/// conversion. The message is the same text as before.
-pub fn store_command_error(err: impl StoreFailure) -> CommandError {
-    match err.store_kind() {
-        Some(kind) => CommandError::with_code(err.to_string(), store_error_code(kind)),
-        None => CommandError::from(err),
-    }
-}
-
-/// `result.store_err()?` — [`store_command_error`] for a `Result`.
+/// `result.store_err()?` — kept as a readable marker at store call sites;
+/// the code comes from the error's [`ErrorCode`] impl.
 pub trait StoreResultExt<T> {
     fn store_err(self) -> CommandResult<T>;
 }
 
-impl<T, E: StoreFailure> StoreResultExt<T> for Result<T, E> {
+impl<T, E: ErrorCode + std::fmt::Display> StoreResultExt<T> for Result<T, E> {
     fn store_err(self) -> CommandResult<T> {
-        self.map_err(store_command_error)
+        self.map_err(CommandError::from)
+    }
+}
+
+/// `result.or_code("SOME_CODE")?` — gives an error that has no [`ErrorCode`]
+/// (a plain `String`/`&str`, a foreign-crate error) an explicit code and keeps
+/// its `Display` text as the message. The code is chosen at the call site, so
+/// a conversion that would drop it does not exist.
+pub trait ResultCodeExt<T> {
+    fn or_code(self, code: &'static str) -> CommandResult<T>;
+}
+
+impl<T, E: std::fmt::Display> ResultCodeExt<T> for Result<T, E> {
+    fn or_code(self, code: &'static str) -> CommandResult<T> {
+        self.map_err(|err| CommandError::with_code(err.to_string(), code))
     }
 }
 
@@ -193,12 +158,9 @@ pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
 ///
-/// **Ein `From`-Impl ist hier möglich, weil `RuleWriteError` kein `Display`
-/// implementiert** (Issue #260, ADR 0068 §7): Der blanket
-/// `impl<E: Display> From<E>` unten greift deshalb für diesen Typ nicht,
-/// und ein bloßes `?` behält den Code. Ein späteres `Display` auf
-/// `RuleWriteError` wäre ein Kohärenzfehler (E0119), kein stiller
-/// Codeverlust.
+/// **Ein explizites `From` statt `ErrorCode`** (Issue #260, ADR 0068 §7):
+/// `RuleWriteError` hat bewusst kein `Display`; ein bloßes `?` behält den
+/// Code.
 ///
 /// Als `message` steht der Fehlertext der Bibliothek (mit der Stelle im
 /// Muster). Das Frontend ersetzt bei bekanntem Code zwar den Text, zeigt
@@ -249,12 +211,12 @@ impl From<crate::filter_rules::RuleWriteError> for CommandError {
 pub fn secret_store_error(err: CredentialError) -> CommandError {
     match err {
         CredentialError::Backend(payload) => backend_failure_to_command_error(&payload),
-        // **Ausdrücklich `NotFound`, kein Catch-all** (spec-reviewer Runde 1):
-        // `CommandError::from` setzt `code: None` und nimmt den `Display`-Text
-        // als Meldung. Für eine dritte `CredentialError`-Variante wäre das
-        // genau der Zustand, den Spec 0098 abgeschafft hat — roher Text, kein
-        // stabiler Code. So scheitert stattdessen die Übersetzung.
-        not_found @ CredentialError::NotFound(_) => CommandError::from(not_found),
+        // Explicitly `NotFound`, no catch-all: a third `CredentialError`
+        // variant must fail to compile here rather than leak raw text. The
+        // message is the `Display` text (names only the reference).
+        not_found @ CredentialError::NotFound(_) => {
+            CommandError::with_code(not_found.to_string(), CREDENTIAL_NOT_FOUND)
+        }
     }
 }
 
@@ -279,7 +241,7 @@ pub fn ssh_command_error(err: &SshError) -> CommandError {
 
 /// The command error type lives in `ssh_manager_core::ipc_error` so that
 /// extension crates without an `app-logic` dependency can return it too.
-pub use ssh_manager_core::ipc_error::{CommandError, CommandResult};
+pub use ssh_manager_core::ipc_error::{CommandError, CommandResult, ErrorCode};
 
 #[cfg(test)]
 mod code_tests {
@@ -662,7 +624,7 @@ mod feature_locked_tests {
     /// Frontend jeden Fehler fälschlich als gesperrtes Feature behandeln.
     #[test]
     fn test_ordinary_error_leaves_feature_locked_none() {
-        let command_error: CommandError = "irgendein fachlicher Fehler".into();
+        let command_error = CommandError::with_code("irgendein fachlicher Fehler", "TEST_ERROR");
 
         assert!(command_error.feature_locked.is_none());
         assert_eq!(command_error.code, None);
@@ -717,15 +679,12 @@ mod store_code_tests {
 
     #[test]
     fn test_store_error_code_maps_every_kind() {
-        assert_eq!(store_error_code(StoreErrorKind::Busy), STORE_BUSY);
-        assert_eq!(
-            store_error_code(StoreErrorKind::Constraint),
-            STORE_CONSTRAINT
-        );
-        assert_eq!(store_error_code(StoreErrorKind::Corrupt), STORE_CORRUPT);
-        assert_eq!(store_error_code(StoreErrorKind::Io), STORE_IO);
-        assert_eq!(store_error_code(StoreErrorKind::NotFound), STORE_FAILED);
-        assert_eq!(store_error_code(StoreErrorKind::Other), STORE_FAILED);
+        assert_eq!(StoreErrorKind::Busy.code(), STORE_BUSY);
+        assert_eq!(StoreErrorKind::Constraint.code(), STORE_CONSTRAINT);
+        assert_eq!(StoreErrorKind::Corrupt.code(), STORE_CORRUPT);
+        assert_eq!(StoreErrorKind::Io.code(), STORE_IO);
+        assert_eq!(StoreErrorKind::NotFound.code(), STORE_FAILED);
+        assert_eq!(StoreErrorKind::Other.code(), STORE_FAILED);
     }
 
     #[test]
@@ -734,7 +693,7 @@ mod store_code_tests {
             kind: StoreErrorKind::Busy,
             message: "database is locked".into(),
         };
-        let cmd = store_command_error(err);
+        let cmd = CommandError::from(err);
         assert_eq!(
             cmd.message,
             "Profile-Store-Backend-Fehler: database is locked"
@@ -745,7 +704,7 @@ mod store_code_tests {
     #[test]
     fn test_domain_errors_keep_the_plain_conversion() {
         let err = ssh_manager_core::profiles::ProfileError::CycleDetected;
-        assert_eq!(code_of(store_command_error(err)), None);
+        assert_eq!(code_of(CommandError::from(err)), Some("GROUP_CHAIN_CYCLE"));
     }
 
     #[test]
@@ -768,6 +727,6 @@ mod store_code_tests {
             kind: StoreErrorKind::Corrupt,
             message: "malformed".into(),
         });
-        assert_eq!(code_of(store_command_error(err)), Some(STORE_CORRUPT));
+        assert_eq!(code_of(CommandError::from(err)), Some(STORE_CORRUPT));
     }
 }

@@ -1,6 +1,7 @@
 //! Spec 0008/0057/0058: Notizen (Server/Gruppe, Kürzungs-Vorschlag) — Teil
 //! der Spec-0083-Aufteilung von `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
@@ -204,7 +205,8 @@ pub async fn rollback_note(
     let old = revisions
         .iter()
         .find(|r| r.id == revision_id)
-        .ok_or("Revision nicht gefunden")?;
+        .ok_or("Revision nicht gefunden")
+        .or_code("NOTE_REVISION_NOT_FOUND")?;
     let revision = record_revision(target, old.content.clone(), NoteEditor::User);
     state
         .profile_store
@@ -221,12 +223,12 @@ pub async fn rollback_note(
 /// Revisions-Historie.
 #[tauri::command]
 pub async fn update_local_server_notes(app: AppHandle, content: String) -> CommandResult<()> {
-    crate::local_server::save_notes(&app, &content).map_err(Into::into)
+    crate::local_server::save_notes(&app, &content).or_code("LOCAL_SERVER_NOTES_FAILED")
 }
 
 #[tauri::command]
 pub async fn update_local_server_tags(app: AppHandle, tags: Vec<String>) -> CommandResult<()> {
-    crate::local_server::save_tags(&app, &tags).map_err(Into::into)
+    crate::local_server::save_tags(&app, &tags).or_code("LOCAL_SERVER_TAGS_FAILED")
 }
 
 #[tauri::command]

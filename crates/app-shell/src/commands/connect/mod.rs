@@ -8,6 +8,7 @@ mod transport;
 
 pub(super) use system_context::build_session_system_context;
 
+use app_logic::error::ResultCodeExt;
 pub(crate) use progress::ConnectProgress;
 use progress::{cancelled_error, or_cancelled};
 use transport::establish_transport;
@@ -199,9 +200,10 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
                 .sessions
                 .claim_chat_session_for_resume(existing_id)
                 .map_err(|_| {
-                    CommandError::from(
+                    CommandError::with_code(
                         "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
                          werden.",
+                        "CHAT_SESSION_BEING_DELETED",
                     )
                 })?,
         ),
@@ -543,14 +545,17 @@ pub async fn delete_chat_session(
     {
         Ok(claim) => claim,
         Err(app_logic::session::ChatSessionClaimError::InUse) => {
-            return Err(
+            return Err(CommandError::with_code(
                 "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
-                 löschen."
-                    .into(),
-            );
+                 löschen.",
+                "CHAT_SESSION_IN_USE",
+            ));
         }
         Err(app_logic::session::ChatSessionClaimError::BeingDeleted) => {
-            return Err("Diese Chat-Sitzung wird gerade gelöscht.".into());
+            return Err(CommandError::with_code(
+                "Diese Chat-Sitzung wird gerade gelöscht.",
+                "CHAT_SESSION_BEING_DELETED",
+            ));
         }
     };
     state
@@ -601,6 +606,7 @@ pub async fn confirm_host_key(
 ) -> CommandResult<()> {
     state
         .pending_host_key_confirmations
-        .resolve(&session_id, decision)?;
+        .resolve(&session_id, decision)
+        .or_code("CONFIRMATION_NOT_PENDING")?;
     Ok(())
 }

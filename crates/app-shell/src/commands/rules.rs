@@ -1,6 +1,7 @@
 //! Spec 0009/0011: Filter-Regel-Verwaltung und Regel-Schnellvorschlag — Teil
 //! der Spec-0083-Aufteilung von `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use tauri::State;
 
 use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
@@ -198,7 +199,8 @@ pub async fn accept_and_create_rule(
     };
     state
         .pending_action_confirmations
-        .resolve(&action_id, decision)?;
+        .resolve(&action_id, decision)
+        .or_code("CONFIRMATION_NOT_PENDING")?;
 
     // Spec 0077, 3.1.3: auch hier ausdrücklich umwandeln, damit die
     // Schnellregel denselben Code liefert wie das Formular. Der Fehlerweg

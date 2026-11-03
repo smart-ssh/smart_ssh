@@ -13,15 +13,10 @@ use crate::ssh::ConnectStepRecord;
 #[derive(Debug, Serialize)]
 pub struct CommandError {
     pub message: String,
-    /// Spec 0024, Abschnitt 5: stabiler, sprachunabhängiger Bezeichner fürs
-    /// Frontend-Mapping auf Übersetzungs-Keys — `None` für die (weit
-    /// überwiegende) Mehrheit der Fehler, die weiterhin nur über den
-    /// blanket `From<E: Display>`-Impl unten entstehen (unverändert wie vor
-    /// Spec 0024: `message` reicht dafür aus, ein `code` pro Fehlertyp wäre
-    /// hier unverhältnismäßiger Aufwand, s. Moduldoc). Gezielt `Some` nur an
-    /// den Stellen, die explizit `CommandError::with_code` verwenden — aktuell
-    /// die Validierungsfehler aus den Server-/Gruppen-Formularen (Spec 0008,
-    /// s. `groups.rs`/`server_credentials.rs`).
+    /// Spec 0024, section 5: stable, language-independent identifier the
+    /// frontend maps to a translation. Every conversion sets it (via
+    /// [`ErrorCode`] or [`CommandError::with_code`]); it is an `Option` only
+    /// to keep the pinned JSON shape (`null`) readable for old payloads.
     pub code: Option<&'static str>,
     /// Spec 0037, Abschnitt 2: strukturiert eingebettet (nicht nur als
     /// `message`-String), damit das Frontend einen gesperrten Feature-Fehler
@@ -41,16 +36,6 @@ pub struct CommandError {
 }
 
 impl CommandError {
-    /// A plain message without a code (what the blanket `From` produces).
-    pub fn message_only(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            feature_locked: None,
-            connect_log: None,
-        }
-    }
-
     pub fn with_code(message: impl Into<String>, code: &'static str) -> Self {
         Self {
             message: message.into(),
@@ -66,10 +51,8 @@ impl CommandError {
         self
     }
 
-    /// Spec 0037, Abschnitt 3 (D5): gating convention. There is no
-    /// `impl From<FeatureLocked>` (the blanket `From<E: Display>` below
-    /// already covers it and a second impl would overlap, E0119), so a gated
-    /// command calls `.map_err(CommandError::feature_locked)?` explicitly.
+    /// Spec 0037, Abschnitt 3 (D5): gating convention. A gated command uses
+    /// `?` on the `FeatureLocked` (the `From` impl calls this).
     pub fn feature_locked(err: FeatureLocked) -> Self {
         Self {
             message: err.to_string(),
@@ -80,14 +63,43 @@ impl CommandError {
     }
 }
 
-impl<E: std::fmt::Display> From<E> for CommandError {
+/// An error type that can be returned to the frontend through `?`. The
+/// `code` is the stable, language-independent identifier the frontend maps to
+/// a translation (`errorCodes.ts`); a code without a translation falls back to
+/// the message.
+///
+/// Every error type that reaches a command result implements this (there is no
+/// blanket `From<E: Display>`, so a conversion that would drop the code does
+/// not compile). One code per variant where the UI can act on it, otherwise
+/// one per type. List the codes in a `const CODES: &[&str]` of the type and
+/// register that in the uniqueness test. An extension crate adds its own
+/// errors by implementing this trait on them; the `From` below then applies.
+pub trait ErrorCode {
+    /// The stable code of this error value.
+    fn code(&self) -> &'static str;
+}
+
+impl<E: ErrorCode + std::fmt::Display> From<E> for CommandError {
     fn from(err: E) -> Self {
-        Self {
-            message: err.to_string(),
-            code: None,
-            feature_locked: None,
-            connect_log: None,
-        }
+        Self::with_code(err.to_string(), err.code())
+    }
+}
+
+/// A filesystem error that reaches a command through `?` without a more
+/// specific mapping: one code for the type (Spec 0024, section 5). The
+/// message is the OS error text, as before.
+impl ErrorCode for std::io::Error {
+    fn code(&self) -> &'static str {
+        IO_FAILED
+    }
+}
+
+/// Code of a plain [`std::io::Error`] converted through `?`.
+pub const IO_FAILED: &str = "IO_FAILED";
+
+impl From<FeatureLocked> for CommandError {
+    fn from(err: FeatureLocked) -> Self {
+        Self::feature_locked(err)
     }
 }
 
@@ -114,7 +126,6 @@ mod tests {
             duration_ms: Some(12),
         };
         let actual = serde_json::json!({
-            "message_only": CommandError::from("Something failed"),
             "with_code": CommandError::with_code("Group cannot be its own parent", "GROUP_SELF_PARENT"),
             "feature_locked": CommandError::feature_locked(FeatureLocked {
                 feature: Feature::new("document_export"),
@@ -129,10 +140,38 @@ mod tests {
         assert_eq!(actual, fixture);
     }
 
+    struct Probe;
+    impl std::fmt::Display for Probe {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("probe failed")
+        }
+    }
+    impl ErrorCode for Probe {
+        fn code(&self) -> &'static str {
+            "PROBE_FAILED"
+        }
+    }
+
     #[test]
-    fn message_only_has_no_code() {
-        let e = CommandError::message_only("x");
-        assert_eq!(e.message, "x");
-        assert!(e.code.is_none());
+    fn question_mark_keeps_the_error_code() {
+        fn run() -> CommandResult<()> {
+            Err(Probe)?
+        }
+        let e = run().unwrap_err();
+        assert_eq!(e.code, Some("PROBE_FAILED"));
+        assert_eq!(e.message, "probe failed");
+    }
+
+    #[test]
+    fn question_mark_on_feature_locked_sets_code_and_payload() {
+        fn run() -> CommandResult<()> {
+            Err(FeatureLocked {
+                feature: Feature::new("document_export"),
+                tier: TierId::FREE,
+            })?
+        }
+        let e = run().unwrap_err();
+        assert_eq!(e.code, Some("FEATURE_LOCKED"));
+        assert!(e.feature_locked.is_some());
     }
 }

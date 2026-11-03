@@ -129,7 +129,9 @@ pub async fn export_encrypted_backup(
             // `content://` target (Android): write and verify in an
             // app-private directory, then copy through the handle.
             let dir = crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(uuid::Uuid::new_v4().to_string());
             let result = export_via_staging(&state, &handle, &app, &dir, &file_name).await;
             remove_staging(&dir);
@@ -322,7 +324,9 @@ pub async fn pick_backup_import_file(
         },
         None => {
             let dir = crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(uuid::Uuid::new_v4().to_string());
             let opener = crate::local_file::platform_opener(&app);
             match handle.stage_into(opener.as_ref(), &dir) {

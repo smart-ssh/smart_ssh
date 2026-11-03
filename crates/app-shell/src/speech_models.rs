@@ -29,7 +29,7 @@ pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<Model
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| CommandError::from(e.to_string()))?
+        .map_err(|e| CommandError::with_code(e.to_string(), "SPEECH_MODELS_DIR_UNAVAILABLE"))?
         .join(MODELS_SUBDIR);
     Ok(Arc::clone(
         state.0.get_or_init(|| Arc::new(ModelManager::new(dir))),

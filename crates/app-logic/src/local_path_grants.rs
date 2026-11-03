@@ -46,6 +46,14 @@ pub const LOCAL_PATH_NOT_GRANTED: &str =
     "Diese lokale Datei wurde für diese Sitzung weder ausgewählt noch abgelegt \
      und darf deshalb nicht gelesen werden.";
 
+/// Stable code of [`LOCAL_PATH_NOT_GRANTED`].
+pub const LOCAL_PATH_NOT_GRANTED_CODE: &str = "LOCAL_PATH_NOT_GRANTED";
+
+/// The error for a local path outside the grants of the session.
+pub fn local_path_not_granted() -> CommandError {
+    CommandError::with_code(LOCAL_PATH_NOT_GRANTED, LOCAL_PATH_NOT_GRANTED_CODE)
+}
+
 /// A local path that passed [`LocalPathGrants::check`]: canonical, and
 /// inside a grant of the session it was checked for. Only this module can
 /// construct one (outside of tests), so a reader that takes a
@@ -95,7 +103,7 @@ impl GrantSnapshot {
         std::fs::canonicalize(requested)
             .ok()
             .and_then(|canonical| decide(canonical, &self.roots, self.edit_session_dir.as_deref()))
-            .ok_or_else(|| CommandError::from(LOCAL_PATH_NOT_GRANTED))
+            .ok_or_else(|| local_path_not_granted())
     }
 }
 
@@ -162,7 +170,7 @@ impl LocalPathGrants {
         requested: &Path,
         edit_session_dir: Option<&Path>,
     ) -> Result<GrantedLocalPath, CommandError> {
-        let not_granted = || CommandError::from(LOCAL_PATH_NOT_GRANTED);
+        let not_granted = || local_path_not_granted();
         // A path that does not resolve (missing file, broken link) is not
         // granted — there is nothing to compare.
         let canonical = std::fs::canonicalize(requested).map_err(|_| not_granted())?;

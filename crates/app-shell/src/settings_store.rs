@@ -16,6 +16,7 @@
 //!
 //! Reading is unchanged and keeps its fail-safe defaults.
 
+use app_logic::error::ResultCodeExt;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -111,10 +112,13 @@ fn check_file_loadable(path: &std::path::Path) -> CommandResult<bool> {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
     }
-    Err(CommandError::from(format!(
-        "{SETTINGS_STORE_FILE} could not be read and was left unchanged; \
-         repair or remove the file and try again"
-    )))
+    Err(CommandError::with_code(
+        format!(
+            "{SETTINGS_STORE_FILE} could not be read and was left unchanged; \
+             repair or remove the file and try again"
+        ),
+        "SETTINGS_STORE_UNREADABLE",
+    ))
 }
 
 /// Applies `change` to the settings store and saves it. On a failed save the
@@ -123,13 +127,15 @@ pub(crate) fn update<R: Runtime>(
     app: &AppHandle<R>,
     change: impl FnOnce(&mut Changes<R>),
 ) -> CommandResult<()> {
-    let path = settings_store_path(app)?;
+    let path = settings_store_path(app).or_code("SETTINGS_STORE_UNAVAILABLE")?;
     let file_has_entries = check_file_loadable(&path)?;
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(SETTINGS_STORE_FILE)
+        .or_code("SETTINGS_STORE_FAILED")?;
     if file_has_entries && store.is_empty() {
         // The store was opened while the file was unreadable and is cached
         // empty; pick up the repaired file before writing on top of it.
-        store.reload()?;
+        store.reload().or_code("SETTINGS_STORE_FAILED")?;
     }
 
     let mut changes = Changes {
@@ -141,7 +147,10 @@ pub(crate) fn update<R: Runtime>(
     // The one place that saves the settings store.
     if let Err(err) = store.save() {
         changes.roll_back();
-        return Err(err.into());
+        return Err(CommandError::with_code(
+            err.to_string(),
+            "SETTINGS_STORE_FAILED",
+        ));
     }
     harden_settings_store_permissions(app);
     Ok(())

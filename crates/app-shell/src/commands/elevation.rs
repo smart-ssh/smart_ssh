@@ -142,7 +142,7 @@ impl BrowserChannel {
     /// A1.2; Spec 0086, A2.1).
     pub(super) fn revoked_error(&self) -> CommandError {
         self.revoked_mid_command.store(true, Ordering::SeqCst);
-        CommandError::from(ELEVATED_CHANNEL_INACTIVE)
+        elevated_inactive()
     }
 
     /// Issue #622: Ist der erhöhte Kanal dieses Befehls inzwischen widerrufen
@@ -211,6 +211,12 @@ impl BrowserChannel {
     }
 }
 
+const ELEVATED_CHANNEL_INACTIVE_CODE: &str = "ELEVATED_CHANNEL_INACTIVE";
+
+fn elevated_inactive() -> CommandError {
+    CommandError::with_code(ELEVATED_CHANNEL_INACTIVE, ELEVATED_CHANNEL_INACTIVE_CODE)
+}
+
 const ELEVATED_CHANNEL_INACTIVE: &str =
     "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
      die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
@@ -240,7 +246,7 @@ where
         // vor dem ersten Zugriff — der Aufrufer soll den Abbruchgrund nicht
         // daran unterscheiden müssen, wie weit der Befehl gekommen war.
         // Schon geänderte Einträge bleiben geändert (§2, Nicht-Ziel).
-        return Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE));
+        return Err(elevated_inactive());
     }
     result
 }
@@ -286,7 +292,7 @@ impl ElevatedAccessError {
             Self::UserChanged { .. } => {
                 CommandError::with_code(self.message(), ELEVATED_USER_CHANGED_CODE)
             }
-            Self::Revoked => CommandError::from(self.message()),
+            Self::Revoked => CommandError::with_code(self.message(), "ELEVATED_ACCESS_REVOKED"),
         }
     }
 
@@ -448,7 +454,7 @@ impl BrowserSftpGuard<'_> {
                     .sftp()
                     .expect("browser_session öffnet den normalen Kanal vorab"),
             )),
-            Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
+            Self::ElevatedInactive => Err(elevated_inactive()),
             Self::Elevated {
                 slot,
                 expected_user,
@@ -719,7 +725,7 @@ async fn browser_session(
         BrowserChannelKind::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
         BrowserChannelKind::Elevated { slot, .. } => {
             if slot.is_none() {
-                return Err(ELEVATED_CHANNEL_INACTIVE.into());
+                return Err(elevated_inactive());
             }
         }
     }
@@ -850,9 +856,10 @@ pub(super) fn safe_local_segment(name: &str) -> CommandResult<()> {
     let mut components = Path::new(name).components();
     match (components.next(), components.next()) {
         (Some(Component::Normal(_)), None) => Ok(()),
-        _ => Err(CommandError::from(format!(
-            "Unsicherer Dateiname vom Server abgelehnt: '{name}'"
-        ))),
+        _ => Err(CommandError::with_code(
+            format!("Unsicherer Dateiname vom Server abgelehnt: '{name}'"),
+            "SFTP_UNSAFE_FILE_NAME",
+        )),
     }
 }
 

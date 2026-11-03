@@ -1,6 +1,7 @@
 //! Spec 0005: interaktives Terminal — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use tokio::sync::mpsc;
 use ssh_manager_core::ssh::PtySize;
 
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandError, CommandResult};
 use app_logic::events::EventEmitter;
 use app_logic::session::{spawn_terminal_actor, Session, TerminalCommand};
 use app_logic::start_directory::{open_shell_in_start_directory, TerminalStartDto};
@@ -52,7 +53,12 @@ pub async fn open_terminal(
 fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {
     lock_tolerating_poison(&session.conn.terminal)
         .clone()
-        .ok_or_else(|| "Terminal wurde noch nicht geöffnet (open_terminal aufrufen)".into())
+        .ok_or_else(|| {
+            CommandError::with_code(
+                "Terminal wurde noch nicht geöffnet (open_terminal aufrufen)",
+                "TERMINAL_NOT_OPEN",
+            )
+        })
 }
 
 #[tauri::command]
@@ -64,7 +70,8 @@ pub async fn terminal_input(
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Write(data))
-        .map_err(|_| "Terminal-Kanal bereits geschlossen")?;
+        .map_err(|_| "Terminal-Kanal bereits geschlossen")
+        .or_code("TERMINAL_CHANNEL_CLOSED")?;
     Ok(())
 }
 
@@ -78,6 +85,7 @@ pub async fn terminal_resize(
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Resize(PtySize { cols, rows }))
-        .map_err(|_| "Terminal-Kanal bereits geschlossen")?;
+        .map_err(|_| "Terminal-Kanal bereits geschlossen")
+        .or_code("TERMINAL_CHANNEL_CLOSED")?;
     Ok(())
 }

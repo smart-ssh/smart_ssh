@@ -275,7 +275,7 @@ async fn persist_note_revision(
         .record_note_revision(&revision)
         .await
         .map(|()| note_update_summary(target))
-        .map_err(crate::error::store_command_error)
+        .map_err(crate::error::CommandError::from)
 }
 
 /// Spec 0012, Abschnitt 2/3: `GenerateDocument` erzeugt reinen lokalen
