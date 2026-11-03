@@ -11,6 +11,8 @@ use ssh_manager_core::ai::default_action_schemas;
 use super::*;
 use crate::common::prompt_format::format_command_result;
 use crate::error::ProviderErrorInfo;
+use crate::test_support::test_budget;
+use futures::StreamExt;
 use ssh_manager_core::ai::{MessageContent, Role};
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -52,10 +54,6 @@ fn test_extension_part_renders_fixed_placeholder() {
     );
     let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
     crate::content::test_fixtures::assert_extension_placeholder(&p.build_request_body(&ctx));
-}
-
-fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
 }
 
 fn context_with_actions(system_context: &str, actions: Vec<ActionSchema>) -> SessionContext {

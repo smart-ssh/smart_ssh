@@ -35,7 +35,7 @@ export { useIsNarrow } from "./hooks/useIsNarrow";
 export { resolveSectionLabel } from "./resolveSectionLabel";
 export { pickAndReadTextFile } from "./fileDialog";
 export { SUPPORTED_LANGUAGES } from "./languages";
-export { settingsStore, initI18n } from "./i18n";
+export { settingsStore, initI18n, setUiPreference } from "./i18n";
 
 export type {
   AiProviderConfigDto,

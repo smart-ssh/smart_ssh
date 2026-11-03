@@ -11,6 +11,7 @@ mod content;
 mod discovery;
 mod error;
 mod fallback;
+mod openai_common;
 mod openai_compatible;
 mod openai_responses;
 mod overload;
@@ -24,6 +25,7 @@ mod usage;
 
 pub use anthropic::AnthropicProvider;
 pub use discovery::{discover_models, fetch_attestation_info};
+pub use openai_common::StreamOptionsRejections;
 pub use openai_compatible::OpenAiCompatibleProvider;
 pub use openai_responses::OpenAiResponsesProvider;
 pub use rate_limit_budget::{

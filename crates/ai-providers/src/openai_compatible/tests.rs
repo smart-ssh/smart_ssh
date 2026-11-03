@@ -4,7 +4,15 @@
 //! für den OpenAI-kompatiblen Provider gespiegelt.
 
 use super::*;
+use crate::common::max_tokens_retry::RawEvent;
 use crate::common::prompt_format::format_command_result;
+use crate::openai_common::{
+    OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS,
+    OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS,
+};
+use crate::sse::SseFrame;
+use futures::StreamExt;
+use ssh_manager_core::ai::AiError;
 use ssh_manager_core::ai::{MessageContent, Role};
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -47,7 +55,7 @@ fn test_extension_part_renders_fixed_placeholder() {
         "k",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
@@ -90,7 +98,7 @@ fn test_request_body_never_contains_a_web_tool() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let body =
@@ -125,7 +133,7 @@ fn test_no_system_message_when_system_text_is_empty_with_native_tool_calling() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
 
@@ -155,7 +163,7 @@ fn test_fallback_mode_keeps_system_message_even_with_empty_system_context() {
         "key",
         false,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_system("", default_action_schemas());
@@ -798,10 +806,6 @@ async fn test_unrecognized_finish_reason_is_treated_as_truncated_not_complete() 
     assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
 }
 
-fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
-}
-
 fn context_with_actions(actions: Vec<ActionSchema>) -> SessionContext {
     SessionContext {
         system_context: "Hi.".to_string(),
@@ -824,7 +828,7 @@ fn test_build_request_body_uses_model_aware_max_tokens_for_official_openai() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -849,7 +853,7 @@ fn test_build_request_body_stays_conservative_for_non_openai_endpoint() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -876,7 +880,7 @@ fn test_unknown_model_on_non_openai_endpoint_sends_8192_by_default() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -896,7 +900,7 @@ fn test_build_request_body_honors_max_tokens_hint_over_model_default() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let mut context = context_with_actions(Vec::new());
@@ -917,7 +921,7 @@ fn test_build_request_body_honors_provider_level_max_tokens_override() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         Some(20_000),
     );
     let context = context_with_actions(Vec::new());
@@ -937,7 +941,7 @@ fn test_side_call_hint_still_wins_over_provider_level_override() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         Some(20_000),
     );
     let mut context = context_with_actions(Vec::new());
@@ -999,7 +1003,7 @@ fn test_reasoning_models_use_max_completion_tokens_field_on_official_openai() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1020,7 +1024,7 @@ fn test_non_reasoning_models_use_classic_max_tokens_field() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1043,7 +1047,7 @@ fn test_generic_gateway_keeps_classic_field_even_for_an_o1_like_model_name() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1098,7 +1102,7 @@ async fn test_context_limit_retry_logs_error_then_debug_line_with_old_and_new_bu
         api_key,
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
 
@@ -1225,7 +1229,7 @@ fn combine_provider() -> OpenAiCompatibleProvider {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     )
 }
