@@ -27,149 +27,136 @@ use super::pending_confirmation::PendingConfirmation;
 
 // Imports the test modules below reach through `use super::*`.
 #[cfg(test)]
-#[allow(unused_imports)]
 use uuid::Uuid;
 
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::ai::{
     truncate_for_second_opinion, ChatMessage, MessageContent, OutputRedactor, RejectionReason,
     Role, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 #[cfg(test)]
-#[allow(unused_imports)]
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::filter::{
     exceeds_command_length_limit, Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin,
     DEFAULT_MAX_COMMAND_LENGTH,
 };
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::profiles::{AiAction, PostIngestPolicy, ProfileStore};
 #[cfg(test)]
-#[allow(unused_imports)]
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 #[cfg(test)]
-#[allow(unused_imports)]
 use ssh_manager_core::ssh::SshError;
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome};
 
 #[cfg(test)]
-#[allow(unused_imports)]
 use ssh_manager_core::profiles::NoteTargetSelector;
 
 #[cfg(test)]
-#[allow(unused_imports)]
 use crate::confirmation::ConfirmationRegistry;
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use crate::confirmation_settled::emit_settled_for_rejection;
 #[cfg(test)]
-#[allow(unused_imports)]
 use crate::dto::{ActionOrigin, ActionUserDecision};
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use crate::events::{
     emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
     emit_chat_error, emit_chat_injection_check, emit_risk_assessment_updated, ActionResultPayload,
     EventEmitter, InjectionCheckState,
 };
 #[cfg(test)]
-#[allow(unused_imports)]
 use crate::session::Session;
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use crate::state::{ActionId, SessionId};
 
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::approval::{ApprovedAction, ApprovedCommand};
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::chat_turn::{
     ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
     wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::notes::{execute_note_update, note_target_preview_for_action};
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::pending_confirmation::ANOTHER_CONFIRMATION_PENDING_MESSAGE;
 #[cfg(test)]
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::remote_files::{
     execute_read_remote_file, execute_write_remote_file, previous_file_content_for_action,
 };
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_core;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_decision_steps;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_check_unavailable;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_files_and_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_outgoing;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_pending_confirmation;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_red_risk;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_red_risk_second_opinion;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_not_assessable;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_escalation_log;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_escalation;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_live_output;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_auto_exec_rules;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_server_tags;
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_path_normalisation;
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_propose_steps;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
@@ -201,5 +188,4 @@ fn empty_store() -> &'static crate::test_support::InMemoryProfileStore {
 }
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_injection_reason;

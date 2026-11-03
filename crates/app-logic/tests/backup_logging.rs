@@ -1,5 +1,6 @@
 //! Issue #664, S-7 (Spec 0094): key handling and export log events and counts
 //! only. Its own test binary: the subscriber is process-wide state.
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};

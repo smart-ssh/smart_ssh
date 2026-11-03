@@ -62,7 +62,8 @@ pub fn harden_permissions(path: &Path, mode: u32, kind: &'static str) {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};

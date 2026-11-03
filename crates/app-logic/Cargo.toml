@@ -72,3 +72,6 @@ ssh-manager-core = { path = "../core", features = ["test-support"] }
 # Spec 0076, §6.2 (Muster wie app-shell/Cargo.toml).
 ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
 tokio = { version = "1.53.1", features = ["test-util"] }
+
+[lints]
+workspace = true

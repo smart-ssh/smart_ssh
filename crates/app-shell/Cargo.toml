@@ -118,3 +118,6 @@ russh-sftp = "2.4.0"
 # Sekunden abzuwarten. Nur unter `[dev-dependencies]`, landet nie in einem
 # Release-Build.
 tokio = { version = "1.53.1", features = ["test-util"] }
+
+[lints]
+workspace = true

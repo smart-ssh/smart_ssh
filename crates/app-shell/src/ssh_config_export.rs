@@ -121,7 +121,8 @@ fn resolves_to_ssh_config_under(path: &Path, home: &Path) -> bool {
     // namens "config" irgendwo im Dateisystem).
     if path
         .parent()
-        .is_some_and(|p| p.components().eq(target.parent().unwrap().components()))
+        .zip(target.parent())
+        .is_some_and(|(p, t)| p.components().eq(t.components()))
         && filenames_match_case_insensitive(path, &target)
     {
         return true;

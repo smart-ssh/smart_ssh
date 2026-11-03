@@ -5,11 +5,15 @@
 //! Datenbankdateien), `MockRuntime`, ein Mock-Connector mit Mock-Transport.
 // Testcode-Ausnahme zum `deny` — s. `lib.rs`, Modulkopf.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![expect(clippy::expect_used, reason = "test code")]
 /// Issue #395: the in-process SSH test server of `ssh-transport`, reused for
 /// the real two-hop reconnect test in `connect_flow_tests`. Test-only.
 #[cfg(test)]
-#[allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#[expect(
+    dead_code,
+    clippy::expect_used,
+    reason = "some helpers of the shared SSH test server are unused here; expect in test code"
+)]
 #[path = "../../../../ssh-transport/tests/fixtures/test_server.rs"]
 mod two_hop_fixture;
 

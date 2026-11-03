@@ -251,7 +251,7 @@ impl Drop for RegistryCleanup<'_> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod task_cancellation_tests {
     use super::*;
     use crate::tasks::TaskSupervisor;

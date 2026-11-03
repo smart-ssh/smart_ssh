@@ -1,5 +1,6 @@
 // Repository conventions guard (issue #858, AGENTS.md "Testing conventions"):
 //  1. No new `*_tests.rs` files; the built-in list of existing ones may only shrink.
+//  3. Every crate manifest under crates/ and apps/ inherits the workspace lint table (issue #890).
 //  2. `LOCAL_SERVER_ID` / `local_server` must not appear in core/filter or core/risk.
 import fs from "node:fs";
 import path from "node:path";
@@ -64,6 +65,18 @@ export function checkConventions(root = REPO_ROOT, existing = EXISTING_TESTS_RS)
             `${rel(root, file)}: \`${id}\` must not appear in filter/risk code (AGENTS.md, "No special-casing the local pseudo-server")`,
           );
         }
+      }
+    }
+  }
+  for (const group of ["crates", "apps"]) {
+    const groupDir = path.join(root, group);
+    if (!fs.existsSync(groupDir)) continue;
+    for (const entry of fs.readdirSync(groupDir, { withFileTypes: true })) {
+      const manifest = path.join(groupDir, entry.name, "Cargo.toml");
+      if (!entry.isDirectory() || !fs.existsSync(manifest)) continue;
+      const text = fs.readFileSync(manifest, "utf8");
+      if (!/^\[lints\]\s*\n\s*workspace\s*=\s*true\s*$/m.test(text)) {
+        problems.push(`${rel(root, manifest)}: missing \`[lints]\\nworkspace = true\` (issue #890)`);
       }
     }
   }

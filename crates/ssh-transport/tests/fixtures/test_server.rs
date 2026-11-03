@@ -165,10 +165,10 @@ pub struct AuthAttemptLog {
 
 impl AuthAttemptLog {
     pub fn attempts(&self) -> Vec<&'static str> {
-        self.attempts.lock().unwrap().clone()
+        self.attempts.lock().expect("attempt log lock").clone()
     }
     fn record(&self, what: &'static str) {
-        self.attempts.lock().unwrap().push(what);
+        self.attempts.lock().expect("attempt log lock").push(what);
     }
 }
 

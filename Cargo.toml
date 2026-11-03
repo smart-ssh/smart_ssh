@@ -41,3 +41,13 @@ opt-level = 3
 
 [profile.dev.package.globset]
 opt-level = 3
+
+# Issue #890: one lint table for all crates (each crate has `[lints] workspace = true`).
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+undocumented_unsafe_blocks = "deny"

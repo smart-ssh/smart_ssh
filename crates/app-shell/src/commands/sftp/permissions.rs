@@ -8,7 +8,7 @@ pub(super) use app_logic::sftp_ops::{chmod_recursive, chown_recursive, resolve_c
 /// dieselben Rechte auf **jeden** gefundenen Eintrag (Dateien UND
 /// Verzeichnisse selbst), nicht nur auf Blätter.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)] // one argument per IPC parameter
+#[expect(clippy::too_many_arguments, reason = "one argument per input")] // one argument per IPC parameter
 pub async fn sftp_chmod(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -110,7 +110,7 @@ pub(super) async fn chmod_impl_reporting(
 /// anything is changed: an unknown name fails with nothing touched.
 /// `recursive` applies to folders only and never follows symlinks.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)] // one argument per IPC parameter
+#[expect(clippy::too_many_arguments, reason = "one argument per input")] // one argument per IPC parameter
 pub async fn sftp_chown(
     app: AppHandle,
     state: State<'_, AppState>,

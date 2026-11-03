@@ -72,7 +72,6 @@ pub struct OpenAiResponsesProvider {
 }
 
 impl OpenAiResponsesProvider {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         base_url: impl Into<String>,
         model: impl Into<String>,

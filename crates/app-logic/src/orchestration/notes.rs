@@ -41,11 +41,10 @@ use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests;
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_note_result;
 
 mod note_result;
@@ -183,7 +182,7 @@ pub(crate) fn redact_note_proposal(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn execute_note_update(
     session: &Session,
     session_id: SessionId,
@@ -1184,7 +1183,7 @@ fn note_shrink_instruction(language: PromptLanguage) -> String {
 /// zuvor angenommenen Notiz-Vorschlag eingeschleuste Instruktion (die
 /// ursprünglich aus einer Kommandoausgabe eines Remote-Hosts stammte) hier
 /// als gleichrangiger Prompt-Text statt als Daten gelesen werden.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn summarize_note_for_shrink(
     ai_provider: &dyn AiProvider,
     budget: &ai_providers::ProviderBudgetGuard,
@@ -1397,7 +1396,7 @@ impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
 // 8 Parameter, alle unabhängige Kollaborateure ohne natürliche Gruppierung
 // (kein `Session` verfügbar, s. Doc-Kommentar oben) — ein Bündel-Struct nur
 // für diesen einen Aufrufer wäre reine Indirektion ohne Mehrwert.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn execute_note_shrink_request(
     session_id: SessionId,
     server_id: ServerId,

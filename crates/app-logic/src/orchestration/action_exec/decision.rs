@@ -17,7 +17,7 @@ use super::super::approval::ApprovedAction;
 use super::super::chat_turn::{ledger_source_for_origin, push_history_scoped, write_ledger_entry};
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(super) async fn handle_user_decision(
     session: &Session,
     session_id: SessionId,
