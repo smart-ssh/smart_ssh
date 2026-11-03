@@ -763,6 +763,9 @@ mod store_code_tests {
 #[cfg(test)]
 mod every_error_has_a_code_tests {
     use super::*;
+    use ssh_manager_core::ai::AiError;
+    use ssh_manager_core::profiles::{ProfileError, StoreErrorKind};
+    use ssh_manager_core::ssh::SshError;
 
     /// Spec 0024, section 5: errors converted through `?` always carry a code.
     #[test]
@@ -770,15 +773,213 @@ mod every_error_has_a_code_tests {
         let io = CommandError::from(std::io::Error::other("disk"));
         assert_eq!(io.code, Some(ssh_manager_core::ipc_error::IO_FAILED));
 
-        let profile = CommandError::from(ssh_manager_core::profiles::ProfileError::ServerNotFound(
-            Default::default(),
-        ));
+        let profile = CommandError::from(ProfileError::ServerNotFound(Default::default()));
         assert_eq!(profile.code, Some("SERVER_NOT_FOUND"));
-
-        let ssh = CommandError::from(ssh_manager_core::ssh::SshError::Timeout);
-        assert!(ssh.code.is_some());
 
         let stringly = CommandError::with_code("x", "TEST_ERROR");
         assert_eq!(stringly.code, Some("TEST_ERROR"));
+    }
+
+    /// One representative error per command module whose errors travel
+    /// through `?` (the modules whose errors are built by hand set the code at
+    /// the construction site and are covered in `app-shell`).
+    #[test]
+    fn test_representative_error_of_every_command_module_has_a_code() {
+        let samples: Vec<(&str, CommandError)> = vec![
+            (
+                "servers",
+                ProfileError::ServerNotFound(Default::default()).into(),
+            ),
+            ("groups", ProfileError::CycleDetected.into()),
+            (
+                "profile store",
+                ProfileError::Store {
+                    kind: StoreErrorKind::Busy,
+                    message: "m".into(),
+                }
+                .into(),
+            ),
+            ("connect", SshError::ConnectionFailed("x".into()).into()),
+            ("sftp", SshError::SftpPermissionDenied("x".into()).into()),
+            ("elevation", SshError::AuthenticationFailed.into()),
+            ("terminal", SshError::SessionClosed("x".into()).into()),
+            ("chat", AiError::RateLimited.into()),
+            ("ai providers", AiError::AuthenticationFailed.into()),
+            (
+                "filter rules",
+                crate::filter_rules::RuleWriteError::Store(
+                    persistence_sqlite::PolicyStoreError::Backend("x".into()),
+                )
+                .into(),
+            ),
+            (
+                "filter rules (store kind)",
+                persistence_sqlite::PolicyStoreError::NotFound(ssh_manager_core::filter::RuleId(
+                    "r".into(),
+                ))
+                .into(),
+            ),
+            (
+                "chat sessions",
+                persistence_sqlite::ChatSessionStoreError::Backend("x".into()).into(),
+            ),
+            (
+                "files (mcp settings, speech)",
+                std::io::Error::other("x").into(),
+            ),
+        ];
+        for (module, err) in samples {
+            assert!(err.code.is_some(), "{module}: error without a code");
+        }
+    }
+
+    /// No hand-built `CommandError { .. }` literal may leave `code` empty
+    /// (that would reopen the hole the `ErrorCode` bound closed).
+    #[test]
+    fn test_no_command_error_literal_without_a_code() {
+        for file in rust_sources() {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for (at, _) in text.match_indices("CommandError {") {
+                let head = &text[..at];
+                if head.ends_with("struct ") || head.ends_with("impl ") {
+                    continue;
+                }
+                let tail: String = text[at..].chars().take(160).collect();
+                assert!(
+                    !tail.contains("code: None"),
+                    "{}: CommandError literal with `code: None`",
+                    file.display()
+                );
+            }
+        }
+    }
+
+    /// Every `*.rs` file under `app-logic/src` and `app-shell/src`.
+    fn rust_sources() -> Vec<std::path::PathBuf> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut out = Vec::new();
+        for krate in ["app-logic", "app-shell"] {
+            walk(&root.join(krate).join("src"), &mut out);
+        }
+        out.sort();
+        out
+    }
+
+    /// Value of a code-shaped `const NAME: &str = "UPPER_CASE";` line.
+    fn code_const(line: &str) -> Option<(&str, &str)> {
+        let rest = line.trim_start();
+        let rest = rest
+            .strip_prefix("pub(crate) ")
+            .or_else(|| rest.strip_prefix("pub "))
+            .unwrap_or(rest);
+        let rest = rest.strip_prefix("const ")?;
+        let (name, rest) = rest.split_once(": &str = \"")?;
+        let value = rest.strip_suffix("\";")?;
+        let shaped = value.len() > 3
+            && value
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit());
+        shaped.then_some((name, value))
+    }
+
+    /// Issue #887 AC 4: the codes the command layers define as constants in
+    /// `app-logic`/`app-shell` are collected from the source and checked
+    /// together with the codes of the `ErrorCode` types: one name per value,
+    /// and no constant reuses a type's code.
+    #[test]
+    fn test_code_constants_in_the_command_layers_are_unique() {
+        let mut named: Vec<(String, String)> = Vec::new();
+        let mut inline: Vec<String> = Vec::new();
+        for file in rust_sources() {
+            let name = file.file_name().unwrap().to_string_lossy().into_owned();
+            if name.starts_with("test") || file.components().any(|c| c.as_os_str() == "tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&file).unwrap();
+            let production = text.split("#[cfg(test)]").next().unwrap();
+            for (at, call) in production
+                .match_indices("with_code(")
+                .chain(production.match_indices("or_code("))
+            {
+                // The code is the last argument: the last quoted
+                // UPPER_CASE literal before the call's closing `)`.
+                let args: String = production[at + call.len()..].chars().take(300).collect();
+                let Some(end) = args.find("\")") else {
+                    continue;
+                };
+                let Some(lit) = args[..end].rsplit('"').next() else {
+                    continue;
+                };
+                let shaped = lit.len() > 3
+                    && lit
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit());
+                if shaped {
+                    inline.push(lit.to_owned());
+                }
+            }
+            for line in production.lines() {
+                if let Some((name, value)) = code_const(line) {
+                    named.push((name.to_owned(), value.to_owned()));
+                }
+            }
+        }
+        assert!(
+            named.len() > 20,
+            "the scan found only {} constants",
+            named.len()
+        );
+        for (i, (name, value)) in named.iter().enumerate() {
+            for (other, other_value) in &named[i + 1..] {
+                assert!(
+                    !(value == other_value && name != other),
+                    "code {value} is defined by both {name} and {other}"
+                );
+            }
+        }
+        let typed: Vec<&str> = [
+            SshError::CODES,
+            AiError::CODES,
+            ProfileError::CODES,
+            persistence_sqlite::STORE_ERROR_CODES,
+        ]
+        .concat();
+        assert!(!inline.is_empty(), "the scan found no inline codes");
+        for lit in &inline {
+            assert!(
+                !typed.contains(&lit.as_str()) || lit == SECRET_STORE_FAILED,
+                "inline code {lit} reuses the code of an ErrorCode type"
+            );
+        }
+        for (name, value) in &named {
+            // `SECRET_STORE_FAILED` is deliberately shared with `SshError`.
+            if value == SECRET_STORE_FAILED {
+                continue;
+            }
+            assert!(
+                !typed.contains(&value.as_str()),
+                "constant {name} reuses the code {value} of an ErrorCode type"
+            );
+        }
+    }
+
+    /// The scan helper above sees a duplicate (fixture).
+    #[test]
+    fn test_code_const_parses_a_definition() {
+        assert_eq!(
+            code_const("pub const FOO_BAR: &str = \"FOO_BAR\";"),
+            Some(("FOO_BAR", "FOO_BAR"))
+        );
+        assert_eq!(code_const("const X: &str = \"a b\";"), None);
     }
 }

@@ -461,6 +461,24 @@ pub async fn cancel_backup_import(slot: State<'_, BackupImportSlot>) -> CommandR
 mod tests {
     use super::*;
 
+    /// Issue #887: every backup failure reaches the frontend with a code.
+    #[test]
+    fn test_every_backup_error_carries_a_code() {
+        for err in [
+            BackupOpError::KeyRequired,
+            BackupOpError::KeyAlreadyExists,
+            BackupOpError::Format(BackupError::CodeTypo),
+            BackupOpError::KeyUnreadable,
+            BackupOpError::HostKeys,
+            BackupOpError::Write,
+            BackupOpError::Read,
+            BackupOpError::Invalid("x"),
+            BackupOpError::VerificationFailed,
+        ] {
+            assert!(command_error(err).code.is_some());
+        }
+    }
+
     fn slot_with(dir: &std::path::Path, staged: bool) -> (BackupImportSlot, std::path::PathBuf) {
         let file = dir.join("a.sshbackup");
         std::fs::write(&file, b"x").unwrap();

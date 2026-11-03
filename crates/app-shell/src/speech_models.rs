@@ -126,6 +126,18 @@ pub fn delete_speech_model(app: AppHandle, model: String) -> CommandResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #887: speech-model failures reach the frontend with a code.
+    #[test]
+    fn test_every_model_manager_error_carries_a_code() {
+        for err in [
+            ModelManagerError::AlreadyDownloading,
+            ModelManagerError::Downloading,
+            ModelManagerError::Io,
+        ] {
+            assert!(manager_error(err).code.is_some());
+        }
+    }
     use crate::first_run_notice::test_support::{lock, test_app};
 
     #[test]
