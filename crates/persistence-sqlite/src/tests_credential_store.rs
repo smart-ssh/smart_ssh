@@ -253,7 +253,8 @@ async fn test_t1_a_stored_secret_never_appears_in_the_raw_file() {
 /// Kombination: Der Store trägt Tauris Multi-Thread-Handle, der Aufruf kommt
 /// aber aus einer `current_thread`-Runtime (das ist auch die Lage in jedem
 /// `#[tokio::test]` ohne `flavor`). Die Zusicherung aus dem Modul-Kommentar
-/// lautet „sichtbar scheitern, nicht abstürzen".
+/// lautet seit Issue #898: nicht abstürzen; die Abfrage läuft auf einem
+/// Hilfsthread.
 ///
 /// **Gegenbeweis geführt:** Prüft `block_on` wieder `self.handle` statt
 /// `Handle::try_current()`, passiert der Aufruf die Schranke, trifft
@@ -261,7 +262,7 @@ async fn test_t1_a_stored_secret_never_appears_in_the_raw_file() {
 /// blocking only when running on the multi-threaded runtime") — der Panic
 /// schlägt durch `block_on` nach oben und der Test scheitert.
 #[test]
-fn test_a9_a_current_thread_caller_fails_visibly_instead_of_panicking() {
+fn test_a9_a_current_thread_caller_is_served_on_a_helper_thread() {
     let multi = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -286,27 +287,11 @@ fn test_a9_a_current_thread_caller_fails_visibly_instead_of_panicking() {
         credentials.get(&r("server:4:password"))
     });
 
-    let err = result.err().unwrap_or_else(|| {
-        panic!("der Aufruf darf nicht gelingen — die Laufzeitumgebung erlaubt kein Blockieren")
-    });
-    match err {
-        CredentialError::Backend(payload) => {
-            assert!(
-                payload.contains("Laufzeitumgebung"),
-                "die Meldung muss die Ursache nennen: {payload}"
-            );
-            assert!(
-                !payload.contains(MARKER) && !payload.contains("server:4:password"),
-                "weder Secret noch Referenz gehören in die Meldung: {payload}"
-            );
-        }
-        // Ohne die Schranke käme der Aufruf bis zur Abfrage durch; der
-        // Eintrag existiert nicht, das Ergebnis wäre also `NotFound`.
-        // Genau daran lässt sich „Schranke hat gegriffen" von „Abfrage ist
-        // normal gelaufen" unterscheiden.
-        CredentialError::NotFound(_) => {
-            panic!("eine Störung der Laufzeitumgebung darf nicht wie „kein Eintrag\" aussehen")
-        }
+    // Issue #898: the bridge runs the query on a helper thread; the
+    // result is the ordinary one for a slot that was never written.
+    match result {
+        Err(CredentialError::NotFound(got)) => assert_eq!(got.as_str(), "server:4:password"),
+        other => panic!("expected NotFound from the helper-thread path, got: {other:?}"),
     }
 
     multi.block_on(async { profile_store.close().await });

@@ -144,6 +144,32 @@ pub fn build_ai_provider_from_config(
     ))
 }
 
+/// [`build_ai_provider_from_config`] for async callers: the key is read on
+/// the blocking pool (issue #898), then the provider is built as before.
+pub async fn build_ai_provider_from_config_async(
+    registry: &RateLimitRegistry,
+    credential_store: Arc<dyn CredentialStore + Send + Sync>,
+    config: &AiProviderConfig,
+    web_research_enabled: bool,
+) -> Result<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>), CredentialError> {
+    let credential_ref = config.credential_ref.clone();
+    let api_key = persistence_sqlite::runtime_bridge::spawn_blocking_io(move || {
+        credential_store.get(&credential_ref)
+    })
+    .await?;
+    Ok(build_ai_provider(
+        registry,
+        config.provider_type,
+        config.base_url.as_deref(),
+        &config.model,
+        api_key,
+        config.supports_native_tool_calling,
+        config.extra_headers.clone(),
+        config.max_tokens_override,
+        web_research_enabled,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
