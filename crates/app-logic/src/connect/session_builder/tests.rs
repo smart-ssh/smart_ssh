@@ -397,6 +397,49 @@ async fn test_resume_loads_history_and_flags_untrusted_content() {
 }
 
 #[tokio::test]
+async fn test_uname_banner_precedes_resumed_stored_history() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let store = &fx.state.chat_session_store;
+    let chat_id = store
+        .create_session(&fx.server.id, Some(fx.config.id.0))
+        .await
+        .unwrap();
+    let stored = ChatMessage {
+        role: Role::ActionResult,
+        content: MessageContent::Text(fence_untrusted(
+            UntrustedKind::CommandStdout,
+            "cat /etc/motd",
+            "hello",
+        )),
+    };
+    store.append_message(chat_id, &stored).await.unwrap();
+    let run = run(
+        &fx,
+        fx.server.id,
+        fx.server.clone(),
+        ok("Linux web-1 6.1.0 x86_64"),
+        ok("0"),
+        Some(chat_id),
+    )
+    .await;
+    let session = run.built.unwrap().session;
+    let ctx = session.context.lock().await;
+    assert_eq!(ctx.history.len(), 2);
+    let MessageContent::Text(first) = &ctx.history[0].content else {
+        panic!("banner is text");
+    };
+    assert_eq!(
+        first,
+        &fence_untrusted(
+            UntrustedKind::RemoteOsInfo,
+            "uname -a",
+            "Linux web-1 6.1.0 x86_64"
+        )
+    );
+    assert!(ctx.history[1].content == stored.content);
+}
+
+#[tokio::test]
 async fn test_local_pseudo_server_gets_no_sudo_password_and_no_root_probe() {
     // A sudo password stored for some other server must not reach the local one.
     let other = ServerId(uuid::Uuid::new_v4());
