@@ -12,6 +12,7 @@
 //! frei von I/O-Abhängigkeiten (kein HTTP-Client hier) und schnell über
 //! Mock-Implementierungen testbar.
 
+mod error_codes;
 mod extension_content;
 mod extension_part;
 mod fencing;
