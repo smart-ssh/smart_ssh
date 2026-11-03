@@ -744,7 +744,9 @@ async fn generate_rolling_summary(
         session.redactor.as_ref(),
         &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
-    ) {
+    )
+    .await
+    {
         Ok(context) => context,
         Err(_) => return None,
     };

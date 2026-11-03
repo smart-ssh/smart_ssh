@@ -2330,6 +2330,7 @@ struct FlakyExt {
     ok_calls: usize,
 }
 
+#[async_trait::async_trait]
 impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
     fn name(&self) -> &str {
         "files"
@@ -2341,7 +2342,7 @@ impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
     ) -> Option<crate::chat_content_extension::PendingContent> {
         None
     }
-    fn persist(
+    async fn persist(
         &self,
         _s: Uuid,
         _part_id: &str,
@@ -2349,7 +2350,7 @@ impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
     ) -> Result<(), crate::chat_content_extension::ChatContentError> {
         Ok(())
     }
-    fn resolve(
+    async fn resolve(
         &self,
         _s: Uuid,
         _part: &ssh_manager_core::ai::ExtensionPart,

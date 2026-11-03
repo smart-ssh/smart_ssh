@@ -104,8 +104,9 @@ fn content_type_for(content: &MessageContent) -> &'static str {
 /// delete, retention delete and (via the profile store) server delete. Called
 /// only after the delete succeeded; a crash in between is covered by the
 /// extension's `reconcile` at the next start.
+#[async_trait::async_trait]
 pub trait ChatSessionRemovalObserver: Send + Sync {
-    fn sessions_removed(&self, session_ids: &[Uuid]);
+    async fn sessions_removed(&self, session_ids: &[Uuid]);
 }
 
 /// Slot shared between the profile store and every chat store made from it,
@@ -113,12 +114,12 @@ pub trait ChatSessionRemovalObserver: Send + Sync {
 pub(crate) type RemovalHook =
     std::sync::Arc<std::sync::OnceLock<std::sync::Arc<dyn ChatSessionRemovalObserver>>>;
 
-pub(crate) fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
+pub(crate) async fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
     if ids.is_empty() {
         return;
     }
     if let Some(observer) = hook.get() {
-        observer.sessions_removed(ids);
+        observer.sessions_removed(ids).await;
     }
 }
 
@@ -512,7 +513,7 @@ impl SqliteChatSessionStore {
             .await?;
         // Issue #504: only after a successful delete, once per removed session.
         if result.rows_affected() > 0 {
-            notify_removed(&self.removal, &[session_id]);
+            notify_removed(&self.removal, &[session_id]).await;
         }
         Ok(())
     }
@@ -540,7 +541,7 @@ impl SqliteChatSessionStore {
             .filter_map(|r| r.try_get::<String, _>("id").ok())
             .filter_map(|raw| Uuid::parse_str(&raw).ok())
             .collect();
-        notify_removed(&self.removal, &ids);
+        notify_removed(&self.removal, &ids).await;
         Ok(rows.len() as u64)
     }
 }
@@ -1428,8 +1429,9 @@ mod tests {
     /// Observer recording the removed ids.
     #[derive(Default)]
     struct Recording(std::sync::Mutex<Vec<Vec<Uuid>>>);
+    #[async_trait::async_trait]
     impl ChatSessionRemovalObserver for Recording {
-        fn sessions_removed(&self, ids: &[Uuid]) {
+        async fn sessions_removed(&self, ids: &[Uuid]) {
             self.0.lock().unwrap().push(ids.to_vec());
         }
     }

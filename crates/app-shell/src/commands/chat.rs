@@ -290,7 +290,9 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // Issue #505: hand the checked blocks to their extension only now, after
     // the busy check; an error sends nothing (the guard resets the turn).
     if !queued_only {
-        extension_parts.persist(session.extension_content_key(session_id).await)?;
+        extension_parts
+            .persist(session.extension_content_key(session_id).await)
+            .await?;
     }
     let mut extension_parts = Some(extension_parts);
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für

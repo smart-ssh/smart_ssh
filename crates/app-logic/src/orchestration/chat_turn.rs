@@ -543,7 +543,7 @@ enum RoundOutcome {
 /// (chat turn, compaction, title, notes): seals extension parts (Issue #505),
 /// then re-applies redaction (Spec 0040, Abschnitt 5; invariant 11). Call it
 /// as the last step before `AiProvider::send` (issue #833).
-pub(crate) fn seal_for_send(
+pub(crate) async fn seal_for_send(
     context: SessionContext,
     redactor: &dyn OutputRedactor,
     registry: &crate::chat_content_extension::ChatContentRegistry,
@@ -557,6 +557,7 @@ pub(crate) fn seal_for_send(
             session_id,
         },
     )
+    .await
 }
 
 /// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
@@ -608,7 +609,9 @@ async fn run_one_round(
         session.redactor.as_ref(),
         &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
-    ) {
+    )
+    .await
+    {
         Ok(context) => context,
         Err(err) => {
             emit_chat_error(emitter, session_id, err.message, Some(err.code));

@@ -626,6 +626,7 @@ async fn request_ai_title(
         &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
     )
+    .await
     .map_err(|_| TitleFailure::SealFailed)?;
 
     wait_for_ai_request_slot(session).await;
@@ -858,7 +859,9 @@ pub async fn suggest_note_update_on_disconnect(
         session.redactor.as_ref(),
         &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
-    ) else {
+    )
+    .await
+    else {
         tracing::info!("skipping note-update suggestion on disconnect: sealing failed");
         return false;
     };
@@ -1225,7 +1228,8 @@ async fn summarize_note_for_shrink(
         request_context,
         redactor,
         &ssh_manager_core::ai::NoExtensionSealer,
-    );
+    )
+    .await;
 
     // Spec 0061, Abschnitt 3: dieser Aufruf läuft session-unabhängig (s.
     // Doc-Kommentar an `execute_note_shrink_request` weiter unten) — kein
