@@ -2,6 +2,7 @@
 //! strukturiertes Logging/Diagnose, Zugangsdatei-Lesen — Teil der
 //! Spec-0083-Aufteilung von `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use tauri::AppHandle;
 use tauri::State;
 
@@ -13,7 +14,7 @@ use ssh_manager_core::shared::ServerId;
 
 use app_logic::dto::DocumentFormat;
 use app_logic::dto::KeychainStatusDto;
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandError, CommandResult};
 use app_logic::state::AppState;
 
 // --- Spec 0012: KI-generierte Dokumente -------------------------------
@@ -109,7 +110,8 @@ pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
     let dir = app_logic::logging::default_log_dir();
     std::fs::create_dir_all(&dir)?;
     app.opener()
-        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)?;
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)
+        .or_code("OPEN_PATH_FAILED")?;
     Ok(())
 }
 
@@ -127,7 +129,7 @@ pub(crate) struct EditionDataPaths(pub Vec<app_logic::data_paths::ExtraDataPath>
 fn mcp_settings_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> CommandResult<std::path::PathBuf> {
-    Ok(crate::settings_store::settings_store_path(app)?)
+    crate::settings_store::settings_store_path(app).or_code("SETTINGS_STORE_UNAVAILABLE")
 }
 
 fn current_data_paths<R: tauri::Runtime>(
@@ -167,12 +169,17 @@ pub async fn open_data_path_folder(
     use tauri_plugin_opener::OpenerExt;
 
     let entries = current_data_paths(&app, &extra)?;
-    let folder = app_logic::data_paths::open_folder_target(&entries, &id)?;
+    let folder =
+        app_logic::data_paths::open_folder_target(&entries, &id).or_code("DATA_FOLDER_UNKNOWN")?;
     if !folder.is_dir() {
-        return Err(format!("folder does not exist: {}", folder.display()).into());
+        return Err(CommandError::with_code(
+            format!("folder does not exist: {}", folder.display()),
+            "DATA_FOLDER_MISSING",
+        ));
     }
     app.opener()
-        .open_path(folder.to_string_lossy().into_owned(), None::<&str>)?;
+        .open_path(folder.to_string_lossy().into_owned(), None::<&str>)
+        .or_code("OPEN_PATH_FAILED")?;
     Ok(())
 }
 

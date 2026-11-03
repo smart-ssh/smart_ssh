@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(not(target_os = "android"))]
+use app_logic::error::ResultCodeExt;
 
 /// Lädt genau eine Remote-Datei nach `local_path` herunter — der
 /// eigentliche Transfer-Kern hinter `sftp_download`, `sftp_download_default`
@@ -106,7 +108,9 @@ pub(super) async fn download_impl(
         Some(p) => (p.to_path_buf(), None),
         None => {
             let dir = crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(Uuid::new_v4().to_string());
             (dir.join(&file_name), Some(dir))
         }
@@ -132,7 +136,7 @@ pub(super) async fn download_impl(
             let h = handle.clone();
             tokio::task::spawn_blocking(move || h.copy_from(opener.as_ref(), &from))
                 .await
-                .map_err(|e| CommandError::from(e.to_string()))
+                .map_err(|e| CommandError::with_code(e.to_string(), "BACKGROUND_TASK_FAILED"))
                 .and_then(|r| r.map(|_| ()).map_err(CommandError::from))
         }
         _ => Ok(()),
@@ -169,7 +173,9 @@ pub(super) async fn pick_folder_dialog(
             let _ = tx.send(path);
         });
     match rx.await.ok().flatten() {
-        Some(picked) => Ok(Some(picked.into_path()?)),
+        Some(picked) => Ok(Some(
+            picked.into_path().or_code("FILE_PICKER_PATH_INVALID")?,
+        )),
         None => Ok(None),
     }
 }
@@ -179,8 +185,9 @@ pub(super) async fn pick_folder_dialog(
     _app: &AppHandle,
     _title: &str,
 ) -> CommandResult<Option<std::path::PathBuf>> {
-    Err(CommandError::from(
+    Err(CommandError::with_code(
         "Folder selection is not available on Android",
+        "FILE_PICKER_UNAVAILABLE",
     ))
 }
 
@@ -199,7 +206,7 @@ pub(super) fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
         directories::UserDirs::new()
             .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
             .ok_or("Kein Standard-Downloadverzeichnis gefunden")
-            .map_err(CommandError::from)
+            .or_code("NO_DOWNLOAD_DIR")
     }
 }
 
@@ -237,10 +244,12 @@ impl app_logic::sftp_ops::TreeVisitor for DownloadTreeVisitor {
         entry: ssh_manager_core::ssh::RemoteEntry,
     ) -> CommandResult<()> {
         safe_local_segment(&entry.name)?;
-        let local_dir = self
-            .local_dirs
-            .get(remote_dir)
-            .ok_or_else(|| CommandError::from("internal error: unknown parent directory"))?;
+        let local_dir = self.local_dirs.get(remote_dir).ok_or_else(|| {
+            CommandError::with_code(
+                "internal error: unknown parent directory",
+                "SFTP_INTERNAL_ERROR",
+            )
+        })?;
         let local_entry_path = local_dir.join(&entry.name);
         if entry.is_dir {
             tokio::fs::create_dir_all(&local_entry_path).await?;

@@ -2,6 +2,7 @@
 //! Zugangsdaten-Test, Attestierung) — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use futures::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
 use tauri::State;
@@ -47,7 +48,9 @@ pub async fn add_ai_provider(
     // wäre der richtige, aber über Fund 1 hinausgehende nächste Schritt.
     let config = config.trimmed();
     // Spec 0065, Teil 4: vor jedem Persistieren, wie `trimmed()` oben.
-    config.validate_max_tokens_override()?;
+    config
+        .validate_max_tokens_override()
+        .or_code("AI_MAX_TOKENS_OVERRIDE_INVALID")?;
     let id = ProviderId::new();
     let credential_ref = credential_ref_for(id);
     state
@@ -65,7 +68,7 @@ pub async fn add_ai_provider(
         // relevante Information für den Aufrufer, ein sekundärer
         // Keychain-Fehler beim Aufräumversuch soll ihn nicht überdecken.
         let _ = state.credential_store.delete(&credential_ref);
-        return Err(app_logic::error::store_command_error(err));
+        return Err(app_logic::error::CommandError::from(err));
     }
     Ok(id)
 }
@@ -88,7 +91,9 @@ pub async fn update_ai_provider(
     // Whitespace bestehender Paste die Prüfung fälschlich und überschreibt
     // das bestehende Credential mit einem leeren Wert.
     let config = config.trimmed();
-    config.validate_max_tokens_override()?;
+    config
+        .validate_max_tokens_override()
+        .or_code("AI_MAX_TOKENS_OVERRIDE_INVALID")?;
     let api_key = config.api_key.clone();
     state
         .ai_provider_store
@@ -178,7 +183,10 @@ pub async fn discover_models(
             | ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
             | ssh_manager_core::ai::ProviderType::Ollama
     ) {
-        return Err("Modell-Discovery wird für diesen Provider-Typ nicht unterstützt".into());
+        return Err(CommandError::with_code(
+            "Modell-Discovery wird für diesen Provider-Typ nicht unterstützt",
+            "AI_MODEL_DISCOVERY_UNSUPPORTED",
+        ));
     }
 
     // Unabhängiger Review-Pass (Spec 0024/0025): ohne diese Prüfung fällt
@@ -193,7 +201,10 @@ pub async fn discover_models(
     // mit dem der Nutzer nie interagieren wollte. Dieselbe
     // Verteidigung-in-der-Tiefe wie die `provider_type`-Prüfung oben.
     if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
-        return Err("Base-URL erforderlich, bevor Modelle geladen werden können".into());
+        return Err(CommandError::with_code(
+            "Base-URL erforderlich, bevor Modelle geladen werden können",
+            "AI_BASE_URL_REQUIRED",
+        ));
     }
 
     let api_key = resolve_api_key(
@@ -357,7 +368,9 @@ async fn resolve_api_key(
     if !config.api_key.is_empty() {
         return Ok(SecretString::from(config.api_key.clone()));
     }
-    let id = existing_provider_id.ok_or(missing_message)?;
+    let id = existing_provider_id
+        .ok_or(missing_message)
+        .or_code("AI_API_KEY_REQUIRED")?;
     let existing = state.ai_provider_store.get(&id).await.store_err()?;
     // Stays a `SecretString` (zeroed on drop) until the HTTP client needs it.
     state
@@ -379,7 +392,10 @@ pub async fn test_ai_provider_credentials(
     // Same guard as in `discover_models` above (Spec 0050): never send the key
     // to the default endpoint when a custom one is required but missing.
     if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
-        return Err("Base-URL erforderlich, bevor die Zugangsdaten getestet werden können".into());
+        return Err(CommandError::with_code(
+            "Base-URL erforderlich, bevor die Zugangsdaten getestet werden können",
+            "AI_BASE_URL_REQUIRED",
+        ));
     }
 
     let api_key = resolve_api_key(
@@ -581,8 +597,11 @@ pub async fn fetch_attestation_info(
         .store_err()?;
     let url = existing
         .attestation_url
-        .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")?;
-    let info = ai_providers::fetch_attestation_info(&url).await?;
+        .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")
+        .or_code("AI_ATTESTATION_UNAVAILABLE")?;
+    let info = ai_providers::fetch_attestation_info(&url)
+        .await
+        .map_err(CommandError::from)?;
     Ok(info)
 }
 

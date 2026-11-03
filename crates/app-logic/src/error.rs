@@ -1,13 +1,13 @@
-//! Fehlertyp für Tauri-Commands. Tauri serialisiert das `Err`-Ergebnis
-//! eines `#[tauri::command]` per `serde::Serialize` zurück ans Frontend —
-//! ein flacher `{ message: String }` reicht für Teil 1 (die einzelnen
-//! Rust-Fehlertypen aus `core`/`persistence-sqlite` unterscheiden sich zu
-//! sehr, um sie 1:1 über die IPC-Grenze zu spiegeln; das Frontend braucht
-//! ohnehin nur eine anzeigbare Meldung). Ein blanket `From<E: Display>`
-//! deckt alle projektinternen Fehlertypen ab (`ProfileError`,
-//! `CredentialError`, `persistence_sqlite::AiProviderStoreError`,
-//! `keyring`-Fehler über `credentials-keyring`), die allesamt `Display`
-//! implementieren — kein separater `From`-Impl pro Fehlertyp nötig.
+//! The error type of Tauri commands and the conversions into it.
+//!
+//! [`CommandError`] (defined in `ssh_manager_core::ipc_error`) always carries
+//! a stable `code` (Spec 0024, section 5). There is no blanket
+//! `From<E: Display>`: an error type reaches `?` only if it implements
+//! [`ErrorCode`] (or has an explicit `From`, like `FeatureLocked` and
+//! `RuleWriteError`). Credential-store errors are deliberately **not**
+//! `ErrorCode` — they go through [`secret_store_error`] so the backend
+//! payload never reaches the message. Plain strings are not convertible: use
+//! `CommandError::with_code(message, CODE)`.
 
 use ssh_manager_core::profiles::CredentialError;
 use ssh_manager_core::ssh::SshError;
@@ -29,6 +29,10 @@ pub use ssh_manager_core::profiles::KEYCHAIN_ACCESS_FAILED;
 /// Wohnt aus demselben Grund in `core` wie [`KEYCHAIN_ACCESS_FAILED`] —
 /// `SshError::code` vergibt ihn für die Verbindungskette ebenfalls.
 pub use ssh_manager_core::profiles::SECRET_STORE_FAILED;
+
+/// A credential reference without a stored entry (a statement about the
+/// stock, not a store failure).
+pub const CREDENTIAL_NOT_FOUND: &str = "CREDENTIAL_NOT_FOUND";
 
 /// Spec 0098 A1/A2/A7, seit Spec 0101 A9.1 auf den Secret-Speicher
 /// umgestellt: der eine Ort, an dem ein [`CredentialError::Backend`] zu
@@ -84,7 +88,7 @@ pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK
 
 /// Spec 0077, 3.1.3: Das Muster einer Filterregel lässt sich nicht
 /// übersetzen — die Regel wurde deshalb **nicht** gespeichert.
-pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
+pub use persistence_sqlite::FILTER_RULE_PATTERN_INVALID;
 
 /// Issue #357, Spec 0086 A1.1: „Dateiinhalt kopieren" lehnt eine Datei über
 /// 50 MB ab. Das Frontend übersetzt den Code (`errorCodes.ts`), der Text hier
@@ -117,72 +121,33 @@ pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIR
 /// preference, or a value outside the shape registered for it.
 pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
 
-/// Issue #885: a SQLite store failed because the database was busy/locked.
-pub const STORE_BUSY: &str = "STORE_BUSY";
-/// Issue #885: a store write violated a database constraint.
-pub const STORE_CONSTRAINT: &str = "STORE_CONSTRAINT";
-/// Issue #885: the database is corrupt or not a database.
-pub const STORE_CORRUPT: &str = "STORE_CORRUPT";
-/// Issue #885: the database file could not be read or written.
-pub const STORE_IO: &str = "STORE_IO";
-/// Issue #885: any other store failure (including "not found" of a row).
-pub const STORE_FAILED: &str = "STORE_FAILED";
+pub use ssh_manager_core::profiles::{
+    STORE_BUSY, STORE_CONSTRAINT, STORE_CORRUPT, STORE_FAILED, STORE_IO,
+};
 
-/// Issue #885: the stable code for a store failure kind. Unknown frontend
-/// codes fall back to the message, so this adds no UI text.
-pub fn store_error_code(kind: persistence_sqlite::StoreErrorKind) -> &'static str {
-    use persistence_sqlite::StoreErrorKind as K;
-    match kind {
-        K::Busy => STORE_BUSY,
-        K::Constraint => STORE_CONSTRAINT,
-        K::Corrupt => STORE_CORRUPT,
-        K::Io => STORE_IO,
-        K::NotFound | K::Other => STORE_FAILED,
-    }
-}
-
-/// Errors of the SQLite stores (not the credential store, which has its own
-/// path: [`secret_store_error`]).
-pub trait StoreFailure: std::fmt::Display {
-    fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind>;
-}
-
-macro_rules! store_failure {
-    ($($t:ty),* $(,)?) => {$(
-        impl StoreFailure for $t {
-            fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind> {
-                self.kind()
-            }
-        }
-    )*};
-}
-store_failure!(
-    ssh_manager_core::profiles::ProfileError,
-    persistence_sqlite::ChatSessionStoreError,
-    persistence_sqlite::AiProviderStoreError,
-    persistence_sqlite::PolicyStoreError,
-    persistence_sqlite::LedgerStoreError,
-    persistence_sqlite::PromptHistoryStoreError,
-);
-
-/// Turns a store error into a [`CommandError`] with a `STORE_*` code when the
-/// error carries a kind; domain errors (e.g. `ServerNotFound`) keep the plain
-/// conversion. The message is the same text as before.
-pub fn store_command_error(err: impl StoreFailure) -> CommandError {
-    match err.store_kind() {
-        Some(kind) => CommandError::with_code(err.to_string(), store_error_code(kind)),
-        None => CommandError::from(err),
-    }
-}
-
-/// `result.store_err()?` — [`store_command_error`] for a `Result`.
+/// `result.store_err()?` — kept as a readable marker at store call sites;
+/// the code comes from the error's [`ErrorCode`] impl.
 pub trait StoreResultExt<T> {
     fn store_err(self) -> CommandResult<T>;
 }
 
-impl<T, E: StoreFailure> StoreResultExt<T> for Result<T, E> {
+impl<T, E: ErrorCode + std::fmt::Display> StoreResultExt<T> for Result<T, E> {
     fn store_err(self) -> CommandResult<T> {
-        self.map_err(store_command_error)
+        self.map_err(CommandError::from)
+    }
+}
+
+/// `result.or_code("SOME_CODE")?` — gives an error that has no [`ErrorCode`]
+/// (a plain `String`/`&str`, a foreign-crate error) an explicit code and keeps
+/// its `Display` text as the message. The code is chosen at the call site, so
+/// a conversion that would drop it does not exist.
+pub trait ResultCodeExt<T> {
+    fn or_code(self, code: &'static str) -> CommandResult<T>;
+}
+
+impl<T, E: std::fmt::Display> ResultCodeExt<T> for Result<T, E> {
+    fn or_code(self, code: &'static str) -> CommandResult<T> {
+        self.map_err(|err| CommandError::with_code(err.to_string(), code))
     }
 }
 
@@ -193,12 +158,9 @@ pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
 ///
-/// **Ein `From`-Impl ist hier möglich, weil `RuleWriteError` kein `Display`
-/// implementiert** (Issue #260, ADR 0068 §7): Der blanket
-/// `impl<E: Display> From<E>` unten greift deshalb für diesen Typ nicht,
-/// und ein bloßes `?` behält den Code. Ein späteres `Display` auf
-/// `RuleWriteError` wäre ein Kohärenzfehler (E0119), kein stiller
-/// Codeverlust.
+/// **Ein explizites `From` statt `ErrorCode`** (Issue #260, ADR 0068 §7):
+/// `RuleWriteError` hat bewusst kein `Display`; ein bloßes `?` behält den
+/// Code.
 ///
 /// Als `message` steht der Fehlertext der Bibliothek (mit der Stelle im
 /// Muster). Das Frontend ersetzt bei bekanntem Code zwar den Text, zeigt
@@ -249,12 +211,12 @@ impl From<crate::filter_rules::RuleWriteError> for CommandError {
 pub fn secret_store_error(err: CredentialError) -> CommandError {
     match err {
         CredentialError::Backend(payload) => backend_failure_to_command_error(&payload),
-        // **Ausdrücklich `NotFound`, kein Catch-all** (spec-reviewer Runde 1):
-        // `CommandError::from` setzt `code: None` und nimmt den `Display`-Text
-        // als Meldung. Für eine dritte `CredentialError`-Variante wäre das
-        // genau der Zustand, den Spec 0098 abgeschafft hat — roher Text, kein
-        // stabiler Code. So scheitert stattdessen die Übersetzung.
-        not_found @ CredentialError::NotFound(_) => CommandError::from(not_found),
+        // Explicitly `NotFound`, no catch-all: a third `CredentialError`
+        // variant must fail to compile here rather than leak raw text. The
+        // message is the `Display` text (names only the reference).
+        not_found @ CredentialError::NotFound(_) => {
+            CommandError::with_code(not_found.to_string(), CREDENTIAL_NOT_FOUND)
+        }
     }
 }
 
@@ -279,7 +241,7 @@ pub fn ssh_command_error(err: &SshError) -> CommandError {
 
 /// The command error type lives in `ssh_manager_core::ipc_error` so that
 /// extension crates without an `app-logic` dependency can return it too.
-pub use ssh_manager_core::ipc_error::{CommandError, CommandResult};
+pub use ssh_manager_core::ipc_error::{CommandError, CommandResult, ErrorCode};
 
 #[cfg(test)]
 mod code_tests {
@@ -359,6 +321,27 @@ mod code_tests {
             // Issue #883.
             super::SESSION_NOT_FOUND,
         ];
+        assert_unique(&codes);
+        // The codes of every `ErrorCode` type come from the types' own lists,
+        // so a new variant cannot be forgotten here. A code the list above
+        // names too (e.g. `SECRET_STORE_FAILED`) is counted once.
+        let mut typed: Vec<&str> = Vec::new();
+        for list in [
+            ssh_manager_core::ssh::SshError::CODES,
+            ssh_manager_core::ai::AiError::CODES,
+            ssh_manager_core::profiles::ProfileError::CODES,
+            persistence_sqlite::STORE_ERROR_CODES,
+            &[ssh_manager_core::ipc_error::IO_FAILED],
+        ] {
+            assert_unique(list);
+            typed.extend(list.iter().copied().filter(|c| !codes.contains(c)));
+        }
+        assert_unique(&typed);
+        assert!(typed.iter().all(|c| !codes.contains(c)));
+    }
+
+    /// Fails when a code appears twice in `codes`.
+    fn assert_unique(codes: &[&str]) {
         let mut unique = codes.to_vec();
         unique.sort_unstable();
         unique.dedup();
@@ -367,6 +350,12 @@ mod code_tests {
             unique.len(),
             "doppelt vergebener CommandError-Code: {codes:?}"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "doppelt vergebener")]
+    fn test_assert_unique_rejects_a_duplicate() {
+        assert_unique(&["A", "B", "A"]);
     }
 
     /// Spec 0077, T-6d: Die Umwandlung aus 3.1.3 hängt für ein ungültiges
@@ -431,7 +420,9 @@ mod code_tests {
             )),
         ));
 
-        assert_eq!(err.code, None);
+        // The kind survives as a code; a missing rule is not a store failure.
+        assert!(err.code.is_some());
+        assert_ne!(err.code, Some(ssh_manager_core::profiles::STORE_FAILED));
     }
 }
 
@@ -594,7 +585,8 @@ mod secret_store_code_tests {
         let err = secret_store_error(CredentialError::NotFound(CredentialRef::new(
             "server:1:sudo_password".to_string(),
         )));
-        assert_eq!(err.code, None);
+        assert_eq!(err.code, Some(CREDENTIAL_NOT_FOUND));
+        assert_ne!(err.code, Some(SECRET_STORE_FAILED));
     }
 
     /// Spec 0101, A9.1, zweiter Weg (§1): derselbe Code aus der
@@ -657,15 +649,14 @@ mod feature_locked_tests {
         assert_eq!(feature_locked.tier, TierId::FREE);
     }
 
-    /// Gegentest: ein gewöhnlicher Fehler (über den blanket `From<E:
-    /// Display>`) darf `feature_locked` nicht setzen — sonst könnte das
+    /// Gegentest: ein gewöhnlicher Fehler (über `with_code`) darf `feature_locked` nicht setzen — sonst könnte das
     /// Frontend jeden Fehler fälschlich als gesperrtes Feature behandeln.
     #[test]
     fn test_ordinary_error_leaves_feature_locked_none() {
-        let command_error: CommandError = "irgendein fachlicher Fehler".into();
+        let command_error = CommandError::with_code("irgendein fachlicher Fehler", "TEST_ERROR");
 
         assert!(command_error.feature_locked.is_none());
-        assert_eq!(command_error.code, None);
+        assert_eq!(command_error.code, Some("TEST_ERROR"));
     }
 }
 
@@ -717,15 +708,12 @@ mod store_code_tests {
 
     #[test]
     fn test_store_error_code_maps_every_kind() {
-        assert_eq!(store_error_code(StoreErrorKind::Busy), STORE_BUSY);
-        assert_eq!(
-            store_error_code(StoreErrorKind::Constraint),
-            STORE_CONSTRAINT
-        );
-        assert_eq!(store_error_code(StoreErrorKind::Corrupt), STORE_CORRUPT);
-        assert_eq!(store_error_code(StoreErrorKind::Io), STORE_IO);
-        assert_eq!(store_error_code(StoreErrorKind::NotFound), STORE_FAILED);
-        assert_eq!(store_error_code(StoreErrorKind::Other), STORE_FAILED);
+        assert_eq!(StoreErrorKind::Busy.code(), STORE_BUSY);
+        assert_eq!(StoreErrorKind::Constraint.code(), STORE_CONSTRAINT);
+        assert_eq!(StoreErrorKind::Corrupt.code(), STORE_CORRUPT);
+        assert_eq!(StoreErrorKind::Io.code(), STORE_IO);
+        assert_eq!(StoreErrorKind::NotFound.code(), STORE_FAILED);
+        assert_eq!(StoreErrorKind::Other.code(), STORE_FAILED);
     }
 
     #[test]
@@ -734,7 +722,7 @@ mod store_code_tests {
             kind: StoreErrorKind::Busy,
             message: "database is locked".into(),
         };
-        let cmd = store_command_error(err);
+        let cmd = CommandError::from(err);
         assert_eq!(
             cmd.message,
             "Profile-Store-Backend-Fehler: database is locked"
@@ -745,7 +733,7 @@ mod store_code_tests {
     #[test]
     fn test_domain_errors_keep_the_plain_conversion() {
         let err = ssh_manager_core::profiles::ProfileError::CycleDetected;
-        assert_eq!(code_of(store_command_error(err)), None);
+        assert_eq!(code_of(CommandError::from(err)), Some("GROUP_CHAIN_CYCLE"));
     }
 
     #[test]
@@ -768,6 +756,230 @@ mod store_code_tests {
             kind: StoreErrorKind::Corrupt,
             message: "malformed".into(),
         });
-        assert_eq!(code_of(store_command_error(err)), Some(STORE_CORRUPT));
+        assert_eq!(code_of(CommandError::from(err)), Some(STORE_CORRUPT));
+    }
+}
+
+#[cfg(test)]
+mod every_error_has_a_code_tests {
+    use super::*;
+    use ssh_manager_core::ai::AiError;
+    use ssh_manager_core::profiles::{ProfileError, StoreErrorKind};
+    use ssh_manager_core::ssh::SshError;
+
+    /// Spec 0024, section 5: errors converted through `?` always carry a code.
+    #[test]
+    fn test_converted_errors_carry_a_code() {
+        let io = CommandError::from(std::io::Error::other("disk"));
+        assert_eq!(io.code, Some(ssh_manager_core::ipc_error::IO_FAILED));
+
+        let profile = CommandError::from(ProfileError::ServerNotFound(Default::default()));
+        assert_eq!(profile.code, Some("SERVER_NOT_FOUND"));
+
+        let stringly = CommandError::with_code("x", "TEST_ERROR");
+        assert_eq!(stringly.code, Some("TEST_ERROR"));
+    }
+
+    /// One representative error per command module whose errors travel
+    /// through `?` (the modules whose errors are built by hand set the code at
+    /// the construction site and are covered in `app-shell`).
+    #[test]
+    fn test_representative_error_of_every_command_module_has_a_code() {
+        let samples: Vec<(&str, CommandError)> = vec![
+            (
+                "servers",
+                ProfileError::ServerNotFound(Default::default()).into(),
+            ),
+            ("groups", ProfileError::CycleDetected.into()),
+            (
+                "profile store",
+                ProfileError::Store {
+                    kind: StoreErrorKind::Busy,
+                    message: "m".into(),
+                }
+                .into(),
+            ),
+            ("connect", SshError::ConnectionFailed("x".into()).into()),
+            ("sftp", SshError::SftpPermissionDenied("x".into()).into()),
+            ("elevation", SshError::AuthenticationFailed.into()),
+            ("terminal", SshError::SessionClosed("x".into()).into()),
+            ("chat", AiError::RateLimited.into()),
+            ("ai providers", AiError::AuthenticationFailed.into()),
+            (
+                "filter rules",
+                crate::filter_rules::RuleWriteError::Store(
+                    persistence_sqlite::PolicyStoreError::Backend("x".into()),
+                )
+                .into(),
+            ),
+            (
+                "filter rules (store kind)",
+                persistence_sqlite::PolicyStoreError::NotFound(ssh_manager_core::filter::RuleId(
+                    "r".into(),
+                ))
+                .into(),
+            ),
+            (
+                "chat sessions",
+                persistence_sqlite::ChatSessionStoreError::Backend("x".into()).into(),
+            ),
+            (
+                "files (mcp settings, speech)",
+                std::io::Error::other("x").into(),
+            ),
+        ];
+        for (module, err) in samples {
+            assert!(err.code.is_some(), "{module}: error without a code");
+        }
+    }
+
+    /// No hand-built `CommandError { .. }` literal may leave `code` empty
+    /// (that would reopen the hole the `ErrorCode` bound closed).
+    #[test]
+    fn test_no_command_error_literal_without_a_code() {
+        for file in rust_sources() {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for (at, _) in text.match_indices("CommandError {") {
+                let head = &text[..at];
+                if head.ends_with("struct ") || head.ends_with("impl ") {
+                    continue;
+                }
+                let tail: String = text[at..].chars().take(160).collect();
+                assert!(
+                    !tail.contains("code: None"),
+                    "{}: CommandError literal with `code: None`",
+                    file.display()
+                );
+            }
+        }
+    }
+
+    /// Every `*.rs` file under `app-logic/src` and `app-shell/src`.
+    fn rust_sources() -> Vec<std::path::PathBuf> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut out = Vec::new();
+        for krate in ["app-logic", "app-shell"] {
+            walk(&root.join(krate).join("src"), &mut out);
+        }
+        out.sort();
+        out
+    }
+
+    /// Value of a code-shaped `const NAME: &str = "UPPER_CASE";` line.
+    fn code_const(line: &str) -> Option<(&str, &str)> {
+        let rest = line.trim_start();
+        let rest = rest
+            .strip_prefix("pub(crate) ")
+            .or_else(|| rest.strip_prefix("pub "))
+            .unwrap_or(rest);
+        let rest = rest.strip_prefix("const ")?;
+        let (name, rest) = rest.split_once(": &str = \"")?;
+        let value = rest.strip_suffix("\";")?;
+        let shaped = value.len() > 3
+            && value
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit());
+        shaped.then_some((name, value))
+    }
+
+    /// Issue #887 AC 4: the codes the command layers define as constants in
+    /// `app-logic`/`app-shell` are collected from the source and checked
+    /// together with the codes of the `ErrorCode` types: one name per value,
+    /// and no constant reuses a type's code.
+    #[test]
+    fn test_code_constants_in_the_command_layers_are_unique() {
+        let mut named: Vec<(String, String)> = Vec::new();
+        let mut inline: Vec<String> = Vec::new();
+        for file in rust_sources() {
+            let name = file.file_name().unwrap().to_string_lossy().into_owned();
+            if name.starts_with("test") || file.components().any(|c| c.as_os_str() == "tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&file).unwrap();
+            let production = text.split("#[cfg(test)]").next().unwrap();
+            for (at, call) in production
+                .match_indices("with_code(")
+                .chain(production.match_indices("or_code("))
+            {
+                // The code is the last argument: the last quoted
+                // UPPER_CASE literal before the call's closing `)`.
+                let args: String = production[at + call.len()..].chars().take(300).collect();
+                let Some(end) = args.find("\")") else {
+                    continue;
+                };
+                let Some(lit) = args[..end].rsplit('"').next() else {
+                    continue;
+                };
+                let shaped = lit.len() > 3
+                    && lit
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit());
+                if shaped {
+                    inline.push(lit.to_owned());
+                }
+            }
+            for line in production.lines() {
+                if let Some((name, value)) = code_const(line) {
+                    named.push((name.to_owned(), value.to_owned()));
+                }
+            }
+        }
+        assert!(
+            named.len() > 20,
+            "the scan found only {} constants",
+            named.len()
+        );
+        for (i, (name, value)) in named.iter().enumerate() {
+            for (other, other_value) in &named[i + 1..] {
+                assert!(
+                    !(value == other_value && name != other),
+                    "code {value} is defined by both {name} and {other}"
+                );
+            }
+        }
+        let typed: Vec<&str> = [
+            SshError::CODES,
+            AiError::CODES,
+            ProfileError::CODES,
+            persistence_sqlite::STORE_ERROR_CODES,
+        ]
+        .concat();
+        assert!(!inline.is_empty(), "the scan found no inline codes");
+        for lit in &inline {
+            assert!(
+                !typed.contains(&lit.as_str()) || lit == SECRET_STORE_FAILED,
+                "inline code {lit} reuses the code of an ErrorCode type"
+            );
+        }
+        for (name, value) in &named {
+            // `SECRET_STORE_FAILED` is deliberately shared with `SshError`.
+            if value == SECRET_STORE_FAILED {
+                continue;
+            }
+            assert!(
+                !typed.contains(&value.as_str()),
+                "constant {name} reuses the code {value} of an ErrorCode type"
+            );
+        }
+    }
+
+    /// The scan helper above sees a duplicate (fixture).
+    #[test]
+    fn test_code_const_parses_a_definition() {
+        assert_eq!(
+            code_const("pub const FOO_BAR: &str = \"FOO_BAR\";"),
+            Some(("FOO_BAR", "FOO_BAR"))
+        );
+        assert_eq!(code_const("const X: &str = \"a b\";"), None);
     }
 }

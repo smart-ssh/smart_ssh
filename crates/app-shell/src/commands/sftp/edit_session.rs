@@ -1,4 +1,5 @@
 use super::*;
+use app_logic::error::ResultCodeExt;
 
 // --- Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten" ----
 //
@@ -48,7 +49,7 @@ pub(super) fn edit_session_dir_in(
 ) -> CommandResult<std::path::PathBuf> {
     let root = edit_root
         .ok_or("Kein Cache-Verzeichnis gefunden")
-        .map_err(CommandError::from)?;
+        .or_code("NO_CACHE_DIR")?;
     Ok(root.join(session_id.to_string()))
 }
 
@@ -138,7 +139,10 @@ pub(super) async fn open_for_editing_impl(
         // Spec 0086, A1.2: vor dem Lesen, wenn `stat` die Größe schon zeigt —
         // dann wird eine zu große Datei nicht erst komplett übertragen.
         if entry.size > max_bytes {
-            return Err(CommandError::from(TOO_LARGE_FOR_EDITING));
+            return Err(CommandError::with_code(
+                TOO_LARGE_FOR_EDITING,
+                "SFTP_TOO_LARGE_FOR_EDITING",
+            ));
         }
         let bytes = sftp.read_file(remote_path).await?;
         (bytes, entry.modified.map(|dt| dt.to_rfc3339()))
@@ -152,7 +156,10 @@ pub(super) async fn open_for_editing_impl(
     // weder Datei noch Verzeichnis, und eine aus einem früheren „Lokal
     // öffnen" schon liegende Kopie bleibt unverändert (A1.3).
     if bytes.len() as u64 > max_bytes {
-        return Err(CommandError::from(TOO_LARGE_FOR_EDITING));
+        return Err(CommandError::with_code(
+            TOO_LARGE_FOR_EDITING,
+            "SFTP_TOO_LARGE_FOR_EDITING",
+        ));
     }
 
     let dir = edit_session_dir_in(edit_root, session_id)?;
@@ -164,7 +171,12 @@ pub(super) async fn open_for_editing_impl(
         crate::edit_copies::write_edit_copy(&dir, &local_path_for_write, &bytes)
     })
     .await
-    .map_err(|e| format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"))??;
+    .map_err(|e| {
+        app_logic::error::CommandError::with_code(
+            format!("Hintergrund-Task für lokalen Download fehlgeschlagen: {e}"),
+            "BACKGROUND_TASK_FAILED",
+        )
+    })??;
 
     Ok(EditSessionDto {
         local_path: local_path.to_string_lossy().into_owned(),
@@ -239,18 +251,18 @@ pub(super) fn in_app_edit_copy(
     local_path: &str,
 ) -> CommandResult<std::path::PathBuf> {
     if sessions.get(session_id).is_none() {
-        return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
+        return Err(app_logic::local_path_grants::local_path_not_granted());
     }
     let dir = edit_session_dir_in(edit_root, session_id)?
         .canonicalize()
-        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+        .map_err(|_| app_logic::local_path_grants::local_path_not_granted())?;
     let canonical = std::path::Path::new(local_path)
         .canonicalize()
-        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+        .map_err(|_| app_logic::local_path_grants::local_path_not_granted())?;
     if canonical.starts_with(&dir) && canonical.is_file() {
         Ok(canonical)
     } else {
-        Err(CommandError::from(LOCAL_PATH_NOT_GRANTED))
+        Err(app_logic::local_path_grants::local_path_not_granted())
     }
 }
 
@@ -267,9 +279,14 @@ pub(super) fn read_edit_copy_text_impl(
     std::fs::File::open(path)?
         .take(max + 1)
         .read_to_string(&mut text)
-        .map_err(|_| CommandError::from("The file is not valid UTF-8 text"))?;
+        .map_err(|_| {
+            CommandError::with_code("The file is not valid UTF-8 text", "EDIT_COPY_NOT_TEXT")
+        })?;
     if text.len() as u64 > max {
-        return Err(CommandError::from("The file is too large to edit here"));
+        return Err(CommandError::with_code(
+            "The file is too large to edit here",
+            "SFTP_TOO_LARGE_FOR_EDITING",
+        ));
     }
     Ok(text)
 }
@@ -283,7 +300,10 @@ pub(super) fn write_edit_copy_text_impl(
     max: u64,
 ) -> CommandResult<()> {
     if content.len() as u64 > max {
-        return Err(CommandError::from("The text is too large to save here"));
+        return Err(CommandError::with_code(
+            "The text is too large to save here",
+            "EDIT_COPY_TEXT_TOO_LARGE",
+        ));
     }
     let path = in_app_edit_copy(sessions, edit_root, session_id, local_path)?;
     std::fs::write(path, content)?;
@@ -355,13 +375,14 @@ pub(super) async fn close_edit_session_impl(
     // einem anderen Pfad aufgerufen.
     let dir = edit_session_dir_in(edit_root, session_id)?;
     if !std::path::Path::new(local_path).starts_with(&dir) {
-        return Err(CommandError::from(
+        return Err(CommandError::with_code(
             "Pfad liegt außerhalb des Editier-Temp-Ordners dieser Session",
+            "EDIT_SESSION_PATH_OUTSIDE",
         ));
     }
     match tokio::fs::remove_file(local_path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(CommandError::from(e.to_string())),
+        Err(e) => Err(CommandError::from(e)),
     }
 }

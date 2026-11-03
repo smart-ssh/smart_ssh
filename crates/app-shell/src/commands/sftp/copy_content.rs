@@ -325,15 +325,24 @@ pub async fn sftp_copy_file(
     jobs.remove(&request_id);
     let bytes = result?;
 
-    let root = crate::edit_copies::clipboard_root()
-        .ok_or_else(|| CommandError::from("No cache directory available for the clipboard"))?;
+    let root = crate::edit_copies::clipboard_root().ok_or_else(|| {
+        CommandError::with_code(
+            "No cache directory available for the clipboard",
+            "NO_CACHE_DIR",
+        )
+    })?;
     let staged = {
         let root = root.clone();
         tokio::task::spawn_blocking(move || {
             crate::file_clipboard::stage_file(&root, &file_name, &bytes)
         })
         .await
-        .map_err(|e| format!("Background task for Copy file failed: {e}"))??
+        .map_err(|e| {
+            app_logic::error::CommandError::with_code(
+                format!("Background task for Copy file failed: {e}"),
+                "BACKGROUND_TASK_FAILED",
+            )
+        })??
     };
     if let Err(err) = clipboard.set_file(&staged) {
         crate::file_clipboard::discard(&staged);
@@ -387,7 +396,12 @@ pub(super) async fn read_local_text_preview_impl(
     let local_path = authorize_local_path(sessions, grants, edit_root, session_id, local_path)?;
     let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path.as_path()))
         .await
-        .map_err(|e| format!("Hintergrund-Task für Datei-Vorschau fehlgeschlagen: {e}"))??;
+        .map_err(|e| {
+            app_logic::error::CommandError::with_code(
+                format!("Hintergrund-Task für Datei-Vorschau fehlgeschlagen: {e}"),
+                "BACKGROUND_TASK_FAILED",
+            )
+        })??;
     let size = bytes.len() as u64;
     if size > MAX_TEXT_PREVIEW_BYTES {
         return Ok(LocalFilePreviewDto { text: None, size });

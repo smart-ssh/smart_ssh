@@ -9,8 +9,8 @@ import {
 
 // The same file pins the Rust serialisation of `ssh_manager_core::ipc_error::CommandError`.
 describe("command error JSON shapes", () => {
-  it("reads a plain message", () => {
-    const e = fixture.message_only;
+  it("reads a plain message (a payload without a code, e.g. from a plugin)", () => {
+    const e = { message: "Something failed", code: null };
     expect(commandErrorMessage(e)).toBe("Something failed");
     expect(commandErrorCode(e)).toBeNull();
     expect(commandErrorFeatureLocked(e)).toBeNull();

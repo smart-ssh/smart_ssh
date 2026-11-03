@@ -9,6 +9,7 @@
 //! persistierten Wert bleibt — ein reiner JS-seitiger Store-Schreibzugriff
 //! hätte keine Wirkung auf einen bereits laufenden Server.
 
+use app_logic::error::ResultCodeExt;
 use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -86,7 +87,10 @@ struct SettingsJsonToken<'a> {
 
 impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
     fn read_token(&self) -> CommandResult<Option<String>> {
-        let store = self.app.store(SETTINGS_STORE_FILE)?;
+        let store = self
+            .app
+            .store(SETTINGS_STORE_FILE)
+            .or_code("SETTINGS_STORE_FAILED")?;
         Ok(store
             .get(TOKEN_KEY)
             .and_then(|v| v.as_str().map(str::to_string)))
@@ -125,7 +129,9 @@ fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String
 }
 
 fn load_allowed_servers(app: &AppHandle) -> CommandResult<HashSet<ServerId>> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(SETTINGS_STORE_FILE)
+        .or_code("SETTINGS_STORE_FAILED")?;
     let Some(value) = store.get(ALLOWED_SERVERS_KEY) else {
         return Ok(HashSet::new());
     };
@@ -148,7 +154,9 @@ fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandRes
 }
 
 fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u64> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(SETTINGS_STORE_FILE)
+        .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(CONFIRM_TIMEOUT_SECS_KEY)
         .and_then(|v| v.as_u64())
@@ -156,7 +164,9 @@ fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u6
 }
 
 fn is_enabled_setting(app: &AppHandle) -> CommandResult<bool> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(SETTINGS_STORE_FILE)
+        .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(ENABLED_KEY)
         .and_then(|v| v.as_bool())

@@ -142,7 +142,7 @@ impl BrowserChannel {
     /// A1.2; Spec 0086, A2.1).
     pub(super) fn revoked_error(&self) -> CommandError {
         self.revoked_mid_command.store(true, Ordering::SeqCst);
-        CommandError::from(ELEVATED_CHANNEL_INACTIVE)
+        elevated_inactive()
     }
 
     /// Issue #622: Ist der erhöhte Kanal dieses Befehls inzwischen widerrufen
@@ -211,6 +211,12 @@ impl BrowserChannel {
     }
 }
 
+const ELEVATED_CHANNEL_INACTIVE_CODE: &str = "ELEVATED_CHANNEL_INACTIVE";
+
+fn elevated_inactive() -> CommandError {
+    CommandError::with_code(ELEVATED_CHANNEL_INACTIVE, ELEVATED_CHANNEL_INACTIVE_CODE)
+}
+
 const ELEVATED_CHANNEL_INACTIVE: &str =
     "Der erhöhte Modus ist nicht mehr aktiv (Verbindung getrennt oder ausgeschaltet) — \
      die Aktion wurde nicht ausgeführt. Bitte den erhöhten Modus erneut einschalten.";
@@ -240,7 +246,7 @@ where
         // vor dem ersten Zugriff — der Aufrufer soll den Abbruchgrund nicht
         // daran unterscheiden müssen, wie weit der Befehl gekommen war.
         // Schon geänderte Einträge bleiben geändert (§2, Nicht-Ziel).
-        return Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE));
+        return Err(elevated_inactive());
     }
     result
 }
@@ -286,7 +292,7 @@ impl ElevatedAccessError {
             Self::UserChanged { .. } => {
                 CommandError::with_code(self.message(), ELEVATED_USER_CHANGED_CODE)
             }
-            Self::Revoked => CommandError::from(self.message()),
+            Self::Revoked => CommandError::with_code(self.message(), "ELEVATED_ACCESS_REVOKED"),
         }
     }
 
@@ -448,7 +454,7 @@ impl BrowserSftpGuard<'_> {
                     .sftp()
                     .expect("browser_session öffnet den normalen Kanal vorab"),
             )),
-            Self::ElevatedInactive => Err(CommandError::from(ELEVATED_CHANNEL_INACTIVE)),
+            Self::ElevatedInactive => Err(elevated_inactive()),
             Self::Elevated {
                 slot,
                 expected_user,
@@ -719,7 +725,7 @@ async fn browser_session(
         BrowserChannelKind::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
         BrowserChannelKind::Elevated { slot, .. } => {
             if slot.is_none() {
-                return Err(ELEVATED_CHANNEL_INACTIVE.into());
+                return Err(elevated_inactive());
             }
         }
     }
@@ -850,53 +856,15 @@ pub(super) fn safe_local_segment(name: &str) -> CommandResult<()> {
     let mut components = Path::new(name).components();
     match (components.next(), components.next()) {
         (Some(Component::Normal(_)), None) => Ok(()),
-        _ => Err(CommandError::from(format!(
-            "Unsicherer Dateiname vom Server abgelehnt: '{name}'"
-        ))),
+        _ => Err(CommandError::with_code(
+            format!("Unsicherer Dateiname vom Server abgelehnt: '{name}'"),
+            "SFTP_UNSAFE_FILE_NAME",
+        )),
     }
 }
 
 #[cfg(test)]
-mod safe_local_segment_tests {
-    //! Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets, ERHÖHTE
-    //! Priorität): Zip-Slip über servergelieferte Dateinamen beim
-    //! rekursiven Ordner-Download/"Lokal öffnen". `download_recursive`/
-    //! `download_entry_to`/`sftp_open_for_editing` rufen `safe_local_segment`
-    //! jetzt vor jedem `PathBuf::join(entry.name)` auf — diese Tests prüfen
-    //! nur die reine Funktion (`std::path::Path::join`s Verhalten bei
-    //! `..`-Segmenten/absoluten Pfaden ist dokumentiertes, stabiles
-    //! Standardbibliotheks-Verhalten, kein separat zu beweisender Teil).
-    use super::*;
-
-    #[test]
-    fn test_accepts_a_plain_file_name() {
-        assert!(safe_local_segment("readme.md").is_ok());
-        assert!(safe_local_segment("nginx.conf.smartssh-backup-123").is_ok());
-    }
-
-    #[test]
-    fn test_rejects_parent_directory_traversal() {
-        assert!(safe_local_segment("..").is_err());
-        assert!(safe_local_segment("../etc/passwd").is_err());
-        assert!(safe_local_segment("../../.zshrc").is_err());
-    }
-
-    #[test]
-    fn test_rejects_current_directory_segment() {
-        assert!(safe_local_segment(".").is_err());
-    }
-
-    #[test]
-    fn test_rejects_an_embedded_separator() {
-        assert!(safe_local_segment("a/b").is_err());
-    }
-
-    #[test]
-    fn test_rejects_an_absolute_path() {
-        assert!(safe_local_segment("/etc/passwd").is_err());
-        assert!(safe_local_segment("/Users/u/.ssh/authorized_keys").is_err());
-    }
-}
+mod tests_safe_segment;
 
 #[cfg(test)]
 mod browser_channel_tests {

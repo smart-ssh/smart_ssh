@@ -21,6 +21,7 @@
 //! das Ablehnen offener Bestätigungen beim Schließen ohne `AppHandle`
 //! getestet sind.
 
+use crate::error::CommandError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -363,7 +364,10 @@ impl McpSessionRegistry {
     /// MCP-Sitzung nimmt keine Nutzer-Eingaben an.
     pub fn ensure_user_session(&self, session_id: SessionId) -> CommandResult<()> {
         if self.is_mcp_session(session_id) {
-            return Err(MCP_SESSION_NOT_INTERACTIVE_MESSAGE.into());
+            return Err(CommandError::with_code(
+                MCP_SESSION_NOT_INTERACTIVE_MESSAGE,
+                "MCP_SESSION_NOT_INTERACTIVE",
+            ));
         }
         Ok(())
     }
