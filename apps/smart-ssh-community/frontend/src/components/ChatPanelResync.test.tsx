@@ -1,52 +1,21 @@
 // Issue #1020, Spec 0114 §4: the chat is rebuilt from the backend when the
 // app returns from the background.
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getChatHistory, getChatResync } from "../api";
 import { onChatTextDelta } from "../events";
 import type { ChatResyncDto } from "../chatResync";
-import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  getChatResync: vi.fn(),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
-  ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+  });
+});
 
 vi.mock("../events", () => ({
   onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
@@ -78,17 +47,10 @@ vi.mock("../events", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
 }));
-
-
-function renderChatPanel() {
-  return render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
-}
 
 const PENDING = {
   sessionId: "session-1",
@@ -128,7 +90,10 @@ describe("ChatPanel re-sync on resume (issue #1020)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getChatHistory).mockResolvedValue([]);
-    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
   });
 
   it("shows the assistant text and action result missed in the background", async () => {
@@ -149,7 +114,9 @@ describe("ChatPanel re-sync on resume (issue #1020)", () => {
   it("shows a still-pending confirmation with active buttons", async () => {
     renderChatPanel();
     await resume({ history: [], pendingProposal: PENDING });
-    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeEnabled();
+    expect(
+      await screen.findByRole("button", { name: "Ausführen" }),
+    ).toBeEnabled();
     expect(screen.getByRole("button", { name: "Ablehnen" })).toBeEnabled();
   });
 
@@ -158,7 +125,9 @@ describe("ChatPanel re-sync on resume (issue #1020)", () => {
     await resume({ history: [], pendingProposal: PENDING });
     await screen.findByRole("button", { name: "Ausführen" });
     await resume({ history: [RESULT_ENTRY], pendingProposal: null });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Ausführen" })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Ausführen" })).toBeNull(),
+    );
     expect(screen.getByText(/up 3 days/)).toBeInTheDocument();
   });
 

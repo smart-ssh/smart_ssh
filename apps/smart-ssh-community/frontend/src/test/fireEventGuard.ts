@@ -21,7 +21,8 @@ function describeNode(node: Node): string {
   const role = node.getAttribute("role");
   if (role) parts.push(`role="${role}"`);
   const name =
-    node.getAttribute("aria-label") ?? (node.textContent ?? "").trim().slice(0, 40);
+    node.getAttribute("aria-label") ??
+    (node.textContent ?? "").trim().slice(0, 40);
   if (name) parts.push(`name="${name}"`);
   return parts.join(" ");
 }
@@ -37,7 +38,11 @@ export function checkFireEventTarget(event: string, target: unknown): void {
         "again after the transition (ADR 0122, R14).",
     );
   }
-  if (allowDisabled === 0 && target instanceof Element && target.matches(":disabled")) {
+  if (
+    allowDisabled === 0 &&
+    target instanceof Element &&
+    target.matches(":disabled")
+  ) {
     throw new Error(
       `fireEvent.${event} on a disabled element (${describeNode(target)}): the ` +
         "event does nothing. Wait for the rendered state that enables it " +

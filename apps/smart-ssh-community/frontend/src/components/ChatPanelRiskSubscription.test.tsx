@@ -1,52 +1,24 @@
 // Issue #829: the chat event listeners stay registered when the risk second
 // opinion setting changes while an answer streams.
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getChatHistory } from "../api";
 import { onChatActionProposed, onChatTextDelta } from "../events";
 import { loadRiskClassifierSettings } from "../riskSettings";
 import type { ChatActionProposedEvent } from "../types";
 import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  retryChatTurn: vi.fn(() => Promise.resolve()),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  explainConfirmation: vi.fn(() => new Promise(() => {})),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
-  ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+    explainConfirmation: vi.fn(() => new Promise<never>(() => {})),
+  });
+});
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -86,8 +58,15 @@ type Delta = { sessionId: string; delta: string };
 /** Registers like the real `listen()`: resolves asynchronously, and tracks how
  * many listeners are active and whether the count ever dropped to zero. */
 function trackAsyncListener<T>(listener: unknown) {
-  const state = { active: 0, handler: null as null | ((e: T) => void), droppedToZero: false, started: 0 };
-  vi.mocked(listener as (h: (e: T) => void) => Promise<() => void>).mockImplementation((h) => {
+  const state = {
+    active: 0,
+    handler: null as null | ((e: T) => void),
+    droppedToZero: false,
+    started: 0,
+  };
+  vi.mocked(
+    listener as (h: (e: T) => void) => Promise<() => void>,
+  ).mockImplementation((h) => {
     state.started += 1;
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -106,7 +85,10 @@ function trackAsyncListener<T>(listener: unknown) {
 function deferredSettings() {
   let resolve: (enabled: boolean) => void = () => {};
   vi.mocked(loadRiskClassifierSettings).mockImplementation(
-    () => new Promise((r) => (resolve = (enabled) => r({ enabled, providerId: null }))),
+    () =>
+      new Promise(
+        (r) => (resolve = (enabled) => r({ enabled, providerId: null })),
+      ),
   );
   return (enabled: boolean) => resolve(enabled);
 }
@@ -116,7 +98,9 @@ function proposed(): ChatActionProposedEvent {
     sessionId: "session-1",
     actionId: "a1",
     action: { SuggestCommand: { command: "ls" } },
-    decision: { Confirm: { reason: "no rule", code: "FILTER_NO_RULE_MATCHED" } },
+    decision: {
+      Confirm: { reason: "no rule", code: "FILTER_NO_RULE_MATCHED" },
+    },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
     previousFileContent: null,
@@ -135,11 +119,7 @@ function proposed(): ChatActionProposedEvent {
 }
 
 function renderPanel() {
-  render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
+  renderChatPanel();
 }
 
 describe("ChatPanel event subscription vs. risk second opinion setting (issue #829)", () => {
@@ -167,19 +147,23 @@ describe("ChatPanel event subscription vs. risk second opinion setting (issue #8
   });
 
   it("shows the pending second opinion after the setting turned on", async () => {
-    const proposal = trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
+    const proposal =
+      trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
     const settle = deferredSettings();
     renderPanel();
     await waitFor(() => expect(proposal.active).toBe(1));
     await act(async () => settle(true));
     act(() => proposal.handler?.(proposed()));
     const title = testI18n.t("actionCard.riskSecondOpinionPending");
-    await waitFor(() => expect(document.querySelector(`[title="${title}"]`)).not.toBeNull());
+    await waitFor(() =>
+      expect(document.querySelector(`[title="${title}"]`)).not.toBeNull(),
+    );
     expect(proposal.started).toBe(1);
   });
 
   it("shows no pending second opinion when the setting is off", async () => {
-    const proposal = trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
+    const proposal =
+      trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
     const settle = deferredSettings();
     renderPanel();
     await waitFor(() => expect(proposal.active).toBe(1));

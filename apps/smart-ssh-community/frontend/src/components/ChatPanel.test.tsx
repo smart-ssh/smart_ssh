@@ -22,7 +22,12 @@ function buildActionItem(overrides: Partial<ActionItem> = {}): ChatItem {
     id: "item-1",
     actionId: "action-1",
     action: { SuggestCommand: { command: "uname -a" } },
-    decision: { Confirm: { reason: "keine Regel gefunden", code: "FILTER_NO_RULE_MATCHED" } },
+    decision: {
+      Confirm: {
+        reason: "keine Regel gefunden",
+        code: "FILTER_NO_RULE_MATCHED",
+      },
+    },
     responded: false,
     previousNoteContent: null,
     usesStoredSudoPassword: false,
@@ -72,7 +77,9 @@ function renderItem(item: ChatItem) {
 
 describe("risk badge positioning (Spec 0029)", () => {
   it("places the risk badge and decision badge in the same row container as the action label", () => {
-    const { container } = renderItem(buildActionItem({ riskAssessment: riskyAssessment }));
+    const { container } = renderItem(
+      buildActionItem({ riskAssessment: riskyAssessment }),
+    );
 
     const label = screen.getByText("Kommando vorschlagen");
     const riskBadge = screen.getByText("Server");
@@ -103,9 +110,15 @@ describe("risk badge positioning (Spec 0029)", () => {
     // DOCUMENT_POSITION_FOLLOWING (4): das erste Argument kommt im Dokument
     // vor dem zweiten.
     // eslint-disable-next-line no-bitwise
-    expect(label.compareDocumentPosition(riskBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      label.compareDocumentPosition(riskBadge) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // eslint-disable-next-line no-bitwise
-    expect(riskBadge.compareDocumentPosition(decisionBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      riskBadge.compareDocumentPosition(decisionBadge) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("renders no risk-badge markup at all when both risk axes are none (no layout jump)", () => {
@@ -167,7 +180,10 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
 describe("second opinion unavailable notice (Issue #102)", () => {
   it("shows the notice on the card when the second opinion could not be obtained", () => {
     renderItem(
-      buildActionItem({ riskAssessment: riskyAssessment, secondOpinionUnavailable: true }),
+      buildActionItem({
+        riskAssessment: riskyAssessment,
+        secondOpinionUnavailable: true,
+      }),
     );
     expect(screen.getByText("KI-Zweitmeinung nicht verfügbar")).toBeTruthy();
   });
@@ -194,7 +210,11 @@ describe("registered document actions (Spec 0045)", () => {
 
   it("renders an active document action and invokes it with the document context on click", () => {
     const onInvoke = vi.fn();
-    registerDocumentAction({ id: "save-word", label: "Als Word speichern", onInvoke });
+    registerDocumentAction({
+      id: "save-word",
+      label: "Als Word speichern",
+      onInvoke,
+    });
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -252,7 +272,10 @@ describe("registered document actions (Spec 0045)", () => {
 
     const button = screen.getByRole("button", { name: "Als Word speichern" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", "Erfordert einen kostenpflichtigen Plan");
+    expect(button).toHaveAttribute(
+      "title",
+      "Erfordert einen kostenpflichtigen Plan",
+    );
 
     clickDisabled(button);
     expect(onInvoke).not.toHaveBeenCalled();
@@ -263,8 +286,16 @@ describe("registered document actions (Spec 0045)", () => {
     const Broken = (): never => {
       throw new Error("broken label");
     };
-    registerDocumentAction({ id: "bad", label: (<Broken />) as unknown as string, onInvoke: vi.fn() });
-    registerDocumentAction({ id: "good", label: "Als Word speichern", onInvoke: vi.fn() });
+    registerDocumentAction({
+      id: "bad",
+      label: (<Broken />) as unknown as string,
+      onInvoke: vi.fn(),
+    });
+    registerDocumentAction({
+      id: "good",
+      label: "Als Word speichern",
+      onInvoke: vi.fn(),
+    });
     render(
       <I18nextProvider i18n={testI18n}>
         <ChatItemView
@@ -278,13 +309,21 @@ describe("registered document actions (Spec 0045)", () => {
         />
       </I18nextProvider>,
     );
-    expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
-    expect(spy.mock.calls.some((c) => String(c[0]).includes("document-action:bad"))).toBe(true);
+    expect(
+      screen.getByRole("button", { name: "Als Word speichern" }),
+    ).toBeInTheDocument();
+    expect(
+      spy.mock.calls.some((c) => String(c[0]).includes("document-action:bad")),
+    ).toBe(true);
     spy.mockRestore();
   });
 
   it("still renders the unchanged markdown export button alongside registered actions", () => {
-    registerDocumentAction({ id: "save-word", label: "Als Word speichern", onInvoke: vi.fn() });
+    registerDocumentAction({
+      id: "save-word",
+      label: "Als Word speichern",
+      onInvoke: vi.fn(),
+    });
 
     render(
       <I18nextProvider i18n={testI18n}>
@@ -300,8 +339,12 @@ describe("registered document actions (Spec 0045)", () => {
       </I18nextProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "Als Markdown speichern" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Als Markdown speichern" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Als Word speichern" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -340,7 +383,9 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
     renderAssistantItem("Ok, verstanden.");
 
     expect(screen.getByText("Export:")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Als Markdown/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Als Markdown/ }),
+    ).toBeInTheDocument();
     expect(screen.getByTitle("In Notiz übernehmen")).toBeInTheDocument();
   });
 
@@ -365,7 +410,12 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
 // abgeschnittenen Antwort.
 describe("truncated response notice (Spec 0065, Teil 2)", () => {
   function truncatedItem(truncated: boolean): ChatItem {
-    return { type: "assistant", id: "assistant-1", text: "Teilantwort...", truncated };
+    return {
+      type: "assistant",
+      id: "assistant-1",
+      text: "Teilantwort...",
+      truncated,
+    };
   }
 
   it("shows no truncation notice for a normal, complete reply", () => {
@@ -491,7 +541,9 @@ describe("empty response notice (Spec 0080, A3)", () => {
         "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Weiter" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Weiter" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Export:")).not.toBeInTheDocument();
   });
 });
@@ -500,19 +552,25 @@ describe("Sudo fallback announcement for file writes (Spec 0068, Teil 3)", () =>
   it("announces before confirming that a write may run with the stored sudo password", () => {
     renderItem(
       buildActionItem({
-        action: { WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" } },
+        action: {
+          WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" },
+        },
         usesStoredSudoPassword: true,
       }),
     );
     expect(
-      screen.getByText(/Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort/),
+      screen.getByText(
+        /Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort/,
+      ),
     ).toBeVisible();
   });
 
   it("shows no sudo announcement when no sudo password is stored", () => {
     renderItem(
       buildActionItem({
-        action: { WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" } },
+        action: {
+          WriteRemoteFile: { path: "/etc/nginx/nginx.conf", content: "x" },
+        },
         usesStoredSudoPassword: false,
       }),
     );
@@ -526,7 +584,9 @@ describe("Sudo fallback announcement for file writes (Spec 0068, Teil 3)", () =>
 describe("editable command in the confirmation (issue #166)", () => {
   it("names the command field by its caption", () => {
     renderItem(buildActionItem());
-    expect(screen.getByRole("textbox", { name: "Kommando — editierbar" })).toHaveValue("uname -a");
+    expect(
+      screen.getByRole("textbox", { name: "Kommando — editierbar" }),
+    ).toHaveValue("uname -a");
   });
 });
 
@@ -554,23 +614,45 @@ describe("chat notices follow the UI language (issue #116)", () => {
     expect(screen.getByText("⏹ Response cancelled.")).toBeInTheDocument();
 
     renderItemIn("en", { type: "user", id: "u-1", text: "hi", queued: true });
-    expect(screen.getByText("⏳ Will be sent with the next request")).toBeInTheDocument();
+    expect(
+      screen.getByText("⏳ Will be sent with the next request"),
+    ).toBeInTheDocument();
 
     renderItemIn("en", { type: "emptyResponse", id: "e-1" });
-    expect(screen.getByText(/^The model returned no response\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/^The model returned no response\./),
+    ).toBeInTheDocument();
 
-    renderItemIn("en", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Response was cut off (length limit reached).")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "📄 As Markdown" })).toBeInTheDocument();
+    renderItemIn("en", {
+      type: "assistant",
+      id: "a-1",
+      text: "partial",
+      truncated: true,
+    });
+    expect(
+      screen.getByText("✂ Response was cut off (length limit reached)."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "📄 As Markdown" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the German wording with a German UI", () => {
     renderItemIn("de", { type: "responseCancelled", id: "c-1" });
     expect(screen.getByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
 
-    renderItemIn("de", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
+    renderItemIn("de", {
+      type: "assistant",
+      id: "a-1",
+      text: "partial",
+      truncated: true,
+    });
+    expect(
+      screen.getByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht)."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });
@@ -631,20 +713,32 @@ describe("web research unavailable notice (issue #169)", () => {
   it("shows the English notice with a pointer to the setting", () => {
     const { container } = renderNoticeIn("en");
     expect(
-      screen.getByText(/^Web research is not available for this provider account/),
+      screen.getByText(
+        /^Web research is not available for this provider account/,
+      ),
     ).toBeInTheDocument();
-    expect(container.textContent).toContain("Settings → AI Provider → “Web research”");
-    expect(container.textContent).not.toMatch(/invalid_request_error|not enabled|HTTP 400/);
+    expect(container.textContent).toContain(
+      "Settings → AI Provider → “Web research”",
+    );
+    expect(container.textContent).not.toMatch(
+      /invalid_request_error|not enabled|HTTP 400/,
+    );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("shows the German notice with a pointer to the setting", () => {
     const { container } = renderNoticeIn("de");
     expect(
-      screen.getByText(/^Web-Recherche ist für dieses Provider-Konto nicht verfügbar/),
+      screen.getByText(
+        /^Web-Recherche ist für dieses Provider-Konto nicht verfügbar/,
+      ),
     ).toBeInTheDocument();
-    expect(container.textContent).toContain("Einstellungen → KI-Provider → „Web-Recherche“");
-    expect(container.textContent).not.toMatch(/invalid_request_error|not enabled|HTTP 400/);
+    expect(container.textContent).toContain(
+      "Einstellungen → KI-Provider → „Web-Recherche“",
+    );
+    expect(container.textContent).not.toMatch(
+      /invalid_request_error|not enabled|HTTP 400/,
+    );
   });
 });
 
@@ -677,7 +771,12 @@ describe("document actions are reactive (#884)", () => {
     render(
       <I18nextProvider i18n={testI18n}>
         <ChatItemView
-          item={{ type: "document", id: "doc-1", title: "T", contentMarkdown: "# T" }}
+          item={{
+            type: "document",
+            id: "doc-1",
+            title: "T",
+            contentMarkdown: "# T",
+          }}
           onRespond={vi.fn()}
           onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
@@ -693,7 +792,9 @@ describe("document actions are reactive (#884)", () => {
     renderDocument();
     expect(screen.queryByRole("button", { name: "Late" })).toBeNull();
 
-    act(() => registerDocumentAction({ id: "late", label: "Late", onInvoke: vi.fn() }));
+    act(() =>
+      registerDocumentAction({ id: "late", label: "Late", onInvoke: vi.fn() }),
+    );
     expect(screen.getByRole("button", { name: "Late" })).toBeInTheDocument();
 
     act(() => unregisterDocumentAction("late"));
@@ -706,7 +807,12 @@ describe("document actions are reactive (#884)", () => {
     expect(screen.getByRole("button", { name: "Act" })).toBeEnabled();
 
     act(() =>
-      registerDocumentAction({ id: "a", label: "Act", onInvoke: vi.fn(), disabled: true }),
+      registerDocumentAction({
+        id: "a",
+        label: "Act",
+        onInvoke: vi.fn(),
+        disabled: true,
+      }),
     );
     expect(screen.getByRole("button", { name: "Act" })).toBeDisabled();
   });
