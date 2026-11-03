@@ -660,7 +660,7 @@ pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<
     let app_for_suggestion = app.clone();
     // Issue #879: app scope, not session scope — outlives the session, but a
     // pending confirmation is dropped (rejected) when the app exits.
-    crate::app_scope(&app).spawn("on-disconnect-suggestions", async move {
+    crate::background_tasks::app_scope(&app).spawn("on-disconnect-suggestions", async move {
         let state = app_for_suggestion.state::<AppState>();
         // Spec 0034, Abschnitt 7: läuft vor dem Notiz-Vorschlag im selben
         // Hintergrund-Task (sequentiell, keine zweite parallele

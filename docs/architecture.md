@@ -234,7 +234,7 @@ Long-lived background tasks have an owner. `app_logic::tasks::TaskSupervisor`
   deadline; names of tasks still running are logged at `warn` (no payloads).
 - Spawning into a cancelled scope does not run the future.
 
-**App scope** (`ScopeKey::App`, `app_shell::app_scope`): post-startup tasks
+**App scope** (`ScopeKey::App`, `background_tasks::app_scope` in app-shell): post-startup tasks
 (service host start, MCP autostart, chat retention cleanup, title backfill,
 entitlement watch, window decoration) and the on-disconnect and note-shrink AI
 requests. The latter deliberately outlive their session. There is no re-lock
