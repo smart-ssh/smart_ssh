@@ -486,7 +486,7 @@ async fn test_connection_watch_reports_loss_without_terminal() {
     let emitter = Arc::new(crate::events::TestEmitter::default());
     let (tx, rx) = tokio::sync::watch::channel(None);
     let id = Uuid::new_v4();
-    spawn_connection_watch(id, &session, rx, emitter.clone());
+    spawn_connection_watch(id, &session, rx, emitter.clone(), &test_scope());
 
     tx.send(Some(ssh_manager_core::ssh::ConnectionLoss {
         reason: Some("The server stopped responding".to_string()),
@@ -519,7 +519,7 @@ async fn test_connection_watch_ignores_intentional_close() {
     let session = Arc::new(dummy_session(ServerId::new()));
     let emitter = Arc::new(crate::events::TestEmitter::default());
     let (tx, rx) = tokio::sync::watch::channel(None);
-    spawn_connection_watch(Uuid::new_v4(), &session, rx, emitter.clone());
+    spawn_connection_watch(Uuid::new_v4(), &session, rx, emitter.clone(), &test_scope());
 
     session.transport.mark_closed();
     tx.send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
@@ -541,7 +541,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
     let emitter = Arc::new(crate::events::TestEmitter::default());
     let id = Uuid::new_v4();
     let (old_tx, old_rx) = tokio::sync::watch::channel(None);
-    spawn_connection_watch(id, &session, old_rx, emitter.clone());
+    spawn_connection_watch(id, &session, old_rx, emitter.clone(), &test_scope());
 
     *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     let claim = session.begin_reconnect().expect("claim");
@@ -553,7 +553,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
         )
         .await;
     let (new_tx, new_rx) = tokio::sync::watch::channel(None);
-    spawn_connection_watch(id, &session, new_rx, emitter.clone());
+    spawn_connection_watch(id, &session, new_rx, emitter.clone(), &test_scope());
 
     old_tx
         .send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
@@ -1094,4 +1094,9 @@ mod lookup_failures {
         let masked = swappable.redact_text(&format!("a {value} b"));
         assert!(!masked.contains("oversized-marker"), "not masked bytewise");
     }
+}
+
+/// A live session scope for the spawn helpers under test.
+fn test_scope() -> crate::tasks::TaskScope {
+    crate::tasks::TaskSupervisor::new().session_scope(Uuid::new_v4())
 }

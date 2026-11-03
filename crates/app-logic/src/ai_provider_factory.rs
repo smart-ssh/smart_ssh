@@ -47,7 +47,7 @@ pub fn is_official_openai(provider_type: ProviderType, base_url: Option<&str>) -
 /// der entschärfte `api_key` gleichzeitig vorliegen, um
 /// [`provider_identity_key`] zu bilden, BEVOR der Key als reiner `String`
 /// im Provider verschwindet.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub fn build_ai_provider(
     registry: &RateLimitRegistry,
     provider_type: ProviderType,

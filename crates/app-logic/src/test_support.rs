@@ -18,6 +18,7 @@
 //! privat wären (sie sind `pub`), sondern damit der Bauplan für eine
 //! Test-`Session` an einer einzigen Stelle gepflegt wird, statt bei jedem
 //! neuen `Session`-Feld auch in `app-shell` nachgezogen werden zu müssen.
+#![expect(clippy::unwrap_used, reason = "test support")]
 
 use std::collections::HashMap;
 use std::sync::Mutex;

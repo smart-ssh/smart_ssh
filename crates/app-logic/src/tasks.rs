@@ -33,7 +33,8 @@ use ssh_manager_core::sync::lock_tolerating_poison;
 pub enum ScopeKey {
     /// Lives until the app exits (or, later, until it is locked again).
     App,
-    /// Reserved for session-scoped tasks.
+    /// Tasks of one open session; ends when the session is closed
+    /// ([`TaskSupervisor::close_session_scope`]).
     Session(Uuid),
 }
 
@@ -220,6 +221,38 @@ impl TaskSupervisor {
         self.scope(ScopeKey::App)
     }
 
+    /// The scope of session `session_id`, created on first use (a child of
+    /// the root: it also ends at app exit).
+    pub fn session_scope(&self, session_id: Uuid) -> TaskScope {
+        self.scope(ScopeKey::Session(session_id))
+    }
+
+    /// Number of tasks of the session scope that have not ended yet (0 when
+    /// there is no such scope).
+    pub fn running_in(&self, session_id: Uuid) -> usize {
+        let scope = lock_tolerating_poison(&self.scopes)
+            .get(&ScopeKey::Session(session_id))
+            .cloned();
+        scope.map_or(0, |scope| scope.running_names().len())
+    }
+
+    /// Cancels the session's tasks, waits up to `timeout` for them to end and
+    /// removes the scope. While waiting, the scope refuses new tasks.
+    pub async fn close_session_scope(&self, session_id: Uuid, timeout: Duration) -> ShutdownReport {
+        let scope = lock_tolerating_poison(&self.scopes)
+            .get(&ScopeKey::Session(session_id))
+            .cloned();
+        let Some(scope) = scope else {
+            return ShutdownReport {
+                timed_out: false,
+                still_running: Vec::new(),
+            };
+        };
+        let report = scope.shutdown(timeout).await;
+        lock_tolerating_poison(&self.scopes).remove(&ScopeKey::Session(session_id));
+        report
+    }
+
     /// Shuts down every scope within one shared deadline.
     pub async fn shutdown(&self, timeout: Duration) -> Vec<ShutdownReport> {
         let deadline = Instant::now() + timeout;
@@ -244,7 +277,7 @@ impl Default for TaskSupervisor {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests {
     use super::*;
     use tokio::sync::oneshot;
@@ -312,6 +345,28 @@ mod tests {
         // The future was dropped without running: the sender is gone.
         assert!(rx.await.is_err());
         assert!(!scope.spawn_blocking("late-blocking", || {}));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_close_session_scope_cancels_and_removes() {
+        let sup = TaskSupervisor::new();
+        let id = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let scope = sup.session_scope(id);
+        scope.spawn("a", std::future::pending());
+        sup.session_scope(other).spawn("b", std::future::pending());
+        assert_eq!(sup.running_in(id), 1);
+        let report = sup.close_session_scope(id, Duration::from_secs(2)).await;
+        assert!(!report.timed_out);
+        assert_eq!(sup.running_in(id), 0);
+        assert_eq!(sup.running_in(other), 1);
+        assert!(!scope.spawn("late", async {}), "closed scope refuses tasks");
+        // Closing an unknown session is a no-op.
+        assert!(
+            !sup.close_session_scope(Uuid::new_v4(), Duration::from_secs(2))
+                .await
+                .timed_out
+        );
     }
 
     #[tokio::test(start_paused = true)]

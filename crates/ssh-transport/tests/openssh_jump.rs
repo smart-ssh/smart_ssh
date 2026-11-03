@@ -17,6 +17,7 @@
 //! `SSH_JUMP_BASTION_PORT`, `SSH_JUMP_TARGET_PORT`, `SSH_JUMP_TARGET_HOST`
 //! überschreiben. Jeder Host-Key wird je Hop über den normalen
 //! `PendingHostKeyConfirmation`-Weg bestätigt (Spec 0005), kein Pauschal-Trust.
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::collections::HashMap;
 use std::future::Future;

@@ -109,9 +109,8 @@ pub mod test_support {
 #[cfg(test)]
 mod tests {
     // Compile-level check: removing a re-export from the facade fails the build.
-    #[allow(unused_imports)]
     use super::test_support::{Session, SessionManager};
-    #[allow(unused_imports)]
+    #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
     use super::{
         apply_changes, open_backup, seal_extension_parts, start_import_snapshot, BackupKey,
         BackupOpError, Change, ChangeSet, ChatContentRegistry, HostKeyRow, ImportContext,

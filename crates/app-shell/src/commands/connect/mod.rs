@@ -227,8 +227,10 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
     // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
     // `russh`/Host-Key-Schleife unten zu durchlaufen.
-    let transport =
+    let mut transport =
         establish_transport(app, state, server_id, session_id, &server, true, progress).await?;
+    // Issue #881: the transport's own tasks run in the session scope.
+    transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
 
     // The Tauri-bound inputs of the session assembly (issue #839): resolved
     // here, handed to `app_logic::connect::session_builder` as plain values.
@@ -284,6 +286,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             &session,
             watch,
             Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+            &crate::background_tasks::session_scope(app, session_id),
         );
     }
 
@@ -369,7 +372,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         } else {
             state.profile_store.get_server(&server_id).await?
         };
-        let transport = establish_transport(
+        let mut transport = establish_transport(
             app,
             state,
             server_id,
@@ -379,6 +382,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             None,
         )
         .await?;
+        transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
         let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
         let (redactor, sudo_password) =
             redaction_for_reconnect(state, &session, server_id, &lookup).await;
@@ -398,6 +402,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
                     &session,
                     watch,
                     Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+                    &crate::background_tasks::session_scope(app, session_id),
                 );
             }
             tracing::info!(session_id = %session_id, "session reconnected");

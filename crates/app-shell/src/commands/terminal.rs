@@ -43,7 +43,8 @@ pub async fn open_terminal(
         Arc::clone(&session),
         shell,
         rx,
-        Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>,
+        Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>,
+        &crate::background_tasks::session_scope(&app, session_id),
     );
     Ok(start)
 }

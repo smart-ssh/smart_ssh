@@ -156,7 +156,6 @@ pub async fn explain_confirmation(
 /// (`app_logic::orchestration::handle_user_decision`). `None` (Text
 /// unverändert) verhält sich wie zuvor.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 pub async fn accept_and_create_rule(
     state: State<'_, AppState>,
     // Wie bei `respond_to_action` (Spec 0010) Teil der Signatur, aber nicht

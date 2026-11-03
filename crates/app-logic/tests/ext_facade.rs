@@ -2,6 +2,7 @@
 //! below imports only from `app_logic::ext` (and `ssh_manager_core`). Only
 //! the `fixture` module, which builds a test `AppState` (something an
 //! extension never does), reaches outside the facade.
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::sync::Arc;
 

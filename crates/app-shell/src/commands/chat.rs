@@ -121,7 +121,7 @@ pub async fn retry_chat_turn(
 /// mit `MockRuntime` braucht daher einen separaten `TestEmitter` statt
 /// `app` doppelt zu verwenden — in Produktion sind `app`/`emitter` einfach
 /// derselbe Wert (s. Aufrufer oben).
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -151,7 +151,7 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
 /// Wie [`send_chat_message_impl`], mit bereits aufgelösten Anhängen
 /// (Issue #469). Die Grenzen werden hier erneut geprüft, bevor irgendein
 /// Zustand verändert wird.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -183,7 +183,6 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
 /// current history WITHOUT adding the user message again. Only allowed when
 /// the history ends with the user's own message (so no tool call, command or
 /// partial answer follows it) and no turn is running.
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -209,7 +208,7 @@ pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
 }
 
 /// Shared turn entry. `text == None` means "resend the last user turn".
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn send_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,

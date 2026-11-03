@@ -15,6 +15,7 @@
 //!   `A -> B` and `B -> A`. The test counts these pairs and fails above
 //!   [`CYCLE_CEILING`]. Lower the constant when a cycle is removed; never
 //!   raise it.
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;

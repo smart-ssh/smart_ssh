@@ -47,8 +47,9 @@ impl AndroidForeground {
 }
 
 fn disconnect_all(app: &AppHandle) {
+    let scope = crate::background_tasks::app_scope(app);
     let app = app.clone();
-    tauri::async_runtime::spawn(async move {
+    scope.spawn("android-disconnect-all", async move {
         let ids: Vec<_> = app
             .state::<AppState>()
             .sessions
@@ -117,7 +118,7 @@ pub(crate) fn start(app: &AppHandle) {
     let controller = KeepAliveController::new(Arc::new(AndroidForeground { tx }));
     background_keepalive::install(Arc::clone(&controller));
     let mut count = app.state::<AppState>().sessions.subscribe_count();
-    tauri::async_runtime::spawn(async move {
+    crate::background_tasks::app_scope(app).spawn("android-keepalive-watch", async move {
         controller.on_session_count(*count.borrow_and_update());
         while count.changed().await.is_ok() {
             controller.on_session_count(*count.borrow_and_update());

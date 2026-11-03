@@ -38,7 +38,7 @@ use super::super::remote_files::previous_file_content_for_action;
 /// blockiert (`Deny`) oder vom Nutzer abgelehnt wird; ist es gesetzt, wird
 /// jede weitere Aktion derselben Antwort von `AutoExec` auf `Confirm`
 /// eskaliert — sie kann inhaltlich auf der abgelehnten aufbauen.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn handle_action_proposed(
     session: &Session,
     session_id: SessionId,

@@ -133,9 +133,34 @@ fn parse_status(body: &[u8]) -> Option<(u32, TapStatus)> {
     Some((id, (code, message)))
 }
 
+fn spawn_pump(
+    spawner: Option<&ssh_manager_core::ssh::TaskSpawner>,
+    name: &'static str,
+    fut: impl std::future::Future<Output = ()> + Send + 'static,
+) {
+    match spawner {
+        // A refused spawn (scope closed) drops the future, which drops the
+        // stream halves: the SFTP channel ends instead of leaking.
+        Some(spawner) => {
+            spawner.spawn(name, fut);
+        }
+        None => {
+            tokio::spawn(fut);
+        }
+    }
+}
+
 /// Schaltet den Vermittler vor `stream`. Der Rückgabe-Stream gehört
 /// `russh-sftp`, das Handle dem Aufrufer.
-pub(crate) fn tap<S>(stream: S) -> (DuplexStream, Arc<SftpTap>)
+///
+/// Issue #881: the two pump tasks go to `spawner` (the session scope of the
+/// application), so closing the session ends them. Without a spawner (a
+/// transport used standalone, e.g. in tests) they run detached and end on
+/// EOF or error as before.
+pub(crate) fn tap<S>(
+    stream: S,
+    spawner: Option<&ssh_manager_core::ssh::TaskSpawner>,
+) -> (DuplexStream, Arc<SftpTap>)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -152,7 +177,7 @@ where
 
     // russh-sftp -> Server
     let up_writer = writer.clone();
-    tokio::spawn(async move {
+    spawn_pump(spawner, "sftp-tap-up", async move {
         while let Ok(body) = read_packet(&mut client_rd).await {
             let mut w = up_writer.lock().await;
             let mut packet = (body.len() as u32).to_be_bytes().to_vec();
@@ -166,7 +191,7 @@ where
 
     // Server -> russh-sftp
     let down = shared.clone();
-    tokio::spawn(async move {
+    spawn_pump(spawner, "sftp-tap-down", async move {
         while let Ok(body) = read_packet(&mut remote_rd).await {
             match body.first().copied() {
                 Some(FXP_VERSION) if advertises_posix_rename(&body) => {
@@ -225,7 +250,7 @@ mod tests {
     #[tokio::test]
     async fn test_tap_detects_extension_and_round_trips_the_request() {
         let (client, mut server) = duplex(4096);
-        let (mut app, tap) = tap(client);
+        let (mut app, tap) = tap(client, None);
         send(&mut server, &version_packet(true)).await;
         // Das VERSION-Paket kommt unverändert bei der Anwendung an.
         let body = read_packet(&mut app).await.unwrap();
@@ -264,7 +289,7 @@ mod tests {
     #[tokio::test]
     async fn test_tap_reports_no_support_without_extension() {
         let (client, mut server) = duplex(4096);
-        let (mut app, tap) = tap(client);
+        let (mut app, tap) = tap(client, None);
         send(&mut server, &version_packet(false)).await;
         read_packet(&mut app).await.unwrap();
         assert!(!tap.supports_posix_rename());
@@ -273,7 +298,7 @@ mod tests {
     #[tokio::test]
     async fn test_tap_request_fails_when_stream_ends() {
         let (client, server) = duplex(4096);
-        let (_app, tap) = tap(client);
+        let (_app, tap) = tap(client, None);
         let t = tap.clone();
         let req = tokio::spawn(async move { t.posix_rename("/a", "/b").await });
         tokio::task::yield_now().await;

@@ -30,3 +30,6 @@ tower = { version = "0.5.3", features = ["util"] }
 # Nur für Tests — dieselbe Fassung und dasselbe Muster wie in `core`/
 # `ai-providers`.
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
+
+[lints]
+workspace = true

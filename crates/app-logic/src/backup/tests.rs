@@ -973,7 +973,11 @@ async fn key_file_paths_are_not_opened_by_the_import() {
     // block until the test times out.
     let fifo = a.dir.path().join("fifo-key");
     let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
-    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    // SAFETY: `c_path` is a valid NUL-terminated path that outlives the call;
+    // `mkfifo` has no other memory preconditions.
+    #[expect(unsafe_code, reason = "libc::mkfifo to create a FIFO fixture")]
+    let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+    assert_eq!(rc, 0);
     let missing = "/definitely/not/here/id_ed25519".to_string();
     for (i, path) in [missing.clone(), fifo.to_str().unwrap().to_string()]
         .into_iter()

@@ -32,6 +32,11 @@ struct TestBackend {
 
 #[async_trait]
 impl McpBackend for TestBackend {
+    fn spawn_tool_call(&self, task: ssh_manager_core::ssh::BoxedTask) -> bool {
+        tokio::spawn(task);
+        true
+    }
+
     async fn list_servers(&self) -> Vec<ServerSummary> {
         vec![ServerSummary {
             id: self.known_server,
@@ -72,7 +77,7 @@ async fn start_server(
     confirm_timeout: Duration,
 ) -> (mcp_server::McpServerHandle, SocketAddr) {
     let config = McpServerConfig {
-        bind_addr: "127.0.0.1:0".parse().unwrap(),
+        bind_addr: "127.0.0.1:0".parse().expect("valid socket address"),
         confirm_timeout,
     };
     let handle = mcp_server::serve(config, Arc::new(backend), SharedToken::new(token))

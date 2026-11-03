@@ -70,3 +70,6 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 # prüft, dass das Kommando nicht darin landet. Nur für Tests — dieselbe
 # Fassung und dasselbe Muster wie in `ai-providers`/`app-shell`.
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
+
+[lints]
+workspace = true

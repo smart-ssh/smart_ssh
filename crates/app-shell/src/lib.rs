@@ -199,7 +199,7 @@ fn startup_inputs(
 /// [`run`] ruft sie außerhalb der Laufzeit über ein `block_on` auf.
 ///
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
@@ -716,6 +716,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 window_found = app.get_webview_window("main").is_some(),
                 "app setup complete, creating main window"
             );
+
+            // Issue #881: the one worker that delivers AI usage records.
+            app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
 
             #[cfg(not(target_os = "android"))]
             if let Some(window) = app.get_webview_window("main") {

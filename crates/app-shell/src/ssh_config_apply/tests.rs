@@ -945,6 +945,7 @@ fn t_5_5_fifo_haengt_nicht() {
     let fifo = d.path().join("pipe");
     let c = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
     // SAFETY: gültiger, nullterminierter Pfad in einem frischen Tempdir.
+    #[expect(unsafe_code, reason = "libc::mkfifo to create a FIFO fixture")]
     let rc = unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
     assert_eq!(rc, 0, "mkfifo fehlgeschlagen");
 

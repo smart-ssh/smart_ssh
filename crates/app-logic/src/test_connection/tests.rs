@@ -12,7 +12,7 @@ use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 /// Nur das Ergebnis — die bestehenden Tests prüfen die Abbildung
 /// `SshError`/`ConnectOutcome` → `TestConnectionResult`; das
 /// Schritt-Protokoll (Issue #51) prüfen eigene Tests unten.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn test_connection_result(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
