@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { type ChatItem } from "./chatItem";
 import { ActionCard, TakeIntoNoteButton } from "./ActionCard";
 import { AssistantMessageView } from "./AssistantMessageView";
@@ -12,7 +13,7 @@ import { WebActivityCard } from "../WebActivityCard";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
 import { QuestionCard, type QuestionState } from "../QuestionCard";
 
-export function ChatItemView({
+export const ChatItemView = memo(function ChatItemView({
   item,
   liveOutput,
   waitingForInput = false,
@@ -241,7 +242,7 @@ export function ChatItemView({
       sessionId={sessionId}
     />
   );
-}
+});
 
 /** "name (Art), …" — nur Namen und Art, nie Inhalt (Spec 0110, §5). */
 export function attachmentLine(
