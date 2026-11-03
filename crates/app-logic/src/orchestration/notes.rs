@@ -33,7 +33,7 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    push_history, seal_session_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
     write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
@@ -620,14 +620,9 @@ async fn request_ai_title(
     // Haupt-Chat-Default erben.
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
     // Issue #562/#833: seal last; a sealing failure means no title request.
-    let request_context = seal_for_send(
-        request_context,
-        session.redactor.as_ref(),
-        &session.persistence.chat_content,
-        session.extension_content_key(session_id).await,
-    )
-    .await
-    .map_err(|_| TitleFailure::SealFailed)?;
+    let request_context = seal_session_for_send(session, session_id, request_context)
+        .await
+        .map_err(|_| TitleFailure::SealFailed)?;
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
@@ -854,13 +849,7 @@ pub async fn suggest_note_update_on_disconnect(
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
     // Issue #564/#833: seal last; a sealing failure means no request.
-    let Ok(request_context) = seal_for_send(
-        request_context,
-        session.redactor.as_ref(),
-        &session.persistence.chat_content,
-        session.extension_content_key(session_id).await,
-    )
-    .await
+    let Ok(request_context) = seal_session_for_send(session, session_id, request_context).await
     else {
         tracing::info!("skipping note-update suggestion on disconnect: sealing failed");
         return false;
