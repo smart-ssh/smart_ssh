@@ -179,109 +179,135 @@ pub(crate) async fn emit_action_error(
     true
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn execute_suggested_command(
-    session: &Session,
-    session_id: SessionId,
-    action_id: ActionId,
-    approved: ApprovedCommand,
-    emitter: &dyn EventEmitter,
-    profile_store: &dyn ProfileStore,
-    persist: bool,
-    ledger_source: LedgerSource,
-) -> bool {
-    let command = approved.as_str().to_owned();
-    // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
-    // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
-    // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
-    let sudo_password = session.sudo_password.get();
-    // Issue #464 (Spec 0038): the edition's transform runs on the final
-    // approved command, right before the transport call. Everything that
-    // is shown or stored below uses `command`; `wire_command` exists only
-    // for the transport call.
-    let wire_command = match super::super::outgoing::prepare_for_send(
-        session,
-        profile_store,
-        ssh_manager_core::outgoing::OutgoingKind::Command,
-        &command,
-    )
-    .await
-    {
-        Ok(prepared) => prepared,
-        Err(message) => {
-            return emit_action_error(session, emitter, session_id, message, None, persist).await;
-        }
-    };
-    let effective_command = sudo_password
-        .as_ref()
-        .and_then(|_| command_with_stdin_password_flag(&command));
-    let wire_effective_command = match &wire_command {
-        Some(prepared) => {
-            use secrecy::ExposeSecret;
-            sudo_password
+/// A command prepared for the transport call (sudo stdin handling and the
+/// edition's outgoing transform applied). `command` and `effective_command`
+/// are what is shown and stored; `wire_*` exist only for the transport call.
+pub(super) struct PreparedCommand {
+    command: String,
+    /// `command` with the stdin password flag, when the stored sudo password
+    /// applies (Spec 0018, Abschnitt 5).
+    effective_command: Option<String>,
+    /// Issue #464 (Spec 0038): the edition's transform of the approved command.
+    wire_command: Option<secrecy::SecretString>,
+    wire_effective_command: Option<String>,
+    sudo_password: Option<std::sync::Arc<secrecy::SecretString>>,
+}
+
+impl PreparedCommand {
+    /// Pure part of the preparation: derive the sudo-rewritten variants.
+    pub(super) fn new(
+        command: String,
+        wire_command: Option<secrecy::SecretString>,
+        sudo_password: Option<std::sync::Arc<secrecy::SecretString>>,
+    ) -> Self {
+        use secrecy::ExposeSecret;
+        // Spec 0018, Abschnitt 5: only rewrite/feed stdin when a password is
+        // actually stored.
+        let effective_command = sudo_password
+            .as_ref()
+            .and_then(|_| command_with_stdin_password_flag(&command));
+        let wire_effective_command = match &wire_command {
+            Some(prepared) => sudo_password
                 .as_ref()
-                .and_then(|_| command_with_stdin_password_flag(prepared.expose_secret()))
-        }
-        None => effective_command.clone(),
-    };
-
-    // Spec 0027, Abschnitt 3: vor dem eigentlichen Aufruf registriert, damit
-    // `commands::cancel_running_command` diese `action_id` jederzeit
-    // während der Ausführung treffen kann. Der Aufruf unten (egal welcher
-    // Zweig) konsumiert `cancel_rx` vollständig — der abschließende
-    // `resolve()`-Aufruf danach räumt den Registry-Eintrag in **jedem**
-    // Fall auf (regulär beendet: Empfänger bereits gedroppt, `send()`
-    // schlägt harmlos fehl; abgebrochen: Eintrag existiert dann schon
-    // nicht mehr, weil genau dieser `resolve()`-Aufruf — aus
-    // `cancel_running_command` — die Ausführung erst beendet hat) — ohne
-    // dieses Aufräumen bliebe für jedes regulär beendete Kommando ein
-    // nie entfernter Eintrag in der Registry zurück.
-    let cancel_rx = session.running_command_cancellations.register(action_id);
-
-    // Issue #325 (Spec 0106): the transport additionally hands every output
-    // chunk to `live_sink` while the command runs; `forward_live_output`
-    // redacts and throttles it into `chat-action-output` events. Display
-    // only — the outcome below (history, ledger, AI) is unchanged. The
-    // forwarder ends when the transport drops the sink, i.e. before the
-    // final result is emitted.
-    let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
-    // Issue #327: set by the forwarder while the "probably waiting for
-    // input" hint is shown. Backend-owned, so the cancel note does not
-    // depend on anything the frontend claims.
-    let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let execution = async {
-        // Issue #328: AI commands of one session stay serial through the
-        // command slot, but the transport lock is only held to open the exec
-        // channel. While the command runs, file browser, terminal and
-        // disconnect can use the transport.
-        let Some(_slot) = session.transport.begin_command(action_id).await else {
-            return Err(ssh_manager_core::ssh::SshError::ChannelError(
-                "session is disconnecting".to_string(),
-            ));
+                .and_then(|_| command_with_stdin_password_flag(prepared.expose_secret())),
+            None => effective_command.clone(),
         };
-        let stdin = match (&wire_effective_command, &sudo_password) {
+        Self {
+            command,
+            effective_command,
+            wire_command,
+            wire_effective_command,
+            sudo_password,
+        }
+    }
+
+    /// The text for the transport call and the stdin bytes: the stored sudo
+    /// password goes to stdin only when the command was rewritten to read it.
+    pub(super) fn wire_text_and_stdin(&self) -> (std::borrow::Cow<'_, str>, Option<Vec<u8>>) {
+        use secrecy::ExposeSecret;
+        let stdin = match (&self.wire_effective_command, &self.sudo_password) {
             (Some(_), Some(password)) => {
-                use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
                 stdin.push(b'\n');
                 Some(stdin)
             }
             _ => None,
         };
-        let run_command = match (&wire_effective_command, &stdin) {
+        let text = match (&self.wire_effective_command, &stdin) {
             (Some(rewritten), Some(_)) => rewritten.as_str(),
-            _ => match &wire_command {
-                Some(prepared) => {
-                    use secrecy::ExposeSecret;
-                    prepared.expose_secret()
-                }
-                None => command.as_str(),
+            _ => match &self.wire_command {
+                Some(prepared) => prepared.expose_secret(),
+                None => self.command.as_str(),
             },
         };
+        (std::borrow::Cow::Borrowed(text), stdin)
+    }
+}
+
+/// Applies the outgoing transform and the sudo stdin handling to the approved
+/// command. `Err` carries the message for `emit_action_error`.
+async fn prepare_command(
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+    command: String,
+) -> Result<PreparedCommand, String> {
+    // Issue #464 (Spec 0038): the edition's transform runs on the final
+    // approved command, right before the transport call.
+    let wire_command = super::super::outgoing::prepare_for_send(
+        session,
+        profile_store,
+        ssh_manager_core::outgoing::OutgoingKind::Command,
+        &command,
+    )
+    .await?;
+    Ok(PreparedCommand::new(
+        command,
+        wire_command,
+        session.sudo_password.get(),
+    ))
+}
+
+/// Starts the command, streams its live output and waits for the result.
+/// Also returns the "waiting for input" flag set by the live forwarder.
+async fn run_prepared_command(
+    session: &Session,
+    session_id: SessionId,
+    action_id: ActionId,
+    emitter: &dyn EventEmitter,
+    prepared: &PreparedCommand,
+) -> (
+    Result<ExecOutcome, ssh_manager_core::ssh::SshError>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+) {
+    // Spec 0027, Abschnitt 3: registered before the call so that
+    // `commands::cancel_running_command` can hit this `action_id` at any time
+    // during execution. The call below consumes `cancel_rx`; the `resolve()`
+    // afterwards removes the registry entry in every case (otherwise each
+    // regularly finished command would leave an entry behind).
+    let cancel_rx = session.running_command_cancellations.register(action_id);
+
+    // Issue #325 (Spec 0106): the transport additionally hands every output
+    // chunk to `live_sink` while the command runs; `forward_live_output`
+    // redacts and throttles it into `chat-action-output` events. Display
+    // only. The forwarder ends when the transport drops the sink.
+    let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    // Issue #327: set by the forwarder while the "probably waiting for
+    // input" hint is shown. Backend-owned.
+    let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let execution = async {
+        // Issue #328: AI commands of one session stay serial through the
+        // command slot, but the transport lock is only held to open the exec
+        // channel.
+        let Some(_slot) = session.transport.begin_command(action_id).await else {
+            return Err(ssh_manager_core::ssh::SshError::ChannelError(
+                "session is disconnecting".to_string(),
+            ));
+        };
+        let (run_command, stdin) = prepared.wire_text_and_stdin();
         // Spec 0114 §4: keep the device awake while the command runs.
         let _activity = crate::background_keepalive::background_activity();
         let mut transport = session.transport.lock().await;
-        match transport.start_exec(run_command, stdin.as_deref()).await? {
+        match transport.start_exec(&run_command, stdin.as_deref()).await? {
             Some(running) => {
                 drop(transport);
                 running.run(cancel_rx, live_sink).await
@@ -290,7 +316,7 @@ pub(super) async fn execute_suggested_command(
             // whole command, as before.
             None => {
                 transport
-                    .execute_streaming(run_command, stdin.as_deref(), cancel_rx, live_sink)
+                    .execute_streaming(&run_command, stdin.as_deref(), cancel_rx, live_sink)
                     .await
             }
         }
@@ -309,149 +335,182 @@ pub(super) async fn execute_suggested_command(
     let _ = session
         .running_command_cancellations
         .resolve(&action_id, ());
-    // Spec 0018, Abschnitt 5: das tatsächlich ausgeführte Kommando (mit
-    // `-S`, ohne Passwort) landet in Ergebnis-Event/Log/Kontext — voll
-    // transparent, da nie das Passwort selbst enthalten.
-    let command = effective_command.unwrap_or(command);
+    (raw_outcome, waiting_for_input)
+}
 
+/// Where the result of a finished command is reported to.
+pub(super) struct CommandReport<'a> {
+    pub(super) session: &'a Session,
+    pub(super) session_id: SessionId,
+    pub(super) action_id: ActionId,
+    pub(super) emitter: &'a dyn EventEmitter,
+    pub(super) persist: bool,
+    pub(super) ledger_source: LedgerSource,
+}
+
+impl CommandReport<'_> {
+    /// Ledger, log, result event and chat history for a finished command.
+    /// `output` is still unredacted; every sink redacts on its own.
+    pub(super) async fn success(
+        &self,
+        command: String,
+        output: CommandOutput,
+        cancelled: bool,
+        waiting_for_input: bool,
+    ) {
+        let session = self.session;
+        // Spec 0057, §1.1: deliberately called with the UNREDACTED `output`;
+        // `write_ledger_entry` redacts centrally. `ledger_source` comes from
+        // the caller, not derived from `persist` (which means something else:
+        // MCP chat-persistence exclusion).
+        write_ledger_entry(
+            session,
+            self.ledger_source,
+            LedgerEntryContent::CommandExecuted {
+                command: command.clone(),
+                output: output.clone(),
+                cancelled,
+            },
+        )
+        .await;
+        let redacted = session.redactor.redact(&output);
+        // Spec 0016 Abschnitt 2/3: the command itself (e.g. `mysql
+        // --password=hunter2 ...`) is redacted for the log; the event and the
+        // history entry keep the executed command (Spec 0018 Abschnitt 5).
+        log_command_execution(
+            self.session_id,
+            &session.redactor.redact_text(&command),
+            &redacted,
+        );
+        emit_chat_action_result(
+            self.emitter,
+            self.session_id,
+            self.action_id,
+            ActionResultPayload::Command {
+                command: command.clone(),
+                stdout: String::from_utf8_lossy(&redacted.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&redacted.stderr).into_owned(),
+                exit_code: redacted.exit_code,
+                cancelled,
+                truncated: redacted.truncated,
+            },
+        );
+        let combined_output = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&redacted.stdout),
+            String::from_utf8_lossy(&redacted.stderr)
+        );
+        push_history_scoped(
+            session,
+            ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command,
+                    output: redacted,
+                    cancelled,
+                    // The flag is only meaningful for a stop; a command
+                    // that ended on its own never gets the note.
+                    waiting_for_input: cancelled && waiting_for_input,
+                },
+            },
+            self.persist,
+        )
+        .await;
+        // Spec 0039, Abschnitt 5: counts as untrusted content entering the AI
+        // context already here (see `history_contains_untrusted_content`).
+        session
+            .untrusted_content_ingested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        check_for_injected_instructions(
+            session,
+            self.session_id,
+            self.emitter,
+            self.action_id,
+            &combined_output,
+            "command_output",
+        )
+        .await;
+    }
+
+    /// Ledger, log and error report for a transport failure.
+    async fn failure(&self, command: String, err: ssh_manager_core::ssh::SshError) -> bool {
+        let session = self.session;
+        // A transport/channel error says nothing about whether the command
+        // reached the server, so the ledger still gets a `CommandExecuted`
+        // entry. `exit_code: None` means "result unknown"; the message goes
+        // into `stderr` so the central redaction in `write_ledger_entry`
+        // treats it like real command output.
+        write_ledger_entry(
+            session,
+            self.ledger_source,
+            LedgerEntryContent::CommandExecuted {
+                command: command.clone(),
+                output: CommandOutput {
+                    stdout: Vec::new(),
+                    stderr: err.to_string().into_bytes(),
+                    exit_code: None,
+                    truncated: false,
+                },
+                cancelled: false,
+            },
+        )
+        .await;
+        // Spec 0016/0027: redact the command for the log as in the success case.
+        log_command_execution_failed(
+            self.session_id,
+            &session.redactor.redact_text(&command),
+            &err,
+        );
+        let code = err.code();
+        emit_action_error(
+            session,
+            self.emitter,
+            self.session_id,
+            format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
+            Some(code),
+            self.persist,
+        )
+        .await
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn execute_suggested_command(
+    session: &Session,
+    session_id: SessionId,
+    action_id: ActionId,
+    approved: ApprovedCommand,
+    emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
+    persist: bool,
+    ledger_source: LedgerSource,
+) -> bool {
+    let prepared = match prepare_command(session, profile_store, approved.as_str().to_owned()).await
+    {
+        Ok(prepared) => prepared,
+        Err(message) => {
+            return emit_action_error(session, emitter, session_id, message, None, persist).await;
+        }
+    };
+    let (raw_outcome, waiting_for_input) =
+        run_prepared_command(session, session_id, action_id, emitter, &prepared).await;
+    // Spec 0018, Abschnitt 5: the command that actually ran (with `-S`,
+    // without the password) goes into event/log/context.
+    let command = prepared.effective_command.unwrap_or(prepared.command);
+    let report = CommandReport {
+        session,
+        session_id,
+        action_id,
+        emitter,
+        persist,
+        ledger_source,
+    };
     match raw_outcome {
         Ok(ExecOutcome { output, cancelled }) => {
-            // Spec 0057, §1.1, dritter Punkt: "Kommando ausgeführt +
-            // Ergebnis (stdout/stderr/exit)". Bewusst mit dem noch
-            // UNREDIGIERTEN `output` aufgerufen — `write_ledger_entry`
-            // redigiert selbst zentral (s. dortiger Doc-Kommentar), eine
-            // hier vorab redigierte Fassung würde nur doppelt redigieren,
-            // ohne einen Sicherheitsgewinn. `ledger_source` kommt jetzt
-            // explizit vom Aufrufer (`handle_action_proposed`/
-            // `handle_user_decision`), nicht mehr aus `persist` abgeleitet
-            // — spec-reviewer-Fund (Review dieses Schritts): `persist`
-            // beschreibt einen ganz anderen Sachverhalt
-            // (Chat-Persistenz-Ausschluss für MCP) und hätte ein vom
-            // Menschen editiertes Kommando (`EditThenApprove`) fälschlich
-            // `Ai` zugeschrieben.
-            write_ledger_entry(
-                session,
-                ledger_source,
-                LedgerEntryContent::CommandExecuted {
-                    command: command.clone(),
-                    output: output.clone(),
-                    cancelled,
-                },
-            )
-            .await;
-            let redacted = session.redactor.redact(&output);
-            // Unabhängiger Review-Pass (Spec 0016): Spec 0016 Abschnitt 2/3
-            // verlangt dieselbe Redaction-Regel für Logs wie für den
-            // tatsächlichen API-Request — bisher lief nur `output` durch
-            // den Redactor, das Kommando selbst (kann z. B. `mysql
-            // --password=hunter2 ...` sein) landete roh im Log. Nur der
-            // LOG-Aufruf bekommt die redigierte Fassung; das Event/der
-            // Kontext-Eintrag unten bleibt bewusst unverändert (Spec 0018
-            // Abschnitt 5: "voll transparent" für das tatsächlich
-            // ausgeführte Kommando gegenüber Nutzer/KI).
-            log_command_execution(
-                session_id,
-                &session.redactor.redact_text(&command),
-                &redacted,
-            );
-            emit_chat_action_result(
-                emitter,
-                session_id,
-                action_id,
-                ActionResultPayload::Command {
-                    command: command.clone(),
-                    stdout: String::from_utf8_lossy(&redacted.stdout).into_owned(),
-                    stderr: String::from_utf8_lossy(&redacted.stderr).into_owned(),
-                    exit_code: redacted.exit_code,
-                    cancelled,
-                    truncated: redacted.truncated,
-                },
-            );
-            let combined_output = format!(
-                "{}\n{}",
-                String::from_utf8_lossy(&redacted.stdout),
-                String::from_utf8_lossy(&redacted.stderr)
-            );
-            push_history_scoped(
-                session,
-                ChatMessage {
-                    role: Role::ActionResult,
-                    content: MessageContent::CommandResult {
-                        command,
-                        output: redacted,
-                        cancelled,
-                        // The flag is only meaningful for a stop; a command
-                        // that ended on its own never gets the note.
-                        waiting_for_input: cancelled
-                            && waiting_for_input.load(std::sync::atomic::Ordering::SeqCst),
-                    },
-                },
-                persist,
-            )
-            .await;
-            // Spec 0039, Abschnitt 5: `CommandResult` wird erst beim
-            // tatsächlichen Versand an den KI-Provider über `ai::
-            // fence_untrusted` in <stdout>/<stderr>-Tags gepackt
-            // (`ai-providers::format_command_result`) — zählt aber schon
-            // hier als "Inhalt aus einer nicht vertrauenswürdigen Quelle
-            // in den KI-Kontext gelangt", s. `session::history_contains_
-            // untrusted_content`, das denselben Fall genauso behandelt.
-            session
-                .untrusted_content_ingested
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(
-                session,
-                session_id,
-                emitter,
-                action_id,
-                &combined_output,
-                "command_output",
-            )
-            .await;
+            let waiting = waiting_for_input.load(std::sync::atomic::Ordering::SeqCst);
+            report.success(command, output, cancelled, waiting).await;
             true
         }
-        Err(err) => {
-            // spec-reviewer-Fund (Review dieses Schritts): vorher blieb der
-            // Fehlerfall ganz ohne `CommandExecuted`-Eintrag — im Ledger
-            // sah es dann so aus, als sei das Kommando nie ausgeführt
-            // worden, obwohl es den Server ggf. bereits erreicht hat (ein
-            // Transport-/Kanalfehler sagt nichts darüber aus, ob es dort
-            // angekommen ist). `exit_code: None` markiert bewusst "Ergebnis
-            // unbekannt", nicht "erfolgreich beendet"; die Fehlermeldung
-            // selbst landet in `stderr`, damit sie beim (zentralen)
-            // Redigieren in `write_ledger_entry` denselben Behandlung
-            // durchläuft wie eine echte Kommando-Ausgabe.
-            write_ledger_entry(
-                session,
-                ledger_source,
-                LedgerEntryContent::CommandExecuted {
-                    command: command.clone(),
-                    output: CommandOutput {
-                        stdout: Vec::new(),
-                        stderr: err.to_string().into_bytes(),
-                        exit_code: None,
-                        truncated: false,
-                    },
-                    cancelled: false,
-                },
-            )
-            .await;
-            // Unabhängiger Review-Pass (Spec 0016/0027): derselbe Fund wie im
-            // Erfolgsfall oben (`redact_text` vor dem Log) - ohne das würde
-            // z. B. `mysql --password=hunter2 ...` bei einem Kanalfehler im
-            // Klartext im Logfile landen, obwohl der Erfolgspfad dasselbe
-            // Kommando korrekt redigiert.
-            log_command_execution_failed(session_id, &session.redactor.redact_text(&command), &err);
-            let code = err.code();
-            emit_action_error(
-                session,
-                emitter,
-                session_id,
-                format!("Kommando '{command}' konnte nicht ausgeführt werden: {err}"),
-                Some(code),
-                persist,
-            )
-            .await
-        }
+        Err(err) => report.failure(command, err).await,
     }
 }

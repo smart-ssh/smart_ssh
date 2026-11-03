@@ -30,12 +30,15 @@ use ssh_manager_core::ai::{
 
 use crate::action::parameters_json_schema;
 use crate::common::frame_loop::{self, FrameHandler};
+use crate::common::max_tokens_retry::{
+    retry_stream_with_overload, ConnectFn, RawEvent, RetryParams,
+};
 use crate::common::prompt_format::{message_content_text, role_str};
 use crate::error::{classify_provider_error, ProviderErrorInfo};
 use crate::fallback::fallback_system_prompt_addition;
-use crate::openai_compatible::{
-    openai_compatible_default_max_tokens, openai_compatible_model_max_output_tokens,
-    retry_stream_with_overload, OpenAiStreamState, RawEvent, RetryKind, RetryState,
+use crate::openai_common::{
+    connect_and_stream, openai_compatible_default_max_tokens,
+    openai_compatible_model_max_output_tokens, OpenAiStreamState, StreamOptionsRejections,
 };
 use crate::request_logging::log_outgoing_context;
 use crate::sse::{build_http_client, SseFrame};
@@ -60,8 +63,6 @@ pub struct OpenAiResponsesProvider {
     api_key: String,
     supports_native_tool_calling: bool,
     extra_headers: Vec<(String, String)>,
-    #[allow(dead_code)]
-    budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     max_tokens_override: Option<u32>,
     /// Issue #168: offer the provider's `web_search` tool in the main chat.
     web_research: bool,
@@ -77,7 +78,6 @@ impl OpenAiResponsesProvider {
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
         extra_headers: Vec<(String, String)>,
-        budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
         max_tokens_override: Option<u32>,
     ) -> Self {
         Self {
@@ -87,7 +87,6 @@ impl OpenAiResponsesProvider {
             api_key: api_key.into(),
             supports_native_tool_calling,
             extra_headers,
-            budget,
             max_tokens_override,
             web_research: false,
             last_request: std::sync::Mutex::new(None),
@@ -186,26 +185,41 @@ impl AiProvider for OpenAiResponsesProvider {
             .as_u64()
             .unwrap_or(u64::from(model_max_tokens)) as u32;
 
+        let client = self.client.clone();
+        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
+        let api_key = self.api_key.clone();
+        let native_tool_calling = self.supports_native_tool_calling;
+        let extra_headers = self.extra_headers.clone();
+        // The Responses body never carries `stream_options`, so this cache
+        // stays empty and unused.
+        let connect: ConnectFn = std::sync::Arc::new(move |body| {
+            Box::pin(connect_and_stream(
+                parse_sse_response,
+                client.clone(),
+                url.clone(),
+                api_key.clone(),
+                native_tool_calling,
+                request_id,
+                extra_headers.clone(),
+                StreamOptionsRejections::new(),
+                body,
+            ))
+        });
         retry_stream_with_overload(
             "openai_responses",
             &self.model,
             &self.last_request,
-            RetryState {
-                parse: parse_sse_response,
-                client: self.client.clone(),
-                url: format!("{}/responses", self.base_url.trim_end_matches('/')),
-                api_key: self.api_key.clone(),
-                native_tool_calling: self.supports_native_tool_calling,
+            RetryParams {
+                connect,
                 request_id,
-                extra_headers: self.extra_headers.clone(),
                 body,
                 max_tokens,
                 model_max_tokens,
                 max_tokens_field: MAX_TOKENS_FIELD,
                 max_tokens_is_user_override,
-                retry_used: RetryKind::None,
-                inner: None,
-                finished: false,
+                context_limit_retry_max_tokens: Some(
+                    crate::openai_common::OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS,
+                ),
             },
         )
     }
@@ -738,10 +752,6 @@ mod attachment_tests {
         );
     }
 
-    fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
-    }
-
     /// Issue #504: an unsealed extension part is the fixed fenced placeholder.
     #[test]
     fn test_responses_extension_part_renders_fixed_placeholder() {
@@ -751,7 +761,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
@@ -769,7 +778,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let mut ctx = context_with_image_and_pdf("x");
@@ -804,7 +812,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let body = p.build_request_body(&context_with_image_and_pdf("hello"));
@@ -838,7 +845,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let events = first_events(&p, context_with_image_and_pdf("x")).await;

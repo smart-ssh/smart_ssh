@@ -1,4 +1,4 @@
-//! Tests for `dto` (SFTP server path normalization).
+//! Tests for `server_paths` (SFTP server path normalization).
 
 use super::normalize_sftp_server_path;
 

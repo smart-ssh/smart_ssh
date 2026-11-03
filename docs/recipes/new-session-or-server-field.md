@@ -41,7 +41,7 @@ backup and import, the DTO and the frontend.
       restore `INSERT … ON CONFLICT` statement. Plus the backup file format
       in `crates/app-logic/src/backup/` when the field is part of the file
       (keep it optional so older files still import).
-- [ ] `crates/app-logic/src/dto.rs` – `ServerDto` and `ServerInput`;
+- [ ] `crates/app-logic/src/dto/server.rs` – `ServerDto` and `ServerInput`;
       `crates/app-logic/src/servers.rs` – create/update.
 - [ ] Struct literals of `Server` and `ServerInput` across crates, examples
       and tests. If the field has no default, `cargo check --workspace

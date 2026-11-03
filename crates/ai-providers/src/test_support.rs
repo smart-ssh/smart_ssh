@@ -120,6 +120,11 @@ fn log_lines_at_levels(levels: &[&str]) -> Vec<String> {
         .collect()
 }
 
+/// One fresh rate-limit budget guard for provider unit tests.
+pub(crate) fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
+    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+}
+
 #[cfg(test)]
 mod capture_self_check {
     use super::*;

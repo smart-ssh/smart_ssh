@@ -88,7 +88,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Database migrations | `crates/persistence-sqlite/migrations/` (`NNNN_name.sql`, consecutive); applied in `crates/persistence-sqlite/src/store.rs` |
 | Locale files | `apps/smart-ssh-community/frontend/src/locales/` (one folder per language); parity test `apps/smart-ssh-community/frontend/src/locales/localeKeyParity.test.ts` |
 | Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/events.ts` |
-| DTOs sent to the frontend | `crates/app-logic/src/dto.rs` — `ServerDto`; TS side `apps/smart-ssh-community/frontend/src/types.ts` |
+| DTOs sent to the frontend | `crates/app-logic/src/dto/` (`ServerDto` in `crates/app-logic/src/dto/server.rs`); TS side `apps/smart-ssh-community/frontend/src/types.ts` |
 | Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session` |
 | In-memory stores for tests | `crates/app-logic/src/test_support.rs` — `InMemoryProfileStore`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
@@ -129,8 +129,10 @@ Production code:
 - `apps/smart-ssh-community/frontend/src/components/serverForm/useServerDelete.ts` — `useServerDelete`: two-step delete.
 - `apps/smart-ssh-community/frontend/src/components/serverForm/useIdentityFile.ts` — `useIdentityFile`: key-file facts, keychain conversion, key-import prompt.
 - `apps/smart-ssh-community/frontend/src/components/serverForm/TestResultBadge.tsx` — `TestResultBadge`.
-- `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`to_raw_stream`), retry (`RetryState`), web research citations.
-- `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: request building, `connect_and_stream`, tool-call buffering (`OpenAiStreamState`).
+- `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`parse_sse_response`), web research citations.
+- `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: Chat Completions request building.
+- `crates/ai-providers/src/openai_common.rs` — shared by both OpenAI providers: `connect_and_stream`, tool-call buffering (`OpenAiStreamState`), max-token tables, `StreamOptionsRejections`.
+- `crates/ai-providers/src/common/max_tokens_retry.rs` — `retry_stream_with_overload`: the one max-tokens / context-limit retry stream of all providers.
 - `crates/ai-providers/src/common/frame_loop.rs` — the shared SSE frame loop (`process_frame_stream`, `FrameHandler`): content deadline, transport errors, abrupt end; providers implement `FrameHandler` on their stream state.
 - `crates/app-shell/src/commands/sftp/` — SFTP commands (one file per group): listing (`sftp_list`), `sftp_download`, `sftp_upload`, mutations, edit sessions.
 - `crates/app-logic/src/orchestration/action_exec.rs` (module root) with `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_action_proposed` (entry), `evaluate_action` (filter plus risk); `crates/app-logic/src/orchestration/action_exec/risk.rs` (escalation helpers); `crates/app-logic/src/orchestration/action_exec/decision.rs` — `handle_user_decision` (confirmation); `crates/app-logic/src/orchestration/action_exec/execute.rs` — `execute_action`, `execute_suggested_command` (run and redact); `crates/app-logic/src/orchestration/action_exec/injection.rs` — `check_for_injected_instructions`; `crates/app-logic/src/orchestration/action_exec/logging.rs` (command log lines).
