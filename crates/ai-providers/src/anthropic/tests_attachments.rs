@@ -2,10 +2,7 @@
 
 use super::*;
 use crate::content::test_fixtures::context_with_image_and_pdf;
-
-fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
-}
+use crate::test_support::test_budget;
 
 /// Issue #470: image -> `image` block, PDF -> `document` block, fenced
 /// text in front, secret-free text part untouched.
@@ -16,7 +13,7 @@ fn test_image_and_pdf_become_native_blocks() {
         "claude-x",
         "k",
         true,
-        budget(),
+        test_budget(),
         None,
     );
     let body = p.build_request_body(&context_with_image_and_pdf("hello"));
@@ -51,7 +48,7 @@ fn test_binary_parts_are_never_sent_as_text() {
         "claude-x",
         "k",
         true,
-        budget(),
+        test_budget(),
         None,
     );
     let body = p

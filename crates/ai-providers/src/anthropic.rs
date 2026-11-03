@@ -22,7 +22,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
 
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -34,6 +34,9 @@ use ssh_manager_core::ai::{
 use crate::action::{parameters_json_schema, tool_call_event};
 use crate::common::frame_loop::{self, FrameHandler};
 use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
+use crate::common::max_tokens_retry::{
+    retry_stream_with_overload, to_raw_stream, ConnectFn, RawEvent, RetryParams,
+};
 use crate::common::prompt_format::{message_content_text, role_str};
 use crate::content::check_attachments;
 use crate::error::{error_stream, map_stream_error_object, provider_request_id};
@@ -118,30 +121,6 @@ fn anthropic_default_max_tokens_for(model_max: u32) -> u32 {
         64_000 => 16_384,
         _ => model_max / 2,
     }
-}
-
-/// Internes Zwischenergebnis der SSE-Verarbeitung, NICHT nach außen sichtbar
-/// (`AiProvider::send` liefert weiterhin nur `AiEvent`) — Spec 0065, Teil 3:
-/// ein abgeschnittener Tool-Call darf den `AiEvent`-Verbraucher (`app-shell::
-/// orchestration`) nie erreichen, muss also VOR der öffentlichen Schnittstelle
-/// abgefangen werden können. `RetryWithHigherMaxTokens` trägt keine Daten —
-/// der `send()`-Retry-Loop unten kennt `max_tokens`/`body` bereits selbst.
-#[derive(Debug, Clone, PartialEq)]
-enum RawEvent {
-    Public(AiEvent),
-    RetryWithHigherMaxTokens,
-}
-
-impl From<AiEvent> for RawEvent {
-    fn from(event: AiEvent) -> Self {
-        RawEvent::Public(event)
-    }
-}
-
-fn to_raw_stream(
-    inner: Pin<Box<dyn Stream<Item = AiEvent> + Send>>,
-) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    Box::pin(inner.map(RawEvent::Public))
 }
 
 pub struct AnthropicProvider {
@@ -486,27 +465,6 @@ fn is_web_tools_disabled_rejection(status: u16, info: &crate::error::ProviderErr
     status == 400 && info.is_web_tools_disabled()
 }
 
-/// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3).
-struct RetryState {
-    client: reqwest::Client,
-    url: String,
-    api_key: String,
-    native_tool_calling: bool,
-    request_id: Uuid,
-    budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
-    body: Value,
-    max_tokens: u32,
-    /// Modell-Maximum (Spec 0065, Teil 1) — der Retry-Deckel, s.
-    /// `AnthropicProvider::send`-Kommentar.
-    model_max_tokens: u32,
-    /// `true`, sobald der einmalige `max_tokens`-Retry bereits verbraucht
-    /// wurde — verhindert eine Retry-Schleife (Spec 0065, Invariante
-    /// "Retry ist einmalig").
-    retried: bool,
-    inner: Option<Pin<Box<dyn Stream<Item = RawEvent> + Send>>>,
-    finished: bool,
-}
-
 impl AiProvider for AnthropicProvider {
     /// Issue #169: s. Feld `web_research_rejected`.
     fn disable_web_research(&self) {
@@ -556,35 +514,33 @@ impl AiProvider for AnthropicProvider {
         // das an sich schon gültige Maximum hinaus verdoppeln.
         let model_max_tokens = anthropic_model_max_output_tokens(&self.model);
 
-        // Issue #599: the whole attempt is repeated on a pre-output overload
-        // (`crate::overload`); provider/model/request id ride on the span so
-        // that every log line of this request carries them.
-        *self
-            .last_request
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request_id);
-        let span = tracing::info_span!(
-            "ai_request",
-            provider = "anthropic",
-            model = %self.model,
-        );
-        let make = move || {
-            anthropic_attempt_stream(RetryState {
-                client: client.clone(),
-                url: url.clone(),
-                api_key: api_key.clone(),
+        let connect: ConnectFn = std::sync::Arc::new(move |body| {
+            Box::pin(connect_and_stream(
+                client.clone(),
+                url.clone(),
+                api_key.clone(),
                 native_tool_calling,
                 request_id,
-                budget: budget.clone(),
-                body: body.clone(),
+                budget.clone(),
+                body,
+            ))
+        });
+        retry_stream_with_overload(
+            "anthropic",
+            &self.model,
+            &self.last_request,
+            RetryParams {
+                connect,
+                request_id,
+                body,
                 max_tokens,
                 model_max_tokens,
-                retried: false,
-                inner: None,
-                finished: false,
-            })
-        };
-        crate::overload::with_overload_retry(span, request_id, make)
+                max_tokens_field: "max_tokens",
+                max_tokens_is_user_override: false,
+                // Anthropic has no context-limit retry (Spec 0087, T11b).
+                context_limit_retry_max_tokens: None,
+            },
+        )
     }
 
     fn last_request_id(&self) -> Option<Uuid> {
@@ -593,84 +549,6 @@ impl AiProvider for AnthropicProvider {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
-}
-
-/// One attempt of a `send()` call, including the single higher-`max_tokens`
-/// retry (Spec 0065, Teil 3).
-fn anthropic_attempt_stream(state: RetryState) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-    // Spec 0065, Teil 3: dieser äußere Stream verbindet erst lazy (beim
-    // ersten Poll, wie zuvor `request.flatten_stream()`), hält aber
-    // zusätzlich Zustand über MEHRERE Verbindungsversuche hinweg — nötig,
-    // damit ein abgeschnittener Tool-Call (`RawEvent::
-    // RetryWithHigherMaxTokens`, erst nach vollständigem Konsum des
-    // ersten Streams bekannt) zu einem zweiten `connect_and_stream`-
-    // Aufruf mit verdoppeltem `max_tokens` führen kann, statt — wie beim
-    // alten `async move { ... }.flatten_stream()` — nur EINMAL verbinden
-    // zu können.
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if state.finished {
-                return None;
-            }
-            if state.inner.is_none() {
-                let stream = connect_and_stream(
-                    state.client.clone(),
-                    state.url.clone(),
-                    state.api_key.clone(),
-                    state.native_tool_calling,
-                    state.request_id,
-                    state.budget.clone(),
-                    state.body.clone(),
-                )
-                .await;
-                state.inner = Some(stream);
-            }
-            match state.inner.as_mut().expect("gerade gesetzt").next().await {
-                Some(RawEvent::Public(event)) => return Some((event, state)),
-                Some(RawEvent::RetryWithHigherMaxTokens) => {
-                    if state.retried {
-                        // Spec 0065, Invariante "Retry ist einmalig":
-                        // kein zweiter Versuch, kein Ausführen/Vorlegen
-                        // des abgeschnittenen Tool-Calls — stattdessen
-                        // ein sichtbarer, terminaler Fehler. Die
-                        // Zuweisung wird erst beim NÄCHSTEN Aufruf
-                        // dieses `unfold`-Closures gelesen (ganz oben:
-                        // `if state.finished { return None; }`) — dem
-                        // Compiler nicht sichtbar, daher `allow` statt
-                        // die Zeile fälschlich als toten Code zu
-                        // entfernen.
-                        #[allow(unused_assignments)]
-                        {
-                            state.finished = true;
-                        }
-                        return Some((AiEvent::Error(AiError::ResponseTruncated), state));
-                    }
-                    state.retried = true;
-                    // Spec 0087, A2.1 (BL-0265): identisches Muster zu
-                    // `openai_compatible::send`s `doubled_and_capped.max(...)`
-                    // — ohne dieses `.max(...)` konnte `min(verdoppelt,
-                    // Modell-Maximum)` unter einen expliziten, über dem
-                    // Modell-Maximum liegenden `max_tokens_override` fallen
-                    // (Ist-Befund vor diesem Fix, s. Spec Abschnitt 1: Override
-                    // 32 000, Modell-Maximum 16 384 → der Retry sendete 16 384,
-                    // WENIGER als eingestellt). Der Retry wird für diesen Fall
-                    // wirkungslos (derselbe Wert nochmal), statt die explizite
-                    // Nutzereinstellung zu unterlaufen.
-                    let doubled_and_capped = state
-                        .max_tokens
-                        .saturating_mul(2)
-                        .min(state.model_max_tokens);
-                    state.max_tokens = doubled_and_capped.max(state.max_tokens);
-                    state.body["max_tokens"] = json!(state.max_tokens);
-                    state.inner = None;
-                    // Schleife läuft weiter, verbindet oben neu.
-                }
-                // `unfold` ruft das Closure nach `None` nicht erneut
-                // auf — `state.finished` hier zu setzen wäre toter Code.
-                None => return None,
-            }
-        }
-    }))
 }
 
 enum BlockKind {

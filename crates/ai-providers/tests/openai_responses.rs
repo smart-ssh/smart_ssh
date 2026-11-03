@@ -1,9 +1,7 @@
 //! Wiremock tests for `OpenAiResponsesProvider` (ADR 0124): request body
 //! shape and stream parsing from recorded Responses API events.
 
-use std::sync::Arc;
-
-use ai_providers::{OpenAiResponsesProvider, ProviderBudgetGuard};
+use ai_providers::OpenAiResponsesProvider;
 use futures::StreamExt;
 use ssh_manager_core::ai::RedactedContext;
 use ssh_manager_core::ai::{
@@ -15,15 +13,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn provider(server: &MockServer, native: bool) -> OpenAiResponsesProvider {
-    OpenAiResponsesProvider::new(
-        server.uri(),
-        "gpt-test",
-        "key",
-        native,
-        Vec::new(),
-        Arc::new(ProviderBudgetGuard::new()),
-        None,
-    )
+    OpenAiResponsesProvider::new(server.uri(), "gpt-test", "key", native, Vec::new(), None)
 }
 
 fn context() -> SessionContext {

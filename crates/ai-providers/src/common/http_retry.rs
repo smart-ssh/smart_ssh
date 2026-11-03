@@ -323,7 +323,7 @@ mod tests {
             SECRET,
             true,
             Vec::new(),
-            Arc::new(ProviderBudgetGuard::new()),
+            crate::openai_common::StreamOptionsRejections::new(),
             None,
         )
     }

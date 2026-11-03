@@ -127,8 +127,10 @@ Production code:
 - `apps/smart-ssh-community/frontend/src/components/serverForm/useServerDelete.ts` — `useServerDelete`: two-step delete.
 - `apps/smart-ssh-community/frontend/src/components/serverForm/useIdentityFile.ts` — `useIdentityFile`: key-file facts, keychain conversion, key-import prompt.
 - `apps/smart-ssh-community/frontend/src/components/serverForm/TestResultBadge.tsx` — `TestResultBadge`.
-- `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`to_raw_stream`), retry (`RetryState`), web research citations.
-- `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: request building, `connect_and_stream`, tool-call buffering (`OpenAiStreamState`).
+- `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`parse_sse_response`), web research citations.
+- `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: Chat Completions request building.
+- `crates/ai-providers/src/openai_common.rs` — shared by both OpenAI providers: `connect_and_stream`, tool-call buffering (`OpenAiStreamState`), max-token tables, `StreamOptionsRejections`.
+- `crates/ai-providers/src/common/max_tokens_retry.rs` — `retry_stream_with_overload`: the one max-tokens / context-limit retry stream of all providers.
 - `crates/ai-providers/src/common/frame_loop.rs` — the shared SSE frame loop (`process_frame_stream`, `FrameHandler`): content deadline, transport errors, abrupt end; providers implement `FrameHandler` on their stream state.
 - `crates/app-shell/src/commands/sftp/` — SFTP commands (one file per group): listing (`sftp_list`), `sftp_download`, `sftp_upload`, mutations, edit sessions.
 - `crates/app-logic/src/orchestration/action_exec.rs` (module root) with `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_action_proposed` (entry), `evaluate_action` (filter plus risk); `crates/app-logic/src/orchestration/action_exec/risk.rs` (escalation helpers); `crates/app-logic/src/orchestration/action_exec/decision.rs` — `handle_user_decision` (confirmation); `crates/app-logic/src/orchestration/action_exec/execute.rs` — `execute_action`, `execute_suggested_command` (run and redact); `crates/app-logic/src/orchestration/action_exec/injection.rs` — `check_for_injected_instructions`; `crates/app-logic/src/orchestration/action_exec/logging.rs` (command log lines).

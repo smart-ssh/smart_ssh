@@ -293,11 +293,20 @@ pub fn provider_identity_key(base_url: &str, model: &str, api_key: &str) -> Stri
 #[derive(Debug, Default)]
 pub struct RateLimitRegistry {
     guards: Mutex<HashMap<String, Arc<ProviderBudgetGuard>>>,
+    /// Issue #609 / #860: endpoints that rejected `stream_options`, shared
+    /// by every OpenAI-compatible provider built from this registry.
+    stream_options_rejections: crate::openai_common::StreamOptionsRejections,
 }
 
 impl RateLimitRegistry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The `stream_options` rejection memory of this registry (a clone shares
+    /// state); a fresh registry starts empty.
+    pub fn stream_options_rejections(&self) -> crate::openai_common::StreamOptionsRejections {
+        self.stream_options_rejections.clone()
     }
 
     pub fn guard_for(&self, identity_key: &str) -> Arc<ProviderBudgetGuard> {

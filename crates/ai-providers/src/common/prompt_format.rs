@@ -326,7 +326,7 @@ mod tests {
             "key",
             true,
             Vec::new(),
-            std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new()),
+            crate::openai_common::StreamOptionsRejections::new(),
             None,
         )
         .build_request_body(&ctx);
