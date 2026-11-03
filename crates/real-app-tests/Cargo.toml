@@ -16,20 +16,20 @@ description = "Starts the real desktop app through tauri-driver (WebDriver) and 
 # HTTP clients) must not see WebDriver's HTTP client. This package has no
 # library or binary target.
 [dev-dependencies]
-app-logic = { version = "0.7.0", path = "../app-logic" }
-base64 = "0.23.1"
-credentials-keyring = { version = "0.7.0", path = "../credentials-keyring" }
-persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite", features = ["test-support"] }
-secrecy = "0.10.3"
-serde_json = "1.0.151"
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-tempfile = "3.27.0"
+app-logic = { workspace = true }
+base64 = { workspace = true }
+credentials-keyring = { workspace = true }
+persistence-sqlite = { workspace = true, features = ["test-support"] }
+secrecy = { workspace = true }
+serde_json = { workspace = true }
+ssh-manager-core = { workspace = true }
+tempfile = { workspace = true }
 # No `manager` feature: it downloads browser drivers at runtime. The driver
 # is `tauri-driver`, installed by the CI job.
 thirtyfour = { version = "0.37.7", default-features = false, features = ["reqwest", "rustls"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "net", "time"] }
-uuid = { version = "1.26.0", features = ["v4"] }
-chrono = "0.4.45"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "net", "time"] }
+uuid = { workspace = true, features = ["v4"] }
+chrono = { workspace = true }
 
 [lints]
 workspace = true
