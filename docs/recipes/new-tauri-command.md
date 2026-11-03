@@ -18,7 +18,7 @@ translates (see `docs/architecture.md`).
 - [ ] `apps/smart-ssh-community/frontend/src/api.ts` – typed wrapper around
       `invoke`.
 - [ ] `apps/smart-ssh-community/frontend/src/types.ts` – argument/result
-      types, mirroring the DTOs in `crates/app-logic/src/dto.rs` (serde
+      types, mirroring the DTOs in `crates/app-logic/src/dto/` (serde
       `rename_all`, see the regression tests in `crates/app-logic/src/dto/`).
 - [ ] `apps/smart-ssh-community/frontend/e2e/harness/fakeBackend.ts` – a
       handler, otherwise browser tests fail on the unknown command.
