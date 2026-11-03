@@ -11,47 +11,47 @@ name = "app_shell"
 path = "src/lib.rs"
 
 [dependencies]
-ai-providers = { version = "0.7.0", path = "../ai-providers" }
+ai-providers = { workspace = true }
 # Spec 0084: die Tauri-freie Anwendungslogik — `app-shell` hängt von ihr ab,
 # nie umgekehrt (A3, s. `docs/architecture.md`).
-app-logic = { version = "0.7.0", path = "../app-logic" }
-async-trait = "0.1.92"
-chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.7.0", path = "../credentials-keyring" }
-directories = "6.0.0"
-futures = "0.3.34"
-mcp-server = { version = "0.7.0", path = "../mcp-server" }
-persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite" }
-regex = "1.13.1"
-secrecy = "0.10.3"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-speech = { version = "0.7.0", path = "../speech" }
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-ssh-transport = { version = "0.7.0", path = "../ssh-transport" }
-tauri = { version = "2", features = [] }
-tls-config = { path = "../tls-config" }
-tauri-plugin-android-host = { version = "0.7.0", path = "../tauri-plugin-android-host" }
-tauri-plugin-dialog = "2.7.3"
-tauri-plugin-notification = "2"
-tauri-plugin-opener = "2.5.5"
-tauri-plugin-os = "2"
-tauri-plugin-store = "2"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-tracing = "0.1.44"
-uuid = { version = "1.26.0", features = ["v4", "serde"] }
+app-logic = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+credentials-keyring = { workspace = true }
+directories = { workspace = true }
+futures = { workspace = true }
+mcp-server = { workspace = true }
+persistence-sqlite = { workspace = true }
+regex = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+speech = { workspace = true }
+ssh-manager-core = { workspace = true }
+ssh-transport = { workspace = true }
+tauri = { workspace = true }
+tls-config = { workspace = true }
+tauri-plugin-android-host = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-notification = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-os = { workspace = true }
+tauri-plugin-store = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
 
 # Desktop-only dependencies (Spec 0114, ADR 0148): these crates have no
 # Android backend or are empty there, so they are not compiled for it.
 [target.'cfg(target_os = "android")'.dependencies]
 # Issue #679: opens `content://` URIs from the system file picker as file
 # descriptors (already in the tree through `tauri-plugin-dialog`).
-tauri-plugin-fs = "2"
+tauri-plugin-fs = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 # Issue #358: file references on the system clipboard (macOS/Windows/X11/Wayland).
 clipboard-rs = { version = "0.3.5", default-features = false }
-tauri-plugin-decoration = "3.0"
+tauri-plugin-decoration = { workspace = true }
 # Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 # nach vorn (s. `src/single_instance.rs`). Keine neue transitive
 # Abhaengigkeit: alles, was das Plugin braucht, ist schon im Baum.
@@ -82,39 +82,39 @@ rfd = { version = "0.16.0", default-features = false, features = [
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
 # unter `[dependencies]`.
-persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite", features = ["test-support"] }
-tempfile = "3.27.0"
-toml = "1.1.4"
+persistence-sqlite = { workspace = true, features = ["test-support"] }
+tempfile = { workspace = true }
+toml = { workspace = true }
 # ADR 0065 §3 (Nachtrag): `libc::mkfifo` im Testaufbau von
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene
 # Gebrauch in dieser Crate, deshalb nur noch `[dev-dependencies]`.
-libc = "0.2.189"
+libc = { workspace = true }
 # Spec 0084, A5: aktiviert `app_logic::test_support`/`app_logic::policy`
 # (dort hinter `#[cfg(any(test, feature = "test-support"))]`) für diese
 # Crates eigene Tests — nur unter `[dev-dependencies]`, landet also nie in
 # einem Release-Build. Dasselbe Muster wie bei `ssh-manager-core` direkt
 # darunter.
-app-logic = { path = "../app-logic", features = ["test-support"] }
+app-logic = { workspace = true, features = ["test-support"] }
 # Spec 0020, Abschnitt 6: aktiviert `ssh_manager_core::ssh::mock` (dort
 # hinter `#[cfg(any(test, feature = "test-support"))]`) für diese Crates
 # eigene Tests — nur unter `[dev-dependencies]`, landet also nie in einem
 # Release-Build.
-ssh-manager-core = { path = "../core", features = ["test-support"] }
+ssh-manager-core = { workspace = true, features = ["test-support"] }
 # Spec 0076, §6.2: `ssh_transport::test_keys` erzeugt echte
 # OpenSSH-Schlüssel für die Tests der `KeyFileReader`-Umsetzung — erzeugt
 # statt eingebettet, damit in diesem öffentlichen Repo kein privater
 # Schlüssel im Klartext liegt. Nur `[dev-dependencies]`.
-ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
-tauri = { version = "2", features = ["test"] }
+ssh-transport = { workspace = true, features = ["test-support"] }
+tauri = { workspace = true, features = ["test"] }
 # Issue #395: the two-hop reconnect test includes the in-process SSH test
 # server of `ssh-transport` (`tests/fixtures/test_server.rs`) via `#[path]`
 # and therefore needs its dependencies. Same crates and versions as
 # `ssh-transport` already uses; dev-only, never part of a release build.
-rand = "0.10.2"
-russh = "0.63.1"
-russh-sftp = "2.4.0"
+rand = { workspace = true }
+russh = { workspace = true }
+russh-sftp = { workspace = true }
 # Spec 0046, Fund 4: `start_paused`/`tokio::time::advance` fürs Testen des
 # Backend-Timeouts auf eine wartende `Confirm`-Aktion, ohne 3600 echte
 # Sekunden abzuwarten. Nur unter `[dev-dependencies]`, landet nie in einem
 # Release-Build.
-tokio = { version = "1.53.1", features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util"] }

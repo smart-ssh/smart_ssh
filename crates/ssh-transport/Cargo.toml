@@ -20,36 +20,36 @@ path = "src/lib.rs"
 test-support = ["dep:rand"]
 
 [dependencies]
-async-trait = "0.1.92"
+async-trait = { workspace = true }
 bytes = "1.12.1"
-chrono = "0.4.45"
+chrono = { workspace = true }
 portable-pty = "0.9"
 # Nur für `test-support` (s. oben) — ohne das Feature nicht mitkompiliert.
 # Dieselbe Kiste, die die Integrationstests dieser Crate ohnehin schon
 # unter `[dev-dependencies]` benutzen, keine neue Abhängigkeit.
-rand = { version = "0.10.2", optional = true }
-russh = "0.63.1"
-russh-sftp = "2.4.0"
-secrecy = "0.10.3"
-ssh-manager-core = { version = "0.7.0", path = "../core" }
+rand = { workspace = true, optional = true }
+russh = { workspace = true }
+russh-sftp = { workspace = true }
+secrecy = { workspace = true }
+ssh-manager-core = { workspace = true }
 # `process`/`fs`: Spec 0032 (lokaler Pseudo-Server) — `LocalTransport`
 # ruft die Plattform-Shell als Kindprozess auf, `LocalFileSession` (Spec
 # 0020-Trait, lokal implementiert) greift direkt aufs Dateisystem zu,
 # beide Teil der eigentlichen Bibliothek, nicht nur der Test-Fixtures.
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "process", "fs"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "process", "fs"] }
 
 # Issue #324: `killpg` beendet beim Abbruch (Spec 0027) die ganze
 # Prozessgruppe eines lokalen Kommandos. Bereits direkte Abhängigkeit von
 # `app-logic` (ADR 0065), keine neue Kiste im Lockfile.
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.189"
+libc = { workspace = true }
 
 [dev-dependencies]
-rand = "0.10.2"
-tempfile = "3.27.0"
+rand = { workspace = true }
+tempfile = { workspace = true }
 # Spec 0069, Teil A3: `start_paused = true` für den Timeout-Gegenbeweis
 # (`connect_with_timeout`-Tests) — eine virtuelle statt einer echten Uhr,
 # damit der Test nicht wirklich 10 Sekunden wartet. Nur `dev-dependencies`
 # (wie im selben Muster bereits in `crates/app-shell/Cargo.toml`), keine
 # zusätzliche Abhängigkeit, nur ein zusätzliches Feature der bestehenden.
-tokio = { version = "1.53.1", features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util"] }

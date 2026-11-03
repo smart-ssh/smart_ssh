@@ -10,8 +10,8 @@ description = "Android host plugins (background session service, microphone perm
 links = "tauri-plugin-android-host"
 
 [dependencies]
-tauri = { version = "2", features = [] }
-serde = { version = "1", features = ["derive"] }
+tauri = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [build-dependencies]
 tauri-plugin = { version = "2", features = ["build"] }

@@ -298,10 +298,7 @@ places Tauri and the build actually read it: `apps/smart-ssh-community/
 tauri.conf.json` (`version`), the workspace `Cargo.toml`
 (`[workspace.package].version`, inherited by every crate via
 `version.workspace = true`), the internal path-dependency version pins in
-each crate's `Cargo.toml` (e.g. `ssh-manager-core = { version = "0.4.0",
-path = "../core" }` — these must match the workspace version or the
-workspace fails to build, since Cargo's default caret requirement on a
-0.x version only matches that patch range), and the frontend
+the root `Cargo.toml` `[workspace.dependencies]` entries for the internal crates (e.g. `ssh-manager-core = { version = "0.7.0", path = "crates/core" }` — these must match the workspace version or the workspace fails to build, since Cargo's default caret requirement on a 0.x version only matches that patch range), and the frontend
 `package.json`/`package-lock.json` (bump both together via `npm version
 X.Y.Z --no-git-tag-version` from `apps/smart-ssh-community/frontend/`,
 not by hand-editing, so the lockfile stays consistent).
@@ -370,6 +367,19 @@ not by hand-editing, so the lockfile stays consistent).
   that passes both before and after the fix tests nothing; this is the
   single most effective guard against the tautological tests that a past
   audit found across the codebase.
+
+## Workspace dependencies
+
+A third-party crate used by two or more workspace crates is pinned once in
+the root `Cargo.toml` under `[workspace.dependencies]`; crates inherit it with
+`name = { workspace = true }` and add only their own `features`/`optional`.
+`default-features = false` belongs in the workspace entry. New shared
+dependencies go there too. `scripts/check-workspace-deps.mjs` (run by
+`npm run lint`) fails on a crate that pins its own version of such a
+dependency. Remaining duplicate versions in the lockfile come from upstream
+crates and are listed with a reason under `[bans] skip` in `deny.toml`
+(`multiple-versions` stays `warn`); add an entry there when an upstream update
+introduces a new one.
 
 ## Code comments
 

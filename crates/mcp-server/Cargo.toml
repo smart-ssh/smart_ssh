@@ -7,26 +7,26 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-async-trait = "0.1.92"
+async-trait = { workspace = true }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
-secrecy = "0.10.3"
+secrecy = { workspace = true }
 rmcp = { version = "3.2.0", features = ["server", "macros", "transport-streamable-http-server", "schemars"] }
 schemars = "1"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 subtle = "2.6.1"
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-tokio = { version = "1.53.1", features = ["sync", "time", "rt"] }
-tokio-util = "0.7.19"
-tracing = "0.1.44"
-uuid = { version = "1.26.0", features = ["v4", "serde"] }
+ssh-manager-core = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
-reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] }
+reqwest = { workspace = true, features = ["rustls"] }
 rmcp = { version = "3.2.0", features = ["client", "transport-streamable-http-client-reqwest"] }
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5.3", features = ["util"] }
 # Spec 0094, §7: Mitschnitt der `tracing`-Ereignisse in `test_support.rs`.
 # Nur für Tests — dieselbe Fassung und dasselbe Muster wie in `core`/
 # `ai-providers`.
-tracing-subscriber = { version = "0.3.23", features = ["json"] }
+tracing-subscriber = { workspace = true, features = ["json"] }

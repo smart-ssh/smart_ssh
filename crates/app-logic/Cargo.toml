@@ -23,52 +23,52 @@ test-support = []
 
 [dependencies]
 # Issue #104: NFKC-Normalisierung der Urteilswerte (Spec 0074).
-unicode-normalization = "0.1.25"
-ai-providers = { version = "0.7.0", path = "../ai-providers" }
-async-trait = "0.1.92"
-base64 = "0.23.1"
-chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.7.0", path = "../credentials-keyring" }
-directories = "6.0.0"
-futures = "0.3.34"
+unicode-normalization = { workspace = true }
+ai-providers = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+credentials-keyring = { workspace = true }
+directories = { workspace = true }
+futures = { workspace = true }
 # Spec 0075, §9 Q-1 Punkt 1 (übernommen aus app-shell/Cargo.toml, s. dort
 # für die volle Begründung): löst `Include`-Pfad-Platzhalter auf
 # (`ssh_config_import`).
-globset = "0.4.20"
+globset = { workspace = true }
 # ADR 0065 §3 (Nachtrag) (übernommen aus app-shell/Cargo.toml): `O_NONBLOCK` für
 # `key_files.rs`.
-libc = "0.2.189"
-mcp-server = { version = "0.7.0", path = "../mcp-server" }
-persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite" }
-regex = "1.13.1"
-secrecy = "0.10.3"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.11.0"
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-ssh-transport = { version = "0.7.0", path = "../ssh-transport" }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-tokio-util = { version = "0.7.19", features = ["rt"] }
-tracing = "0.1.44"
+libc = { workspace = true }
+mcp-server = { workspace = true }
+persistence-sqlite = { workspace = true }
+regex = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+ssh-manager-core = { workspace = true }
+ssh-transport = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
 tracing-appender = "0.2.5"
 # `logging.rs` (Aufbau des globalen `tracing`-Subscribers) — normale
 # Abhängigkeit, nicht nur `[dev-dependencies]`, weil das Produktivlogging
 # selbst hier liegt (nicht nur Test-Infrastruktur).
-tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
-uuid = { version = "1.26.0", features = ["v4", "serde"] }
-zeroize = "1.9.0"
+tracing-subscriber = { workspace = true, features = ["json", "env-filter"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 # Issue #104: Eigenschaftstest gegen den Fallback-Parser. Nur hier.
-proptest = "1"
+proptest = { workspace = true }
 # Spec 0101 (spec-reviewer Runde 1): Die Tests dieser Crate legen
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
 # unter `[dependencies]`.
-persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite", features = ["test-support"] }
-tempfile = "3.27.0"
+persistence-sqlite = { workspace = true, features = ["test-support"] }
+tempfile = { workspace = true }
 # Spec 0020, Abschnitt 6 (Muster wie app-shell/Cargo.toml).
-ssh-manager-core = { path = "../core", features = ["test-support"] }
+ssh-manager-core = { workspace = true, features = ["test-support"] }
 # Spec 0076, §6.2 (Muster wie app-shell/Cargo.toml).
-ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
-tokio = { version = "1.53.1", features = ["test-util"] }
+ssh-transport = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["test-util"] }
