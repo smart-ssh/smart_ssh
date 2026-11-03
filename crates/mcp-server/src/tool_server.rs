@@ -150,11 +150,23 @@ impl SmartSshMcpServer {
         let backend = self.backend.clone();
         let action_for_task = action.clone();
         let client_name_for_task = client_name.clone();
-        let mut join_handle = tokio::spawn(async move {
-            backend
+        // Issue #881: the backend owns the task. The result comes back over
+        // a channel; a task that panicked or was cancelled drops the sender.
+        // On timeout only this receiver is dropped; the task keeps waiting
+        // for the user's decision (Spec 0028, §7) until it is decided or the
+        // session closes.
+        let (result_tx, mut join_handle) = tokio::sync::oneshot::channel();
+        let spawned = self.backend.spawn_tool_call(Box::pin(async move {
+            let outcome = backend
                 .propose_action(server_id, action_for_task, client_name_for_task)
-                .await
-        });
+                .await;
+            let _ = result_tx.send(outcome);
+        }));
+        if !spawned {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(
+                "interner Fehler bei der Verarbeitung der Anfrage",
+            )]));
+        }
 
         let result = tokio::select! {
             joined = &mut join_handle => {
@@ -194,7 +206,7 @@ impl SmartSshMcpServer {
                     Err(join_err) => {
                         tracing::error!(
                             origin = "mcp", tool = tool_name, server_id = %server_id_raw,
-                            error = %join_err, "mcp backend task panicked"
+                            error = %join_err, "mcp backend task ended without a result (panicked or cancelled)"
                         );
                         CallToolResult::error(vec![ContentBlock::text(
                             "interner Fehler bei der Verarbeitung der Anfrage",
@@ -411,6 +423,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl McpBackend for MockBackend {
+        fn spawn_tool_call(&self, task: ssh_manager_core::ssh::BoxedTask) -> bool {
+            tokio::spawn(task);
+            true
+        }
+
         async fn list_servers(&self) -> Vec<ServerSummary> {
             self.servers.clone()
         }

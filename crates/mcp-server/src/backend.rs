@@ -135,4 +135,10 @@ pub trait McpBackend: Send + Sync + 'static {
         action: AiAction,
         client_name: Option<String>,
     ) -> Result<ActionOutcome, LookupError>;
+
+    /// Issue #881: starts the task that runs one `propose_action` call, so
+    /// the application owns it (cancelled at app exit) instead of a bare
+    /// `tokio::spawn`. Returns `false` when the task was refused (the app is
+    /// shutting down); the tool call then fails without running.
+    fn spawn_tool_call(&self, task: ssh_manager_core::ssh::BoxedTask) -> bool;
 }

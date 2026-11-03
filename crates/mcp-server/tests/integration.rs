@@ -32,6 +32,11 @@ struct TestBackend {
 
 #[async_trait]
 impl McpBackend for TestBackend {
+    fn spawn_tool_call(&self, task: ssh_manager_core::ssh::BoxedTask) -> bool {
+        tokio::spawn(task);
+        true
+    }
+
     async fn list_servers(&self) -> Vec<ServerSummary> {
         vec![ServerSummary {
             id: self.known_server,

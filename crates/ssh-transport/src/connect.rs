@@ -319,6 +319,7 @@ async fn connect_inner(
         _intermediate_hops: sessions,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
         loss: loss_rx,
+        spawner: None,
     })))
 }
 

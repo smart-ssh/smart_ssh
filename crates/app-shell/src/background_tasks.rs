@@ -14,9 +14,29 @@ pub(crate) fn new_supervisor() -> Arc<TaskSupervisor> {
 }
 
 /// The app scope: tasks spawned here end at app exit.
-pub(crate) fn app_scope(app: &tauri::AppHandle) -> TaskScope {
+pub(crate) fn app_scope<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> TaskScope {
     use tauri::Manager;
     app.state::<Arc<TaskSupervisor>>().app_scope()
+}
+
+/// Issue #881: the scope of one session. Tasks spawned here end when the
+/// session is closed (`CloseContext::close`).
+pub(crate) fn session_scope<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    session_id: app_logic::state::SessionId,
+) -> TaskScope {
+    use tauri::Manager;
+    app.state::<Arc<TaskSupervisor>>().session_scope(session_id)
+}
+
+/// Hands the session scope to a transport (SFTP tap pumps), see
+/// `SshTransport::set_task_spawner`.
+pub(crate) fn session_spawner<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    session_id: app_logic::state::SessionId,
+) -> ssh_manager_core::ssh::TaskSpawner {
+    let scope = session_scope(app, session_id);
+    ssh_manager_core::ssh::TaskSpawner::new(move |name, fut| scope.spawn(name, fut))
 }
 
 /// Exit steps: stop background services (issue #669; bounded by the

@@ -717,6 +717,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
+            // Issue #881: the one worker that delivers AI usage records.
+            app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
+
             #[cfg(not(target_os = "android"))]
             if let Some(window) = app.get_webview_window("main") {
                 use tauri_plugin_decoration::WebviewWindowExt;
