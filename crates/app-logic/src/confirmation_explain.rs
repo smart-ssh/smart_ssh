@@ -14,10 +14,10 @@ use ssh_manager_core::filter::{
 };
 
 use crate::dto::{
-    pattern_from_parts, AutoExecRuleDto, ConfirmationExplanationDto, CoveringRuleDto,
-    ExplainedSuggestionDto, RuleDto, SegmentCoverageDto, SegmentCoverageState,
-    SuggestionVerdictDto, VerdictReasonDto,
+    AutoExecRuleDto, ConfirmationExplanationDto, CoveringRuleDto, ExplainedSuggestionDto, RuleDto,
+    SegmentCoverageDto, SegmentCoverageState, SuggestionVerdictDto, VerdictReasonDto,
 };
+use crate::filter_rules::pattern_from_parts;
 use crate::rule_suggestions::suggest_rule_patterns_excluding;
 use crate::session::CommandEvaluator;
 

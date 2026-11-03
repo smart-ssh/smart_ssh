@@ -32,17 +32,6 @@ impl From<&Pattern> for PatternType {
     }
 }
 
-/// `pub(crate)`: Spec 0077, 3.1.5 — `rule_suggestions` baut damit dasselbe
-/// [`Pattern`] wie das Anlegen, um einen Vorschlag zu prüfen, statt die
-/// Zuordnung Typ → Variante ein zweites Mal nachzubilden.
-pub(crate) fn pattern_from_parts(pattern_type: PatternType, pattern_value: String) -> Pattern {
-    match pattern_type {
-        PatternType::Glob => Pattern::Glob(pattern_value),
-        PatternType::Regex => Pattern::Regex(pattern_value),
-        PatternType::Exact => Pattern::Exact(pattern_value),
-    }
-}
-
 /// Formular-Eingabe für `create_rule`/`update_rule` (Spec 0009, Abschnitt
 /// 3). `action`/`scope` sind bewusst direkt `core::filter::{RuleAction,
 /// Scope}` statt separater `ScopeInput`-artiger Typen, wie die Spec-Skizze
@@ -73,7 +62,7 @@ impl RuleInput {
     ) -> StoredRule {
         StoredRule {
             id,
-            pattern: pattern_from_parts(self.pattern_type, self.pattern_value),
+            pattern: crate::filter_rules::pattern_from_parts(self.pattern_type, self.pattern_value),
             action: self.action,
             scope: self.scope,
             priority: self.priority,

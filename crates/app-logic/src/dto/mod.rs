@@ -31,7 +31,8 @@ pub use server::*;
 pub use sftp::*;
 
 #[cfg(test)]
-use sftp::format_unix_permissions;
+use crate::file_browser::format_unix_permissions;
+pub use crate::file_browser::{sort_remote_entries, RemoteEntryDto};
 
 mod redacted_debug;
 #[cfg(test)]
