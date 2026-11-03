@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use super::*;
@@ -594,4 +594,64 @@ async fn failed_final_pass_still_errors_after_live_text() {
     );
     rec.start(model(), None).unwrap();
     assert_eq!(rec.stop().await, Err(RecordError::TranscriptionFailed));
+}
+
+/// A source whose `open` blocks until released, like a device that is slow
+/// to become ready.
+struct BlockingSource {
+    entered: mpsc::Sender<()>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+impl AudioSource for BlockingSource {
+    fn open(&self, _max_samples: usize) -> Result<Box<dyn AudioCapture>, CaptureError> {
+        self.entered.send(()).unwrap();
+        self.release
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| CaptureError::Failed)?;
+        Ok(Box::new(FakeCapture(vec![0.1; 16_000], Arc::default())))
+    }
+}
+
+/// Issue #898: the device wait must not hold the recorder's state lock. The
+/// ordering is forced by channels: `status()` returns while `open` is still
+/// blocked, and only afterwards is the source released.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_start_waits_for_the_device_outside_the_state_lock() {
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let source = Arc::new(BlockingSource {
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+    });
+    let rec = Recorder::new(
+        source,
+        Arc::new(FakeTranscriber::default()),
+        Duration::from_secs(60),
+        Arc::new(|_| {}),
+        tokio::runtime::Handle::current(),
+    );
+    let starter = rec.clone();
+    let start = tokio::task::spawn_blocking(move || starter.start(model(), None));
+    let probe = rec.clone();
+    let status = tokio::task::spawn_blocking(move || {
+        entered_rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("open must be entered");
+        // `open` is blocked now; the lock must be free.
+        probe.status()
+    })
+    .await
+    .unwrap();
+    assert_eq!(status, RecorderState::Idle);
+    // A second start during the wait is refused, not queued on the lock.
+    assert!(matches!(
+        rec.start(model(), None),
+        Err(RecordError::AlreadyRecording)
+    ));
+    release_tx.send(()).unwrap();
+    start.await.unwrap().expect("start succeeds after release");
+    assert_eq!(rec.status(), RecorderState::Recording);
+    rec.cancel();
 }

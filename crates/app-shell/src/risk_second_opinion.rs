@@ -21,7 +21,7 @@ use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::ai::AiProvider;
 
-use app_logic::ai_provider_factory::build_ai_provider_from_config;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::state::AppState;
 
 /// Spec 0024, Abschnitt 4: derselbe `tauri-plugin-store`-Ablageort wie die
@@ -232,12 +232,14 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
         return SecondOpinionSetup::Unavailable;
     };
     // Side call (second opinion / injection check): never web tools (#162).
-    let Ok((provider, budget)) = build_ai_provider_from_config(
+    let Ok((provider, budget)) = build_ai_provider_from_config_async(
         &state.rate_limit_registry,
-        state.credential_store.as_ref(),
+        state.credential_store.clone(),
         &config,
         false,
-    ) else {
+    )
+    .await
+    else {
         return SecondOpinionSetup::Unavailable;
     };
     let source = app_logic::ai_usage::AiUsageSource {

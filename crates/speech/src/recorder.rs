@@ -152,6 +152,9 @@ struct Active {
 
 enum State {
     Idle,
+    /// The device is being opened (outside the lock); `start` refuses a second
+    /// start meanwhile, `cancel` turns it back into `Idle`.
+    Starting(u64),
     Recording(Active),
     Transcribing {
         id: u64,
@@ -228,17 +231,39 @@ impl Recorder {
         language: Option<String>,
     ) -> Result<(), RecordError> {
         let inner = &self.0;
-        let mut state = lock_tolerating_poison(&inner.state);
-        if matches!(&*state, State::Recording(_) | State::Transcribing { .. }) {
-            return Err(RecordError::AlreadyRecording);
-        }
-        let model = model.ok_or(RecordError::NoModel)?;
+        // The state lock is only held to check and set the state. Opening the
+        // device waits for its readiness thread and can take long, so it runs
+        // with the lock released (issue #898).
+        let (model, id) = {
+            let mut state = lock_tolerating_poison(&inner.state);
+            if matches!(
+                &*state,
+                State::Starting(_) | State::Recording(_) | State::Transcribing { .. }
+            ) {
+                return Err(RecordError::AlreadyRecording);
+            }
+            let model = model.ok_or(RecordError::NoModel)?;
+            let id = {
+                let mut n = lock_tolerating_poison(&inner.next_id);
+                *n += 1;
+                *n
+            };
+            *state = State::Starting(id);
+            (model, id)
+        };
         let max_samples = (inner.max.as_secs_f64() * TARGET_RATE as f64) as usize;
-        let capture = inner.source.open(max_samples).map_err(RecordError::from)?;
-        let id = {
-            let mut n = lock_tolerating_poison(&inner.next_id);
-            *n += 1;
-            *n
+        let opened = inner.source.open(max_samples);
+        let mut state = lock_tolerating_poison(&inner.state);
+        if !matches!(&*state, State::Starting(i) if *i == id) {
+            // Cancelled while the device was opening: discard the capture.
+            return Ok(());
+        }
+        let capture = match opened {
+            Ok(capture) => capture,
+            Err(e) => {
+                *state = State::Idle;
+                return Err(RecordError::from(e));
+            }
         };
         let this = self.clone();
         let max = inner.max;
@@ -300,6 +325,10 @@ impl Recorder {
                     Err((id, done))
                 }
                 State::Idle => return Err(RecordError::NotRecording),
+                State::Starting(id) => {
+                    *state = State::Starting(id);
+                    return Err(RecordError::NotRecording);
+                }
             }
         };
         match taken {
@@ -341,6 +370,18 @@ impl Recorder {
                 (inner.on_state)(RecorderState::Idle);
                 outcome
             }
+        }
+    }
+
+    /// The current state as the frontend sees it. Takes the state lock only
+    /// briefly, so it answers even while a start waits for the device
+    /// (`Starting` reads as `Idle`: nothing is recorded yet).
+    pub fn status(&self) -> RecorderState {
+        match &*lock_tolerating_poison(&self.0.state) {
+            State::Idle | State::Starting(_) => RecorderState::Idle,
+            State::Recording(_) => RecorderState::Recording,
+            State::Transcribing { .. } => RecorderState::Transcribing,
+            State::Finished(_) => RecorderState::Finished,
         }
     }
 
