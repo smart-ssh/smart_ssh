@@ -51,3 +51,8 @@ unwrap_used = "deny"
 dbg_macro = "deny"
 todo = "deny"
 undocumented_unsafe_blocks = "deny"
+# Issue #896: new overlong/complex functions are flagged; existing ones carry
+# #[expect(.., reason)] (count ratcheted by crates/core/tests/lint_exception_guard.rs).
+too_many_lines = "warn"
+cognitive_complexity = "warn"
+large_futures = "warn"

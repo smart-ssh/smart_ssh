@@ -614,6 +614,7 @@ struct AnthropicStreamState {
 }
 
 impl AnthropicStreamState {
+    #[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
     fn handle_event(&mut self, event: &str, data: &Value) {
         match event {
             "content_block_start" => {

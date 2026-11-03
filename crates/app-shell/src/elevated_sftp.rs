@@ -456,6 +456,7 @@ pub(crate) async fn enable(
 /// [`enable`] ohne die Prüfung auf laufende Operationen (Issue #622). Der
 /// bisherige Kanal wird ohne Rücksicht auf sie widerrufen — die Widerrufs-
 /// Tests (Spec 0084/0085) prüfen damit den Mechanismus selbst.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub(crate) async fn enable_after_confirmation(
     ctx: &ElevationContext<'_>,
     login: &str,

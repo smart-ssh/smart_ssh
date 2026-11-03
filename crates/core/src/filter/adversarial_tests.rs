@@ -715,6 +715,8 @@ async fn test_adv_shell_and_interpreter_with_script_operand_stay_autoexec() {
 }
 
 #[test]
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 fn test_adv_program_source_parses_options_per_program() {
     use super::parser::{program_source, ProgramSource};
     let code = |c: &str| Some(ProgramSource::Code(vec![c.to_string()]));

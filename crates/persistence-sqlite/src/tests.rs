@@ -415,6 +415,7 @@ async fn test_foreign_keys_pragma_is_enabled_on_the_connection() {
 /// — und der Test verifiziert, dass jede zuvor geschriebene Zeile
 /// unverändert lesbar ist.
 #[tokio::test]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() {
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 

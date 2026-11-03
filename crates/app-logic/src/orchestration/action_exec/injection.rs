@@ -77,6 +77,7 @@ pub(super) fn take_injection_reason(session: &Session) -> Option<String> {
 /// ändert absichtlich nichts: keine Eskalation, aber auch kein Zurücksetzen
 /// eines zuvor schon erkannten Verdachts — "keine Prüfung verfügbar" ist
 /// kein "alles in Ordnung".
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(crate) async fn check_for_injected_instructions(
     session: &Session,
     session_id: SessionId,

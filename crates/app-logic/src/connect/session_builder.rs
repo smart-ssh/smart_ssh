@@ -163,6 +163,8 @@ pub async fn build_session_system_context(
 
 /// Builds the session on a connected transport. On an error after the
 /// transport was handed in, the transport is disconnected first.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn build_session(
     state: &AppState,
     mut transport: Box<dyn SshTransport>,

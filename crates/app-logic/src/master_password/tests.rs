@@ -1152,6 +1152,7 @@ fn test_a_read_but_broken_wrapping_file_stays_invalid_and_keeps_the_way_out() {
 /// `app_shell::commands::master_password` nach (`detail_for_log`, `?state`,
 /// `?health`), die aus diesem Crate nicht erreichbar sind.
 #[test]
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
     use crate::diagnostics::{build_diagnostics_bundle, DiagnosticsInput};
     use crate::test_support::{key_leak_needles, log_capture};
