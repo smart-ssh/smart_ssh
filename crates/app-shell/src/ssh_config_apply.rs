@@ -17,7 +17,7 @@ use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
 use ssh_manager_core::sync::lock_tolerating_poison;
 
 use app_logic::dto::{AuthMethodInput, ServerInput};
-use app_logic::error::{CommandError, CommandResult};
+use app_logic::error::{CommandError, CommandResult, StoreResultExt};
 
 /// Was mit `IdentityFile` geschehen soll (§3.1.9). Gilt für den ganzen
 /// Import und ist je Eintrag umstellbar; Vorgabe ist [`Self::KeepAsFile`],
@@ -812,15 +812,20 @@ pub async fn preview_ssh_config_import(
     // Bestand noch Schlagwort-Treffer bestimmbar.
     // Nicht nutzbare Server zählen nur für die Konflikterkennung (Spec
     // 0008 §6a), nie als Jump-Ziel — sie stehen getrennt im Inventory.
-    let listing = state.profile_store.list_server_entries().await?;
+    let listing = state
+        .profile_store
+        .list_server_entries()
+        .await
+        .store_err()?;
     let servers = listing.servers;
-    let groups = state.profile_store.list_groups().await?;
+    let groups = state.profile_store.list_groups().await.store_err()?;
     // §5.2a: die bestehenden Regeln, damit die Vorschau kennzeichnen kann,
     // welches importierte Schlagwort eine davon trifft.
     let rules: Vec<ssh_manager_core::filter::Rule> = state
         .policy_store
         .list_all()
-        .await?
+        .await
+        .store_err()?
         .into_iter()
         .map(|r| r.into_rule())
         .collect();

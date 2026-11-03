@@ -16,6 +16,7 @@ mod credential_store;
 /// Klartext-Datei umwandeln.
 mod encryption;
 mod error;
+mod error_kind;
 /// Issue #462: extension-owned tables and migrations (Spec 0038, 2a).
 mod extension_db;
 /// Issue #673: namespaced key-value and secret store.
@@ -30,6 +31,7 @@ mod mapping;
 mod paths;
 mod policy_store;
 mod prompt_history_store;
+pub mod runtime_bridge;
 mod store;
 /// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
 /// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
@@ -71,6 +73,8 @@ mod tests_raw_file;
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
+#[cfg(test)]
+mod tests_runtime_bridge_guard;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
@@ -89,6 +93,7 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
+pub use error_kind::{classify, DbFailure, StoreErrorKind};
 pub use extension_db::{
     validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
     ExtensionRegistration,

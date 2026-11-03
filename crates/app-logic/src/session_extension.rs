@@ -328,7 +328,7 @@ pub async fn rebuild_server_redactors(state: &AppState, server_id: ServerId) {
     rebuild_redactors_for_sessions(
         &state.sessions,
         state.profile_store.as_ref(),
-        state.credential_store.as_ref(),
+        state.credential_store.clone(),
         state.session_extension.as_deref(),
         server_id,
     )
@@ -339,7 +339,7 @@ pub async fn rebuild_server_redactors(state: &AppState, server_id: ServerId) {
 pub async fn rebuild_redactors_for_sessions(
     sessions_manager: &crate::session::SessionManager,
     profile_store: &dyn ProfileStore,
-    credential_store: &dyn ssh_manager_core::profiles::CredentialStore,
+    credential_store: std::sync::Arc<dyn ssh_manager_core::profiles::CredentialStore + Send + Sync>,
     extension: Option<&dyn SessionExtension>,
     server_id: ServerId,
 ) {
@@ -353,7 +353,8 @@ pub async fn rebuild_redactors_for_sessions(
         return;
     }
     let (sudo, sudo_complete) =
-        crate::server_redaction::read_sudo_password_checked(credential_store, server_id);
+        crate::server_redaction::read_sudo_password_checked_async(credential_store, server_id)
+            .await;
     let mut scope_complete = true;
     let group_chain = match profile_store.get_server(&server_id).await {
         Ok(server) => {

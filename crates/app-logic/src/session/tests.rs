@@ -170,13 +170,20 @@ async fn test_rebuild_server_redactors_masks_new_secret_for_that_server_only() {
     manager.insert(other_id, Arc::new(dummy_session(other_server)));
     let ext = Changing(StdMutex::new(Vec::new()));
     let profiles = InMemoryProfileStore::new();
-    let credentials = InMemoryCredentialStore::new();
+    let credentials = Arc::new(InMemoryCredentialStore::new());
     let text = "key=late-secret-77";
 
     assert_eq!(manager.get(id).unwrap().redactor.redact_text(text), text);
 
     ext.0.lock().unwrap().push("late-secret-77".to_string());
-    rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id).await;
+    rebuild_redactors_for_sessions(
+        &manager,
+        &profiles,
+        credentials.clone(),
+        Some(&ext),
+        server_id,
+    )
+    .await;
 
     assert!(!manager
         .get(id)
@@ -270,8 +277,15 @@ async fn test_rebuild_replaces_literals_but_reconnect_swap_keeps_them() {
     // rebuild with {B}: A no longer masked, B is
     let ext = Known(vec!["value-bbb-2".to_string()]);
     let profiles = InMemoryProfileStore::new();
-    let credentials = InMemoryCredentialStore::new();
-    rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id).await;
+    let credentials = Arc::new(InMemoryCredentialStore::new());
+    rebuild_redactors_for_sessions(
+        &manager,
+        &profiles,
+        credentials.clone(),
+        Some(&ext),
+        server_id,
+    )
+    .await;
     assert_eq!(
         session.redactor.redact_text(text),
         "a=value-aaa-1 b=[REDACTED]"
@@ -279,7 +293,14 @@ async fn test_rebuild_replaces_literals_but_reconnect_swap_keeps_them() {
 
     // a value still known stays masked after another rebuild, and a
     // later reconnect swap keeps it
-    rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id).await;
+    rebuild_redactors_for_sessions(
+        &manager,
+        &profiles,
+        credentials.clone(),
+        Some(&ext),
+        server_id,
+    )
+    .await;
     session.swap_redactor(Box::new(DefaultOutputRedactor::new()));
     assert_eq!(
         session.redactor.redact_text(text),
@@ -288,7 +309,14 @@ async fn test_rebuild_replaces_literals_but_reconnect_swap_keeps_them() {
 
     // rebuild with an empty set withdraws everything
     let none = Known(Vec::new());
-    rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&none), server_id).await;
+    rebuild_redactors_for_sessions(
+        &manager,
+        &profiles,
+        credentials.clone(),
+        Some(&none),
+        server_id,
+    )
+    .await;
     assert_eq!(session.redactor.redact_text(text), text);
 }
 
@@ -1014,7 +1042,7 @@ mod lookup_failures {
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
-        let credentials = InMemoryCredentialStore::new();
+        let credentials = Arc::new(InMemoryCredentialStore::new());
         let ext = Ext { group: g.id };
         let manager = SessionManager::new();
         let id = Uuid::new_v4();
@@ -1022,7 +1050,8 @@ mod lookup_failures {
         let session = manager.get(id).unwrap();
 
         // Healthy rebuild: both masked, no notice.
-        rebuild_redactors_for_sessions(&manager, &store, &credentials, Some(&ext), srv.id).await;
+        rebuild_redactors_for_sessions(&manager, &store, credentials.clone(), Some(&ext), srv.id)
+            .await;
         assert!(!session
             .safety
             .redaction_incomplete_notice_pending
@@ -1034,7 +1063,8 @@ mod lookup_failures {
 
         // Failing store: the group secret stays masked, the session is flagged.
         store.fail_get_server.store(true, SeqCst);
-        rebuild_redactors_for_sessions(&manager, &store, &credentials, Some(&ext), srv.id).await;
+        rebuild_redactors_for_sessions(&manager, &store, credentials.clone(), Some(&ext), srv.id)
+            .await;
         assert_eq!(
             session.redactor.redact_text(TEXT),
             "s=[REDACTED] g=[REDACTED]"

@@ -125,8 +125,17 @@ mod android_permission {
 
 /// Starts recording. Errors with `speech_no_model` before the input device
 /// is touched when the selected model is not ready.
-#[tauri::command(async)]
-pub fn start_voice_recording(app: AppHandle) -> CommandResult<()> {
+///
+/// Opening the device and the permission request block, so they run on the
+/// blocking pool, never on a runtime worker (issue #898).
+#[tauri::command]
+pub async fn start_voice_recording(app: AppHandle) -> CommandResult<()> {
+    tauri::async_runtime::spawn_blocking(move || start_voice_recording_blocking(app))
+        .await
+        .map_err(|_| record_error(RecordError::NoDevice))?
+}
+
+fn start_voice_recording_blocking(app: AppHandle) -> CommandResult<()> {
     let selected = speech_models::read_selected_model(&app);
     let model = speech_models::manager(&app).ok().and_then(|m| {
         matches!(m.status(selected), ModelStatus::Ready).then(|| m.model_path(selected))

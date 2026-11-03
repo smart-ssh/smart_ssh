@@ -39,11 +39,14 @@ pub enum PolicyStoreError {
     /// haben nichts geschrieben (Spec 0077, 3.1.2, Schicht 2).
     InvalidPattern(PatternError),
     Backend(String),
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for PolicyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PolicyStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             PolicyStoreError::NotFound(id) => write!(f, "Filter-Regel '{id}' nicht gefunden"),
             PolicyStoreError::InvalidPattern(err) => write!(f, "{err}"),
             PolicyStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
@@ -54,7 +57,7 @@ impl std::fmt::Display for PolicyStoreError {
 impl std::error::Error for PolicyStoreError {}
 
 fn backend_err(e: sqlx::Error) -> PolicyStoreError {
-    PolicyStoreError::Backend(e.to_string())
+    PolicyStoreError::Database(e.into())
 }
 
 fn parse_timestamp(raw: &str) -> Result<DateTime<Utc>, PolicyStoreError> {
@@ -636,7 +639,10 @@ mod tests {
             .swap_priorities(&RuleId("a".into()), &RuleId("b".into()), Utc::now())
             .await;
 
-        assert!(matches!(result, Err(PolicyStoreError::Backend(_))));
+        assert_eq!(
+            result.unwrap_err().kind(),
+            Some(crate::error_kind::StoreErrorKind::Constraint)
+        );
         assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 10);
         assert_eq!(store.get(&RuleId("b".into())).await.unwrap().priority, 3);
     }

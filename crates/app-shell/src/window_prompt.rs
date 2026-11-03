@@ -19,7 +19,7 @@
 //! **Wie das Warten funktioniert:** `ask` ist synchron (das Trait ist es),
 //! läuft aber in einer asynchronen Aufgabe. Es schickt die Frage als
 //! Ereignis ans Frontend und wartet auf dem Kanal — mit
-//! `tokio::task::block_in_place`, derselben gemessenen Zusicherung wie beim
+//! `persistence_sqlite::runtime_bridge::block_on_io` (Issue #898), derselben Brücke wie beim
 //! synchronen Secret-Speicher (§2 Frage 2: Tauris Laufzeit ist eine
 //! Multi-Thread-Laufzeit, s. `runtime_assumptions`).
 
@@ -315,10 +315,10 @@ impl PromptChannel {
         // s. Modulkommentar: synchrones Warten in einer asynchronen
         // Aufgabe, auf der gemessenen Multi-Thread-Laufzeit — jetzt mit
         // einer Zeitgrenze (s. [`PROMPT_TIMEOUT`]).
-        let waited = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { tokio::time::timeout(self.timeout, rx).await })
-        });
+        let waited = persistence_sqlite::runtime_bridge::block_on_io(
+            &tokio::runtime::Handle::current(),
+            async { tokio::time::timeout(self.timeout, rx).await },
+        );
         match waited {
             Ok(Ok(answer)) => answer,
             // Der Kanal ist zugegangen — das Fenster ist weg. Wieder:
