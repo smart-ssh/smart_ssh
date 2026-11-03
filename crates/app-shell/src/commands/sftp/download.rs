@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(not(target_os = "android"))]
 use app_logic::error::ResultCodeExt;
 
 /// Lädt genau eine Remote-Datei nach `local_path` herunter — der
@@ -184,8 +185,9 @@ pub(super) async fn pick_folder_dialog(
     _app: &AppHandle,
     _title: &str,
 ) -> CommandResult<Option<std::path::PathBuf>> {
-    Err(CommandError::from(
+    Err(CommandError::with_code(
         "Folder selection is not available on Android",
+        "FILE_PICKER_UNAVAILABLE",
     ))
 }
 
