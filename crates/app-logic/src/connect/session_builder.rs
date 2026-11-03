@@ -163,6 +163,8 @@ pub async fn build_session_system_context(
 
 /// Builds the session on a connected transport. On an error after the
 /// transport was handed in, the transport is disconnected first.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn build_session(
     state: &AppState,
     mut transport: Box<dyn SshTransport>,
@@ -214,10 +216,11 @@ pub async fn build_session(
     // Without the redactor knowing the sudo password it would reach the AI
     // context and the log when `sudo` passes the stdin line on to the
     // executed program (NOPASSWD, valid timestamp).
-    let sudo = crate::server_redaction::read_sudo_password_checked(
-        state.credential_store.as_ref(),
+    let sudo = crate::server_redaction::read_sudo_password_checked_async(
+        state.credential_store.clone(),
         server_id,
-    );
+    )
+    .await;
     let sudo_password = sudo.0.clone();
 
     // Spec 0038, section 2a: known secrets of a registered session extension
@@ -463,7 +466,7 @@ pub async fn build_session(
 
 /// Reconnect (Spec 0105): the sudo password is read again so the redactor
 /// knows the current value. Returns the new redactor and the sudo password.
-pub fn redaction_for_reconnect(
+pub async fn redaction_for_reconnect(
     state: &AppState,
     session: &Session,
     server_id: ServerId,
@@ -472,10 +475,11 @@ pub fn redaction_for_reconnect(
     Box<dyn ssh_manager_core::ai::OutputRedactor>,
     Option<secrecy::SecretString>,
 ) {
-    let sudo = crate::server_redaction::read_sudo_password_checked(
-        state.credential_store.as_ref(),
+    let sudo = crate::server_redaction::read_sudo_password_checked_async(
+        state.credential_store.clone(),
         server_id,
-    );
+    )
+    .await;
     let extension_secrets = crate::session_extension::known_secrets(
         state.session_extension.as_deref(),
         scope_lookup.scope.as_ref(),

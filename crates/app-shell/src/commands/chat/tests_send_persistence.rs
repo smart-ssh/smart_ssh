@@ -421,6 +421,7 @@ async fn test_extension_content_while_turn_running_is_rejected() {
 /// eingereiht und nach Turn-Ende als normale Nachricht gesendet — über
 /// denselben Pfad, also auch mit Redaction vor dem Versand.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_message_sent_during_running_turn_is_queued_then_sent_redacted() {
     let _guard = lock_async().await;
     let gate = Arc::new(tokio::sync::Notify::new());
@@ -590,6 +591,7 @@ impl AiProvider for GatedActionProvider {
 /// Versand) gestoppt, muss sie trotzdem noch beantwortet werden — per
 /// Folge-Turn.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_queued_message_injected_then_stopped_before_send_is_still_answered() {
     let _guard = lock_async().await;
     let gate = Arc::new(tokio::sync::Notify::new());

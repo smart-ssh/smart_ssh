@@ -209,6 +209,7 @@ pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
 
 /// Shared turn entry. `text == None` means "resend the last user turn".
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn send_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,

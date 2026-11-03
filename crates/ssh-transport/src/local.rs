@@ -452,9 +452,7 @@ impl RunningExec for RunningLocalExec {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        self.transport
-            .run(&self.command, Some(cancel), Some(sink))
-            .await
+        Box::pin(self.transport.run(&self.command, Some(cancel), Some(sink))).await
     }
 }
 
@@ -476,7 +474,7 @@ impl SshTransport for LocalTransport {
     /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
     /// markiert.
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        Ok(self.run(command, None, None).await?.output)
+        Ok(Box::pin(self.run(command, None, None)).await?.output)
     }
 
     /// Issue #325: same process handling as `execute_cancellable`, every kept
@@ -489,7 +487,7 @@ impl SshTransport for LocalTransport {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), Some(sink)).await
+        Box::pin(self.run(command, Some(cancel), Some(sink))).await
     }
 
     /// Issue #328: nothing is held between start and run, so the running
@@ -529,7 +527,7 @@ impl SshTransport for LocalTransport {
         command: &str,
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), None).await
+        Box::pin(self.run(command, Some(cancel), None)).await
     }
 
     /// Wie [`execute_cancellable`](Self::execute_cancellable); `stdin` wird
@@ -540,7 +538,7 @@ impl SshTransport for LocalTransport {
         _stdin: &[u8],
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), None).await
+        Box::pin(self.run(command, Some(cancel), None)).await
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {

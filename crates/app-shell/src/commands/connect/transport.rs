@@ -7,6 +7,7 @@ use super::*;
 /// and by `reconnect_session` (Issue #355), so a reconnect is verified exactly
 /// like a first connect: no cached "accepted" decision, a changed key shows
 /// the dialog again.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(super) async fn establish_transport<R: tauri::Runtime>(
     app: &AppHandle<R>,
     state: &AppState,

@@ -114,16 +114,19 @@ impl std::fmt::Debug for PendingImport {
 
 /// I1 and U1–U7: reads, decrypts and validates everything in memory.
 pub async fn open_backup(path: &Path, secret: BackupSecret) -> Result<Snapshot, BackupOpError> {
-    let meta = std::fs::metadata(path).map_err(|_| BackupOpError::Read)?;
-    if meta.len() > MAX_FILE_BYTES as u64 {
-        return Err(BackupOpError::Format(
-            ssh_manager_core::backup::BackupError::LimitExceeded(
-                ssh_manager_core::backup::Limit::FileSize,
-            ),
-        ));
-    }
-    let bytes = std::fs::read(path).map_err(|_| BackupOpError::Read)?;
+    // File access and decoding both block: they run on the blocking pool, not
+    // on the async worker (issue #898).
+    let path = path.to_path_buf();
     let snapshot = tokio::task::spawn_blocking(move || {
+        let meta = std::fs::metadata(&path).map_err(|_| BackupOpError::Read)?;
+        if meta.len() > MAX_FILE_BYTES as u64 {
+            return Err(BackupOpError::Format(
+                ssh_manager_core::backup::BackupError::LimitExceeded(
+                    ssh_manager_core::backup::Limit::FileSize,
+                ),
+            ));
+        }
+        let bytes = std::fs::read(&path).map_err(|_| BackupOpError::Read)?;
         let opened = open(&bytes, &secret, KNOWN_SECTIONS)?;
         Snapshot::from_sections(&opened.sections)
     })

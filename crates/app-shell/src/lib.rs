@@ -200,6 +200,7 @@ fn startup_inputs(
 ///
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
@@ -415,6 +416,8 @@ pub(crate) async fn open_and_assemble(
 /// Icons/Frontend dieser Library-Crate zugeordnet sein, obwohl `app-shell`
 /// künftig mehrere Binaries (Community/Official) mit je eigener Config
 /// bedienen soll (Spec 0038, Abschnitt 3).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)

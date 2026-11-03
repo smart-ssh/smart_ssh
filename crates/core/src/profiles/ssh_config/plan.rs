@@ -315,6 +315,8 @@ fn file_stem_name(path: &str) -> String {
 }
 
 /// Baut den Importplan (§4.1).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
     let mut plan = ImportPlan::default();
 
@@ -653,6 +655,8 @@ fn find_conflict(
 /// Richtung** bauen, die zwei harten Bedingungen prüfen, Schleifen
 /// ablehnen — und jede Ablehnung bei **allen** beteiligten Einträgen
 /// melden, nicht gekürzt und nicht teilweise angelegt.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 fn resolve_proxy_jumps(
     plan: &mut ImportPlan,
     entries: &mut [PlannedEntry],

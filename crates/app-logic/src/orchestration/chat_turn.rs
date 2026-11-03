@@ -563,6 +563,8 @@ pub(crate) async fn seal_session_for_send(
 /// jede Runde, in die gerade eingereihte Nutzer-Nachrichten eingespeist
 /// wurden, `false` für jede automatische Folgerunde nach einer
 /// ausgeführten/geblockten Aktion.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn run_one_round(
     session: &Session,
     session_id: SessionId,

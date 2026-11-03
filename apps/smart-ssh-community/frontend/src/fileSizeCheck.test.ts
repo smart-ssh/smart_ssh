@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { isTestFile, limitFor, main } from "../../../../scripts/check-file-size.mjs";
+import { countSizedLines, isTestFile, limitFor, main } from "../../../../scripts/check-file-size.mjs";
 
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
 const tmpDirs: string[] = [];
@@ -157,5 +157,15 @@ describe("check-file-size", () => {
     const r = run(dir);
     expect(r.code, r.text).toBe(0);
     expect(r.text).toContain("ok");
+  });
+});
+
+describe("countSizedLines (issue #896)", () => {
+  it("does not count documented clippy exception attributes", () => {
+    const src =
+      '#[expect(clippy::too_many_lines, reason = "split planned")]\nfn a() {}\n' +
+      '    #[expect(clippy::cognitive_complexity, reason = "split planned")]\nfn b() {}\n' +
+      '#[expect(clippy::too_many_arguments, reason = "x")]\nfn c() {}\n';
+    expect(countSizedLines(src)).toBe(4);
   });
 });

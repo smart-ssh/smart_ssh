@@ -27,6 +27,8 @@ const ALLOWLIST: &[(&str, usize, &str)] = &[
     ("app-logic/src/ai_usage.rs", 1, "the one usage worker, a tracked blocking task of the app scope"),
     ("app-logic/src/backup/import.rs", 1, "awaited"),
     ("app-logic/src/backup/key.rs", 1, "awaited by the caller (blocking key derivation helper)"),
+    ("persistence-sqlite/src/runtime_bridge.rs", 1, "awaited (blocking-pool bridge, joined in the same function)"),
+    ("app-shell/src/voice_input.rs", 1, "awaited (blocking device open)"),
     ("app-shell/src/android_service.rs", 1, "Android foreground-service call thread; blocks on a channel that lives for the process"),
     ("app-shell/src/commands/sftp/copy_content.rs", 2, "awaited"),
     ("app-shell/src/commands/sftp/download.rs", 1, "awaited"),

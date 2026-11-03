@@ -77,6 +77,18 @@ export function countLines(text) {
   return text.charCodeAt(text.length - 1) === 10 ? n : n + 1;
 }
 
+/**
+ * Lines of a documented clippy exception (`#[expect(clippy::too_many_lines, ..)]`,
+ * issue #896) do not count: they mark a function that is to be split and must
+ * not push its file over its allowlist entry.
+ */
+export function countSizedLines(text) {
+  const exceptions = text.split("\n").filter((l) =>
+    /^\s*#!?\[expect\(clippy::(too_many_lines|cognitive_complexity|large_futures)\b/.test(l),
+  ).length;
+  return countLines(text) - exceptions;
+}
+
 function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 28 });
 }
@@ -104,7 +116,7 @@ export function collectSizes(root) {
       continue; // tracked but deleted in the work tree
     }
     if (!st.isFile()) continue;
-    sizes.set(rel, countLines(fs.readFileSync(full, "utf8")));
+    sizes.set(rel, countSizedLines(fs.readFileSync(full, "utf8")));
   }
   return sizes;
 }

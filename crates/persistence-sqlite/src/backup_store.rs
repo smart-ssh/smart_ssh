@@ -246,6 +246,7 @@ impl SqliteBackupStore {
 }
 
 /// The snapshot read, on an open transaction's connection.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn read_in<F, Fut>(
     conn: &mut sqlx::SqliteConnection,
     between: &mut F,
