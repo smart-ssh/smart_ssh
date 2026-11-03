@@ -249,3 +249,41 @@ impl Drop for RegistryCleanup<'_> {
             .cancel_if_current(&self.action_id, self.generation);
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod task_cancellation_tests {
+    use super::*;
+    use crate::tasks::TaskSupervisor;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Issue #879: cancelling an app-scope task that waits for a
+    /// confirmation (the on-disconnect note suggestion) drops the guard: no
+    /// entry stays behind, and a late answer is refused, never an approval.
+    #[tokio::test(start_paused = true)]
+    async fn test_cancelled_task_leaves_no_pending_confirmation() {
+        let registry: Arc<ConfirmationRegistry<ActionId, ActionUserDecision>> =
+            Arc::new(ConfirmationRegistry::new());
+        let action_id = uuid::Uuid::new_v4();
+        let supervisor = TaskSupervisor::new();
+        let scope = supervisor.app_scope();
+        let (registered_tx, registered_rx) = tokio::sync::oneshot::channel::<()>();
+        let task_registry = Arc::clone(&registry);
+        scope.spawn("on-disconnect-suggestion", async move {
+            let pending = RegisteredConfirmation::register(&task_registry, action_id);
+            let _ = registered_tx.send(());
+            let _ = pending.wait_for_decision(Duration::from_secs(3600)).await;
+        });
+        registered_rx.await.expect("task registered");
+        assert!(registry.contains(&action_id));
+
+        let report = scope.shutdown(Duration::from_secs(3)).await;
+
+        assert!(!report.timed_out);
+        assert!(!registry.contains(&action_id), "no dangling confirmation");
+        assert!(registry
+            .resolve(&action_id, ActionUserDecision::Approve)
+            .is_err());
+    }
+}

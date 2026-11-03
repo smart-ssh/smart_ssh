@@ -123,7 +123,7 @@ pub async fn request_note_shrink(
         .await;
 
     let language = crate::ui_language::session_prompt_language(&app);
-    tokio::spawn(async move {
+    crate::background_tasks::app_scope(&app).spawn("note-shrink-request", async move {
         let state = app.state::<AppState>();
         let session_id: SessionId = Uuid::new_v4();
         // Spec 0058, Teil 2: derselbe `is_local`-Verzweigungs-Idiom wie

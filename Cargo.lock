@@ -183,6 +183,7 @@ dependencies = [
  "ssh-transport",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

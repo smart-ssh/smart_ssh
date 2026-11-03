@@ -106,6 +106,8 @@ pub mod status;
 /// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
 /// nach der UI-Sprache.
 pub mod system_prompt;
+/// Issue #879: owner for background tasks (scopes, cancel, shutdown).
+pub mod tasks;
 pub mod test_connection;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
