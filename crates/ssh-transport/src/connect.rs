@@ -200,7 +200,7 @@ pub async fn connect_with_limits(
 /// #353). Production code uses the fixed 15 s / 3 of [`client_config`];
 /// this exists so tests can exercise the real keepalive chain in seconds.
 #[doc(hidden)]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn connect_with_keepalive(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
@@ -619,7 +619,6 @@ fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
 /// `Ok` bleibt `Ok`, ein Host-Key-Fehler wird zu
 /// `Err(ConnectOutcome::PendingHostKeyConfirmation)`, jeder andere Fehler zu
 /// `Err(SshError)` (äußeres `Result`, propagiert per `?`).
-#[allow(clippy::type_complexity)]
 fn resolve_or_pending<H>(
     result: Result<H, TransportError>,
     host: &str,

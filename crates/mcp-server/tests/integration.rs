@@ -72,7 +72,7 @@ async fn start_server(
     confirm_timeout: Duration,
 ) -> (mcp_server::McpServerHandle, SocketAddr) {
     let config = McpServerConfig {
-        bind_addr: "127.0.0.1:0".parse().unwrap(),
+        bind_addr: "127.0.0.1:0".parse().expect("valid socket address"),
         confirm_timeout,
     };
     let handle = mcp_server::serve(config, Arc::new(backend), SharedToken::new(token))

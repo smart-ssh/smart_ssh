@@ -20,6 +20,7 @@
 //! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
 
 use serde::Serialize;
+#[cfg(any(test, feature = "test-support"))]
 use ssh_manager_core::sync::lock_tolerating_poison;
 use uuid::Uuid;
 
@@ -141,7 +142,7 @@ struct HostKeyVerificationNeededPayload {
     key_type: Option<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub fn emit_host_key_verification_needed(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
@@ -396,7 +397,7 @@ struct ChatActionProposedPayload {
     auto_exec_rules: Vec<AutoExecRuleDto>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub fn emit_chat_action_proposed(
     emitter: &dyn EventEmitter,
     session_id: SessionId,

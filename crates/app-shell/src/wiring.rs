@@ -17,7 +17,6 @@ use tauri::{Builder, Wry};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edition {
     Community,
-    #[allow(dead_code)]
     Official,
 }
 

@@ -6,7 +6,7 @@
 //! ```text
 //! cargo test -p ssh-transport --test integration
 //! ```
-
+#![expect(clippy::unwrap_used, reason = "integration test")]
 mod fixtures;
 
 use std::collections::HashMap;

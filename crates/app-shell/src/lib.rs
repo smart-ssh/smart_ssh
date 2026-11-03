@@ -199,7 +199,7 @@ fn startup_inputs(
 /// [`run`] ruft sie außerhalb der Laufzeit über ein `block_on` auf.
 ///
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,

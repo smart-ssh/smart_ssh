@@ -1067,7 +1067,14 @@ async fn error_status_events(status: u16, body: &str) -> (Vec<AiEvent>, usize) {
         .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
-    (events, server.received_requests().await.unwrap().len())
+    (
+        events,
+        server
+            .received_requests()
+            .await
+            .expect("request recording is enabled")
+            .len(),
+    )
 }
 
 /// Issue #599: OpenAI `insufficient_quota` (HTTP 429) and OpenRouter's HTTP

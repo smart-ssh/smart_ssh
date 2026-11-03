@@ -21,7 +21,7 @@ use super::super::remote_files::{execute_read_remote_file, execute_write_remote_
 /// (`SshError`/`ProfileError`) ist der Kontext unverändert, eine
 /// automatische Folgerunde (s. Moduldoc) würde dann nur denselben
 /// Vorschlag erneut auslösen, statt der KI etwas Neues mitzuteilen.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(super) async fn execute_action(
     session: &Session,
     session_id: SessionId,
@@ -479,7 +479,7 @@ impl CommandReport<'_> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(super) async fn execute_suggested_command(
     session: &Session,
     session_id: SessionId,

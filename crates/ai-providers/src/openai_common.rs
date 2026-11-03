@@ -213,7 +213,7 @@ impl StreamOptionsRejections {
 /// s. `crate::anthropic::connect_and_stream`-Kommentar — identisches Muster,
 /// losgelöst von `send()`, damit Spec 0065 Teil 3 sie ein zweites Mal mit
 /// höherem `max_tokens` aufrufen kann.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn connect_and_stream(
     parse: StreamParser,
     client: reqwest::Client,
