@@ -13,14 +13,14 @@ use ssh_manager_core::ai::{
 
 use app_logic::ai_provider_factory::build_ai_provider;
 use app_logic::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
-use app_logic::error::{secret_store_error, CommandError, CommandResult};
+use app_logic::error::{secret_store_error, CommandError, CommandResult, StoreResultExt};
 use app_logic::state::AppState;
 
 #[tauri::command]
 pub async fn list_ai_providers(
     state: State<'_, AppState>,
 ) -> CommandResult<Vec<AiProviderConfigDto>> {
-    let configs = state.ai_provider_store.list().await?;
+    let configs = state.ai_provider_store.list().await.store_err()?;
     Ok(configs.iter().map(AiProviderConfigDto::from).collect())
 }
 
@@ -65,7 +65,7 @@ pub async fn add_ai_provider(
         // relevante Information für den Aufrufer, ein sekundärer
         // Keychain-Fehler beim Aufräumversuch soll ihn nicht überdecken.
         let _ = state.credential_store.delete(&credential_ref);
-        return Err(err.into());
+        return Err(app_logic::error::store_command_error(err));
     }
     Ok(id)
 }
@@ -93,7 +93,8 @@ pub async fn update_ai_provider(
     state
         .ai_provider_store
         .update_fields(&config.into_update(id))
-        .await?;
+        .await
+        .store_err()?;
 
     if !api_key.is_empty() {
         state
@@ -112,7 +113,7 @@ pub async fn update_ai_provider(
 /// aktiven, in der DB unverändert bleibenden Providers entfernen.
 #[tauri::command]
 pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> CommandResult<()> {
-    let existing = state.ai_provider_store.get(&id).await?;
+    let existing = state.ai_provider_store.get(&id).await.store_err()?;
     if existing.is_active {
         return Err(
             persistence_sqlite::AiProviderStoreError::ActiveProviderDeletionForbidden(id).into(),
@@ -123,7 +124,7 @@ pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> C
         .credential_store
         .delete(&existing.credential_ref)
         .map_err(secret_store_error)?;
-    state.ai_provider_store.delete(&id).await?;
+    state.ai_provider_store.delete(&id).await.store_err()?;
     Ok(())
 }
 
@@ -135,7 +136,8 @@ pub async fn set_active_ai_provider(
     state
         .ai_provider_store
         .set_active(&id, chrono::Utc::now())
-        .await?;
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -356,7 +358,7 @@ async fn resolve_api_key(
         return Ok(SecretString::from(config.api_key.clone()));
     }
     let id = existing_provider_id.ok_or(missing_message)?;
-    let existing = state.ai_provider_store.get(&id).await?;
+    let existing = state.ai_provider_store.get(&id).await.store_err()?;
     // Stays a `SecretString` (zeroed on drop) until the HTTP client needs it.
     state
         .credential_store
@@ -571,7 +573,11 @@ pub async fn fetch_attestation_info(
     state: State<'_, AppState>,
     provider_id: ProviderId,
 ) -> CommandResult<String> {
-    let existing = state.ai_provider_store.get(&provider_id).await?;
+    let existing = state
+        .ai_provider_store
+        .get(&provider_id)
+        .await
+        .store_err()?;
     let url = existing
         .attestation_url
         .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")?;
@@ -584,7 +590,7 @@ pub async fn fetch_attestation_info(
 /// über `list()`, ein zusätzlicher SQL-Pfad nur für diesen einen Aufrufer
 /// wäre unnötige API-Fläche.
 pub(super) async fn active_ai_provider_config(state: &AppState) -> CommandResult<AiProviderConfig> {
-    pick_active_provider(state.ai_provider_store.list().await?)
+    pick_active_provider(state.ai_provider_store.list().await.store_err()?)
 }
 
 /// Reine Auswahl-Logik aus `active_ai_provider_config` herausgezogen (wie

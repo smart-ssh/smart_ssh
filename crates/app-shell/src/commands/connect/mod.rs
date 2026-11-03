@@ -26,7 +26,9 @@ use app_logic::connect::session_builder::{
     build_session, redaction_for_reconnect, BuiltSession, SessionBuildInput,
 };
 use app_logic::dto::HostKeyUserDecision;
-use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
+use app_logic::error::{
+    secret_store_error, ssh_command_error, CommandError, CommandResult, StoreResultExt,
+};
 use app_logic::events::{emit_connection_status_changed, ConnectionStatus};
 use app_logic::state::{AppState, SessionId};
 // Spec 0084, §4: die Konstante liegt in `app_logic::test_connection` (s.
@@ -210,7 +212,11 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     let server = if is_local {
         crate::local_server::synthetic_server(app)
     } else {
-        state.profile_store.get_server(&server_id).await?
+        state
+            .profile_store
+            .get_server(&server_id)
+            .await
+            .store_err()?
     };
     let active_config = active_ai_provider_config(state).await?;
     // Issue #162: Einstellung des Providers (Default an).
@@ -369,7 +375,11 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         let server = if app_logic::dto::is_local(server_id) {
             crate::local_server::synthetic_server(app)
         } else {
-            state.profile_store.get_server(&server_id).await?
+            state
+                .profile_store
+                .get_server(&server_id)
+                .await
+                .store_err()?
         };
         let mut transport = establish_transport(
             app,
@@ -432,7 +442,8 @@ pub async fn list_chat_sessions(
     Ok(state
         .chat_session_store
         .list_sessions_for_server(&server_id)
-        .await?
+        .await
+        .store_err()?
         .into_iter()
         .map(app_logic::dto::ChatSessionSummaryDto::from)
         .collect())
@@ -503,10 +514,11 @@ pub async fn rename_chat_session(
     session_id: uuid::Uuid,
     new_title: String,
 ) -> CommandResult<()> {
-    Ok(state
+    state
         .chat_session_store
         .rename_session(session_id, &new_title)
-        .await?)
+        .await
+        .store_err()
 }
 
 /// Spec 0034, Abschnitt 8: `delete_chat_session` — zugehörige Nachrichten
@@ -541,7 +553,11 @@ pub async fn delete_chat_session(
             return Err("Diese Chat-Sitzung wird gerade gelöscht.".into());
         }
     };
-    Ok(state.chat_session_store.delete_session(session_id).await?)
+    state
+        .chat_session_store
+        .delete_session(session_id)
+        .await
+        .store_err()
 }
 
 /// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor
