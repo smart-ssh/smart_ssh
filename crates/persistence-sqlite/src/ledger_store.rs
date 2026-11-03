@@ -39,6 +39,8 @@ use ssh_manager_core::audit::LedgerEntryContent;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LedgerStoreError {
     Backend(String),
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
     /// Wie `ChatSessionStoreError::CorruptContent` (s. dortiger
     /// Doc-Kommentar): die geladene `content`-Spalte eines Eintrags ließ
     /// sich nicht als `LedgerEntryContent` deserialisieren.
@@ -51,6 +53,7 @@ pub enum LedgerStoreError {
 impl std::fmt::Display for LedgerStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            LedgerStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             LedgerStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
             LedgerStoreError::CorruptContent { entry_id, reason } => write!(
                 f,
@@ -63,7 +66,7 @@ impl std::fmt::Display for LedgerStoreError {
 impl std::error::Error for LedgerStoreError {}
 
 fn backend_err(e: sqlx::Error) -> LedgerStoreError {
-    LedgerStoreError::Backend(e.to_string())
+    LedgerStoreError::Database(e.into())
 }
 
 /// Spiegelt `LedgerEntryContent`s Varianten in der `entry_type`-Spalte
@@ -528,7 +531,27 @@ mod tests {
 
         assert!(matches!(
             ledger_store.load_entries(session_id).await,
-            Err(LedgerStoreError::Backend(_))
+            Err(LedgerStoreError::Database(_))
         ));
+    }
+
+    /// Issue #885: a foreign-key violation keeps its kind.
+    #[tokio::test]
+    async fn test_constraint_failure_keeps_its_kind() {
+        let (_profile_store, ledger_store) = in_memory_ledger_store().await;
+        let err = ledger_store
+            .append_entry(
+                Uuid::new_v4(),
+                ssh_manager_core::audit::LedgerSource::Ai,
+                &LedgerEntryContent::CommandProposed {
+                    command: "ps".to_string(),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.kind(),
+            Some(crate::error_kind::StoreErrorKind::Constraint)
+        );
     }
 }

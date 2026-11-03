@@ -117,6 +117,75 @@ pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIR
 /// preference, or a value outside the shape registered for it.
 pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
 
+/// Issue #885: a SQLite store failed because the database was busy/locked.
+pub const STORE_BUSY: &str = "STORE_BUSY";
+/// Issue #885: a store write violated a database constraint.
+pub const STORE_CONSTRAINT: &str = "STORE_CONSTRAINT";
+/// Issue #885: the database is corrupt or not a database.
+pub const STORE_CORRUPT: &str = "STORE_CORRUPT";
+/// Issue #885: the database file could not be read or written.
+pub const STORE_IO: &str = "STORE_IO";
+/// Issue #885: any other store failure (including "not found" of a row).
+pub const STORE_FAILED: &str = "STORE_FAILED";
+
+/// Issue #885: the stable code for a store failure kind. Unknown frontend
+/// codes fall back to the message, so this adds no UI text.
+pub fn store_error_code(kind: persistence_sqlite::StoreErrorKind) -> &'static str {
+    use persistence_sqlite::StoreErrorKind as K;
+    match kind {
+        K::Busy => STORE_BUSY,
+        K::Constraint => STORE_CONSTRAINT,
+        K::Corrupt => STORE_CORRUPT,
+        K::Io => STORE_IO,
+        K::NotFound | K::Other => STORE_FAILED,
+    }
+}
+
+/// Errors of the SQLite stores (not the credential store, which has its own
+/// path: [`secret_store_error`]).
+pub trait StoreFailure: std::fmt::Display {
+    fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind>;
+}
+
+macro_rules! store_failure {
+    ($($t:ty),* $(,)?) => {$(
+        impl StoreFailure for $t {
+            fn store_kind(&self) -> Option<persistence_sqlite::StoreErrorKind> {
+                self.kind()
+            }
+        }
+    )*};
+}
+store_failure!(
+    ssh_manager_core::profiles::ProfileError,
+    persistence_sqlite::ChatSessionStoreError,
+    persistence_sqlite::AiProviderStoreError,
+    persistence_sqlite::PolicyStoreError,
+    persistence_sqlite::LedgerStoreError,
+    persistence_sqlite::PromptHistoryStoreError,
+);
+
+/// Turns a store error into a [`CommandError`] with a `STORE_*` code when the
+/// error carries a kind; domain errors (e.g. `ServerNotFound`) keep the plain
+/// conversion. The message is the same text as before.
+pub fn store_command_error(err: impl StoreFailure) -> CommandError {
+    match err.store_kind() {
+        Some(kind) => CommandError::with_code(err.to_string(), store_error_code(kind)),
+        None => CommandError::from(err),
+    }
+}
+
+/// `result.store_err()?` — [`store_command_error`] for a `Result`.
+pub trait StoreResultExt<T> {
+    fn store_err(self) -> CommandResult<T>;
+}
+
+impl<T, E: StoreFailure> StoreResultExt<T> for Result<T, E> {
+    fn store_err(self) -> CommandResult<T> {
+        self.map_err(store_command_error)
+    }
+}
+
 /// Issue #883: a command named a session that is no longer open.
 pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
 
@@ -281,6 +350,12 @@ mod code_tests {
             super::RISK_SETTINGS_PROVIDER_REQUIRED,
             // Issue #862.
             super::UI_PREFERENCE_REJECTED,
+            // Issue #885.
+            super::STORE_BUSY,
+            super::STORE_CONSTRAINT,
+            super::STORE_CORRUPT,
+            super::STORE_IO,
+            super::STORE_FAILED,
             // Issue #883.
             super::SESSION_NOT_FOUND,
         ];
@@ -624,5 +699,75 @@ mod connect_log_tests {
         assert_eq!(with_log["code"], "SSH_TIMEOUT");
         assert_eq!(with_log["connect_log"][0]["step"]["kind"], "tcpConnect");
         assert_eq!(with_log["connect_log"][0]["status"]["code"], "SSH_TIMEOUT");
+    }
+}
+
+#[cfg(test)]
+mod store_code_tests {
+    use super::*;
+    use persistence_sqlite::StoreErrorKind;
+
+    fn code_of(err: CommandError) -> Option<&'static str> {
+        let json = serde_json::to_value(&err).unwrap();
+        // The serialized `code` is what the frontend sees.
+        let code = json.get("code").and_then(|c| c.as_str()).map(str::to_owned);
+        assert_eq!(code.as_deref(), err.code);
+        err.code
+    }
+
+    #[test]
+    fn test_store_error_code_maps_every_kind() {
+        assert_eq!(store_error_code(StoreErrorKind::Busy), STORE_BUSY);
+        assert_eq!(
+            store_error_code(StoreErrorKind::Constraint),
+            STORE_CONSTRAINT
+        );
+        assert_eq!(store_error_code(StoreErrorKind::Corrupt), STORE_CORRUPT);
+        assert_eq!(store_error_code(StoreErrorKind::Io), STORE_IO);
+        assert_eq!(store_error_code(StoreErrorKind::NotFound), STORE_FAILED);
+        assert_eq!(store_error_code(StoreErrorKind::Other), STORE_FAILED);
+    }
+
+    #[test]
+    fn test_profile_store_error_reaches_the_frontend_with_a_store_code() {
+        let err = ssh_manager_core::profiles::ProfileError::Store {
+            kind: StoreErrorKind::Busy,
+            message: "database is locked".into(),
+        };
+        let cmd = store_command_error(err);
+        assert_eq!(
+            cmd.message,
+            "Profile-Store-Backend-Fehler: database is locked"
+        );
+        assert_eq!(code_of(cmd), Some(STORE_BUSY));
+    }
+
+    #[test]
+    fn test_domain_errors_keep_the_plain_conversion() {
+        let err = ssh_manager_core::profiles::ProfileError::CycleDetected;
+        assert_eq!(code_of(store_command_error(err)), None);
+    }
+
+    #[test]
+    fn test_chat_session_store_error_reaches_the_frontend_with_a_store_code() {
+        let err =
+            persistence_sqlite::ChatSessionStoreError::Database(persistence_sqlite::DbFailure {
+                kind: StoreErrorKind::Constraint,
+                message: "FOREIGN KEY constraint failed".into(),
+            });
+        assert_eq!(
+            code_of(Err::<(), _>(err).store_err().unwrap_err()),
+            Some(STORE_CONSTRAINT)
+        );
+    }
+
+    #[test]
+    fn test_ai_provider_store_error_reaches_the_frontend_with_a_store_code() {
+        use persistence_sqlite::AiProviderStoreError;
+        let err = AiProviderStoreError::Database(persistence_sqlite::DbFailure {
+            kind: StoreErrorKind::Corrupt,
+            message: "malformed".into(),
+        });
+        assert_eq!(code_of(store_command_error(err)), Some(STORE_CORRUPT));
     }
 }

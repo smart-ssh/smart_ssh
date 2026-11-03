@@ -13,6 +13,61 @@ license = "Apache-2.0"
 # Drittanbieter-Allow-Liste prüft.
 publish = false
 
+# Issue #897: every third-party crate used by two or more workspace crates is
+# pinned here once; crates inherit it with `name = { workspace = true }` and
+# add only their own `features`/`optional`. `default-features = false` lives
+# here (a crate cannot switch default features off again). Guarded by
+# scripts/check-workspace-deps.mjs (run by `npm run lint`).
+[workspace.dependencies]
+async-trait = { version = "0.1.92" }
+base64 = { version = "0.23.1" }
+chrono = { version = "0.4.45" }
+directories = { version = "6.0.0" }
+futures = { version = "0.3.34" }
+globset = { version = "0.4.20" }
+libc = { version = "0.2.189" }
+proptest = { version = "1" }
+rand = { version = "0.10.2" }
+regex = { version = "1.13.1" }
+reqwest = { version = "0.13.4", default-features = false }
+russh = { version = "0.63.1" }
+russh-sftp = { version = "2.4.0" }
+secrecy = { version = "0.10.3" }
+serde = { version = "1.0.229" }
+serde_json = { version = "1.0.151" }
+sha2 = { version = "0.11.0" }
+tauri = { version = "2" }
+tauri-plugin-decoration = { version = "3.0" }
+tauri-plugin-dialog = { version = "2.7.3" }
+tauri-plugin-fs = { version = "2" }
+tauri-plugin-notification = { version = "2" }
+tauri-plugin-opener = { version = "2.5.5" }
+tauri-plugin-os = { version = "2" }
+tauri-plugin-store = { version = "2" }
+tempfile = { version = "3.27.0" }
+thiserror = { version = "2.0" }
+tokio = { version = "1.53.1" }
+tokio-util = { version = "0.7.19" }
+toml = { version = "1.1.4" }
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.23" }
+unicode-normalization = { version = "0.1.25" }
+uuid = { version = "1.26.0" }
+zeroize = { version = "1.9.0" }
+
+# Internal path dependencies (version pins must match [workspace.package]).
+ai-providers = { version = "0.7.0", path = "crates/ai-providers" }
+app-logic = { version = "0.7.0", path = "crates/app-logic" }
+app-shell = { version = "0.7.0", path = "crates/app-shell" }
+credentials-keyring = { version = "0.7.0", path = "crates/credentials-keyring" }
+mcp-server = { version = "0.7.0", path = "crates/mcp-server" }
+persistence-sqlite = { version = "0.7.0", path = "crates/persistence-sqlite" }
+speech = { version = "0.7.0", path = "crates/speech" }
+ssh-manager-core = { version = "0.7.0", path = "crates/core" }
+ssh-transport = { version = "0.7.0", path = "crates/ssh-transport" }
+tauri-plugin-android-host = { version = "0.7.0", path = "crates/tauri-plugin-android-host" }
+tls-config = { version = "0.7.0", path = "crates/tls-config" }
+
 # Spec 0101, A14: Argon2id rechnet absichtlich teuer (m = 64 MiB, t = 3).
 # Unoptimiert dauert ein einzelner Durchlauf gut zwei Sekunden statt rund
 # 90 ms — das trifft `cargo test` (die Tests zu T13/T15 verpacken und

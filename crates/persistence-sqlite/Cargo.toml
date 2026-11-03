@@ -21,9 +21,9 @@ path = "src/lib.rs"
 test-support = []
 
 [dependencies]
-async-trait = "0.1.92"
-chrono = { version = "0.4.45", features = ["serde"] }
-directories = "6.0.0"
+async-trait = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+directories = { workspace = true }
 # Spec 0101, A1: SQLite wird mit SQLCipher gebaut, statt per `sqlx`s eigenem
 # `sqlite-bundled`-Feature (plain SQLite) zu laufen. `sqlx-sqlite` zieht
 # `libsqlite3-sys` ohnehin schon (mit Feature `bundled`); diese explizite
@@ -35,29 +35,29 @@ libsqlite3-sys = { version = "=0.37.0", features = ["bundled-sqlcipher-vendored-
 # Spec 0101, A2: der `PRAGMA key`-Wert kommt als `SecretString` aus
 # `core::crypto::DatabaseKey` und wird erst beim Aufbau der Verbindung
 # ausgepackt. Schon im Abhängigkeitsbaum (direkte Abhängigkeit von `core`).
-secrecy = "0.10.3"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 sqlx = { version = "0.9.0", features = ["sqlite", "runtime-tokio", "migrate", "chrono", "uuid", "sqlite-bundled"] }
-ssh-manager-core = { version = "0.7.0", path = "../core" }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "sync"] }
-thiserror = "2.0"
-tracing = "0.1.44"
-zeroize = "1.9.0"
-uuid = { version = "1.26.0", features = ["v4", "serde"] }
+ssh-manager-core = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "sync"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+zeroize = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
 # Issue #113: `crypto::legacy_field_content::encrypt_for_tests` erzeugt
 # feldweise verschluesselte Altzeilen fuer die Tests der Umstellung. Dieselbe
 # Abhaengigkeit wie oben, nur mit dem Test-Feature -- dasselbe Muster wie in
 # `app-logic`/`app-shell`.
-ssh-manager-core = { path = "../core", features = ["test-support"] }
-tempfile = "3.27.0"
+ssh-manager-core = { workspace = true, features = ["test-support"] }
+tempfile = { workspace = true }
 # Spec 0101, A2 (spec-reviewer Runde 1): Der Nachweis, dass der
 # Datenbankschluessel in keinem `tracing`-Ereignis auftaucht, schneidet den
 # Ereignisstrom mit. Dieselbe Fassung und dasselbe Muster wie in
 # `core`/`ai-providers`/`app-shell`.
-tracing-subscriber = { version = "0.3.23", features = ["json"] }
+tracing-subscriber = { workspace = true, features = ["json"] }
 
 # Spec 0101 (spec-reviewer Runde 1): Das Beispiel oeffnet die Datenbank
 # **unverschluesselt** und braucht dafuer `connect_plaintext`, das hinter
