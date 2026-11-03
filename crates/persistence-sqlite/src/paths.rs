@@ -1,3 +1,4 @@
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::path::PathBuf;
 
 #[cfg(not(target_os = "android"))]
@@ -120,7 +121,7 @@ impl AppIdState {
         {
             return Err(AndroidAppIdError::Invalid(app_id.to_owned()));
         }
-        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = lock_tolerating_poison(&self.inner);
         if g.resolved {
             return Err(AndroidAppIdError::AlreadyResolved);
         }
@@ -137,7 +138,7 @@ impl AppIdState {
 
     /// Liefert die wirksame ID und sperrt weitere Änderungen.
     fn resolve(&self) -> String {
-        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = lock_tolerating_poison(&self.inner);
         g.resolved = true;
         g.id.clone().unwrap_or_else(|| ANDROID_APP_ID.to_owned())
     }

@@ -494,10 +494,10 @@ pub(crate) struct RecordingExtension {
 #[cfg(test)]
 impl SessionExtension for RecordingExtension {
     fn server_removed(&self, server_id: ServerId) {
-        self.servers.lock().unwrap().push(server_id);
+        ssh_manager_core::sync::lock_tolerating_poison(&self.servers).push(server_id);
     }
     fn group_removed(&self, group_id: GroupId) {
-        self.groups.lock().unwrap().push(group_id);
+        ssh_manager_core::sync::lock_tolerating_poison(&self.groups).push(group_id);
     }
 }
 

@@ -1,5 +1,6 @@
 //! `SessionManager`: bookkeeping of the running sessions.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -73,7 +74,7 @@ pub struct ChatSessionClaim<'a> {
 
 impl Drop for ChatSessionClaim<'_> {
     fn drop(&mut self) {
-        let mut claims = self.manager.claimed_chat_sessions.lock().unwrap();
+        let mut claims = lock_tolerating_poison(&self.manager.claimed_chat_sessions);
         if let Some(state) = claims.get_mut(&self.chat_session_id) {
             if self.exclusive {
                 state.deleting = false;
@@ -96,7 +97,7 @@ impl SessionManager {
         &self,
         chat_session_id: uuid::Uuid,
     ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
-        let mut claims = self.claimed_chat_sessions.lock().unwrap();
+        let mut claims = lock_tolerating_poison(&self.claimed_chat_sessions);
         let state = claims.entry(chat_session_id).or_default();
         if state.deleting {
             return Err(ChatSessionClaimError::BeingDeleted);
@@ -118,7 +119,7 @@ impl SessionManager {
         chat_session_id: uuid::Uuid,
     ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
         {
-            let mut claims = self.claimed_chat_sessions.lock().unwrap();
+            let mut claims = lock_tolerating_poison(&self.claimed_chat_sessions);
             let state = claims.entry(chat_session_id).or_default();
             if state.deleting {
                 return Err(ChatSessionClaimError::BeingDeleted);
@@ -147,7 +148,7 @@ impl SessionManager {
     }
 
     pub fn insert(&self, id: SessionId, session: Arc<Session>) {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = lock_tolerating_poison(&self.sessions);
         sessions.insert(id, session);
         self.count_tx.send_replace(sessions.len());
     }
@@ -158,11 +159,11 @@ impl SessionManager {
     }
 
     pub fn get(&self, id: SessionId) -> Option<Arc<Session>> {
-        self.sessions.lock().unwrap().get(&id).cloned()
+        lock_tolerating_poison(&self.sessions).get(&id).cloned()
     }
 
     pub fn remove(&self, id: SessionId) -> Option<Arc<Session>> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = lock_tolerating_poison(&self.sessions);
         let removed = sessions.remove(&id);
         self.count_tx.send_replace(sessions.len());
         removed
@@ -179,7 +180,10 @@ impl SessionManager {
     /// auf `chat_session_id` je Session erfolgt — derselbe Grund wie bei
     /// `snapshot()` oben.
     pub async fn is_chat_session_active(&self, chat_session_id: uuid::Uuid) -> bool {
-        let sessions: Vec<Arc<Session>> = self.sessions.lock().unwrap().values().cloned().collect();
+        let sessions: Vec<Arc<Session>> = lock_tolerating_poison(&self.sessions)
+            .values()
+            .cloned()
+            .collect();
         for session in sessions {
             if *session.persistence.chat_session_id.lock().await == Some(chat_session_id) {
                 return true;
@@ -189,14 +193,11 @@ impl SessionManager {
     }
 
     pub fn register_pending_connection(&self, id: SessionId, server_id: ServerId) {
-        self.pending_connections
-            .lock()
-            .unwrap()
-            .insert(id, server_id);
+        lock_tolerating_poison(&self.pending_connections).insert(id, server_id);
     }
 
     pub fn clear_pending_connection(&self, id: SessionId) {
-        self.pending_connections.lock().unwrap().remove(&id);
+        lock_tolerating_poison(&self.pending_connections).remove(&id);
     }
 
     /// Momentaufnahme aller offenen Sessions plus aller noch auf einen
@@ -208,20 +209,17 @@ impl SessionManager {
     /// das keinen parallelen `insert`/`get`/`remove`-Aufruf für nennenswerte
     /// Zeit.
     pub fn snapshot(&self) -> Vec<SessionSnapshotEntry> {
-        let mut result: Vec<SessionSnapshotEntry> = self
-            .sessions
-            .lock()
-            .unwrap()
+        let mut result: Vec<SessionSnapshotEntry> = lock_tolerating_poison(&self.sessions)
             .iter()
             .map(|(id, session)| SessionSnapshotEntry {
                 session_id: *id,
                 server_id: session.server_id,
-                status: *session.conn.status.lock().unwrap(),
+                status: *lock_tolerating_poison(&session.conn.status),
                 // Spec 0088, A2.1: Der Tab-Indikator darf nicht daran
                 // scheitern, dass irgendwo unter dieser Sperre einmal ein
                 // Panic lief — sonst reißt eine einzelne vergiftete
                 // Sitzung die Sitzungsliste aller Tabs mit.
-                has_pending_action: crate::poison::lock_tolerating_poison(
+                has_pending_action: ssh_manager_core::sync::lock_tolerating_poison(
                     &session.conn.pending_action,
                 )
                 .is_some(),
@@ -229,9 +227,7 @@ impl SessionManager {
             .collect();
 
         result.extend(
-            self.pending_connections
-                .lock()
-                .unwrap()
+            lock_tolerating_poison(&self.pending_connections)
                 .iter()
                 .map(|(id, server_id)| SessionSnapshotEntry {
                     session_id: *id,

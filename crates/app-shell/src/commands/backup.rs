@@ -2,6 +2,7 @@
 //! import. The commands only translate between Tauri and `app_logic::backup`.
 
 use serde::Serialize;
+use ssh_manager_core::sync::lock_tolerating_poison;
 use tauri::{AppHandle, State};
 
 use app_logic::backup::{
@@ -193,7 +194,7 @@ impl BackupImportSlot {
     /// Forgets the chosen file and deletes its staged copy, if any (the copy
     /// holds encrypted credentials and must not outlive the import).
     fn clear_file(&self) {
-        let taken = self.file.lock().unwrap().take();
+        let taken = lock_tolerating_poison(&self.file).take();
         if let Some(ChosenFile {
             staging: Some(dir), ..
         }) = taken
@@ -337,7 +338,7 @@ pub async fn pick_backup_import_file(
         }
     };
     slot.clear_file();
-    *slot.file.lock().unwrap() = Some(chosen);
+    *lock_tolerating_poison(&slot.file) = Some(chosen);
     *slot.pending.lock().await = None;
     Ok(Some(name))
 }
@@ -369,7 +370,10 @@ pub async fn start_backup_import(
     secret: String,
 ) -> CommandResult<BackupImportStartDto> {
     use ssh_manager_core::backup::{BackupSecret, RecoveryCode};
-    let Some(file) = slot.file.lock().unwrap().as_ref().map(|c| c.path.clone()) else {
+    let Some(file) = lock_tolerating_poison(&slot.file)
+        .as_ref()
+        .map(|c| c.path.clone())
+    else {
         return Err(CommandError::with_code(
             "no backup file chosen",
             "BACKUP_FILE_REQUIRED",

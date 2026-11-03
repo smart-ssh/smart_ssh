@@ -13,9 +13,9 @@ use ssh_manager_core::profiles::AiAction;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{EventEmitter, TestEmitter};
-use crate::poison::{lock_tolerating_poison, poison_for_test};
 use crate::session::{Session, SessionManager};
 use crate::state::{ActionId, SessionId};
+use ssh_manager_core::sync::{lock_tolerating_poison, poison_for_test};
 
 use super::super::test_support::{
     output, session_with_ai_provider, session_with_second_opinion, test_fresh_rejection_flag,

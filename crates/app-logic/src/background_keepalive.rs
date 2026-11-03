@@ -6,6 +6,7 @@
 //! [`ForegroundService`]; on other platforms nothing is installed and every
 //! call here is a no-op.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// The platform side of the keep-alive.
@@ -48,7 +49,7 @@ impl KeepAliveController {
 
     /// Called whenever the number of open sessions changes.
     pub fn on_session_count(&self, count: usize) {
-        let mut st = self.state.lock().unwrap();
+        let mut st = lock_tolerating_poison(&self.state);
         if count == st.sessions && (count > 0) == st.running {
             return;
         }
@@ -74,7 +75,7 @@ impl KeepAliveController {
     /// Marks a running command or transfer; the wake lock is held while at
     /// least one guard lives.
     pub fn begin_activity(self: &Arc<Self>) -> ActivityGuard {
-        let mut st = self.state.lock().unwrap();
+        let mut st = lock_tolerating_poison(&self.state);
         st.activities += 1;
         if st.activities == 1 {
             log("acquire wake lock", self.service.set_wake_lock(true));
@@ -83,7 +84,7 @@ impl KeepAliveController {
     }
 
     fn end_activity(&self) {
-        let mut st = self.state.lock().unwrap();
+        let mut st = lock_tolerating_poison(&self.state);
         if st.activities == 0 {
             return; // already reset by the last session closing
         }

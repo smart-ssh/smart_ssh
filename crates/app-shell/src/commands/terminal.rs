@@ -1,6 +1,7 @@
 //! Spec 0005: interaktives Terminal — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
@@ -36,7 +37,7 @@ pub async fn open_terminal(
         open_shell_in_start_directory(&session, PtySize { cols: 80, rows: 24 }).await?;
 
     let (tx, rx) = mpsc::unbounded_channel();
-    *session.conn.terminal.lock().unwrap() = Some(tx);
+    *lock_tolerating_poison(&session.conn.terminal) = Some(tx);
     spawn_terminal_actor(
         session_id,
         Arc::clone(&session),
@@ -48,11 +49,7 @@ pub async fn open_terminal(
 }
 
 fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {
-    session
-        .conn
-        .terminal
-        .lock()
-        .unwrap()
+    lock_tolerating_poison(&session.conn.terminal)
         .clone()
         .ok_or_else(|| "Terminal wurde noch nicht geöffnet (open_terminal aufrufen)".into())
 }
