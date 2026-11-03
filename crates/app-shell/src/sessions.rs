@@ -15,6 +15,7 @@
 //! The elevated-channel registry itself stays crate-private; only this
 //! complete sequence is public.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -102,7 +103,7 @@ impl<'a> CloseContext<'a> {
         .await;
         // Dropping the sender ends the terminal actor on its next receive
         // without a second status event.
-        *session.conn.terminal.lock().unwrap() = None;
+        *lock_tolerating_poison(&session.conn.terminal) = None;
 
         tracing::info!(session_id = %session_id, "session disconnected");
         emit_connection_status_changed(

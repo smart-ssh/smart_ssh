@@ -13,9 +13,9 @@ use ssh_manager_core::ai::{
     SessionContext, UntrustedKind,
 };
 use ssh_manager_core::filter::{Decision, FilterEngine};
-use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::ssh::mock::MockSftpSession;
 use ssh_manager_core::ssh::CommandOutput;
+use ssh_manager_core::{profiles::PostIngestPolicy, sync::lock_tolerating_poison};
 
 use crate::dto::ActionUserDecision;
 use crate::events::TestEmitter;
@@ -2018,7 +2018,7 @@ async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compactio
         MockAiProvider::new(vec![AiEvent::Done]),
         MockSshTransport::default(),
     );
-    crate::poison::poison_for_test(&session.safety.mcp_origin_flags);
+    ssh_manager_core::sync::poison_for_test(&session.safety.mcp_origin_flags);
 
     // Ein Verlauf, der die Kompaktierung sicher ausloest.
     for round in 0..6 {
@@ -2027,7 +2027,7 @@ async fn test_a_poisoned_mcp_origin_flags_lock_breaks_neither_push_nor_compactio
     }
 
     let history_len = session.ai.context.lock().await.history.len();
-    let flags_len = crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags).len();
+    let flags_len = lock_tolerating_poison(&session.safety.mcp_origin_flags).len();
     assert_eq!(
         history_len, flags_len,
         "Verlauf und Flags muessen trotz vergifteter Sperre gleich lang bleiben"

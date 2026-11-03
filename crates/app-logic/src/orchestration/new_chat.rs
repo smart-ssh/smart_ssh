@@ -3,6 +3,7 @@
 //! Sudo-Passwort und `untrusted_content_ingested` bleiben unangetastet; nur
 //! der Chat (Zeile in `chat_sessions` und `SessionContext`) wird getauscht.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use uuid::Uuid;
 
 use crate::error::CommandError;
@@ -49,7 +50,7 @@ fn busy_error() -> CommandError {
 }
 
 fn is_confirmation_open(session: &Session) -> bool {
-    crate::poison::lock_tolerating_poison(&session.conn.pending_action).is_some()
+    ssh_manager_core::sync::lock_tolerating_poison(&session.conn.pending_action).is_some()
         || session
             .safety
             .mcp_confirmation_claim
@@ -61,12 +62,7 @@ struct TurnClaim<'a>(&'a Session);
 
 impl Drop for TurnClaim<'_> {
     fn drop(&mut self) {
-        let mut turn = self
-            .0
-            .conn
-            .chat_turn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut turn = lock_tolerating_poison(&self.0.conn.chat_turn);
         turn.running = false;
         turn.swapping = false;
     }
@@ -91,7 +87,7 @@ pub async fn start_new_chat(
     emitter: &dyn EventEmitter,
     provider_id: Option<Uuid>,
 ) -> Result<Option<Uuid>, CommandError> {
-    if crate::poison::lock_tolerating_poison(&session.conn.chat_turn).running
+    if ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn).running
         || is_confirmation_open(session)
     {
         return Err(busy_error());
@@ -113,7 +109,7 @@ pub async fn start_new_chat(
     // Belegt den Turn-Slot atomar mit der Prüfung: eine währenddessen
     // eintreffende Nutzer-Nachricht wird nur eingereiht, nicht ausgeführt.
     {
-        let mut turn = crate::poison::lock_tolerating_poison(&session.conn.chat_turn);
+        let mut turn = ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn);
         if turn.running {
             return Err(busy_error());
         }
@@ -145,7 +141,8 @@ pub async fn start_new_chat(
         let mut chat_session_id = session.persistence.chat_session_id.lock().await;
         let mut context = session.ai.context.lock().await;
         let mut summary = session.ai.summary.lock().await;
-        let mut flags = crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags);
+        let mut flags =
+            ssh_manager_core::sync::lock_tolerating_poison(&session.safety.mcp_origin_flags);
         // Kontext-Lock nur für diese reinen Speicheroperationen.
         context.history.retain(is_os_banner);
         flags.clear();
@@ -157,11 +154,7 @@ pub async fn start_new_chat(
     }
     // Issue #648: the provider-reported size belongs to the old chat. Reset
     // the tracker (so compaction ignores the old ratio) and tell the UI 0.
-    *session
-        .ai
-        .context_usage
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Default::default();
+    *lock_tolerating_poison(&session.ai.context_usage) = Default::default();
     crate::events::emit_chat_context_usage(
         emitter,
         session_id,

@@ -22,6 +22,7 @@
 //! **Beobachten, nie entscheiden.** Das Protokoll ist reine Aufzeichnung;
 //! keine Vertrauens- oder Anmeldeentscheidung hängt an ihm.
 
+use crate::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -229,7 +230,7 @@ impl ConnectLog {
     /// ist reine Anzeige. Weiterarbeiten mit dem Inhalt statt eines Panics
     /// mitten im Verbindungsaufbau.
     fn lock(&self) -> MutexGuard<'_, Vec<Entry>> {
-        self.entries.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.entries)
     }
 
     /// Beginnt einen Schritt.

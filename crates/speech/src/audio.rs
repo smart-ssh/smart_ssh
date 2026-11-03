@@ -2,6 +2,7 @@
 //! sees `AudioSource`; the cpal device lives at the edge. Audio stays in
 //! memory and is never written to disk or logged.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -188,7 +189,7 @@ impl AudioCapture for CpalCapture {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
-        let samples = std::mem::take(&mut *self.buf.lock().expect("audio buffer lock"));
+        let samples = std::mem::take(&mut *lock_tolerating_poison(&self.buf));
         resample_mono(&samples, self.rate)
     }
 }

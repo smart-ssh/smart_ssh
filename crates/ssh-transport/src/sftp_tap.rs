@@ -11,6 +11,7 @@
 //!   `russh-sftp` weiterzugeben. Die Anfrage-IDs liegen ab
 //!   [`TAP_ID_BASE`], `russh-sftp` zählt von 0 hoch — keine Überschneidung.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -63,7 +64,7 @@ impl SftpTap {
             body.extend_from_slice(s.as_bytes());
         }
         let (tx, rx) = oneshot::channel();
-        self.pending.lock().unwrap().insert(id, tx);
+        lock_tolerating_poison(&self.pending).insert(id, tx);
         let written = {
             let mut w = self.writer.lock().await;
             let mut packet = (body.len() as u32).to_be_bytes().to_vec();
@@ -74,14 +75,14 @@ impl SftpTap {
             }
         };
         if written.is_err() {
-            self.pending.lock().unwrap().remove(&id);
+            lock_tolerating_poison(&self.pending).remove(&id);
             return Err(TapError::Closed);
         }
         match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
             Ok(Ok(status)) => Ok(status),
             Ok(Err(_)) => Err(TapError::Closed),
             Err(_) => {
-                self.pending.lock().unwrap().remove(&id);
+                lock_tolerating_poison(&self.pending).remove(&id);
                 Err(TapError::Timeout)
             }
         }
@@ -174,7 +175,7 @@ where
                 Some(FXP_STATUS) => {
                     if let Some((id, status)) = parse_status(&body) {
                         if id >= TAP_ID_BASE {
-                            if let Some(tx) = down.pending.lock().unwrap().remove(&id) {
+                            if let Some(tx) = lock_tolerating_poison(&down.pending).remove(&id) {
                                 let _ = tx.send(status);
                             }
                             continue;
@@ -190,7 +191,7 @@ where
             }
         }
         // Wartende Anfragen scheitern (Sender fallen weg), russh-sftp sieht EOF.
-        down.pending.lock().unwrap().clear();
+        lock_tolerating_poison(&down.pending).clear();
         let _ = client_wr.shutdown().await;
     });
 

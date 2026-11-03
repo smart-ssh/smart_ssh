@@ -1,4 +1,5 @@
 use super::*;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Obergrenze für die Remote-Seite der Upload-Diff-Vorschau (`sftp_read_text`;
 /// „Dateiinhalt kopieren" hat seit Issue #357 eine eigene, größere Grenze,
@@ -133,27 +134,16 @@ pub struct CopyContentJobs(
 impl CopyContentJobs {
     pub(super) fn register(&self, request_id: &str) -> std::sync::Arc<tokio::sync::Notify> {
         let notify = std::sync::Arc::new(tokio::sync::Notify::new());
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(request_id.to_string(), notify.clone());
+        lock_tolerating_poison(&self.0).insert(request_id.to_string(), notify.clone());
         notify
     }
 
     pub(super) fn remove(&self, request_id: &str) {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(request_id);
+        lock_tolerating_poison(&self.0).remove(request_id);
     }
 
     pub(super) fn cancel(&self, request_id: &str) {
-        if let Some(notify) = self
-            .0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(request_id)
-        {
+        if let Some(notify) = lock_tolerating_poison(&self.0).get(request_id) {
             notify.notify_one();
         }
     }

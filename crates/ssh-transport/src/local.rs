@@ -618,7 +618,7 @@ impl InteractiveShell for LocalShell {
         let writer = self.writer.clone();
         let data = data.to_vec();
         tokio::task::spawn_blocking(move || {
-            let mut guard = writer.lock().expect("PTY-Writer-Mutex vergiftet");
+            let mut guard = ssh_manager_core::sync::lock_tolerating_poison(&writer);
             guard.write_all(&data).and_then(|()| guard.flush())
         })
         .await
@@ -635,7 +635,7 @@ impl InteractiveShell for LocalShell {
         let reader = self.reader.clone();
         tokio::task::spawn_blocking(move || {
             let mut buf = [0u8; 8192];
-            let mut guard = reader.lock().expect("PTY-Reader-Mutex vergiftet");
+            let mut guard = ssh_manager_core::sync::lock_tolerating_poison(&reader);
             match guard.read(&mut buf) {
                 Ok(0) => Ok(Vec::new()),
                 Ok(n) => Ok(buf[..n].to_vec()),

@@ -221,7 +221,7 @@ impl PendingStartup {
     }
 
     fn prompt_for(&self, app: &tauri::AppHandle) -> Arc<WindowStartupPrompt> {
-        let mut slot = self.prompt.lock().expect("Prompt-Sperre");
+        let mut slot = ssh_manager_core::sync::lock_tolerating_poison(&self.prompt);
         if let Some(prompt) = slot.as_ref() {
             return prompt.clone();
         }

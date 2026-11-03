@@ -76,7 +76,8 @@ impl Session {
         &self,
         confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     ) -> bool {
-        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.conn.pending_action)
+        let Some(action_id) =
+            *ssh_manager_core::sync::lock_tolerating_poison(&self.conn.pending_action)
         else {
             return false;
         };

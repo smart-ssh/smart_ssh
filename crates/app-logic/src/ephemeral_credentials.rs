@@ -9,6 +9,7 @@
 //! berührt und mit dem Ende des `test_connection`-Aufrufs automatisch
 //! verschwindet (kein `drop`/Aufräum-Schritt nötig).
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -31,7 +32,7 @@ impl EphemeralCredentialStore {
     /// Recovers from a poisoned mutex: the map only holds plain values, so a
     /// panic in another thread cannot leave it in an inconsistent state.
     fn lock(&self) -> MutexGuard<'_, HashMap<String, SecretString>> {
-        self.secrets.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.secrets)
     }
 
     pub fn insert(&self, r: &CredentialRef, value: SecretString) {
