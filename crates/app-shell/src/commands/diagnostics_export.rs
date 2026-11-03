@@ -6,9 +6,9 @@ use tauri::AppHandle;
 use tauri::State;
 
 use persistence_sqlite::AiProviderConfig;
-use ssh_manager_core::ai::{
-    fence_untrusted, ChatMessage, DefaultOutputRedactor, MessageContent, Role, UntrustedKind,
-};
+use ssh_manager_core::ai::DefaultOutputRedactor;
+#[cfg(test)]
+use ssh_manager_core::ai::{MessageContent, Role};
 use ssh_manager_core::shared::ServerId;
 
 use app_logic::dto::DocumentFormat;
@@ -358,16 +358,8 @@ pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> Command
 /// ActionResult`) ohne einen vollen `connect()`-Durchlauf direkt testen
 /// lässt (spec-reviewer-Fund, Follow-up-Review: die vorherigen Tests
 /// prüften nur den System-Prompt, nie diesen konkreten Nachrichtenbau).
-pub(crate) fn build_os_banner_message(sanitized_os: &str) -> ChatMessage {
-    ChatMessage {
-        role: Role::ActionResult,
-        content: MessageContent::Text(fence_untrusted(
-            UntrustedKind::RemoteOsInfo,
-            "uname -a",
-            sanitized_os,
-        )),
-    }
-}
+#[cfg(test)]
+pub(crate) use app_logic::connect::session_builder::build_os_banner_message;
 
 /// Liest den Textinhalt einer vom Nutzer im nativen Dateidialog ausgewählten
 /// Schlüssel-/Zertifikatsdatei (Spec 0013, SEC-06). Ersetzt globale Dateilese-
