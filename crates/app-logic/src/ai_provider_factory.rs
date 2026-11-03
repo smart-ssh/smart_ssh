@@ -98,7 +98,6 @@ pub fn build_ai_provider(
                         api_key,
                         supports_native_tool_calling,
                         extra_headers,
-                        budget.clone(),
                         max_tokens_override,
                     )
                     .with_web_research(web_research_enabled),
@@ -110,7 +109,7 @@ pub fn build_ai_provider(
                     api_key,
                     supports_native_tool_calling,
                     extra_headers,
-                    budget.clone(),
+                    registry.stream_options_rejections(),
                     max_tokens_override,
                 ))
             }

@@ -4,11 +4,8 @@ use super::*;
 use crate::content::test_fixtures::{
     context_with_blocks, context_with_image_and_pdf, first_events, pdf_block,
 };
+use ssh_manager_core::ai::AiError;
 use ssh_manager_core::ai::{AiEvent, MediaClass};
-
-fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
-}
 
 #[test]
 fn test_openai_compatible_image_and_pdf_blocks() {
@@ -18,7 +15,7 @@ fn test_openai_compatible_image_and_pdf_blocks() {
         "k",
         true,
         Vec::new(),
-        budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let body = p.build_request_body(&context_with_image_and_pdf("hello"));
@@ -47,7 +44,7 @@ async fn test_text_model_rejects_image_without_request() {
         "k",
         false,
         Vec::new(),
-        budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let events = first_events(&p, context_with_image_and_pdf("x")).await;
@@ -69,7 +66,7 @@ async fn test_vision_model_without_pdf_input_rejects_pdf_without_request() {
         "k",
         false,
         Vec::new(),
-        budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     // Only the PDF remains unsupported.
@@ -95,7 +92,7 @@ async fn test_text_attachment_is_not_rejected_on_text_model() {
         "k",
         false,
         Vec::new(),
-        budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let ctx = context_with_blocks(vec![ssh_manager_core::ai::ResolvedBlock::Text {
