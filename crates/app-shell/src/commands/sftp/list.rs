@@ -27,10 +27,7 @@ pub async fn sftp_start_directory(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<app_logic::start_directory::StartDirectoryDto> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     Ok(app_logic::start_directory::file_browser_start(&session).await)
 }
 
@@ -42,10 +39,7 @@ pub async fn session_is_root(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Option<bool>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     Ok(session.is_root())
 }
 

@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "이 시스템에서는 파일을 클립보드에 넣을 수 없습니다.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "선택한 AI 제공자가 설정되어 있지 않습니다. 설정된 제공자를 선택하세요.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "위험 세컨드 오피니언을 켜기 전에 AI 제공자를 선택하세요.",
+    "SESSION_NOT_FOUND": "이 세션은 더 이상 열려 있지 않습니다. 서버 목록에서 다시 여세요.",
     "SSH_SFTP_ALREADY_EXISTS": "이 이름의 파일 또는 폴더가 이미 있습니다",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다"
   },

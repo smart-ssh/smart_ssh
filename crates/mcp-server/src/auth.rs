@@ -3,6 +3,7 @@
 //! Prüfung sitzt daher als Axum-Middleware **vor** dem gesamten
 //! MCP-Router, nicht pro Tool.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Request, State};
@@ -43,14 +44,14 @@ impl SharedToken {
 
     /// Returns a copy of the current token as a secret.
     pub fn get(&self) -> SecretString {
-        self.0.lock().expect("SharedToken-Mutex vergiftet").clone()
+        lock_tolerating_poison(&self.0).clone()
     }
 
     /// Ersetzt das gültige Token — ab dem nächsten Aufruf wird das alte
     /// Token abgelehnt, unabhängig von bereits offenen HTTP-Verbindungen
     /// (jeder neue Tool-Call durchläuft die Middleware erneut).
     pub fn set(&self, new_token: impl Into<String>) {
-        *self.0.lock().expect("SharedToken-Mutex vergiftet") = SecretString::from(new_token.into());
+        *lock_tolerating_poison(&self.0) = SecretString::from(new_token.into());
     }
 }
 

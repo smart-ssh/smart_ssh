@@ -4,6 +4,7 @@
 //! einer Meldung, die das erwartete Ereignis nennt und alle bis dahin
 //! tatsächlich gesendeten Events auflistet.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::future::Future;
 use std::time::Duration;
 
@@ -49,10 +50,7 @@ pub(super) async fn expect_event_within<F: Future>(
 pub(super) async fn wait_for_event(emitter: &TestEmitter, name: &str) -> serde_json::Value {
     expect_event_within(emitter, name, async {
         loop {
-            let found = emitter
-                .events
-                .lock()
-                .unwrap()
+            let found = lock_tolerating_poison(&emitter.events)
                 .iter()
                 .find(|(event, _)| event == name)
                 .map(|(_, payload)| payload.clone());
@@ -90,10 +88,7 @@ fn timeout_message(emitter: &TestEmitter, expected: &str) -> String {
     // `unwrap_or_else(into_inner)`: ist der Mutex vergiftet (ein anderer
     // Test-Task ist mit gehaltenem Lock gepanickt), soll trotzdem die
     // Liste erscheinen statt einer zweiten, nichtssagenden Panik.
-    let events = emitter
-        .events
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let events = lock_tolerating_poison(&emitter.events);
     let mut message = format!(
         "Zeitüberschreitung nach {} s beim Warten auf erwartetes Ereignis: {expected}\n\
          Empfangene Events ({}):",

@@ -437,7 +437,7 @@ impl<'a> RecordingCredentialStore<'a> {
     /// Die aufgezeichneten Refs in Schreibreihenfolge, ohne Dubletten.
     pub(crate) fn written(&self) -> Vec<CredentialRef> {
         let mut unique: Vec<CredentialRef> = Vec::new();
-        for r in self.written.lock().unwrap().iter() {
+        for r in ssh_manager_core::sync::lock_tolerating_poison(&self.written).iter() {
             if !unique.contains(r) {
                 unique.push(r.clone());
             }
@@ -458,7 +458,7 @@ impl CredentialStore for RecordingCredentialStore<'_> {
         // nichts hinterlassen hat. Ein Ref zu viel kostet höchstens ein
         // Löschen ins Leere (`NotFound` gilt als Erfolg); ein Ref zu
         // wenig hieße, einen verwaisten Eintrag stehen zu lassen (A3).
-        self.written.lock().unwrap().push(r.clone());
+        ssh_manager_core::sync::lock_tolerating_poison(&self.written).push(r.clone());
         self.inner.set(r, value)
     }
 

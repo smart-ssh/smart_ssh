@@ -14,6 +14,7 @@ use ssh_manager_core::profiles::ssh_config::{ImportPlan, JumpTarget};
 use ssh_manager_core::profiles::{CredentialStore, Group, GroupId, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 use app_logic::dto::{AuthMethodInput, ServerInput};
 use app_logic::error::{CommandError, CommandResult, StoreResultExt};
@@ -844,10 +845,8 @@ pub async fn preview_ssh_config_import(
     plan.skipped.extend(read.include_issues.clone());
 
     let dto = build_preview_dto(&plan, &read.files, &servers);
-    *state
-        .pending_ssh_config_import
-        .lock()
-        .expect("pending import lock") = Some(app_logic::state::PendingImport { plan });
+    *lock_tolerating_poison(&state.pending_ssh_config_import) =
+        Some(app_logic::state::PendingImport { plan });
     Ok(Some(dto))
 }
 
@@ -862,11 +861,7 @@ pub async fn apply_ssh_config_import(
     // wurde nur geklont und erst nach Erfolg geleert - zwei ueberlappende
     // Aufrufe sahen beide `Some` und haetten beide angelegt (Review-Runde 1).
     // `take` macht aus dem Kommentar "der Plan ist verbraucht" eine Tatsache.
-    let pending = state
-        .pending_ssh_config_import
-        .lock()
-        .expect("pending import lock")
-        .take();
+    let pending = lock_tolerating_poison(&state.pending_ssh_config_import).take();
     let Some(pending) = pending else {
         return Err(CommandError::from(
             "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.".to_string(),

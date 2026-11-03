@@ -272,6 +272,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Issue #856: the backend refused a risk second-opinion setting.
   "RISK_SETTINGS_PROVIDER_UNKNOWN",
   "RISK_SETTINGS_PROVIDER_REQUIRED",
+  // Issue #883: a command named a session that is no longer open.
+  "SESSION_NOT_FOUND",
 ]);
 
 /** Issue #600: errors for which the error card offers "Try again". */

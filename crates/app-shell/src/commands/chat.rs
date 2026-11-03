@@ -1,6 +1,7 @@
 //! Spec 0010/0017/0021/0027/0065/0066: Chat-Nachrichten, laufende Sitzungen,
 //! Trennen — Teil der Spec-0083-Aufteilung von `commands.rs`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use tauri::{AppHandle, Manager, State};
 
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
@@ -30,10 +31,7 @@ pub async fn send_chat_message(
 ) -> CommandResult<()> {
     // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Resolved and checked before anything else: an error sends nothing.
     // Registered chat content extensions take the ids (Issue #505, ADR 0141).
     let ids = attachment_ids.as_deref().unwrap_or(&[]);
@@ -73,10 +71,7 @@ pub async fn continue_truncated_response(
 ) -> CommandResult<()> {
     // Spec 0104, §4: wie `send_chat_message`.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     send_chat_message_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -101,10 +96,7 @@ pub async fn retry_chat_turn(
     session_id: SessionId,
 ) -> CommandResult<()> {
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     retry_chat_turn_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -259,7 +251,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // früh gedrückter Stopp für diesen Turn kann dadurch nicht mehr von
     // einem späteren Reset verschluckt werden.
     let queued_only = {
-        let mut turn = session.conn.chat_turn.lock().unwrap();
+        let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
         // Issue #315: während „Neuer Chat" den Chat austauscht, nichts
         // einreihen — die Nachricht würde sonst unbemerkt der ersten Anfrage
         // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
@@ -424,7 +416,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
         // Start oben) atomar zurückgesetzt — eingereihte Nachrichten werden
         // auch nach einem Stopp noch beantwortet (Spec 0066, §1).
         let next = {
-            let mut turn = session.conn.chat_turn.lock().unwrap();
+            let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
             if turn.queued.is_empty() && !unanswered_injected_messages {
                 turn.running = false;
                 None
@@ -465,12 +457,7 @@ struct ChatTurnRunningGuard<'a> {
 impl Drop for ChatTurnRunningGuard<'_> {
     fn drop(&mut self) {
         if self.armed {
-            let mut turn = self
-                .session
-                .conn
-                .chat_turn
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut turn = lock_tolerating_poison(&self.session.conn.chat_turn);
             turn.running = false;
         }
     }
@@ -491,10 +478,7 @@ pub async fn take_chat_content_into_note(
     session_id: SessionId,
     content: String,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     app_logic::orchestration::propose_note_from_chat_content(
         &session,
         session_id,
@@ -570,10 +554,7 @@ pub async fn stop_auto_continuation(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     session.request_auto_continue_stop();
     Ok(())
 }
@@ -600,10 +581,7 @@ pub async fn start_new_chat(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Option<String>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
     // bleibt die Spalte leer, statt den Chat zu verhindern.
     let provider_id = super::ai_providers::active_ai_provider_config(&state)
@@ -632,7 +610,7 @@ pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<
     // follows here.
     let session = crate::sessions::close_session_returning(&app, session_id)
         .await
-        .ok_or("Session nicht gefunden")?;
+        .ok_or_else(app_logic::session::session_not_found)?;
 
     // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
     // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`
@@ -658,7 +636,9 @@ pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<
     // potenziell noch, nachdem `disconnect()` selbst längst zurückgekehrt
     // ist (wartet auf eine KI-Antwort plus ggf. auf die Nutzerbestätigung).
     let app_for_suggestion = app.clone();
-    tokio::spawn(async move {
+    // Issue #879: app scope, not session scope — outlives the session, but a
+    // pending confirmation is dropped (rejected) when the app exits.
+    crate::background_tasks::app_scope(&app).spawn("on-disconnect-suggestions", async move {
         let state = app_for_suggestion.state::<AppState>();
         // Spec 0034, Abschnitt 7: läuft vor dem Notiz-Vorschlag im selben
         // Hintergrund-Task (sequentiell, keine zweite parallele
@@ -765,10 +745,7 @@ pub async fn get_chat_history(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Vec<app_logic::dto::ChatHistoryEntryDto>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     let history = session.ai.context.lock().await.history.clone();
     Ok(history
         .into_iter()

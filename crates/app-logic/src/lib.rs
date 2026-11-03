@@ -73,9 +73,6 @@ pub mod mcp_token;
 pub mod orchestration;
 /// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
 pub mod owner_names;
-/// Spec 0088, A2.1/A2.2: crate-intern, weil es eine Implementierungs-
-/// Entscheidung über die Sperren dieser Crate ist und keine Schnittstelle.
-mod poison;
 /// Spec 0084, A5: `NoRulesPolicyStore` ist ein Testdouble, das sowohl
 /// innerhalb dieser Crate (`session.rs`, `orchestration::test_support`) als
 /// auch von `app-shell`s Tests (`commands::chat`) gebraucht wird — deshalb
@@ -109,6 +106,8 @@ pub mod status;
 /// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
 /// nach der UI-Sprache.
 pub mod system_prompt;
+/// Issue #879: owner for background tasks (scopes, cancel, shutdown).
+pub mod tasks;
 pub mod test_connection;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

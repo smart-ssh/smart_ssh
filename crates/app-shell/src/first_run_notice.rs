@@ -96,6 +96,11 @@ pub(crate) mod test_support {
             .disable_auto_save()
             .build()
             .expect("settings store konnte nicht geöffnet werden");
+        // Session-scoped tasks (issue #881) need the supervisor in state.
+        let tasks = std::sync::Arc::new(app_logic::tasks::TaskSupervisor::with_handle(
+            tauri::async_runtime::handle().inner().clone(),
+        ));
+        tauri::Manager::manage(&app, tasks);
         app
     }
 

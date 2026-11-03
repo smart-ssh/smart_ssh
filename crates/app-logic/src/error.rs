@@ -186,6 +186,9 @@ impl<T, E: StoreFailure> StoreResultExt<T> for Result<T, E> {
     }
 }
 
+/// Issue #883: a command named a session that is no longer open.
+pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -353,6 +356,8 @@ mod code_tests {
             super::STORE_CORRUPT,
             super::STORE_IO,
             super::STORE_FAILED,
+            // Issue #883.
+            super::SESSION_NOT_FOUND,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
