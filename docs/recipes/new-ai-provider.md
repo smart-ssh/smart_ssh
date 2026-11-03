@@ -45,7 +45,7 @@ checklist, test-only files under "Required tests").
 - [ ] `crates/app-shell/src/commands/ai_providers.rs` – the `match` blocks for
       base-URL requirement, key requirement, model discovery and connection
       test.
-- [ ] `crates/app-shell/src/commands/connect.rs` – builds the session from the
+- [ ] `crates/app-shell/src/commands/connect/mod.rs` – builds the session from the
       active configuration (context window, provider label).
 - [ ] Frontend: `apps/smart-ssh-community/frontend/src/types.ts`
       (`ProviderType` union, `needsBaseUrl`, `supportsWebResearch`,

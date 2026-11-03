@@ -30,7 +30,7 @@ When you chat in a session, the active AI provider receives:
   apply to this server, and the server and group notes. Hostname, user name
   and tags of the profile are not part of the prompt.
   ([`crates/app-logic/src/system_prompt.rs`](crates/app-logic/src/system_prompt.rs),
-  [`crates/app-shell/src/commands/connect.rs`](crates/app-shell/src/commands/connect.rs),
+  [`crates/app-shell/src/commands/connect/mod.rs`](crates/app-shell/src/commands/connect/mod.rs),
   [`crates/app-logic/src/compaction.rs`](crates/app-logic/src/compaction.rs))
 - **The remote OS banner** (`uname -a`) read at connect time, as fenced
   untrusted content.

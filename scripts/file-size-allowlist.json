@@ -24,7 +24,6 @@
   "crates/app-logic/src/session.rs": 1784,
   "crates/app-logic/src/startup_error_messages.rs": 1541,
   "crates/app-shell/src/commands/chat.rs": 1657,
-  "crates/app-shell/src/commands/connect.rs": 1521,
   "crates/app-shell/src/commands/elevation.rs": 1649,
   "crates/app-shell/src/commands/master_password.rs": 1413,
   "crates/app-shell/src/commands/sftp.rs": 2673,

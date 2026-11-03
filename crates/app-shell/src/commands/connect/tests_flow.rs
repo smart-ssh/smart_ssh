@@ -16,6 +16,8 @@ mod two_hop_fixture;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use app_logic::confirmation::ConfirmationRegistry;
+use app_logic::events::EventEmitter;
 use async_trait::async_trait;
 use persistence_sqlite::{AiProviderConfig, SqliteProfileStore};
 use ssh_manager_core::ai::{ChatMessage, MessageContent, ProviderId, ProviderType, Role};

@@ -2,27 +2,28 @@
 //! Bestätigung), persistente Chat-Sitzungen — Teil der Spec-0083-Aufteilung
 //! von `commands.rs`.
 
+mod progress;
+mod system_context;
+
+pub(super) use system_context::build_session_system_context;
+
+pub(crate) use progress::ConnectProgress;
+use progress::{cancelled_error, or_cancelled};
+
 use super::scope::extension_scope_lookup;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
 
 use ssh_manager_core::ai::{ChatMessage, OutputRedactor, SessionContext};
-use ssh_manager_core::filter::{EffectiveScope, EvalContext, FilterEngine, PolicyStore};
-use ssh_manager_core::profiles::effective_notes_sections;
-use ssh_manager_core::profiles::ProfileStore;
+use ssh_manager_core::filter::FilterEngine;
 use ssh_manager_core::shared::ServerId;
-use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, HostKeyDecision, SshError};
+use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, SshError};
 
 use app_logic::ai_provider_factory::build_ai_provider_from_config;
-use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use app_logic::dto::HostKeyUserDecision;
 use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
-use app_logic::events::{
-    emit_connect_progress, emit_connection_status_changed, emit_host_key_verification_ended,
-    emit_host_key_verification_needed, ConnectionStatus, EventEmitter, HostKeyKind,
-    HostKeyPromptEndReason,
-};
+use app_logic::events::{emit_connection_status_changed, ConnectionStatus};
 use app_logic::session::{history_contains_untrusted_content, Session, SessionParts};
 use app_logic::state::{AppState, SessionId};
 // Spec 0084, §4: die Konstante liegt in `app_logic::test_connection` (s.
@@ -88,73 +89,6 @@ pub async fn connect(
 #[tauri::command]
 pub fn cancel_connect(state: State<'_, AppState>, attempt_id: String) {
     state.connect_attempts.cancel(&attempt_id);
-}
-
-/// Issue #546: what a running `connect` needs to report its progress and to
-/// notice a cancel.
-pub(crate) struct ConnectProgress {
-    attempt_id: String,
-    emitter: Arc<dyn EventEmitter>,
-    guard: app_logic::connect_attempts::ConnectAttemptGuard,
-}
-
-impl ConnectProgress {
-    pub(crate) fn new(
-        state: &AppState,
-        attempt_id: String,
-        emitter: Arc<dyn EventEmitter>,
-    ) -> Self {
-        let guard = state.connect_attempts.register(&attempt_id);
-        Self {
-            attempt_id,
-            emitter,
-            guard,
-        }
-    }
-
-    fn emit(
-        &self,
-        server_id: ServerId,
-        attempt: u32,
-        steps: Vec<ssh_manager_core::ssh::ConnectStepSnapshot>,
-    ) {
-        emit_connect_progress(
-            self.emitter.as_ref(),
-            &self.attempt_id,
-            server_id,
-            attempt,
-            steps,
-        );
-    }
-
-    /// A step log that reports every change as a `connect-progress` event.
-    fn log(&self, server_id: ServerId, attempt: u32) -> ConnectLog {
-        let emitter = self.emitter.clone();
-        let attempt_id = self.attempt_id.clone();
-        ConnectLog::with_sink(Arc::new(move |steps| {
-            emit_connect_progress(emitter.as_ref(), &attempt_id, server_id, attempt, steps);
-        }))
-    }
-}
-
-fn cancelled_error() -> CommandError {
-    CommandError::with_code("Verbindungsaufbau abgebrochen", "SSH_CONNECT_CANCELLED")
-}
-
-/// Runs `fut` unless the attempt is cancelled first (`None`). Without a
-/// progress handle there is nothing to cancel. `fut` is dropped on cancel,
-/// which releases its sockets and tunnel channels.
-async fn or_cancelled<F: std::future::Future>(
-    progress: Option<&ConnectProgress>,
-    fut: F,
-) -> Option<F::Output> {
-    match progress {
-        Some(p) => tokio::select! {
-            out = fut => Some(out),
-            () = p.guard.cancelled() => None,
-        },
-        None => Some(fut.await),
-    }
 }
 
 /// Kern von `connect()` (s. dessen Doc-Kommentar zur Host-Key-Logik),
@@ -372,175 +306,41 @@ async fn establish_transport<R: tauri::Runtime>(
                     raw_key,
                     decision,
                 } => {
-                    if !interactive {
-                        // Issue #356, Spec 0107 §8: an automatic attempt
-                        // never opens the host key dialog and never trusts
-                        // a key; the user decides with the Reconnect button.
-                        tracing::info!(
-                            session_id = %session_id,
-                            host = %host,
-                            port,
-                            "automatic reconnect stops: host key needs confirmation",
-                        );
-                        return Err(CommandError::with_code(
-                            format!(
-                                "Verbindung zu {host}:{port} nicht möglich (Host-Key nicht vertraut)"
-                            ),
-                            "SSH_HOST_KEY_NOT_TRUSTED",
-                        )
-                        .with_connect_log(attempt_log.snapshot()));
-                    }
-                    let key_type = app_logic::host_key_store::offered_key_type(&raw_key);
-                    let (kind, fingerprint, expected_fingerprint) = match decision {
-                        HostKeyDecision::Unknown { fingerprint } => {
-                            (HostKeyKind::Unknown, fingerprint, None)
-                        }
-                        HostKeyDecision::Mismatch {
-                            expected_fingerprint,
-                            actual_fingerprint,
-                        } => (
-                            HostKeyKind::Mismatch,
-                            actual_fingerprint,
-                            Some(expected_fingerprint),
-                        ),
-                        HostKeyDecision::Trusted => {
-                            unreachable!(
-                                "PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut"
-                            )
-                        }
-                    };
-
-                    tracing::info!(
-                        session_id = %session_id,
-                        host = %host,
-                        port,
-                        kind = ?kind,
-                        "host key verification needed",
-                    );
-
-                    let (generation, rx) = state
-                        .pending_host_key_confirmations
-                        .register_tracked(session_id);
-                    // Spec 0017, Abschnitt 2: solange `connect()` hier auf die
-                    // Nutzerentscheidung wartet, existiert `session_id` noch in
-                    // keiner `Session` (die wird erst unten nach erfolgreichem
-                    // Aufbau eingefügt) — ohne diesen Eintrag würde ein
-                    // Frontend-Reload während eines offenen Host-Key-Dialogs den
-                    // zugehörigen Tab in der wiederhergestellten Tab-Leiste
-                    // verlieren.
-                    state
-                        .sessions
-                        .register_pending_connection(session_id, server_id);
-                    // Issue #546: the host key step waits for the decision.
-                    if let Some(p) = progress {
-                        p.emit(
-                            server_id,
-                            attempt_no,
-                            ssh_manager_core::ssh::ConnectStepSnapshot::from_records(
-                                &attempt_log.snapshot(),
-                                true,
-                            ),
-                        );
-                    }
-                    emit_host_key_verification_needed(
-                        &crate::event_emitter::TauriEventEmitter(app.clone()),
-                        session_id,
-                        generation.as_u64(),
-                        host.clone(),
-                        port,
-                        kind,
-                        fingerprint,
-                        expected_fingerprint,
-                        key_type,
-                    );
-
-                    let wait = or_cancelled(
-                        progress,
-                        wait_for_host_key_decision(
-                            &state.pending_host_key_confirmations,
-                            session_id,
-                            generation,
-                            rx,
-                            app_logic::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
-                        ),
-                    )
-                    .await;
-                    state.sessions.clear_pending_connection(session_id);
-                    let Some(wait) = wait else {
-                        // Issue #546: cancelled while the dialog is open.
-                        // Release the registration and tell the frontend the
-                        // prompt is over; the key is not trusted.
-                        state
-                            .pending_host_key_confirmations
-                            .cancel_if_current(&session_id, generation);
-                        let _ = finish_host_key_wait(
-                            &crate::event_emitter::TauriEventEmitter(app.clone()),
-                            session_id,
-                            generation,
-                            HostKeyWait::Abandoned,
-                            &host,
-                            port,
-                        );
-                        attempt_log.fail_running("SSH_CONNECT_CANCELLED");
+                    // Issue #835: the whole host key decision (prompt, wait,
+                    // trust) lives in `app_logic::connect::host_key_flow`.
+                    let emitter = crate::event_emitter::TauriEventEmitter(app.clone());
+                    let report = |steps| {
                         if let Some(p) = progress {
-                            p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
+                            p.emit(server_id, attempt_no, steps);
                         }
-                        return Err(cancelled_error().with_connect_log(attempt_log.snapshot()));
                     };
-                    // Issue #37: jeder Ausgang des Wartens meldet dem
-                    // Frontend das Ende genau dieser Abfrage (`generation`),
-                    // damit ein offener Dialog nach Timeout/Abbruch von
-                    // selbst schließt. Timeout/Abbruch bleiben Ablehnung.
-                    let user_decision = finish_host_key_wait(
-                        &crate::event_emitter::TauriEventEmitter(app.clone()),
-                        session_id,
-                        generation,
-                        wait,
-                        &host,
+                    let cancel = async {
+                        match progress {
+                            Some(p) => p.cancelled().await,
+                            None => std::future::pending().await,
+                        }
+                    };
+                    app_logic::connect::host_key_flow::resolve_pending_host_key(
+                        app_logic::connect::host_key_flow::HostKeyFlowContext {
+                            session_id,
+                            server_id,
+                            host_key_store: state.host_key_store.as_ref(),
+                            confirmations: &state.pending_host_key_confirmations,
+                            sessions: &state.sessions,
+                            emitter: &emitter,
+                            attempt_log: &attempt_log,
+                            progress: &report,
+                            interactive,
+                            timeout: app_logic::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
+                        },
+                        host,
                         port,
+                        raw_key,
+                        decision,
+                        cancel,
                     )
-                    .map_err(|err| err.with_connect_log(attempt_log.snapshot()));
-                    // Issue #546: the dialog is over — a final, plain
-                    // snapshot (the host key step shows its real result)
-                    // unless the attempt is retried after Trust.
-                    let user_decision = match user_decision {
-                        Ok(d) => d,
-                        Err(err) => {
-                            if let Some(p) = progress {
-                                p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
-                            }
-                            return Err(err);
-                        }
-                    };
-                    match user_decision {
-                        HostKeyUserDecision::Trust => {
-                            tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
-                            state.host_key_store.trust(&host, port, &raw_key)?;
-                            // Erneuter Versuch mit demselben `target` — s.
-                            // Doc-Kommentar oben.
-                        }
-                        HostKeyUserDecision::Reject => {
-                            tracing::warn!(
-                                session_id = %session_id,
-                                host = %host,
-                                port,
-                                "host key rejected, connection aborted",
-                            );
-                            if let Some(p) = progress {
-                                p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
-                            }
-                            // Spec 0069, Teil A4: Code zusätzlich zur
-                            // bisherigen, host:port-tragenden Meldung
-                            // (Text unverändert).
-                            return Err(CommandError::with_code(
-                                format!(
-                                    "Verbindung zu {host}:{port} abgelehnt (Host-Key nicht vertraut)"
-                                ),
-                                "SSH_HOST_KEY_NOT_TRUSTED",
-                            )
-                            .with_connect_log(attempt_log.snapshot()));
-                        }
-                    }
+                    .await?;
+                    // Retry with the same `target` after Trust (ADR 0007).
                 }
             }
         }
@@ -1322,192 +1122,7 @@ mod tests_chat_session;
 mod tests_map_result;
 
 #[cfg(test)]
-mod tests_host_key_wait;
-
-#[cfg(test)]
 mod tests_flow;
-
-/// Gibt die Rohbestandteile des System-Prompts (Spec 0057, §4.1:
-/// [`app_logic::compaction::SystemContextParts`] — getrennt gehalten statt
-/// direkt zusammengefügt, damit die Kompaktierung Notiz-Sektionen einzeln
-/// nach Scope priorisiert kürzen kann) zurück, zusammen mit der Info, ob
-/// die Notizen nicht-leer sind (Spec 0039, Abschnitt 5) — der System-Prompt
-/// wird bei **jeder** Nutzer-Nachricht neu gebaut und in jede KI-Anfrage
-/// eingebettet; enthält er Notizen, ist damit ab diesem Zeitpunkt bereits
-/// Inhalt aus einer nicht vertrauenswürdigen Quelle in den KI-Kontext
-/// gelangt. Der Aufrufer nutzt das, um `Session::untrusted_content_
-/// ingested` entsprechend zu setzen (monoton, s. dortiger Kommentar). Den
-/// fertig zusammengesetzten String liefert `SystemContextParts::assemble`.
-pub(super) async fn build_session_system_context<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    server_name: &str,
-    server_id: &ServerId,
-    tags: &[String],
-    profile_store: &dyn ProfileStore,
-    policy_store: &persistence_sqlite::SqlitePolicyStore,
-) -> (app_logic::compaction::SystemContextParts, bool) {
-    // Spec 0032: der lokale Pseudo-Server hat keine `servers`-Zeile —
-    // `profile_store.get_server` schlägt für ihn immer fehl, wodurch diese
-    // Funktion sonst dauerhaft mit leeren Notizen liefe, obwohl über
-    // `local_server::synthetic_server` tatsächlich welche hinterlegt sein
-    // können (unabhängiger Review-Pass, s. docs/adr/0026).
-    // `tracing::warn!` statt stillem `unwrap_or_default()`/leerem Fallback
-    // (unabhängiger Review-Pass, Spec 0003/0004): ein Fehler hier bedeutet
-    // nicht nur "keine Notizen geladen", sondern dass sicherheitsrelevanter
-    // Kontext (z. B. "Produktionsserver, nur außerhalb des Wartungsfensters
-    // anfassen") ohne jedes sichtbare Signal aus dem System-Prompt
-    // verschwindet — die KI schlägt dann Kommandos vor, die sie mit
-    // geladenen Notizen nicht vorschlagen würde.
-    // Spec 0039, Abschnitt 3: unformatiert als (Quelle, Notiztext)-Paare
-    // geladen statt als fertigen String — jeder Abschnitt muss einzeln
-    // über `fence_untrusted` laufen, bevor er unten in den System-Prompt
-    // eingebettet wird (der schwerwiegendste der vier in Spec 0039
-    // genannten Befunde: Notizen persistieren über Sitzungen hinweg, eine
-    // einmal eingeschleuste Anweisung wirkt also nicht nur einmalig).
-    let note_sections: Vec<(String, String)> = if app_logic::dto::is_local(*server_id) {
-        let local_notes = crate::local_server::synthetic_server(app).notes;
-        if local_notes.trim().is_empty() {
-            Vec::new()
-        } else {
-            vec![(format!("Server \"{server_name}\""), local_notes)]
-        }
-    } else {
-        match profile_store.get_server(server_id).await {
-            Ok(s) => match effective_notes_sections(&s, profile_store).await {
-                Ok(sections) => sections,
-                Err(err) => {
-                    tracing::warn!(
-                        server_id = %server_id.0,
-                        error = %err,
-                        "effective_notes_sections fehlgeschlagen — Session-Kontext enthält keine Notizen",
-                    );
-                    Vec::new()
-                }
-            },
-            Err(err) => {
-                tracing::warn!(
-                    server_id = %server_id.0,
-                    error = %err,
-                    "get_server fehlgeschlagen — Session-Kontext enthält keine Notizen",
-                );
-                Vec::new()
-            }
-        }
-    };
-
-    // Issue #90: Sprache bei JEDEM Aufbau neu gelesen — ein Wechsel der
-    // UI-Sprache gilt ab dem nächsten Aufbau, ohne Neustart.
-    let language = crate::ui_language::session_prompt_language(app);
-    let mut context = app_logic::system_prompt::base_prompt(language, server_name);
-
-    let eval_ctx = EvalContext {
-        server_id: *server_id,
-        tags: tags.to_vec(),
-    };
-    let scope = EffectiveScope::from(&eval_ctx);
-    let rules = policy_store.rules_for(&scope).await.into_trusted_rules();
-    let allow_rules = app_logic::system_prompt::allow_rule_lines(&rules);
-
-    context.push_str(&app_logic::system_prompt::allow_rules_section(
-        language,
-        &allow_rules,
-    ));
-
-    let parts = app_logic::compaction::SystemContextParts {
-        base: context,
-        note_sections,
-        language,
-    };
-    let has_notes = parts.has_notes();
-    (parts, has_notes)
-}
-
-/// Ausgang des Wartens auf die Host-Key-Entscheidung (Spec 0068, Teil 5b).
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum HostKeyWait {
-    Decided(HostKeyUserDecision),
-    /// Sender gedroppt (Neu-Registrierung, App-Ende) — Abbruch.
-    Abandoned,
-    /// Frist abgelaufen — gilt als Ablehnung, der Host-Key wird **nie**
-    /// durch Zeitablauf vertraut.
-    TimedOut,
-}
-
-/// Spec 0068, Teil 5b: wartet höchstens `timeout` auf `confirm_host_key`
-/// (analog zum Confirm-Timeout aus Spec 0046, Fund 4). Geht ein Frontend
-/// verloren, hängt `connect()` damit nicht mehr ewig. Beim Zeitablauf wird
-/// nur der Eintrag DIESER Registrierung abgeräumt (`generation`), nie einer,
-/// den ein `connect()`-Retry unter derselben `SessionId` neu angelegt hat.
-pub(crate) async fn wait_for_host_key_decision(
-    registry: &ConfirmationRegistry<SessionId, HostKeyUserDecision>,
-    session_id: SessionId,
-    generation: RegistrationGeneration,
-    rx: tokio::sync::oneshot::Receiver<HostKeyUserDecision>,
-    timeout: std::time::Duration,
-) -> HostKeyWait {
-    match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(decision)) => HostKeyWait::Decided(decision),
-        Ok(Err(_)) => HostKeyWait::Abandoned,
-        Err(_elapsed) => {
-            registry.cancel_if_current(&session_id, generation);
-            HostKeyWait::TimedOut
-        }
-    }
-}
-
-/// Issue #37: schließt ein Warten auf die Host-Key-Entscheidung ab. Meldet
-/// `host-key-verification-ended` für genau diese Registrierung
-/// (`generation`) — bei jedem Ausgang, damit das Frontend die passende
-/// Abfrage schließen kann — und bildet den Ausgang auf das Ergebnis von
-/// `connect()` ab. Timeout und Abbruch bleiben Fehler (nie Vertrauen,
-/// Spec 0068, Teil 5b); das Ereignis selbst entscheidet nichts.
-pub(crate) fn finish_host_key_wait(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    generation: RegistrationGeneration,
-    wait: HostKeyWait,
-    host: &str,
-    port: u16,
-) -> CommandResult<HostKeyUserDecision> {
-    let reason = match wait {
-        HostKeyWait::Decided(_) => HostKeyPromptEndReason::Decided,
-        HostKeyWait::Abandoned => HostKeyPromptEndReason::Abandoned,
-        HostKeyWait::TimedOut => HostKeyPromptEndReason::TimedOut,
-    };
-    emit_host_key_verification_ended(emitter, session_id, generation.as_u64(), reason);
-    match wait {
-        HostKeyWait::Decided(decision) => Ok(decision),
-        HostKeyWait::Abandoned => {
-            // Spec 0069, Teil A5 (spec-reviewer-Fund, Review dieses
-            // Schritts): der dritte Ausgang derselben Host-Key-Wartestelle
-            // (neben Reject/TimedOut, die bereits einen Code tragen) zeigte
-            // bislang rohen deutschen Text auch in der englischen UI. Neuer,
-            // additiver Code (E3).
-            Err(CommandError::with_code(
-                "Verbindungsaufbau abgebrochen",
-                "SSH_CONNECTION_ABANDONED",
-            ))
-        }
-        HostKeyWait::TimedOut => {
-            tracing::warn!(
-                session_id = %session_id,
-                host = %host,
-                port,
-                "host key confirmation timed out, treating as rejected",
-            );
-            // Spec 0069, Teil A4: Code zusätzlich zur bisherigen,
-            // host:port-tragenden Meldung (Text unverändert).
-            Err(CommandError::with_code(
-                format!(
-                    "Verbindung zu {host}:{port} abgebrochen: Host-Key-Bestätigung \
-                     nicht rechtzeitig beantwortet (nicht vertraut)"
-                ),
-                "SSH_HOST_KEY_CONFIRM_TIMEOUT",
-            ))
-        }
-    }
-}
-
 #[tauri::command]
 pub async fn confirm_host_key(
     state: State<'_, AppState>,

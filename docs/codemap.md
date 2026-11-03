@@ -88,6 +88,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Database migrations | `crates/persistence-sqlite/migrations/` (`NNNN_name.sql`, consecutive); applied in `crates/persistence-sqlite/src/store.rs` |
 | Locale files | `apps/smart-ssh-community/frontend/src/locales/` (one folder per language); parity test `apps/smart-ssh-community/frontend/src/locales/localeKeyParity.test.ts` |
 | Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/events.ts` |
+| Host key decision during connect | `crates/app-logic/src/connect/host_key_flow.rs` — `resolve_pending_host_key`; Tauri side `crates/app-shell/src/commands/connect/mod.rs` — `establish_transport` |
 | DTOs sent to the frontend | `crates/app-logic/src/dto.rs` — `ServerDto`; TS side `apps/smart-ssh-community/frontend/src/types.ts` |
 | Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session` |
@@ -103,7 +104,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Local pseudo-server | `crates/app-shell/src/local_server.rs` — `synthetic_server`; `crates/ssh-transport/src/local.rs` — `LocalTransport` |
 | Filter rules storage and defaults | `crates/persistence-sqlite/src/policy_store.rs`; `crates/app-logic/src/policy.rs`; hard blacklist `crates/core/src/filter/blacklist.rs` |
 | Output redaction | `crates/core/src/ai/redactor.rs` — `DefaultOutputRedactor`; `crates/core/src/ai/live_redaction.rs` |
-| System prompt for the AI | `crates/app-logic/src/system_prompt.rs`; session context `crates/app-shell/src/commands/connect.rs` — `build_session_system_context` |
+| System prompt for the AI | `crates/app-logic/src/system_prompt.rs`; session context `crates/app-shell/src/commands/connect/system_context.rs` — `build_session_system_context` |
 | Context compaction | `crates/app-logic/src/compaction.rs` |
 | Server notes | `crates/app-logic/src/orchestration/notes.rs`; `crates/core/src/profiles/notes.rs` |
 | Backup and restore | `crates/core/src/backup/format.rs`; `crates/persistence-sqlite/src/backup_store.rs`; `crates/app-shell/src/commands/backup.rs` |

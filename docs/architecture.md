@@ -184,6 +184,7 @@ Wohin neue Logik gehört (alle Tauri-frei; jedes `pub mod` aus `lib.rs`):
 - `confirmation`, `confirmation_explain` — Bestätigungs-Registry und Erklärung einer Bestätigung.
 - `second_opinion` — Abruf-Logik der KI-Zweitmeinung; `rule_suggestions` — Regel-Schnellvorschlag.
 - `connect_attempts` — abbrechbare Verbindungsversuche; `test_connection` — Verbindungstest.
+- `connect` — Host-Key-Entscheidung beim Verbindungsaufbau (`connect::host_key_flow`, Issue #835).
 - `auto_reconnect` — automatischer Wiederaufbau; `background_keepalive` — Sitzungen im Hintergrund halten.
 - `start_directory` — Startverzeichnis einer Sitzung; `folder_upload` — Plan eines rekursiven Ordner-Uploads.
 - `mcp_lookup`, `mcp_sessions` — lesende MCP-Tools und MCP-eigene Sitzungen.

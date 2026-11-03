@@ -1,6 +1,7 @@
-//! Tests of the host-key confirmation wait of `connect.rs`.
+//! Tests of the host key flow (issue #835): the wait, its end event and the
+//! whole decision against a recording host key store, without Tauri.
 
-use app_logic::events::TestEmitter;
+use crate::events::TestEmitter;
 use uuid::Uuid;
 
 use super::*;
@@ -202,4 +203,225 @@ fn test_host_key_decided_wait_emits_ended_event_and_passes_decision_through() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].1["reason"], "decided");
     assert_eq!(events[0].1["promptId"], generation.as_u64());
+}
+
+// ---- the whole flow (issue #835) ----
+
+use std::sync::Mutex;
+
+use ssh_manager_core::ssh::SshError;
+
+const HOST: &str = "prod-1.internal";
+const PORT: u16 = 2222;
+
+/// Records every `trust` call; `check` is never consulted by the flow.
+#[derive(Default)]
+struct RecordingStore {
+    trusted: Mutex<Vec<(String, u16, Vec<u8>)>>,
+}
+
+impl HostKeyStore for RecordingStore {
+    fn check(&self, _host: &str, _port: u16, _key: &[u8]) -> HostKeyDecision {
+        HostKeyDecision::Trusted
+    }
+    fn trust(&self, host: &str, port: u16, key: &[u8]) -> Result<(), SshError> {
+        self.trusted
+            .lock()
+            .unwrap()
+            .push((host.to_string(), port, key.to_vec()));
+        Ok(())
+    }
+}
+
+struct Fixture {
+    store: RecordingStore,
+    confirmations: ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    sessions: SessionManager,
+    emitter: TestEmitter,
+    log: ConnectLog,
+    session_id: SessionId,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        Self {
+            store: RecordingStore::default(),
+            confirmations: ConfirmationRegistry::new(),
+            sessions: SessionManager::new(),
+            emitter: TestEmitter::default(),
+            log: ConnectLog::new(),
+            session_id: Uuid::new_v4(),
+        }
+    }
+
+    async fn run(
+        &self,
+        interactive: bool,
+        timeout: std::time::Duration,
+        decision: HostKeyDecision,
+        cancel: impl Future<Output = ()>,
+    ) -> CommandResult<()> {
+        let progress = |_steps: Vec<ConnectStepSnapshot>| {};
+        let ctx = HostKeyFlowContext {
+            session_id: self.session_id,
+            server_id: ServerId(Uuid::new_v4()),
+            host_key_store: &self.store,
+            confirmations: &self.confirmations,
+            sessions: &self.sessions,
+            emitter: &self.emitter,
+            attempt_log: &self.log,
+            progress: &progress,
+            interactive,
+            timeout,
+        };
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            resolve_pending_host_key(
+                ctx,
+                HOST.to_string(),
+                PORT,
+                b"raw-key".to_vec(),
+                decision,
+                cancel,
+            ),
+        )
+        .await
+        .expect("the flow must not hang")
+    }
+
+    /// Answers the open prompt as soon as it is registered.
+    async fn answer(&self, decision: HostKeyUserDecision) {
+        while !self.confirmations.contains(&self.session_id) {
+            tokio::task::yield_now().await;
+        }
+        self.confirmations
+            .resolve(&self.session_id, decision)
+            .expect("the prompt is open");
+    }
+
+    fn event_names(&self) -> Vec<String> {
+        recorded_events(&self.emitter)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    fn trusted(&self) -> Vec<(String, u16, Vec<u8>)> {
+        self.store.trusted.lock().unwrap().clone()
+    }
+}
+
+fn unknown() -> HostKeyDecision {
+    HostKeyDecision::Unknown {
+        fingerprint: "SHA256:new".to_string(),
+    }
+}
+
+fn mismatch() -> HostKeyDecision {
+    HostKeyDecision::Mismatch {
+        expected_fingerprint: "SHA256:old".to_string(),
+        actual_fingerprint: "SHA256:new".to_string(),
+    }
+}
+
+const LONG: std::time::Duration = std::time::Duration::from_secs(60);
+
+#[tokio::test]
+async fn test_flow_unknown_key_trusted_stores_key_and_retries() {
+    let fx = Fixture::new();
+    let (result, ()) = tokio::join!(
+        fx.run(true, LONG, unknown(), std::future::pending()),
+        fx.answer(HostKeyUserDecision::Trust),
+    );
+    result.expect("Trust means retry");
+    assert_eq!(
+        fx.trusted(),
+        vec![(HOST.to_string(), PORT, b"raw-key".to_vec())]
+    );
+    assert_eq!(
+        fx.event_names(),
+        vec![
+            "host-key-verification-needed",
+            "host-key-verification-ended"
+        ]
+    );
+    let events = recorded_events(&fx.emitter);
+    assert_eq!(events[0].1["kind"], "unknown");
+    assert_eq!(events[0].1["fingerprint"], "SHA256:new");
+    assert_eq!(events[1].1["reason"], "decided");
+    assert!(!fx.confirmations.contains(&fx.session_id));
+}
+
+#[tokio::test]
+async fn test_flow_mismatch_rejected_does_not_store_key() {
+    let fx = Fixture::new();
+    let (result, ()) = tokio::join!(
+        fx.run(true, LONG, mismatch(), std::future::pending()),
+        fx.answer(HostKeyUserDecision::Reject),
+    );
+    let err = result.expect_err("Reject aborts the connect");
+    assert_eq!(err.code, Some("SSH_HOST_KEY_NOT_TRUSTED"));
+    assert!(fx.trusted().is_empty());
+    let events = recorded_events(&fx.emitter);
+    assert_eq!(events[0].1["kind"], "mismatch");
+    assert_eq!(events[0].1["expectedFingerprint"], "SHA256:old");
+    assert_eq!(events[1].1["reason"], "decided");
+}
+
+#[tokio::test]
+async fn test_flow_timeout_is_rejection_and_emits_ended_for_its_generation() {
+    let fx = Fixture::new();
+    let result = fx
+        .run(
+            true,
+            std::time::Duration::from_millis(50),
+            unknown(),
+            std::future::pending(),
+        )
+        .await;
+    let err = result.expect_err("a timeout never trusts");
+    assert_eq!(err.code, Some("SSH_HOST_KEY_CONFIRM_TIMEOUT"));
+    assert!(fx.trusted().is_empty());
+    let events = recorded_events(&fx.emitter);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, "host-key-verification-ended");
+    assert_eq!(events[1].1["reason"], "timed_out");
+    assert_eq!(events[1].1["promptId"], events[0].1["promptId"]);
+    assert!(!fx.confirmations.contains(&fx.session_id));
+}
+
+#[tokio::test]
+async fn test_flow_cancel_while_waiting_releases_registration_and_never_trusts() {
+    let fx = Fixture::new();
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let cancel = async move {
+        let _ = rx.await;
+    };
+    let canceller = async {
+        while !fx.confirmations.contains(&fx.session_id) {
+            tokio::task::yield_now().await;
+        }
+        tx.send(()).unwrap();
+    };
+    let (result, ()) = tokio::join!(fx.run(true, LONG, unknown(), cancel), canceller);
+    let err = result.expect_err("cancel ends the connect");
+    assert_eq!(err.code, Some("SSH_CONNECT_CANCELLED"));
+    assert!(fx.trusted().is_empty());
+    assert!(!fx.confirmations.contains(&fx.session_id));
+    let events = recorded_events(&fx.emitter);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, "host-key-verification-ended");
+    assert_eq!(events[1].1["reason"], "abandoned");
+    assert_eq!(events[1].1["promptId"], events[0].1["promptId"]);
+}
+
+#[tokio::test]
+async fn test_flow_automatic_reconnect_stops_without_prompting() {
+    let fx = Fixture::new();
+    let result = fx.run(false, LONG, unknown(), std::future::pending()).await;
+    let err = result.expect_err("an automatic attempt never trusts");
+    assert_eq!(err.code, Some("SSH_HOST_KEY_NOT_TRUSTED"));
+    assert!(fx.trusted().is_empty());
+    assert!(fx.event_names().is_empty());
+    assert!(!fx.confirmations.contains(&fx.session_id));
 }
