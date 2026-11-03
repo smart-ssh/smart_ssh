@@ -32,21 +32,17 @@ use ssh_manager_core::ai::{
 };
 
 use crate::action::{parameters_json_schema, tool_call_event};
+use crate::common::frame_loop::{self, FrameHandler};
 use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
 use crate::common::prompt_format::{message_content_text, role_str};
 use crate::content::check_attachments;
-use crate::error::{
-    error_stream, map_stream_error_object, map_transport_error, provider_request_id, timeout_error,
-};
+use crate::error::{error_stream, map_stream_error_object, provider_request_id};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_cache_usage, log_outgoing_context, log_provider_transport_error, log_stop_reason,
     log_text_delta_summary, log_tool_call_fragment,
 };
-use crate::sse::{
-    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
-    SSE_INACTIVITY_TIMEOUT,
-};
+use crate::sse::{build_http_client, SseFrame};
 
 /// Spec 0072, B1: `pub(crate)`, damit `discovery::discover_models` (Modell-
 /// Discovery gegen `GET /v1/models`) dieselbe Version nutzt wie der
@@ -134,6 +130,12 @@ fn anthropic_default_max_tokens_for(model_max: u32) -> u32 {
 enum RawEvent {
     Public(AiEvent),
     RetryWithHigherMaxTokens,
+}
+
+impl From<AiEvent> for RawEvent {
+    fn from(event: AiEvent) -> Self {
+        RawEvent::Public(event)
+    }
 }
 
 fn to_raw_stream(
@@ -442,7 +444,7 @@ async fn connect_and_stream(
         Err(mapped) => return to_raw_stream(error_stream(mapped)),
     };
     let provider_rid = provider_request_id(response.headers());
-    event_stream_from_response(
+    parse_sse_response(
         response,
         native_tool_calling,
         request_id,
@@ -696,9 +698,6 @@ struct WebCitation {
 }
 
 struct AnthropicStreamState {
-    /// Issue #694: restarted only by real content frames.
-    content_deadline: tokio::time::Instant,
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     blocks: BTreeMap<u64, BlockKind>,
     fallback_text: String,
     /// Spec 0049, Fund 2: für die Redaction bei einem Transport-Fehler
@@ -1171,36 +1170,51 @@ fn str_field<'a>(value: Option<&'a Value>, field: &str) -> Option<&'a str> {
     value.and_then(|v| v.get(field)).and_then(Value::as_str)
 }
 
-fn event_stream_from_response(
+fn parse_sse_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    process_frame_stream(
-        Box::pin(sse_frame_stream(response)),
-        native_tool_calling,
-        request_id,
-        api_key,
-        provider_request_id,
+    frame_loop::event_stream_from_response(
+        response,
+        new_stream_state(
+            native_tool_calling,
+            request_id,
+            api_key,
+            provider_request_id,
+        ),
     )
 }
 
-/// Von `event_stream_from_response` losgelöst, damit sich das
-/// Inaktivitäts-Timeout-Verhalten (`SSE_INACTIVITY_TIMEOUT`) direkt mit
-/// einem synthetischen, nie liefernden `frames`-Stream testen lässt — ganz
-/// ohne echten HTTP-Request/Mock-Server.
-fn process_frame_stream(
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+/// Test entry: the shared frame loop over a synthetic `frames` stream.
+#[cfg(test)]
+fn frame_stream(
+    frames: frame_loop::FrameStream,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    let state = AnthropicStreamState {
-        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
+    frame_loop::process_frame_stream(
         frames,
+        new_stream_state(
+            native_tool_calling,
+            request_id,
+            api_key,
+            provider_request_id,
+        ),
+    )
+}
+
+fn new_stream_state(
+    native_tool_calling: bool,
+    request_id: Uuid,
+    api_key: String,
+    provider_request_id: Option<String>,
+) -> AnthropicStreamState {
+    AnthropicStreamState {
         blocks: BTreeMap::new(),
         fallback_text: String::new(),
         api_key,
@@ -1216,75 +1230,38 @@ fn process_frame_stream(
         web_activities: Vec::new(),
         web_citations: Vec::new(),
         usage: AiUsage::default(),
-    };
+    }
+}
 
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(event) = state.pending.pop_front() {
-                return Some((event, state));
-            }
-            if state.finished {
-                return None;
-            }
-            match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
-                Ok(Some(Ok(frame))) => {
-                    if frame_is_content(&frame) {
-                        state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
-                    }
-                    let Some(event_type) = frame.event.clone() else {
-                        continue;
-                    };
-                    if let Ok(data) = serde_json::from_str::<Value>(&frame.data) {
-                        state.handle_event(&event_type, &data);
-                    }
-                    // Frames mit nicht-parsebarem JSON werden ignoriert
-                    // statt den Stream mit einem Fehler abzubrechen — s.
-                    // Begründung in `openai_compatible.rs`.
-                }
-                Ok(Some(Err(err))) => {
-                    let mapped = map_transport_error(&err);
-                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-                Ok(None) => {
-                    // Verbindung endete ohne `message_stop`-Event (z. B.
-                    // abgeschnittene Antwort) — trotzdem sauber abschließen
-                    // statt den Stream einfach verstummen zu lassen.
-                    // Spec 0065, Teil 3 (spec-reviewer-Fund, ERHÖHT): `abrupt
-                    // = true` — selbst ein bereits per `content_block_stop`
-                    // geschlossener (und damit in `held_tool_events`
-                    // liegender) Tool-Call gilt hier als unvollständig,
-                    // solange kein `message_delta`/`message_stop` den
-                    // Abschluss bestätigt hat. Vorher griff nur `has_open_
-                    // tool_block` (Block noch in `self.blocks`) — ein
-                    // Verbindungsabbruch UNMITTELBAR NACH `content_block_
-                    // stop`, aber vor `message_delta`, hätte den Tool-Call
-                    // sonst freigegeben (Ist-Befund im Review).
-                    if !state.finished {
-                        state.finished = true;
-                        let events = state.finalize(true);
-                        state.pending.extend(events);
-                    } else {
-                        return None;
-                    }
-                }
-                Err(_elapsed) => {
-                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT`: ohne
-                    // dieses Limit würde ein hängender Request den Chat-Turn
-                    // für immer ohne jede Fehlermeldung blockieren.
-                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                    log_provider_transport_error(state.request_id, &mapped, &[&state.api_key]);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
+impl FrameHandler for AnthropicStreamState {
+    type Event = RawEvent;
+
+    fn on_frame(&mut self, frame: &SseFrame) -> Vec<RawEvent> {
+        if let Some(event_type) = frame.event.as_deref() {
+            // Frames with unparsable JSON are ignored instead of aborting
+            // the stream (see `openai_compatible.rs`).
+            if let Ok(data) = serde_json::from_str::<Value>(&frame.data) {
+                self.handle_event(event_type, &data);
             }
         }
-    }))
+        self.pending.drain(..).collect()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// Spec 0065, part 3: the loop passes `abrupt = true` when the
+    /// connection ended without `message_stop`; even a tool call already
+    /// closed by `content_block_stop` (held in `held_tool_events`) then
+    /// counts as incomplete until `message_delta`/`message_stop` confirmed it.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+        AnthropicStreamState::finalize(self, abrupt)
+    }
+
+    fn log_transport_error(&self, error: &AiError) {
+        log_provider_transport_error(self.request_id, error, &[&self.api_key]);
+    }
 }
 #[cfg(test)]
 mod tests;
