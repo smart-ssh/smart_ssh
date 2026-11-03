@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Dosya bu sistemde panoya konulamadı.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Seçilen yapay zekâ sağlayıcısı yapılandırılmamış. Yapılandırılmış bir sağlayıcı seçin.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Risk için ikinci görüşü açmadan önce bir yapay zekâ sağlayıcısı seçin.",
+    "SESSION_NOT_FOUND": "Bu oturum artık açık değil. Sunucu listesinden yeniden açın.",
     "SSH_SFTP_ALREADY_EXISTS": "Bu adda bir dosya veya klasör zaten var",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı"
   },

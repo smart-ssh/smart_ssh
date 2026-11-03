@@ -406,3 +406,16 @@ describe("Prüfung nicht verfügbar (Issue #102)", () => {
     }
   }
 });
+
+// Issue #883: SESSION_NOT_FOUND is a known code with its own DE and EN text.
+describe("SESSION_NOT_FOUND", () => {
+  const FALLBACK = "__FALLBACK_SENTINEL__";
+
+  it("is known and DE/EN texts differ", () => {
+    const en = translateErrorCode(testI18n.getFixedT("en"), "SESSION_NOT_FOUND", FALLBACK);
+    const de = translateErrorCode(testI18n.getFixedT("de"), "SESSION_NOT_FOUND", FALLBACK);
+    expect(en).not.toBe(FALLBACK);
+    expect(de).not.toBe(FALLBACK);
+    expect(de).not.toBe(en);
+  });
+});

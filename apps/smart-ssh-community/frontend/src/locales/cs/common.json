@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Vybraný poskytovatel AI není nastaven. Vyberte nastaveného poskytovatele.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
+    "SESSION_NOT_FOUND": "Tato relace už není otevřená. Otevřete ji znovu ze seznamu serverů.",
     "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen"
   },

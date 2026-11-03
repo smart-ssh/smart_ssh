@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "A kiválasztott AI-szolgáltató nincs beállítva. Válasszon egy beállított szolgáltatót.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "A kockázati második vélemény bekapcsolása előtt válasszon AI-szolgáltatót.",
+    "SESSION_NOT_FOUND": "Ez a munkamenet már nincs megnyitva. Nyisd meg újra a szerverlistából.",
     "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
   },
