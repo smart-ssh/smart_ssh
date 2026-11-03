@@ -33,6 +33,11 @@ use ssh_manager_core::shared::ServerId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatSessionStoreError {
     Backend(String),
+    /// A SQLite failure with its machine-readable kind (issue #885).
+    Database {
+        kind: crate::error_kind::StoreErrorKind,
+        message: String,
+    },
     /// Die geladene `content`-Spalte einer Nachricht ließ sich nicht als
     /// `MessageContent` deserialisieren — z. B. korrupte/fremde Daten.
     /// Eigene Variante statt in `Backend` verpackt, damit Aufrufer diesen
@@ -48,6 +53,9 @@ pub enum ChatSessionStoreError {
 impl std::fmt::Display for ChatSessionStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ChatSessionStoreError::Database { message, .. } => {
+                write!(f, "Datenbankfehler: {message}")
+            }
             ChatSessionStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
             ChatSessionStoreError::CorruptContent { message_id, reason } => write!(
                 f,
@@ -59,8 +67,24 @@ impl std::fmt::Display for ChatSessionStoreError {
 
 impl std::error::Error for ChatSessionStoreError {}
 
+impl ChatSessionStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
+        match self {
+            ChatSessionStoreError::Database { kind, .. } => Some(*kind),
+            ChatSessionStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
 fn backend_err(e: sqlx::Error) -> ChatSessionStoreError {
-    ChatSessionStoreError::Backend(e.to_string())
+    ChatSessionStoreError::Database {
+        kind: crate::error_kind::classify(&e),
+        message: e.to_string(),
+    }
 }
 
 fn role_to_text(role: Role) -> &'static str {
@@ -1626,7 +1650,7 @@ mod tests {
 
         assert!(matches!(
             chat_store.load_session(session_id).await,
-            Err(ChatSessionStoreError::Backend(_))
+            Err(ChatSessionStoreError::Database { .. })
         ));
     }
 
@@ -1647,7 +1671,7 @@ mod tests {
 
         assert!(matches!(
             chat_store.load_summary(session_id).await,
-            Err(ChatSessionStoreError::Backend(_))
+            Err(ChatSessionStoreError::Database { .. })
         ));
     }
 
@@ -1662,5 +1686,19 @@ mod tests {
 
         let loaded = chat_store.load_summary(session_id).await.unwrap();
         assert_eq!(loaded, None);
+    }
+
+    /// Issue #885: a foreign-key violation keeps its kind.
+    #[tokio::test]
+    async fn test_constraint_failure_keeps_its_kind() {
+        let (_profile_store, chat_store) = in_memory_chat_session_store().await;
+        let err = chat_store
+            .create_session(&ServerId::new(), None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.kind(),
+            Some(crate::error_kind::StoreErrorKind::Constraint)
+        );
     }
 }

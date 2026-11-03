@@ -16,6 +16,7 @@ mod credential_store;
 /// Klartext-Datei umwandeln.
 mod encryption;
 mod error;
+mod error_kind;
 /// Issue #462: extension-owned tables and migrations (Spec 0038, 2a).
 mod extension_db;
 /// Issue #673: namespaced key-value and secret store.
@@ -89,6 +90,7 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
+pub use error_kind::{classify, StoreErrorKind};
 pub use extension_db::{
     validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
     ExtensionRegistration,

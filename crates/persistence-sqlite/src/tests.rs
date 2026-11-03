@@ -980,3 +980,16 @@ async fn test_copy_marker_defaults_to_false_and_survives_updates() {
     store.update_server(&server).await.unwrap();
     assert_eq!(backup.copy_marked().await.unwrap().servers.len(), 1);
 }
+
+/// Issue #885: a duplicate primary key keeps its kind in `ProfileError`.
+#[tokio::test]
+async fn test_profile_store_constraint_failure_keeps_its_kind() {
+    let store = in_memory_store().await;
+    let server = make_server("dup", None, vec![]);
+    store.create_server(&server).await.unwrap();
+    let err = store.create_server(&server).await.unwrap_err();
+    assert_eq!(
+        err.kind(),
+        Some(ssh_manager_core::profiles::StoreErrorKind::Constraint)
+    );
+}

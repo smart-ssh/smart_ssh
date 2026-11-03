@@ -27,7 +27,7 @@ pub use start_directory::{
     normalize_start_directory, start_directory_cd_command, start_directory_sftp_path,
     StartDirectoryError,
 };
-pub use store::{ProfileError, ProfileResult, ProfileStore};
+pub use store::{ProfileError, ProfileResult, ProfileStore, StoreErrorKind};
 pub use types::{
     ask_user_fallback_text, ask_user_model_text, validate_ask_user, AiAction, AskUserOption,
     AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,
