@@ -1,3 +1,4 @@
+use crate::sync::lock_tolerating_poison;
 use std::cmp::Ordering;
 
 use async_trait::async_trait;
@@ -172,10 +173,7 @@ impl<S: PolicyStore> FilterEngine<S> {
             };
             let key = (rule.id.0.clone(), pattern_fingerprint(&rule.pattern));
             let first_time = {
-                let mut seen = self
-                    .reported_invalid
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut seen = lock_tolerating_poison(&self.reported_invalid);
                 if seen.len() >= REPORTED_INVALID_PATTERNS_CAP && !seen.contains(&key) {
                     seen.clear();
                 }

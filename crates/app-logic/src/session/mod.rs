@@ -29,6 +29,7 @@
 //!    Server-Chunk blockieren und die Eingabe spürbar verzögern. Der Aktor
 //!    umgeht das vollständig, da nur er selbst je auf die Shell zugreift.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex as StdMutex;
@@ -230,7 +231,7 @@ impl ReconnectClaim<'_> {
         self.session
             .replace_connection(transport, redactor, sudo_password)
             .await;
-        *crate::poison::lock_tolerating_poison(&self.session.conn.status) =
+        *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
             ConnectionStatus::Connected;
         self.settled = true;
     }
@@ -239,7 +240,7 @@ impl ReconnectClaim<'_> {
 impl Drop for ReconnectClaim<'_> {
     fn drop(&mut self) {
         if !self.settled {
-            *crate::poison::lock_tolerating_poison(&self.session.conn.status) =
+            *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
                 ConnectionStatus::Disconnected;
         }
     }
@@ -290,7 +291,7 @@ pub struct CommandSlot<'a> {
 
 impl Drop for CommandSlot<'_> {
     fn drop(&mut self) {
-        *self.owner.running_action.lock().unwrap() = None;
+        *lock_tolerating_poison(&self.owner.running_action) = None;
     }
 }
 
@@ -315,7 +316,7 @@ impl SessionTransport {
         if self.is_closed() {
             return None;
         }
-        *self.running_action.lock().unwrap() = Some(action_id);
+        *lock_tolerating_poison(&self.running_action) = Some(action_id);
         Some(CommandSlot {
             owner: self,
             _guard: guard,
@@ -324,7 +325,7 @@ impl SessionTransport {
 
     /// Issue #328: the AI command running right now, if any.
     pub fn running_action(&self) -> Option<ActionId> {
-        *self.running_action.lock().unwrap()
+        *lock_tolerating_poison(&self.running_action)
     }
 
     /// Issue #328: the session is being disconnected.
@@ -706,7 +707,7 @@ impl Session {
     /// only once: the state flips to `Reconnecting` under the lock, so a
     /// second trigger (double click, `R` key held down) gets `None`.
     pub fn begin_reconnect(&self) -> Option<ReconnectClaim<'_>> {
-        let mut status = crate::poison::lock_tolerating_poison(&self.conn.status);
+        let mut status = ssh_manager_core::sync::lock_tolerating_poison(&self.conn.status);
         if *status != ConnectionStatus::Disconnected {
             return None;
         }
@@ -729,7 +730,7 @@ impl Session {
         )
         .await;
         let _ = self.transport.lock().await.disconnect().await;
-        *crate::poison::lock_tolerating_poison(&self.conn.terminal) = None;
+        *ssh_manager_core::sync::lock_tolerating_poison(&self.conn.terminal) = None;
     }
 
     /// Issue #355: replaces transport, normal SFTP channel and redactor of
@@ -881,7 +882,7 @@ impl Session {
 
     /// Spec 0066, §2: entnimmt alle eingereihten Nutzer-Nachrichten.
     pub(crate) fn take_queued_user_messages(&self) -> Vec<String> {
-        std::mem::take(&mut self.conn.chat_turn.lock().unwrap().queued)
+        std::mem::take(&mut lock_tolerating_poison(&self.conn.chat_turn).queued)
     }
 
     /// Spec 0066, §1: setzt das Stopp-Flag und weckt eine gerade laufende
@@ -907,7 +908,8 @@ impl Session {
         &self,
         confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
     ) -> bool {
-        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.conn.pending_action)
+        let Some(action_id) =
+            *ssh_manager_core::sync::lock_tolerating_poison(&self.conn.pending_action)
         else {
             return false;
         };
@@ -1027,8 +1029,12 @@ pub fn spawn_terminal_actor(
     mut shell: Box<dyn ssh_manager_core::ssh::InteractiveShell>,
     mut commands: mpsc::UnboundedReceiver<TerminalCommand>,
     emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
 ) {
-    tokio::spawn(async move {
+    // Issue #881: runs in the session scope; closing the session cancels it
+    // (no further output event, no status event — the close path emits its
+    // own).
+    tasks.spawn("terminal-actor", async move {
         // `Some(reason)` löst am Ende ein `connection-status-changed`-Event
         // aus, `None` unterdrückt es bewusst — das passiert nur, wenn der
         // Sender absichtlich gedroppt wurde (`app_shell::commands::disconnect`
@@ -1095,7 +1101,7 @@ pub fn report_connection_lost(
     reason: Option<String>,
 ) -> bool {
     {
-        let mut status = session.conn.status.lock().unwrap();
+        let mut status = lock_tolerating_poison(&session.conn.status);
         if *status == ConnectionStatus::Disconnected {
             return false;
         }
@@ -1104,7 +1110,8 @@ pub fn report_connection_lost(
     // Issue #356: remember that an AI turn was cut off by the loss (running
     // command, waiting confirmation or a pending follow-up round), so the
     // AI can continue after an automatic reconnect.
-    let turn_active = crate::poison::lock_tolerating_poison(&session.conn.chat_turn).running;
+    let turn_active =
+        ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn).running;
     session
         .conn
         .auto_reconnect
@@ -1125,10 +1132,11 @@ pub fn spawn_connection_watch(
     session: &Arc<Session>,
     mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
     emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
 ) {
     let epoch = session.transport.epoch();
     let session = Arc::downgrade(session);
-    tokio::spawn(async move {
+    tasks.spawn("connection-watch", async move {
         let loss = loop {
             if let Some(loss) = watch.borrow_and_update().clone() {
                 break loss;

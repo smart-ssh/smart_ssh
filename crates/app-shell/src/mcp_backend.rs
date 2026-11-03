@@ -6,6 +6,7 @@
 //! zur Begründung, warum diese Implementierung hier (statt in der
 //! `mcp-server`-Crate selbst) lebt.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Manager};
@@ -86,7 +87,7 @@ impl AppMcpBackend {
                     if let Err(err) = orphan.transport.lock().await.disconnect().await {
                         tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
                     }
-                    *orphan.conn.terminal.lock().unwrap() = None;
+                    *lock_tolerating_poison(&orphan.conn.terminal) = None;
                 }
             },
         )
@@ -135,6 +136,10 @@ impl McpBackend for AppMcpBackend {
         McpLookup::from_state(&state).server_notes(server_id).await
     }
 
+    fn spawn_tool_call(&self, task: ssh_manager_core::ssh::BoxedTask) -> bool {
+        crate::background_tasks::app_scope(&self.app).spawn("mcp-tool-call", task)
+    }
+
     async fn propose_action(
         &self,
         server_id: ServerId,
@@ -178,26 +183,55 @@ impl McpBackend for AppMcpBackend {
 
         self.notify_pending_confirmation(&server_name, client_name.as_deref());
 
-        let app_emitter = TauriEventEmitter(self.app.clone());
-        let capture = CaptureEmitter::new(&app_emitter);
+        // Issue #881: the action runs as a task of the *session* scope, so
+        // closing the session cancels it. Cancellation drops the future and
+        // with it the registered confirmation (rejection, never execution);
+        // the closed MCP session is then reported to the client. After an MCP
+        // tool-call timeout the task keeps waiting for the user's decision
+        // (Spec 0028, §7) until it is decided or the session closes.
+        let (outcome_tx, outcome_rx) = tokio::sync::oneshot::channel();
+        let app = self.app.clone();
+        let spawned = crate::background_tasks::session_scope(&self.app, session_id).spawn(
+            "mcp-propose-action",
+            async move {
+                let state = app.state::<AppState>();
+                let app_emitter = TauriEventEmitter(app.clone());
+                let capture = CaptureEmitter::new(&app_emitter);
 
-        handle_mcp_action_proposed(
-            &session,
-            session_id,
-            action,
-            &capture,
-            state.profile_store.as_ref(),
-            &state.pending_action_confirmations,
-            client_name,
-        )
-        .await;
+                handle_mcp_action_proposed(
+                    &session,
+                    session_id,
+                    action,
+                    &capture,
+                    state.profile_store.as_ref(),
+                    &state.pending_action_confirmations,
+                    client_name,
+                )
+                .await;
 
-        // Spec 0104, §5: Wurde die MCP-Sitzung in der App geschlossen,
-        // während die Aktion lief, bekommt der Client eine eindeutige
-        // Meldung statt "vom Nutzer abgelehnt" — ein bereits vorliegendes
-        // Ergebnis oder ein Filter-`Deny` bleibt davon unberührt.
-        let session_closed = !state.mcp.sessions.is_mcp_session(session_id);
-        Ok(capture.into_outcome(session_closed))
+                // Spec 0104, §5: Wurde die MCP-Sitzung in der App geschlossen,
+                // während die Aktion lief, bekommt der Client eine eindeutige
+                // Meldung statt "vom Nutzer abgelehnt" — ein bereits
+                // vorliegendes Ergebnis oder ein Filter-`Deny` bleibt davon
+                // unberührt.
+                let session_closed = !state.mcp.sessions.is_mcp_session(session_id);
+                let _ = outcome_tx.send(capture.into_outcome(session_closed));
+            },
+        );
+        let closed = || {
+            Ok(ActionOutcome::Failed {
+                message: MCP_SESSION_CLOSED_MESSAGE.to_string(),
+            })
+        };
+        if !spawned {
+            return closed();
+        }
+        // The sender is gone without a value only when the session scope
+        // cancelled the task (session closed) or the task panicked.
+        match outcome_rx.await {
+            Ok(outcome) => Ok(outcome),
+            Err(_) => closed(),
+        }
     }
 }
 
@@ -273,14 +307,14 @@ impl EventEmitter for CaptureEmitter<'_> {
     fn emit_event(&self, event: &str, payload: serde_json::Value) {
         match event {
             "chat-action-proposed" => {
-                *self.decision.lock().expect("Mutex vergiftet") = Some(payload["decision"].clone());
+                *lock_tolerating_poison(&self.decision) = Some(payload["decision"].clone());
             }
             "chat-action-result" => {
-                *self.result.lock().expect("Mutex vergiftet") = Some(payload["result"].clone());
+                *lock_tolerating_poison(&self.result) = Some(payload["result"].clone());
             }
             "chat-error" => {
                 if let Some(message) = payload["message"].as_str() {
-                    *self.error.lock().expect("Mutex vergiftet") = Some(message.to_string());
+                    *lock_tolerating_poison(&self.error) = Some(message.to_string());
                 }
             }
             _ => {}

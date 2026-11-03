@@ -10,6 +10,7 @@
 //! here; if the single retry is already used it ends in
 //! `AiError::ResponseTruncated`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -105,9 +106,7 @@ pub(crate) fn retry_stream_with_overload(
     params: RetryParams,
 ) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
     let request_id = params.request_id;
-    *last_request
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request_id);
+    *lock_tolerating_poison(last_request) = Some(request_id);
     let span = tracing::info_span!("ai_request", provider, model = %model);
     crate::overload::with_overload_retry(span, request_id, move || retry_stream(params.clone()))
 }

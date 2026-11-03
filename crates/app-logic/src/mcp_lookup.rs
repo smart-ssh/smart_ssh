@@ -15,6 +15,7 @@
 //! trennen) liegt aber Tauri-frei in
 //! `crate::mcp_sessions::ensure_mcp_session` (Issue #67).
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -51,20 +52,14 @@ impl<'a> McpLookup<'a> {
 
     /// Ob `server_id` auf der MCP-Allow-Liste steht.
     pub fn is_allowed(&self, server_id: &ServerId) -> bool {
-        self.allowed_servers
-            .lock()
-            .expect("allowed_servers-Mutex vergiftet")
-            .contains(server_id)
+        lock_tolerating_poison(self.allowed_servers).contains(server_id)
     }
 
     /// Nur Server auf der Allow-Liste, die im Profil-Store (noch)
     /// existieren. Die Liste wird vor dem ersten `await` kopiert, damit der
     /// Mutex nicht über einen Await-Punkt gehalten wird.
     pub async fn list_servers(&self) -> Vec<ServerSummary> {
-        let allowed: Vec<ServerId> = self
-            .allowed_servers
-            .lock()
-            .expect("allowed_servers-Mutex vergiftet")
+        let allowed: Vec<ServerId> = lock_tolerating_poison(self.allowed_servers)
             .iter()
             .copied()
             .collect();

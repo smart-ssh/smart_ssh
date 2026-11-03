@@ -2,6 +2,7 @@
 //! hard maximum length, transcription off the caller's thread. Audio only
 //! lives in memory and is dropped after transcription or cancel.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -227,7 +228,7 @@ impl Recorder {
         language: Option<String>,
     ) -> Result<(), RecordError> {
         let inner = &self.0;
-        let mut state = inner.state.lock().expect("recorder state");
+        let mut state = lock_tolerating_poison(&inner.state);
         if matches!(&*state, State::Recording(_) | State::Transcribing { .. }) {
             return Err(RecordError::AlreadyRecording);
         }
@@ -235,7 +236,7 @@ impl Recorder {
         let max_samples = (inner.max.as_secs_f64() * TARGET_RATE as f64) as usize;
         let capture = inner.source.open(max_samples).map_err(RecordError::from)?;
         let id = {
-            let mut n = inner.next_id.lock().expect("recorder id");
+            let mut n = lock_tolerating_poison(&inner.next_id);
             *n += 1;
             *n
         };
@@ -275,7 +276,7 @@ impl Recorder {
         let inner = &self.0;
         let (tx, rx) = watch::channel(None);
         let taken = {
-            let mut state = inner.state.lock().expect("recorder state");
+            let mut state = lock_tolerating_poison(&inner.state);
             match std::mem::replace(&mut *state, State::Idle) {
                 State::Recording(active) => {
                     // Stay busy while recognising: start is refused, cancel
@@ -308,7 +309,7 @@ impl Recorder {
                 let id = active.id;
                 let outcome = self.transcribe(active).await;
                 let _ = tx.send(Some(outcome.clone()));
-                let mut state = inner.state.lock().expect("recorder state");
+                let mut state = lock_tolerating_poison(&inner.state);
                 if matches!(&*state, State::Transcribing { id: i, .. } if *i == id) {
                     *state = State::Idle;
                     drop(state);
@@ -330,7 +331,7 @@ impl Recorder {
                         return Err(RecordError::NotRecording);
                     }
                 };
-                let mut state = inner.state.lock().expect("recorder state");
+                let mut state = lock_tolerating_poison(&inner.state);
                 if matches!(&*state, State::Finished(_))
                     || matches!(&*state, State::Transcribing { id: i, .. } if *i == id)
                 {
@@ -346,10 +347,7 @@ impl Recorder {
     /// Discards the recording; nothing is transcribed or returned.
     pub fn cancel(&self) {
         let inner = &self.0;
-        let old = std::mem::replace(
-            &mut *inner.state.lock().expect("recorder state"),
-            State::Idle,
-        );
+        let old = std::mem::replace(&mut *lock_tolerating_poison(&inner.state), State::Idle);
         if let State::Recording(active) = old {
             active.timer.abort();
             active.live.abort();
@@ -363,7 +361,7 @@ impl Recorder {
         let inner = &self.0;
         let (tx, rx) = watch::channel(None);
         let active = {
-            let mut state = inner.state.lock().expect("recorder state");
+            let mut state = lock_tolerating_poison(&inner.state);
             match &*state {
                 State::Recording(a) if a.id == id => {}
                 _ => return,
@@ -379,7 +377,7 @@ impl Recorder {
         (inner.on_state)(RecorderState::Transcribing);
         let outcome = self.transcribe(active).await;
         {
-            let mut state = inner.state.lock().expect("recorder state");
+            let mut state = lock_tolerating_poison(&inner.state);
             if matches!(&*state, State::Transcribing { id: i, .. } if *i == id) {
                 *state = State::Finished(outcome.clone());
             } else {
@@ -406,7 +404,7 @@ impl Recorder {
         loop {
             tokio::time::sleep(inner.live.interval).await;
             let samples = {
-                let state = inner.state.lock().expect("recorder state");
+                let state = lock_tolerating_poison(&inner.state);
                 match &*state {
                     State::Recording(a) if a.id == id => a.capture.snapshot(),
                     _ => return,
@@ -464,7 +462,7 @@ impl Recorder {
                 continue;
             }
             // Report only while this recording is still the running one.
-            let state = inner.state.lock().expect("recorder state");
+            let state = lock_tolerating_poison(&inner.state);
             if !matches!(&*state, State::Recording(a) if a.id == id) {
                 return;
             }

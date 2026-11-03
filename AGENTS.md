@@ -388,6 +388,18 @@ as they are (translate only when the surrounding function is substantially
 rewritten, never in bulk). Spec references (`Spec NNNN, A<n>`) stay as they
 are. See `docs/adr/0152-code-comment-language.md`.
 
+## Locks and poisoning
+
+Production code locks `std::sync` primitives (`Mutex`, `RwLock`) only through
+`ssh_manager_core::sync::{lock,read,write}_tolerating_poison` — never
+`lock().unwrap()`, `lock().expect(..)` or the `read`/`write` equivalents. Where
+a poisoned value could be half-updated and continuing would be wrong, the call
+site resets the value to a safe default after recovering and says so in a
+comment; it never panics, and never skips a revocation or turns a pending
+decision into an approval (Spec 0088, A5). A guard test
+(`crates/core/tests/lock_poison_guard.rs`) enforces it; tests may keep
+`unwrap`. `tokio::sync` locks are not poisoned and are out of scope.
+
 ## Commits
 
 Conventional Commits, scoped to the crate/area, referencing the spec if any:

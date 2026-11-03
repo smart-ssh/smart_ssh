@@ -6,6 +6,7 @@
 //! union of the affected [`DataKind`]s. The notification never carries entity
 //! content, IDs or names: subscribers re-read what they care about.
 
+use crate::sync::lock_tolerating_poison;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -122,7 +123,7 @@ impl DataChangeNotifier {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.inner)
     }
 }
 

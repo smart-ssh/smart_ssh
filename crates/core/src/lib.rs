@@ -21,3 +21,4 @@ pub mod risk;
 pub mod session;
 pub mod shared;
 pub mod ssh;
+pub mod sync;

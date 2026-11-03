@@ -30,8 +30,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::error::CommandError;
-use crate::poison::lock_tolerating_poison;
 use crate::state::SessionId;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// How long a native drop stays claimable. The file browser claims it
 /// right after the webview receives the same drop event; a drop no

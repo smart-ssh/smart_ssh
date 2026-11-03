@@ -20,9 +20,9 @@ use tokio::sync::oneshot;
 
 use crate::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use crate::dto::ActionUserDecision;
-use crate::poison::lock_tolerating_poison;
 use crate::session::Session;
 use crate::state::ActionId;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Eine registrierte, noch nicht aufgelöste Bestätigung für `action_id`.
 ///

@@ -60,7 +60,11 @@ fn start<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) {
         1,
     );
     let app = app.clone();
-    tauri::async_runtime::spawn(async move { run(app, session, session_id, budget, stop).await });
+    // Issue #881: ends with the session; the stop flag of `begin_run` stays
+    // for the close path that runs before the scope is cancelled.
+    crate::background_tasks::session_scope(&app, session_id).spawn("auto-reconnect", async move {
+        run(app, session, session_id, budget, stop).await
+    });
 }
 
 async fn run<R: Runtime>(

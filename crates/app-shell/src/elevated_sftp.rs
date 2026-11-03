@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-use ssh_manager_core::ssh::SftpSession;
+use ssh_manager_core::{ssh::SftpSession, sync::lock_tolerating_poison};
 
 use crate::commands::BrowserAccess;
 use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
@@ -103,7 +103,7 @@ impl ElevatedSftpSlot {
     /// Befehl gerade festhält.
     #[cfg(test)]
     pub(crate) fn set_before_operation_hook(&self, hook: BeforeOperationHook) {
-        *self.before_operation_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.before_operation_hook) = Some(hook);
     }
 
     /// Ruft den Haltepunkt aus [`Self::before_operation_hook`], falls einer
@@ -111,7 +111,7 @@ impl ElevatedSftpSlot {
     pub(crate) fn run_before_operation_hook(&self) {
         #[cfg(test)]
         {
-            let hook = self.before_operation_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.before_operation_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
@@ -220,7 +220,9 @@ impl ElevatedSftpRegistry {
         session_id: SessionId,
         _access: &BrowserAccess,
     ) -> Option<ElevatedSftpSlot> {
-        self.slots.lock().unwrap().get(&session_id).cloned()
+        lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned()
     }
 
     /// Spec 0084, A2.2: trägt `channel` **nur** ein, wenn `session_id` zu
@@ -241,7 +243,7 @@ impl ElevatedSftpRegistry {
         channel: ElevatedSftp,
         _access: &BrowserAccess,
     ) -> Result<Option<ElevatedSftpSlot>, ()> {
-        let mut slots = self.slots.lock().unwrap();
+        let mut slots = lock_tolerating_poison(&self.slots);
         if sessions.get(session_id).is_none() {
             return Err(());
         }
@@ -262,7 +264,7 @@ impl ElevatedSftpRegistry {
     /// laufenden Vorgang und darf deshalb nicht unter der
     /// Zuordnungs-Sperre laufen.
     fn take(&self, session_id: SessionId, _access: &BrowserAccess) -> Option<ElevatedSftpSlot> {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = &slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -298,12 +300,12 @@ impl ElevatedSftpRegistry {
         let session = sessions.remove(session_id);
         #[cfg(test)]
         {
-            let hook = self.interleave_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.interleave_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
         }
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -315,7 +317,7 @@ impl ElevatedSftpRegistry {
     /// channel (it belonged to the dead connection). The channel is revoked
     /// like on disconnect; the user elevates again.
     pub(crate) fn revoke_session(&self, session_id: SessionId) {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -328,9 +330,7 @@ impl ElevatedSftpRegistry {
     /// separat geprüft (T8/T8b).
     #[cfg(test)]
     pub(crate) fn insert_for_tests(&self, session_id: SessionId, channel: ElevatedSftp) {
-        self.slots
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.slots)
             .insert(session_id, ElevatedSftpSlot::with_channel(channel));
     }
 
@@ -338,7 +338,7 @@ impl ElevatedSftpRegistry {
     /// ersten Durchlauf verbraucht.
     #[cfg(test)]
     fn set_interleave_hook(&self, hook: InterleaveHook) {
-        *self.interleave_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.interleave_hook) = Some(hook);
     }
 }
 

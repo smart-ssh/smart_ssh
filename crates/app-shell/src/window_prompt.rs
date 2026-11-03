@@ -23,6 +23,7 @@
 //! synchronen Secret-Speicher (§2 Frage 2: Tauris Laufzeit ist eine
 //! Multi-Thread-Laufzeit, s. `runtime_assumptions`).
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -235,7 +236,7 @@ impl PromptChannel {
     /// dann ist der Aufruf verspätet oder erfunden und wird verworfen, statt
     /// eine spätere Frage vorab zu beantworten.
     fn answer(&self, answer: StartupPromptAnswer) -> bool {
-        let sender = self.pending.lock().expect("Prompt-Sperre").take();
+        let sender = lock_tolerating_poison(&self.pending).take();
         match sender {
             Some(sender) => sender.send(answer).is_ok(),
             None => {
@@ -271,7 +272,7 @@ impl PromptChannel {
             tracing::error!(error = %err, "could not show the startup notice in the window");
         }
         debug_assert!(
-            self.pending.lock().expect("Prompt-Sperre").is_none(),
+            lock_tolerating_poison(&self.pending).is_none(),
             "ein Hinweis darf keine Frage offen lassen (Klarstellung 10e)"
         );
     }
@@ -283,7 +284,7 @@ impl PromptChannel {
     ) -> StartupPromptAnswer {
         let (tx, rx) = oneshot::channel();
         {
-            let mut pending = self.pending.lock().expect("Prompt-Sperre");
+            let mut pending = lock_tolerating_poison(&self.pending);
             // Eine noch offene Frage kann es nicht geben (linearer Ablauf).
             // Käme es doch dazu, ist „beenden“ die sichere Antwort auf die
             // alte — nicht ihr stilles Verschwinden.
@@ -306,7 +307,7 @@ impl PromptChannel {
             // Ohne Fenster gibt es keine Antwort. „Beenden“ ist der einzige
             // Ausgang, der nichts anfasst.
             tracing::error!(error = %err, "could not show the startup prompt in the window");
-            let _ = self.pending.lock().expect("Prompt-Sperre").take();
+            let _ = lock_tolerating_poison(&self.pending).take();
             return StartupPromptAnswer::Quit;
         }
 
@@ -335,7 +336,7 @@ impl PromptChannel {
                 // Den verwaisten Sender wegräumen: Eine Antwort, die jetzt
                 // noch käme, soll „es ist gerade keine Frage offen" ergeben
                 // und nicht eine längst abgelaufene Frage beantworten.
-                let _ = self.pending.lock().expect("Prompt-Sperre").take();
+                let _ = lock_tolerating_poison(&self.pending).take();
                 tracing::error!(
                     seconds = self.timeout.as_secs(),
                     "no answer to the startup prompt arrived in time; the window may never \
@@ -397,7 +398,7 @@ impl WindowStartupPrompt {
     /// entnommen — eine Bestätigung aus einem früheren Versuch kann so
     /// nicht an ein neues Passwort geraten.
     pub fn provide_new_password(&self, password: NewMasterPassword) {
-        *self.new_password.lock().expect("Passwort-Sperre") = Some(password);
+        *lock_tolerating_poison(&self.new_password) = Some(password);
     }
 
     fn request(&self, request: StartupPromptRequest) -> StartupPromptAnswer {
@@ -529,7 +530,7 @@ impl StartupPrompt for WindowStartupPrompt {
         // das genügte ein Aufruf von `answer_startup_prompt` mit `Confirm`
         // und ohne Passwort, um das alte zu bestätigen — die Maske zeigte
         // ein leeres Feld, und eingerichtet würde das Passwort von vorhin.
-        *self.new_password.lock().expect("Passwort-Sperre") = None;
+        *lock_tolerating_poison(&self.new_password) = None;
         let text = texts::master_password_setup_text(self.language);
         let answer = self.request(StartupPromptRequest {
             kind: PromptKind::NewMasterPassword,
@@ -539,10 +540,10 @@ impl StartupPrompt for WindowStartupPrompt {
         if answer != StartupPromptAnswer::Confirm {
             // A5/A13: Abbruch heißt, dass nichts verändert ist — auch kein
             // hinterlegtes Passwort bleibt liegen.
-            *self.new_password.lock().expect("Passwort-Sperre") = None;
+            *lock_tolerating_poison(&self.new_password) = None;
             return None;
         }
-        self.new_password.lock().expect("Passwort-Sperre").take()
+        lock_tolerating_poison(&self.new_password).take()
     }
 
     fn can_ask_for_a_password(&self) -> bool {
@@ -696,7 +697,7 @@ mod tests {
             "fn ask_for_new_master_password(&self) -> Option<NewMasterPassword> {",
         );
         let clears = asking
-            .find("*self.new_password.lock().expect(\"Passwort-Sperre\") = None;")
+            .find("*lock_tolerating_poison(&self.new_password) = None;")
             .expect(
                 "Klarstellung 10e: Der Platz für das neue Passwort muss geleert werden, bevor \
                  gefragt wird — sonst gilt ein Passwort aus einem früheren, abgebrochenen \

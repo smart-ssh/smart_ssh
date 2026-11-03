@@ -1,6 +1,7 @@
 //! Spec 0010/0017/0021/0027/0065/0066: Chat-Nachrichten, laufende Sitzungen,
 //! Trennen — Teil der Spec-0083-Aufteilung von `commands.rs`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use tauri::{AppHandle, Manager, State};
 
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
@@ -250,7 +251,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // früh gedrückter Stopp für diesen Turn kann dadurch nicht mehr von
     // einem späteren Reset verschluckt werden.
     let queued_only = {
-        let mut turn = session.conn.chat_turn.lock().unwrap();
+        let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
         // Issue #315: während „Neuer Chat" den Chat austauscht, nichts
         // einreihen — die Nachricht würde sonst unbemerkt der ersten Anfrage
         // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
@@ -415,7 +416,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
         // Start oben) atomar zurückgesetzt — eingereihte Nachrichten werden
         // auch nach einem Stopp noch beantwortet (Spec 0066, §1).
         let next = {
-            let mut turn = session.conn.chat_turn.lock().unwrap();
+            let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
             if turn.queued.is_empty() && !unanswered_injected_messages {
                 turn.running = false;
                 None
@@ -456,12 +457,7 @@ struct ChatTurnRunningGuard<'a> {
 impl Drop for ChatTurnRunningGuard<'_> {
     fn drop(&mut self) {
         if self.armed {
-            let mut turn = self
-                .session
-                .conn
-                .chat_turn
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut turn = lock_tolerating_poison(&self.session.conn.chat_turn);
             turn.running = false;
         }
     }

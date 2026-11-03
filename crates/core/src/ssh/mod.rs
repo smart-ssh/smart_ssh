@@ -16,6 +16,7 @@ pub mod input_prompt;
 mod jump_host;
 #[cfg(any(test, feature = "test-support"))]
 pub mod mock;
+mod task_spawner;
 mod transport;
 mod types;
 
@@ -34,6 +35,7 @@ pub use connect_log::{
 pub use error::{HopLabel, SecretKind, SshError};
 pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
+pub use task_spawner::{BoxedTask, TaskSpawner};
 pub use transport::{
     ChunkControl, ChunkSource, ConnectionLoss, ConnectionLossWatch, InteractiveShell, RunningExec,
     SftpSession, SshTransport, TransferEnd,

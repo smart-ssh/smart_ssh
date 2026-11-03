@@ -6037,6 +6037,7 @@ dependencies = [
  "reqwest",
  "serde",
  "sha2 0.11.0",
+ "ssh-manager-core",
  "tempfile",
  "tls-config",
  "tokio",

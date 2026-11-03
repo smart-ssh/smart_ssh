@@ -215,7 +215,7 @@ Wohin neue Logik gehört (alle Tauri-frei; jedes `pub mod` aus `lib.rs`):
 
 **Plattform-Helfer**
 - `data_paths` — Datenpfade; `local_path_grants` — freigegebene lokale Pfade; `owner_names` — Besitzer-/Gruppennamen für den Dateibrowser.
-- `single_instance` — Single-Instance-Entscheidung; `logging` — JSON-Lines-Logging; `version` — Version/Build-Hash; `poison` — vergiftungsfeste Sperren (nicht `pub`).
+- `single_instance` — Single-Instance-Entscheidung; `logging` — JSON-Lines-Logging; `version` — Version/Build-Hash; vergiftungsfeste Sperren liegen jetzt in `ssh_manager_core::sync`.
 - `test_support` — Testhilfen hinter `test-support` (s. o.).
 
 ## Background tasks: `TaskSupervisor` (issue #879)
@@ -239,8 +239,22 @@ Long-lived background tasks have an owner. `app_logic::tasks::TaskSupervisor`
 entitlement watch, window decoration) and the on-disconnect and note-shrink AI
 requests. The latter deliberately outlive their session. There is no re-lock
 today, so the scope ends at exit; a future re-lock cancels the scope without
-touching the call sites. `ScopeKey::Session` is reserved for session-scoped
-tasks.
+touching the call sites.
+
+**Session scope** (`ScopeKey::Session`, `TaskSupervisor::session_scope`,
+`background_tasks::session_scope`; issue #881): terminal actor, connection
+watch, the SFTP tap pumps (injected into the transport as a
+`ssh_manager_core::ssh::TaskSpawner` via `SshTransport::set_task_spawner`),
+the auto-reconnect run and the MCP `propose_action` task. `CloseContext::close`
+calls `close_session_scope(session_id, 2 s)` after the elevated channel is
+revoked, the pending confirmation rejected and the transport marked closed:
+the scope is cancelled, awaited and removed. Cancelling a task that waits for a
+confirmation drops its registry guard — a rejection, never an execution. The
+MCP tool call itself is an app-scope task (`McpBackend::spawn_tool_call`); after
+an MCP timeout the session-scope action task keeps waiting (Spec 0028 §7) until
+the user decides or the session closes. AI usage records go through one bounded
+queue and one tracked worker (`ai_usage::start_worker`, app scope); a full
+queue drops records with a `warn`.
 
 **Exit order** (`RunEvent::Exit`): `ServiceHost::stop_all()`, then
 `TaskSupervisor::shutdown(3 s)`, then the file clipboard cleanup.

@@ -20,6 +20,7 @@
 //!
 //! Führe aus mit: `cargo run -p ssh-manager-core --example profiles_demo`
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -48,49 +49,51 @@ impl DemoProfileStore {
     }
 
     fn insert_group(&self, group: Group) {
-        self.groups.lock().unwrap().insert(group.id, group);
+        lock_tolerating_poison(&self.groups).insert(group.id, group);
     }
 
     fn insert_server(&self, server: Server) {
-        self.servers.lock().unwrap().insert(server.id, server);
+        lock_tolerating_poison(&self.servers).insert(server.id, server);
     }
 }
 
 #[async_trait]
 impl ProfileStore for DemoProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-        self.servers
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.servers)
             .get(id)
             .cloned()
             .ok_or(ProfileError::ServerNotFound(*id))
     }
 
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
-        self.groups
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.groups)
             .get(id)
             .cloned()
             .ok_or(ProfileError::GroupNotFound(*id))
     }
 
     async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
-        Ok(self.servers.lock().unwrap().values().cloned().collect())
+        Ok(lock_tolerating_poison(&self.servers)
+            .values()
+            .cloned()
+            .collect())
     }
 
     async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
-        Ok(self.groups.lock().unwrap().values().cloned().collect())
+        Ok(lock_tolerating_poison(&self.groups)
+            .values()
+            .cloned()
+            .collect())
     }
 
     async fn create_group(&self, group: &Group) -> ProfileResult<()> {
-        self.groups.lock().unwrap().insert(group.id, group.clone());
+        lock_tolerating_poison(&self.groups).insert(group.id, group.clone());
         Ok(())
     }
 
     async fn update_group(&self, group: &Group) -> ProfileResult<()> {
-        let mut groups = self.groups.lock().unwrap();
+        let mut groups = lock_tolerating_poison(&self.groups);
         if !groups.contains_key(&group.id) {
             return Err(ProfileError::GroupNotFound(group.id));
         }
@@ -99,24 +102,19 @@ impl ProfileStore for DemoProfileStore {
     }
 
     async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
-        self.groups
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.groups)
             .remove(id)
             .map(|_| ())
             .ok_or(ProfileError::GroupNotFound(*id))
     }
 
     async fn create_server(&self, server: &Server) -> ProfileResult<()> {
-        self.servers
-            .lock()
-            .unwrap()
-            .insert(server.id, server.clone());
+        lock_tolerating_poison(&self.servers).insert(server.id, server.clone());
         Ok(())
     }
 
     async fn update_server(&self, server: &Server) -> ProfileResult<()> {
-        let mut servers = self.servers.lock().unwrap();
+        let mut servers = lock_tolerating_poison(&self.servers);
         if !servers.contains_key(&server.id) {
             return Err(ProfileError::ServerNotFound(server.id));
         }
@@ -125,9 +123,7 @@ impl ProfileStore for DemoProfileStore {
     }
 
     async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
-        self.servers
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.servers)
             .remove(id)
             .map(|_| ())
             .ok_or(ProfileError::ServerNotFound(*id))
@@ -136,7 +132,7 @@ impl ProfileStore for DemoProfileStore {
     async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
         match revision.target {
             NoteTarget::Server(id) => {
-                let mut servers = self.servers.lock().unwrap();
+                let mut servers = lock_tolerating_poison(&self.servers);
                 let server = servers
                     .get_mut(&id)
                     .ok_or(ProfileError::ServerNotFound(id))?;
@@ -144,21 +140,18 @@ impl ProfileStore for DemoProfileStore {
                 server.updated_at = revision.created_at;
             }
             NoteTarget::Group(id) => {
-                let mut groups = self.groups.lock().unwrap();
+                let mut groups = lock_tolerating_poison(&self.groups);
                 let group = groups.get_mut(&id).ok_or(ProfileError::GroupNotFound(id))?;
                 group.notes = revision.content.clone();
                 group.updated_at = revision.created_at;
             }
         }
-        self.note_revisions.lock().unwrap().push(revision.clone());
+        lock_tolerating_poison(&self.note_revisions).push(revision.clone());
         Ok(())
     }
 
     async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>> {
-        Ok(self
-            .note_revisions
-            .lock()
-            .unwrap()
+        Ok(lock_tolerating_poison(&self.note_revisions)
             .iter()
             .filter(|r| r.target == target)
             .cloned()
