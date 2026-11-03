@@ -260,7 +260,7 @@ impl McpSessionRegistry {
         let session_id = *inner.current.get(key)?;
         match sessions.get(session_id) {
             Some(session)
-                if *lock_tolerating_poison(&session.status) == ConnectionStatus::Connected =>
+                if *lock_tolerating_poison(&session.conn.status) == ConnectionStatus::Connected =>
             {
                 Some(session_id)
             }

@@ -245,6 +245,7 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
     );
     assert!(
         !session
+            .safety
             .injection_suspected
             .load(std::sync::atomic::Ordering::SeqCst),
         "a failed check must not invent a suspicion"
@@ -290,6 +291,7 @@ async fn test_injection_check_without_verdict_counts_as_unavailable() {
     .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_some());
     assert!(session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -299,6 +301,7 @@ async fn test_injection_check_without_verdict_counts_as_unavailable() {
 async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     let session = session_with_injection_check(FailingProvider);
     session
+        .safety
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
     check_for_injected_instructions(
@@ -311,6 +314,7 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     )
     .await;
     assert!(session
+        .safety
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -331,6 +335,7 @@ async fn test_successful_injection_check_has_no_notice() {
     .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_none());
     assert!(!session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -357,6 +362,7 @@ async fn test_unavailable_flag_survives_a_denied_action() {
     .await;
     assert!(!matches!(decision, Decision::AutoExec));
     assert!(session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -367,6 +373,7 @@ async fn test_unavailable_flag_survives_a_denied_action() {
 async fn test_setup_failure_notice_is_sent_once_per_session() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session
+        .safety
         .second_opinion_setup_notice_pending
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let emitter = TestEmitter::default();
@@ -384,6 +391,7 @@ async fn test_setup_failure_notice_is_sent_once_per_session() {
 async fn test_inactive_injection_check_notice_is_sent_once() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session
+        .safety
         .injection_check_inactive_notice_pending
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let emitter = TestEmitter::default();

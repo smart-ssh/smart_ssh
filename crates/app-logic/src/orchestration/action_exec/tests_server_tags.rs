@@ -116,6 +116,7 @@ fn test_redaction_incomplete_notice_is_sent_once() {
     announce_second_opinion_setup_failure(&session, Uuid::new_v4(), &emitter);
     assert_eq!(count(&emitter), 0, "no notice without the flag");
     session
+        .safety
         .redaction_incomplete_notice_pending
         .store(true, std::sync::atomic::Ordering::SeqCst);
     announce_second_opinion_setup_failure(&session, Uuid::new_v4(), &emitter);

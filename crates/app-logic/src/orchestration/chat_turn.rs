@@ -173,22 +173,22 @@ pub(crate) async fn push_history_scoped(session: &Session, message: ChatMessage,
         // `!persist` ist exakt dieselbe Bedingung, die auch den
         // `chat_messages`-Persistenz-Ausschluss steuert (Spec 0034 §10) —
         // dieselbe Quelle der Wahrheit, kein zweiter Mechanismus.
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.history.push(message.clone());
         // Spec 0088, A4.1: vergiftungstolerant — ein Panic hier liesse
         // `history` und `mcp_origin_flags` dauerhaft verschieden lang
         // zurück, und die Kompaktierung müsste jede Nachricht defensiv als
         // MCP-originiert behandeln (s. `group_mcp_flags_by_round`).
-        crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).push(!persist);
+        crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags).push(!persist);
     }
     if !persist {
         return;
     }
 
-    let Some(store) = &session.chat_session_store else {
+    let Some(store) = &session.persistence.chat_session_store else {
         return;
     };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
     if let Err(err) = store.append_message(chat_session_id, &message).await {
@@ -259,10 +259,10 @@ pub(crate) async fn write_ledger_entry(
     source: LedgerSource,
     content: LedgerEntryContent,
 ) {
-    let Some(store) = &session.ledger_store else {
+    let Some(store) = &session.persistence.ledger_store else {
         return;
     };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
     let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
@@ -295,7 +295,7 @@ const MIN_AI_REQUEST_SPACING: std::time::Duration = std::time::Duration::from_mi
 /// dieser Sitzung, nicht danach — sonst würde die Wartezeit die ohnehin
 /// schon laufende Anfrage nicht mehr entzerren.
 pub(crate) async fn wait_for_ai_request_slot(session: &Session) {
-    let mut paced_at = session.ai_request_paced_at.lock().await;
+    let mut paced_at = session.ai.request_paced_at.lock().await;
     if let Some(previous) = *paced_at {
         let elapsed = previous.elapsed();
         if elapsed < MIN_AI_REQUEST_SPACING {
@@ -360,7 +360,7 @@ async fn wait_before_main_send(
         () = async {
             wait_for_ai_request_slot(session).await;
             wait_for_rate_limit_budget(
-                &session.ai_provider_budget,
+                &session.ai.provider_budget,
                 estimated_tokens,
                 emitter,
                 session_id,
@@ -409,6 +409,7 @@ pub async fn run_chat_turn(
             // Nachrichten bleiben dann in der Warteschlange und werden vom
             // Aufrufer als neuer Turn gesendet (Spec 0066, §1).
             if session
+                .conn
                 .auto_continue_stop
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
@@ -487,6 +488,7 @@ pub async fn run_chat_turn(
                 // Issue #551: title after the first finished answer (one
                 // attempt per session; no-op once a title exists).
                 if !session
+                    .conn
                     .auto_continue_stop
                     .load(std::sync::atomic::Ordering::SeqCst)
                 {
@@ -576,7 +578,7 @@ async fn run_one_round(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     check_for_empty_response: bool,
 ) -> RoundOutcome {
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // spec-reviewer-Fund (Review dieses Schritts, Etappe 3): geklont statt
     // den `MutexGuard` über den (jetzt potenziell lange laufenden,
     // Zusammenfassungs-KI-Aufruf enthaltenden) `compact_for_send`-Aufruf
@@ -586,7 +588,7 @@ async fn run_one_round(
     // gleichzeitigen Lese-/Schreibzugriff (z. B. `send_chat_message_impl`
     // bei einer neuen Nutzer-Nachricht in einem anderen Tab derselben
     // Sitzung) bis zu `SUMMARY_CALL_TIMEOUT` blockieren.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     // Spec 0057, §3: "vor jedem `AiProvider::send()`-Aufruf" — kompaktiert
     // nur die an den Provider gesendete Kopie, die gespeicherte Historie in
     // `session.context`/der DB bleibt unangetastet (s.
@@ -597,7 +599,7 @@ async fn run_one_round(
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
@@ -607,7 +609,7 @@ async fn run_one_round(
     let request_context = match seal_for_send(
         request_context,
         session.redactor.as_ref(),
-        &session.chat_content,
+        &session.persistence.chat_content,
         session.extension_content_key(session_id).await,
     ) {
         Ok(context) => context,
@@ -625,8 +627,8 @@ async fn run_one_round(
     // Issue #169: geklont, weil ein abgelehnter Request mit Web-Werkzeugen
     // genau einmal mit demselben (bereits kompaktierten und geschwärzten)
     // Kontext wiederholt wird, s. `AiError::WebResearchRejected` unten.
-    let mut stream = session.ai_provider.send(request_context.clone());
-    crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai_provider_label);
+    let mut stream = session.ai.provider.send(request_context.clone());
+    crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai.label);
     let mut trace = RequestTrace::new();
     // Issue #169: höchstens ein Wiederholversuch ohne Web-Werkzeuge je
     // Anfrage, nie eine Schleife.
@@ -827,6 +829,7 @@ async fn run_one_round(
                 // Issue #601: feed the real size back into compaction and
                 // show it in the chat (numbers only).
                 session
+                    .ai
                     .context_usage
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -835,7 +838,7 @@ async fn run_one_round(
                     emitter,
                     session_id,
                     input_tokens,
-                    session.model_context_window_tokens as u64,
+                    session.ai.model_context_window_tokens as u64,
                 );
             }
             // Issue #610: passive report to the registered observers; the
@@ -864,6 +867,7 @@ async fn run_one_round(
                 // davon, wie diese Antwort endet. Kein Inhalt, keine
                 // Anzeige, kein `round_had_content`.
                 session
+                    .safety
                     .untrusted_content_ingested
                     .store(true, std::sync::atomic::Ordering::SeqCst);
             }
@@ -926,18 +930,14 @@ async fn run_one_round(
                 trace.log_finished(session, "error");
                 drop(stream);
                 flush_text_buffer(session, &mut text_buffer).await;
-                session.ai_provider.disable_web_research();
+                session.ai.provider.disable_web_research();
                 emit_chat_web_research_unavailable(emitter, session_id);
                 if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
                     emit_chat_response_cancelled(emitter, session_id);
                     return RoundOutcome::StoppedBeforeSend;
                 }
-                stream = session.ai_provider.send(request_context.clone());
-                crate::events::emit_chat_ai_request_started(
-                    emitter,
-                    session_id,
-                    &session.ai_provider_label,
-                );
+                stream = session.ai.provider.send(request_context.clone());
+                crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai.label);
                 trace = RequestTrace::new();
             }
             AiEvent::Error(err) => {
@@ -955,7 +955,7 @@ async fn run_one_round(
                 // message text (the provider line already carries it).
                 tracing::warn!(
                     session_id = %session_id,
-                    request_id = ?session.ai_provider.last_request_id(),
+                    request_id = ?session.ai.provider.last_request_id(),
                     code = err.code(),
                     "AI turn ended with an error",
                 );
@@ -964,7 +964,7 @@ async fn run_one_round(
                     session_id,
                     describe_ai_error(&err),
                     Some(err.code()),
-                    ai_error_details(&err, &session.ai_provider_label, session.redactor.as_ref()),
+                    ai_error_details(&err, &session.ai.label, session.redactor.as_ref()),
                 );
                 break;
             }
@@ -1022,6 +1022,7 @@ async fn handle_web_activity(
     )
     .await;
     session
+        .safety
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
     if !check_text.trim().is_empty() {
@@ -1138,7 +1139,7 @@ impl RequestTrace {
         }
         self.first_content_logged = true;
         tracing::info!(
-            request_id = ?session.ai_provider.last_request_id(),
+            request_id = ?session.ai.provider.last_request_id(),
             time_to_first_content_ms = self.started.elapsed().as_millis() as u64,
             "AI request: first content received",
         );
@@ -1146,7 +1147,7 @@ impl RequestTrace {
 
     fn log_finished(&self, session: &Session, outcome: &'static str) {
         tracing::info!(
-            request_id = ?session.ai_provider.last_request_id(),
+            request_id = ?session.ai.provider.last_request_id(),
             duration_ms = self.started.elapsed().as_millis() as u64,
             outcome,
             "AI request finished",

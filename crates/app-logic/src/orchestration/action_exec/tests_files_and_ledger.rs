@@ -276,7 +276,7 @@ async fn test_read_remote_file_content_lands_fenced_in_context_and_cannot_break_
     )
     .await;
 
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let text = history
         .iter()
         .find_map(|m| match &m.content {
@@ -1988,7 +1988,7 @@ async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_ou
     );
     let advancer = async {
         loop {
-            if session.pending_action.lock().unwrap().is_some() {
+            if session.conn.pending_action.lock().unwrap().is_some() {
                 break;
             }
             tokio::task::yield_now().await;

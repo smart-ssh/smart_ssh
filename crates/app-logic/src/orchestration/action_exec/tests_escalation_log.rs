@@ -124,7 +124,7 @@ async fn test_each_escalation_code_is_logged() {
                 s.set_post_ingest_policy_for_tests(
                     ssh_manager_core::profiles::PostIngestPolicy::Strict,
                 );
-                s.untrusted_content_ingested.store(true, SeqCst);
+                s.safety.untrusted_content_ingested.store(true, SeqCst);
             },
             false,
             false,
@@ -133,7 +133,7 @@ async fn test_each_escalation_code_is_logged() {
         (
             "suspected",
             format!("ls {MARKER}"),
-            |s| s.injection_suspected.store(true, SeqCst),
+            |s| s.safety.injection_suspected.store(true, SeqCst),
             false,
             false,
             "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM",
@@ -141,7 +141,7 @@ async fn test_each_escalation_code_is_logged() {
         (
             "unavailable",
             format!("ls {MARKER}"),
-            |s| s.injection_check_unavailable.store(true, SeqCst),
+            |s| s.safety.injection_check_unavailable.store(true, SeqCst),
             false,
             false,
             "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM",

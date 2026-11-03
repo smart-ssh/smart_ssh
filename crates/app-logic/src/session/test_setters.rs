@@ -17,48 +17,48 @@ impl Session {
         &mut self,
         value: Arc<crate::chat_content_extension::ChatContentRegistry>,
     ) {
-        self.parts.chat_content = value;
+        self.parts.persistence.chat_content = value;
     }
 
     pub fn set_outgoing_transform_for_tests(
         &mut self,
         value: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ) {
-        self.parts.outgoing_transform = value;
+        self.parts.safety.outgoing_transform = value;
     }
 
     pub fn set_filter_engine_for_tests(&mut self, value: Box<dyn CommandEvaluator>) {
-        self.parts.filter_engine = value;
+        self.parts.safety.filter_engine = value;
     }
 
     pub fn set_model_context_window_tokens_for_tests(&mut self, value: usize) {
-        self.parts.model_context_window_tokens = value;
+        self.parts.ai.model_context_window_tokens = value;
     }
 
     pub fn set_ai_provider_for_tests(&mut self, value: Box<dyn AiProvider>) {
-        self.parts.ai_provider = value;
+        self.parts.ai.provider = value;
     }
 
     pub fn set_post_ingest_policy_for_tests(
         &mut self,
         value: ssh_manager_core::profiles::PostIngestPolicy,
     ) {
-        self.parts.post_ingest_policy = value;
+        self.parts.safety.post_ingest_policy = value;
     }
 
     pub fn set_sudo_password_for_tests(&mut self, value: Option<secrecy::SecretString>) {
-        self.parts.sudo_password = SwappableSudoPassword::new(value);
+        self.parts.safety.sudo_password = SwappableSudoPassword::new(value);
     }
 
     pub fn set_injection_check_provider_for_tests(&mut self, value: Option<Box<dyn AiProvider>>) {
-        self.parts.injection_check_provider = value;
+        self.parts.safety.injection_check_provider = value;
     }
 
     pub fn set_injection_check_budget_for_tests(
         &mut self,
         value: Option<Arc<ai_providers::ProviderBudgetGuard>>,
     ) {
-        self.parts.injection_check_budget = value;
+        self.parts.safety.injection_check_budget = value;
     }
 
     pub fn set_server_id_for_tests(&mut self, value: ServerId) {
@@ -66,46 +66,46 @@ impl Session {
     }
 
     pub fn set_red_risk_always_confirm_for_tests(&mut self, value: bool) {
-        self.parts.red_risk_always_confirm = value;
+        self.parts.safety.red_risk_always_confirm = value;
     }
 
     pub fn set_chat_session_id_for_tests(&mut self, value: AsyncMutex<Option<uuid::Uuid>>) {
-        self.parts.chat_session_id = value;
+        self.parts.persistence.chat_session_id = value;
     }
 
     pub fn set_system_context_parts_for_tests(
         &mut self,
         value: AsyncMutex<crate::compaction::SystemContextParts>,
     ) {
-        self.parts.system_context_parts = value;
+        self.parts.ai.system_context_parts = value;
     }
 
     pub fn set_risk_second_opinion_provider_for_tests(
         &mut self,
         value: Option<Box<dyn AiProvider>>,
     ) {
-        self.parts.risk_second_opinion_provider = value;
+        self.parts.safety.risk_second_opinion_provider = value;
     }
 
     pub fn set_risk_second_opinion_budget_for_tests(
         &mut self,
         value: Option<Arc<ai_providers::ProviderBudgetGuard>>,
     ) {
-        self.parts.risk_second_opinion_budget = value;
+        self.parts.safety.risk_second_opinion_budget = value;
     }
 
     pub fn set_chat_session_store_for_tests(
         &mut self,
         value: Option<persistence_sqlite::SqliteChatSessionStore>,
     ) {
-        self.parts.chat_session_store = value;
+        self.parts.persistence.chat_session_store = value;
     }
 
     pub fn set_ledger_store_for_tests(
         &mut self,
         value: Option<persistence_sqlite::SqliteLedgerStore>,
     ) {
-        self.parts.ledger_store = value;
+        self.parts.persistence.ledger_store = value;
     }
 
     pub fn set_transport_for_tests(&mut self, value: SessionTransport) {
@@ -116,7 +116,7 @@ impl Session {
         &mut self,
         value: Arc<ai_providers::ProviderBudgetGuard>,
     ) {
-        self.parts.ai_provider_budget = value;
+        self.parts.ai.provider_budget = value;
     }
 
     /// Spec 0085, A3.3: Setzt einen Test-Kanal ein. Hinter dem Feature

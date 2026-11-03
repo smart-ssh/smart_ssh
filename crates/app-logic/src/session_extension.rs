@@ -387,7 +387,7 @@ pub async fn rebuild_redactors_for_sessions(
             sudo.clone()
         } else {
             sudo.clone()
-                .or_else(|| session.sudo_password.get().map(|p| (*p).clone()))
+                .or_else(|| session.safety.sudo_password.get().map(|p| (*p).clone()))
         };
         let (redactor, compiled) = redactor_with_secrets_checked(sudo_now.as_ref(), &secrets);
         if lookup_complete {
@@ -400,6 +400,7 @@ pub async fn rebuild_redactors_for_sessions(
         }
         if !(lookup_complete && compiled) {
             session
+                .safety
                 .redaction_incomplete_notice_pending
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
@@ -467,13 +468,14 @@ pub fn redactor_for_reconnect(
     } else {
         sudo_password
             .clone()
-            .or_else(|| session.sudo_password.get().map(|p| (*p).clone()))
+            .or_else(|| session.safety.sudo_password.get().map(|p| (*p).clone()))
     };
     let (redactor, compiled) =
         redactor_with_secrets_checked(sudo_for_redactor.as_ref(), extension_secrets);
     if !(*sudo_complete && !lookup.incomplete && compiled) {
         session.redactor.add_secret_values(extension_secrets);
         session
+            .safety
             .redaction_incomplete_notice_pending
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }

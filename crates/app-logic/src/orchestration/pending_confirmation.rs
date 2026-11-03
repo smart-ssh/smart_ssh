@@ -71,6 +71,7 @@ impl<'a> PendingConfirmation<'a> {
     ) -> Result<Self, AnotherConfirmationPending> {
         if exclusive
             && session
+                .safety
                 .mcp_confirmation_claim
                 .compare_exchange(
                     false,
@@ -118,7 +119,8 @@ impl<'a> PendingConfirmation<'a> {
     ) -> (ConfirmationWaitOutcome, ConfirmationCleanup<'a>) {
         let Self { cleanup, receiver } = self;
         // A2.1: auch bei vergifteter Sperre setzen statt panicken.
-        *lock_tolerating_poison(&cleanup.session.pending_action) = Some(cleanup.registry.action_id);
+        *lock_tolerating_poison(&cleanup.session.conn.pending_action) =
+            Some(cleanup.registry.action_id);
         let outcome = tokio::time::timeout(timeout, receiver).await;
         (outcome, cleanup)
     }
@@ -147,6 +149,7 @@ impl Drop for ConfirmationCleanup<'_> {
     fn drop(&mut self) {
         if self.claimed {
             self.session
+                .safety
                 .mcp_confirmation_claim
                 .store(false, std::sync::atomic::Ordering::SeqCst);
         }
@@ -159,14 +162,14 @@ impl Drop for ConfirmationCleanup<'_> {
             // A2.2: `lock_tolerating_poison` statt `lock().unwrap()` — ein
             // Panic hier, während bereits ein anderer Panic abgewickelt
             // wird, bräche den Prozess ab.
-            let mut pending = lock_tolerating_poison(&self.session.pending_action);
+            let mut pending = lock_tolerating_poison(&self.session.conn.pending_action);
             if *pending == Some(self.registry.action_id) {
                 *pending = None;
             }
         }
         {
             // Issue #1020: the stored proposal belongs to this confirmation.
-            let mut turn = lock_tolerating_poison(&self.session.chat_turn);
+            let mut turn = lock_tolerating_poison(&self.session.conn.chat_turn);
             if turn.pending_proposal.as_ref().map(|(id, _)| *id) == Some(self.registry.action_id) {
                 turn.pending_proposal = None;
             }

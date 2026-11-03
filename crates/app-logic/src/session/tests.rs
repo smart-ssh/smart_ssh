@@ -76,60 +76,68 @@ impl SshTransport for UnusedTransport {
 fn dummy_session(server_id: ServerId) -> Session {
     Session::new(SessionParts {
         transport: SessionTransport::new(Box::new(UnusedTransport)),
-        ai_provider: Box::new(UnusedAiProvider),
-        ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
-        context: AsyncMutex::new(SessionContext {
-            system_context: String::new(),
-            history: Vec::new(),
-            available_actions: default_action_schemas(),
-            max_tokens_hint: None,
-        }),
-        filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
         server_id,
         tags: Vec::new(),
-        terminal: StdMutex::new(None),
         redactor: SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
-        ai_provider_label: "test-provider".to_string(),
-        ai_model: "test-model".to_string(),
-        system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
-        // Absichtlich riesig: Tests sollen nie versehentlich in die
-        // Etappe-2-Kompaktierung laufen, außer sie setzen diesen Wert
-        // explizit klein (s. `orchestration::tests`, `compaction`-Modul
-        // für die dedizierten Kompaktierungs-Tests).
-        model_context_window_tokens: usize::MAX / 1_000,
-        summary: AsyncMutex::new(None),
-        context_usage: Default::default(),
-        mcp_origin_flags: StdMutex::new(Vec::new()),
-        sudo_password: SwappableSudoPassword::new(None),
-        status: StdMutex::new(ConnectionStatus::Connected),
-        pending_action: StdMutex::new(None),
-        mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
-        risk_second_opinion_provider: None,
-        risk_second_opinion_budget: None,
-        // Spec 0092, A1.2: in Test-Fixtures wie in der App standardmäßig
-        // „an".
-        red_risk_always_confirm: true,
-        running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
-        outgoing_transform: None,
-        chat_content: Arc::default(),
-        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        injection_check_provider: None,
-        injection_check_budget: None,
-        injection_suspected: std::sync::atomic::AtomicBool::new(false),
-        injection_suspected_reason: std::sync::Mutex::new(None),
-        injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
-        second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        chat_session_store: None,
-        ledger_store: None,
-        chat_session_id: AsyncMutex::new(None),
-        ai_request_paced_at: AsyncMutex::new(None),
-        auto_reconnect: Default::default(),
+        ai: crate::session::AiConfig {
+            provider: Box::new(UnusedAiProvider),
+            provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
+            context: AsyncMutex::new(SessionContext {
+                system_context: String::new(),
+                history: Vec::new(),
+                available_actions: default_action_schemas(),
+                max_tokens_hint: None,
+            }),
+            label: "test-provider".to_string(),
+            model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            // Absichtlich riesig: Tests sollen nie versehentlich in die
+            // Etappe-2-Kompaktierung laufen, außer sie setzen diesen Wert
+            // explizit klein (s. `orchestration::tests`, `compaction`-Modul
+            // für die dedizierten Kompaktierungs-Tests).
+            model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
+            request_paced_at: AsyncMutex::new(None),
+        },
+        safety: crate::session::SafetyState {
+            filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
+            mcp_origin_flags: StdMutex::new(Vec::new()),
+            sudo_password: SwappableSudoPassword::new(None),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
+            // Spec 0092, A1.2: in Test-Fixtures wie in der App standardmäßig
+            // „an".
+            red_risk_always_confirm: true,
+            outgoing_transform: None,
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_check_budget: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        },
+        persistence: crate::session::ChatPersistence {
+            chat_content: Arc::default(),
+            chat_session_store: None,
+            ledger_store: None,
+            chat_session_id: AsyncMutex::new(None),
+        },
+        conn: crate::session::TransportState {
+            terminal: StdMutex::new(None),
+            status: StdMutex::new(ConnectionStatus::Connected),
+            pending_action: StdMutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            auto_reconnect: Default::default(),
+        },
     })
 }
 
@@ -436,7 +444,7 @@ fn test_connection_loss_is_reported_once_per_session() {
     ));
     assert_eq!(status_events(&emitter).len(), 1);
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
 }
@@ -464,7 +472,7 @@ async fn test_connection_watch_reports_loss_without_terminal() {
         .to_string()
         .contains("The server stopped responding"));
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
     assert!(!report_connection_lost(
@@ -491,7 +499,10 @@ async fn test_connection_watch_ignores_intentional_close() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     assert!(status_events(&emitter).is_empty());
-    assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+    assert_eq!(
+        *session.conn.status.lock().unwrap(),
+        ConnectionStatus::Connected
+    );
 }
 
 /// Issue #565: after a reconnect the old transport's watch stays
@@ -504,7 +515,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
     let (old_tx, old_rx) = tokio::sync::watch::channel(None);
     spawn_connection_watch(id, &session, old_rx, emitter.clone());
 
-    *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     let claim = session.begin_reconnect().expect("claim");
     claim
         .succeed(
@@ -521,7 +532,10 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     assert!(status_events(&emitter).is_empty());
-    assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+    assert_eq!(
+        *session.conn.status.lock().unwrap(),
+        ConnectionStatus::Connected
+    );
 
     new_tx
         .send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
@@ -529,7 +543,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
     wait_for_status_events(&emitter, 1).await;
     assert_eq!(status_events(&emitter).len(), 1);
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
 }
@@ -560,11 +574,11 @@ fn test_snapshot_reports_status_and_pending_action_per_session() {
     let session_a = dummy_session(server_a);
     // Simuliert eine wartende Confirm-Bestätigung (Spec 0017, Abschnitt
     // 5), wie sie `orchestration::handle_action_proposed` setzt.
-    *session_a.pending_action.lock().unwrap() = Some(Uuid::new_v4());
+    *session_a.conn.pending_action.lock().unwrap() = Some(Uuid::new_v4());
     manager.insert(id_a, Arc::new(session_a));
 
     let session_b = dummy_session(server_b);
-    *session_b.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session_b.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     manager.insert(id_b, Arc::new(session_b));
 
     let snapshot = manager.snapshot();
@@ -1009,7 +1023,10 @@ mod lookup_failures {
 
         // Healthy rebuild: both masked, no notice.
         rebuild_redactors_for_sessions(&manager, &store, &credentials, Some(&ext), srv.id).await;
-        assert!(!session.redaction_incomplete_notice_pending.load(SeqCst));
+        assert!(!session
+            .safety
+            .redaction_incomplete_notice_pending
+            .load(SeqCst));
         assert_eq!(
             session.redactor.redact_text(TEXT),
             "s=[REDACTED] g=[REDACTED]"
@@ -1022,7 +1039,10 @@ mod lookup_failures {
             session.redactor.redact_text(TEXT),
             "s=[REDACTED] g=[REDACTED]"
         );
-        assert!(session.redaction_incomplete_notice_pending.load(SeqCst));
+        assert!(session
+            .safety
+            .redaction_incomplete_notice_pending
+            .load(SeqCst));
     }
 
     /// A literal the regex size limit rejects flags the session and is not

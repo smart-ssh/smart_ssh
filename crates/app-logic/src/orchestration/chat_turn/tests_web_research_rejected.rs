@@ -96,7 +96,7 @@ async fn run_turn(rounds: Vec<Vec<AiEvent>>) -> Run {
     let sends = provider.sends.clone();
     let disable_calls = provider.disable_calls.clone();
     let session = session_with_ai_provider(provider, MockSshTransport::default());
-    session.context.lock().await.history.push(ChatMessage {
+    session.ai.context.lock().await.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text("Was ist neu in nginx 1.29?".to_string()),
     });
@@ -253,7 +253,7 @@ async fn test_retry_goes_through_the_same_rate_limit_budget_gate() {
     ]);
     let sends = provider.sends.clone();
     let mut session = session_with_ai_provider(provider, MockSshTransport::default());
-    session.context.lock().await.history.push(ChatMessage {
+    session.ai.context.lock().await.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text("hallo".to_string()),
     });

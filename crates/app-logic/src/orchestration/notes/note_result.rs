@@ -72,16 +72,17 @@ async fn refresh_session_note_context(session: &Session, profile_store: &dyn Pro
             }
         };
     let assembled = {
-        let mut parts = session.system_context_parts.lock().await;
+        let mut parts = session.ai.system_context_parts.lock().await;
         parts.note_sections = sections;
         if parts.has_notes() {
             session
+                .safety
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
         parts.assemble()
     };
-    session.context.lock().await.system_context = assembled;
+    session.ai.context.lock().await.system_context = assembled;
 }
 
 /// Pushes the tagged result as an `ActionResult` history entry (kind and
@@ -94,7 +95,7 @@ pub(super) async fn record_note_update_for_model(
     profile_store: &dyn ProfileStore,
     persist: bool,
 ) {
-    let language = session.system_context_parts.lock().await.language;
+    let language = session.ai.system_context_parts.lock().await.language;
     let name = note_target_display_name(target, profile_store).await;
     let text = note_update_result_text(target, &name, new_content, language);
     push_history_scoped(

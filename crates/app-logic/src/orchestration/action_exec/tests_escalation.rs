@@ -28,17 +28,21 @@ async fn test_main_path_and_verdict_report_the_same_code() {
                 test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
             session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
             session.set_red_risk_always_confirm_for_tests(red);
-            session.untrusted_content_ingested.store(ingested, SeqCst);
-            session.injection_suspected.store(suspected, SeqCst);
             session
+                .safety
+                .untrusted_content_ingested
+                .store(ingested, SeqCst);
+            session.safety.injection_suspected.store(suspected, SeqCst);
+            session
+                .safety
                 .injection_check_unavailable
                 .store(unavailable, SeqCst);
 
             let verdict = state_independent_escalation_code(&session, command, None);
             // The verdict must not consume anything.
-            assert_eq!(session.injection_suspected.load(SeqCst), suspected);
+            assert_eq!(session.safety.injection_suspected.load(SeqCst), suspected);
             assert_eq!(
-                session.injection_check_unavailable.load(SeqCst),
+                session.safety.injection_check_unavailable.load(SeqCst),
                 unavailable
             );
 

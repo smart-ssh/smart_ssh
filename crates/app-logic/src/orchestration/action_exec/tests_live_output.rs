@@ -94,7 +94,7 @@ async fn test_live_output_precedes_an_unchanged_final_result() {
         events[result_at].1["result"]["stdout"],
         serde_json::json!("1\n2\n3\n")
     );
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 1);
     let MessageContent::CommandResult {
         output, cancelled, ..
@@ -138,6 +138,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         session
+            .conn
             .running_command_cancellations
             .resolve(&action_id, ())
             .expect("a waiting cancel registration");
@@ -152,7 +153,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
         .find(|(name, _)| name == "chat-action-result")
         .expect("chat-action-result");
     assert_eq!(result["result"]["cancelled"], serde_json::json!(true));
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let MessageContent::CommandResult {
         cancelled, output, ..
     } = &history[0].content
@@ -274,13 +275,14 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
         session
+            .conn
             .running_command_cancellations
             .resolve(&action_id, ())
             .expect("a waiting cancel registration");
     };
     let (executed, ()) = tokio::join!(exec_future, cancel_future);
     assert!(executed);
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let MessageContent::CommandResult {
         cancelled,
         waiting_for_input,

@@ -47,7 +47,7 @@ impl AiProvider for Silent {
 
 async fn session_for(provider: impl AiProvider + 'static) -> Session {
     let session = session_with_ai_provider(provider, MockSshTransport::default());
-    session.context.lock().await.history.push(ChatMessage {
+    session.ai.context.lock().await.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text("hello".to_string()),
     });
@@ -96,9 +96,9 @@ async fn test_total_deadline_ends_a_request_that_keeps_streaming() {
     let (_, err) = events.iter().find(|(n, _)| n == "chat-error").unwrap();
     assert_eq!(err["code"], "AI_TOTAL_DEADLINE");
     assert_eq!(err["timeoutSecs"], 600);
-    assert_eq!(err["providerName"], session.ai_provider_label.as_str());
+    assert_eq!(err["providerName"], session.ai.label.as_str());
     // The history keeps the partial answer.
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(history.iter().any(|m| matches!(
         &m.content,
         MessageContent::Text(t) if t.contains(SECRET_TEXT)
@@ -128,7 +128,7 @@ async fn test_request_started_event_names_the_provider() {
         .iter()
         .find(|(n, _)| n == "chat-ai-request-started")
         .expect("request-started event");
-    assert_eq!(started["providerName"], session.ai_provider_label.as_str());
+    assert_eq!(started["providerName"], session.ai.label.as_str());
 }
 
 /// A provider error is logged with outcome `error`, a content timeout with

@@ -29,15 +29,16 @@
 //!    Server-Chunk blockieren und die Eingabe spürbar verzögern. Der Aktor
 //!    umgeht das vollständig, da nur er selbst je auf die Shell zugreift.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
+#[cfg(test)]
+use std::sync::Mutex as StdMutex;
 
 use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
 
-use ssh_manager_core::ai::{
-    AiProvider, ChatMessage, MessageContent, OutputRedactor, SessionContext,
-};
+#[cfg(any(test, feature = "test-support"))]
+use ssh_manager_core::ai::AiProvider;
+use ssh_manager_core::ai::{ChatMessage, MessageContent, OutputRedactor};
 use ssh_manager_core::filter::{EvalContext, EvaluationTrace, FilterEngine, PolicyStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{PtySize, SftpSession, SshError, SshTransport};
@@ -46,160 +47,19 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
-/// Issue #355: the stored sudo password of a session. Behind a lock so a
-/// reconnect can replace it together with the redactor.
-pub struct SwappableSudoPassword(std::sync::RwLock<Option<Arc<secrecy::SecretString>>>);
+mod ai_config;
+mod chat_persistence;
+mod manager;
+mod safety_state;
+mod swappable;
+mod transport_state;
 
-impl SwappableSudoPassword {
-    pub fn new(value: Option<secrecy::SecretString>) -> Self {
-        Self(std::sync::RwLock::new(value.map(Arc::new)))
-    }
-
-    pub fn get(&self) -> Option<Arc<secrecy::SecretString>> {
-        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
-    }
-
-    pub fn is_some(&self) -> bool {
-        self.get().is_some()
-    }
-
-    pub fn is_none(&self) -> bool {
-        self.get().is_none()
-    }
-
-    fn replace(&self, value: Option<secrecy::SecretString>) {
-        *self.0.write().unwrap_or_else(|e| e.into_inner()) = value.map(Arc::new);
-    }
-}
-
-/// Issue #355: the redactor of a session. Behind a lock so a reconnect can
-/// rebuild it with the sudo password read again from the keychain; every
-/// reader sees either the old or the new redactor, never none.
-pub struct SwappableRedactor {
-    inner: std::sync::RwLock<Arc<dyn OutputRedactor>>,
-    /// Issue #464: literal secret values inserted by an outgoing transform.
-    /// They survive a reconnect (the swap only replaces `inner`) and are
-    /// masked before the pattern-based redactor runs.
-    literal_secrets: std::sync::RwLock<Vec<Vec<u8>>>,
-}
-
-impl SwappableRedactor {
-    pub fn new(redactor: Box<dyn OutputRedactor>) -> Self {
-        Self {
-            inner: std::sync::RwLock::new(Arc::from(redactor)),
-            literal_secrets: std::sync::RwLock::new(Vec::new()),
-        }
-    }
-
-    fn current(&self) -> Arc<dyn OutputRedactor> {
-        self.inner.read().unwrap_or_else(|e| e.into_inner()).clone()
-    }
-
-    fn replace(&self, redactor: Box<dyn OutputRedactor>) {
-        *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
-    }
-
-    /// Issue #635: replaces the pattern-based redactor **and** the literal
-    /// secret set with exactly `secrets` (empty values ignored). Only the
-    /// extension rebuild path calls this; every other swap (reconnect) keeps
-    /// the literal set add-only. Text stored already redacted is not touched.
-    fn replace_with_literals(
-        &self,
-        redactor: Box<dyn OutputRedactor>,
-        secrets: &[secrecy::SecretString],
-    ) {
-        use secrecy::ExposeSecret;
-        // Build the complete new set first, then install it with a single
-        // assignment under one write guard: a concurrent reader sees either
-        // the old or the new set, never an empty one (no fail-open window).
-        let mut fresh: Vec<Vec<u8>> = Vec::new();
-        for secret in secrets {
-            let value = secret.expose_secret().as_bytes();
-            if !value.is_empty() && !fresh.iter().any(|k| k == value) {
-                fresh.push(value.to_vec());
-            }
-        }
-        // Longest first, so a secret that contains another is masked whole.
-        fresh.sort_by_key(|k| std::cmp::Reverse(k.len()));
-        let mut known = self
-            .literal_secrets
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
-        *known = fresh;
-        drop(known);
-        self.replace(redactor);
-    }
-
-    /// Issue #464: from now on `secrets` are masked wherever this redactor
-    /// runs (live output, result, ledger, history, logs). Called before the
-    /// command that uses them starts, so its own output is already covered.
-    /// Empty values are ignored (they would match everywhere).
-    pub fn add_secret_values(&self, secrets: &[secrecy::SecretString]) {
-        use secrecy::ExposeSecret;
-        let mut known = self
-            .literal_secrets
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
-        for secret in secrets {
-            let value = secret.expose_secret().as_bytes();
-            if !value.is_empty() && !known.iter().any(|k| k == value) {
-                known.push(value.to_vec());
-            }
-        }
-        // Longest first, so a secret that contains another is masked whole.
-        known.sort_by_key(|k| std::cmp::Reverse(k.len()));
-    }
-
-    fn mask_literals(&self, bytes: &[u8]) -> Vec<u8> {
-        let known = self
-            .literal_secrets
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let placeholder = ssh_manager_core::ai::REDACTED_PLACEHOLDER.as_bytes();
-        let mut out = bytes.to_vec();
-        for secret in known.iter() {
-            let mut next = Vec::with_capacity(out.len());
-            let mut i = 0;
-            while i < out.len() {
-                if out[i..].starts_with(secret) {
-                    next.extend_from_slice(placeholder);
-                    i += secret.len();
-                } else {
-                    next.push(out[i]);
-                    i += 1;
-                }
-            }
-            out = next;
-        }
-        out
-    }
-}
-
-impl OutputRedactor for SwappableRedactor {
-    fn redact(
-        &self,
-        output: &ssh_manager_core::ssh::CommandOutput,
-    ) -> ssh_manager_core::ssh::CommandOutput {
-        let masked = ssh_manager_core::ssh::CommandOutput {
-            stdout: self.mask_literals(&output.stdout),
-            stderr: self.mask_literals(&output.stderr),
-            exit_code: output.exit_code,
-            truncated: output.truncated,
-        };
-        self.current().redact(&masked)
-    }
-
-    fn redact_text(&self, text: &str) -> String {
-        let masked = String::from_utf8_lossy(&self.mask_literals(text.as_bytes())).into_owned();
-        self.current().redact_text(&masked)
-    }
-}
-
-impl AsRef<dyn OutputRedactor> for SwappableRedactor {
-    fn as_ref(&self) -> &(dyn OutputRedactor + 'static) {
-        self
-    }
-}
+pub use ai_config::AiConfig;
+pub use chat_persistence::ChatPersistence;
+pub use manager::*;
+pub use safety_state::SafetyState;
+pub use swappable::{SwappableRedactor, SwappableSudoPassword};
+pub use transport_state::TransportState;
 
 /// Objektsicherer Wrapper um `FilterEngine<S>::evaluate` (Aufgabenstellung
 /// Teil 1, Punkt 4). `FilterEngine<S>` selbst ist über den `PolicyStore`-Typ
@@ -368,7 +228,8 @@ impl ReconnectClaim<'_> {
         self.session
             .replace_connection(transport, redactor, sudo_password)
             .await;
-        *crate::poison::lock_tolerating_poison(&self.session.status) = ConnectionStatus::Connected;
+        *crate::poison::lock_tolerating_poison(&self.session.conn.status) =
+            ConnectionStatus::Connected;
         self.settled = true;
     }
 }
@@ -376,7 +237,7 @@ impl ReconnectClaim<'_> {
 impl Drop for ReconnectClaim<'_> {
     fn drop(&mut self) {
         if !self.settled {
-            *crate::poison::lock_tolerating_poison(&self.session.status) =
+            *crate::poison::lock_tolerating_poison(&self.session.conn.status) =
                 ConnectionStatus::Disconnected;
         }
     }
@@ -693,123 +554,20 @@ impl std::ops::Deref for Session {
 /// — der normale SFTP-Kanal gehört bewusst **nicht** dazu (Spec 0085, A3:
 /// „Der Konstruktor nimmt keinen Kanal an", ein neu erzeugter Kanal ist
 /// immer leer).
+///
+/// Issue #871: `transport`, `server_id`, `tags` and `redactor` stay direct
+/// fields (used by embedding crates); everything else is grouped by concern.
 pub struct SessionParts {
     /// Spec 0086, A3: eigener Typ statt `AsyncMutex<Box<dyn SshTransport>>`
     /// — s. [`SessionTransport`] zur Begründung.
     pub transport: SessionTransport,
-    pub ai_provider: Box<dyn AiProvider>,
-    /// Spec 0061: der Rate-Limit-Budget-Wächter für `ai_provider` (aus
-    /// `AppState.rate_limit_registry` bei `connect()` aufgelöst, s.
-    /// `risk_second_opinion_budget`-Doc-Kommentar zur Begründung, warum
-    /// dieses separate Feld nötig ist).
-    pub ai_provider_budget: Arc<ai_providers::ProviderBudgetGuard>,
-    pub context: AsyncMutex<SessionContext>,
-    pub filter_engine: Box<dyn CommandEvaluator>,
     pub server_id: ServerId,
     pub tags: Vec<String>,
-    /// `Some`, sobald `open_terminal` den Aktor gestartet hat.
-    /// `terminal_input`/`terminal_resize` senden darüber; `None` (noch kein
-    /// `open_terminal` aufgerufen, oder Kanal bereits geschlossen) wird als
-    /// Anwenderfehler zurückgemeldet statt zu blockieren.
-    pub terminal: StdMutex<Option<mpsc::UnboundedSender<TerminalCommand>>>,
     /// Läuft über jeden `SshTransport::execute()`-Output, bevor er in
     /// `chat-action-result` und `context.history` landet (Spec 0006,
     /// Abschnitt 5) — pro Session eine Instanz statt bei jeder Ausführung
     /// neu aufgebaut (baut intern eine feste Regex-Liste auf).
     pub redactor: SwappableRedactor,
-    /// Für `NoteEditor::Ai { provider, model }` bei `ProposeNoteUpdate`
-    /// (Spec 0003, Abschnitt 5.3) — aus der aktiven `AiProviderConfig` zum
-    /// Verbindungszeitpunkt übernommen, damit spätere Notiz-Historie
-    /// nachvollziehbar bleibt, welcher Provider/welches Modell den
-    /// Vorschlag gemacht hat.
-    pub ai_provider_label: String,
-    pub ai_model: String,
-    /// Spec 0057, §4.1: die ungefencten Rohbestandteile des aktuellen
-    /// System-Prompts (Basis-Text, Notiz-Sektionen nach Scope geordnet —
-    /// seit Spec 0064 OHNE die Remote-OS-Info, die lebt jetzt als eigene,
-    /// gefencte Verlaufs-Nachricht, s. `crate::compaction::
-    /// SystemContextParts`-Doc-Kommentar) — parallel zu `context.lock()
-    /// .await.system_context`
-    /// (dem bereits zusammengesetzten String) gepflegt, s.
-    /// `crate::compaction::SystemContextParts`-Doc-Kommentar zur
-    /// Begründung, warum das getrennt statt nur aus dem fertigen String
-    /// gehalten wird. Aktualisiert an denselben zwei Stellen wie `context`:
-    /// `app_shell::commands::connect_session` (initial) und
-    /// `send_chat_message_impl` (bei jeder Nutzer-Nachricht neu gebaut).
-    pub system_context_parts: AsyncMutex<crate::compaction::SystemContextParts>,
-    /// Spec 0057, §3.1: geschätztes Kontextfenster (Token) des bei
-    /// `connect()` aktiven KI-Providers/-Modells — einmalig aufgelöst über
-    /// `crate::compaction::model_context_window_tokens`, analog zu
-    /// `ai_provider_label`/`ai_model` oben (ein während der Sitzung
-    /// geänderter aktiver Provider greift wie dort erst bei der nächsten
-    /// `connect()`).
-    pub model_context_window_tokens: usize,
-    /// Spec 0057, §2: die aktuelle rollierende Zusammenfassung alter,
-    /// bereits aus dem KI-Kontext verdichteter Gesprächsrunden — `None`,
-    /// solange Schritt 1 der Kompaktierungs-Leiter (`compaction::
-    /// compact_for_send`) noch nie greifen musste, oder nach einem
-    /// wiederaufgenommenen Resume ohne zuvor gespeicherte Summary.
-    /// Aktualisiert ausschließlich von `compaction::
-    /// compact_rounds_with_summary` (nie direkt), persistiert
-    /// wie die Chat-Historie/das Ledger, geschützt durch die Verschlüsselung
-    /// der Datenbankdatei (Spec 0036, Spec 0057 §2.3),
-    /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
-    pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
-    /// Issue #601: real input sizes reported by the provider, used to
-    /// correct the compaction estimate (in memory, per session).
-    pub context_usage: StdMutex<crate::compaction::ContextUsageTracker>,
-    /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
-    /// §2.1, Entscheidung: die Summary bildet Chat-Kontinuität ab,
-    /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
-    /// Etappe 1, unabhängig davon). Parallel zu `context.history` geführt
-    /// (Index `i` sagt, ob `context.history[i]` MCP-originiert ist,
-    /// `true` ⟺ die Nachricht wurde mit `persist: false` gepusht) —
-    /// `ChatMessage` selbst trägt keine Herkunftsinformation (kein
-    /// `core`-Typ soll App-Shell-Konzepte wie MCP kennen), deshalb dieser
-    /// Session-lokale Spiegel. Ausschließlich von `orchestration::
-    /// push_history_scoped` gepflegt, IM SELBEN `context`-Lock wie der
-    /// `history.push` selbst (atomar, keine zwei Nachrichten können sich
-    /// zwischen den beiden Pushes einschieben) — dieselbe Quelle der
-    /// Wahrheit wie der bereits bestehende `persist`-Parameter, der auch
-    /// den `chat_messages`-Persistenz-Ausschluss steuert (Spec 0034 §10),
-    /// hier nur zusätzlich für die Kompaktierung gespiegelt statt eines
-    /// zweiten, divergierenden Mechanismus. `StdMutex` statt `AsyncMutex`:
-    /// nur kurze, nie über einen `.await`-Punkt gehaltene Push-Operationen,
-    /// wie bei `pending_action`.
-    pub mcp_origin_flags: StdMutex<Vec<bool>>,
-    /// Spec 0018, Abschnitt 6: optionales Sudo-Passwort, einmalig bei
-    /// `connect()` aus dem `CredentialStore` gelesen — `None`, wenn für den
-    /// Server keines hinterlegt ist (kein Fehler, s. dortiger Kommentar).
-    /// Wird ausschließlich über Stdin an genau einen `sudo -S`-Aufruf
-    /// weitergereicht (`crate::orchestration::execute_suggested_command`),
-    /// nie auf dem Zielserver abgelegt.
-    pub sudo_password: SwappableSudoPassword,
-    /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
-    /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
-    /// konstruiert, s. `app_shell::commands::connect`) und wird von
-    /// `spawn_terminal_actor` auf `Disconnected` gesetzt, sobald der
-    /// Terminal-Aktor unerwartet endet (Netzwerkfehler/Verbindungsabbruch) —
-    /// ein expliziter `disconnect()`-Aufruf entfernt die Session ohnehin
-    /// komplett aus `SessionManager`, dort ist kein Status-Update nötig.
-    /// Eigener `StdMutex` statt z. B. eines `AtomicU8`: `ConnectionStatus`
-    /// ist ein einfaches Copy-Enum, aber kein Integer — ein Mutex bleibt
-    /// hier die geradlinigste Wahl, analog zu `terminal` oben.
-    pub status: StdMutex<ConnectionStatus>,
-    /// Spec 0017, Abschnitt 5: `Some(action_id)`, während diese Session auf
-    /// eine `Confirm`-Bestätigung wartet (gesetzt in
-    /// `crate::orchestration::handle_action_proposed`, gelöscht sobald die
-    /// wartende `rx.await` dort zurückkehrt) — die Grundlage für
-    /// `SessionSummaryDto.has_pending_action`, den Tab-Indikator im
-    /// Frontend. **Nicht** für den Disconnect-Notiz-Vorschlag (Spec 0010)
-    /// verwendet: der läuft bewusst erst, nachdem die Session bereits aus
-    /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
-    /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
-    pub pending_action: StdMutex<Option<ActionId>>,
-    /// Issue #108, Spec 0104 §3: `true`, solange eine MCP-Bestätigung dieser
-    /// Session registriert ist (von der Registrierung bis zum Aufräumen,
-    /// also auch vor dem Setzen des Indikators). Ein weiterer MCP-Vorschlag
-    /// wird dann abgewiesen.
-    pub mcp_confirmation_claim: std::sync::atomic::AtomicBool,
     // Spec 0085, A3: Der normale SFTP-Kanal war bis hierhin ein `pub`-Feld
     // dieser Struktur. Er liegt jetzt als privates Feld an `Session` selbst
     // (s. `NormalSftpChannel`): so kann Code außerhalb von `app-logic` ihn
@@ -820,174 +578,14 @@ pub struct SessionParts {
     // verwalteten Zustand von `app-shell` (Spec 0084, A1): so führt von
     // einer `Session` aus kein Weg mehr zu ihm, auch nicht für Code, der
     // eine `Session` in der Hand hat.
-    /// Spec 0021, Abschnitt 5 / Spec 0066, §1: gesetzt über
-    /// [`Session::request_auto_continue_stop`] (`app_shell::commands::
-    /// stop_auto_continuation`). Beendet die Fortsetzungskette und bricht
-    /// einen laufenden KI-Stream bzw. die Wartezeit vor dem Send sofort ab
-    /// (`crate::orchestration::run_one_round`); ein offener
-    /// Bestätigungsdialog und ein bereits laufendes Kommando bleiben
-    /// unangetastet. Zurückgesetzt in `app_shell::commands::
-    /// send_chat_message_impl` beim Start eines Turns, atomar mit
-    /// `chat_turn.running`.
-    pub auto_continue_stop: std::sync::atomic::AtomicBool,
-    /// Spec 0066, §1: weckt eine laufende Runde auf, sobald
-    /// `auto_continue_stop` gesetzt wird, damit ein laufender KI-Stream
-    /// sofort abgebrochen wird statt erst an der nächsten Rundengrenze.
-    /// Immer über [`Session::request_auto_continue_stop`] setzen.
-    pub auto_continue_stop_notify: tokio::sync::Notify,
-    /// Spec 0066, §2: ob gerade ein Chat-Turn läuft, und welche
-    /// Nutzer-Nachrichten währenddessen eingereiht wurden. Beides unter
-    /// EINEM Lock, damit keine Nachricht zwischen "Warteschlange leer" und
-    /// "Turn beendet" verloren gehen kann.
-    pub chat_turn: StdMutex<ChatTurnState>,
-    /// Spec 0026, Abschnitt 3: `Some`, wenn die optionale KI-Zweitmeinung
-    /// zur Daten-Risiko-Achse aktiviert ist UND ein gültiger, separater
-    /// Provider dafür konfiguriert ist — einmalig bei `connect()` aus den
-    /// `tauri-plugin-store`-Einstellungen aufgelöst (analog zu
-    /// `ai_provider_label`/`ai_model` oben), nicht bei jedem Aktionsvorschlag
-    /// neu gelesen. Ein während einer laufenden Session geänderter Wert
-    /// greift dadurch erst bei der nächsten `connect()` — ein bewusster,
-    /// kleiner Scope-Kompromiss: eine Live-Aktualisierung mitten in einer
-    /// Session hätte deutlich mehr Zustands-Plumbing gebraucht, für eine
-    /// reine Komfort-Einstellung unverhältnismäßig.
-    pub risk_second_opinion_provider: Option<Box<dyn AiProvider>>,
-    /// Spec 0061: derselbe Rate-Limit-Budget-Wächter, den der zugehörige
-    /// `risk_second_opinion_provider` beim Bau (`ai_provider_factory::
-    /// build_ai_provider`) aus `AppState.rate_limit_registry` bekommen hat
-    /// — als eigenständiges Feld gehalten, weil `Box<dyn AiProvider>`
-    /// (s. oben) keinen Weg bietet, nachträglich an seinen internen
-    /// Wächter heranzukommen (die `AiProvider`-Trait-Grenze kennt Spec
-    /// 0061 nicht, s. `crate::orchestration::wait_for_rate_limit_budget`,
-    /// das dieses Feld VOR dem jeweiligen `send()`-Aufruf konsultiert).
-    /// `Some` genau dann, wenn `risk_second_opinion_provider` `Some` ist.
-    pub risk_second_opinion_budget: Option<Arc<ai_providers::ProviderBudgetGuard>>,
-    /// Spec 0092, A1.3: ob ein rot eingestufter Vorschlag immer eine
-    /// Bestätigung verlangt — app-weite Einstellung (`redRiskAlwaysConfirm`
-    /// in `settings.json`), einmalig bei `connect()` aufgelöst, genau wie
-    /// `risk_second_opinion_provider` oben. Eine Änderung greift deshalb
-    /// erst bei der nächsten Verbindung; der Hinweistext am Schalter sagt
-    /// das.
-    ///
-    /// **Fail-safe `true`** (A1.2): fehlender Schlüssel, kein boolescher
-    /// Wert oder ein nicht öffenbarer Store gelten als „an". In
-    /// Test-Fixtures ebenfalls `true` (Spec 0092, A1.2) — damit ein
-    /// bestehender Test mit rotem Kommando und Allow-Regel sichtbar bricht,
-    /// statt still auf „aus" zu laufen.
-    pub red_risk_always_confirm: bool,
-    /// Spec 0027: derselbe `Arc` wie `AppState.running_command_
-    /// cancellations` — ein billiger Klon bei `connect()`, damit
-    /// `orchestration::execute_suggested_command` (die nur `&Session`
-    /// bekommt, kein `AppState`) einen laufenden Abbruch registrieren kann,
-    /// ohne die Signaturen von `run_chat_turn`/`run_one_round`/
-    /// `handle_action_proposed` anfassen zu müssen (s. Doc-Kommentar auf
-    /// `AppState.running_command_cancellations`).
-    pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
-    /// Issue #464 (Spec 0038): the edition's transform for approved text right
-    /// before it is sent (`AppState.outgoing_transform`). `None`: text is sent
-    /// unchanged.
-    pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
-    /// Issue #505: chat content extensions (`AppState.chat_content`); the
-    /// send path seals extension parts through it.
-    pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
-    /// Spec 0039, Abschnitt 5: `true`, sobald in dieser Sitzung
-    /// **irgendein** durch `ai::fence_untrusted` gelaufener Inhalt in den
-    /// KI-Kontext gelangt ist (Kommando-Ausgabe, SFTP-Dateiinhalt oder
-    /// Server-/Gruppen-Notiz im System-Prompt) — anders als
-    /// `auto_continue_stop` **niemals** zurückgesetzt, auch nicht über neue
-    /// Nutzer-Nachrichten hinweg (ersetzt damit die alte, pro-Turn
-    /// zurückgesetzte SEC-03-Bremse, s. `orchestration::handle_action_
-    /// proposed`-Kommentar an der Eskalationsstelle für die Begründung).
-    /// Initialisiert mit `true`, wenn die Sitzung bereits mit Notizen oder
-    /// (künftig, Spec 0034) vorbelasteter Historie startet — s.
-    /// `history_contains_untrusted_content`.
-    pub untrusted_content_ingested: std::sync::atomic::AtomicBool,
-    /// Spec 0039, Abschnitt 5.1: einmalig bei `connect()` vom Server-Profil
-    /// übernommen (analog zu `ai_provider_label`/`risk_second_opinion_
-    /// provider` oben) — steuert, wie stark eskaliert wird, NACHDEM
-    /// `untrusted_content_ingested` gesetzt ist. Das Fencing selbst
-    /// (Abschnitt 3/4) läuft davon unabhängig immer.
-    pub post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy,
-    /// Spec 0039, Abschnitt 5.2: `Some`, wenn sowohl die app-weite
-    /// Zweitmeinungs-Einstellung (Spec 0026, Abschnitt 3) als auch die
-    /// serverspezifische `ai_injection_check_enabled`-Einstellung aktiv
-    /// sind — einmalig bei `connect()` aufgelöst (analog zu
-    /// `risk_second_opinion_provider`, derselbe konfigurierte Provider,
-    /// separat aufgelöst, weil `Box<dyn AiProvider>` nicht `Clone` ist).
-    pub injection_check_provider: Option<Box<dyn AiProvider>>,
-    /// Spec 0061: Gegenstück zu `risk_second_opinion_budget`, für
-    /// `injection_check_provider`. In der Praxis oft **derselbe** `Arc`
-    /// wie `risk_second_opinion_budget` (beide werden normalerweise aus
-    /// derselben `riskClassifierProviderId`-Einstellung gebaut, s.
-    /// `risk_second_opinion::resolve_second_opinion_provider` — die
-    /// `RateLimitRegistry` gibt für dieselbe Provider-Identität denselben
-    /// Wächter zurück, unabhängig vom Aufrufzweck, s. Spec 0061 Abschnitt
-    /// 2, "geteiltes Budget pro Provider-Identität").
-    pub injection_check_budget: Option<Arc<ai_providers::ProviderBudgetGuard>>,
-    /// Spec 0039, Abschnitt 5.2: `true`, sobald der letzte gelaufene
-    /// Einschleusungs-Check "ja" ergeben hat — anders als
-    /// `untrusted_content_ingested` NICHT dauerhaft-monoton, sondern
-    /// "klebrig bis verbraucht": `handle_action_proposed` setzt es beim
-    /// Eskalieren einer Aktion wieder auf `false` zurück, weil sich die
-    /// Eskalation laut Spec auf "die auf diesem Inhalt basierende
-    /// Folgeaktion" bezieht (Singular), nicht auf den Rest der Sitzung.
-    pub injection_suspected: std::sync::atomic::AtomicBool,
-    /// Issue #693: the checker's (redacted, length-limited) reason for the
-    /// suspicion above. Display text only — shown in the confirmation that
-    /// consumes the flag, never sent to the AI. Cleared together with the
-    /// flag; set alongside it.
-    pub injection_suspected_reason: StdMutex<Option<String>>,
-    /// Issue #102: `true`, wenn der letzte Einschleusungs-Check nicht laufen
-    /// konnte (Provider-Fehler) oder kein Urteil lieferte. Wie
-    /// `injection_suspected` "klebrig bis verbraucht": die nächste
-    /// `AutoExec`-Aktion wird zu `Confirm` und setzt es zurück (fail closed,
-    /// pro Aktion); beeinflusst `injection_suspected` nie.
-    pub injection_check_unavailable: std::sync::atomic::AtomicBool,
-    /// Issue #102: `true`, wenn die Zweitmeinung aktiv ist, beim `connect()`
-    /// aber nicht eingerichtet werden konnte; Hinweis einmalig (`swap(false)`).
-    pub second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool,
-    /// Issue #231: `true`, wenn die serverspezifische Injection-Prüfung an
-    /// ist, beim `connect()` aber kein Anbieter zur Verfügung stand
-    /// (Zweitmeinung app-weit aus oder nicht einrichtbar). Nur Hinweis, keine
-    /// erzwungene Bestätigung; einmalig gesendet (`swap(false)`).
-    pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
-    /// Issue #843: notice `REDACTION_INCOMPLETE` due (secrets not fully loaded).
-    pub redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool,
-    /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
-    /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
-    /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen
-    /// ohnehin nie über `run_chat_turn`/eine eigene `Session`, s.
-    /// `app_shell::mcp_backend`, insofern betrifft dieses Feld sie gar nicht
-    /// erst). Konkreter Store-Typ statt Trait-Abstraktion — derselbe
-    /// Präzedenzfall wie `SqlitePromptHistoryStore` in `AppState` (Spec
-    /// 0015): kein `core`-Trait für diese Art Hilfs-Store, anders als
-    /// `ProfileStore`/`PolicyStore`/`AiProvider`.
-    pub chat_session_store: Option<persistence_sqlite::SqliteChatSessionStore>,
-    /// Spec 0057, §1: das Session-Ledger dieser Sitzung. Bewusst
-    /// UNABHÄNGIG vom `persist`-Flag von `push_history_scoped` (das MCP-
-    /// Herkunft von `chat_messages` ausschließt, Spec 0034/0040) — das
-    /// Ledger soll MCP-Aktivität gerade erfassen (Spec 0057, §1.1: Quelle
-    /// `mcp-agent`). Gleiches `None`-Verhalten wie `chat_session_store`
-    /// (Tests; Sitzungen ohne eigene `chat_sessions`-Zeile).
-    pub ledger_store: Option<persistence_sqlite::SqliteLedgerStore>,
-    /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
-    /// `app_shell::commands::connect_session` sie anlegt (bzw. bei
-    /// `resume_chat_session`, Teil 2, auf die wiederverwendete Zeile
-    /// gesetzt wird). `AsyncMutex` statt `StdMutex`, weil
-    /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
-    /// hält (der eigentliche `INSERT`).
-    pub chat_session_id: AsyncMutex<Option<uuid::Uuid>>,
-    /// Spec 0051, Teil 2: Zeitpunkt des letzten `AiProvider::send()`-
-    /// Aufrufs dieser Sitzung — über alle KI-Anfrage-Arten hinweg
-    /// (Haupt-Chat, Risiko-Zweitmeinung, Einschleusungs-Check, Auto-Titel,
-    /// Notiz-Vorschlag) und unabhängig von der konkreten `AiProvider`-
-    /// Instanz: `risk_second_opinion_provider`/`injection_check_provider`
-    /// können denselben API-Key/dasselbe Rate-Limit-Kontingent wie
-    /// `ai_provider` teilen, ohne dass die App das unterscheiden könnte —
-    /// s. `crate::orchestration::wait_for_ai_request_slot`, das dieses Feld unmittelbar
-    /// vor jedem `send()`-Aufruf konsultiert. `None` vor dem ersten Aufruf.
-    pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
-    /// Issue #356, Spec 0107 §8: state of the automatic reconnect.
-    pub auto_reconnect: crate::auto_reconnect::AutoReconnectState,
+    /// AI configuration and conversation state.
+    pub ai: AiConfig,
+    /// Safety-model state.
+    pub safety: SafetyState,
+    /// Chat persistence handles.
+    pub persistence: ChatPersistence,
+    /// Connection status and turn control.
+    pub conn: TransportState,
 }
 
 /// Spec 0066, §2 — s. `Session::chat_turn`.
@@ -1008,7 +606,7 @@ impl Session {
     /// session without a saved chat (persistence off, local server) falls
     /// back to the tab id; such content can never be resumed anyway.
     pub async fn extension_content_key(&self, tab_id: SessionId) -> uuid::Uuid {
-        (*self.chat_session_id.lock().await).unwrap_or(tab_id)
+        (*self.persistence.chat_session_id.lock().await).unwrap_or(tab_id)
     }
 
     /// Spec 0085, A3: der einzige Weg, eine `Session` zu bauen. Der normale
@@ -1050,7 +648,8 @@ impl Session {
         let Some(source) = reporting.source_for(purpose) else {
             return;
         };
-        let chat_session_id = (*self.chat_session_id.lock().await).map(|id| id.to_string());
+        let chat_session_id =
+            (*self.persistence.chat_session_id.lock().await).map(|id| id.to_string());
         let record = crate::ai_usage::AiUsageRecord {
             chat_session_id,
             runtime_session_id: reporting.runtime_session_id.clone(),
@@ -1105,7 +704,7 @@ impl Session {
     /// only once: the state flips to `Reconnecting` under the lock, so a
     /// second trigger (double click, `R` key held down) gets `None`.
     pub fn begin_reconnect(&self) -> Option<ReconnectClaim<'_>> {
-        let mut status = crate::poison::lock_tolerating_poison(&self.status);
+        let mut status = crate::poison::lock_tolerating_poison(&self.conn.status);
         if *status != ConnectionStatus::Disconnected {
             return None;
         }
@@ -1128,7 +727,7 @@ impl Session {
         )
         .await;
         let _ = self.transport.lock().await.disconnect().await;
-        *crate::poison::lock_tolerating_poison(&self.terminal) = None;
+        *crate::poison::lock_tolerating_poison(&self.conn.terminal) = None;
     }
 
     /// Issue #355: replaces transport, normal SFTP channel and redactor of
@@ -1147,7 +746,7 @@ impl Session {
         self.transport.replace(transport).await;
         // One read feeds both: the password sent to `sudo -S` and the
         // redactor always agree.
-        self.sudo_password.replace(sudo_password);
+        self.safety.sudo_password.replace(sudo_password);
         self.redactor.replace(redactor);
     }
 
@@ -1280,15 +879,16 @@ impl Session {
 
     /// Spec 0066, §2: entnimmt alle eingereihten Nutzer-Nachrichten.
     pub(crate) fn take_queued_user_messages(&self) -> Vec<String> {
-        std::mem::take(&mut self.chat_turn.lock().unwrap().queued)
+        std::mem::take(&mut self.conn.chat_turn.lock().unwrap().queued)
     }
 
     /// Spec 0066, §1: setzt das Stopp-Flag und weckt eine gerade laufende
     /// Runde auf (bricht deren KI-Stream ab).
     pub fn request_auto_continue_stop(&self) {
-        self.auto_continue_stop
+        self.conn
+            .auto_continue_stop
             .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.auto_continue_stop_notify.notify_waiters();
+        self.conn.auto_continue_stop_notify.notify_waiters();
     }
 
     /// Spec 0017, Abschnitt 5 / Spec 0104, Abschnitt 5 (Issue #66): Lehnt
@@ -1305,7 +905,8 @@ impl Session {
         &self,
         confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
     ) -> bool {
-        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.pending_action) else {
+        let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.conn.pending_action)
+        else {
             return false;
         };
         // Kann nur scheitern, wenn die Bestätigung im selben Moment
@@ -1327,8 +928,9 @@ impl Session {
             // empfängt `notify_waiters()` ab seiner Erzeugung, auch
             // ungepollt — sonst ginge ein Stopp zwischen Prüfung und
             // `.await` verloren.
-            let notified = self.auto_continue_stop_notify.notified();
+            let notified = self.conn.auto_continue_stop_notify.notified();
             if self
+                .conn
                 .auto_continue_stop
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
@@ -1491,7 +1093,7 @@ pub fn report_connection_lost(
     reason: Option<String>,
 ) -> bool {
     {
-        let mut status = session.status.lock().unwrap();
+        let mut status = session.conn.status.lock().unwrap();
         if *status == ConnectionStatus::Disconnected {
             return false;
         }
@@ -1500,11 +1102,14 @@ pub fn report_connection_lost(
     // Issue #356: remember that an AI turn was cut off by the loss (running
     // command, waiting confirmation or a pending follow-up round), so the
     // AI can continue after an automatic reconnect.
-    let turn_active = crate::poison::lock_tolerating_poison(&session.chat_turn).running;
-    session.auto_reconnect.set_ai_turn_interrupted(turn_active);
+    let turn_active = crate::poison::lock_tolerating_poison(&session.conn.chat_turn).running;
+    session
+        .conn
+        .auto_reconnect
+        .set_ai_turn_interrupted(turn_active);
     // The hook runs first: it announces the automatic attempts before the
     // status event, so the UI never shows "lost" for a moment.
-    session.auto_reconnect.fire_hook(session_id);
+    session.conn.auto_reconnect.fire_hook(session_id);
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1539,242 +1144,6 @@ pub fn spawn_connection_watch(
         }
         report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
     });
-}
-
-/// Eine Zeile der `SessionManager::snapshot()`-Momentaufnahme (Spec 0017,
-/// Abschnitt 2) — bewusst ohne `server_name`: dafür bräuchte es den
-/// `ProfileStore`, den `SessionManager` absichtlich nicht kennt (reines
-/// Session-Bookkeeping, keine Persistenz-Abhängigkeit). Die Auflösung auf
-/// `SessionSummaryDto` (inkl. Servername) übernimmt der Aufrufer
-/// (`app_shell::commands::list_sessions`).
-#[derive(Debug, Clone, Copy)]
-pub struct SessionSnapshotEntry {
-    pub session_id: SessionId,
-    pub server_id: ServerId,
-    pub status: ConnectionStatus,
-    pub has_pending_action: bool,
-}
-
-/// Kapselt `AppState.sessions` (Aufgabenstellung Teil 2, Punkt 1) — s.
-/// Modul-Kommentar Punkt 1 zur Wahl von `std::sync::Mutex` für die äußere
-/// Map.
-#[derive(Default)]
-pub struct SessionManager {
-    sessions: StdMutex<HashMap<SessionId, Arc<Session>>>,
-    /// Spec 0114 §4: number of open sessions, for the background keep-alive.
-    count_tx: tokio::sync::watch::Sender<usize>,
-    /// Spec 0017, Abschnitt 2: Verbindungsversuche, die aktuell auf
-    /// `confirm_host_key` warten (`app_shell::commands::connect`) — diese
-    /// Sessions existieren noch nicht in `sessions` (s. dortiger
-    /// Kommentar zur Reihenfolge: `Session` wird erst nach erfolgreichem
-    /// Aufbau eingefügt), sollen aber trotzdem in `list_sessions()`
-    /// auftauchen (Status `AwaitingHostKey`), damit ein Frontend-Reload
-    /// während eines offenen Host-Key-Dialogs den Tab nicht einfach
-    /// verschwinden lässt.
-    pending_connections: StdMutex<HashMap<SessionId, ServerId>>,
-    /// Issue #242: Chat-Sitzungen, die gerade fortgesetzt (Resume) oder
-    /// gelöscht werden. Schließt die Lücke zwischen "Resume gestartet" und
-    /// `insert` der registrierten `Session`, in der `is_chat_session_active`
-    /// noch `false` liefert. Reine synchrone Sperre, nie über ein `.await`
-    /// hinweg gehalten.
-    claimed_chat_sessions: StdMutex<HashMap<uuid::Uuid, ChatSessionClaimState>>,
-}
-
-#[derive(Default, Clone, Copy)]
-struct ChatSessionClaimState {
-    resumers: usize,
-    deleting: bool,
-}
-
-/// Die Chat-Sitzung ist gerade in Benutzung (Resume läuft, ein Tab nutzt
-/// sie) bzw. wird gerade gelöscht.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChatSessionClaimError {
-    /// Ein Tab nutzt die Sitzung oder ein Resume läuft gerade.
-    InUse,
-    /// Ein Löschvorgang für diese Sitzung läuft gerade.
-    BeingDeleted,
-}
-
-/// RAII-Anspruch auf eine Chat-Sitzung; gibt sie beim `Drop` frei — auch auf
-/// jedem Fehlerpfad eines Resume.
-#[must_use = "dropping the claim releases it immediately"]
-pub struct ChatSessionClaim<'a> {
-    manager: &'a SessionManager,
-    chat_session_id: uuid::Uuid,
-    exclusive: bool,
-}
-
-impl Drop for ChatSessionClaim<'_> {
-    fn drop(&mut self) {
-        let mut claims = self.manager.claimed_chat_sessions.lock().unwrap();
-        if let Some(state) = claims.get_mut(&self.chat_session_id) {
-            if self.exclusive {
-                state.deleting = false;
-            } else {
-                state.resumers = state.resumers.saturating_sub(1);
-            }
-            if !state.deleting && state.resumers == 0 {
-                claims.remove(&self.chat_session_id);
-            }
-        }
-    }
-}
-
-impl SessionManager {
-    /// Issue #242: Anspruch eines Resume. Mehrere gleichzeitige Resumes
-    /// derselben Sitzung bleiben möglich (wie bisher); nur ein laufendes
-    /// Löschen schließt sie aus. Vor dem Laden der Historie nehmen, bis nach
-    /// `insert` der `Session` halten.
-    pub fn claim_chat_session_for_resume(
-        &self,
-        chat_session_id: uuid::Uuid,
-    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
-        let mut claims = self.claimed_chat_sessions.lock().unwrap();
-        let state = claims.entry(chat_session_id).or_default();
-        if state.deleting {
-            return Err(ChatSessionClaimError::BeingDeleted);
-        }
-        state.resumers += 1;
-        Ok(ChatSessionClaim {
-            manager: self,
-            chat_session_id,
-            exclusive: false,
-        })
-    }
-
-    /// Issue #242: exklusiver Anspruch für das Löschen. Scheitert mit
-    /// `InUse`, wenn ein Resume läuft oder ein Tab die Sitzung nutzt;
-    /// Prüfung und Anspruch gehören zusammen, der Aufrufer löscht, solange
-    /// er die Rückgabe hält.
-    pub async fn claim_chat_session_for_delete(
-        &self,
-        chat_session_id: uuid::Uuid,
-    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
-        {
-            let mut claims = self.claimed_chat_sessions.lock().unwrap();
-            let state = claims.entry(chat_session_id).or_default();
-            if state.deleting {
-                return Err(ChatSessionClaimError::BeingDeleted);
-            }
-            if state.resumers > 0 {
-                return Err(ChatSessionClaimError::InUse);
-            }
-            state.deleting = true;
-        }
-        // Ab hier hält der Anspruch (Drop gibt frei, auch beim Fehler unten).
-        let claim = ChatSessionClaim {
-            manager: self,
-            chat_session_id,
-            exclusive: true,
-        };
-        if self.is_chat_session_active(chat_session_id).await {
-            return Err(ChatSessionClaimError::InUse);
-        }
-        Ok(claim)
-    }
-}
-
-impl SessionManager {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&self, id: SessionId, session: Arc<Session>) {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.insert(id, session);
-        self.count_tx.send_replace(sessions.len());
-    }
-
-    /// Watches the number of open sessions (Spec 0114 §4).
-    pub fn subscribe_count(&self) -> tokio::sync::watch::Receiver<usize> {
-        self.count_tx.subscribe()
-    }
-
-    pub fn get(&self, id: SessionId) -> Option<Arc<Session>> {
-        self.sessions.lock().unwrap().get(&id).cloned()
-    }
-
-    pub fn remove(&self, id: SessionId) -> Option<Arc<Session>> {
-        let mut sessions = self.sessions.lock().unwrap();
-        let removed = sessions.remove(&id);
-        self.count_tx.send_replace(sessions.len());
-        removed
-    }
-
-    /// Spec 0040, Abschnitt 7: Grundlage für `commands::delete_chat_session`s
-    /// Schutz vor dem Löschen einer gerade aktiv verbundenen Sitzung — ohne
-    /// diese Prüfung würde die zugehörige `chat_sessions`-Zeile unter einer
-    /// noch laufenden `Session` weggezogen, und jeder weitere `push_history`-
-    /// Aufruf dieser Sitzung liefe fortan ins Leere (Fremdschlüssel-Verletzung
-    /// bei jedem Schreibversuch, nur als Warnung geloggt statt sichtbar zu
-    /// scheitern — s. `orchestration::push_history_scoped`). Klont nur die
-    /// `Arc`-Zeiger unter der kurzen synchronen Sperre, bevor der `.await`
-    /// auf `chat_session_id` je Session erfolgt — derselbe Grund wie bei
-    /// `snapshot()` oben.
-    pub async fn is_chat_session_active(&self, chat_session_id: uuid::Uuid) -> bool {
-        let sessions: Vec<Arc<Session>> = self.sessions.lock().unwrap().values().cloned().collect();
-        for session in sessions {
-            if *session.chat_session_id.lock().await == Some(chat_session_id) {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn register_pending_connection(&self, id: SessionId, server_id: ServerId) {
-        self.pending_connections
-            .lock()
-            .unwrap()
-            .insert(id, server_id);
-    }
-
-    pub fn clear_pending_connection(&self, id: SessionId) {
-        self.pending_connections.lock().unwrap().remove(&id);
-    }
-
-    /// Momentaufnahme aller offenen Sessions plus aller noch auf einen
-    /// Host-Key wartenden Verbindungsversuche (Spec 0017, Abschnitt 2) —
-    /// Grundlage für `list_sessions()`. Jeder Feldzugriff (`status`,
-    /// `pending_action`) sperrt nur den jeweils eigenen `Session`-internen
-    /// Mutex kurz, nie die äußere `sessions`-Map über den ganzen Aufbau
-    /// dieser Liste hinweg — bei vielen gleichzeitig offenen Sessions blockt
-    /// das keinen parallelen `insert`/`get`/`remove`-Aufruf für nennenswerte
-    /// Zeit.
-    pub fn snapshot(&self) -> Vec<SessionSnapshotEntry> {
-        let mut result: Vec<SessionSnapshotEntry> = self
-            .sessions
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(id, session)| SessionSnapshotEntry {
-                session_id: *id,
-                server_id: session.server_id,
-                status: *session.status.lock().unwrap(),
-                // Spec 0088, A2.1: Der Tab-Indikator darf nicht daran
-                // scheitern, dass irgendwo unter dieser Sperre einmal ein
-                // Panic lief — sonst reißt eine einzelne vergiftete
-                // Sitzung die Sitzungsliste aller Tabs mit.
-                has_pending_action: crate::poison::lock_tolerating_poison(&session.pending_action)
-                    .is_some(),
-            })
-            .collect();
-
-        result.extend(
-            self.pending_connections
-                .lock()
-                .unwrap()
-                .iter()
-                .map(|(id, server_id)| SessionSnapshotEntry {
-                    session_id: *id,
-                    server_id: *server_id,
-                    status: ConnectionStatus::AwaitingHostKey,
-                    has_pending_action: false,
-                }),
-        );
-
-        result
-    }
 }
 
 #[cfg(any(test, feature = "test-support"))]

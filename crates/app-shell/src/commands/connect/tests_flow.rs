@@ -313,7 +313,10 @@ async fn test_connect_registers_session_emits_connected_and_creates_chat_session
         .unwrap();
     assert_eq!(sessions.len(), 1, "one chat session row is created");
     let session = fx.state.sessions.get(session_id).unwrap();
-    assert_eq!(*session.chat_session_id.lock().await, Some(sessions[0].id));
+    assert_eq!(
+        *session.persistence.chat_session_id.lock().await,
+        Some(sessions[0].id)
+    );
     let seen = events.lock().unwrap().clone();
     assert!(
         seen.iter()
@@ -380,8 +383,11 @@ async fn test_resume_loads_history_and_clears_ended_at() {
     .expect("resume should succeed");
 
     let session = fx.state.sessions.get(tab).expect("session registered");
-    assert_eq!(*session.chat_session_id.lock().await, Some(existing));
-    let history = session.context.lock().await.history.clone();
+    assert_eq!(
+        *session.persistence.chat_session_id.lock().await,
+        Some(existing)
+    );
+    let history = session.ai.context.lock().await.history.clone();
     assert!(
         history.iter().any(|m| matches!(
             &m.content,
@@ -513,7 +519,7 @@ async fn connected_then_lost(
     .await
     .unwrap();
     let session = fx.state.sessions.get(session_id).unwrap();
-    *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     (session_id, session)
 }
 
@@ -528,12 +534,13 @@ async fn test_reconnect_keeps_session_id_and_ai_context_and_replaces_transport()
     let fx = fixture(connector.clone()).await;
     let (session_id, session) = connected_then_lost(&app, &fx, &connector, &old_closed).await;
     session
+        .ai
         .context
         .lock()
         .await
         .history
         .push(user_text("before the drop"));
-    let history_len = session.context.lock().await.history.len();
+    let history_len = session.ai.context.lock().await.history.len();
     connector.push(connected(&new_closed));
     let (elevated, grants) = registry_pair();
 
@@ -550,8 +557,11 @@ async fn test_reconnect_keeps_session_id_and_ai_context_and_replaces_transport()
 
     let after = fx.state.sessions.get(session_id).unwrap();
     assert!(Arc::ptr_eq(&session, &after), "same session object and id");
-    assert_eq!(*after.status.lock().unwrap(), ConnectionStatus::Connected);
-    assert_eq!(after.context.lock().await.history.len(), history_len);
+    assert_eq!(
+        *after.conn.status.lock().unwrap(),
+        ConnectionStatus::Connected
+    );
+    assert_eq!(after.ai.context.lock().await.history.len(), history_len);
     assert!(old_closed.load(Ordering::SeqCst), "old transport is closed");
     assert!(
         !new_closed.load(Ordering::SeqCst),
@@ -585,7 +595,7 @@ async fn test_reconnect_rereads_sudo_password_for_sudo_and_redactor() {
         .unwrap();
     let (session_id, session) = connected_then_lost(&app, &fx, &connector, &old_closed).await;
     assert_eq!(
-        session.sudo_password.get().unwrap().expose_secret(),
+        session.safety.sudo_password.get().unwrap().expose_secret(),
         "old-sudo-pw"
     );
     fx.state
@@ -609,7 +619,7 @@ async fn test_reconnect_rereads_sudo_password_for_sudo_and_redactor() {
     let after = fx.state.sessions.get(session_id).unwrap();
     // The password used for `sudo -S` and the redactor come from one read.
     assert_eq!(
-        after.sudo_password.get().unwrap().expose_secret(),
+        after.safety.sudo_password.get().unwrap().expose_secret(),
         "new-sudo-pw"
     );
     let redacted = after.redactor.redact_text("echo new-sudo-pw");
@@ -625,7 +635,7 @@ async fn test_reconnect_of_a_live_session_does_nothing() {
     let connector = ScriptedConnector::new(connected(&closed));
     let fx = fixture(connector.clone()).await;
     let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
-    *session.status.lock().unwrap() = ConnectionStatus::Connected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Connected;
     let calls = connector.calls.load(Ordering::SeqCst);
     let (elevated, grants) = registry_pair();
 
@@ -673,12 +683,12 @@ async fn test_second_reconnect_trigger_while_one_runs_starts_no_connect() {
     assert_eq!(err.code, Some("SESSION_NOT_RECONNECTABLE"));
     assert_eq!(connector.calls.load(Ordering::SeqCst), calls);
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Reconnecting
     );
     drop(running);
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
     reset(app.handle());
@@ -707,7 +717,7 @@ async fn test_failed_reconnect_stays_disconnected_and_can_be_retried() {
     .unwrap_err();
     assert!(err.code.is_some(), "the translated error code is reported");
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
 
@@ -723,7 +733,10 @@ async fn test_failed_reconnect_stays_disconnected_and_can_be_retried() {
     )
     .await
     .expect("the button stays usable");
-    assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+    assert_eq!(
+        *session.conn.status.lock().unwrap(),
+        ConnectionStatus::Connected
+    );
     reset(app.handle());
 }
 
@@ -737,7 +750,7 @@ async fn test_pending_confirmation_at_drop_is_rejected_not_executed_after_reconn
     let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
     let action_id = uuid::Uuid::new_v4();
     let waiting = fx.state.pending_action_confirmations.register(action_id);
-    *session.pending_action.lock().unwrap() = Some(action_id);
+    *session.conn.pending_action.lock().unwrap() = Some(action_id);
     connector.push(connected(&Arc::new(AtomicBool::new(false))));
     let (elevated, grants) = registry_pair();
 
@@ -804,7 +817,7 @@ async fn test_automatic_attempt_stops_at_a_changed_host_key_without_a_dialog() {
         "no host key question was registered"
     );
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
     reset(app.handle());
@@ -856,7 +869,7 @@ async fn test_rejected_host_key_during_reconnect_leaves_the_tab_disconnected() {
 
     assert_eq!(result.unwrap_err().code, Some("SSH_HOST_KEY_NOT_TRUSTED"));
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
     reset(app.handle());
@@ -1082,7 +1095,7 @@ async fn connect_and_sever(
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     assert!(gone, "the session should end after the cut");
-    *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     (session_id, session)
 }
 
@@ -1115,7 +1128,10 @@ async fn test_reconnect_over_a_real_two_hop_chain_runs_a_command_via_the_bastion
         "the reconnect must open a new connection to the BASTION; a direct \
          connection to the target would leave this at 1"
     );
-    assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+    assert_eq!(
+        *session.conn.status.lock().unwrap(),
+        ConnectionStatus::Connected
+    );
     assert!(!session.transport.is_closed());
     let out = session
         .transport
@@ -1155,7 +1171,7 @@ async fn test_reconnect_with_unreachable_bastion_fails_and_session_stays_dead() 
 
     assert!(err.code.is_some(), "stable error code expected: {err:?}");
     assert_eq!(
-        *session.status.lock().unwrap(),
+        *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected,
         "the session stays dead and can be retried"
     );

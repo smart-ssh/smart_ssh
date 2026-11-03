@@ -320,7 +320,7 @@ pub async fn reconnect_session(
 ) -> CommandResult<()> {
     // Issue #356: a manual reconnect takes over from the automatic attempts.
     if let Some(session) = state.sessions.get(session_id) {
-        session.auto_reconnect.stop();
+        session.conn.auto_reconnect.stop();
     }
     reconnect_session_inner(&app, &state, &elevated, &grants, session_id, true).await
 }
@@ -404,7 +404,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             }
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
-            let current = *session.chat_session_id.lock().await;
+            let current = *session.persistence.chat_session_id.lock().await;
             app_logic::events::emit_chat_session_changed(&emitter, session_id, current);
             Ok(())
         }

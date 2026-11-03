@@ -93,9 +93,9 @@ pub(super) fn escalation_facts(
 ) -> super::super::escalation::EscalationFacts {
     use std::sync::atomic::Ordering::SeqCst;
     let pseudo = pseudo_command_for_risk_classification(action);
-    let post_ingest_escalates = session.untrusted_content_ingested.load(SeqCst) && {
+    let post_ingest_escalates = session.safety.untrusted_content_ingested.load(SeqCst) && {
         let is_modifying_action = risk_assessment.is_some_and(|r| r.server_risk != RiskLevel::None);
-        match session.post_ingest_policy {
+        match session.safety.post_ingest_policy {
             PostIngestPolicy::Strict => true,
             PostIngestPolicy::Balanced => is_modifying_action,
             PostIngestPolicy::Standard => false,
@@ -108,15 +108,15 @@ pub(super) fn escalation_facts(
         sftp_server: pseudo
             .as_deref()
             .and_then(ssh_manager_core::risk::sftp_server_invocation_reason),
-        red_risk_reason: if session.red_risk_always_confirm {
+        red_risk_reason: if session.safety.red_risk_always_confirm {
             red_risk_confirm_reason(action, risk_assessment)
         } else {
             None
         },
         post_ingest_escalates,
-        injection_suspected: session.injection_suspected.load(SeqCst),
+        injection_suspected: session.safety.injection_suspected.load(SeqCst),
         injection_reason: peek_injection_reason(session),
-        injection_check_unavailable: session.injection_check_unavailable.load(SeqCst),
+        injection_check_unavailable: session.safety.injection_check_unavailable.load(SeqCst),
         mcp_origin: false,
         uses_stored_sudo_password: uses_stored_sudo_password(session, action),
         transform_marks_text: transform_requires_confirmation(session, transform_scope, action),
@@ -153,7 +153,7 @@ pub(super) fn transform_requires_confirmation(
     action: &AiAction,
 ) -> bool {
     use ssh_manager_core::outgoing::OutgoingKind;
-    let (Some(transform), Some(scope)) = (session.outgoing_transform.as_ref(), scope) else {
+    let (Some(transform), Some(scope)) = (session.safety.outgoing_transform.as_ref(), scope) else {
         return false;
     };
     match action {

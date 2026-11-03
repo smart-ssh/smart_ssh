@@ -18,7 +18,7 @@ pub async fn get_chat_resync(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     // Only a confirmation the registry still knows may become a card with
     // active buttons — a stale proposal must not be confirmable.
     let pending_proposal = session

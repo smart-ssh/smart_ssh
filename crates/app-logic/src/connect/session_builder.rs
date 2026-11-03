@@ -26,7 +26,10 @@ use persistence_sqlite::AiProviderConfig;
 
 use crate::ai_usage::{AiUsageReporting, AiUsageSource};
 use crate::error::CommandError;
-use crate::session::{history_contains_untrusted_content, Session, SessionParts};
+use crate::session::{
+    history_contains_untrusted_content, AiConfig, ChatPersistence, SafetyState, Session,
+    SessionParts, TransportState,
+};
 use crate::session_extension::ScopeLookup;
 use crate::state::{AppState, SessionId};
 use crate::system_prompt::PromptLanguage;
@@ -380,63 +383,71 @@ pub async fn build_session(
     let loss_watch = transport.connection_loss_watch();
     let session = Session::new(SessionParts {
         transport: crate::session::SessionTransport::new(transport),
-        ai_provider,
-        ai_provider_budget,
-        context: tokio::sync::Mutex::new(SessionContext {
-            system_context,
-            history: initial_history,
-            available_actions,
-            max_tokens_hint: None,
-        }),
-        filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
         server_id,
         tags: server.tags,
-        terminal: std::sync::Mutex::new(None),
         redactor: crate::session::SwappableRedactor::new(redactor),
-        ai_provider_label: active_config.display_name,
-        ai_model: active_config.model,
-        system_context_parts: tokio::sync::Mutex::new(system_context_parts),
-        model_context_window_tokens,
-        summary: tokio::sync::Mutex::new(initial_summary),
-        context_usage: Default::default(),
-        mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
-        sudo_password: crate::session::SwappableSudoPassword::new(sudo_password),
-        status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
-        pending_action: std::sync::Mutex::new(None),
-        mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
-        risk_second_opinion_provider,
-        risk_second_opinion_budget,
-        red_risk_always_confirm,
-        running_command_cancellations: state.running_command_cancellations.clone(),
-        outgoing_transform: state.outgoing_transform.clone(),
-        chat_content: state.chat_content.clone(),
-        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
-            starts_with_untrusted_content,
-        ),
-        post_ingest_policy,
-        injection_check_provider,
-        injection_check_budget,
-        injection_suspected: std::sync::atomic::AtomicBool::new(false),
-        injection_suspected_reason: std::sync::Mutex::new(None),
-        injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
-        second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
-            second_opinion_setup_failed,
-        ),
-        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(
-            injection_check_inactive,
-        ),
-        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(
-            redaction_incomplete,
-        ),
-        chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
-        // Spec 0057, §1: same gating as `chat_session_store` (FK, migration 0011).
-        ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),
-        chat_session_id: tokio::sync::Mutex::new(chat_session_id),
-        ai_request_paced_at: tokio::sync::Mutex::new(None),
-        auto_reconnect: Default::default(),
+        ai: AiConfig {
+            provider: ai_provider,
+            provider_budget: ai_provider_budget,
+            context: tokio::sync::Mutex::new(SessionContext {
+                system_context,
+                history: initial_history,
+                available_actions,
+                max_tokens_hint: None,
+            }),
+            label: active_config.display_name,
+            model: active_config.model,
+            system_context_parts: tokio::sync::Mutex::new(system_context_parts),
+            model_context_window_tokens,
+            summary: tokio::sync::Mutex::new(initial_summary),
+            context_usage: Default::default(),
+            request_paced_at: tokio::sync::Mutex::new(None),
+        },
+        safety: SafetyState {
+            filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
+            mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
+            sudo_password: crate::session::SwappableSudoPassword::new(sudo_password),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider,
+            risk_second_opinion_budget,
+            red_risk_always_confirm,
+            outgoing_transform: state.outgoing_transform.clone(),
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
+                starts_with_untrusted_content,
+            ),
+            post_ingest_policy,
+            injection_check_provider,
+            injection_check_budget,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
+                second_opinion_setup_failed,
+            ),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(
+                injection_check_inactive,
+            ),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(
+                redaction_incomplete,
+            ),
+        },
+        persistence: ChatPersistence {
+            chat_content: state.chat_content.clone(),
+            chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
+            // Spec 0057, §1: same gating as `chat_session_store` (FK, migration 0011).
+            ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),
+            chat_session_id: tokio::sync::Mutex::new(chat_session_id),
+        },
+        conn: TransportState {
+            terminal: std::sync::Mutex::new(None),
+            status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
+            pending_action: std::sync::Mutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+            running_command_cancellations: state.running_command_cancellations.clone(),
+            auto_reconnect: Default::default(),
+        },
     })
     .with_start_directory(start_directory)
     .with_is_root(is_root)

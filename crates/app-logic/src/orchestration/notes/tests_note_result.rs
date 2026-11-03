@@ -75,13 +75,13 @@ async fn test_approved_note_update_pushes_tagged_result_and_refreshes_system_pro
         // the row, so the row starts at the state after persistence.
         .insert(server_id, server_with_note(server_id, "web-1", "NEU-TEXT"));
     {
-        let mut parts = session.system_context_parts.lock().await;
+        let mut parts = session.ai.system_context_parts.lock().await;
         parts.note_sections = vec![("Server \"web-1\"".to_string(), "ALT-TEXT".to_string())];
         let assembled = parts.assemble();
-        session.context.lock().await.system_context = assembled;
+        session.ai.context.lock().await.system_context = assembled;
     }
     // A user message typed while the card was pending sits next to the result.
-    session.context.lock().await.history.push(ChatMessage {
+    session.ai.context.lock().await.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text("meine Zwischenfrage".to_string()),
     });
@@ -100,7 +100,7 @@ async fn test_approved_note_update_pushes_tagged_result_and_refreshes_system_pro
     .await;
     assert!(ok);
 
-    let ctx = session.context.lock().await;
+    let ctx = session.ai.context.lock().await;
     let last = ctx.history.last().unwrap();
     assert!(matches!(last.role, Role::ActionResult));
     let MessageContent::Text(text) = &last.content else {

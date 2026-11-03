@@ -267,6 +267,7 @@ impl DecisionEnv<'_> {
             tags,
         };
         let re_evaluation = session
+            .safety
             .filter_engine
             .evaluate_explained(&edited, &ctx)
             .await;

@@ -141,7 +141,7 @@ pub(super) fn command_with_stdin_password_flag(command: &str) -> Option<String> 
 /// Bestätigung still nach. Der Fallback dort bekommt genau den im Dialog
 /// gesendeten Wert durchgereicht, ist also an die Ankündigung gebunden.
 pub(super) fn uses_stored_sudo_password(session: &Session, action: &AiAction) -> bool {
-    session.sudo_password.is_some()
+    session.safety.sudo_password.is_some()
         && match action {
             AiAction::SuggestCommand { command } => detect_elevation_prefix(command).is_some(),
             AiAction::WriteRemoteFile { .. } => true,
@@ -263,7 +263,7 @@ async fn prepare_command(
     Ok(PreparedCommand::new(
         command,
         wire_command,
-        session.sudo_password.get(),
+        session.safety.sudo_password.get(),
     ))
 }
 
@@ -284,7 +284,10 @@ async fn run_prepared_command(
     // during execution. The call below consumes `cancel_rx`; the `resolve()`
     // afterwards removes the registry entry in every case (otherwise each
     // regularly finished command would leave an entry behind).
-    let cancel_rx = session.running_command_cancellations.register(action_id);
+    let cancel_rx = session
+        .conn
+        .running_command_cancellations
+        .register(action_id);
 
     // Issue #325 (Spec 0106): the transport additionally hands every output
     // chunk to `live_sink` while the command runs; `forward_live_output`
@@ -333,6 +336,7 @@ async fn run_prepared_command(
         )
     );
     let _ = session
+        .conn
         .running_command_cancellations
         .resolve(&action_id, ());
     (raw_outcome, waiting_for_input)
@@ -419,6 +423,7 @@ impl CommandReport<'_> {
         // Spec 0039, Abschnitt 5: counts as untrusted content entering the AI
         // context already here (see `history_contains_untrusted_content`).
         session
+            .safety
             .untrusted_content_ingested
             .store(true, std::sync::atomic::Ordering::SeqCst);
         check_for_injected_instructions(

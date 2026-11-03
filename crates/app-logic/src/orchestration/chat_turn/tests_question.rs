@@ -95,7 +95,7 @@ async fn test_valid_question_emits_one_event_stores_it_and_ends_turn() {
         || n == "chat-error"
         || n == "chat-response-empty"));
 
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 1, "{history:?}");
     assert_eq!(history[0].role, Role::Assistant);
     let MessageContent::Question {
@@ -139,7 +139,7 @@ async fn test_invalid_questions_are_shown_as_text_without_event() {
         run_turn(&session, &emitter).await;
 
         assert!(question_events(&emitter).is_empty());
-        let history = session.context.lock().await.history.clone();
+        let history = session.ai.context.lock().await.history.clone();
         assert_eq!(history.len(), 1, "{history:?}");
         let MessageContent::Text(text) = &history[0].content else {
             panic!("{history:?}");
@@ -159,7 +159,7 @@ async fn test_overlong_question_is_shown_as_text() {
     let emitter = TestEmitter::default();
     run_turn(&session, &emitter).await;
     assert!(question_events(&emitter).is_empty());
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(matches!(history[0].content, MessageContent::Text(_)));
 }
 
@@ -184,7 +184,7 @@ async fn test_question_texts_are_redacted_before_emit_and_storage() {
         "{}",
         events[0]
     );
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(!format!("{history:?}").contains(PLANTED_KEY), "{history:?}");
 }
 
@@ -195,7 +195,7 @@ async fn test_stopped_turn_emits_no_question() {
     let emitter = TestEmitter::default();
     let stopper = async {
         loop {
-            if !session.context.lock().await.history.is_empty()
+            if !session.ai.context.lock().await.history.is_empty()
                 || emitter
                     .events
                     .lock()
@@ -215,7 +215,7 @@ async fn test_stopped_turn_emits_no_question() {
     .await
     .expect("stop must end the turn");
     assert!(question_events(&emitter).is_empty());
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(!history
         .iter()
         .any(|m| matches!(m.content, MessageContent::Question { .. })));

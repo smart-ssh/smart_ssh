@@ -237,7 +237,7 @@ pub(super) async fn apply_escalations(
     // (issue #826). Here: read the facts, escalate, then consume exactly the
     // one-shot flags the result names.
     let uses_password = uses_stored_sudo_password(session, action);
-    let transform_scope = if session.outgoing_transform.is_some() {
+    let transform_scope = if session.safety.outgoing_transform.is_some() {
         Some(super::super::outgoing::outgoing_scope(session, ctx.profile_store).await)
     } else {
         None
@@ -256,6 +256,7 @@ pub(super) async fn apply_escalations(
     let escalation = super::super::escalation::escalate(decision, &facts);
     if escalation.consume_injection_suspected
         && session
+            .safety
             .injection_suspected
             .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
@@ -263,6 +264,7 @@ pub(super) async fn apply_escalations(
     }
     if escalation.consume_injection_check_unavailable {
         session
+            .safety
             .injection_check_unavailable
             .swap(false, std::sync::atomic::Ordering::SeqCst);
     }
@@ -376,7 +378,7 @@ async fn run_second_opinion(
         unavailable: false,
     };
     let (Some(provider), Some(assessment)) = (
-        session.risk_second_opinion_provider.as_deref(),
+        session.safety.risk_second_opinion_provider.as_deref(),
         risk_assessment,
     ) else {
         return outcome;
@@ -385,7 +387,7 @@ async fn run_second_opinion(
         return outcome;
     };
     wait_for_ai_request_slot(session).await;
-    if let Some(budget) = session.risk_second_opinion_budget.as_deref() {
+    if let Some(budget) = session.safety.risk_second_opinion_budget.as_deref() {
         wait_for_rate_limit_budget(
             budget,
             crate::compaction::estimate_tokens(&pseudo_command),
@@ -469,6 +471,7 @@ fn auto_exec_stopped(ctx: &ProposeCtx<'_>) -> bool {
     matches!(ctx.origin, ActionOrigin::Internal)
         && ctx
             .session
+            .conn
             .auto_continue_stop
             .load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -485,7 +488,7 @@ fn escalate_after_second_opinion<'a>(
     proposed_payload: Option<serde_json::Value>,
 ) -> Result<PreparedDecision<'a>, ()> {
     let Some((reason, code)) = second_opinion_escalation(
-        ctx.session.red_risk_always_confirm,
+        ctx.session.safety.red_risk_always_confirm,
         outcome,
         matches!(prepared, PreparedDecision::AutoExec),
         auto_exec_stopped(ctx),
@@ -783,8 +786,12 @@ pub(super) async fn auto_exec_rules_for(
         server_id: session.server_id,
         tags,
     };
-    crate::confirmation_explain::auto_exec_rules(session.filter_engine.as_ref(), &ctx, evaluation)
-        .await
+    crate::confirmation_explain::auto_exec_rules(
+        session.safety.filter_engine.as_ref(),
+        &ctx,
+        evaluation,
+    )
+    .await
 }
 
 /// Spec 0020, Abschnitt 4.1/4.2: `ReadRemoteFile`/`WriteRemoteFile` werden
@@ -899,6 +906,7 @@ pub(super) async fn evaluate_action(
                 tags,
             };
             let trace = session
+                .safety
                 .filter_engine
                 .evaluate_explained(command, &ctx)
                 .await;
@@ -937,6 +945,7 @@ pub(super) async fn evaluate_action(
                 tags,
             };
             let trace = session
+                .safety
                 .filter_engine
                 .evaluate_explained(&sftp_read_pseudo_command(path), &ctx)
                 .await;
@@ -949,6 +958,7 @@ pub(super) async fn evaluate_action(
                 tags,
             };
             let mut trace = session
+                .safety
                 .filter_engine
                 .evaluate_explained(&sftp_write_pseudo_command(path), &ctx)
                 .await;
