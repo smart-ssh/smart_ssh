@@ -217,3 +217,36 @@ Wohin neue Logik gehört (alle Tauri-frei; jedes `pub mod` aus `lib.rs`):
 - `data_paths` — Datenpfade; `local_path_grants` — freigegebene lokale Pfade; `owner_names` — Besitzer-/Gruppennamen für den Dateibrowser.
 - `single_instance` — Single-Instance-Entscheidung; `logging` — JSON-Lines-Logging; `version` — Version/Build-Hash; `poison` — vergiftungsfeste Sperren (nicht `pub`).
 - `test_support` — Testhilfen hinter `test-support` (s. o.).
+
+## Background tasks: `TaskSupervisor` (issue #879)
+
+Long-lived background tasks have an owner. `app_logic::tasks::TaskSupervisor`
+(one `Arc` per process, managed by Tauri next to `AppState`) hands out
+*scopes* by key. A scope has a cancellation token and a task tracker:
+
+- `scope.spawn(name, fut)` races `fut` against the scope token, so a cancelled
+  task stops at its next `.await` and its `Drop` guards run. A pending
+  confirmation is therefore removed from the registry exactly as if the
+  dialog had been closed — cancellation never becomes an approval.
+- `scope.spawn_blocking(name, f)` is tracked and awaited at shutdown, but
+  cannot be cancelled.
+- `scope.shutdown(timeout)` cancels, closes the tracker and waits up to the
+  deadline; names of tasks still running are logged at `warn` (no payloads).
+- Spawning into a cancelled scope does not run the future.
+
+**App scope** (`ScopeKey::App`, `app_shell::app_scope`): post-startup tasks
+(service host start, MCP autostart, chat retention cleanup, title backfill,
+entitlement watch, window decoration) and the on-disconnect and note-shrink AI
+requests. The latter deliberately outlive their session. There is no re-lock
+today, so the scope ends at exit; a future re-lock cancels the scope without
+touching the call sites. `ScopeKey::Session` is reserved for session-scoped
+tasks.
+
+**Exit order** (`RunEvent::Exit`): `ServiceHost::stop_all()`, then
+`TaskSupervisor::shutdown(3 s)`, then the file clipboard cleanup.
+
+Crates below `app-logic` (`speech`, `ssh-transport`, `mcp-server`, `core`)
+cannot use the supervisor; their remaining sites sit on the allowlist in
+`crates/app-logic/tests/no_untracked_spawns.rs`, which fails on any new direct
+`tokio::spawn` / `std::thread::spawn` / `spawn_blocking` in production code and
+may only shrink.

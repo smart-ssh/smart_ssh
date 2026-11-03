@@ -679,6 +679,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         )
     };
 
+    // Issue #879: one supervisor per process; spawns onto the Tauri runtime
+    // because setup code runs outside a Tokio context.
+    let task_supervisor = Arc::new(app_logic::tasks::TaskSupervisor::with_handle(
+        tauri::async_runtime::block_on(async { tokio::runtime::Handle::current() }),
+    ));
+
     // Schlüsselbund-Modus: Der beim Start aufgebaute Zustand muss hier an
     // Tauri übergeben werden — sonst wird er verworfen, das Tor steht trotzdem
     // offen, und jedes Kommando scheitert mit „state not managed". Im
@@ -720,7 +726,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             if let Some(window) = app.get_webview_window("main") {
                 use tauri_plugin_decoration::WebviewWindowExt;
                 let window_clone = window.clone();
-                tauri::async_runtime::spawn(async move {
+                app_scope(app.handle()).spawn("window-decoration", async move {
                     let _ = window_clone.activate_decoration().await;
                     #[cfg(target_os = "macos")]
                     {
@@ -747,6 +753,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             Ok(())
         })
+        .manage(task_supervisor)
         .manage(gate.clone())
         .manage(pending)
         .manage(service_host)
@@ -983,10 +990,26 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                     if let Some(host) = app.try_state::<ServiceHost>() {
                         tauri::async_runtime::block_on(host.stop_all());
                     }
+                    // Issue #879: after the services, cancel and await the
+                    // app-scope background tasks (bounded, so a task that
+                    // ignores cancellation cannot block exit).
+                    if let Some(tasks) = app.try_state::<Arc<app_logic::tasks::TaskSupervisor>>() {
+                        tauri::async_runtime::block_on(
+                            tasks.shutdown(std::time::Duration::from_secs(3)),
+                        );
+                    }
                 }
                 file_clipboard::cleanup_at_exit();
             }
         });
+}
+
+/// Issue #879: the app scope of the process-wide `TaskSupervisor`
+/// (managed in `run`). Tasks spawned here end at app exit.
+pub(crate) fn app_scope(app: &tauri::AppHandle) -> app_logic::tasks::TaskScope {
+    use tauri::Manager;
+    app.state::<Arc<app_logic::tasks::TaskSupervisor>>()
+        .app_scope()
 }
 
 /// Spec 0101, A16: die Hintergrundaufgaben, die einen fertigen `AppState`
@@ -1009,7 +1032,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     // state exists (after unlock in master-password mode), and after the
     // database extensions were started in `open_and_assemble`.
     let services_app = app.clone();
-    tauri::async_runtime::spawn(async move {
+    app_scope(app).spawn("service-host-start", async move {
         if let Some(host) = services_app.try_state::<ServiceHost>() {
             host.start_all(ServiceContext {
                 app: services_app.clone(),
@@ -1022,7 +1045,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne manuelles
     // erneutes Anschalten.
     let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
+    app_scope(&handle).spawn("mcp-autostart", async move {
         crate::mcp_settings::autostart_if_enabled(&handle).await;
     });
 
@@ -1042,7 +1065,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     let app = app.clone();
     // Spec 0034, Abschnitt 5: Aufräum-Job beim App-Start.
     let handle_for_retention = app.clone();
-    tauri::async_runtime::spawn(async move {
+    app_scope(&app).spawn("chat-retention-cleanup", async move {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
@@ -1050,7 +1073,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
 
     // Issue #551: titles for old untitled sessions, once per start.
     let handle_for_titles = app.clone();
-    tauri::async_runtime::spawn(async move {
+    app_scope(&app).spawn("chat-title-backfill", async move {
         let state = handle_for_titles.state::<AppState>();
         app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
     });
@@ -1059,7 +1082,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     // aktuell. Bei `FixedEntitlements` (Community) endet der Task sofort,
     // weil `watch()` ihren `Sender` droppt (s. dortiger Kommentar).
     let handle_for_entitlements = app.clone();
-    tauri::async_runtime::spawn(async move {
+    app_scope(&app).spawn("entitlements-watch", async move {
         let mut receiver = {
             let state = handle_for_entitlements.state::<AppState>();
             state.entitlements.watch()
