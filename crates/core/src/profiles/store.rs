@@ -50,10 +50,11 @@ pub enum StoreErrorKind {
 
 impl ProfileError {
     /// The kind of a database failure; `None` for the domain variants and the
-    /// plain-string `Backend`.
+    /// domain variants (`ServerNotFound`, ...); a plain-string `Backend` is `Other`.
     pub fn kind(&self) -> Option<StoreErrorKind> {
         match self {
             ProfileError::Store { kind, .. } => Some(*kind),
+            ProfileError::Backend(_) => Some(StoreErrorKind::Other),
             _ => None,
         }
     }

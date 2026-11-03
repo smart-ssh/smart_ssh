@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use ssh_manager_core::profiles::{CredentialStore, GroupId, ProfileStore};
 
 use crate::dto::{DeleteGroupResult, GroupDto, ServerDto, UnusableServerDto};
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandError, CommandResult, StoreResultExt};
 
 /// Aufgabenstellung Teil 1, Punkt 5: eine Gruppe darf nicht sich selbst
 /// oder einen ihrer eigenen Nachfahren als `parent_id` bekommen.
@@ -35,7 +35,7 @@ pub async fn validate_no_cycle(
             "GROUP_SELF_PARENT",
         ));
     }
-    let chain = store.group_chain(&new_parent).await?;
+    let chain = store.group_chain(&new_parent).await.store_err()?;
     if chain.iter().any(|g| g.id == group_id) {
         return Err(CommandError::with_code(
             "Zyklus: die gewählte übergeordnete Gruppe ist eine Untergruppe dieser Gruppe",
@@ -58,13 +58,13 @@ pub async fn move_group(
     parent_id: Option<GroupId>,
 ) -> CommandResult<()> {
     validate_no_cycle(store, Some(id), parent_id).await?;
-    let mut group = store.get_group(&id).await?;
+    let mut group = store.get_group(&id).await.store_err()?;
     if group.parent_id == parent_id {
         return Ok(());
     }
     group.parent_id = parent_id;
     group.updated_at = chrono::Utc::now();
-    store.update_group(&group).await?;
+    store.update_group(&group).await.store_err()?;
     Ok(())
 }
 
@@ -86,8 +86,8 @@ pub async fn compute_delete_group_result(
     id: GroupId,
     executed: bool,
 ) -> CommandResult<DeleteGroupResult> {
-    let all_groups = store.list_groups().await?;
-    let listing = store.list_server_entries().await?;
+    let all_groups = store.list_groups().await.store_err()?;
+    let listing = store.list_server_entries().await.store_err()?;
     let all_servers = listing.servers;
 
     let mut affected: HashSet<GroupId> = HashSet::new();
@@ -140,7 +140,7 @@ pub async fn delete_group(
     if confirm_cascade {
         // Descendants are collected before the delete: afterwards the rows
         // are gone.
-        let all_groups = store.list_groups().await?;
+        let all_groups = store.list_groups().await.store_err()?;
         let mut removed = vec![id];
         let mut index = 0;
         while index < removed.len() {
@@ -152,7 +152,7 @@ pub async fn delete_group(
                 }
             }
         }
-        store.delete_group(&id).await?;
+        store.delete_group(&id).await.store_err()?;
         if let Some(extension) = extension {
             for group_id in removed {
                 extension.group_removed(group_id);

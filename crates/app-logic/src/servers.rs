@@ -25,7 +25,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::dto::{
     DeleteServerResult, DeleteUnusableServerResult, ServerDto, ServerInput, UnusableServerDto,
 };
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandError, CommandResult, StoreResultExt};
 use crate::server_credentials::{
     cleanup_replaced_auth_method_secrets, delete_all_possible_server_secrets,
     delete_all_server_secrets_on_unusable_delete, delete_auth_method_secrets,
@@ -116,7 +116,7 @@ pub async fn create_server(
 
     if let Err(err) = store.create_server(&server).await {
         delete_all_possible_server_secrets(credential_store, id);
-        return Err(err.into());
+        return Err(crate::error::store_command_error(err));
     }
     Ok(id)
 }
@@ -169,7 +169,7 @@ pub async fn update_server(
     // nur noch den geprüften Wert sieht.
     let mut input = input;
     input.start_directory = normalize_start_directory_input(input.start_directory)?;
-    let existing = store.get_server(&id).await?;
+    let existing = store.get_server(&id).await.store_err()?;
     let previous_auth = existing.auth.clone();
 
     // Jedes Schreiben läuft über die aufzeichnende Hülle — nur so weiß der
@@ -237,7 +237,7 @@ async fn write_edited_server(
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
-    store.update_server(&server).await?;
+    store.update_server(&server).await.store_err()?;
     Ok(auth)
 }
 
@@ -257,7 +257,7 @@ pub async fn compute_delete_server_result(
     server: &Server,
     executed: bool,
 ) -> CommandResult<DeleteServerResult> {
-    let all_servers = store.list_servers().await?;
+    let all_servers = store.list_servers().await.store_err()?;
     let servers_losing_jump_host: Vec<ServerDto> = all_servers
         .iter()
         .filter(|s| s.jump_host == Some(server.id))
@@ -292,7 +292,7 @@ pub async fn delete_server(
     confirm: bool,
     extension: Option<&dyn crate::session_extension::SessionExtension>,
 ) -> CommandResult<DeleteServerResult> {
-    let server = store.get_server(&id).await?;
+    let server = store.get_server(&id).await.store_err()?;
     let mut result =
         compute_delete_server_result(store, credential_store, &server, confirm).await?;
     if confirm {
@@ -305,7 +305,7 @@ pub async fn delete_server(
         // (X6-Korrektur vom 2026-09-22).
         let mut left_behind = delete_auth_method_secrets(credential_store, &server.auth);
         left_behind.extend(delete_sudo_password_on_server_delete(credential_store, id));
-        store.delete_server(&id).await?;
+        store.delete_server(&id).await.store_err()?;
         // Spec 0038, section 2a: after the core deleted the server.
         if let Some(extension) = extension {
             extension.server_removed(id);
@@ -328,7 +328,8 @@ pub async fn list_unusable_servers(
 ) -> CommandResult<Vec<UnusableServerDto>> {
     Ok(store
         .list_server_entries()
-        .await?
+        .await
+        .store_err()?
         .unusable
         .iter()
         .map(UnusableServerDto::from)
@@ -354,7 +355,7 @@ pub async fn delete_unusable_server(
     confirm: bool,
     extension: Option<&dyn crate::session_extension::SessionExtension>,
 ) -> CommandResult<DeleteUnusableServerResult> {
-    let listing = store.list_server_entries().await?;
+    let listing = store.list_server_entries().await.store_err()?;
     let Some(unusable) = listing.unusable.iter().find(|s| s.id == id) else {
         if listing.servers.iter().any(|s| s.id == id) {
             return Err(CommandError::from(
@@ -379,7 +380,7 @@ pub async fn delete_unusable_server(
         // Dieselbe Reihenfolge wie `delete_server`: erst die Secrets, dann
         // die Zeile — und durchlaufen, auch wenn ein Secret stehen bleibt.
         let left_behind = delete_all_server_secrets_on_unusable_delete(credential_store, id);
-        store.delete_server(&id).await?;
+        store.delete_server(&id).await.store_err()?;
         if let Some(extension) = extension {
             extension.server_removed(id);
         }
@@ -413,15 +414,15 @@ pub async fn move_server_to_group(
         return Err("Der lokale Pseudo-Server kann keiner Gruppe zugeordnet werden".into());
     }
     if let Some(group_id) = group_id {
-        store.get_group(&group_id).await?;
+        store.get_group(&group_id).await.store_err()?;
     }
-    let mut server = store.get_server(&id).await?;
+    let mut server = store.get_server(&id).await.store_err()?;
     if server.group_id == group_id {
         return Ok(());
     }
     server.group_id = group_id;
     server.updated_at = Utc::now();
-    store.update_server(&server).await?;
+    store.update_server(&server).await.store_err()?;
     Ok(())
 }
 
@@ -2102,5 +2103,19 @@ mod tests {
         let result = move_server_to_group(&store, LOCAL_SERVER_ID, Some(target.id)).await;
 
         assert!(result.is_err());
+    }
+
+    /// Issue #885: a store failure reaches the command layer with a
+    /// `STORE_*` code instead of `code: None`.
+    #[tokio::test]
+    async fn test_issue_885_store_failure_carries_a_store_code() {
+        let store = InMemoryProfileStore::new();
+        store
+            .fail_get_server
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let err = move_server_to_group(&store, ServerId::new(), None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, Some(crate::error::STORE_FAILED));
     }
 }

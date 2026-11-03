@@ -12,7 +12,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::event_emitter::TauriEventEmitter;
 use app_logic::ai_provider_factory::build_ai_provider_from_config;
 use app_logic::dto::NoteRevisionDto;
-use app_logic::error::{secret_store_error, CommandResult};
+use app_logic::error::{secret_store_error, CommandResult, StoreResultExt};
 use app_logic::orchestration::execute_note_shrink_request;
 use app_logic::state::{AppState, SessionId};
 
@@ -27,7 +27,11 @@ pub async fn update_group_notes(
     content: String,
 ) -> CommandResult<()> {
     let revision = record_revision(NoteTarget::Group(id), content, NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -38,7 +42,11 @@ pub async fn update_server_notes(
     content: String,
 ) -> CommandResult<()> {
     let revision = record_revision(NoteTarget::Server(id), content, NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -170,7 +178,11 @@ pub async fn list_note_revisions(
     state: State<'_, AppState>,
     target: NoteTarget,
 ) -> CommandResult<Vec<NoteRevisionDto>> {
-    let revisions = state.profile_store.list_note_revisions(target).await?;
+    let revisions = state
+        .profile_store
+        .list_note_revisions(target)
+        .await
+        .store_err()?;
     Ok(revisions.iter().map(NoteRevisionDto::from).collect())
 }
 
@@ -184,13 +196,21 @@ pub async fn rollback_note(
     target: NoteTarget,
     revision_id: Uuid,
 ) -> CommandResult<()> {
-    let revisions = state.profile_store.list_note_revisions(target).await?;
+    let revisions = state
+        .profile_store
+        .list_note_revisions(target)
+        .await
+        .store_err()?;
     let old = revisions
         .iter()
         .find(|r| r.id == revision_id)
         .ok_or("Revision nicht gefunden")?;
     let revision = record_revision(target, old.content.clone(), NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -214,7 +234,11 @@ pub async fn preview_effective_notes(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<String> {
-    let server = state.profile_store.get_server(&server_id).await?;
+    let server = state
+        .profile_store
+        .get_server(&server_id)
+        .await
+        .store_err()?;
     effective_notes(&server, state.profile_store.as_ref())
         .await
         .map_err(Into::into)
