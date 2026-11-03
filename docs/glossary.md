@@ -74,7 +74,7 @@ deleted). Content is redacted before it is appended.
 **Local pseudo-server** — The always-present "Localhost" entry that runs
 commands on the user's own machine through the same traits as a real
 server, so filter, risk and confirmation apply identically.
-`LOCAL_SERVER_ID` in `crates/app-logic/src/dto.rs`; Spec 0032.
+`LOCAL_SERVER_ID` in `crates/app-logic/src/dto/server.rs`; Spec 0032.
 
 **Redactor / redaction** — Masking secrets in command output and text with
 placeholders before it is persisted, logged or sent to the AI, always and

@@ -39,7 +39,7 @@ checklist, test-only files under "Required tests").
 - [ ] `crates/app-logic/src/backup/validate.rs` – a backup file with the new
       value must pass validation (uses `from_db_str`, so usually nothing to
       change; verify with a test).
-- [ ] `crates/app-logic/src/dto.rs` and `crates/app-logic/src/diagnostics.rs` –
+- [ ] `crates/app-logic/src/dto/` and `crates/app-logic/src/diagnostics.rs` –
       DTOs carry the type; diagnostics export names it by `as_db_str`.
 - [ ] `crates/app-logic/src/ai_usage.rs` – usage records carry the type.
 - [ ] `crates/app-shell/src/commands/ai_providers.rs` – the `match` blocks for
