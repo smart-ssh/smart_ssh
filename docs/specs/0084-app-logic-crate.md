@@ -47,7 +47,7 @@ er erreichbar ist.
 2. Aktivieren trägt den Kanal nur ein, wenn die Sitzung zu diesem Zeitpunkt
    noch existiert; Prüfung und Eintrag geschehen unter derselben Sperre, unter
    der auch das Entfernen (A2.1) den Eintrag löscht. Sonst endet der Befehl
-   mit dem Fehler „Session nicht gefunden", und der geöffnete Kanal wird
+   mit dem Fehlercode `SESSION_NOT_FOUND` (übersetzter Hinweistext), und der geöffnete Kanal wird
    verworfen.
 3. Ein Kanal ist nur für die Sitzung erreichbar, für die er aktiviert
    wurde, nicht für eine andere Sitzung zum selben Server.
@@ -125,12 +125,12 @@ Logik. Wo ein Modul beides mischte, gilt:
   in B lässt A aktiv.
 - **T8** Wettlauf: Aktivieren ist nach den Proben, vor dem Eintrag
   angehalten; die Sitzung wird entfernt; danach läuft das Aktivieren weiter.
-  Ergebnis: „Session nicht gefunden", kein Eintrag in der Zuordnung.
+  Ergebnis: Fehlercode `SESSION_NOT_FOUND`, kein Eintrag in der Zuordnung.
   **T8b:** dasselbe, während das Entfernen zwischen Sitzung und Eintrag
   steht.
 - **T9** Deaktivieren bei nicht aktivem Kanal und für eine unbekannte
   Sitzung: kein Absturz; „nicht aktiv" für eine bekannte Sitzung ohne
-  Kanal, „Session nicht gefunden" für eine unbekannte.
+  Kanal, Fehlercode `SESSION_NOT_FOUND` für eine unbekannte.
 - **T10** Kanal von einem Befehl festgehalten, Deaktivieren, danach
   scheitert der Zugriff. **T10b** dasselbe mit Neu-Aktivieren für einen
   anderen Nutzer. **T10c** dasselbe mit Entfernen der Sitzung.

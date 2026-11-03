@@ -335,10 +335,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
     session_id: SessionId,
     interactive: bool,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     let emitter = crate::event_emitter::TauriEventEmitter(app.clone());
     // Only one reconnect at a time, and only for a lost session: a second
     // trigger finds the state `Reconnecting` and does nothing.

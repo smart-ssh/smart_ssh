@@ -27,10 +27,7 @@ pub async fn open_terminal(
 ) -> CommandResult<TerminalStartDto> {
     // Spec 0104, §4: Eine MCP-Sitzung hat kein interaktives Terminal.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
 
     // Standardgröße, bis das Frontend die tatsächliche Terminal-Größe
     // per `terminal_resize` meldet (Spec 0007 Abschnitt 4 sieht für
@@ -66,10 +63,7 @@ pub async fn terminal_input(
     session_id: SessionId,
     data: Vec<u8>,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Write(data))
         .map_err(|_| "Terminal-Kanal bereits geschlossen")?;
@@ -83,10 +77,7 @@ pub async fn terminal_resize(
     cols: u16,
     rows: u16,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Resize(PtySize { cols, rows }))
         .map_err(|_| "Terminal-Kanal bereits geschlossen")?;

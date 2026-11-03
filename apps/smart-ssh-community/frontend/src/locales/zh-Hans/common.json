@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "所选的 AI 提供商尚未配置。请选择已配置的提供商。",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
+    "SESSION_NOT_FOUND": "此会话已不再打开。请从服务器列表重新打开。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
   },

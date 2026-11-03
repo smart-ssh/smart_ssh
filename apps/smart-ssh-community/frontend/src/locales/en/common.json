@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "The selected AI provider is not configured. Choose a configured provider.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choose an AI provider before turning on the risk second opinion.",
+    "SESSION_NOT_FOUND": "This session is no longer open. Open it again from the server list.",
     "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
   },

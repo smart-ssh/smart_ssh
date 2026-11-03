@@ -30,10 +30,7 @@ pub async fn send_chat_message(
 ) -> CommandResult<()> {
     // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Resolved and checked before anything else: an error sends nothing.
     // Registered chat content extensions take the ids (Issue #505, ADR 0141).
     let ids = attachment_ids.as_deref().unwrap_or(&[]);
@@ -73,10 +70,7 @@ pub async fn continue_truncated_response(
 ) -> CommandResult<()> {
     // Spec 0104, §4: wie `send_chat_message`.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     send_chat_message_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -101,10 +95,7 @@ pub async fn retry_chat_turn(
     session_id: SessionId,
 ) -> CommandResult<()> {
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     retry_chat_turn_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -491,10 +482,7 @@ pub async fn take_chat_content_into_note(
     session_id: SessionId,
     content: String,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     app_logic::orchestration::propose_note_from_chat_content(
         &session,
         session_id,
@@ -570,10 +558,7 @@ pub async fn stop_auto_continuation(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     session.request_auto_continue_stop();
     Ok(())
 }
@@ -600,10 +585,7 @@ pub async fn start_new_chat(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Option<String>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
     // bleibt die Spalte leer, statt den Chat zu verhindern.
     let provider_id = super::ai_providers::active_ai_provider_config(&state)
@@ -632,7 +614,7 @@ pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<
     // follows here.
     let session = crate::sessions::close_session_returning(&app, session_id)
         .await
-        .ok_or("Session nicht gefunden")?;
+        .ok_or_else(app_logic::session::session_not_found)?;
 
     // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
     // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`
@@ -767,10 +749,7 @@ pub async fn get_chat_history(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Vec<app_logic::dto::ChatHistoryEntryDto>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     let history = session.ai.context.lock().await.history.clone();
     Ok(history
         .into_iter()
