@@ -4,6 +4,17 @@
 //! für den OpenAI-kompatiblen Provider gespiegelt.
 
 use super::*;
+use crate::common::max_tokens_retry::RawEvent;
+use crate::common::prompt_format::format_command_result;
+use crate::openai_common::{
+    OPENAI_COMPATIBLE_NON_OPENAI_ENDPOINT_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS,
+    OPENAI_COMPATIBLE_OFFICIAL_API_UNKNOWN_MODEL_MAX_OUTPUT_TOKENS,
+};
+use crate::sse::SseFrame;
+use futures::StreamExt;
+use ssh_manager_core::ai::AiError;
+use ssh_manager_core::ai::{MessageContent, Role};
+use ssh_manager_core::ssh::CommandOutput;
 
 /// Issue #545: a stored question is sent as assistant text with the
 /// question and numbered option labels.
@@ -44,7 +55,7 @@ fn test_extension_part_renders_fixed_placeholder() {
         "k",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
@@ -87,7 +98,7 @@ fn test_request_body_never_contains_a_web_tool() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let body =
@@ -122,7 +133,7 @@ fn test_no_system_message_when_system_text_is_empty_with_native_tool_calling() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
 
@@ -152,7 +163,7 @@ fn test_fallback_mode_keeps_system_message_even_with_empty_system_context() {
         "key",
         false,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_system("", default_action_schemas());
@@ -174,7 +185,7 @@ async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever
     let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::pending());
 
-    let mut events = process_frame_stream(
+    let mut events = frame_stream(
         never_yields,
         true,
         Uuid::new_v4(),
@@ -199,7 +210,7 @@ async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever
 async fn test_keep_alive_frames_do_not_restart_content_timeout() {
     let frames = crate::sse::periodic_frames(None, "", std::time::Duration::from_secs(5));
     let start = tokio::time::Instant::now();
-    let mut events = process_frame_stream(
+    let mut events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -229,7 +240,7 @@ async fn test_slow_deltas_over_three_minutes_complete_without_error() {
         "{\"choices\":[{\"delta\":{\"content\":\"x\"}}]}",
         std::time::Duration::from_secs(30),
     );
-    let events = process_frame_stream(
+    let events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -255,7 +266,7 @@ async fn test_continuous_deltas_for_eleven_minutes_keep_streaming() {
         "{\"choices\":[{\"delta\":{\"content\":\"x\"}}]}",
         std::time::Duration::from_secs(30),
     );
-    let events = process_frame_stream(
+    let events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -293,7 +304,7 @@ async fn test_finish_reason_stop_is_logged() {
         ]));
     let request_id = Uuid::new_v4();
     let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, request_id, String::new(), Vec::new(), None)
+        frame_stream(frames, true, request_id, String::new(), Vec::new(), None)
             .collect()
             .await;
 
@@ -326,7 +337,7 @@ async fn test_finish_reason_length_with_no_content_triggers_retry_and_is_logged(
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -356,7 +367,7 @@ async fn test_finish_reason_length_with_text_content_stays_text_truncated() {
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -385,7 +396,7 @@ async fn test_fallback_mode_finish_reason_length_with_no_content_triggers_retry(
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         false,
         Uuid::new_v4(),
@@ -409,7 +420,7 @@ async fn test_content_filter_finish_reason_with_no_content_does_not_trigger_retr
             frame(r#"{"choices":[{"delta":{},"finish_reason":"content_filter"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -433,7 +444,7 @@ async fn test_abrupt_disconnect_without_finish_reason_and_no_content_does_not_tr
     let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
         futures::stream::iter(vec![frame(r#"{"choices":[{"delta":{}}]}"#)]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -461,7 +472,7 @@ async fn test_content_filter_is_refused_without_retry_or_tool_call() {
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -491,7 +502,7 @@ async fn test_length_with_whitespace_only_content_does_not_trigger_empty_round_r
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -533,7 +544,7 @@ async fn test_length_with_no_text_and_a_syntactically_incomplete_tool_call_trigg
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -568,7 +579,7 @@ async fn test_fallback_mode_action_like_content_in_reasoning_delta_is_never_pars
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         false,
         Uuid::new_v4(),
@@ -595,7 +606,7 @@ async fn test_only_reasoning_deltas_logs_reasoning_len_with_zero_text_len() {
             frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -637,7 +648,7 @@ async fn test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -670,7 +681,7 @@ async fn test_complete_tool_call_with_normal_finish_reason_is_forwarded() {
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -706,7 +717,7 @@ async fn test_invalid_tool_calls_are_non_fatal_and_valid_call_still_forwarded() 
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -750,7 +761,7 @@ async fn test_abrupt_disconnect_mid_tool_call_triggers_retry_not_silent_parse() 
         )]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -781,7 +792,7 @@ async fn test_unrecognized_finish_reason_is_treated_as_truncated_not_complete() 
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -793,10 +804,6 @@ async fn test_unrecognized_finish_reason_is_treated_as_truncated_not_complete() 
     .await;
 
     assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
-}
-
-fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-    std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
 }
 
 fn context_with_actions(actions: Vec<ActionSchema>) -> SessionContext {
@@ -821,7 +828,7 @@ fn test_build_request_body_uses_model_aware_max_tokens_for_official_openai() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -846,7 +853,7 @@ fn test_build_request_body_stays_conservative_for_non_openai_endpoint() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -873,7 +880,7 @@ fn test_unknown_model_on_non_openai_endpoint_sends_8192_by_default() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -893,7 +900,7 @@ fn test_build_request_body_honors_max_tokens_hint_over_model_default() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let mut context = context_with_actions(Vec::new());
@@ -914,7 +921,7 @@ fn test_build_request_body_honors_provider_level_max_tokens_override() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         Some(20_000),
     );
     let context = context_with_actions(Vec::new());
@@ -934,7 +941,7 @@ fn test_side_call_hint_still_wins_over_provider_level_override() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         Some(20_000),
     );
     let mut context = context_with_actions(Vec::new());
@@ -996,7 +1003,7 @@ fn test_reasoning_models_use_max_completion_tokens_field_on_official_openai() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1017,7 +1024,7 @@ fn test_non_reasoning_models_use_classic_max_tokens_field() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1040,7 +1047,7 @@ fn test_generic_gateway_keeps_classic_field_even_for_an_o1_like_model_name() {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
     let context = context_with_actions(Vec::new());
@@ -1095,7 +1102,7 @@ async fn test_context_limit_retry_logs_error_then_debug_line_with_old_and_new_bu
         api_key,
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     );
 
@@ -1222,7 +1229,7 @@ fn combine_provider() -> OpenAiCompatibleProvider {
         "key",
         true,
         Vec::new(),
-        test_budget(),
+        crate::openai_common::StreamOptionsRejections::new(),
         None,
     )
 }

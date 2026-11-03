@@ -469,6 +469,11 @@ export function registerManageView(view: ManageViewContribution): void {
   notifyFormSlotsChanged();
 }
 
+/** Removes a Manage view and notifies form-slot subscribers. Unknown id: no-op. */
+export function unregisterManageView(id: string): void {
+  if (registry.manageViews.delete(id)) notifyFormSlotsChanged();
+}
+
 /** Zwischen zwei Änderungen dieselbe Array-Referenz (nicht verändern). */
 export function listServerFormSections(): ServerFormSectionContribution[] {
   return serverFormSectionsSnapshot;
@@ -518,6 +523,12 @@ function notifyComposerChanged(): void {
  * (Issue #471). Die Community Edition registriert keine. */
 export function registerComposerAction(action: ComposerAction): void {
   registry.composerActions.set(action.id, action);
+  notifyComposerChanged();
+}
+
+/** Removes a composer action and notifies composer subscribers. Unknown id: no-op. */
+export function unregisterComposerAction(id: string): void {
+  if (!registry.composerActions.delete(id)) return;
   notifyComposerChanged();
 }
 

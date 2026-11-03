@@ -15,6 +15,29 @@
 //! Typ nicht wieder lautlos in diesen Zustand zurückfallen lässt.
 
 use super::*;
+#[allow(unused_imports)]
+use crate::ids::SessionId;
+#[allow(unused_imports)]
+use crate::status::ConnectionStatus;
+#[allow(unused_imports)]
+use chrono::{DateTime, Utc};
+#[allow(unused_imports)]
+use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
+use ssh_manager_core::ai::{ProviderId, ProviderType};
+#[allow(unused_imports)]
+use ssh_manager_core::filter::{
+    Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
+};
+#[allow(unused_imports)]
+use ssh_manager_core::profiles::{
+    AuthMethod, CredentialError, CredentialRef, CredentialStore, Group, GroupId, NoteEditor,
+    NoteRevision, PostIngestPolicy, Server,
+};
+#[allow(unused_imports)]
+use ssh_manager_core::shared::ServerId;
+#[allow(unused_imports)]
+use ssh_manager_core::ssh::RemoteEntry;
 
 #[test]
 fn test_test_connection_result_host_key_unknown_uses_camel_case_fields() {

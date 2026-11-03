@@ -17,10 +17,9 @@
 //! Completions path (the shared `OpenAiStreamState::finalize` is reused with
 //! the terminal status mapped to its `finish_reason` vocabulary).
 
-use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
 
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -30,20 +29,19 @@ use ssh_manager_core::ai::{
 };
 
 use crate::action::parameters_json_schema;
-use crate::error::{
-    classify_provider_error, map_transport_error, timeout_error, ProviderErrorInfo,
+use crate::common::frame_loop::{self, FrameHandler};
+use crate::common::max_tokens_retry::{
+    retry_stream_with_overload, ConnectFn, RawEvent, RetryParams,
 };
+use crate::common::prompt_format::{message_content_text, role_str};
+use crate::error::{classify_provider_error, ProviderErrorInfo};
 use crate::fallback::fallback_system_prompt_addition;
-use crate::openai_compatible::{
-    message_content_text, openai_compatible_default_max_tokens,
-    openai_compatible_model_max_output_tokens, retry_stream_with_overload, role_str,
-    OpenAiStreamState, RawEvent, RetryKind, RetryState,
+use crate::openai_common::{
+    connect_and_stream, openai_compatible_default_max_tokens,
+    openai_compatible_model_max_output_tokens, OpenAiStreamState, StreamOptionsRejections,
 };
-use crate::request_logging::{log_outgoing_context, log_provider_transport_error};
-use crate::sse::{
-    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
-    SSE_INACTIVITY_TIMEOUT,
-};
+use crate::request_logging::log_outgoing_context;
+use crate::sse::{build_http_client, SseFrame};
 
 const MAX_TOKENS_FIELD: &str = "max_output_tokens";
 
@@ -65,8 +63,6 @@ pub struct OpenAiResponsesProvider {
     api_key: String,
     supports_native_tool_calling: bool,
     extra_headers: Vec<(String, String)>,
-    #[allow(dead_code)]
-    budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     max_tokens_override: Option<u32>,
     /// Issue #168: offer the provider's `web_search` tool in the main chat.
     web_research: bool,
@@ -82,7 +78,6 @@ impl OpenAiResponsesProvider {
         api_key: impl Into<String>,
         supports_native_tool_calling: bool,
         extra_headers: Vec<(String, String)>,
-        budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
         max_tokens_override: Option<u32>,
     ) -> Self {
         Self {
@@ -92,7 +87,6 @@ impl OpenAiResponsesProvider {
             api_key: api_key.into(),
             supports_native_tool_calling,
             extra_headers,
-            budget,
             max_tokens_override,
             web_research: false,
             last_request: std::sync::Mutex::new(None),
@@ -191,26 +185,41 @@ impl AiProvider for OpenAiResponsesProvider {
             .as_u64()
             .unwrap_or(u64::from(model_max_tokens)) as u32;
 
+        let client = self.client.clone();
+        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
+        let api_key = self.api_key.clone();
+        let native_tool_calling = self.supports_native_tool_calling;
+        let extra_headers = self.extra_headers.clone();
+        // The Responses body never carries `stream_options`, so this cache
+        // stays empty and unused.
+        let connect: ConnectFn = std::sync::Arc::new(move |body| {
+            Box::pin(connect_and_stream(
+                parse_sse_response,
+                client.clone(),
+                url.clone(),
+                api_key.clone(),
+                native_tool_calling,
+                request_id,
+                extra_headers.clone(),
+                StreamOptionsRejections::new(),
+                body,
+            ))
+        });
         retry_stream_with_overload(
             "openai_responses",
             &self.model,
             &self.last_request,
-            RetryState {
-                parse: event_stream_from_response,
-                client: self.client.clone(),
-                url: format!("{}/responses", self.base_url.trim_end_matches('/')),
-                api_key: self.api_key.clone(),
-                native_tool_calling: self.supports_native_tool_calling,
+            RetryParams {
+                connect,
                 request_id,
-                extra_headers: self.extra_headers.clone(),
                 body,
                 max_tokens,
                 model_max_tokens,
                 max_tokens_field: MAX_TOKENS_FIELD,
                 max_tokens_is_user_override,
-                retry_used: RetryKind::None,
-                inner: None,
-                finished: false,
+                context_limit_retry_max_tokens: Some(
+                    crate::openai_common::OPENAI_COMPATIBLE_CONTEXT_LIMIT_RETRY_MAX_TOKENS,
+                ),
             },
         )
     }
@@ -223,7 +232,7 @@ impl AiProvider for OpenAiResponsesProvider {
     }
 }
 
-fn event_stream_from_response(
+fn parse_sse_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
@@ -231,13 +240,15 @@ fn event_stream_from_response(
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    process_frame_stream(
-        Box::pin(sse_frame_stream(response)),
-        native_tool_calling,
-        request_id,
-        api_key,
-        extra_headers,
-        provider_request_id,
+    frame_loop::event_stream_from_response(
+        response,
+        ResponsesHandler::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
     )
 }
 
@@ -570,120 +581,116 @@ fn handle_event(
     None
 }
 
-fn process_frame_stream(
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+/// Test entry: the shared frame loop over a synthetic `frames` stream.
+#[cfg(test)]
+fn frame_stream(
+    frames: frame_loop::FrameStream,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    let secrets: Vec<String> = std::iter::once(api_key)
-        .chain(extra_headers.into_iter().map(|(_, value)| value))
-        .collect();
-    let state = OpenAiStreamState {
-        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
+    frame_loop::process_frame_stream(
         frames,
-        tool_calls: BTreeMap::new(),
-        fallback_text: String::new(),
-        secrets,
-        text_delta_total_len: 0,
-        reasoning_delta_total_len: 0,
-        native_tool_calling,
-        pending: VecDeque::new(),
-        finished: false,
-        request_id,
-        provider_request_id,
-        finish_reason: None,
-        usage: Default::default(),
-    };
+        ResponsesHandler::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
+    )
+}
 
-    Box::pin(futures::stream::unfold(
-        (state, WebCollector::default()),
-        |(mut state, mut web)| async move {
-            loop {
-                if let Some(event) = state.pending.pop_front() {
-                    return Some((event, (state, web)));
+/// Responses API side of the shared frame loop.
+struct ResponsesHandler {
+    state: OpenAiStreamState,
+    web: WebCollector,
+}
+
+impl ResponsesHandler {
+    fn new(
+        native_tool_calling: bool,
+        request_id: Uuid,
+        api_key: String,
+        extra_headers: Vec<(String, String)>,
+        provider_request_id: Option<String>,
+    ) -> Self {
+        Self {
+            state: OpenAiStreamState::new(
+                native_tool_calling,
+                request_id,
+                api_key,
+                extra_headers,
+                provider_request_id,
+            ),
+            web: WebCollector::default(),
+        }
+    }
+}
+
+impl FrameHandler for ResponsesHandler {
+    type Event = RawEvent;
+
+    fn on_frame(&mut self, frame: &SseFrame) -> Vec<RawEvent> {
+        let state = &mut self.state;
+        // Malformed frames are skipped, like on the Chat Completions path.
+        if let Ok(event) = serde_json::from_str::<Value>(&frame.data) {
+            match handle_event(state, &mut self.web, &event) {
+                None => {}
+                Some(Ok(())) => {
+                    state.finished = true;
+                    if let Some(reason) = state.finish_reason.clone() {
+                        crate::request_logging::log_stop_reason(
+                            state.request_id,
+                            "openai_responses",
+                            &reason,
+                        );
+                    }
+                    let events = state.finalize(false);
+                    // Web research is plain information, emitted before
+                    // action proposals; a discarded (retried) response drops
+                    // it with the rest.
+                    let released = !events
+                        .iter()
+                        .any(|e| matches!(e, RawEvent::RetryWithHigherMaxTokens));
+                    if released {
+                        state.pending.extend(
+                            self.web
+                                .take()
+                                .into_iter()
+                                .map(|a| RawEvent::Public(AiEvent::WebActivity(a))),
+                        );
+                    }
+                    state.pending.extend(events);
                 }
-                if state.finished {
-                    return None;
-                }
-                match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
-                    Ok(Some(Ok(frame))) => {
-                        if frame_is_content(&frame) {
-                            state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
-                        }
-                        // Malformed frames are skipped, like on the Chat
-                        // Completions path.
-                        let Ok(event) = serde_json::from_str::<Value>(&frame.data) else {
-                            continue;
-                        };
-                        match handle_event(&mut state, &mut web, &event) {
-                            None => {}
-                            Some(Ok(())) => {
-                                state.finished = true;
-                                if let Some(reason) = state.finish_reason.clone() {
-                                    crate::request_logging::log_stop_reason(
-                                        state.request_id,
-                                        "openai_responses",
-                                        &reason,
-                                    );
-                                }
-                                let events = state.finalize(false);
-                                // Web research is plain information, emitted
-                                // before action proposals; a discarded
-                                // (retried) response drops it with the rest.
-                                let released = !events
-                                    .iter()
-                                    .any(|e| matches!(e, RawEvent::RetryWithHigherMaxTokens));
-                                if released {
-                                    state.pending.extend(
-                                        web.take()
-                                            .into_iter()
-                                            .map(|a| RawEvent::Public(AiEvent::WebActivity(a))),
-                                    );
-                                }
-                                state.pending.extend(events);
-                            }
-                            Some(Err(error)) => {
-                                // A failed response never releases a tool call.
-                                state.finished = true;
-                                state.tool_calls.clear();
-                                web.take();
-                                state
-                                    .pending
-                                    .push_back(RawEvent::Public(AiEvent::Error(error)));
-                            }
-                        }
-                    }
-                    Ok(Some(Err(err))) => {
-                        let mapped = map_transport_error(&err);
-                        let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                        log_provider_transport_error(state.request_id, &mapped, &secrets);
-                        state
-                            .pending
-                            .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                        state.finished = true;
-                    }
-                    Ok(None) => {
-                        state.finished = true;
-                        // No terminal event seen: abrupt.
-                        let events = state.finalize(true);
-                        state.pending.extend(events);
-                    }
-                    Err(_elapsed) => {
-                        let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                        let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                        log_provider_transport_error(state.request_id, &mapped, &secrets);
-                        state
-                            .pending
-                            .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                        state.finished = true;
-                    }
+                Some(Err(error)) => {
+                    // A failed response never releases a tool call.
+                    state.finished = true;
+                    state.tool_calls.clear();
+                    self.web.take();
+                    state
+                        .pending
+                        .push_back(RawEvent::Public(AiEvent::Error(error)));
                 }
             }
-        },
-    ))
+        }
+        state.pending.drain(..).collect()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.state.finished
+    }
+
+    /// No terminal event seen: the loop passes `abrupt = true`.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+        self.state.finalize(abrupt)
+    }
+
+    fn log_transport_error(&self, error: &AiError) {
+        self.state.log_transport_error_redacted(error);
+    }
 }
 
 #[cfg(test)]
@@ -700,7 +707,7 @@ mod attachment_tests {
         let every = std::time::Duration::from_secs(5);
         let frames = crate::sse::periodic_frames(None, "", every);
         let start = tokio::time::Instant::now();
-        let event = process_frame_stream(
+        let event = frame_stream(
             frames,
             true,
             Uuid::new_v4(),
@@ -726,7 +733,7 @@ mod attachment_tests {
             r#"{"type":"response.output_text.delta","delta":"x"}"#,
             std::time::Duration::from_secs(30),
         );
-        let collected: Vec<RawEvent> = process_frame_stream(
+        let collected: Vec<RawEvent> = frame_stream(
             frames,
             true,
             Uuid::new_v4(),
@@ -745,10 +752,6 @@ mod attachment_tests {
         );
     }
 
-    fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
-        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
-    }
-
     /// Issue #504: an unsealed extension part is the fixed fenced placeholder.
     #[test]
     fn test_responses_extension_part_renders_fixed_placeholder() {
@@ -758,7 +761,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
@@ -776,7 +778,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let mut ctx = context_with_image_and_pdf("x");
@@ -811,7 +812,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let body = p.build_request_body(&context_with_image_and_pdf("hello"));
@@ -845,7 +845,6 @@ mod attachment_tests {
             "k",
             true,
             Vec::new(),
-            budget(),
             None,
         );
         let events = first_events(&p, context_with_image_and_pdf("x")).await;
@@ -880,7 +879,7 @@ mod attachment_tests {
             ),
             frame(r#"{"type":"response.completed"}"#),
         ]));
-        let events: Vec<RawEvent> = process_frame_stream(
+        let events: Vec<RawEvent> = frame_stream(
             frames,
             true,
             Uuid::new_v4(),

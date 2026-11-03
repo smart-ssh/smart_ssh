@@ -19,7 +19,7 @@ must upgrade without losing any row; migrations are append-only.
       (`(1..=N).collect::<Vec<i64>>()`) goes up by one.
 - [ ] Struct literals of any changed domain type across crates
       (`cargo check --workspace --all-targets` lists each one).
-- [ ] DTO in `crates/app-logic/src/dto.rs` and frontend type in
+- [ ] DTO in `crates/app-logic/src/dto/` and frontend type in
       `apps/smart-ssh-community/frontend/src/types.ts` when the field is
       exposed.
 - [ ] `crates/persistence-sqlite/tests/fixtures/releases/` and its `README.md`

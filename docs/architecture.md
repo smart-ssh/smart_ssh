@@ -87,6 +87,14 @@ sonst denselben verbotenen Pfad nach `elevated_sftp`/`BrowserAccess`
 nehmen. `docs/adr/0077-app-logic-crate-split-decisions.md` hält die
 Einzelentscheidungen dieser Aufteilung fest.
 
+Die reine SFTP-Logik des Dateibrowsers (rekursives Löschen, chmod/chown,
+Modus-Bits, Eigentümer-Namen, Überschreiben-Umbenennen, Baum-Durchlauf)
+liegt Tauri-frei in `app-logic::sftp_ops` (Issue #849). Sie arbeitet auf
+`&mut dyn SftpSession` und dem kleinen Trait `OpProgress`; `app-shell` löst
+den `BrowserChannel` zu einer `SftpSession` auf, ruft hinein und implementiert
+`OpProgress` für `OpHandle`. `app-logic` sieht keinen Typ des erhöhten Kanals;
+ein Quelltext-Scan (`browser_channel_tests`) sichert das zusätzlich zum Compiler.
+
 ## Das Feature `test-support`
 
 Manche Testhilfen braucht keine der beiden Crates allein, sondern beide:
@@ -157,7 +165,7 @@ dem Startablauf hängen, bleiben aus dem jeweils genannten Grund hier:
 |---|---|
 | `crates/app-shell/src/chat_content.rs`, `crates/app-shell/src/db_extensions.rs` | Wenden die Erweiterungen aus `Wiring` an (Spec 0038 Abschnitt 2a), aufgerufen aus dem Start-/Entsperrablauf in `app-shell`. |
 | `crates/app-shell/src/edit_copies.rs`, `crates/app-shell/src/file_clipboard.rs` | Ablage und Aufräumen lokaler Dateien des Dateibrowsers (Spec 0054), vom Command-Layer und vom Start-/Beenden-Ablauf benutzt. |
-| `crates/app-shell/src/file_ops.rs` | Laufende Datei-Operationen des erhöhten Kanals; hängt an `ElevatedSftpRegistry` (s. o.) und bleibt deshalb bei ihr. |
+| `crates/app-shell/src/file_ops.rs` | Laufende Datei-Operationen des erhöhten Kanals; hängt an `ElevatedSftpRegistry` (s. o.) und bleibt deshalb bei ihr. Implementiert `app_logic::sftp_ops::OpProgress` für `OpHandle`. |
 | `crates/app-shell/src/startup_gate.rs` | Torliste vor dem `generate_handler!`-Verteiler (Spec 0101 A16); selbst Tauri-frei, gehört zum Tor, das die Verdrahtung einhängt. |
 | `crates/app-shell/src/startup_prompt.rs` | Zuordnung Fall → Dialog für die nativen Startdialoge (Spec 0101 A3/A5), arbeitet mit dem nativen Fehlerdialog zusammen. |
 

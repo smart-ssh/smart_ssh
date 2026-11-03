@@ -23,10 +23,10 @@ const EXPECTED: Record<string, Kind> = {
   unregisterDocumentAction: fn, subscribeDocumentActions: fn, registerFirstRunNoticeExtension: fn,
   listFirstRunNoticeExtensions: fn, unregisterFirstRunNoticeExtension: fn,
   subscribeFirstRunNoticeExtensions: fn, registerServerSettingsTab: fn,
-  unregisterServerSettingsTab: fn, listServerSettingsTabs: fn, registerComposerAction: fn,
+  unregisterServerSettingsTab: fn, listServerSettingsTabs: fn, registerComposerAction: fn, unregisterComposerAction: fn,
   registerComposerDropHandler: fn, unregisterComposerDropHandler: fn, subscribeSettingsSections: fn,
   subscribeComposer: fn, registerServerFormSection: fn, registerGroupFormSection: fn,
-  registerManageView: fn, registerSessionHeaderItem: fn, unregisterSessionHeaderItem: fn,
+  registerManageView: fn, unregisterManageView: fn, registerSessionHeaderItem: fn, unregisterSessionHeaderItem: fn,
   listSessionHeaderItems: fn, listServerFormSections: fn, listGroupFormSections: fn,
   listManageViews: fn, subscribeFormSlots: fn, resetRegistryForTests: fn,
   requestResumeChatSession: fn, useEntitlements: fn, FREE_TIER: "string" as Kind, registerTier: fn,
@@ -41,6 +41,7 @@ const EXPECTED: Record<string, Kind> = {
   listGroups: fn, listAiProviders: fn, listChatSessions: fn,
   TECHNICAL_INPUT_PROPS: obj, useIsNarrow: fn, resolveSectionLabel: fn, pickAndReadTextFile: fn,
   SUPPORTED_LANGUAGES: obj, settingsStore: fn, initI18n: fn,
+  setUiPreference: fn,
 };
 
 describe("public-api", () => {
@@ -60,6 +61,25 @@ describe("public-api", () => {
     expect(typeof testSupport.listComposerActions).toBe("function");
     expect(typeof testSupport.listComposerDropHandlers).toBe("function");
     expect(typeof testSupport.resetComposerRegistryForTests).toBe("function");
+  });
+
+  it("setUiPreference calls set_ui_preference with key and value", async () => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+    await publicApi.setUiPreference("some.key", { a: 1 });
+    expect(invokeMock).toHaveBeenCalledWith("set_ui_preference", {
+      key: "some.key",
+      value: { a: 1 },
+    });
+  });
+
+  it("resetTiersForTests clears registered tiers; tierLabel falls back to the id", () => {
+    const t = (k: string) => `T:${k}`;
+    expect(publicApi.tierLabel("acme", t)).toBe("acme");
+    publicApi.registerTier({ id: "acme", labelKey: "tier.acme" });
+    expect(publicApi.tierLabel("acme", t)).toBe("T:tier.acme");
+    testSupport.resetTiersForTests();
+    expect(publicApi.tierLabel("acme", t)).toBe("acme");
   });
 
   it("resolves by package name through the exports map", () => {
