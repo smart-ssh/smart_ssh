@@ -209,11 +209,15 @@ async fn auto_stop_at_max_length_transcribes_and_stop_collects() {
         800,
         "bound in 16 kHz samples"
     );
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    assert_eq!(
-        events.lock().unwrap().last(),
-        Some(&RecorderState::Finished)
-    );
+    // Wait for the state change itself; the 5 s bound only stops a
+    // regression from hanging (ADR 0122, R6).
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while events.lock().unwrap().last() != Some(&RecorderState::Finished) {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("recorder should reach Finished after the maximum length");
     assert_eq!(tr.calls.lock().unwrap().len(), 1);
     assert!(rec.stop().await.unwrap().starts_with("heard"));
     assert_eq!(rec.stop().await, Err(RecordError::NotRecording));
@@ -448,7 +452,10 @@ impl TranscribeSession for FakeSession {
         if self.0.running.fetch_add(1, Ordering::SeqCst) > 0 {
             self.0.overlap.fetch_add(1, Ordering::SeqCst);
         }
-        std::thread::sleep(Duration::from_millis(60)); // slower than the interval
+        // Not on the assertion path: it only makes a pass slower than the
+        // live interval so an overlapping pass would be *possible*; the
+        // assertion (`overlap == 0`) holds or fails regardless of timing.
+        std::thread::sleep(Duration::from_millis(60));
         self.0.running.fetch_sub(1, Ordering::SeqCst);
         let n = self.0.passes.fetch_add(1, Ordering::SeqCst);
         Ok(format!("w{n}-{}", samples.len()))
