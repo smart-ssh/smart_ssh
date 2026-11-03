@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, exportDocument, listAiProviders } from "../api";
 import { useStickToBottom } from "../hooks/useStickToBottom";
@@ -9,9 +9,10 @@ import { loadRiskClassifierSettings } from "../riskSettings";
 import type { DocumentFormat } from "../types";
 import { freshId } from "../chatResync";
 import { Button } from "./ui";
-import { deriveQuestionStates } from "./QuestionCard";
+import { deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { useChatTranscript } from "./chat/useChatTranscript";
 import { ChatItemView } from "./chat/ChatItemView";
+import { useStableCallback } from "./chat/useStableCallback";
 import { useChatSend } from "./chat/useChatSend";
 import { useActionDecisions } from "./chat/useActionDecisions";
 
@@ -106,14 +107,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * Backend (`export_document`) — bricht der Nutzer ihn ab, kehrt der
    * Command einfach ohne Fehler zurück (s. dortiger Doc-Kommentar), hier
    * ist dann schlicht nichts zu tun. */
-  const handleExport = async (contentMarkdown: string, title: string, format: DocumentFormat) => {
+  const handleExport = useStableCallback(async (contentMarkdown: string, title: string, format: DocumentFormat) => {
     try {
       await exportDocument(contentMarkdown, title, format);
     } catch (err) {
       dispatch({ type: "itemAppended", item: { type: "error", id: freshId(), message: commandErrorMessage(err), code: null } });
       throw err;
     }
-  };
+  });
 
   const confirmationOpen = items.some(
     (it) =>
@@ -125,8 +126,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const {
     sending,
     handleSubmit,
-    handleContinueTruncated,
-    handleRetryTurn,
+    handleContinueTruncated: continueTruncatedRaw,
+    handleRetryTurn: retryTurnRaw,
     handleQuestionAnswer,
     handleStopAutoContinuation,
     handleNewChat,
@@ -141,8 +142,37 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     confirmationOpen,
   });
 
-  const { respond, acceptWithRule } = useActionDecisions(sessionId, dispatch, onActionSettled);
-  const questionStates = deriveQuestionStates(items);
+  const { respond: respondRaw, acceptWithRule: acceptWithRuleRaw } = useActionDecisions(
+    sessionId,
+    dispatch,
+    onActionSettled,
+  );
+  // Stable identities for the memoised item views.
+  const respond = useStableCallback(respondRaw);
+  const acceptWithRule = useStableCallback(acceptWithRuleRaw);
+  const handleContinueTruncated = useStableCallback(continueTruncatedRaw);
+  const handleRetryTurn = useStableCallback(retryTurnRaw);
+  const handleQuestionAnswerStable = useStableCallback(handleQuestionAnswer);
+  // Keep the previous state object for a question whose state did not change.
+  const questionStatesRef = useRef(new Map<string, QuestionState>());
+  const questionStates = useMemo(() => {
+    const prev = questionStatesRef.current;
+    const next = deriveQuestionStates(items);
+    for (const [id, st] of next) {
+      const old = prev.get(id);
+      if (
+        old &&
+        old.locked === st.locked &&
+        old.ownWords === st.ownWords &&
+        old.selected.length === st.selected.length &&
+        old.selected.every((v, i) => v === st.selected[i])
+      ) {
+        next.set(id, old);
+      }
+    }
+    questionStatesRef.current = next;
+    return next;
+  }, [items]);
 
   const voiceLocked = voice.voiceLocked;
 
@@ -198,7 +228,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onRetryTurn={handleRetryTurn}
             retryDisabled={sending}
             questionState={questionStates.get(item.id)}
-            onQuestionAnswer={handleQuestionAnswer}
+            onQuestionAnswer={handleQuestionAnswerStable}
             serverId={serverId}
             sessionId={sessionId}
           />
