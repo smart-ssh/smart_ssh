@@ -129,7 +129,9 @@ pub async fn export_encrypted_backup(
             // `content://` target (Android): write and verify in an
             // app-private directory, then copy through the handle.
             let dir = crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(uuid::Uuid::new_v4().to_string());
             let result = export_via_staging(&state, &handle, &app, &dir, &file_name).await;
             remove_staging(&dir);
@@ -322,7 +324,9 @@ pub async fn pick_backup_import_file(
         },
         None => {
             let dir = crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(uuid::Uuid::new_v4().to_string());
             let opener = crate::local_file::platform_opener(&app);
             match handle.stage_into(opener.as_ref(), &dir) {
@@ -456,6 +460,24 @@ pub async fn cancel_backup_import(slot: State<'_, BackupImportSlot>) -> CommandR
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #887: every backup failure reaches the frontend with a code.
+    #[test]
+    fn test_every_backup_error_carries_a_code() {
+        for err in [
+            BackupOpError::KeyRequired,
+            BackupOpError::KeyAlreadyExists,
+            BackupOpError::Format(BackupError::CodeTypo),
+            BackupOpError::KeyUnreadable,
+            BackupOpError::HostKeys,
+            BackupOpError::Write,
+            BackupOpError::Read,
+            BackupOpError::Invalid("x"),
+            BackupOpError::VerificationFailed,
+        ] {
+            assert!(command_error(err).code.is_some());
+        }
+    }
 
     fn slot_with(dir: &std::path::Path, staged: bool) -> (BackupImportSlot, std::path::PathBuf) {
         let file = dir.join("a.sshbackup");

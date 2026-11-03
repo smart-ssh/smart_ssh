@@ -8,6 +8,7 @@ mod transport;
 
 pub(super) use system_context::build_session_system_context;
 
+use app_logic::error::ResultCodeExt;
 pub(crate) use progress::ConnectProgress;
 use progress::{cancelled_error, or_cancelled};
 use transport::establish_transport;
@@ -101,9 +102,9 @@ use app_logic::connect::session_builder::should_create_chat_session;
 use app_logic::session::Session;
 
 /// Spec 0047, Fund D2: `SshError` trägt seit Spec 0024 einen stabilen
-/// `code()` fürs Frontend-Mapping — der blanket `?` auf
-/// `ssh_transport::connect(...)` (über `CommandError`s
-/// `impl<E: Display> From<E>`) verwarf ihn bislang und lieferte
+/// `code()` fürs Frontend-Mapping — das frühere pauschale `?` auf
+/// `ssh_transport::connect(...)` (über die damalige Pauschal-Umwandlung)
+/// verwarf ihn bislang und lieferte
 /// `code: None`. Ein Tester mit nicht erreichbarem Server sah dadurch nur
 /// den rohen, hart-deutschen `Display`-Text inkl. OS-Fehlertext, auch im
 /// englischen UI. Eigene, kleine Funktion statt eines Inline-`.map_err`
@@ -199,9 +200,10 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
                 .sessions
                 .claim_chat_session_for_resume(existing_id)
                 .map_err(|_| {
-                    CommandError::from(
+                    CommandError::with_code(
                         "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
                          werden.",
+                        "CHAT_SESSION_BEING_DELETED",
                     )
                 })?,
         ),
@@ -544,14 +546,17 @@ pub async fn delete_chat_session(
     {
         Ok(claim) => claim,
         Err(app_logic::session::ChatSessionClaimError::InUse) => {
-            return Err(
+            return Err(CommandError::with_code(
                 "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
-                 löschen."
-                    .into(),
-            );
+                 löschen.",
+                "CHAT_SESSION_IN_USE",
+            ));
         }
         Err(app_logic::session::ChatSessionClaimError::BeingDeleted) => {
-            return Err("Diese Chat-Sitzung wird gerade gelöscht.".into());
+            return Err(CommandError::with_code(
+                "Diese Chat-Sitzung wird gerade gelöscht.",
+                "CHAT_SESSION_BEING_DELETED",
+            ));
         }
     };
     state
@@ -602,6 +607,7 @@ pub async fn confirm_host_key(
 ) -> CommandResult<()> {
     state
         .pending_host_key_confirmations
-        .resolve(&session_id, decision)?;
+        .resolve(&session_id, decision)
+        .or_code("CONFIRMATION_NOT_PENDING")?;
     Ok(())
 }

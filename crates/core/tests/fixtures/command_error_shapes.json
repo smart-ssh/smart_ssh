@@ -30,10 +30,6 @@
     },
     "message": "feature Feature(\"document_export\") is not available in tier TierId(\"free\")"
   },
-  "message_only": {
-    "code": null,
-    "message": "Something failed"
-  },
   "with_code": {
     "code": "GROUP_SELF_PARENT",
     "message": "Group cannot be its own parent"

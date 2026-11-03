@@ -10,7 +10,7 @@ use app_logic::dto::{
     DeleteServerResult, DeleteUnusableServerResult, ServerDto, ServerInput, TestConnectionReport,
     UnusableServerDto,
 };
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandError, CommandResult};
 use app_logic::server_credentials::clear_sudo_password;
 use app_logic::servers::reject_local_jump_host;
 use app_logic::state::AppState;
@@ -184,7 +184,10 @@ pub async fn delete_server(
 ) -> CommandResult<DeleteServerResult> {
     if app_logic::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
-        return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann nicht gelöscht werden",
+            "SERVER_LOCAL_NOT_DELETABLE",
+        ));
     }
     app_logic::servers::delete_server(
         state.profile_store.as_ref(),
@@ -295,7 +298,10 @@ pub async fn test_connection(
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
         // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
         // werden könnte).
-        return Err("Für den lokalen Pseudo-Server gibt es keinen Verbindungstest".into());
+        return Err(CommandError::with_code(
+            "Für den lokalen Pseudo-Server gibt es keinen Verbindungstest",
+            "SERVER_LOCAL_NO_CONNECTION_TEST",
+        ));
     }
     // Issue #633: live `connect-progress` events and `cancel_connect` for
     // this attempt id.

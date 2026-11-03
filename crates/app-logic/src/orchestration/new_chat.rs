@@ -127,7 +127,10 @@ pub async fn start_new_chat(
             .await
             .map_err(|err| {
                 tracing::warn!(error = %err, "new chat session creation failed");
-                CommandError::from(format!("Neuer Chat konnte nicht angelegt werden: {err}"))
+                CommandError::with_code(
+                    format!("Neuer Chat konnte nicht angelegt werden: {err}"),
+                    "CHAT_NEW_SESSION_FAILED",
+                )
             })?;
         if let Err(err) = store.end_or_discard(*old_id).await {
             tracing::warn!(error = %err, "chat session mark_ended failed");

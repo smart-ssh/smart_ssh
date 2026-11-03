@@ -208,8 +208,9 @@ pub async fn export_ssh_config(
     let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
 
     if handle.as_path().is_some_and(resolves_to_user_ssh_config) {
-        return Err(CommandError::from(
-            "Die eigene ~/.ssh/config wird nicht überschrieben. Bitte einen anderen Dateinamen oder Ort wählen.".to_string(),
+        return Err(CommandError::with_code(
+            "Die eigene ~/.ssh/config wird nicht überschrieben. Bitte einen anderen Dateinamen oder Ort wählen.",
+            "SSH_CONFIG_EXPORT_USER_CONFIG",
         ));
     }
 

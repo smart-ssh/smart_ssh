@@ -37,7 +37,7 @@ use app_logic::events::{
     emit_sftp_entries_finished, emit_sftp_entries_progress, emit_sftp_transfer_started,
     EventEmitter, SftpEntriesProgress, SftpTransferKind,
 };
-use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants, LOCAL_PATH_NOT_GRANTED};
+use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
 

@@ -128,6 +128,91 @@ impl crate::prompt_history_store::PromptHistoryStoreError {
     }
 }
 
+/// Spec 0077, 3.1.3: a filter rule pattern that does not compile.
+pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
+
+/// Codes of the `ErrorCode` impls in this crate that are not `STORE_*`
+/// (those are `StoreErrorKind::CODES`).
+pub const STORE_ERROR_CODES: &[&str] = &[
+    "AI_PROVIDER_NOT_FOUND",
+    "AI_PROVIDER_ACTIVE_DELETION_FORBIDDEN",
+    "POLICY_RULE_NOT_FOUND",
+    FILTER_RULE_PATTERN_INVALID,
+];
+
+use ssh_manager_core::ipc_error::ErrorCode;
+
+/// The database failure kind wins; domain variants get their own code.
+fn kind_code(kind: Option<StoreErrorKind>, domain: Option<&'static str>) -> &'static str {
+    match (domain, kind) {
+        (Some(code), _) => code,
+        (None, Some(kind)) => kind.code(),
+        // Unreachable for the current variants; a generic store code rather
+        // than none if a variant without a kind is ever added.
+        (None, None) => StoreErrorKind::Other.code(),
+    }
+}
+
+impl ErrorCode for crate::chat_session_store::ChatSessionStoreError {
+    fn code(&self) -> &'static str {
+        use crate::chat_session_store::ChatSessionStoreError as E;
+        match self {
+            E::CorruptContent { .. } => StoreErrorKind::Corrupt.code(),
+            _ => kind_code(self.kind(), None),
+        }
+    }
+}
+
+impl ErrorCode for crate::ai_provider_store::AiProviderStoreError {
+    fn code(&self) -> &'static str {
+        use crate::ai_provider_store::AiProviderStoreError as E;
+        let domain = match self {
+            E::NotFound(_) => Some("AI_PROVIDER_NOT_FOUND"),
+            E::ActiveProviderDeletionForbidden(_) => Some("AI_PROVIDER_ACTIVE_DELETION_FORBIDDEN"),
+            _ => None,
+        };
+        kind_code(self.kind(), domain)
+    }
+}
+
+impl ErrorCode for crate::policy_store::PolicyStoreError {
+    fn code(&self) -> &'static str {
+        use crate::policy_store::PolicyStoreError as E;
+        let domain = match self {
+            E::NotFound(_) => Some("POLICY_RULE_NOT_FOUND"),
+            E::InvalidPattern(_) => Some(FILTER_RULE_PATTERN_INVALID),
+            _ => None,
+        };
+        kind_code(self.kind(), domain)
+    }
+}
+
+impl ErrorCode for crate::ledger_store::LedgerStoreError {
+    fn code(&self) -> &'static str {
+        use crate::ledger_store::LedgerStoreError as E;
+        match self {
+            E::CorruptContent { .. } => StoreErrorKind::Corrupt.code(),
+            _ => kind_code(self.kind(), None),
+        }
+    }
+}
+
+impl ErrorCode for crate::backup_store::BackupStoreError {
+    fn code(&self) -> &'static str {
+        use crate::backup_store::BackupStoreError as E;
+        match self {
+            E::Database(_) => StoreErrorKind::Io.code(),
+            E::Data(_) => StoreErrorKind::Corrupt.code(),
+        }
+    }
+}
+
+impl ErrorCode for crate::prompt_history_store::PromptHistoryStoreError {
+    fn code(&self) -> &'static str {
+        kind_code(self.kind(), None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
