@@ -97,11 +97,14 @@ pub enum AiProviderStoreError {
     /// s. Aufgabenstellung).
     ActiveProviderDeletionForbidden(ProviderId),
     Backend(String),
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for AiProviderStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            AiProviderStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             AiProviderStoreError::NotFound(id) => {
                 write!(f, "AI-Provider-Konfiguration '{}' nicht gefunden", id.0)
             }
@@ -119,7 +122,7 @@ impl std::fmt::Display for AiProviderStoreError {
 impl std::error::Error for AiProviderStoreError {}
 
 fn backend_err(e: sqlx::Error) -> AiProviderStoreError {
-    AiProviderStoreError::Backend(e.to_string())
+    AiProviderStoreError::Database(e.into())
 }
 
 fn parse_uuid(raw: &str) -> Result<uuid::Uuid, AiProviderStoreError> {
@@ -701,5 +704,18 @@ mod tests {
         let result = store.get(&ProviderId::new()).await;
 
         assert!(matches!(result, Err(AiProviderStoreError::NotFound(_))));
+    }
+
+    /// Issue #885: a duplicate primary key keeps its kind.
+    #[tokio::test]
+    async fn test_constraint_failure_keeps_its_kind() {
+        let store = in_memory_ai_provider_store().await;
+        let config = make_config("Dup");
+        store.create(&config).await.unwrap();
+        let err = store.create(&config).await.unwrap_err();
+        assert_eq!(
+            err.kind(),
+            Some(crate::error_kind::StoreErrorKind::Constraint)
+        );
     }
 }

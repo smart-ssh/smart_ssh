@@ -35,11 +35,14 @@ const MAX_ENTRIES_PER_SERVER: i64 = 200;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptHistoryStoreError {
     Backend(String),
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for PromptHistoryStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PromptHistoryStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             PromptHistoryStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
         }
     }
@@ -48,7 +51,7 @@ impl std::fmt::Display for PromptHistoryStoreError {
 impl std::error::Error for PromptHistoryStoreError {}
 
 fn backend_err(e: sqlx::Error) -> PromptHistoryStoreError {
-    PromptHistoryStoreError::Backend(e.to_string())
+    PromptHistoryStoreError::Database(e.into())
 }
 
 /// S. Moduldoc — teilt sich den Pool mit [`crate::SqliteProfileStore`],
@@ -389,7 +392,21 @@ mod tests {
 
         assert!(matches!(
             history_store.list(&server_id).await,
-            Err(PromptHistoryStoreError::Backend(_))
+            Err(PromptHistoryStoreError::Database(_))
         ));
+    }
+
+    /// Issue #885: a foreign-key violation keeps its kind.
+    #[tokio::test]
+    async fn test_constraint_failure_keeps_its_kind() {
+        let (_profile_store, history_store) = in_memory_prompt_history_store().await;
+        let err = history_store
+            .record(&ServerId::new(), "ls")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.kind(),
+            Some(crate::error_kind::StoreErrorKind::Constraint)
+        );
     }
 }

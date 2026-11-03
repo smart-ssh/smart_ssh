@@ -26,6 +26,38 @@ pub enum ProfileError {
     /// konkrete Store-Implementierung wandelt ihre eigenen Fehler über
     /// `.to_string()` in diese Variante um.
     Backend(String),
+    /// A database failure whose machine-readable kind survived (issue #885):
+    /// the command layer maps `kind` to a stable error code. `message` is the
+    /// library text as before — never bound values.
+    Store {
+        kind: StoreErrorKind,
+        message: String,
+    },
+}
+
+/// Coarse, machine-readable class of a persistence failure (issue #885).
+/// Defined here because [`ProfileError`] carries it; `persistence-sqlite`
+/// re-exports it and owns the classifier for `sqlx` errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StoreErrorKind {
+    NotFound,
+    Constraint,
+    Busy,
+    Corrupt,
+    Io,
+    Other,
+}
+
+impl ProfileError {
+    /// The kind of a database failure; `None` for the domain variants and the
+    /// domain variants (`ServerNotFound`, ...); a plain-string `Backend` is `Other`.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        match self {
+            ProfileError::Store { kind, .. } => Some(*kind),
+            ProfileError::Backend(_) => Some(StoreErrorKind::Other),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ProfileError {
@@ -37,6 +69,9 @@ impl fmt::Display for ProfileError {
                 write!(f, "zyklische Gruppen-Elternkette erkannt")
             }
             ProfileError::Backend(msg) => write!(f, "Profile-Store-Backend-Fehler: {msg}"),
+            ProfileError::Store { message, .. } => {
+                write!(f, "Profile-Store-Backend-Fehler: {message}")
+            }
         }
     }
 }

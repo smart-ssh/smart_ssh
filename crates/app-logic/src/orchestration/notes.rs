@@ -239,7 +239,7 @@ pub(crate) async fn execute_note_update(
                 session,
                 emitter,
                 session_id,
-                format!("Notiz konnte nicht aktualisiert werden: {err}"),
+                format!("Notiz konnte nicht aktualisiert werden: {}", err.message),
                 None,
                 persist,
             )
@@ -269,13 +269,13 @@ async fn persist_note_revision(
     target: NoteTarget,
     new_content: String,
     editor: NoteEditor,
-) -> Result<String, String> {
+) -> Result<String, crate::error::CommandError> {
     let revision = ssh_manager_core::profiles::record_revision(target, new_content, editor);
     profile_store
         .record_note_revision(&revision)
         .await
         .map(|()| note_update_summary(target))
-        .map_err(|err| err.to_string())
+        .map_err(crate::error::store_command_error)
 }
 
 /// Spec 0012, Abschnitt 2/3: `GenerateDocument` erzeugt reinen lokalen
@@ -1372,7 +1372,7 @@ impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
             },
         )
         .await
-        .map(|_summary| ())
+        .map_or_else(|err| Err(err.message), |_summary| Ok(()))
     }
 }
 

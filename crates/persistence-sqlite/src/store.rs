@@ -489,7 +489,7 @@ impl SqliteProfileStore {
             .bind(server_id)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| ProfileError::Backend(e.to_string()))?;
+            .map_err(backend_err)?;
         Ok(rows
             .into_iter()
             .map(|row| row.get::<String, _>("tag"))
@@ -600,7 +600,10 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
 }
 
 fn backend_err(e: sqlx::Error) -> ProfileError {
-    ProfileError::Backend(e.to_string())
+    ProfileError::Store {
+        kind: crate::error_kind::classify(&e),
+        message: e.to_string(),
+    }
 }
 
 #[async_trait]
