@@ -125,7 +125,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::openai_compatible::RawEvent;
+    use crate::common::max_tokens_retry::RawEvent;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 

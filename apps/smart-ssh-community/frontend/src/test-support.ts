@@ -7,3 +7,4 @@ export {
   listComposerDropHandlers,
   resetComposerRegistryForTests,
 } from "./extensions/registry";
+export { resetTiersForTests } from "./extensions/tiers";
