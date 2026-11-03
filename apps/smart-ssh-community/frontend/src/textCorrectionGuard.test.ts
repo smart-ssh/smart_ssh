@@ -57,7 +57,7 @@ describe("text correction guard (issue #217)", () => {
       fs
         .readdirSync(path.join(COMPONENTS_DIR, dir))
         .filter((f) => f.endsWith(".tsx") && !f.includes(".test."))
-        .map((f) => path.join(dir, f)),
+        .map((f) => (dir === "." ? f : `${dir}/${f}`)),
     );
     const found = files.flatMap((f) =>
       violations(f, fs.readFileSync(path.join(COMPONENTS_DIR, f), "utf8")),
