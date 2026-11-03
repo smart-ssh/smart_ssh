@@ -41,7 +41,7 @@ pub struct PendingImport {
     pub plan: ssh_manager_core::profiles::ssh_config::ImportPlan,
 }
 
-pub type SessionId = Uuid;
+pub use crate::ids::SessionId;
 /// Kennung eines einzelnen `chat-action-proposed`-Vorschlags innerhalb
 /// einer Session — global eindeutig (nicht nur pro Session), damit
 /// `AppState.pending_action_confirmations` eine flache Map bleiben kann statt

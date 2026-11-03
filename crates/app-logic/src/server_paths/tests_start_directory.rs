@@ -1,6 +1,7 @@
-//! Tests for `dto` (start directory input).
+//! Tests for `server_paths` (start directory input).
 
-use super::{normalize_start_directory_input, ServerDto, ServerInput};
+use super::normalize_start_directory_input;
+use crate::dto::{ServerDto, ServerInput};
 
 #[test]
 fn rejected_paths_are_sanitised_in_error_messages() {

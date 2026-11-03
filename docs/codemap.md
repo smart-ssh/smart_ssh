@@ -88,7 +88,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Database migrations | `crates/persistence-sqlite/migrations/` (`NNNN_name.sql`, consecutive); applied in `crates/persistence-sqlite/src/store.rs` |
 | Locale files | `apps/smart-ssh-community/frontend/src/locales/` (one folder per language); parity test `apps/smart-ssh-community/frontend/src/locales/localeKeyParity.test.ts` |
 | Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/events.ts` |
-| DTOs sent to the frontend | `crates/app-logic/src/dto.rs` — `ServerDto`; TS side `apps/smart-ssh-community/frontend/src/types.ts` |
+| DTOs sent to the frontend | `crates/app-logic/src/dto/` (by domain, e.g. `server.rs` — `ServerDto`); TS side `apps/smart-ssh-community/frontend/src/types.ts` |
 | Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session` |
 | In-memory stores for tests | `crates/app-logic/src/test_support.rs` — `InMemoryProfileStore`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
