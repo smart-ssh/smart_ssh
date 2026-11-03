@@ -1,40 +1,26 @@
 // Issue #325, Spec 0106: live output of a running command in the chat —
 // appears inside the command's block while it runs, stdout and stderr
 // apart, and is replaced by the final result without duplicated output.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { onChatActionOutput, onChatActionProposed, onChatActionResult } from "../events";
+import {
+  onChatActionOutput,
+  onChatActionProposed,
+  onChatActionResult,
+} from "../events";
 import type {
   ChatActionOutputEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
 } from "../types";
 import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock(),
+);
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -66,11 +52,14 @@ vi.mock("../events", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
 }));
 
 function handlerOf<T>(listener: unknown): (event: T) => void {
-  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock.calls;
+  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock
+    .calls;
   return calls[calls.length - 1][0];
 }
 
@@ -78,7 +67,9 @@ function proposed(sessionId = "session-1"): ChatActionProposedEvent {
   return {
     sessionId,
     actionId: "action-1",
-    action: { SuggestCommand: { command: "for i in 1 2 3; do echo $i; sleep 1; done" } },
+    action: {
+      SuggestCommand: { command: "for i in 1 2 3; do echo $i; sleep 1; done" },
+    },
     decision: "AutoExec",
     previousNoteContent: null,
     usesStoredSudoPassword: false,
@@ -100,13 +91,11 @@ function output(
 }
 
 async function renderRunningCommand() {
-  render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
+  renderChatPanel();
   await waitFor(() => expect(onChatActionOutput).toHaveBeenCalled());
-  act(() => handlerOf<ChatActionProposedEvent>(onChatActionProposed)(proposed()));
+  act(() =>
+    handlerOf<ChatActionProposedEvent>(onChatActionProposed)(proposed()),
+  );
 }
 
 describe("ChatPanel live command output (issue #325)", () => {
@@ -127,7 +116,11 @@ describe("ChatPanel live command output (issue #325)", () => {
 
   it("shows stderr apart from stdout, in the stderr colour", async () => {
     await renderRunningCommand();
-    act(() => handlerOf<ChatActionOutputEvent>(onChatActionOutput)(output("ok\n", "warn\n")));
+    act(() =>
+      handlerOf<ChatActionOutputEvent>(onChatActionOutput)(
+        output("ok\n", "warn\n"),
+      ),
+    );
 
     const live = await screen.findByTestId("live-command-output");
     const stderr = within(live).getByText("warn");
@@ -137,10 +130,16 @@ describe("ChatPanel live command output (issue #325)", () => {
 
   it("shows the size-limit notice in the live view", async () => {
     await renderRunningCommand();
-    act(() => handlerOf<ChatActionOutputEvent>(onChatActionOutput)(output("a\n", "", true)));
+    act(() =>
+      handlerOf<ChatActionOutputEvent>(onChatActionOutput)(
+        output("a\n", "", true),
+      ),
+    );
 
     expect(
-      await screen.findByText(testI18n.t("actionCard.liveOutputTruncatedNotice")),
+      await screen.findByText(
+        testI18n.t("actionCard.liveOutputTruncatedNotice"),
+      ),
     ).toBeInTheDocument();
   });
 
@@ -157,8 +156,14 @@ describe("ChatPanel live command output (issue #325)", () => {
 
   it("replaces the live view with the final result, without duplicated output", async () => {
     await renderRunningCommand();
-    act(() => handlerOf<ChatActionOutputEvent>(onChatActionOutput)(output("line one\n")));
-    expect(await screen.findByTestId("live-command-output")).toBeInTheDocument();
+    act(() =>
+      handlerOf<ChatActionOutputEvent>(onChatActionOutput)(
+        output("line one\n"),
+      ),
+    );
+    expect(
+      await screen.findByTestId("live-command-output"),
+    ).toBeInTheDocument();
 
     const result: ChatActionResultEvent = {
       sessionId: "session-1",
@@ -176,7 +181,9 @@ describe("ChatPanel live command output (issue #325)", () => {
     act(() => handlerOf<ChatActionResultEvent>(onChatActionResult)(result));
 
     await waitFor(() =>
-      expect(screen.queryByTestId("live-command-output")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByTestId("live-command-output"),
+      ).not.toBeInTheDocument(),
     );
     expect(screen.getAllByText(/line one/)).toHaveLength(1);
   });

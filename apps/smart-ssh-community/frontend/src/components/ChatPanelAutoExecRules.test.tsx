@@ -5,16 +5,18 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import { subscribeRequestOpenFilterRule } from "../navigationBus";
-import type { AutoExecRule, RuleDto } from "../types";
+import type { AutoExecRule, RuleDto, ServerDto } from "../types";
 import { ChatItemView, type ChatItem } from "./ChatPanel";
 
 const listRulesMock = vi.fn<() => Promise<RuleDto[]>>();
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
-  listRules: () => listRulesMock(),
-  listServers: () => Promise.resolve([{ id: "srv-1", name: "prod-1" }]),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listRules: () => listRulesMock(),
+    listServers: () =>
+      Promise.resolve([{ id: "srv-1", name: "prod-1" } as ServerDto]),
+  }),
+);
 
 function rule(id: string): RuleDto {
   return {
@@ -36,7 +38,9 @@ const globalRule: AutoExecRule = {
   segmentIndices: [0],
 };
 
-function item(overrides: Partial<Extract<ChatItem, { type: "action" }>>): ChatItem {
+function item(
+  overrides: Partial<Extract<ChatItem, { type: "action" }>>,
+): ChatItem {
   return {
     type: "action",
     id: "item-1",
@@ -97,8 +101,18 @@ describe("auto-exec rule line (issue #696)", () => {
       item({
         autoExecRules: [
           globalRule,
-          { ...globalRule, ruleId: "r2", patternValue: "ls *", scope: { Server: "srv-1" } },
-          { ...globalRule, ruleId: "r3", patternValue: "df *", scope: { Tag: "web" } },
+          {
+            ...globalRule,
+            ruleId: "r2",
+            patternValue: "ls *",
+            scope: { Server: "srv-1" },
+          },
+          {
+            ...globalRule,
+            ruleId: "r3",
+            patternValue: "df *",
+            scope: { Tag: "web" },
+          },
         ],
       }),
     );
@@ -112,11 +126,18 @@ describe("auto-exec rule line (issue #696)", () => {
     // waiting for it proves the "gone" rule was checked against the loaded list.
     renderItem(
       item({
-        autoExecRules: [{ ...globalRule, ruleId: "gone" }, { ...globalRule, ruleId: "r1", patternValue: "ls *" }],
+        autoExecRules: [
+          { ...globalRule, ruleId: "gone" },
+          { ...globalRule, ruleId: "r1", patternValue: "ls *" },
+        ],
       }),
     );
-    expect(await screen.findByRole("button", { name: "ls *" })).toBeInTheDocument();
-    expect(screen.getAllByText("uptime").some((el) => el.tagName === "SPAN")).toBe(true);
+    expect(
+      await screen.findByRole("button", { name: "ls *" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("uptime").some((el) => el.tagName === "SPAN"),
+    ).toBe(true);
     expect(screen.queryByRole("button", { name: "uptime" })).toBeNull();
   });
 
@@ -130,7 +151,10 @@ describe("auto-exec rule line (issue #696)", () => {
     expect(screen.queryByText(/Automatisch ausgeführt/)).toBeNull();
     unmount();
     renderItem(
-      item({ decision: { Deny: { reason: "r", code: "FILTER_HARD_BLACKLIST" } }, autoExecRules: [globalRule] }),
+      item({
+        decision: { Deny: { reason: "r", code: "FILTER_HARD_BLACKLIST" } },
+        autoExecRules: [globalRule],
+      }),
     );
     expect(screen.queryByText(/Automatisch ausgeführt/)).toBeNull();
   });

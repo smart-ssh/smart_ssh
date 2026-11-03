@@ -640,7 +640,9 @@ pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<
     // potenziell noch, nachdem `disconnect()` selbst längst zurückgekehrt
     // ist (wartet auf eine KI-Antwort plus ggf. auf die Nutzerbestätigung).
     let app_for_suggestion = app.clone();
-    tokio::spawn(async move {
+    // Issue #879: app scope, not session scope — outlives the session, but a
+    // pending confirmation is dropped (rejected) when the app exits.
+    crate::background_tasks::app_scope(&app).spawn("on-disconnect-suggestions", async move {
         let state = app_for_suggestion.state::<AppState>();
         // Spec 0034, Abschnitt 7: läuft vor dem Notiz-Vorschlag im selben
         // Hintergrund-Task (sequentiell, keine zweite parallele

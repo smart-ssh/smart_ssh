@@ -4,11 +4,16 @@
 // bewusst nur `ChatItemView` isoliert (kein API-Mocking nötig), das
 // Eingabefeld lebt aber in `ChatPanel` selbst, das für einen sinnvollen
 // Render deutlich mehr Abhängigkeiten mocken muss.
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendChatMessage } from "../api";
-import { testI18n } from "../testI18n";
+import { renderChatPanel } from "../test/renderChatPanel";
 import {
   cancelSpeechModelDownload,
   cancelVoiceRecording,
@@ -19,45 +24,19 @@ import {
   stopVoiceRecording,
 } from "../voiceApi";
 import { loadVoiceInputEnabled } from "../voiceInputSettings";
-import { ChatPanel } from "./ChatPanel";
 
 // jsdom implementiert `Element.scrollTo` nicht — `ChatPanel`s
 // Auto-Scroll-Effekt (unabhängig von dieser Spec) ruft es bei jeder
 // `items`-Änderung auf.
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) => (err as { code?: string } | null)?.code ?? null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
-  ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+  });
+});
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -89,27 +68,26 @@ vi.mock("../events", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
 }));
 
-function renderChatPanel() {
-  return render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
-}
-
 const statusListeners: Array<(ev: unknown) => void> = [];
-const partialListeners: Array<(ev: { text: string; revision: number }) => void> = [];
-const emitStatus = (ev: unknown) => act(() => statusListeners.forEach((h) => h(ev)));
+const partialListeners: Array<
+  (ev: { text: string; revision: number }) => void
+> = [];
+const emitStatus = (ev: unknown) =>
+  act(() => statusListeners.forEach((h) => h(ev)));
 const emitPartial = (text: string, revision: number) =>
   act(() => partialListeners.forEach((h) => h({ text, revision })));
 
 vi.mock("../voiceApi", async (importActual) => ({
   ...(await importActual<typeof import("../voiceApi")>()),
   getSelectedSpeechModel: vi.fn(() => Promise.resolve("base")),
-  getSpeechModelStatus: vi.fn(() => Promise.resolve({ model: "base", state: "ready" })),
+  getSpeechModelStatus: vi.fn(() =>
+    Promise.resolve({ model: "base", state: "ready" }),
+  ),
   startSpeechModelDownload: vi.fn(() => Promise.resolve()),
   cancelSpeechModelDownload: vi.fn(() => Promise.resolve()),
   startVoiceRecording: vi.fn(() => Promise.resolve()),
@@ -120,10 +98,12 @@ vi.mock("../voiceApi", async (importActual) => ({
     return Promise.resolve(() => {});
   }),
   onSpeechRecordingState: vi.fn(() => Promise.resolve(() => {})),
-  onSpeechPartialText: vi.fn((h: (ev: { text: string; revision: number }) => void) => {
-    partialListeners.push(h);
-    return Promise.resolve(() => {});
-  }),
+  onSpeechPartialText: vi.fn(
+    (h: (ev: { text: string; revision: number }) => void) => {
+      partialListeners.push(h);
+      return Promise.resolve(() => {});
+    },
+  ),
 }));
 
 vi.mock("../voiceInputSettings", async (importActual) => ({
@@ -140,7 +120,10 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     statusListeners.length = 0;
     partialListeners.length = 0;
     vi.mocked(stopVoiceRecording).mockResolvedValue("hallo welt");
-    vi.mocked(getSpeechModelStatus).mockResolvedValue({ model: "base", state: "ready" } as never);
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "ready",
+    } as never);
     vi.mocked(loadVoiceInputEnabled).mockResolvedValue(true);
   });
 
@@ -148,7 +131,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     renderChatPanel();
     const field = await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
-    fireEvent.click(await screen.findByRole("button", { name: /Aufnahme beenden/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Aufnahme beenden/ }),
+    );
     await waitFor(() => expect(field).toHaveValue("hallo welt"));
     expect(sendChatMessage).not.toHaveBeenCalled();
   });
@@ -158,7 +143,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     const field = await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.change(field, { target: { value: "ls und" } });
     fireEvent.click(await screen.findByRole("button", { name: START }));
-    fireEvent.click(await screen.findByRole("button", { name: /Aufnahme beenden/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Aufnahme beenden/ }),
+    );
     await waitFor(() => expect(field).toHaveValue("ls und hallo welt"));
     expect(sendChatMessage).not.toHaveBeenCalled();
   });
@@ -172,7 +159,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(cancelVoiceRecording).toHaveBeenCalled());
     expect(stopVoiceRecording).not.toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: START })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: START }),
+    ).toBeInTheDocument();
     expect(field).toHaveValue("entwurf");
   });
 
@@ -181,15 +170,28 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     const field = await screen.findByPlaceholderText(PLACEHOLDER);
     await screen.findByRole("button", { name: START });
     field.focus();
-    fireEvent.keyDown(field, { key: "M", code: "KeyM", ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(field, {
+      key: "M",
+      code: "KeyM",
+      ctrlKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => expect(startVoiceRecording).toHaveBeenCalledTimes(1));
     await screen.findByRole("button", { name: /Aufnahme beenden/ });
-    fireEvent.keyDown(field, { key: "M", code: "KeyM", ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(field, {
+      key: "M",
+      code: "KeyM",
+      ctrlKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => expect(stopVoiceRecording).toHaveBeenCalledTimes(1));
   });
 
   it("without a model the first click opens the consent dialog; cancel makes no download", async () => {
-    vi.mocked(getSpeechModelStatus).mockResolvedValue({ model: "base", state: "not_downloaded" } as never);
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "not_downloaded",
+    } as never);
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
@@ -205,15 +207,27 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
   });
 
   it("confirming downloads the model and starts recording only once it is ready", async () => {
-    vi.mocked(getSpeechModelStatus).mockResolvedValue({ model: "base", state: "not_downloaded" } as never);
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "not_downloaded",
+    } as never);
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
-    fireEvent.click(await screen.findByRole("button", { name: "Herunterladen" }));
-    await waitFor(() => expect(startSpeechModelDownload).toHaveBeenCalledWith("base"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Herunterladen" }),
+    );
+    await waitFor(() =>
+      expect(startSpeechModelDownload).toHaveBeenCalledWith("base"),
+    );
     expect(startVoiceRecording).not.toHaveBeenCalled();
     await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
-    await emitStatus({ model: "base", state: "downloading", done: 5, total: 10 });
+    await emitStatus({
+      model: "base",
+      state: "downloading",
+      done: 5,
+      total: 10,
+    });
     await screen.findByRole("progressbar");
     await emitStatus({ model: "base", state: "ready" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -221,21 +235,35 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
   });
 
   it("cancelling during the download cancels it and does not record", async () => {
-    vi.mocked(getSpeechModelStatus).mockResolvedValue({ model: "base", state: "not_downloaded" } as never);
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "not_downloaded",
+    } as never);
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
-    fireEvent.click(await screen.findByRole("button", { name: "Herunterladen" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Herunterladen" }),
+    );
     await waitFor(() => expect(startSpeechModelDownload).toHaveBeenCalled());
     // The download button disappears once the dialog switched to its progress state.
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Herunterladen" })).toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Herunterladen" }),
+      ).toBeNull(),
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Abbrechen" }));
-    await waitFor(() => expect(cancelSpeechModelDownload).toHaveBeenCalledWith("base"));
+    await waitFor(() =>
+      expect(cancelSpeechModelDownload).toHaveBeenCalledWith("base"),
+    );
     expect(startVoiceRecording).not.toHaveBeenCalled();
   });
 
   it("shows the translated message for a backend error and returns to idle", async () => {
-    vi.mocked(startVoiceRecording).mockRejectedValueOnce({ code: "speech_permission_denied", message: "x" });
+    vi.mocked(startVoiceRecording).mockRejectedValueOnce({
+      code: "speech_permission_denied",
+      message: "x",
+    });
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
@@ -247,7 +275,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     vi.mocked(loadVoiceInputEnabled).mockResolvedValue(false);
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
-    await waitFor(() => expect(screen.queryByRole("button", { name: START })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: START })).toBeNull(),
+    );
     expect(loadVoiceInputEnabled).toHaveBeenCalled();
   });
 
@@ -282,7 +312,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
       await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
       expect(field).not.toHaveAttribute("data-provisional");
       await waitFor(() => expect(field).toHaveFocus());
-      expect((field as HTMLTextAreaElement).selectionStart).toBe("ls und hallo welt".length);
+      expect((field as HTMLTextAreaElement).selectionStart).toBe(
+        "ls und hallo welt".length,
+      );
       expect(sendChatMessage).not.toHaveBeenCalled();
     });
 
@@ -296,7 +328,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     });
 
     it("a failed final pass keeps the provisional text and shows the error", async () => {
-      vi.mocked(stopVoiceRecording).mockRejectedValue({ code: "speech_transcription_failed" });
+      vi.mocked(stopVoiceRecording).mockRejectedValue({
+        code: "speech_transcription_failed",
+      });
       const field = await startWith("a");
       await emitPartial("b", 1);
       fireEvent.click(screen.getByRole("button", { name: STOP }));
