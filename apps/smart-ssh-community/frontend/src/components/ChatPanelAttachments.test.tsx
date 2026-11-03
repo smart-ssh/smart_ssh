@@ -1,13 +1,6 @@
 // Issue #471 (Spec 0038, Spec 0110): Composer-Erweiterungspunkt, Anhang-Chips,
 // Drop-Routing und Anhänge im fortgesetzten Verlauf.
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChatHistory, sendChatMessage } from "../api";
 import {
@@ -16,12 +9,9 @@ import {
   unregisterComposerDropHandler,
   resetComposerRegistryForTests,
 } from "../extensions/registry";
-import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
 const dragState = vi.hoisted(() => ({
   handler: null as null | ((e: unknown) => void),
@@ -39,36 +29,13 @@ vi.mock("@tauri-apps/api/webview", () => ({
   }),
 }));
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
-  ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+  });
+});
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -104,18 +71,6 @@ vi.mock("../riskSettings", () => ({
     Promise.resolve({ enabled: false, providerId: null }),
   ),
 }));
-
-function renderChatPanel() {
-  return render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel
-        sessionId="session-1"
-        serverId="server-1"
-        onActionSettled={vi.fn()}
-      />
-    </I18nextProvider>,
-  );
-}
 
 function registerTestAction() {
   registerComposerAction({
@@ -168,12 +123,21 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     const Broken = (): never => {
       throw new Error("broken icon");
     };
-    registerComposerAction({ id: "bad", label: "Bad action", icon: <Broken />, onInvoke: vi.fn() });
+    registerComposerAction({
+      id: "bad",
+      label: "Bad action",
+      icon: <Broken />,
+      onInvoke: vi.fn(),
+    });
     registerTestAction();
     renderChatPanel();
-    expect(await screen.findByRole("button", { name: "Attach file" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Attach file" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bad action" })).toBeNull();
-    expect(spy.mock.calls.some((c) => String(c[0]).includes("composer-action:bad"))).toBe(true);
+    expect(
+      spy.mock.calls.some((c) => String(c[0]).includes("composer-action:bad")),
+    ).toBe(true);
     spy.mockRestore();
   });
 
@@ -185,7 +149,9 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     expect(screen.getByText(/key\.pem/)).toBeInTheDocument();
     // Only the chip with `unredactedHint` shows the hint.
     expect(screen.getAllByText("unredigiert gesendet")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "notes.txt entfernen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "notes.txt entfernen" }),
+    );
     expect(screen.queryByText(/notes\.txt/)).not.toBeInTheDocument();
     expect(screen.getByText(/key\.pem/)).toBeInTheDocument();
   });
@@ -229,10 +195,7 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Senden" }));
     await waitFor(() =>
-      expect(sendChatMessage).toHaveBeenCalledWith(
-        "session-1",
-        "hi",
-      ),
+      expect(sendChatMessage).toHaveBeenCalledWith("session-1", "hi"),
     );
   });
 
@@ -301,13 +264,18 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
 
   describe("drop zone by pointer position", () => {
     function prepare() {
-      const area = document.querySelector(".flex.h-full.flex-col") as HTMLElement;
+      const area = document.querySelector(
+        ".flex.h-full.flex-col",
+      ) as HTMLElement;
       area.getBoundingClientRect = () =>
         ({ left: 0, right: 100, top: 0, bottom: 100 }) as DOMRect;
       Object.defineProperty(area, "offsetParent", { get: () => document.body });
     }
     afterEach(() => {
-      Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: 1,
+        configurable: true,
+      });
     });
 
     it("highlights only while a handler is registered and the pointer is over the chat", async () => {
@@ -315,15 +283,35 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
       renderChatPanel();
       await waitFor(() => expect(dragState.handler).not.toBeNull());
       prepare();
-      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "over", position: { x: 10, y: 10 } },
+        }),
+      );
       expect(screen.getByTestId("chat-drop-highlight")).toBeInTheDocument();
-      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 500, y: 500 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "over", position: { x: 500, y: 500 } },
+        }),
+      );
       expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
-      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "over", position: { x: 10, y: 10 } },
+        }),
+      );
       act(() => dragState.handler?.({ payload: { type: "leave" } }));
       expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
-      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
-      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 10, y: 10 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "over", position: { x: 10, y: 10 } },
+        }),
+      );
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "drop", position: { x: 10, y: 10 } },
+        }),
+      );
       expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
     });
 
@@ -341,7 +329,11 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
       await waitFor(() => expect(dragState.handler).not.toBeNull());
       prepare();
       const before = dragState.handler;
-      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "over", position: { x: 10, y: 10 } },
+        }),
+      );
       expect(screen.getByTestId("chat-drop-highlight")).toBeInTheDocument();
       act(() => unregisterComposerDropHandler("unknown"));
       expect(dragState.handler).toBe(before);
@@ -352,15 +344,26 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     });
 
     it("converts positions with devicePixelRatio", async () => {
-      Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: 2,
+        configurable: true,
+      });
       const handler = vi.fn();
       registerComposerDropHandler("test-drop", handler);
       renderChatPanel();
       await waitFor(() => expect(dragState.handler).not.toBeNull());
       prepare();
-      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 150, y: 150 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "drop", position: { x: 150, y: 150 } },
+        }),
+      );
       expect(handler).toHaveBeenCalledTimes(1);
-      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 250, y: 250 } } }));
+      act(() =>
+        dragState.handler?.({
+          payload: { type: "drop", position: { x: 250, y: 250 } },
+        }),
+      );
       expect(handler).toHaveBeenCalledTimes(1);
     });
   });

@@ -4,8 +4,7 @@
 // bewusst nur `ChatItemView` isoliert (kein API-Mocking nötig), das
 // Eingabefeld lebt aber in `ChatPanel` selbst, das für einen sinnvollen
 // Render deutlich mehr Abhängigkeiten mocken muss.
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   continueTruncatedResponse,
@@ -32,47 +31,20 @@ import type {
   ChatActionProposedEvent,
   ChatWebActivityEvent,
 } from "../types";
-import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
 // jsdom implementiert `Element.scrollTo` nicht — `ChatPanel`s
 // Auto-Scroll-Effekt (unabhängig von dieser Spec) ruft es bei jeder
 // `items`-Änderung auf.
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
-  ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+  });
+});
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -104,16 +76,10 @@ vi.mock("../events", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
 }));
-
-function renderChatPanel() {
-  return render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
-}
 
 describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
   beforeEach(() => {
@@ -122,24 +88,32 @@ describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
 
   it("renders a textarea (not a single-line input) for the composer", async () => {
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
     expect(field.tagName).toBe("TEXTAREA");
   });
 
   it("Enter sends the message and clears the draft", async () => {
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
 
     fireEvent.change(field, { target: { value: "hallo" } });
     fireEvent.keyDown(field, { key: "Enter" });
 
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith("session-1", "hallo"));
+    await waitFor(() =>
+      expect(sendChatMessage).toHaveBeenCalledWith("session-1", "hallo"),
+    );
     expect(field).toHaveValue("");
   });
 
   it("Shift+Enter inserts a newline instead of sending", async () => {
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
 
     fireEvent.change(field, { target: { value: "erste Zeile" } });
     fireEvent.keyDown(field, { key: "Enter", shiftKey: true });
@@ -156,7 +130,9 @@ describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
 
   it("does not send an empty/whitespace-only draft on Enter", async () => {
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
 
     fireEvent.change(field, { target: { value: "   " } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -188,13 +164,17 @@ describe("ChatPanel prompt history after send (Spec 0015, §5, issue #352)", () 
 
   it("makes a prompt sent in the open panel reachable with ArrowUp immediately", async () => {
     let stored: string[] = ["alt"];
-    vi.mocked(listPromptHistory).mockImplementation(() => Promise.resolve([...stored]));
+    vi.mocked(listPromptHistory).mockImplementation(() =>
+      Promise.resolve([...stored]),
+    );
     vi.mocked(sendChatMessage).mockImplementation((_s, text) => {
       stored = [...stored, text];
       return Promise.resolve();
     });
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
     // wait-ok: `field` was found above and stays mounted; the wait only orders the initial history load before typing
     await waitFor(() => expect(listPromptHistory).toHaveBeenCalledTimes(1));
 
@@ -223,7 +203,9 @@ describe("ChatPanel stop (Spec 0066, §1)", () => {
       () => new Promise<void>((resolve) => (resolveSend = resolve)),
     );
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
 
     fireEvent.change(field, { target: { value: "hallo" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -245,7 +227,9 @@ describe("ChatPanel stop (Spec 0066, §1)", () => {
 
     handler!({ sessionId: "session-1" });
 
-    expect(await screen.findByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("⏹ Antwort abgebrochen."),
+    ).toBeInTheDocument();
   });
 });
 
@@ -265,7 +249,9 @@ describe("ChatPanel queued messages (Spec 0066, §2)", () => {
       return Promise.resolve(() => {});
     });
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
 
     fireEvent.change(field, { target: { value: "erste" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -275,13 +261,19 @@ describe("ChatPanel queued messages (Spec 0066, §2)", () => {
     fireEvent.change(field, { target: { value: "Korrektur" } });
     fireEvent.keyDown(field, { key: "Enter" });
 
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Korrektur"));
+    await waitFor(() =>
+      expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Korrektur"),
+    );
     expect(field).toHaveValue("");
-    expect(screen.getByText("⏳ Wird mit der nächsten Anfrage gesendet")).toBeInTheDocument();
+    expect(
+      screen.getByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+    ).toBeInTheDocument();
 
     queuedHandler!({ sessionId: "session-1" });
     await waitFor(() =>
-      expect(screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+      ).not.toBeInTheDocument(),
     );
     resolveFirst();
   });
@@ -298,7 +290,9 @@ describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
       () => new Promise<void>((resolve) => (resolveFirst = resolve)),
     );
     renderChatPanel();
-    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText(
+      "Frage stellen oder Kommando beschreiben …",
+    );
     fireEvent.change(field, { target: { value: "erste" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await screen.findByRole("button", { name: "Stopp" });
@@ -309,14 +303,20 @@ describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
     resolveFirst();
 
     await waitFor(() =>
-      expect(screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+      ).not.toBeInTheDocument(),
     );
-    expect(screen.queryByRole("button", { name: "Stopp" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Stopp" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the Stopp button while a 'Weiter' continuation runs", async () => {
-    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
-    let truncatedHandler: ((event: { sessionId: string }) => void) | null = null;
+    let deltaHandler:
+      ((event: { sessionId: string; delta: string }) => void) | null = null;
+    let truncatedHandler: ((event: { sessionId: string }) => void) | null =
+      null;
     vi.mocked(onChatTextDelta).mockImplementation((h) => {
       deltaHandler = h as typeof deltaHandler;
       return Promise.resolve(() => {});
@@ -336,7 +336,9 @@ describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Weiter" }));
 
-    expect(await screen.findByRole("button", { name: "Stopp" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Stopp" }),
+    ).toBeInTheDocument();
     resolveContinue();
   });
 });
@@ -355,7 +357,8 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
   // einem NEUEN Element, nicht im Hinweis.
   it("shows the empty-response hint and starts a fresh element for a later text delta", async () => {
     let emptyHandler: ((event: { sessionId: string }) => void) | null = null;
-    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    let deltaHandler:
+      ((event: { sessionId: string; delta: string }) => void) | null = null;
     vi.mocked(onChatResponseEmpty).mockImplementation((h) => {
       emptyHandler = h;
       return Promise.resolve(() => {});
@@ -372,7 +375,9 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
     const hintText =
       "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.";
     expect(await screen.findByText(hintText)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Weiter" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Weiter" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Export:")).not.toBeInTheDocument();
 
     deltaHandler!({ sessionId: "session-1", delta: "Neue Antwort" });
@@ -400,7 +405,9 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
         "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/keine Antwort geliefert/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/keine Antwort geliefert/),
+    ).not.toBeInTheDocument();
   });
 
   // T16: `chat-response-truncated` OHNE vorherige Assistant-Nachricht (z. B.
@@ -409,7 +416,8 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
   // der Nutzer sah trotz Kürzung nichts. Jetzt: Kürzungs-Hinweis + „Weiter"
   // sichtbar.
   it("shows the truncation notice with Weiter even when no assistant text preceded it", async () => {
-    let truncatedHandler: ((event: { sessionId: string }) => void) | null = null;
+    let truncatedHandler: ((event: { sessionId: string }) => void) | null =
+      null;
     vi.mocked(onChatResponseTruncated).mockImplementation((h) => {
       truncatedHandler = h;
       return Promise.resolve(() => {});
@@ -420,9 +428,13 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
     truncatedHandler!({ sessionId: "session-1" });
 
     expect(
-      await screen.findByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht)."),
+      await screen.findByText(
+        "✂ Antwort wurde abgeschnitten (Längenlimit erreicht).",
+      ),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Weiter" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Weiter" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -462,8 +474,10 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
   }
 
   it("replaces the auto-exec card with a confirm dialog once the escalation event arrives, and Ausführen responds via respond_to_action", async () => {
-    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
-    let escalatedHandler: ((event: ActionDecisionEscalatedEvent) => void) | null = null;
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null =
+      null;
+    let escalatedHandler:
+      ((event: ActionDecisionEscalatedEvent) => void) | null = null;
     vi.mocked(onChatActionProposed).mockImplementation((h) => {
       proposedHandler = h;
       return Promise.resolve(() => {});
@@ -481,20 +495,27 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
     });
 
     // Noch AutoExec: kein Bestätigungsdialog.
-    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ausführen" }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => expect(escalatedHandler).not.toBeNull());
     act(() => {
       escalatedHandler!({
         sessionId: "session-1",
         actionId: "action-1",
-        reason: "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung",
+        reason:
+          "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung",
         code: "FILTER_RED_RISK_REQUIRES_CONFIRM",
       });
     });
 
-    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ablehnen" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Ausführen" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ablehnen" }),
+    ).toBeInTheDocument();
     // Der feste, übersetzte Text zum Code (Spec 0092, §4 „Anzeige des
     // Grunds"), nicht der rohe `reason`-String aus dem Event.
     expect(
@@ -502,12 +523,16 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
-    expect(respondToAction).toHaveBeenCalledWith("session-1", "action-1", { decision: "approve" });
+    expect(respondToAction).toHaveBeenCalledWith("session-1", "action-1", {
+      decision: "approve",
+    });
   });
 
   it("ignores an escalation event for a different actionId", async () => {
-    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
-    let escalatedHandler: ((event: ActionDecisionEscalatedEvent) => void) | null = null;
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null =
+      null;
+    let escalatedHandler:
+      ((event: ActionDecisionEscalatedEvent) => void) | null = null;
     vi.mocked(onChatActionProposed).mockImplementation((h) => {
       proposedHandler = h;
       return Promise.resolve(() => {});
@@ -533,7 +558,9 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
       });
     });
 
-    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ausführen" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -546,7 +573,8 @@ describe("ChatPanel web activity (Spec 0105)", () => {
 
   it("renders a web activity card from the live event", async () => {
     let webHandler: ((event: ChatWebActivityEvent) => void) | null = null;
-    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    let deltaHandler:
+      ((event: { sessionId: string; delta: string }) => void) | null = null;
     vi.mocked(onChatWebActivity).mockImplementation((h) => {
       webHandler = h;
       return Promise.resolve(() => {});
@@ -565,8 +593,18 @@ describe("ChatPanel web activity (Spec 0105)", () => {
         activity: {
           kind: "search",
           input: "openssh 10 changelog",
-          results: [{ title: "OpenSSH Release Notes", url: "https://www.openssh.com/releasenotes.html" }],
-          cited: [{ title: "OpenSSH Release Notes", url: "https://www.openssh.com/releasenotes.html" }],
+          results: [
+            {
+              title: "OpenSSH Release Notes",
+              url: "https://www.openssh.com/releasenotes.html",
+            },
+          ],
+          cited: [
+            {
+              title: "OpenSSH Release Notes",
+              url: "https://www.openssh.com/releasenotes.html",
+            },
+          ],
           contentTruncated: false,
           errorCode: null,
         },
@@ -586,7 +624,9 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       deltaHandler!({ sessionId: "session-1", delta: "Antwort danach" });
     });
 
-    expect(await screen.findByText(/Websuche: openssh 10 changelog/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Websuche: openssh 10 changelog/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/fremde Suche/)).not.toBeInTheDocument();
     expect(screen.getByText("Antwort vorher")).toBeInTheDocument();
     expect(screen.getByText("Antwort danach")).toBeInTheDocument();
@@ -603,7 +643,8 @@ describe("ChatPanel web research unavailable (issue #169)", () => {
 
   it("shows the notice from the live event, followed by the answer", async () => {
     let noticeHandler: ((event: { sessionId: string }) => void) | null = null;
-    let deltaHandler: ((event: { sessionId: string; delta: string }) => void) | null = null;
+    let deltaHandler:
+      ((event: { sessionId: string; delta: string }) => void) | null = null;
     vi.mocked(onChatWebResearchUnavailable).mockImplementation((h) => {
       noticeHandler = h;
       return Promise.resolve(() => {});
@@ -621,11 +662,14 @@ describe("ChatPanel web research unavailable (issue #169)", () => {
       deltaHandler!({ sessionId: "session-1", delta: "Antwort ohne Web" });
     });
 
-    const notices = screen.getAllByText(/Web-Recherche ist für dieses Provider-Konto nicht verfügbar/);
+    const notices = screen.getAllByText(
+      /Web-Recherche ist für dieses Provider-Konto nicht verfügbar/,
+    );
     expect(notices).toHaveLength(1);
     const answer = screen.getByText("Antwort ohne Web");
     expect(
-      notices[0].compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+      notices[0].compareDocumentPosition(answer) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 });
@@ -641,7 +685,9 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     sessionId: "session-1",
     actionId: "action-1",
     action: { SuggestCommand: { command: "rm -rf /data" } },
-    decision: { Confirm: { reason: "needs confirmation", code: "FILTER_CONFIRM" } },
+    decision: {
+      Confirm: { reason: "needs confirmation", code: "FILTER_CONFIRM" },
+    },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
     previousFileContent: null,
@@ -658,9 +704,14 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
   };
 
   async function renderWithPendingCard() {
-    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null =
+      null;
     let settledHandler:
-      | ((event: { sessionId: string; actionId: string; reason: "reconnect" | "timeout" }) => void)
+      | ((event: {
+          sessionId: string;
+          actionId: string;
+          reason: "reconnect" | "timeout";
+        }) => void)
       | null = null;
     vi.mocked(onChatActionProposed).mockImplementation((h) => {
       proposedHandler = h;
@@ -676,27 +727,49 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     act(() => {
       proposedHandler!(proposed);
     });
-    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Ausführen" }),
+    ).toBeInTheDocument();
     return { settle: settledHandler! };
   }
 
   it("shows the discarded state without buttons after a reconnect", async () => {
     const { settle } = await renderWithPendingCard();
     act(() => {
-      settle({ sessionId: "session-1", actionId: "action-1", reason: "reconnect" });
+      settle({
+        sessionId: "session-1",
+        actionId: "action-1",
+        reason: "reconnect",
+      });
     });
-    expect(await screen.findByText(/Verworfen, nachdem die Verbindung neu aufgebaut/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ablehnen" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        /Verworfen, nachdem die Verbindung neu aufgebaut/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ausführen" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ablehnen" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the expired state without buttons after a timeout", async () => {
     const { settle } = await renderWithPendingCard();
     act(() => {
-      settle({ sessionId: "session-1", actionId: "action-1", reason: "timeout" });
+      settle({
+        sessionId: "session-1",
+        actionId: "action-1",
+        reason: "timeout",
+      });
     });
-    expect(await screen.findByText(/Nicht rechtzeitig beantwortet/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/Nicht rechtzeitig beantwortet/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ausführen" }),
+    ).not.toBeInTheDocument();
   });
 
   it("ignores a settled event for another session", async () => {
@@ -704,7 +777,9 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     act(() => {
       settle({ sessionId: "other", actionId: "action-1", reason: "timeout" });
     });
-    expect(screen.getByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ausführen" }),
+    ).toBeInTheDocument();
   });
 
   it("rolls back to the expired state when the backend does not know the confirmation", async () => {
@@ -714,16 +789,29 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
       code: "ACTION_CONFIRMATION_UNKNOWN",
     });
     fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
-    expect(await screen.findByText(/Diese Anfrage ist nicht mehr offen/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
-    expect(screen.queryByText("läuft", { exact: false })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/Diese Anfrage ist nicht mehr offen/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ausführen" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("läuft", { exact: false }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the request open when the response fails with another error", async () => {
     await renderWithPendingCard();
-    vi.mocked(respondToAction).mockRejectedValueOnce({ message: "boom", code: "OTHER" });
+    vi.mocked(respondToAction).mockRejectedValueOnce({
+      message: "boom",
+      code: "OTHER",
+    });
     fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
-    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
-    expect(screen.queryByText(/Diese Anfrage ist nicht mehr offen/)).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Ausführen" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Diese Anfrage ist nicht mehr offen/),
+    ).not.toBeInTheDocument();
   });
 });

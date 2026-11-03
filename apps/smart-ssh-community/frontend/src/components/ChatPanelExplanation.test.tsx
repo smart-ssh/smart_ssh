@@ -1,14 +1,7 @@
 // Issue #596, Spec 0011: the confirmation card lists which segments existing
 // rules cover, shows a verdict per suggestion, and notices when an accepted
 // rule does not make the command run automatically.
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   acceptAndCreateRule,
@@ -21,34 +14,13 @@ import type {
   ConfirmationExplanationDto,
 } from "../types";
 import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? String((err as { code: unknown }).code)
-      : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() =>
-    Promise.resolve({ segments: [], suggestions: [] }),
-  ),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock(),
+);
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -133,15 +105,7 @@ async function renderCard(
     vi.mocked(explainConfirmation).mockRejectedValue(new Error("boom"));
   else vi.mocked(explainConfirmation).mockResolvedValue(explanation);
   await testI18n.changeLanguage("en");
-  render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel
-        sessionId="session-1"
-        serverId="server-1"
-        onActionSettled={vi.fn()}
-      />
-    </I18nextProvider>,
-  );
+  renderChatPanel();
   await waitFor(() => expect(onChatActionOutput).toHaveBeenCalled());
   const event: ChatActionProposedEvent = {
     sessionId: "session-1",

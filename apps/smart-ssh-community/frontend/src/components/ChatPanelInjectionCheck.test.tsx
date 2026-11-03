@@ -1,7 +1,6 @@
 // Issue #693 (Spec 0039, §5.2): progress and verdict of the injection check
 // under a command result, a file read and a web research card.
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   onChatActionProposed,
@@ -16,30 +15,14 @@ import type {
   ChatWebActivityEvent,
 } from "../types";
 import { testI18n } from "../testI18n";
-import { ChatPanel, splitInjectionReason } from "./ChatPanel";
+import { renderChatPanel } from "../test/renderChatPanel";
+import { splitInjectionReason } from "./ChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock(),
+);
 
 vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
@@ -71,17 +54,22 @@ vi.mock("../events", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
 }));
 
 function handlerOf<T>(listener: unknown): (event: T) => void {
-  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock.calls;
+  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock
+    .calls;
   return calls[calls.length - 1][0];
 }
 
 const SESSION = "session-1";
 
-function proposed(action: ChatActionProposedEvent["action"]): ChatActionProposedEvent {
+function proposed(
+  action: ChatActionProposedEvent["action"],
+): ChatActionProposedEvent {
   return {
     sessionId: SESSION,
     actionId: "action-1",
@@ -97,16 +85,15 @@ function proposed(action: ChatActionProposedEvent["action"]): ChatActionProposed
   };
 }
 
-function check(itemId: string, state: Record<string, unknown>): ChatInjectionCheckEvent {
+function check(
+  itemId: string,
+  state: Record<string, unknown>,
+): ChatInjectionCheckEvent {
   return { sessionId: SESSION, itemId, ...state } as ChatInjectionCheckEvent;
 }
 
 async function renderPanel() {
-  render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId={SESSION} serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
+  renderChatPanel({ sessionId: SESSION });
   await waitFor(() => expect(onChatInjectionCheck).toHaveBeenCalled());
 }
 
@@ -170,9 +157,9 @@ describe.each(["command", "file", "web"] as const)(
       const id = await showItem(kind);
       const emit = handlerOf<ChatInjectionCheckEvent>(onChatInjectionCheck);
       act(() => emit(check(id, { state: "running" })));
-      expect(await screen.findByTestId("injection-check-running")).toHaveTextContent(
-        testI18n.t("chat.injectionChecking"),
-      );
+      expect(
+        await screen.findByTestId("injection-check-running"),
+      ).toHaveTextContent(testI18n.t("chat.injectionChecking"));
       act(() => emit(check(id, { state: "clean" })));
       expect(screen.queryByTestId("injection-check-running")).toBeNull();
       expect(screen.queryByTestId("injection-check-suspected")).toBeNull();
@@ -182,7 +169,14 @@ describe.each(["command", "file", "web"] as const)(
       const id = await showItem(kind);
       const emit = handlerOf<ChatInjectionCheckEvent>(onChatInjectionCheck);
       act(() => emit(check(id, { state: "running" })));
-      act(() => emit(check(id, { state: "suspected", reason: "<b>bold</b> **md** [x](http://e.x)" })));
+      act(() =>
+        emit(
+          check(id, {
+            state: "suspected",
+            reason: "<b>bold</b> **md** [x](http://e.x)",
+          }),
+        ),
+      );
       const box = await screen.findByTestId("injection-check-suspected");
       expect(box).toHaveTextContent(testI18n.t("chat.injectionSuspected"));
       expect(box).toHaveTextContent("<b>bold</b> **md** [x](http://e.x)");
@@ -193,11 +187,13 @@ describe.each(["command", "file", "web"] as const)(
     it("shows the unavailable notice", async () => {
       const id = await showItem(kind);
       act(() =>
-        handlerOf<ChatInjectionCheckEvent>(onChatInjectionCheck)(check(id, { state: "unavailable" })),
+        handlerOf<ChatInjectionCheckEvent>(onChatInjectionCheck)(
+          check(id, { state: "unavailable" }),
+        ),
       );
-      expect(await screen.findByTestId("injection-check-unavailable")).toHaveTextContent(
-        testI18n.t("errors.AI_INJECTION_CHECK_UNAVAILABLE"),
-      );
+      expect(
+        await screen.findByTestId("injection-check-unavailable"),
+      ).toHaveTextContent(testI18n.t("errors.AI_INJECTION_CHECK_UNAVAILABLE"));
     });
 
     it("ignores events of another session", async () => {
@@ -216,13 +212,26 @@ describe.each(["command", "file", "web"] as const)(
 describe("splitInjectionReason (issue #693)", () => {
   it("splits the reason only for the injection code, at the last marker", () => {
     expect(
-      splitInjectionReason("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM", "base\nReason: why"),
+      splitInjectionReason(
+        "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM",
+        "base\nReason: why",
+      ),
     ).toEqual({ text: "base", injectionReason: "why" });
-    expect(splitInjectionReason("FILTER_POST_INGEST_REQUIRES_CONFIRM", "base\nReason: why")).toEqual({
+    expect(
+      splitInjectionReason(
+        "FILTER_POST_INGEST_REQUIRES_CONFIRM",
+        "base\nReason: why",
+      ),
+    ).toEqual({
       text: "base\nReason: why",
       injectionReason: null,
     });
-    expect(splitInjectionReason("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM", "base")).toEqual({
+    expect(
+      splitInjectionReason(
+        "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM",
+        "base",
+      ),
+    ).toEqual({
       text: "base",
       injectionReason: null,
     });
