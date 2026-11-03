@@ -9,14 +9,13 @@ import { TestResultBadge } from "./serverForm/TestResultBadge";
 import { useConnectionTest } from "./serverForm/useConnectionTest";
 import { useIdentityFile } from "./serverForm/useIdentityFile";
 import { useServerDelete } from "./serverForm/useServerDelete";
+import { authStateFromKind, type AuthFormState } from "./serverForm/serverFormModel";
+import { useServerFormModel } from "./serverForm/useServerFormModel";
 import {
-  clearServerSudoPassword,
   commandErrorMessage,
   convertIdentityFileToKeychain,
   createServer,
-  getServer,
   largeNoteDialogThresholdChars,
-  listStoredHostKeys,
   previewEffectiveNotes,
   requestNoteShrink,
   updateLocalServerNotes,
@@ -27,16 +26,11 @@ import { commandErrorText, translateErrorCode } from "../errorCodes";
 import { onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
-import { loadRiskClassifierSettings } from "../riskSettings";
-import { checkStartDirectory } from "../startDirectory";
 import type {
-  AuthMethodInput,
   AuthMethodKind,
   GroupDto,
   PostIngestPolicy,
   ServerDto,
-  ServerInput,
-  StoredHostKeyDto,
 } from "../types";
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
@@ -87,89 +81,6 @@ function authKindLabels(
   };
 }
 
-/** Formular-lokaler Zustand — getrennt von [`AuthMethodInput`], weil
- * Textfelder immer einen String brauchen (nie `null`), auch wenn die
- * Bedeutung "leer = unverändert" (Update) erst beim Absenden entsteht
- * (s. `toAuthMethodInput`). */
-type AuthFormState =
-  // `saved`: der Server hat ein gespeichertes Passwort (Issue #632) — nur
-  // dann bedeutet ein leeres Feld "unverändert" und gibt es "entfernen".
-  | { kind: "password"; value: string; saved: boolean; remove: boolean }
-  | { kind: "privateKey"; keyContent: string; passphrase: string }
-  | { kind: "agent" }
-  | { kind: "certificate"; certContent: string; keyContent: string }
-  | { kind: "identityFile"; path: string; passphrase: string };
-
-function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
-  switch (kind) {
-    case "password":
-      return { kind: "password", value: "", saved: false, remove: false };
-    case "privateKey":
-      return { kind: "privateKey", keyContent: "", passphrase: "" };
-    case "agent":
-      return { kind: "agent" };
-    case "certificate":
-      return { kind: "certificate", certContent: "", keyContent: "" };
-    case "identityFile":
-      return { kind: "identityFile", path: "", passphrase: "" };
-  }
-}
-
-/** Spec 0008, Abschnitt 4: bei `update_server` bedeutet ein leeres
- * Secret-Feld "unverändert lassen" (`null`), bei `create_server` ist es
- * schlicht noch nicht ausgefüllt (leerer String bleibt leerer String —
- * das Backend verlangt dort zwingend einen Wert und lehnt sonst ab). Die
- * Passphrase ist immer optional, auch bei Neuanlage.
- *
- * Spec 0073, A6–A8 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
- * "Verbindung testen" (s. unten) — und dort gilt seither dieselbe Regel.
- * Ein leeres Pflichtfeld bei Neuanlage endet also in beiden Fällen in der
- * Fehlermeldung, nicht in einem Anmeldeversuch mit leerem Secret. Auf
- * Randzeichen muss dieses Formular bei den **Secret-Feldern** deshalb
- * nicht prüfen: Beide Wege trimmen im Kern über denselben Helfer, und
- * zwar bevor sie "leer" entscheiden. Für `identityFile.path` gilt das
- * ausdrücklich **nicht** — der Pfad wird bewusst nicht getrimmt
- * (ADR 0065 §5, s. Kommentar am Zweig unten).
- */
-function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodInput {
-  const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);
-  switch (state.kind) {
-    case "password":
-      // Issue #632: Das Passwort ist optional. "Entfernen" und ein leeres
-      // Feld ohne gespeichertes Passwort sind ausdrücklich "kein Passwort";
-      // "unveränderte" (`null`) gibt es nur bei einem gespeicherten.
-      if (state.remove || (state.value === "" && (isCreate || !state.saved))) {
-        return { kind: "noPassword" };
-      }
-      return { kind: "password", value: orNullIfUpdate(state.value) };
-    case "privateKey":
-      return {
-        kind: "privateKey",
-        keyContent: orNullIfUpdate(state.keyContent),
-        passphrase: state.passphrase === "" ? null : state.passphrase,
-      };
-    case "agent":
-      return { kind: "agent" };
-    case "certificate":
-      return {
-        kind: "certificate",
-        certContent: orNullIfUpdate(state.certContent),
-        keyContent: orNullIfUpdate(state.keyContent),
-      };
-    case "identityFile":
-      // Spec 0076, A-1: der Pfad ist kein Secret und immer voll gesendet —
-      // "leer = unverändert" gilt hier nicht, anders als bei `keyContent`
-      // oben (ADR 0065 §5 begründet, warum der Pfad selbst nicht getrimmt
-      // wird; die Leer-Prüfung übernimmt das Backend, SERVER_IDENTITY_
-      // FILE_REQUIRED).
-      return {
-        kind: "identityFile",
-        path: state.path,
-        passphrase: state.passphrase === "" ? null : state.passphrase,
-      };
-  }
-}
-
 export function ServerForm({
   serverId,
   defaultGroupId,
@@ -185,19 +96,80 @@ export function ServerForm({
   const AUTH_KIND_LABELS = authKindLabels(t);
   const isCreate = serverId === null;
 
-  const [loaded, setLoaded] = useState<ServerDto | null>(null);
-  // Spec 0038, Abschnitt 4: ungespeicherte Änderungen — für Abschnitte, die
-  // Erweiterungen im Formular registrieren.
-  const [dirty, setDirty] = useState(false);
-  // Spec 0032, Abschnitt 3: nur bekannt, sobald `loaded` geladen ist (der
-  // lokale Pseudo-Server ist nie `serverId === null`, also nie `isCreate`).
-  const isLocal = loaded?.isLocal ?? false;
-  // Spec 0008: stored host keys of the saved host/port; null = not loaded
-  // (or load failed), shown only for an existing, non-local server.
-  const [storedHostKeys, setStoredHostKeys] = useState<StoredHostKeyDto[] | null>(null);
-  const [localNotes, setLocalNotes] = useState("");
-  const [savingLocalNotes, setSavingLocalNotes] = useState(false);
-  const [savingLocalTags, setSavingLocalTags] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savingLocal, setSavingLocal] = useState({ notes: false, tags: false });
+  const [preview, setPreview] = useState<{ text: string | null; loading: boolean }>({
+    text: null,
+    loading: false,
+  });
+  // Field values, loading, dirty tracking and the save input (Issue #861).
+  const {
+    loaded,
+    dirty,
+    isLocal,
+    storedHostKeys,
+    name,
+    host,
+    port,
+    username,
+    groupId,
+    jumpHost,
+    tags,
+    tagDraft,
+    auth,
+    sudoPassword,
+    hasSudoPassword,
+    sudoPasswordUnknown,
+    postIngestPolicy,
+    aiInjectionCheckEnabled,
+    sftpServerPath,
+    startDirectory,
+    localNotes,
+    secondOpinionAvailable,
+    clearingSudoPassword,
+    startDirectoryCheck,
+    loadServer,
+    buildInput,
+    setName,
+    setHost,
+    setPort,
+    setUsername,
+    setGroupId,
+    setJumpHost,
+    setTagDraft,
+    setSudoPassword,
+    setPostIngestPolicy,
+    setAiInjectionCheckEnabled,
+    setSftpServerPath,
+    setStartDirectory,
+    setLocalNotes,
+    setAuth,
+    addTag: handleAddTag,
+    removeTag,
+    markDirty,
+    markSaved,
+    clearSudoPassword,
+  } = useServerFormModel({
+    serverId,
+    defaultGroupId,
+    // The form's own transient state is reset on every (re)load.
+    onBeforeLoad: () => {
+      setError(null);
+      resetResult();
+      setPreview({ text: null, loading: false });
+      setDeletePreview(null);
+      // spec-reviewer-Fund (Review Runde 1, verifiziert in Runde 2): ohne
+      // diesen Reset hinge die C-2-Bestätigungsgrenze allein an
+      // `ManagementView`s `key={id}` (das `ServerForm` bei jedem
+      // Serverwechsel neu montiert) — richtig, aber eine Eigenschaft des
+      // Aufrufers, nicht der Komponente selbst. `convertFacts`/-`Error`
+      // reagieren bereits über den eigenen Effekt auf `loaded`; nur diese
+      // drei bräuchten sonst einen fremden Anker.
+      resetConvert();
+    },
+    onLoadError: setError,
+  });
   // Spec 0058, Teil 2: derselbe Scroll+Fokus-Effekt wie `NotesPanel`s
   // `autoFocus`-Prop, hier für den lokalen Pseudo-Server (der `NotesPanel`
   // gar nicht verwendet, s. `ServerForm.tsx`s eigener Zweig unten/dortiger
@@ -222,8 +194,10 @@ export function ServerForm({
   // für den lokalen Pseudo-Server separat nachgebaut (der `NotesPanel`
   // nicht verwendet, s. Kommentar am lokalen Zweig unten).
   const [largeLocalNoteThreshold, setLargeLocalNoteThreshold] = useState<number | null>(null);
-  const [localShrinkRequesting, setLocalShrinkRequesting] = useState(false);
-  const [localShrinkError, setLocalShrinkError] = useState<string | null>(null);
+  const [localShrink, setLocalShrink] = useState<{ requesting: boolean; error: string | null }>({
+    requesting: false,
+    error: null,
+  });
   useEffect(() => {
     largeNoteDialogThresholdChars()
       .then(setLargeLocalNoteThreshold)
@@ -234,55 +208,14 @@ export function ServerForm({
     largeLocalNoteThreshold !== null && [...localNotes].length >= largeLocalNoteThreshold;
   const handleSummarizeLocalNoteNow = async () => {
     if (!loaded) return;
-    setLocalShrinkRequesting(true);
-    setLocalShrinkError(null);
+    setLocalShrink({ requesting: true, error: null });
     try {
       await requestNoteShrink(loaded.id);
+      setLocalShrink((prev) => ({ ...prev, requesting: false }));
     } catch (err) {
-      setLocalShrinkError(commandErrorMessage(err));
-    } finally {
-      setLocalShrinkRequesting(false);
+      setLocalShrink({ requesting: false, error: commandErrorMessage(err) });
     }
   };
-  const [name, setName] = useState("");
-  const [host, setHost] = useState("");
-  const [port, setPort] = useState("22");
-  const [username, setUsername] = useState("");
-  const [groupId, setGroupId] = useState<string | null>(defaultGroupId);
-  const [jumpHost, setJumpHost] = useState<string | null>(null);
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagDraft, setTagDraft] = useState("");
-  const [auth, setAuth] = useState<AuthFormState>(authStateFromKind("password"));
-  // Spec 0018, Abschnitt 4: leer = unverändert (bei Update), separater
-  // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
-  const [sudoPassword, setSudoPassword] = useState("");
-  const [hasSudoPassword, setHasSudoPassword] = useState(false);
-  // Spec 0071, A14/I4: Der Schlüsselbund konnte nicht sagen, ob ein
-  // Sudo-Passwort hinterlegt ist. "Unbekannt" ist nicht "nein" — die
-  // Oberfläche darf in diesem Fall keine der beiden Aussagen treffen.
-  const [sudoPasswordUnknown, setSudoPasswordUnknown] = useState(false);
-  const [clearingSudoPassword, setClearingSudoPassword] = useState(false);
-  const [postIngestPolicy, setPostIngestPolicy] = useState<PostIngestPolicy>("balanced");
-  const [aiInjectionCheckEnabled, setAiInjectionCheckEnabled] = useState(false);
-  // Spec 0067, A2: leer = automatisch erkennen.
-  const [sftpServerPath, setSftpServerPath] = useState("");
-  // Spec 0102: leer = Home des Login-Nutzers.
-  const [startDirectory, setStartDirectory] = useState("");
-  // Spec 0039, Abschnitt 5.2: die Checkbox ist nur bedienbar, wenn ein
-  // Zweitmeinungs-Provider konfiguriert ist (dieselbe Voraussetzung wie
-  // beim Backend-`Session::injection_check_provider`, s. dortiger
-  // Kommentar) — sonst bliebe die Einstellung wirkungslos, ohne dass das
-  // sichtbar wäre.
-  const [secondOpinionAvailable, setSecondOpinionAvailable] = useState(false);
-
-  useEffect(() => {
-    loadRiskClassifierSettings()
-      .then((settings) => setSecondOpinionAvailable(settings.enabled && settings.providerId !== null))
-      .catch(() => setSecondOpinionAvailable(false));
-  }, []);
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
   // so one draft, the refs and the connection-test log survive tab switches.
@@ -365,90 +298,6 @@ export function ServerForm({
     setReportValidityPending(false);
     formRef.current?.reportValidity();
   }, [reportValidityPending, activeTab]);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-
-  const loadServer = () => {
-    setError(null);
-    resetResult();
-    setPreview(null);
-    setDeletePreview(null);
-    // spec-reviewer-Fund (Review dieses Schritts): ohne diesen Reset hinge
-    // die C-2-Bestätigungsgrenze allein an `ManagementView`s `key={id}`
-    // (das `ServerForm` bei jedem Serverwechsel neu montiert) — richtig,
-    // aber eine Eigenschaft des Aufrufers, nicht der Komponente selbst.
-    // `convertFacts`/-`Error` reagieren bereits über den eigenen Effekt auf
-    // `loaded`; nur diese drei bräuchten sonst einen fremden Anker.
-    // spec-reviewer-Fund (Review Runde 1, verifiziert in Runde 2): ohne
-    // diesen Reset hinge die C-2-Bestätigungsgrenze allein an
-    // `ManagementView`s `key={id}` (das `ServerForm` bei jedem
-    // Serverwechsel neu montiert) — richtig, aber eine Eigenschaft des
-    // Aufrufers, nicht der Komponente selbst. `convertFacts`/-`Error`
-    // reagieren bereits über den eigenen Effekt auf `loaded`; nur diese
-    // drei bräuchten sonst einen fremden Anker.
-    resetConvert();
-    setStoredHostKeys(null);
-    if (serverId === null) {
-      setLoaded(null);
-      setName("");
-      setHost("");
-      setPort("22");
-      setUsername("");
-      setGroupId(defaultGroupId);
-      setJumpHost(null);
-      setTags([]);
-      setAuth(authStateFromKind("password"));
-      setSudoPassword("");
-      setHasSudoPassword(false);
-      setPostIngestPolicy("balanced");
-      setAiInjectionCheckEnabled(false);
-      return;
-    }
-    listStoredHostKeys(serverId)
-      .then((keys) => setStoredHostKeys(keys))
-      .catch(() => setStoredHostKeys(null));
-    getServer(serverId)
-      .then((server) => {
-        setLoaded(server);
-        setDirty(false);
-        setName(server.name);
-        setHost(server.host);
-        setPort(String(server.port));
-        setUsername(server.username);
-        setGroupId(server.groupId);
-        setJumpHost(server.jumpHost);
-        setTags(server.tags);
-        // Spec 0076, B-4: der Pfad kommt vorbefüllt aus dem DTO — anders
-        // als bei den übrigen Anmeldearten reicht `authStateFromKind`
-        // allein nicht, das leere Formularfeld bräuchte sonst erst einen
-        // manuellen Klick auf "Datei wählen", obwohl der Server längst
-        // einen Pfad hat.
-        setAuth(
-          server.authKind === "identity_file"
-            ? { kind: "identityFile", path: server.identityFilePath ?? "", passphrase: "" }
-            : server.authKind === "password" || server.authKind === "no_password"
-              ? {
-                  kind: "password",
-                  value: "",
-                  saved: server.authKind === "password",
-                  remove: false,
-                }
-              : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
-        );
-        setSudoPassword("");
-        setHasSudoPassword(server.hasSudoPassword);
-        setSudoPasswordUnknown(server.sudoPasswordUnknown);
-        setLocalNotes(server.notes);
-        setPostIngestPolicy(server.postIngestPolicy);
-        setAiInjectionCheckEnabled(server.aiInjectionCheckEnabled);
-        setSftpServerPath(server.sftpServerPath ?? "");
-        setStartDirectory(server.startDirectory ?? "");
-      })
-      .catch((err) => setError(commandErrorMessage(err)));
-  };
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadServer, [serverId, defaultGroupId]);
 
   // Issue #63: nach einem erfolgreichen Verschieben dieses Servers per
   // Drag-and-drop nur die Gruppe übernehmen — alle übrigen ungespeicherten
@@ -456,7 +305,7 @@ export function ServerForm({
   // und ein späteres Speichern machte das Verschieben rückgängig.
   useEffect(() => {
     if (movedTo) setGroupId(movedTo.groupId);
-  }, [movedTo]);
+  }, [movedTo, setGroupId]);
 
   // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): der neue
   // "Jetzt zusammenfassen"-Link (unten) kann eine Zustimmung auslösen,
@@ -481,33 +330,6 @@ export function ServerForm({
     [allServers, serverId],
   );
 
-  const buildInput = (): ServerInput => ({
-    name,
-    host,
-    port: Number(port),
-    username,
-    groupId,
-    tags,
-    auth: toAuthMethodInput(auth, isCreate),
-    jumpHost,
-    sudoPassword: sudoPassword === "" ? null : sudoPassword,
-    postIngestPolicy,
-    // Unabhängiger Review-Pass (Spec 0039): NICHT zusätzlich mit
-    // `secondOpinionAvailable` verknüpfen — sonst würde das Speichern eines
-    // Servers aus einem völlig anderen Grund (z. B. Umbenennen), während
-    // gerade kein Zweitmeinungs-Provider konfiguriert ist, eine zuvor
-    // gesetzte Einstellung still auf `false` zurücksetzen und beim späteren
-    // erneuten Konfigurieren des Providers nicht automatisch wiederkommen.
-    // Die Wirksamkeitsprüfung (Provider konfiguriert?) macht ohnehin das
-    // Backend (`Session::injection_check_provider`); die Checkbox hier ist
-    // nur bedienbar, nicht das gespeicherte Feld selbst gegated.
-    aiInjectionCheckEnabled,
-    sftpServerPath: sftpServerPath.trim() === "" ? null : sftpServerPath.trim(),
-    // Spec 0102: der lokale Pseudo-Server bietet das Feld nicht an.
-    startDirectory: isLocal || !startDirectoryCheck.ok ? null : startDirectoryCheck.value,
-  });
-
-  const startDirectoryCheck = checkStartDirectory(startDirectory);
   const startDirectoryError = startDirectoryCheck.ok
     ? null
     : t(`serverForm.startDirectoryInvalid.${startDirectoryCheck.reason}`);
@@ -554,7 +376,7 @@ export function ServerForm({
     reloadServer: () => loadServer(),
     onSaved,
     onKeepPathFinished: () => {
-      setDirty(false);
+      markSaved();
       setInvalidTabs(new Set());
       onSaved();
     },
@@ -609,7 +431,7 @@ export function ServerForm({
       }
       setImportPromptOpen(false);
       setImportSavedId(null);
-      setDirty(false);
+      markSaved();
       setInvalidTabs(new Set());
       onSaved();
     } catch (err) {
@@ -638,13 +460,8 @@ export function ServerForm({
 
   const handleClearSudoPassword = async () => {
     if (!serverId) return;
-    setClearingSudoPassword(true);
     setError(null);
-    try {
-      await clearServerSudoPassword(serverId);
-      setHasSudoPassword(false);
-      setSudoPasswordUnknown(false);
-    } catch (err) {
+    await clearSudoPassword((err) => {
       // Spec 0071, A17 (spec-reviewer-Fund): Der generische
       // KEYCHAIN_UNAVAILABLE-Text spricht von „speichern oder lesen" — das
       // Entscheidende auf diesem Pfad sagt er nicht. Der Nutzer muss
@@ -652,15 +469,7 @@ export function ServerForm({
       // nächsten `sudo` erneut eingespeist wird; genau das ist die
       // Begründung, aus der A17 diesen Fall überhaupt scheitern lässt.
       setError(t("serverForm.removeSudoPasswordFailed") + " " + commandErrorText(t, err));
-    } finally {
-      setClearingSudoPassword(false);
-    }
-  };
-
-  const handleAddTag = () => {
-    const value = tagDraft.trim();
-    if (value && !tags.includes(value)) setTags([...tags, value]);
-    setTagDraft("");
+    });
   };
 
   // Spec 0032, Abschnitt 3: der lokale Pseudo-Server hat keinen normalen
@@ -668,43 +477,43 @@ export function ServerForm({
   // s. `crate::commands::update_server`) — Tags/Notizen werden stattdessen
   // über eigene, dedizierte Befehle gespeichert.
   const handleSaveLocalTags = async () => {
-    setSavingLocalTags(true);
+    setSavingLocal((prev) => ({ ...prev, tags: true }));
     setError(null);
     try {
       await updateLocalServerTags(tags);
-      setDirty(false);
+      markSaved();
       onSaved();
     } catch (err) {
       setError(commandErrorText(t, err));
     } finally {
-      setSavingLocalTags(false);
+      setSavingLocal((prev) => ({ ...prev, tags: false }));
     }
   };
 
   const handleSaveLocalNotes = async () => {
-    setSavingLocalNotes(true);
+    setSavingLocal((prev) => ({ ...prev, notes: true }));
     setError(null);
     try {
       await updateLocalServerNotes(localNotes);
-      setDirty(false);
+      markSaved();
       onSaved();
     } catch (err) {
       setError(commandErrorText(t, err));
     } finally {
-      setSavingLocalNotes(false);
+      setSavingLocal((prev) => ({ ...prev, notes: false }));
     }
   };
 
   const handlePreview = async () => {
     if (!serverId) return;
-    setPreviewLoading(true);
+    setPreview((prev) => ({ ...prev, loading: true }));
     setError(null);
     try {
-      setPreview(await previewEffectiveNotes(serverId));
+      setPreview({ text: await previewEffectiveNotes(serverId), loading: false });
     } catch (err) {
       setError(commandErrorText(t, err));
     } finally {
-      setPreviewLoading(false);
+      setPreview((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -717,7 +526,7 @@ export function ServerForm({
   // testen).
   if (loaded && isLocal) {
     return (
-      <div className="max-w-2xl space-y-6 p-4" onChange={() => setDirty(true)}>
+      <div className="max-w-2xl space-y-6 p-4" onChange={() => markDirty()}>
         <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">{loaded.name}</h2>
         <p className="text-sm text-fg-subtle">{t("serverForm.localHint")}</p>
 
@@ -744,8 +553,8 @@ export function ServerForm({
                 <button
                   type="button"
                   onClick={() => {
-                    setDirty(true);
-                    setTags(tags.filter((tagValue) => tagValue !== tag));
+                    markDirty();
+                    removeTag(tag);
                   }}
                   className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   aria-label={t("serverForm.removeTagAria", { tag })}
@@ -772,10 +581,10 @@ export function ServerForm({
           </div>
           <Button variant="primary" size="sm"
             onClick={handleSaveLocalTags}
-            disabled={savingLocalTags}
+            disabled={savingLocal.tags}
             className="mt-2"
           >
-            {savingLocalTags ? t("common.saving") : t("common.save")}
+            {savingLocal.tags ? t("common.saving") : t("common.save")}
           </Button>
         </div>
 
@@ -791,12 +600,12 @@ export function ServerForm({
               <button
                 type="button"
                 onClick={handleSummarizeLocalNoteNow}
-                disabled={localShrinkRequesting}
+                disabled={localShrink.requesting}
                 className="mt-1.5 underline hover:no-underline disabled:opacity-50"
               >
-                {localShrinkRequesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
+                {localShrink.requesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
               </button>
-              {localShrinkError && <p className="mt-1 text-danger-fg">{localShrinkError}</p>}
+              {localShrink.error && <p className="mt-1 text-danger-fg">{localShrink.error}</p>}
             </div>
           )}
           <textarea
@@ -808,10 +617,10 @@ export function ServerForm({
           />
           <Button variant="primary" size="sm"
             onClick={handleSaveLocalNotes}
-            disabled={savingLocalNotes}
+            disabled={savingLocal.notes}
             className="mt-2"
           >
-            {savingLocalNotes ? t("common.saving") : t("common.save")}
+            {savingLocal.notes ? t("common.saving") : t("common.save")}
           </Button>
         </div>
         <ServerFormSections serverId={loaded.id} dirty={dirty} tab="notes" />
@@ -840,7 +649,7 @@ export function ServerForm({
         noValidate
         onSubmit={handleSubmit}
         onChange={() => {
-          setDirty(true);
+          markDirty();
           if (invalidTabs.size > 0) setInvalidTabs(collectInvalidTabs());
         }}
         className="space-y-3"
@@ -891,7 +700,7 @@ export function ServerForm({
                 {tag}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
+                  onClick={() => removeTag(tag)}
                   className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
@@ -1648,13 +1457,13 @@ export function ServerForm({
             <div>
               <Button size="sm"
                 onClick={handlePreview}
-                disabled={previewLoading}
+                disabled={preview.loading}
               >
-                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
+                {preview.loading ? t("common.loading") : t("serverForm.contextPreview")}
               </Button>
-              {preview !== null && (
+              {preview.text !== null && (
                 <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-surface-sunken p-3 text-xs text-fg-muted">
-                  {preview || t("serverForm.noContext")}
+                  {preview.text || t("serverForm.noContext")}
                 </pre>
               )}
             </div>
