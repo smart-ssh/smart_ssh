@@ -117,6 +117,9 @@ pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIR
 /// preference, or a value outside the shape registered for it.
 pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
 
+/// Issue #883: a command named a session that is no longer open.
+pub const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -278,6 +281,8 @@ mod code_tests {
             super::RISK_SETTINGS_PROVIDER_REQUIRED,
             // Issue #862.
             super::UI_PREFERENCE_REJECTED,
+            // Issue #883.
+            super::SESSION_NOT_FOUND,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

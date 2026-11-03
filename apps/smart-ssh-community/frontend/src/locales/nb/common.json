@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte KI-leverandøren er ikke konfigurert. Velg en konfigurert leverandør.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
+    "SESSION_NOT_FOUND": "Denne økten er ikke lenger åpen. Åpne den på nytt fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten"
   },

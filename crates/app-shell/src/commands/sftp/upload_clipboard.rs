@@ -95,9 +95,7 @@ pub async fn pick_upload_files(
 ) -> CommandResult<Option<Vec<String>>> {
     use tauri_plugin_dialog::DialogExt;
 
-    if state.sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(&state.sessions, session_id)?;
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
@@ -157,9 +155,7 @@ pub(super) fn claim_dropped_paths_impl(
     grants: &LocalPathGrants,
     session_id: SessionId,
 ) -> CommandResult<Vec<String>> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     Ok(grants
         .claim_drop(session_id)
         .into_iter()
@@ -250,9 +246,7 @@ where
     F: FnOnce(Vec<std::path::PathBuf>) -> Fut,
     Fut: std::future::Future<Output = bool>,
 {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     if files.is_empty() {
         return Ok(None);
     }
@@ -283,9 +277,7 @@ pub async fn claim_clipboard_files(
 ) -> CommandResult<Option<Vec<String>>> {
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
-    if state.sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(&state.sessions, session_id)?;
     let files = clipboard.get_files().map_err(|err| {
         tracing::debug!(error = %err, "clipboard could not be read for paste");
         CommandError::from("The clipboard could not be read")

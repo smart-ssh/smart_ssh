@@ -353,7 +353,7 @@ use app_logic::dto::{
     ElevationDisableDto, ElevationFailureDto, ElevationFailureKind, ElevationResultDto,
     ElevationWarningDto, ElevationWarningKind,
 };
-use app_logic::error::{CommandError, CommandResult};
+use app_logic::error::CommandResult;
 
 /// Spec 0084, A1/A2: alles, was das Einschalten des erhöhten Kanals über die
 /// Sitzungsgrenze hinweg braucht — gebündelt, weil `enable` sonst über die
@@ -412,7 +412,7 @@ async fn run_probe(
 /// (inkl. sudo-stderr) gehen nur in diese Meldung, nie in Chat/KI-Kontext.
 ///
 /// Spec 0084, A2.2: Der geöffnete Kanal wird nur eingetragen, solange die
-/// Sitzung noch steht — sonst `Err("Session nicht gefunden")` und der Kanal
+/// Sitzung noch steht — sonst `Err("session not found")` und der Kanal
 /// wird verworfen.
 ///
 /// **Sperr-Reihenfolge:** Der Widerruf des verdrängten Vorgängers steht
@@ -617,7 +617,7 @@ pub(crate) async fn enable_after_confirmation(
             let previous = ctx
                 .registry
                 .insert_if_session_alive(ctx.sessions, ctx.session_id, channel, access)
-                .map_err(|()| CommandError::from("Session nicht gefunden"))?;
+                .map_err(|()| app_logic::session::session_not_found())?;
             // Spec 0084, §9 (Klarstellung 2026-09-28): Wer den bisherigen
             // Kanal noch aus einem laufenden Befehl hält, darf ihn über das
             // Neu-Aktivieren hinaus nicht weiter benutzen — sonst liefe ein
@@ -662,7 +662,7 @@ pub(crate) async fn enable_after_confirmation(
 ///   festhält, scheitert danach beim Zugriff, statt weiter erhöht zu
 ///   arbeiten.
 /// * Eine **unbekannte** Sitzungskennung liefert wie bisher
-///   `Err("Session nicht gefunden")`; „nicht aktiv“ (also `Ok`, ohne dass
+///   `Err("session not found")`; „nicht aktiv“ (also `Ok`, ohne dass
 ///   etwas passiert) gilt nur für eine bekannte Sitzung ohne Kanal (T9).
 ///
 /// Issue #622: Laufen noch erhöhte Operationen, passiert ohne `confirm_stop`
@@ -677,9 +677,7 @@ pub(crate) async fn disable(
     confirm_stop: bool,
     access: &BrowserAccess,
 ) -> CommandResult<ElevationDisableDto> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     let running = registry.ops().running_elevated(session_id);
     if !running.is_empty() {
         if !confirm_stop {
@@ -713,9 +711,7 @@ pub(crate) async fn disable_now(
     session_id: SessionId,
     access: &BrowserAccess,
 ) -> CommandResult<()> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     if let Some(slot) = registry.take(session_id, access) {
         slot.revoke().await;
     }
@@ -1071,7 +1067,8 @@ mod tests {
         .expect("der Aktivierungs-Task darf nicht panisch enden");
 
         let err = result.expect_err("A2.2: ohne Sitzung darf nicht aktiviert werden");
-        assert_eq!(err.message, "Session nicht gefunden");
+        assert_eq!(err.message, "session not found");
+        assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
         assert!(
             f.registry.slot(f.session_id, &access()).is_none(),
             "A2.2: kein Eintrag für eine bereits entfernte Sitzung"
@@ -1357,7 +1354,8 @@ mod tests {
         )
         .await
         .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
-        assert_eq!(err.message, "Session nicht gefunden");
+        assert_eq!(err.message, "session not found");
+        assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
         assert!(!f.is_active().await);
     }
 }

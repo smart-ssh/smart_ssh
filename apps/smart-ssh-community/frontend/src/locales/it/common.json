@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Il provider IA selezionato non è configurato. Scegli un provider configurato.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Scegli un provider IA prima di attivare il secondo parere sul rischio.",
+    "SESSION_NOT_FOUND": "Questa sessione non è più aperta. Riaprila dall’elenco dei server.",
     "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "File della chiave non trovato su questo dispositivo"
   },

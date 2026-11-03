@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "De gekozen AI-provider is niet geconfigureerd. Kies een geconfigureerde provider.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Kies een AI-provider voordat je de tweede mening over risico inschakelt.",
+    "SESSION_NOT_FOUND": "Deze sessie is niet meer geopend. Open haar opnieuw vanuit de serverlijst.",
     "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
   },

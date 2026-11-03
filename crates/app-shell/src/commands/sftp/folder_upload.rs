@@ -45,9 +45,7 @@ pub async fn pick_upload_folder(
     session_id: SessionId,
     title: String,
 ) -> CommandResult<Option<String>> {
-    if state.sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(&state.sessions, session_id)?;
     let Some(path) = super::pick_folder_dialog(&app, &title).await? else {
         return Ok(None);
     };

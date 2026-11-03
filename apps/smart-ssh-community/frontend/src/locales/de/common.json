@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Der gewählte KI-Anbieter ist nicht eingerichtet. Wähle einen eingerichteten Anbieter.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wähle einen KI-Anbieter, bevor du die Zweitmeinung zum Risiko einschaltest.",
+    "SESSION_NOT_FOUND": "Diese Sitzung ist nicht mehr geöffnet. Öffne sie erneut über die Serverliste.",
     "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden"
   },

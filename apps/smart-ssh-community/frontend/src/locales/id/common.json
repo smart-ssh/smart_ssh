@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Penyedia AI yang dipilih belum dikonfigurasi. Pilih penyedia yang sudah dikonfigurasi.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Pilih penyedia AI sebelum mengaktifkan opini kedua tentang risiko.",
+    "SESSION_NOT_FOUND": "Sesi ini tidak lagi terbuka. Buka lagi dari daftar server.",
     "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Berkas kunci tidak ditemukan di perangkat ini"
   },
