@@ -177,7 +177,7 @@ async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever
     let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::pending());
 
-    let mut events = process_frame_stream(
+    let mut events = frame_stream(
         never_yields,
         true,
         Uuid::new_v4(),
@@ -202,7 +202,7 @@ async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever
 async fn test_keep_alive_frames_do_not_restart_content_timeout() {
     let frames = crate::sse::periodic_frames(None, "", std::time::Duration::from_secs(5));
     let start = tokio::time::Instant::now();
-    let mut events = process_frame_stream(
+    let mut events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -232,7 +232,7 @@ async fn test_slow_deltas_over_three_minutes_complete_without_error() {
         "{\"choices\":[{\"delta\":{\"content\":\"x\"}}]}",
         std::time::Duration::from_secs(30),
     );
-    let events = process_frame_stream(
+    let events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -258,7 +258,7 @@ async fn test_continuous_deltas_for_eleven_minutes_keep_streaming() {
         "{\"choices\":[{\"delta\":{\"content\":\"x\"}}]}",
         std::time::Duration::from_secs(30),
     );
-    let events = process_frame_stream(
+    let events = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -296,7 +296,7 @@ async fn test_finish_reason_stop_is_logged() {
         ]));
     let request_id = Uuid::new_v4();
     let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, request_id, String::new(), Vec::new(), None)
+        frame_stream(frames, true, request_id, String::new(), Vec::new(), None)
             .collect()
             .await;
 
@@ -329,7 +329,7 @@ async fn test_finish_reason_length_with_no_content_triggers_retry_and_is_logged(
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -359,7 +359,7 @@ async fn test_finish_reason_length_with_text_content_stays_text_truncated() {
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -388,7 +388,7 @@ async fn test_fallback_mode_finish_reason_length_with_no_content_triggers_retry(
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         false,
         Uuid::new_v4(),
@@ -412,7 +412,7 @@ async fn test_content_filter_finish_reason_with_no_content_does_not_trigger_retr
             frame(r#"{"choices":[{"delta":{},"finish_reason":"content_filter"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -436,7 +436,7 @@ async fn test_abrupt_disconnect_without_finish_reason_and_no_content_does_not_tr
     let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
         futures::stream::iter(vec![frame(r#"{"choices":[{"delta":{}}]}"#)]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -464,7 +464,7 @@ async fn test_content_filter_is_refused_without_retry_or_tool_call() {
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -494,7 +494,7 @@ async fn test_length_with_whitespace_only_content_does_not_trigger_empty_round_r
             frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -536,7 +536,7 @@ async fn test_length_with_no_text_and_a_syntactically_incomplete_tool_call_trigg
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -571,7 +571,7 @@ async fn test_fallback_mode_action_like_content_in_reasoning_delta_is_never_pars
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         false,
         Uuid::new_v4(),
@@ -598,7 +598,7 @@ async fn test_only_reasoning_deltas_logs_reasoning_len_with_zero_text_len() {
             frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
             frame("[DONE]"),
         ]));
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -640,7 +640,7 @@ async fn test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -673,7 +673,7 @@ async fn test_complete_tool_call_with_normal_finish_reason_is_forwarded() {
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -709,7 +709,7 @@ async fn test_invalid_tool_calls_are_non_fatal_and_valid_call_still_forwarded() 
             frame("[DONE]"),
         ]),
     );
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -753,7 +753,7 @@ async fn test_abrupt_disconnect_mid_tool_call_triggers_retry_not_silent_parse() 
         )]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
@@ -784,7 +784,7 @@ async fn test_unrecognized_finish_reason_is_treated_as_truncated_not_complete() 
         ]),
     );
 
-    let events: Vec<RawEvent> = process_frame_stream(
+    let events: Vec<RawEvent> = frame_stream(
         frames,
         true,
         Uuid::new_v4(),
