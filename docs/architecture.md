@@ -215,5 +215,5 @@ Wohin neue Logik gehört (alle Tauri-frei; jedes `pub mod` aus `lib.rs`):
 
 **Plattform-Helfer**
 - `data_paths` — Datenpfade; `local_path_grants` — freigegebene lokale Pfade; `owner_names` — Besitzer-/Gruppennamen für den Dateibrowser.
-- `single_instance` — Single-Instance-Entscheidung; `logging` — JSON-Lines-Logging; `version` — Version/Build-Hash; `poison` — vergiftungsfeste Sperren (nicht `pub`).
+- `single_instance` — Single-Instance-Entscheidung; `logging` — JSON-Lines-Logging; `version` — Version/Build-Hash; vergiftungsfeste Sperren liegen jetzt in `ssh_manager_core::sync`.
 - `test_support` — Testhilfen hinter `test-support` (s. o.).

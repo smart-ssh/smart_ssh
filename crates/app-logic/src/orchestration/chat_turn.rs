@@ -179,7 +179,8 @@ pub(crate) async fn push_history_scoped(session: &Session, message: ChatMessage,
         // `history` und `mcp_origin_flags` dauerhaft verschieden lang
         // zurück, und die Kompaktierung müsste jede Nachricht defensiv als
         // MCP-originiert behandeln (s. `group_mcp_flags_by_round`).
-        crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags).push(!persist);
+        ssh_manager_core::sync::lock_tolerating_poison(&session.safety.mcp_origin_flags)
+            .push(!persist);
     }
     if !persist {
         return;

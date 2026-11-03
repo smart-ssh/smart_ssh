@@ -26,6 +26,7 @@
 //! Einschleusungs-Check, Zusammenfassung, Auto-Titel, Notiz-Vorschlag,
 //! Notiz-Kürzung) geteilt, sobald sie denselben Key/Endpunkt/Modell nutzen.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -213,7 +214,7 @@ impl ProviderBudgetGuard {
     /// mitschickt, verliert den zuletzt bekannten Reset-Zeitpunkt nicht).
     pub fn record_headers(&self, snapshot: RateLimitHeaderSnapshot) {
         let now = Instant::now();
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = lock_tolerating_poison(&self.state);
         state.has_any_header_data = true;
         state.requests.update(now, snapshot.requests);
         state.input_tokens.update(now, snapshot.input_tokens);
@@ -235,7 +236,7 @@ impl ProviderBudgetGuard {
     /// Solange nie irgendein Header gelesen wurde, immer `None` (Invariante
     /// „header-loser Provider wird nie blockiert").
     pub fn wait_duration(&self, estimated_input_tokens: u64) -> Option<Duration> {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let state = lock_tolerating_poison(&self.state);
         if !state.has_any_header_data {
             return None;
         }
@@ -310,7 +311,7 @@ impl RateLimitRegistry {
     }
 
     pub fn guard_for(&self, identity_key: &str) -> Arc<ProviderBudgetGuard> {
-        let mut guards = self.guards.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guards = lock_tolerating_poison(&self.guards);
         guards
             .entry(identity_key.to_string())
             .or_insert_with(|| Arc::new(ProviderBudgetGuard::new()))

@@ -17,6 +17,7 @@
 //! Completions path (the shared `OpenAiStreamState::finalize` is reused with
 //! the terminal status mapped to its `finish_reason` vocabulary).
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::pin::Pin;
 
 use futures::Stream;
@@ -225,10 +226,7 @@ impl AiProvider for OpenAiResponsesProvider {
     }
 
     fn last_request_id(&self) -> Option<Uuid> {
-        *self
-            .last_request
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        *lock_tolerating_poison(&self.last_request)
     }
 }
 

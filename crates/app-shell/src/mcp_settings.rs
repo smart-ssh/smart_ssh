@@ -9,6 +9,7 @@
 //! persistierten Wert bleibt — ein reiner JS-seitiger Store-Schreibzugriff
 //! hätte keine Wirkung auf einen bereits laufenden Server.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -171,18 +172,14 @@ fn sync_live_state_from_store(app: &AppHandle, state: &AppState) -> CommandResul
     let token = load_or_init_token(app, state)?;
     state.mcp.token.set(token);
     let allowed = load_allowed_servers(app)?;
-    *state.mcp.allowed_servers.lock().expect("Mutex vergiftet") = allowed;
+    *lock_tolerating_poison(&state.mcp.allowed_servers) = allowed;
     Ok(())
 }
 
 async fn build_dto(app: &AppHandle, state: &AppState) -> CommandResult<McpServerSettingsDto> {
     let enabled = state.mcp.runtime.lock().await.is_some();
     let token = load_or_init_token(app, state)?;
-    let allowed_server_ids = state
-        .mcp
-        .allowed_servers
-        .lock()
-        .expect("Mutex vergiftet")
+    let allowed_server_ids = lock_tolerating_poison(&state.mcp.allowed_servers)
         .iter()
         .map(|id| id.0.to_string())
         .collect();
@@ -314,7 +311,7 @@ pub async fn set_mcp_server_allowed_servers(
 ) -> CommandResult<McpServerSettingsDto> {
     let ids: HashSet<ServerId> = server_ids.into_iter().collect();
     store_allowed_servers(&app, &ids)?;
-    *state.mcp.allowed_servers.lock().expect("Mutex vergiftet") = ids;
+    *lock_tolerating_poison(&state.mcp.allowed_servers) = ids;
     build_dto(&app, &state).await
 }
 

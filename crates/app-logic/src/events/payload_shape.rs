@@ -1,6 +1,7 @@
 //! Issue #1010: JSON shape of the chat events that share payload structs.
 
 use super::*;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Issue #1010: `chat-error` JSON — `code` stays present as `null`,
 /// absent provider details are omitted, present ones are camelCase.
@@ -23,7 +24,7 @@ fn test_chat_error_payload_shape_with_and_without_details() {
             access_returns: Some("later".into()),
         },
     );
-    let events = emitter.events.lock().unwrap();
+    let events = lock_tolerating_poison(&emitter.events);
     assert_eq!(events[0].0, "chat-error");
     assert_eq!(
         events[0].1,
@@ -51,7 +52,7 @@ fn test_session_only_events_payload_shape() {
     emit_chat_response_cancelled(&emitter, sid);
     emit_chat_queued_messages_sent(&emitter, sid);
     emit_chat_context_compacted(&emitter, sid);
-    let events = emitter.events.lock().unwrap();
+    let events = lock_tolerating_poison(&emitter.events);
     let names: Vec<&str> = events.iter().map(|e| e.0.as_str()).collect();
     assert_eq!(
         names,

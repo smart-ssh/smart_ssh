@@ -31,6 +31,7 @@ use ssh_manager_core::ai::{
     fence_untrusted, ActionSchema, ChatMessage, MessageContent, OutputRedactor, ProviderType,
     RejectionReason, Role, SessionContext, UntrustedKind,
 };
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 use crate::events::EventEmitter;
 use crate::orchestration::{seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget};
@@ -499,7 +500,8 @@ async fn compact_rounds_with_summary(
     // Spec 0088, A4.1: vergiftungstolerant — `history` ist oben bereits per
     // `mem::take` aus dem Kontext genommen; ein Panic ab hier liesse den
     // Verlauf der Sitzung leer zurück.
-    let mcp_flags = crate::poison::lock_tolerating_poison(&session.safety.mcp_origin_flags).clone();
+    let mcp_flags =
+        ssh_manager_core::sync::lock_tolerating_poison(&session.safety.mcp_origin_flags).clone();
     let mcp_flags_by_round = group_mcp_flags_by_round(&history, &mcp_flags);
     let rounds = split_into_rounds(history);
     if rounds.len() <= min_preserved_rounds {
@@ -1157,12 +1159,7 @@ pub(crate) async fn compact_for_send(
             .await
             .as_ref()
             .map_or(0, |summary| summary.rounds_covered);
-        let announce = session
-            .ai
-            .context_usage
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .should_announce(covered);
+        let announce = lock_tolerating_poison(&session.ai.context_usage).should_announce(covered);
         if announce {
             crate::events::emit_chat_context_compacted(emitter, session_id);
         }
@@ -1183,11 +1180,7 @@ async fn compact_for_send_inner(
     // ratio (never below 1.0), so the comparison is done in estimate units:
     // `budget_tokens` is the largest uncorrected estimate that still fits.
     let (ratio, last_input) = {
-        let tracker = session
-            .ai
-            .context_usage
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let tracker = lock_tolerating_poison(&session.ai.context_usage);
         (tracker.ratio(), tracker.last_input_tokens)
     };
     let mut budget_tokens = (trigger_tokens as f64 / ratio) as usize;

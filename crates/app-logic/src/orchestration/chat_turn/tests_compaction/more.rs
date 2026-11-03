@@ -1,4 +1,5 @@
 use super::*;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// spec-reviewer-Fund (Review dieses Schritts): der Etappe-2-Test, der
 /// die eigentliche Zusage der Leiter prüfte — "nach der Kompaktierung
@@ -173,7 +174,7 @@ async fn test_compact_for_send_reuses_existing_summary_without_a_new_ai_call() {
     .await;
 
     assert!(
-        received_contexts.lock().unwrap().is_empty(),
+        lock_tolerating_poison(&received_contexts).is_empty(),
         "die vorhandene Summary deckt den Bedarf bereits ab — es darf kein KI-Aufruf \
          stattfinden"
     );

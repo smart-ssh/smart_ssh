@@ -21,6 +21,7 @@ pub use transcribe::{
     WhisperTranscriber,
 };
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -180,7 +181,7 @@ impl ModelManager {
 
     /// Pure local state; never touches the network.
     pub fn status(&self, model: SpeechModel) -> ModelStatus {
-        match self.slots.lock().expect("slots lock").get(&model) {
+        match lock_tolerating_poison(&self.slots).get(&model) {
             Some(Slot::Downloading { done, total, .. }) => ModelStatus::Downloading {
                 done: *done,
                 total: *total,
@@ -205,7 +206,7 @@ impl ModelManager {
         let source = self.sources.get(&model).cloned().expect("source per model");
         let (tx, rx) = watch::channel(false);
         {
-            let mut slots = self.slots.lock().expect("slots lock");
+            let mut slots = lock_tolerating_poison(&self.slots);
             if matches!(slots.get(&model), Some(Slot::Downloading { .. })) {
                 return Err(ModelManagerError::AlreadyDownloading);
             }
@@ -223,7 +224,7 @@ impl ModelManager {
         tokio::spawn(async move {
             let result = download(&dir, model, &source, &slots, rx, &on_status).await;
             let final_status = {
-                let mut guard = slots.lock().expect("slots lock");
+                let mut guard = lock_tolerating_poison(&slots);
                 match result {
                     Ok(()) => {
                         guard.remove(&model);
@@ -249,7 +250,7 @@ impl ModelManager {
     /// removes the temp file and reports `NotDownloaded`.
     pub fn cancel_download(&self, model: SpeechModel) -> bool {
         if let Some(Slot::Downloading { cancel, .. }) =
-            self.slots.lock().expect("slots lock").get(&model)
+            lock_tolerating_poison(&self.slots).get(&model)
         {
             let _ = cancel.send(true);
             true
@@ -261,7 +262,7 @@ impl ModelManager {
     /// Removes the model file (and any leftover temp file) and clears a
     /// recorded error. Refused while a download runs.
     pub fn delete(&self, model: SpeechModel) -> Result<(), ModelManagerError> {
-        let mut slots = self.slots.lock().expect("slots lock");
+        let mut slots = lock_tolerating_poison(&self.slots);
         if matches!(slots.get(&model), Some(Slot::Downloading { .. })) {
             return Err(ModelManagerError::Downloading);
         }
@@ -345,7 +346,7 @@ async fn download_inner(
         hasher.update(&chunk);
         file.write_all(&chunk).await.map_err(io)?;
         if let Some(Slot::Downloading { done: d, .. }) =
-            slots.lock().expect("slots lock").get_mut(&model)
+            lock_tolerating_poison(slots).get_mut(&model)
         {
             *d = done;
         }

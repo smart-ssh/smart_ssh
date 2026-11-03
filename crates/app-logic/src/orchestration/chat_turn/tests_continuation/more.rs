@@ -1,4 +1,5 @@
 use super::*;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Fall 1 (Spec 0021, Abschnitt 3): nach `AutoExec` folgt automatisch
 /// ein zweiter `send()`-Aufruf, dessen Kontext das `CommandResult`
@@ -32,7 +33,7 @@ async fn test_auto_continuation_after_autoexec_triggers_second_send_call() {
     )
     .await;
 
-    let contexts = contexts.lock().unwrap().clone();
+    let contexts = lock_tolerating_poison(&contexts).clone();
     assert_eq!(
         contexts.len(),
         2,
@@ -87,7 +88,7 @@ async fn test_auto_continuation_after_confirm_approve_triggers_second_send_call(
     )
     .await;
 
-    let contexts = contexts.lock().unwrap().clone();
+    let contexts = lock_tolerating_poison(&contexts).clone();
     assert_eq!(
         contexts.len(),
         2,
@@ -138,7 +139,7 @@ async fn test_auto_continuation_after_user_deny_pushes_rejection_and_triggers_se
     )
     .await;
 
-    let contexts = contexts.lock().unwrap().clone();
+    let contexts = lock_tolerating_poison(&contexts).clone();
     assert_eq!(
         contexts.len(),
         2,
@@ -199,7 +200,7 @@ async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_
     )
     .await;
 
-    let contexts = contexts.lock().unwrap().clone();
+    let contexts = lock_tolerating_poison(&contexts).clone();
     assert_eq!(
         contexts.len(),
         2,
@@ -258,7 +259,7 @@ async fn test_regression_pending_action_cleared_and_turn_completes_after_deny() 
     .await;
 
     assert!(
-        session.conn.pending_action.lock().unwrap().is_none(),
+        lock_tolerating_poison(&session.conn.pending_action).is_none(),
         "pending_action muss nach der Ablehnung wieder None sein, sonst bleibt \
          die UI (Tab-Indikator/Eingabe) im Warte-Zustand hängen"
     );
@@ -306,12 +307,12 @@ async fn test_regression_pending_confirm_action_times_out_instead_of_hanging_for
         // Tests in dieser Datei, die auf ein Event warten), dann die
         // Uhr über das Timeout hinaus vorspulen.
         let action_id = loop {
-            if let Some(id) = *session.conn.pending_action.lock().unwrap() {
+            if let Some(id) = *lock_tolerating_poison(&session.conn.pending_action) {
                 break id;
             }
             tokio::task::yield_now().await;
         };
-        *action_id_slot_for_advancer.lock().unwrap() = Some(action_id);
+        *lock_tolerating_poison(&action_id_slot_for_advancer) = Some(action_id);
         tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
             .await;
     };
@@ -324,15 +325,13 @@ async fn test_regression_pending_confirm_action_times_out_instead_of_hanging_for
     tokio::join!(turn, advancer);
 
     assert!(
-        session.conn.pending_action.lock().unwrap().is_none(),
+        lock_tolerating_poison(&session.conn.pending_action).is_none(),
         "pending_action muss nach dem Timeout wieder None sein, sonst bleibt \
          die UI (Tab-Indikator/Eingabe) im Warte-Zustand hängen"
     );
 
-    let action_id = action_id_slot
-        .lock()
-        .unwrap()
-        .expect("die Aktion muss registriert worden sein");
+    let action_id =
+        lock_tolerating_poison(&action_id_slot).expect("die Aktion muss registriert worden sein");
     assert!(
         !confirmations.contains(&action_id),
         "der Registry-Eintrag muss vom Timeout selbst aktiv abgeräumt worden sein \

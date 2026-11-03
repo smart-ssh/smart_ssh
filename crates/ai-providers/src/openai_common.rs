@@ -3,6 +3,7 @@
 //! max-token tables, the SSE stream state, the connect/attempt function and
 //! the `stream_options` rejection cache.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
 
@@ -201,17 +202,11 @@ impl StreamOptionsRejections {
     }
 
     fn contains(&self, key: &str) -> bool {
-        self.keys
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(key)
+        lock_tolerating_poison(&self.keys).contains(key)
     }
 
     fn insert(&self, key: String) {
-        self.keys
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(key);
+        lock_tolerating_poison(&self.keys).insert(key);
     }
 }
 

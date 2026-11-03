@@ -20,6 +20,7 @@
 //! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
 
 use serde::Serialize;
+use ssh_manager_core::sync::lock_tolerating_poison;
 use uuid::Uuid;
 
 use ssh_manager_core::filter::Decision;
@@ -1527,10 +1528,7 @@ impl EventEmitter for TestEmitter {
         if event == "chat-ai-request-started" && !self.record_request_started {
             return;
         }
-        self.events
-            .lock()
-            .unwrap()
-            .push((event.to_string(), payload));
+        lock_tolerating_poison(&self.events).push((event.to_string(), payload));
     }
 }
 
