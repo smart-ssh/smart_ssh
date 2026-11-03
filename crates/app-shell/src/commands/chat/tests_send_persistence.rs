@@ -353,6 +353,7 @@ async fn test_extension_content_while_turn_running_is_rejected() {
     };
     use std::sync::atomic::{AtomicBool, Ordering};
     struct Ext(std::sync::Arc<AtomicBool>);
+    #[async_trait::async_trait]
     impl ChatContentExtension for Ext {
         fn name(&self) -> &str {
             "files"
@@ -364,7 +365,7 @@ async fn test_extension_content_while_turn_running_is_rejected() {
                 blocks: vec![ssh_manager_core::ai::ResolvedBlock::Text { text: "x".into() }],
             })
         }
-        fn persist(
+        async fn persist(
             &self,
             _s: uuid::Uuid,
             _p: &str,

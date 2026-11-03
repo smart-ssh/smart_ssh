@@ -55,11 +55,12 @@ impl PreparedExtensionParts {
 
     /// Hands the checked blocks to their extensions. An error means nothing
     /// is sent.
-    pub fn persist(&self, session_id: SessionId) -> CommandResult<()> {
+    pub async fn persist(&self, session_id: SessionId) -> CommandResult<()> {
         for prepared in &self.0 {
             prepared
                 .extension
                 .persist(session_id, &prepared.part.id, prepared.blocks.clone())
+                .await
                 .map_err(|_| {
                     CommandError::with_code(
                         "The message was not sent: the attachment could not be stored.",

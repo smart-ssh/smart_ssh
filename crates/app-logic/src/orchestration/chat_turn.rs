@@ -543,20 +543,16 @@ enum RoundOutcome {
 /// (chat turn, compaction, title, notes): seals extension parts (Issue #505),
 /// then re-applies redaction (Spec 0040, Abschnitt 5; invariant 11). Call it
 /// as the last step before `AiProvider::send` (issue #833).
-pub(crate) fn seal_for_send(
-    context: SessionContext,
-    redactor: &dyn OutputRedactor,
-    registry: &crate::chat_content_extension::ChatContentRegistry,
+pub(crate) async fn seal_session_for_send(
+    session: &Session,
     session_id: SessionId,
+    context: SessionContext,
 ) -> Result<RedactedContext, crate::chat_content_extension::SealError> {
-    RedactedContext::seal(
-        context,
-        redactor,
-        &crate::chat_content_extension::RegistrySealer {
-            registry,
-            session_id,
-        },
-    )
+    let sealer = crate::chat_content_extension::RegistrySealer {
+        registry: &session.persistence.chat_content,
+        session_id: session.extension_content_key(session_id).await,
+    };
+    RedactedContext::seal(context, session.redactor.as_ref(), &sealer).await
 }
 
 /// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
@@ -605,12 +601,7 @@ async fn run_one_round(
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     // Issue #505: extension parts are sealed here (limits, redaction,
     // fencing); a failure sends nothing.
-    let request_context = match seal_for_send(
-        request_context,
-        session.redactor.as_ref(),
-        &session.persistence.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
+    let request_context = match seal_session_for_send(session, session_id, request_context).await {
         Ok(context) => context,
         Err(err) => {
             emit_chat_error(emitter, session_id, err.message, Some(err.code));

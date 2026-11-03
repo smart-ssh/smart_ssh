@@ -45,6 +45,7 @@ pub struct ChatContentError(pub String);
 /// tab: it stays the same after the chat is resumed under a new tab and
 /// changes with "New Chat". Only a connection without a saved chat (chat
 /// persistence off) passes the tab id.
+#[async_trait::async_trait]
 pub trait ChatContentExtension: Send + Sync {
     /// Registered name: `[a-z0-9]+`, unique.
     fn name(&self) -> &str {
@@ -64,7 +65,7 @@ pub trait ChatContentExtension: Send + Sync {
 
     /// Stores what the core hands back: text already redacted, binary
     /// checked. An error means nothing is sent.
-    fn persist(
+    async fn persist(
         &self,
         _session_id: Uuid,
         _part_id: &str,
@@ -74,7 +75,7 @@ pub trait ChatContentExtension: Send + Sync {
     }
 
     /// Content for a send. `Ok(None)` means the content no longer exists.
-    fn resolve(
+    async fn resolve(
         &self,
         _session_id: Uuid,
         _part: &ExtensionPart,
@@ -83,11 +84,11 @@ pub trait ChatContentExtension: Send + Sync {
     }
 
     /// A chat session was removed (called after the delete succeeded).
-    fn session_removed(&self, _session_id: Uuid) {}
+    async fn session_removed(&self, _session_id: Uuid) {}
 
     /// Called once per start with the ids of all existing chat sessions, so
     /// leftovers of a crash between delete and callback disappear.
-    fn reconcile(&self, _live_session_ids: &[Uuid]) {}
+    async fn reconcile(&self, _live_session_ids: &[Uuid]) {}
 }
 
 /// Valid extension name: non-empty, lowercase ASCII letters and digits.
@@ -139,18 +140,19 @@ impl ChatContentRegistry {
     }
 
     /// Calls `reconcile` once per extension.
-    pub fn reconcile(&self, live_session_ids: &[Uuid]) {
+    pub async fn reconcile(&self, live_session_ids: &[Uuid]) {
         for ext in &self.extensions {
-            ext.reconcile(live_session_ids);
+            ext.reconcile(live_session_ids).await;
         }
     }
 }
 
+#[async_trait::async_trait]
 impl ChatSessionRemovalObserver for ChatContentRegistry {
-    fn sessions_removed(&self, session_ids: &[Uuid]) {
+    async fn sessions_removed(&self, session_ids: &[Uuid]) {
         for id in session_ids {
             for ext in &self.extensions {
-                ext.session_removed(*id);
+                ext.session_removed(*id).await;
             }
         }
     }
@@ -196,7 +198,7 @@ impl From<ContentLimitError> for SealError {
 /// is redacted again and fenced. `resolve` -> `None`, or an extension that is
 /// not registered, yields the core placeholder; a `resolve` error stops the
 /// send.
-pub fn seal_extension_parts(
+pub async fn seal_extension_parts(
     history: Vec<ChatMessage>,
     registry: &ChatContentRegistry,
     session_id: Uuid,
@@ -217,11 +219,14 @@ pub fn seal_extension_parts(
         }
         let sealed = match registry.find(&part.extension) {
             Some(ext) => {
-                let content = ext.resolve(session_id, &part).map_err(|_| SealError {
-                    code: crate::orchestration::ATTACHMENT_UNRESOLVED,
-                    message: "The message was not sent: attached content could not be read."
-                        .to_string(),
-                })?;
+                let content = ext
+                    .resolve(session_id, &part)
+                    .await
+                    .map_err(|_| SealError {
+                        code: crate::orchestration::ATTACHMENT_UNRESOLVED,
+                        message: "The message was not sent: attached content could not be read."
+                            .to_string(),
+                    })?;
                 SealedContent::seal(&part, ext.source(), content, redactor)?
             }
             None => SealedContent::seal(&part, ExtensionSource::LocalFile, None, redactor)?,
@@ -248,15 +253,16 @@ pub struct RegistrySealer<'a> {
     pub session_id: Uuid,
 }
 
+#[async_trait::async_trait]
 impl ssh_manager_core::ai::ExtensionSealer for RegistrySealer<'_> {
     type Error = SealError;
 
-    fn seal_extensions(
+    async fn seal_extensions(
         &self,
         history: Vec<ChatMessage>,
         redactor: &dyn OutputRedactor,
     ) -> Result<Vec<ChatMessage>, SealError> {
-        seal_extension_parts(history, self.registry, self.session_id, redactor)
+        seal_extension_parts(history, self.registry, self.session_id, redactor).await
     }
 }
 
@@ -278,14 +284,15 @@ mod tests {
         reconciled: Mutex<Vec<Vec<Uuid>>>,
     }
     struct Rec(&'static str, Arc<Recorder>);
+    #[async_trait::async_trait]
     impl ChatContentExtension for Rec {
         fn name(&self) -> &str {
             self.0
         }
-        fn session_removed(&self, id: Uuid) {
+        async fn session_removed(&self, id: Uuid) {
             self.1.removed.lock().unwrap().push(id);
         }
-        fn reconcile(&self, live: &[Uuid]) {
+        async fn reconcile(&self, live: &[Uuid]) {
             self.1.reconciled.lock().unwrap().push(live.to_vec());
         }
     }
@@ -310,17 +317,17 @@ mod tests {
         assert!(ChatContentRegistry::default().is_empty());
     }
 
-    #[test]
-    fn removal_and_reconcile_reach_every_extension() {
+    #[tokio::test]
+    async fn removal_and_reconcile_reach_every_extension() {
         let rec = Arc::new(Recorder::default());
         let registry = ChatContentRegistry::new(vec![
             Arc::new(Rec("one", rec.clone())),
             Arc::new(Rec("two", rec.clone())),
         ]);
         let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
-        registry.sessions_removed(&[a, b]);
+        registry.sessions_removed(&[a, b]).await;
         assert_eq!(rec.removed.lock().unwrap().len(), 4);
-        registry.reconcile(&[a]);
+        registry.reconcile(&[a]).await;
         assert_eq!(*rec.reconciled.lock().unwrap(), vec![vec![a], vec![a]]);
     }
 }

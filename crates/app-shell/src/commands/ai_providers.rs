@@ -431,7 +431,8 @@ async fn classify_credential_test_result(
         context,
         ssh_manager_core::ai::default_log_redactor(),
         &ssh_manager_core::ai::NoExtensionSealer,
-    );
+    )
+    .await;
     let mut events = provider.send(context);
     let first_event = events.next().await;
     // `events` wird hier fallen gelassen, statt den Stream zu Ende zu

@@ -382,7 +382,8 @@ pub async fn fetch_injection_check_with_usage(
         build_second_opinion_context(INJECTION_CHECK_PROMPT, content),
         redactor,
         &NoExtensionSealer,
-    );
+    )
+    .await;
 
     let (text, end) = collect_side_call_text(provider.send(context), |u| {
         *usage = Some(u);

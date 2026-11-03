@@ -875,7 +875,7 @@ impl ProfileStore for SqliteProfileStore {
         }
         self.data_changes
             .notify_many(&[DataKind::Servers, DataKind::Tags]);
-        crate::chat_session_store::notify_removed(&self.chat_removal, &session_ids);
+        crate::chat_session_store::notify_removed(&self.chat_removal, &session_ids).await;
         Ok(())
     }
 

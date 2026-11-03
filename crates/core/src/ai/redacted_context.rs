@@ -35,11 +35,12 @@ use super::types::{
 /// which owns the extension registry). It may only replace `Extension` parts;
 /// whatever it returns is redacted again by [`RedactedContext::seal`], and
 /// `Sealed` content is constructible only in the core.
-pub trait ExtensionSealer {
+#[async_trait::async_trait]
+pub trait ExtensionSealer: Sync {
     /// Why the send must stop (nothing is sent).
     type Error;
 
-    fn seal_extensions(
+    async fn seal_extensions(
         &self,
         history: Vec<ChatMessage>,
         redactor: &dyn OutputRedactor,
@@ -52,10 +53,11 @@ pub trait ExtensionSealer {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoExtensionSealer;
 
+#[async_trait::async_trait]
 impl ExtensionSealer for NoExtensionSealer {
     type Error = Infallible;
 
-    fn seal_extensions(
+    async fn seal_extensions(
         &self,
         history: Vec<ChatMessage>,
         _redactor: &dyn OutputRedactor,
@@ -76,7 +78,7 @@ impl RedactedContext {
     /// `AiProvider::send`, after any app-authored instruction message was
     /// appended. Order: extension parts are sealed first, then every part of
     /// the history is redacted again (additive only, invariant 11).
-    pub fn seal<S: ExtensionSealer + ?Sized>(
+    pub async fn seal<S: ExtensionSealer + ?Sized>(
         context: SessionContext,
         redactor: &dyn OutputRedactor,
         sealer: &S,
@@ -87,7 +89,7 @@ impl RedactedContext {
             available_actions,
             max_tokens_hint,
         } = context;
-        let history = sealer.seal_extensions(history, redactor)?;
+        let history = sealer.seal_extensions(history, redactor).await?;
         Ok(Self {
             inner: SessionContext {
                 // Deliberately not redacted (THREAT-MODEL.md §2).
@@ -309,9 +311,10 @@ mod tests {
     /// A sealer that misbehaves and hands back raw text: whatever it returns
     /// is redacted afterwards (issue #833, order "seal, then re-redact").
     struct RawTextSealer;
+    #[async_trait::async_trait]
     impl ExtensionSealer for RawTextSealer {
         type Error = ();
-        fn seal_extensions(
+        async fn seal_extensions(
             &self,
             _history: Vec<ChatMessage>,
             _redactor: &dyn OutputRedactor,
@@ -321,9 +324,10 @@ mod tests {
     }
 
     struct FailingSealer;
+    #[async_trait::async_trait]
     impl ExtensionSealer for FailingSealer {
         type Error = &'static str;
-        fn seal_extensions(
+        async fn seal_extensions(
             &self,
             _history: Vec<ChatMessage>,
             _redactor: &dyn OutputRedactor,
@@ -332,32 +336,35 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_seal_redacts_the_result_of_the_sealer() {
+    #[tokio::test]
+    async fn test_seal_redacts_the_result_of_the_sealer() {
         let sealed = RedactedContext::seal(
             context(vec![text("x")]),
             &DefaultOutputRedactor::new(),
             &RawTextSealer,
         )
+        .await
         .unwrap();
         let dump = format!("{:?}", sealed.history());
         assert!(!dump.contains("hunter2geheim"), "{dump}");
         assert_eq!(sealed.max_tokens_hint(), Some(7));
     }
 
-    #[test]
-    fn test_seal_keeps_system_context_unredacted_and_propagates_sealer_error() {
+    #[tokio::test]
+    async fn test_seal_keeps_system_context_unredacted_and_propagates_sealer_error() {
         let Ok(sealed) = RedactedContext::seal(
             context(Vec::new()),
             &DefaultOutputRedactor::new(),
             &NoExtensionSealer,
-        );
+        )
+        .await;
         assert!(sealed.system_context().contains("hunter2geheim"));
         let failed = RedactedContext::seal(
             context(Vec::new()),
             &DefaultOutputRedactor::new(),
             &FailingSealer,
-        );
+        )
+        .await;
         assert_eq!(failed.unwrap_err(), "nope");
     }
 
