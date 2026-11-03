@@ -6,9 +6,7 @@ const listeners = new Set<() => void>();
 function evaluate(query: string): boolean {
   const checks = [...query.matchAll(/\((min|max)-width:\s*([\d.]+)px\)/g)];
   if (checks.length === 0) return false;
-  return checks.every(([, kind, px]) =>
-    kind === "min" ? width >= Number(px) : width <= Number(px),
-  );
+  return checks.every(([, kind, px]) => (kind === "min" ? width >= Number(px) : width <= Number(px)));
 }
 
 export function installMatchMediaMock(): void {
@@ -23,10 +21,7 @@ export function installMatchMediaMock(): void {
         const now = evaluate(query);
         if (now === last) return;
         last = now;
-        for (const l of own)
-          typeof l === "function"
-            ? l({ matches: now, media: query } as never)
-            : l.handleEvent({ matches: now, media: query } as never);
+        for (const l of own) typeof l === "function" ? l({ matches: now, media: query } as never) : l.handleEvent({ matches: now, media: query } as never);
       };
       listeners.add(notify);
       return {
@@ -35,12 +30,8 @@ export function installMatchMediaMock(): void {
         },
         media: query,
         onchange: null,
-        addEventListener: (_t: string, l: EventListenerOrEventListenerObject) =>
-          void own.add(l),
-        removeEventListener: (
-          _t: string,
-          l: EventListenerOrEventListenerObject,
-        ) => void own.delete(l),
+        addEventListener: (_t: string, l: EventListenerOrEventListenerObject) => void own.add(l),
+        removeEventListener: (_t: string, l: EventListenerOrEventListenerObject) => void own.delete(l),
         addListener: () => {},
         removeListener: () => {},
         dispatchEvent: () => false,
@@ -51,11 +42,7 @@ export function installMatchMediaMock(): void {
 
 /** Removes `matchMedia`, to test the "not supported" path. */
 export function removeMatchMedia(): void {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    writable: true,
-    value: undefined,
-  });
+  Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: undefined });
 }
 
 /** Sets the mocked window width in px and notifies listeners whose result changed. */
