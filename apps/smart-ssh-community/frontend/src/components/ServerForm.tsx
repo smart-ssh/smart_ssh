@@ -4,28 +4,27 @@ import { ServerFormSections, ServerFormTabSections, useServerSettingsTabs } from
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { TestConnectionDialog } from "./TestConnectionDialog";
+import { IdentityFileFacts } from "./serverForm/IdentityFileFacts";
+import { TestResultBadge } from "./serverForm/TestResultBadge";
+import { useConnectionTest } from "./serverForm/useConnectionTest";
+import { useIdentityFile } from "./serverForm/useIdentityFile";
+import { useServerDelete } from "./serverForm/useServerDelete";
 import {
-  cancelConnect,
   clearServerSudoPassword,
-  commandErrorCode,
   commandErrorMessage,
   convertIdentityFileToKeychain,
   createServer,
-  deleteServer,
   getServer,
-  inspectKeyFile,
   largeNoteDialogThresholdChars,
   listStoredHostKeys,
   previewEffectiveNotes,
   requestNoteShrink,
-  testConnection,
-  trustHostKey,
   updateLocalServerNotes,
   updateLocalServerTags,
   updateServer,
 } from "../api";
 import { commandErrorText, translateErrorCode } from "../errorCodes";
-import { onConnectProgress, onNoteShrinkSucceeded } from "../events";
+import { onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import { loadRiskClassifierSettings } from "../riskSettings";
@@ -33,17 +32,11 @@ import { checkStartDirectory } from "../startDirectory";
 import type {
   AuthMethodInput,
   AuthMethodKind,
-  DeleteServerResult,
   GroupDto,
-  HostKeyInfo,
-  KeyFileFactsDto,
   PostIngestPolicy,
   ServerDto,
   ServerInput,
   StoredHostKeyDto,
-  ConnectStepSnapshot,
-  TestConnectionReport,
-  TestConnectionResult,
 } from "../types";
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
@@ -53,6 +46,8 @@ import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button, ErrorBoundary, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
 import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
+
+export { TestResultBadge };
 
 interface ServerFormProps {
   /** `null` = Neuanlage. */
@@ -175,96 +170,6 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
   }
 }
 
-/** Spec 0076, B-3: zeigt den Vorab-Befund über eine Schlüsseldatei —
- * existiert sie, passen die Rechte, sieht sie wie ein OpenSSH-Schlüssel
- * aus, ist sie verschlüsselt. Ein Fehlbefund (`facts.problem`) hindert das
- * Speichern nicht, er wird nur angezeigt (B-3, letzter Satz). Eigene
- * Komponente statt Inline-JSX, damit `ServerForm` nicht noch länger wird —
- * reiner Anzeige-Baustein ohne eigenen Zustand. */
-function IdentityFileFacts({
-  loading,
-  facts,
-  error,
-  emptyPath,
-  path,
-}: {
-  path: string;
-  loading: boolean;
-  facts: KeyFileFactsDto | null;
-  /** spec-reviewer-Fund (Review dieses Schritts): der `inspect_key_file`-
-   * Aufruf selbst kann scheitern (z. B. IPC-Fehler) — ohne dieses Flag war
-   * das ununterscheidbar von "noch nicht geprüft" und verschwand
-   * kommentarlos. */
-  error: boolean;
-  emptyPath: boolean;
-}) {
-  const { t } = useTranslation();
-  if (emptyPath) return null;
-  if (error) {
-    return <p className="mt-1 text-xs text-warning-fg">{t("serverForm.identityFile.checkFailed")}</p>;
-  }
-  if (facts === null) {
-    return loading ? (
-      <p className="mt-1 text-xs text-fg-subtle">{t("serverForm.identityFile.checking")}</p>
-    ) : null;
-  }
-
-  const problemLine = facts.problem ? (
-    <li className="text-warning-fg">
-      {/* Issue #667 / Spec 0109 C3: the file is missing on this device. */}
-      {facts.problem.code === "KEY_FILE_NOT_FOUND"
-        ? `${t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}: ${path}`
-        : translateErrorCode(t, facts.problem.code, facts.problem.message)}
-    </li>
-  ) : (
-    <li className="text-success-fg">{t("serverForm.identityFile.looksValid")}</li>
-  );
-
-  // B-3 verlangt Existenz, Rechte, Gültigkeit UND Verschlüsselung — auch
-  // wenn die Datei einen ungültigen Schlüssel enthält. Ohne `exists` ist
-  // über Rechte oder Verschlüsselung nichts bekannt — dann bleibt es bei
-  // der einen Zeile.
-  if (!facts.exists) {
-    return <ul className="mt-1 space-y-0.5 text-xs">{problemLine}</ul>;
-  }
-
-  // spec-reviewer-Fund (Review Runde 2): `permissions_too_open` ist in
-  // `OsKeyFileReader::inspect` (`key_files.rs`) nur dann verlässlich
-  // ermittelt, wenn entweder gar kein Problem vorliegt ODER das Problem
-  // `KEY_FILE_INVALID_KEY` ist — das ist der EINZIGE Fehlercode, der
-  // beweisbar erst NACH der Rechteprüfung entsteht (er kommt ausschließlich
-  // aus `read_and_classify`, das schon einen erfolgreichen `Probe` voraus-
-  // setzt). Für `NotARegularFile` wird die Prüfung nie erreicht, für
-  // `NotReadable`/`TooLarge` ist nicht unterscheidbar, ob sie vor oder
-  // nach der Rechteprüfung entstanden sind — das DTO trägt dafür keine
-  // zusätzliche Information. Die erste Fassung dieser Komponente zeigte in
-  // all diesen Fällen unbedingt „Rechte eng genug gesetzt" — eine
-  // verharmlosende Behauptung über einen Wert, der nie gemessen wurde.
-  const permissionsAreKnown = !facts.problem || facts.problem.code === "KEY_FILE_INVALID_KEY";
-
-  return (
-    <ul className="mt-1 space-y-0.5 text-xs">
-      {problemLine}
-      {permissionsAreKnown &&
-        (facts.permissionsTooOpen ? (
-          <li className="text-warning-fg">{t("serverForm.identityFile.permissionsTooOpen")}</li>
-        ) : (
-          <li className="text-fg-subtle">{t("serverForm.identityFile.permissionsOk")}</li>
-        ))}
-      {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
-       * gültig ist (bei einem Problem steht das Feld immer auf `false`,
-       * s. `crate::dto::KeyFileFactsDto::from`). */}
-      {!facts.problem && (
-        <li className="text-fg-subtle">
-          {facts.encrypted
-            ? t("serverForm.identityFile.encrypted")
-            : t("serverForm.identityFile.notEncrypted")}
-        </li>
-      )}
-    </ul>
-  );
-}
-
 export function ServerForm({
   serverId,
   defaultGroupId,
@@ -348,26 +253,6 @@ export function ServerForm({
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [auth, setAuth] = useState<AuthFormState>(authStateFromKind("password"));
-  // Spec 0076, B-3: der Vorab-Befund über die im Formular gerade
-  // eingetragene Schlüsseldatei — `null`, solange kein Pfad gesetzt ist
-  // oder noch keine Antwort da ist. Ein Fehlbefund hindert das Speichern
-  // nicht (B-3), er wird nur angezeigt.
-  const [identityFacts, setIdentityFacts] = useState<KeyFileFactsDto | null>(null);
-  const [identityFactsLoading, setIdentityFactsLoading] = useState(false);
-  // spec-reviewer-Fund (Review dieses Schritts): ein gescheiterter
-  // `inspect_key_file`-Aufruf selbst (nicht: ein Befund über die Datei)
-  // verschwand bisher spurlos im `.catch(() => null)` — ununterscheidbar
-  // vom Zustand "noch nichts geprüft". Eigenes Flag, damit die Anzeige das
-  // ehrlich sagen kann, statt einfach nichts zu zeigen.
-  const [identityFactsError, setIdentityFactsError] = useState(false);
-  // Spec 0076, C-7: unabhängig vom obigen Entwurfszustand — bezieht sich
-  // auf den tatsächlich GESPEICHERTEN Pfad (`loaded.identityFilePath`) und
-  // entscheidet, ob der Überführen-Knopf wählbar ist.
-  const [convertFacts, setConvertFacts] = useState<KeyFileFactsDto | null>(null);
-  const [convertFactsError, setConvertFactsError] = useState(false);
-  const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
-  const [converting, setConverting] = useState(false);
-  const [convertError, setConvertError] = useState<string | null>(null);
   // Spec 0018, Abschnitt 4: leer = unverändert (bei Update), separater
   // "Entfernen"-Weg für einen bereits gesetzten Wert (s. `handleClearSudoPassword`).
   const [sudoPassword, setSudoPassword] = useState("");
@@ -397,12 +282,6 @@ export function ServerForm({
   }, []);
 
   const [saving, setSaving] = useState(false);
-  // Issue #667: dialog asking whether to import a key file on save.
-  const [importPromptOpen, setImportPromptOpen] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  // Set once the server is saved while the import is still pending/failed,
-  // so a retry never creates the server a second time.
-  const [importSavedId, setImportSavedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
@@ -486,30 +365,12 @@ export function ServerForm({
     setReportValidityPending(false);
     formRef.current?.reportValidity();
   }, [reportValidityPending, activeTab]);
-  const [deleting, setDeleting] = useState(false);
-  const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
-  // Spec 0071, A17: Der Server ist gelöscht, aber mindestens ein Secret
-  // konnte nicht aus dem Schlüsselbund entfernt werden. Die Einträge sind
-  // jetzt verwaist (die Server-ID gibt es nicht mehr) — das muss der
-  // Nutzer erfahren, bevor die Maske zugeht.
-  const [secretsLeftBehind, setSecretsLeftBehind] = useState<string[] | null>(null);
-
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<TestConnectionReport | null>(null);
-  // Issue #633: the dialog with the live step list; `null` = closed.
-  const [testDialog, setTestDialog] = useState<{ steps: ConnectStepSnapshot[] } | null>(null);
-  // Attempt id of the test the dialog currently shows; a result or error of
-  // any other (cancelled) attempt is ignored.
-  const testAttemptRef = useRef<string | null>(null);
-  const [pendingHostKey, setPendingHostKey] = useState<HostKeyInfo | null>(null);
-
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const loadServer = () => {
     setError(null);
-    setTestResult(null);
-    setPendingHostKey(null);
+    resetResult();
     setPreview(null);
     setDeletePreview(null);
     // spec-reviewer-Fund (Review dieses Schritts): ohne diesen Reset hinge
@@ -525,9 +386,7 @@ export function ServerForm({
     // Aufrufers, nicht der Komponente selbst. `convertFacts`/-`Error`
     // reagieren bereits über den eigenen Effekt auf `loaded`; nur diese
     // drei bräuchten sonst einen fremden Anker.
-    setConvertConfirmOpen(false);
-    setConverting(false);
-    setConvertError(null);
+    resetConvert();
     setStoredHostKeys(null);
     if (serverId === null) {
       setLoaded(null);
@@ -599,68 +458,6 @@ export function ServerForm({
     if (movedTo) setGroupId(movedTo.groupId);
   }, [movedTo]);
 
-  // Spec 0076, B-3: fragt `inspect_key_file` für den Pfad an, der gerade im
-  // Formular steht — entkoppelt, gedämpft (400 ms), damit nicht jeder
-  // Tastenanschlag einen eigenen Aufruf auslöst. Läuft nur, solange die
-  // Anmeldeart "Schlüsseldatei" ist; ein leerer Pfad ruft gar nicht erst an
-  // (die Datei darf erst später entstehen, B-3).
-  const identityPath = auth.kind === "identityFile" ? auth.path : "";
-  useEffect(() => {
-    // spec-reviewer-Fund (Review dieses Schritts): `identityFacts` blieb
-    // beim Pfadwechsel bis zum Ablauf der Verzögerung auf dem Befund des
-    // VORHERIGEN Pfads stehen — ein gültiger Pfad, zu einem ungültigen
-    // umgetippt, zeigte bis zu 400 ms lang weiter "gültiger Schlüssel". Der
-    // sofortige Reset hier schließt das Fenster; die Anzeige fällt in der
-    // Zwischenzeit auf "wird geprüft" zurück (B-3).
-    setIdentityFacts(null);
-    setIdentityFactsError(false);
-    if (auth.kind !== "identityFile" || identityPath.trim() === "") {
-      setIdentityFactsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setIdentityFactsLoading(true);
-    const timer = setTimeout(() => {
-      inspectKeyFile(identityPath)
-        .then((facts) => {
-          if (!cancelled) setIdentityFacts(facts);
-        })
-        .catch(() => {
-          if (!cancelled) setIdentityFactsError(true);
-        })
-        .finally(() => {
-          if (!cancelled) setIdentityFactsLoading(false);
-        });
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.kind, identityPath]);
-
-  // Spec 0076, C-7: derselbe Befund für den GESPEICHERTEN Pfad — unabhängig
-  // davon, was der Nutzer gerade im Formular entwirft (der Knopf wirkt auf
-  // den Server in der Datenbank, nicht auf den Entwurf).
-  useEffect(() => {
-    setConvertFacts(null);
-    setConvertFactsError(false);
-    if (!loaded || loaded.authKind !== "identity_file" || !loaded.identityFilePath) {
-      return;
-    }
-    let cancelled = false;
-    inspectKeyFile(loaded.identityFilePath)
-      .then((facts) => {
-        if (!cancelled) setConvertFacts(facts);
-      })
-      .catch(() => {
-        if (!cancelled) setConvertFactsError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loaded]);
-
   // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): der neue
   // "Jetzt zusammenfassen"-Link (unten) kann eine Zustimmung auslösen,
   // WÄHREND dieses Formular noch offen ist — ohne Neuladen würde ein
@@ -714,6 +511,54 @@ export function ServerForm({
   const startDirectoryError = startDirectoryCheck.ok
     ? null
     : t(`serverForm.startDirectoryInvalid.${startDirectoryCheck.reason}`);
+
+  const {
+    testing,
+    testResult,
+    testDialog,
+    pendingHostKey,
+    setPendingHostKey,
+    resetResult,
+    runTest,
+    cancelTest,
+    closeTestDialog,
+    handleTrustAndRetest,
+  } = useConnectionTest({ serverId, buildInput, setError });
+  const { deleting, deletePreview, secretsLeftBehind, setDeletePreview, setSecretsLeftBehind, handleDeleteClick, handleConfirmDelete } =
+    useServerDelete({ serverId, setError, onDeleted });
+  const {
+    identityFacts,
+    identityFactsLoading,
+    identityFactsError,
+    convertFacts,
+    convertFactsError,
+    convertConfirmOpen,
+    setConvertConfirmOpen,
+    converting,
+    convertError,
+    setConvertError,
+    resetConvert,
+    handleConvertToKeychain,
+    importPromptOpen,
+    setImportPromptOpen,
+    importError,
+    setImportError,
+    importSavedId,
+    setImportSavedId,
+    finishKeepingPath,
+  } = useIdentityFile({
+    serverId,
+    draftIsIdentityFile: auth.kind === "identityFile",
+    draftPath: auth.kind === "identityFile" ? auth.path : "",
+    loaded,
+    reloadServer: () => loadServer(),
+    onSaved,
+    onKeepPathFinished: () => {
+      setDirty(false);
+      setInvalidTabs(new Set());
+      onSaved();
+    },
+  });
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -791,15 +636,6 @@ export function ServerForm({
     else setImportPromptOpen(false);
   };
 
-  /** "Keep file path" after the server was already saved by a failed import. */
-  const finishKeepingPath = () => {
-    setImportPromptOpen(false);
-    setImportSavedId(null);
-    setDirty(false);
-    setInvalidTabs(new Set());
-    onSaved();
-  };
-
   const handleClearSudoPassword = async () => {
     if (!serverId) return;
     setClearingSudoPassword(true);
@@ -818,133 +654,6 @@ export function ServerForm({
       setError(t("serverForm.removeSudoPasswordFailed") + " " + commandErrorText(t, err));
     } finally {
       setClearingSudoPassword(false);
-    }
-  };
-
-  // Spec 0076, C-1/C-3 (BL-0222): der eigentliche Übernahme-Aufruf, erst
-  // nach dem Bestätigungsdialog aus C-2. Bei Erfolg wird der Server neu
-  // geladen (die Anmeldeart hat sich geändert, `loadServer` zeigt jetzt
-  // "Private Key" statt "Schlüsseldatei") und `onSaved` informiert den
-  // Aufrufer wie nach jedem anderen Speichern.
-  const handleConvertToKeychain = async () => {
-    if (!serverId) return;
-    setConverting(true);
-    setConvertError(null);
-    try {
-      await convertIdentityFileToKeychain(serverId);
-      setConvertConfirmOpen(false);
-      loadServer();
-      onSaved();
-    } catch (err) {
-      setConvertError(commandErrorText(t, err));
-    } finally {
-      setConverting(false);
-    }
-  };
-
-  // Spec 0046, Fund 1: analog zu `GroupForm`s zweistufigem
-  // `deleteGroup`-Ablauf — der erste Aufruf (`confirm: false`) löscht
-  // nichts, sondern liefert nur die Vorschau (welche Keychain-Secrets
-  // entfernt würden, welche anderen Server ihre Jump-Host-Referenz
-  // verlieren).
-  const handleDeleteClick = async () => {
-    if (!serverId) return;
-    setError(null);
-    try {
-      setDeletePreview(await deleteServer(serverId, false));
-    } catch (err) {
-      setError(commandErrorText(t, err));
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!serverId) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      const result = await deleteServer(serverId, true);
-      // Spec 0071, A17: Das Löschen ist bewusst durchgelaufen. Gab es
-      // Rückstände, nicht stillschweigend schließen — sonst wäre das
-      // genau das falsche Erfolgssignal, das die X6-Korrektur meint.
-      if (result.secretsLeftBehind.length > 0) {
-        setDeletePreview(null);
-        setSecretsLeftBehind(result.secretsLeftBehind);
-        return;
-      }
-      onDeleted();
-    } catch (err) {
-      setError(commandErrorText(t, err));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const runTest = async () => {
-    const attemptId = crypto.randomUUID();
-    testAttemptRef.current = attemptId;
-    setTesting(true);
-    setError(null);
-    setTestResult(null);
-    setTestDialog({ steps: [] });
-    let unlisten: (() => void) | undefined;
-    try {
-      // Subscribe before the command starts so no early step is missed.
-      unlisten = await onConnectProgress((event) => {
-        if (event.attemptId === attemptId) setTestDialog({ steps: event.steps });
-      });
-      const result = await testConnection(buildInput(), attemptId, serverId ?? undefined);
-      if (testAttemptRef.current !== attemptId) return;
-      setTestResult(result);
-      if (result.kind === "hostKeyUnknown" || result.kind === "hostKeyMismatch") {
-        // The host key prompt takes over from the progress dialog; the badge
-        // in the form keeps the result.
-        testAttemptRef.current = null;
-        setTestDialog(null);
-        setPendingHostKey({
-          host: result.host,
-          port: result.port,
-          kind: result.kind === "hostKeyUnknown" ? "unknown" : "mismatch",
-          fingerprint: result.kind === "hostKeyUnknown" ? result.fingerprint : result.actualFingerprint,
-          expectedFingerprint: result.kind === "hostKeyMismatch" ? result.expectedFingerprint : null,
-          keyType: result.keyType,
-        });
-      }
-    } catch (err) {
-      if (testAttemptRef.current !== attemptId) return;
-      testAttemptRef.current = null;
-      setTestDialog(null);
-      if (commandErrorCode(err) !== "SSH_CONNECT_CANCELLED") {
-        setError(commandErrorText(t, err));
-      }
-    } finally {
-      unlisten?.();
-      if (testAttemptRef.current === attemptId || testAttemptRef.current === null) setTesting(false);
-    }
-  };
-
-  // Cancel (button or Escape) while the test runs: end it without an error.
-  const cancelTest = () => {
-    const attemptId = testAttemptRef.current;
-    testAttemptRef.current = null;
-    setTestDialog(null);
-    setTesting(false);
-    if (attemptId) void cancelConnect(attemptId).catch(() => undefined);
-  };
-
-  const closeTestDialog = () => {
-    testAttemptRef.current = null;
-    setTestDialog(null);
-  };
-
-  const handleTrustAndRetest = async () => {
-    if (testResult?.kind !== "hostKeyUnknown" && testResult?.kind !== "hostKeyMismatch") return;
-    const { host: h, port: p, rawKey } = testResult;
-    setPendingHostKey(null);
-    try {
-      await trustHostKey(h, p, rawKey);
-      await runTest();
-    } catch (err) {
-      setError(commandErrorText(t, err));
     }
   };
 
@@ -1978,37 +1687,4 @@ export function ServerForm({
       )}
     </div>
   );
-}
-
-// Spec 0069, Teil A5, Test 20: exportiert (statt modulprivat), damit sich
-// die code->Übersetzung ohne einen vollständigen `ServerForm`-Render
-// testen lässt.
-export function TestResultBadge({ result }: { result: TestConnectionResult }) {
-  const { t } = useTranslation();
-  switch (result.kind) {
-    case "success":
-      return <span className="text-sm text-success-fg">{t("serverForm.testResult.success")}</span>;
-    case "authenticationFailed":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.authFailed")}</span>;
-    case "hostKeyUnknown":
-      return (
-        <span className="text-sm text-warning-fg">{t("serverForm.testResult.hostKeyUnknown")}</span>
-      );
-    case "hostKeyMismatch":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.hostKeyMismatch")}</span>;
-    case "networkError":
-      // Spec 0069, Teil A5: bekannter Code → übersetzte Meldung; ohne
-      // Code → wie bisher der rohe Backend-Text.
-      return (
-        <span className="text-sm text-danger-fg">
-          {translateErrorCode(
-            t,
-            result.code,
-            t("serverForm.testResult.networkError", { message: result.message }),
-          )}
-        </span>
-      );
-    case "timeout":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.timeout")}</span>;
-  }
 }
