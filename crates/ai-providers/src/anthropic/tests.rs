@@ -255,7 +255,7 @@ async fn test_inactivity_timeout_yields_network_error_instead_of_hanging_forever
     let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::pending());
 
-    let mut events = process_frame_stream(never_yields, true, Uuid::new_v4(), String::new(), None);
+    let mut events = frame_stream(never_yields, true, Uuid::new_v4(), String::new(), None);
     let event = events.next().await;
 
     assert!(
@@ -277,7 +277,7 @@ async fn test_keep_alive_frames_do_not_restart_content_timeout() {
         std::time::Duration::from_secs(5),
     );
     let start = tokio::time::Instant::now();
-    let mut events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+    let mut events = frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
     let event = events.next().await;
     assert!(
         matches!(
@@ -296,7 +296,7 @@ async fn test_keep_alive_frames_do_not_restart_content_timeout() {
 #[tokio::test(start_paused = true)]
 async fn test_slow_deltas_over_three_minutes_complete_without_error() {
     let frames = crate::sse::periodic_frames(Some("content_block_delta"), "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}", std::time::Duration::from_secs(30));
-    let events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+    let events = frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
     let collected: Vec<RawEvent> = events.take(6).collect().await;
     assert!(
         collected
@@ -311,7 +311,7 @@ async fn test_slow_deltas_over_three_minutes_complete_without_error() {
 #[tokio::test(start_paused = true)]
 async fn test_continuous_deltas_for_eleven_minutes_keep_streaming() {
     let frames = crate::sse::periodic_frames(Some("content_block_delta"), "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}", std::time::Duration::from_secs(30));
-    let events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+    let events = frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
     let collected: Vec<RawEvent> = events.take(22).collect().await;
     assert_eq!(collected.len(), 22);
     assert!(collected
@@ -345,7 +345,7 @@ async fn test_message_start_cache_usage_fields_are_logged() {
         ]),
     );
     let request_id = Uuid::new_v4();
-    let events: Vec<RawEvent> = process_frame_stream(frames, true, request_id, String::new(), None)
+    let events: Vec<RawEvent> = frame_stream(frames, true, request_id, String::new(), None)
         .collect()
         .await;
 
@@ -389,10 +389,9 @@ async fn test_message_start_cache_read_hit_is_logged() {
             frame("message_stop", "{}"),
         ]),
     );
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -430,7 +429,7 @@ async fn test_message_delta_with_end_turn_stop_reason_is_logged() {
             frame("message_stop", "{}"),
         ]));
     let request_id = Uuid::new_v4();
-    let events: Vec<RawEvent> = process_frame_stream(frames, true, request_id, String::new(), None)
+    let events: Vec<RawEvent> = frame_stream(frames, true, request_id, String::new(), None)
         .collect()
         .await;
 
@@ -468,10 +467,9 @@ async fn test_message_delta_with_max_tokens_stop_reason_is_logged() {
             ),
             frame("message_stop", "{}"),
         ]));
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     // Spec 0065, Teil 2: kein Tool-Call beteiligt (reiner Text) — seit
     // diesem Fix `TextTruncated` statt `Done`, s. `finalize`-Kommentar.
@@ -526,10 +524,9 @@ async fn test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -542,7 +539,7 @@ async fn test_truncated_but_parseable_tool_call_is_never_forwarded_and_triggers_
 async fn anthropic_events(frames: Vec<Result<SseFrame, reqwest::Error>>) -> Vec<RawEvent> {
     let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::iter(frames));
-    process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+    frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
         .collect()
         .await
 }
@@ -642,10 +639,9 @@ async fn test_complete_tool_call_with_normal_stop_reason_is_forwarded() {
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(
         events.len(),
@@ -752,10 +748,9 @@ async fn test_unknown_tool_is_non_fatal_and_valid_call_still_forwarded() {
             frame("message_stop", "{}"),
         ]),
     );
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
     assert!(
         matches!(
             &events[0],
@@ -795,10 +790,9 @@ async fn test_tool_call_block_never_closed_triggers_retry_not_silent_drop() {
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
 }
@@ -829,10 +823,9 @@ async fn test_abrupt_disconnect_after_content_block_stop_but_before_message_delt
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -869,10 +862,9 @@ async fn test_unrecognized_stop_reason_is_treated_as_truncated_not_complete() {
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
 }
@@ -911,10 +903,9 @@ async fn test_multi_tool_use_with_truncated_last_block_discards_all() {
         ]),
     );
 
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -1189,7 +1180,7 @@ fn test_web_tool_set_is_identical_across_sessions_and_servers() {
 async fn collect_frames(frames: Vec<Result<SseFrame, reqwest::Error>>) -> Vec<RawEvent> {
     let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::iter(frames));
-    process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+    frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
         .collect()
         .await
 }
@@ -1579,10 +1570,9 @@ async fn test_web_activity_precedes_fallback_action_in_mixed_response() {
     ]);
     let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
         Box::pin(futures::stream::iter(frames));
-    let events: Vec<RawEvent> =
-        process_frame_stream(frames, false, Uuid::new_v4(), String::new(), None)
-            .collect()
-            .await;
+    let events: Vec<RawEvent> = frame_stream(frames, false, Uuid::new_v4(), String::new(), None)
+        .collect()
+        .await;
 
     let web = position_of(&events, |e| matches!(e, AiEvent::WebActivity(_)));
     let action = position_of(&events, |e| matches!(e, AiEvent::ActionProposed(_)));
