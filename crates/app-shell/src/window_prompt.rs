@@ -278,6 +278,7 @@ impl PromptChannel {
     }
 
     /// Frage offen halten, `show` aufrufen, auf die Antwort warten.
+    #[expect(clippy::cognitive_complexity, reason = "split planned")]
     fn show_and_wait<E: std::fmt::Display>(
         &self,
         show: impl FnOnce() -> Result<(), E>,

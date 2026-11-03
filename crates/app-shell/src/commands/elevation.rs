@@ -1451,6 +1451,7 @@ mod browser_channel_tests {
     /// aktiv, lesen und schreiben KI- und MCP-Aktionen trotzdem über den
     /// NORMALEN Kanal — der erhöhte ist nur für Browser-Commands da.
     #[tokio::test]
+    #[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
     async fn test_ai_and_mcp_file_actions_never_use_the_elevated_channel() {
         use ssh_manager_core::ai::AiEvent;
         use ssh_manager_core::profiles::AiAction;
@@ -1568,6 +1569,7 @@ mod browser_channel_tests {
     /// NORMALEN Kanal — sie darf die Datei nie mit den Rechten des erhöhten
     /// Kanals schreiben.
     #[tokio::test]
+    #[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
     async fn test_mcp_write_actions_never_use_the_elevated_channel() {
         use ssh_manager_core::ai::AiEvent;
         use ssh_manager_core::profiles::AiAction;

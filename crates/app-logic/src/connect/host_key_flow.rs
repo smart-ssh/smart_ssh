@@ -49,6 +49,7 @@ pub struct HostKeyFlowContext<'a> {
 /// `SSH_HOST_KEY_NOT_TRUSTED` (automatic reconnect or reject),
 /// `SSH_HOST_KEY_CONFIRM_TIMEOUT`, `SSH_CONNECTION_ABANDONED` and
 /// `SSH_CONNECT_CANCELLED` (`cancel` resolved while waiting).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub async fn resolve_pending_host_key(
     ctx: HostKeyFlowContext<'_>,
     host: String,
