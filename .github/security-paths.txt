@@ -16,7 +16,8 @@ crates/app-shell/src/commands/master_password.rs
 crates/persistence-sqlite/migrations/
 crates/ssh-transport/
 crates/core/src/ssh/
-crates/app-shell/src/commands/connect.rs
+crates/app-shell/src/commands/connect/
+crates/app-logic/src/connect/
 apps/smart-ssh-community/frontend/src/components/HostKeyDialog.tsx
 crates/app-shell/src/elevated_sftp.rs
 crates/app-shell/src/commands/elevation.rs
