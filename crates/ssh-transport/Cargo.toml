@@ -53,3 +53,6 @@ tempfile = { workspace = true }
 # (wie im selben Muster bereits in `crates/app-shell/Cargo.toml`), keine
 # zusätzliche Abhängigkeit, nur ein zusätzliches Feature der bestehenden.
 tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

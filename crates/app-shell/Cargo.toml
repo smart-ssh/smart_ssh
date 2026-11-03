@@ -118,3 +118,6 @@ russh-sftp = { workspace = true }
 # Sekunden abzuwarten. Nur unter `[dev-dependencies]`, landet nie in einem
 # Release-Build.
 tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

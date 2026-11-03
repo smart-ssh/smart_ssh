@@ -119,6 +119,17 @@ impl ChildPipes {
     }
 }
 
+/// Sends `signal` to the process group `pgid`.
+#[cfg(unix)]
+#[expect(unsafe_code, reason = "libc::killpg")]
+fn killpg_group(pgid: libc::pid_t, signal: libc::c_int) {
+    // SAFETY: `killpg` has no memory preconditions; `pgid` is the group of
+    // our own child process, which has not been reaped yet (see callers).
+    unsafe {
+        libc::killpg(pgid, signal);
+    }
+}
+
 /// Issue #324 (Spec 0027): beendet ein abgebrochenes lokales Kommando samt
 /// allen Prozessen, die es gestartet hat, und sammelt bis dahin noch
 /// geschriebene Ausgabe ein (unter demselben Cap, Spec 0044).
@@ -146,11 +157,7 @@ async fn terminate_tree(
         .filter(|p| *p > 0);
     #[cfg(unix)]
     if let Some(pgid) = group {
-        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
-        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
-        unsafe {
-            libc::killpg(pgid, libc::SIGINT);
-        }
+        killpg_group(pgid, libc::SIGINT);
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
@@ -166,10 +173,7 @@ async fn terminate_tree(
 
     #[cfg(unix)]
     if let Some(pgid) = group {
-        // SAFETY: wie oben; der Kindprozess ist weiterhin nicht eingesammelt.
-        unsafe {
-            libc::killpg(pgid, libc::SIGKILL);
-        }
+        killpg_group(pgid, libc::SIGKILL);
     }
     // Rückfallebene (keine Gruppe/kein `taskkill`): zumindest den direkten
     // Kindprozess beenden. Für einen schon beendeten Prozess wirkungslos.
@@ -205,11 +209,7 @@ async fn kill_tree_now(child: &mut Child, pid: Option<u32>) {
         .and_then(|p| libc::pid_t::try_from(p).ok())
         .filter(|p| *p > 0)
     {
-        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
-        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
-        unsafe {
-            libc::killpg(pgid, libc::SIGKILL);
-        }
+        killpg_group(pgid, libc::SIGKILL);
     }
     #[cfg(windows)]
     if let Some(pid) = pid {

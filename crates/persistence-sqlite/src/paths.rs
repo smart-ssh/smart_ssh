@@ -222,6 +222,7 @@ pub fn default_db_path() -> PathBuf {
 }
 
 #[cfg(test)]
+#[expect(unsafe_code, reason = "tests mutate process env under ENV_LOCK")]
 mod tests {
     use super::*;
 

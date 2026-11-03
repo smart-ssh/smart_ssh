@@ -72,3 +72,6 @@ ssh-manager-core = { workspace = true, features = ["test-support"] }
 # Spec 0076, §6.2 (Muster wie app-shell/Cargo.toml).
 ssh-transport = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

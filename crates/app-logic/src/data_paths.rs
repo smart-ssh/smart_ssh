@@ -156,6 +156,7 @@ pub fn open_folder_target(entries: &[DataPathEntry], id: &str) -> Result<PathBuf
 }
 
 #[cfg(test)]
+#[expect(unsafe_code, reason = "tests mutate process env under ENV_LOCK")]
 mod tests {
     use super::*;
 

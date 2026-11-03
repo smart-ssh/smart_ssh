@@ -409,7 +409,7 @@ async fn write_via_sudo_fallback(
 /// Fallback, sofern für den Server ein Passwort hinterlegt ist. Ohne
 /// Passwort wird der ursprüngliche Fehler unverändert gemeldet (Abschnitt
 /// 4.3, Punkt 5: "kein stiller Fallback").
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn execute_write_remote_file(
     session: &Session,
     session_id: SessionId,

@@ -32,3 +32,6 @@ wiremock = "0.6.5"
 # initialisation, so TLS there uses the bundled webpki roots instead.
 [target.'cfg(target_os = "android")'.dependencies]
 tls-config = { workspace = true }
+
+[lints]
+workspace = true

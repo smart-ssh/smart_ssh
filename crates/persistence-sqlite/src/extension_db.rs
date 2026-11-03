@@ -215,6 +215,10 @@ struct AuthContext {
     refused: std::sync::atomic::AtomicBool,
 }
 
+#[expect(
+    unsafe_code,
+    reason = "SQLite authorizer callback: raw C ABI, see SAFETY comments"
+)]
 unsafe extern "C" fn authorizer(
     user: *mut c_void,
     action: c_int,
@@ -371,6 +375,10 @@ impl SqliteProfileStore {
     }
 }
 
+#[expect(
+    unsafe_code,
+    reason = "sqlite3_set_authorizer FFI call, see SAFETY comment"
+)]
 async fn install(
     conn: &mut sqlx::SqliteConnection,
     ctx: Option<usize>,

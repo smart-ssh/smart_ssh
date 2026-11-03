@@ -64,7 +64,8 @@
 //! in einer Datei — das schaltete den Schutz stillschweigend auch für den
 //! Produktivcode derselben Datei ab (spec-reviewer-Fund, Runde 1).
 
-#![deny(clippy::unwrap_used, clippy::expect_used)]
+// `unwrap_used` is denied workspace-wide; only `expect_used` is stricter here.
+#![deny(clippy::expect_used)]
 
 pub(crate) mod action_exec;
 mod approval;
@@ -79,11 +80,11 @@ mod outgoing;
 mod pending_confirmation;
 mod remote_files;
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_exec_guard;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 pub(crate) mod test_support;
 
 pub use approval::{ApprovedCommand, ApprovedFileWrite};

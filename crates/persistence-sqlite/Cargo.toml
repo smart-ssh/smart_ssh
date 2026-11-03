@@ -67,3 +67,6 @@ tracing-subscriber = { workspace = true, features = ["json"] }
 [[example]]
 name = "add_test_server"
 required-features = ["test-support"]
+
+[lints]
+workspace = true

@@ -30,3 +30,6 @@ thirtyfour = { version = "0.37.7", default-features = false, features = ["reqwes
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "net", "time"] }
 uuid = { workspace = true, features = ["v4"] }
 chrono = { workspace = true }
+
+[lints]
+workspace = true

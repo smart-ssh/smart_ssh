@@ -20,3 +20,6 @@ ssh-manager-core = { workspace = true }
 [target.'cfg(target_os = "android")'.dependencies]
 android-native-keyring-store = "1.0.0"
 keyring-core = "1"
+
+[lints]
+workspace = true
