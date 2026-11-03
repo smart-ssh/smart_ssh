@@ -182,6 +182,29 @@ describe("ServerForm extension tabs (issue #608)", () => {
     expect(screen.getByTestId("ext-tab")).toHaveTextContent(`ext for ${OTHER_ID}`);
   });
 
+  it("mounts an extension tab on first open, keeps it while switching tabs and unmounts it for another server", async () => {
+    registerServerSettingsTab({ id: "a", label: "Ten", component: Ext });
+    vi.mocked(getServer).mockImplementation((id: string) =>
+      Promise.resolve(serverDto({ id, name: id === OTHER_ID ? "web-02" : "web-01" })),
+    );
+    const view = renderForm();
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    expect(screen.queryByTestId("ext-tab")).toBeNull();
+    openTab("Ten");
+    expect(screen.getByTestId("ext-tab")).toBeVisible();
+    openTab("Sicherheit");
+    openTab("Allgemein");
+    expect(screen.getByTestId("ext-tab")).not.toBeVisible();
+    view.rerender(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm serverId={OTHER_ID} defaultGroupId={null} allGroups={[]} allServers={[]} onSaved={vi.fn()} onDeleted={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-02")).toBeInTheDocument();
+    expect(screen.queryByTestId("ext-tab")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("adds a late tab without losing the draft and falls back to General on unregister", async () => {
     renderForm();
     expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();

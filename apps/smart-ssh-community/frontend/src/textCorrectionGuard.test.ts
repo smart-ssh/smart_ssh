@@ -14,7 +14,7 @@ const NON_TEXT_TYPES = new Set(["radio", "checkbox", "number", "button", "file",
 const FREE_TEXT_ALLOWLIST: { file: string; marker: string }[] = [
   { file: "chat/Composer.tsx", marker: 'placeholder={t("chat.inputPlaceholder")}' },
   { file: "NotesPanel.tsx", marker: "textarea" },
-  { file: "ServerForm.tsx", marker: "ref={localNotesRef}" },
+  { file: "serverForm/LocalServerForm.tsx", marker: "ref={localNotesRef}" },
 ];
 
 /** Opening tags of input/textarea elements found in JSX source (not comments). */
@@ -53,9 +53,12 @@ export function violations(file: string, source: string): string[] {
 
 describe("text correction guard (issue #217)", () => {
   it("every technical text field spreads TECHNICAL_INPUT_PROPS", () => {
-    const files = fs
-      .readdirSync(COMPONENTS_DIR)
-      .filter((f) => f.endsWith(".tsx") && !f.includes(".test."));
+    const files = [".", "serverForm"].flatMap((dir) =>
+      fs
+        .readdirSync(path.join(COMPONENTS_DIR, dir))
+        .filter((f) => f.endsWith(".tsx") && !f.includes(".test."))
+        .map((f) => path.join(dir, f)),
+    );
     const found = files.flatMap((f) =>
       violations(f, fs.readFileSync(path.join(COMPONENTS_DIR, f), "utf8")),
     );
