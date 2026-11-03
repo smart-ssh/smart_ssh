@@ -1,6 +1,7 @@
 //! Spec 0005: interaktives Terminal — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
@@ -27,10 +28,7 @@ pub async fn open_terminal(
 ) -> CommandResult<TerminalStartDto> {
     // Spec 0104, §4: Eine MCP-Sitzung hat kein interaktives Terminal.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
 
     // Standardgröße, bis das Frontend die tatsächliche Terminal-Größe
     // per `terminal_resize` meldet (Spec 0007 Abschnitt 4 sieht für
@@ -39,7 +37,7 @@ pub async fn open_terminal(
         open_shell_in_start_directory(&session, PtySize { cols: 80, rows: 24 }).await?;
 
     let (tx, rx) = mpsc::unbounded_channel();
-    *session.conn.terminal.lock().unwrap() = Some(tx);
+    *lock_tolerating_poison(&session.conn.terminal) = Some(tx);
     spawn_terminal_actor(
         session_id,
         Arc::clone(&session),
@@ -52,11 +50,7 @@ pub async fn open_terminal(
 }
 
 fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {
-    session
-        .conn
-        .terminal
-        .lock()
-        .unwrap()
+    lock_tolerating_poison(&session.conn.terminal)
         .clone()
         .ok_or_else(|| "Terminal wurde noch nicht geöffnet (open_terminal aufrufen)".into())
 }
@@ -67,10 +61,7 @@ pub async fn terminal_input(
     session_id: SessionId,
     data: Vec<u8>,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Write(data))
         .map_err(|_| "Terminal-Kanal bereits geschlossen")?;
@@ -84,10 +75,7 @@ pub async fn terminal_resize(
     cols: u16,
     rows: u16,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Resize(PtySize { cols, rows }))
         .map_err(|_| "Terminal-Kanal bereits geschlossen")?;

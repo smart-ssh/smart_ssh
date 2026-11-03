@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use crate::poison::lock_tolerating_poison;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Identifies a scope. The app scope is one key; session scopes follow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

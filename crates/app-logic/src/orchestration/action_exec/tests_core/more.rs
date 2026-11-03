@@ -1,4 +1,5 @@
 use super::*;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 #[tokio::test]
 async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
@@ -46,7 +47,7 @@ async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
     )
     .await;
 
-    let events = emitter.events.lock().unwrap().clone();
+    let events = lock_tolerating_poison(&emitter.events).clone();
     let event_names = event_names_excluding_auto_continuation(&events);
     // Deny blockiert nur die Ausführung, nicht den weiteren
     // Stream-Verlauf: das TextDelta danach kommt trotzdem an.
@@ -124,7 +125,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
     let responder = async {
         loop {
             let action_id = {
-                let events = emitter.events.lock().unwrap();
+                let events = lock_tolerating_poison(&emitter.events);
                 events.iter().find_map(|(name, payload)| {
                     (name == "chat-action-proposed")
                         .then(|| payload["actionId"].as_str().unwrap().to_string())
@@ -143,7 +144,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
 
     tokio::join!(turn, responder);
 
-    let events = emitter.events.lock().unwrap().clone();
+    let events = lock_tolerating_poison(&emitter.events).clone();
     let event_names = event_names_excluding_auto_continuation(&events);
     assert_eq!(
         event_names,
@@ -155,7 +156,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
         "ProposeNoteUpdate muss immer Confirm sein, nie AutoExec"
     );
 
-    let revisions = profile_store.note_revisions.lock().unwrap().clone();
+    let revisions = lock_tolerating_poison(&profile_store.note_revisions).clone();
     assert_eq!(revisions.len(), 1);
     assert_eq!(
         revisions[0].target,
@@ -203,7 +204,7 @@ async fn test_executed_action_triggers_automatic_followup_round_with_final_answe
     )
     .await;
 
-    let events = emitter.events.lock().unwrap().clone();
+    let events = lock_tolerating_poison(&emitter.events).clone();
     let event_names = event_names_excluding_auto_continuation(&events);
     assert_eq!(
         event_names,
@@ -336,7 +337,7 @@ async fn test_slow_session_does_not_block_concurrent_session_via_shared_manager(
     // prüft nicht den Kern dieses Tests (Nebenläufigkeit, s. oben) —
     // sie hält nur fest, dass sich außer dieser einen, erwarteten
     // Ergänzung nichts an Session B geändert hat.
-    let events_fast = emitter_fast.events.lock().unwrap().clone();
+    let events_fast = lock_tolerating_poison(&emitter_fast.events).clone();
     let event_names: Vec<&str> = events_fast.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(event_names, vec!["chat-response-empty"]);
 }

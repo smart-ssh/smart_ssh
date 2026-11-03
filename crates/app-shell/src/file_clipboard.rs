@@ -10,6 +10,7 @@
 //! staged file — but only after the new one is on the clipboard, so a
 //! cancelled or failed copy neither leaves a file nor changes the clipboard.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -138,7 +139,7 @@ pub(crate) fn cleanup_at_exit() {
 impl FileClipboard {
     /// Puts `file` on the system clipboard as the only file reference.
     pub(crate) fn set_file(&self, file: &Path) -> Result<(), String> {
-        let mut guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = lock_tolerating_poison(&self.context);
         if guard.is_none() {
             *guard = Some(ClipboardContext::new().map_err(|e| e.to_string())?);
         }
@@ -152,7 +153,7 @@ impl FileClipboard {
     /// that only exists after an async step, where the webview no longer
     /// has the user gesture it needs for its own clipboard write.
     pub(crate) fn set_text(&self, text: &str) -> Result<(), String> {
-        let mut guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = lock_tolerating_poison(&self.context);
         if guard.is_none() {
             *guard = Some(ClipboardContext::new().map_err(|e| e.to_string())?);
         }
@@ -168,7 +169,7 @@ impl FileClipboard {
     /// paths of entries that exist come back; `file://` URIs (X11/Wayland)
     /// are turned into plain paths. An unreadable clipboard is an `Err`.
     pub(crate) fn get_files(&self) -> Result<Vec<PathBuf>, String> {
-        let mut guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = lock_tolerating_poison(&self.context);
         if guard.is_none() {
             *guard = Some(ClipboardContext::new().map_err(|e| e.to_string())?);
         }

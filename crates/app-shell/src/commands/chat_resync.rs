@@ -14,10 +14,7 @@ pub async fn get_chat_resync(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<ChatResyncDto> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     let history = session.ai.context.lock().await.history.clone();
     // Only a confirmation the registry still knows may become a card with
     // active buttons — a stale proposal must not be confirmable.

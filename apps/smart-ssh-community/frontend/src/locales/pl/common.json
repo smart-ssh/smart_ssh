@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Wybrany dostawca AI nie jest skonfigurowany. Wybierz skonfigurowanego dostawcę.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wybierz dostawcę AI, zanim włączysz drugą opinię o ryzyku.",
+    "SESSION_NOT_FOUND": "Ta sesja nie jest już otwarta. Otwórz ją ponownie z listy serwerów.",
     "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nie znaleziono pliku klucza na tym urządzeniu"
   },

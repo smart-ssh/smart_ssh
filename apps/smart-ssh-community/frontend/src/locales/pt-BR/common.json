@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "O provedor de IA selecionado não está configurado. Escolha um provedor configurado.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Escolha um provedor de IA antes de ativar a segunda opinião sobre o risco.",
+    "SESSION_NOT_FOUND": "Esta sessão não está mais aberta. Abra-a novamente na lista de servidores.",
     "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Arquivo de chave não encontrado neste dispositivo"
   },

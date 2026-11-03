@@ -5,6 +5,7 @@
 //! `cancel_connect(attemptId)` flips the flag, the running attempt notices
 //! and aborts. Cancelling an unknown or finished attempt is a no-op.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -57,7 +58,7 @@ impl ConnectAttempts {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, (u64, watch::Sender<bool>)>> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.inner)
     }
 }
 
@@ -80,7 +81,7 @@ impl ConnectAttemptGuard {
 
 impl Drop for ConnectAttemptGuard {
     fn drop(&mut self) {
-        let mut map = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+        let mut map = lock_tolerating_poison(&self.registry);
         // Only remove our own entry (not one a newer registration replaced).
         if map.get(&self.id).is_some_and(|(t, _)| *t == self.token) {
             map.remove(&self.id);

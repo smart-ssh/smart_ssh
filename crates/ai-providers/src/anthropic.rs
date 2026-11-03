@@ -19,6 +19,7 @@
 //! [`anthropic_model_max_output_tokens`] (Spec 0065, Teil 1) und
 //! `SessionContext::max_tokens_hint` für den Nebenaufruf-Override.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::{BTreeMap, VecDeque};
 use std::pin::Pin;
 
@@ -544,10 +545,7 @@ impl AiProvider for AnthropicProvider {
     }
 
     fn last_request_id(&self) -> Option<Uuid> {
-        *self
-            .last_request
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        *lock_tolerating_poison(&self.last_request)
     }
 }
 

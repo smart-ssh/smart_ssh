@@ -714,10 +714,7 @@ async fn browser_session(
     session_id: SessionId,
     channel: &BrowserChannel,
 ) -> CommandResult<Arc<Session>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     match &channel.kind {
         BrowserChannelKind::Normal => app_logic::orchestration::ensure_sftp_open(&session).await?,
         BrowserChannelKind::Elevated { slot, .. } => {
@@ -741,10 +738,7 @@ pub async fn sftp_elevation_enable(
     target_user: Option<String>,
     confirm_stop: Option<bool>,
 ) -> CommandResult<app_logic::dto::ElevationResultDto> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Transport-Grenze statt Sonderfall in der Logik: der lokale
     // Pseudo-Server hat kein sudo/sftp-server (CLAUDE.md, "No
     // special-casing ... in the core loop").
@@ -789,7 +783,7 @@ pub async fn sftp_elevation_enable(
 /// ausgehängt, sondern widerrufen — ein Befehl, der ihn gerade festhält,
 /// kann ihn danach nicht mehr benutzen; der Widerruf wartet auf einen
 /// laufenden Vorgang. Eine unbekannte Sitzungskennung liefert wie bisher
-/// `Err("Session nicht gefunden")` (T9).
+/// `Err("session not found")` (T9).
 #[tauri::command]
 pub async fn sftp_elevation_disable(
     state: State<'_, AppState>,
@@ -814,10 +808,7 @@ pub async fn sftp_elevation_status(
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
 ) -> CommandResult<Option<String>> {
-    state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    app_logic::session::require_session(&state.sessions, session_id)?;
     let Some(slot) = elevated.slot(session_id, &BrowserAccess(())) else {
         return Ok(None);
     };

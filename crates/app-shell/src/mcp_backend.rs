@@ -6,6 +6,7 @@
 //! zur Begründung, warum diese Implementierung hier (statt in der
 //! `mcp-server`-Crate selbst) lebt.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Manager};
@@ -86,7 +87,7 @@ impl AppMcpBackend {
                     if let Err(err) = orphan.transport.lock().await.disconnect().await {
                         tracing::debug!(error = %err, "disconnecting orphaned MCP session failed");
                     }
-                    *orphan.conn.terminal.lock().unwrap() = None;
+                    *lock_tolerating_poison(&orphan.conn.terminal) = None;
                 }
             },
         )
@@ -306,14 +307,14 @@ impl EventEmitter for CaptureEmitter<'_> {
     fn emit_event(&self, event: &str, payload: serde_json::Value) {
         match event {
             "chat-action-proposed" => {
-                *self.decision.lock().expect("Mutex vergiftet") = Some(payload["decision"].clone());
+                *lock_tolerating_poison(&self.decision) = Some(payload["decision"].clone());
             }
             "chat-action-result" => {
-                *self.result.lock().expect("Mutex vergiftet") = Some(payload["result"].clone());
+                *lock_tolerating_poison(&self.result) = Some(payload["result"].clone());
             }
             "chat-error" => {
                 if let Some(message) = payload["message"].as_str() {
-                    *self.error.lock().expect("Mutex vergiftet") = Some(message.to_string());
+                    *lock_tolerating_poison(&self.error) = Some(message.to_string());
                 }
             }
             _ => {}

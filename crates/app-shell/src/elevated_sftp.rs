@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-use ssh_manager_core::ssh::SftpSession;
+use ssh_manager_core::{ssh::SftpSession, sync::lock_tolerating_poison};
 
 use crate::commands::BrowserAccess;
 use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
@@ -103,7 +103,7 @@ impl ElevatedSftpSlot {
     /// Befehl gerade festhält.
     #[cfg(test)]
     pub(crate) fn set_before_operation_hook(&self, hook: BeforeOperationHook) {
-        *self.before_operation_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.before_operation_hook) = Some(hook);
     }
 
     /// Ruft den Haltepunkt aus [`Self::before_operation_hook`], falls einer
@@ -111,7 +111,7 @@ impl ElevatedSftpSlot {
     pub(crate) fn run_before_operation_hook(&self) {
         #[cfg(test)]
         {
-            let hook = self.before_operation_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.before_operation_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
@@ -220,7 +220,9 @@ impl ElevatedSftpRegistry {
         session_id: SessionId,
         _access: &BrowserAccess,
     ) -> Option<ElevatedSftpSlot> {
-        self.slots.lock().unwrap().get(&session_id).cloned()
+        lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned()
     }
 
     /// Spec 0084, A2.2: trägt `channel` **nur** ein, wenn `session_id` zu
@@ -241,7 +243,7 @@ impl ElevatedSftpRegistry {
         channel: ElevatedSftp,
         _access: &BrowserAccess,
     ) -> Result<Option<ElevatedSftpSlot>, ()> {
-        let mut slots = self.slots.lock().unwrap();
+        let mut slots = lock_tolerating_poison(&self.slots);
         if sessions.get(session_id).is_none() {
             return Err(());
         }
@@ -262,7 +264,7 @@ impl ElevatedSftpRegistry {
     /// laufenden Vorgang und darf deshalb nicht unter der
     /// Zuordnungs-Sperre laufen.
     fn take(&self, session_id: SessionId, _access: &BrowserAccess) -> Option<ElevatedSftpSlot> {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = &slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -298,12 +300,12 @@ impl ElevatedSftpRegistry {
         let session = sessions.remove(session_id);
         #[cfg(test)]
         {
-            let hook = self.interleave_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.interleave_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
         }
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -315,7 +317,7 @@ impl ElevatedSftpRegistry {
     /// channel (it belonged to the dead connection). The channel is revoked
     /// like on disconnect; the user elevates again.
     pub(crate) fn revoke_session(&self, session_id: SessionId) {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -328,9 +330,7 @@ impl ElevatedSftpRegistry {
     /// separat geprüft (T8/T8b).
     #[cfg(test)]
     pub(crate) fn insert_for_tests(&self, session_id: SessionId, channel: ElevatedSftp) {
-        self.slots
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.slots)
             .insert(session_id, ElevatedSftpSlot::with_channel(channel));
     }
 
@@ -338,7 +338,7 @@ impl ElevatedSftpRegistry {
     /// ersten Durchlauf verbraucht.
     #[cfg(test)]
     fn set_interleave_hook(&self, hook: InterleaveHook) {
-        *self.interleave_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.interleave_hook) = Some(hook);
     }
 }
 
@@ -353,7 +353,7 @@ use app_logic::dto::{
     ElevationDisableDto, ElevationFailureDto, ElevationFailureKind, ElevationResultDto,
     ElevationWarningDto, ElevationWarningKind,
 };
-use app_logic::error::{CommandError, CommandResult};
+use app_logic::error::CommandResult;
 
 /// Spec 0084, A1/A2: alles, was das Einschalten des erhöhten Kanals über die
 /// Sitzungsgrenze hinweg braucht — gebündelt, weil `enable` sonst über die
@@ -412,7 +412,7 @@ async fn run_probe(
 /// (inkl. sudo-stderr) gehen nur in diese Meldung, nie in Chat/KI-Kontext.
 ///
 /// Spec 0084, A2.2: Der geöffnete Kanal wird nur eingetragen, solange die
-/// Sitzung noch steht — sonst `Err("Session nicht gefunden")` und der Kanal
+/// Sitzung noch steht — sonst `Err("session not found")` und der Kanal
 /// wird verworfen.
 ///
 /// **Sperr-Reihenfolge:** Der Widerruf des verdrängten Vorgängers steht
@@ -617,7 +617,7 @@ pub(crate) async fn enable_after_confirmation(
             let previous = ctx
                 .registry
                 .insert_if_session_alive(ctx.sessions, ctx.session_id, channel, access)
-                .map_err(|()| CommandError::from("Session nicht gefunden"))?;
+                .map_err(|()| app_logic::session::session_not_found())?;
             // Spec 0084, §9 (Klarstellung 2026-09-28): Wer den bisherigen
             // Kanal noch aus einem laufenden Befehl hält, darf ihn über das
             // Neu-Aktivieren hinaus nicht weiter benutzen — sonst liefe ein
@@ -662,7 +662,7 @@ pub(crate) async fn enable_after_confirmation(
 ///   festhält, scheitert danach beim Zugriff, statt weiter erhöht zu
 ///   arbeiten.
 /// * Eine **unbekannte** Sitzungskennung liefert wie bisher
-///   `Err("Session nicht gefunden")`; „nicht aktiv“ (also `Ok`, ohne dass
+///   `Err("session not found")`; „nicht aktiv“ (also `Ok`, ohne dass
 ///   etwas passiert) gilt nur für eine bekannte Sitzung ohne Kanal (T9).
 ///
 /// Issue #622: Laufen noch erhöhte Operationen, passiert ohne `confirm_stop`
@@ -677,9 +677,7 @@ pub(crate) async fn disable(
     confirm_stop: bool,
     access: &BrowserAccess,
 ) -> CommandResult<ElevationDisableDto> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     let running = registry.ops().running_elevated(session_id);
     if !running.is_empty() {
         if !confirm_stop {
@@ -713,9 +711,7 @@ pub(crate) async fn disable_now(
     session_id: SessionId,
     access: &BrowserAccess,
 ) -> CommandResult<()> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     if let Some(slot) = registry.take(session_id, access) {
         slot.revoke().await;
     }
@@ -1071,7 +1067,8 @@ mod tests {
         .expect("der Aktivierungs-Task darf nicht panisch enden");
 
         let err = result.expect_err("A2.2: ohne Sitzung darf nicht aktiviert werden");
-        assert_eq!(err.message, "Session nicht gefunden");
+        assert_eq!(err.message, "session not found");
+        assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
         assert!(
             f.registry.slot(f.session_id, &access()).is_none(),
             "A2.2: kein Eintrag für eine bereits entfernte Sitzung"
@@ -1357,7 +1354,8 @@ mod tests {
         )
         .await
         .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
-        assert_eq!(err.message, "Session nicht gefunden");
+        assert_eq!(err.message, "session not found");
+        assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
         assert!(!f.is_active().await);
     }
 }

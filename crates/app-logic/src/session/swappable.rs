@@ -1,5 +1,6 @@
 //! Swappable sudo password and redactor of a session (Issue #355).
 
+use ssh_manager_core::sync::{read_tolerating_poison, write_tolerating_poison};
 use std::sync::Arc;
 
 use ssh_manager_core::ai::OutputRedactor;
@@ -14,7 +15,7 @@ impl SwappableSudoPassword {
     }
 
     pub fn get(&self) -> Option<Arc<secrecy::SecretString>> {
-        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+        read_tolerating_poison(&self.0).clone()
     }
 
     pub fn is_some(&self) -> bool {
@@ -26,7 +27,7 @@ impl SwappableSudoPassword {
     }
 
     pub(super) fn replace(&self, value: Option<secrecy::SecretString>) {
-        *self.0.write().unwrap_or_else(|e| e.into_inner()) = value.map(Arc::new);
+        *write_tolerating_poison(&self.0) = value.map(Arc::new);
     }
 }
 
@@ -50,11 +51,11 @@ impl SwappableRedactor {
     }
 
     fn current(&self) -> Arc<dyn OutputRedactor> {
-        self.inner.read().unwrap_or_else(|e| e.into_inner()).clone()
+        read_tolerating_poison(&self.inner).clone()
     }
 
     pub(super) fn replace(&self, redactor: Box<dyn OutputRedactor>) {
-        *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
+        *write_tolerating_poison(&self.inner) = Arc::from(redactor);
     }
 
     /// Issue #635: replaces the pattern-based redactor **and** the literal
@@ -79,10 +80,7 @@ impl SwappableRedactor {
         }
         // Longest first, so a secret that contains another is masked whole.
         fresh.sort_by_key(|k| std::cmp::Reverse(k.len()));
-        let mut known = self
-            .literal_secrets
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut known = write_tolerating_poison(&self.literal_secrets);
         *known = fresh;
         drop(known);
         self.replace(redactor);
@@ -94,10 +92,7 @@ impl SwappableRedactor {
     /// Empty values are ignored (they would match everywhere).
     pub fn add_secret_values(&self, secrets: &[secrecy::SecretString]) {
         use secrecy::ExposeSecret;
-        let mut known = self
-            .literal_secrets
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut known = write_tolerating_poison(&self.literal_secrets);
         for secret in secrets {
             let value = secret.expose_secret().as_bytes();
             if !value.is_empty() && !known.iter().any(|k| k == value) {
@@ -109,10 +104,7 @@ impl SwappableRedactor {
     }
 
     fn mask_literals(&self, bytes: &[u8]) -> Vec<u8> {
-        let known = self
-            .literal_secrets
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let known = read_tolerating_poison(&self.literal_secrets);
         let placeholder = ssh_manager_core::ai::REDACTED_PLACEHOLDER.as_bytes();
         let mut out = bytes.to_vec();
         for secret in known.iter() {

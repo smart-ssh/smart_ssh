@@ -660,6 +660,7 @@
     "CLIPBOARD_FILE_FAILED": "No se pudo colocar el archivo en el portapapeles de este sistema.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "El proveedor de IA seleccionado no está configurado. Elija un proveedor configurado.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Elija un proveedor de IA antes de activar la segunda opinión sobre el riesgo.",
+    "SESSION_NOT_FOUND": "Esta sesión ya no está abierta. Ábrela de nuevo desde la lista de servidores.",
     "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo"
   },
