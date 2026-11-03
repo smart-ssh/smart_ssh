@@ -102,9 +102,9 @@ use app_logic::connect::session_builder::should_create_chat_session;
 use app_logic::session::Session;
 
 /// Spec 0047, Fund D2: `SshError` trägt seit Spec 0024 einen stabilen
-/// `code()` fürs Frontend-Mapping — der blanket `?` auf
-/// `ssh_transport::connect(...)` (über `CommandError`s
-/// `impl<E: Display> From<E>`) verwarf ihn bislang und lieferte
+/// `code()` fürs Frontend-Mapping — das frühere pauschale `?` auf
+/// `ssh_transport::connect(...)` (über die damalige Pauschal-Umwandlung)
+/// verwarf ihn bislang und lieferte
 /// `code: None`. Ein Tester mit nicht erreichbarem Server sah dadurch nur
 /// den rohen, hart-deutschen `Display`-Text inkl. OS-Fehlertext, auch im
 /// englischen UI. Eigene, kleine Funktion statt eines Inline-`.map_err`

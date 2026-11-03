@@ -33,8 +33,8 @@ pub(crate) fn pattern_from_parts(
 /// Speichers (trägt wie bisher keinen Code). `PolicyStoreError` selbst
 /// kann keinen Code tragen.
 ///
-/// **Bewusst weder `Display` noch `Error`:** Der blanket
-/// `impl<E: Display> From<E> for CommandError` würde den Typ sonst ohne
+/// **Bewusst weder `Display` noch `Error`:** Die generische
+/// `From<E: Display>`-Umwandlung würde den Typ sonst ohne
 /// Code umwandeln (`?` verlöre ihn still). Ohne `Display` gilt allein
 /// `From<RuleWriteError> for CommandError` in `crate::error`, das den Code
 /// setzt (Issue #260, ADR 0068 §7). Ein Aufrufer, der den Text braucht,

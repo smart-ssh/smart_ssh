@@ -103,7 +103,7 @@ impl GrantSnapshot {
         std::fs::canonicalize(requested)
             .ok()
             .and_then(|canonical| decide(canonical, &self.roots, self.edit_session_dir.as_deref()))
-            .ok_or_else(|| local_path_not_granted())
+            .ok_or_else(local_path_not_granted)
     }
 }
 

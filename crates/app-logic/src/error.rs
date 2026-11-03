@@ -321,6 +321,27 @@ mod code_tests {
             // Issue #883.
             super::SESSION_NOT_FOUND,
         ];
+        assert_unique(&codes);
+        // The codes of every `ErrorCode` type come from the types' own lists,
+        // so a new variant cannot be forgotten here. A code the list above
+        // names too (e.g. `SECRET_STORE_FAILED`) is counted once.
+        let mut typed: Vec<&str> = Vec::new();
+        for list in [
+            ssh_manager_core::ssh::SshError::CODES,
+            ssh_manager_core::ai::AiError::CODES,
+            ssh_manager_core::profiles::ProfileError::CODES,
+            persistence_sqlite::STORE_ERROR_CODES,
+            &[ssh_manager_core::ipc_error::IO_FAILED],
+        ] {
+            assert_unique(list);
+            typed.extend(list.iter().copied().filter(|c| !codes.contains(c)));
+        }
+        assert_unique(&typed);
+        assert!(typed.iter().all(|c| !codes.contains(c)));
+    }
+
+    /// Fails when a code appears twice in `codes`.
+    fn assert_unique(codes: &[&str]) {
         let mut unique = codes.to_vec();
         unique.sort_unstable();
         unique.dedup();
@@ -329,6 +350,12 @@ mod code_tests {
             unique.len(),
             "doppelt vergebener CommandError-Code: {codes:?}"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "doppelt vergebener")]
+    fn test_assert_unique_rejects_a_duplicate() {
+        assert_unique(&["A", "B", "A"]);
     }
 
     /// Spec 0077, T-6d: Die Umwandlung aus 3.1.3 hängt für ein ungültiges
@@ -730,5 +757,28 @@ mod store_code_tests {
             message: "malformed".into(),
         });
         assert_eq!(code_of(CommandError::from(err)), Some(STORE_CORRUPT));
+    }
+}
+
+#[cfg(test)]
+mod every_error_has_a_code_tests {
+    use super::*;
+
+    /// Spec 0024, section 5: errors converted through `?` always carry a code.
+    #[test]
+    fn test_converted_errors_carry_a_code() {
+        let io = CommandError::from(std::io::Error::other("disk"));
+        assert_eq!(io.code, Some(ssh_manager_core::ipc_error::IO_FAILED));
+
+        let profile = CommandError::from(ssh_manager_core::profiles::ProfileError::ServerNotFound(
+            Default::default(),
+        ));
+        assert_eq!(profile.code, Some("SERVER_NOT_FOUND"));
+
+        let ssh = CommandError::from(ssh_manager_core::ssh::SshError::Timeout);
+        assert!(ssh.code.is_some());
+
+        let stringly = CommandError::with_code("x", "TEST_ERROR");
+        assert_eq!(stringly.code, Some("TEST_ERROR"));
     }
 }
