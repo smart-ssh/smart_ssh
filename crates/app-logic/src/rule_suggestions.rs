@@ -285,7 +285,7 @@ fn suggestion_covers(suggestion: &PatternSuggestionDto, segments: &[String]) -> 
     let patterns: Vec<_> = suggestion
         .patterns
         .iter()
-        .map(|p| crate::dto::pattern_from_parts(p.pattern_type, p.pattern_value.clone()))
+        .map(|p| crate::filter_rules::pattern_from_parts(p.pattern_type, p.pattern_value.clone()))
         .collect();
     patterns.iter().all(|p| p.validate().is_ok())
         && segments.iter().all(|segment| {
@@ -538,7 +538,8 @@ mod tests {
         let result = labels_and_patterns("ls [abc def");
 
         for (pattern_type, pattern_value) in &result {
-            let pattern = crate::dto::pattern_from_parts(*pattern_type, pattern_value.clone());
+            let pattern =
+                crate::filter_rules::pattern_from_parts(*pattern_type, pattern_value.clone());
             assert!(
                 pattern.validate().is_ok(),
                 "unbrauchbarer Vorschlag angeboten: {pattern_value:?}"

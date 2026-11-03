@@ -9,9 +9,30 @@
 //! woran seine Anmeldung hängt.
 
 use super::*;
+#[allow(unused_imports)]
+use crate::ids::SessionId;
+#[allow(unused_imports)]
+use crate::status::ConnectionStatus;
 use crate::test_support::InMemoryCredentialStore;
-use chrono::Utc;
-use ssh_manager_core::profiles::PostIngestPolicy;
+#[allow(unused_imports)]
+use chrono::{DateTime, Utc};
+#[allow(unused_imports)]
+use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
+use ssh_manager_core::ai::{ProviderId, ProviderType};
+#[allow(unused_imports)]
+use ssh_manager_core::filter::{
+    Decision, EvalContext, EvaluationTrace, Pattern, RuleAction, RuleId, Scope,
+};
+#[allow(unused_imports)]
+use ssh_manager_core::profiles::{
+    AuthMethod, CredentialError, CredentialRef, CredentialStore, Group, GroupId, NoteEditor,
+    NoteRevision, PostIngestPolicy, Server,
+};
+#[allow(unused_imports)]
+use ssh_manager_core::shared::ServerId;
+#[allow(unused_imports)]
+use ssh_manager_core::ssh::RemoteEntry;
 
 const PATH: &str = "~/.ssh/id_ed25519";
 

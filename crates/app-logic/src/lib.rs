@@ -31,6 +31,7 @@ pub mod confirmation;
 pub mod confirmation_explain;
 pub mod confirmation_settled;
 pub mod connect_attempts;
+pub mod credential_slots;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
 pub mod data_paths;
 /// Spec 0101, A3/A5: Die Entscheidungstabelle für den Datenbankstart und
@@ -46,11 +47,13 @@ pub mod events;
 /// Extension API: the documented, supported surface for extension crates.
 pub mod ext;
 pub mod field_content_decryption;
+pub mod file_browser;
 pub mod filter_rules;
 pub mod folder_upload;
 pub mod groups;
 pub mod host_key_store;
 pub mod identity_file;
+pub mod ids;
 pub mod key_files;
 /// Issue #89: which local paths the file browser may read (upload,
 /// overwrite preview, edit-session polling).
@@ -85,6 +88,7 @@ pub mod second_opinion;
 /// Schlüsselbund in die verschlüsselte Datenbank.
 pub mod secret_migration;
 pub mod server_credentials;
+pub mod server_paths;
 /// Issue #18: Session-Redactor eines Servers und redigierte, gefencte
 /// Notizen für das MCP-Tool `get_server_notes`.
 pub mod server_redaction;
@@ -100,6 +104,7 @@ pub mod start_directory;
 pub mod startup_choice_dialogs;
 pub mod startup_error_messages;
 pub mod state;
+pub mod status;
 /// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
 /// nach der UI-Sprache.
 pub mod system_prompt;
