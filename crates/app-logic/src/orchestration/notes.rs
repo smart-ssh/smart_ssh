@@ -764,7 +764,6 @@ fn disconnect_completion_instruction(language: PromptLanguage) -> String {
 /// Update-Vorschlag gemacht hat (nie zwei konkurrierende Notiz-Dialoge am
 /// selben Verbindungsende).
 #[tracing::instrument(skip_all, fields(session_id = %session_id))]
-#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn suggest_note_update_on_disconnect(
     session: &Session,
     session_id: SessionId,
