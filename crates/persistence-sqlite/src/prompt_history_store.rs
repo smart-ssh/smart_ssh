@@ -35,19 +35,14 @@ const MAX_ENTRIES_PER_SERVER: i64 = 200;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptHistoryStoreError {
     Backend(String),
-    /// A SQLite failure with its machine-readable kind (issue #885).
-    Database {
-        kind: crate::error_kind::StoreErrorKind,
-        message: String,
-    },
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for PromptHistoryStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PromptHistoryStoreError::Database { message, .. } => {
-                write!(f, "Datenbankfehler: {message}")
-            }
+            PromptHistoryStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             PromptHistoryStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
         }
     }
@@ -55,24 +50,8 @@ impl std::fmt::Display for PromptHistoryStoreError {
 
 impl std::error::Error for PromptHistoryStoreError {}
 
-impl PromptHistoryStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
-        match self {
-            PromptHistoryStoreError::Database { kind, .. } => Some(*kind),
-            PromptHistoryStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
 fn backend_err(e: sqlx::Error) -> PromptHistoryStoreError {
-    PromptHistoryStoreError::Database {
-        kind: crate::error_kind::classify(&e),
-        message: e.to_string(),
-    }
+    PromptHistoryStoreError::Database(e.into())
 }
 
 /// S. Moduldoc — teilt sich den Pool mit [`crate::SqliteProfileStore`],
@@ -413,7 +392,7 @@ mod tests {
 
         assert!(matches!(
             history_store.list(&server_id).await,
-            Err(PromptHistoryStoreError::Database { .. })
+            Err(PromptHistoryStoreError::Database(_))
         ));
     }
 

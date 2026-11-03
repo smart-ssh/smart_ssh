@@ -328,8 +328,7 @@ pub async fn list_unusable_servers(
 ) -> CommandResult<Vec<UnusableServerDto>> {
     Ok(store
         .list_server_entries()
-        .await
-        .store_err()?
+        .await?
         .unusable
         .iter()
         .map(UnusableServerDto::from)
@@ -2103,19 +2102,5 @@ mod tests {
         let result = move_server_to_group(&store, LOCAL_SERVER_ID, Some(target.id)).await;
 
         assert!(result.is_err());
-    }
-
-    /// Issue #885: a store failure reaches the command layer with a
-    /// `STORE_*` code instead of `code: None`.
-    #[tokio::test]
-    async fn test_issue_885_store_failure_carries_a_store_code() {
-        let store = InMemoryProfileStore::new();
-        store
-            .fail_get_server
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        let err = move_server_to_group(&store, ServerId::new(), None)
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, Some(crate::error::STORE_FAILED));
     }
 }

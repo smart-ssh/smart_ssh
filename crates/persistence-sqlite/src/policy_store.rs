@@ -39,17 +39,14 @@ pub enum PolicyStoreError {
     /// haben nichts geschrieben (Spec 0077, 3.1.2, Schicht 2).
     InvalidPattern(PatternError),
     Backend(String),
-    /// A SQLite failure with its machine-readable kind (issue #885).
-    Database {
-        kind: crate::error_kind::StoreErrorKind,
-        message: String,
-    },
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for PolicyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PolicyStoreError::Database { message, .. } => write!(f, "Datenbankfehler: {message}"),
+            PolicyStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             PolicyStoreError::NotFound(id) => write!(f, "Filter-Regel '{id}' nicht gefunden"),
             PolicyStoreError::InvalidPattern(err) => write!(f, "{err}"),
             PolicyStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
@@ -59,24 +56,8 @@ impl std::fmt::Display for PolicyStoreError {
 
 impl std::error::Error for PolicyStoreError {}
 
-impl PolicyStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
-        match self {
-            PolicyStoreError::Database { kind, .. } => Some(*kind),
-            PolicyStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
 fn backend_err(e: sqlx::Error) -> PolicyStoreError {
-    PolicyStoreError::Database {
-        kind: crate::error_kind::classify(&e),
-        message: e.to_string(),
-    }
+    PolicyStoreError::Database(e.into())
 }
 
 fn parse_timestamp(raw: &str) -> Result<DateTime<Utc>, PolicyStoreError> {

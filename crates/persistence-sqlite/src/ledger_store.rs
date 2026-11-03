@@ -39,11 +39,8 @@ use ssh_manager_core::audit::LedgerEntryContent;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LedgerStoreError {
     Backend(String),
-    /// A SQLite failure with its machine-readable kind (issue #885).
-    Database {
-        kind: crate::error_kind::StoreErrorKind,
-        message: String,
-    },
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
     /// Wie `ChatSessionStoreError::CorruptContent` (s. dortiger
     /// Doc-Kommentar): die geladene `content`-Spalte eines Eintrags ließ
     /// sich nicht als `LedgerEntryContent` deserialisieren.
@@ -56,7 +53,7 @@ pub enum LedgerStoreError {
 impl std::fmt::Display for LedgerStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LedgerStoreError::Database { message, .. } => write!(f, "Datenbankfehler: {message}"),
+            LedgerStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             LedgerStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
             LedgerStoreError::CorruptContent { entry_id, reason } => write!(
                 f,
@@ -68,24 +65,8 @@ impl std::fmt::Display for LedgerStoreError {
 
 impl std::error::Error for LedgerStoreError {}
 
-impl LedgerStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
-        match self {
-            LedgerStoreError::Database { kind, .. } => Some(*kind),
-            LedgerStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
 fn backend_err(e: sqlx::Error) -> LedgerStoreError {
-    LedgerStoreError::Database {
-        kind: crate::error_kind::classify(&e),
-        message: e.to_string(),
-    }
+    LedgerStoreError::Database(e.into())
 }
 
 /// Spiegelt `LedgerEntryContent`s Varianten in der `entry_type`-Spalte
@@ -550,7 +531,7 @@ mod tests {
 
         assert!(matches!(
             ledger_store.load_entries(session_id).await,
-            Err(LedgerStoreError::Database { .. })
+            Err(LedgerStoreError::Database(_))
         ));
     }
 

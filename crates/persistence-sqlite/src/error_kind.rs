@@ -6,6 +6,29 @@
 
 pub use ssh_manager_core::profiles::StoreErrorKind;
 
+/// A classified SQLite failure: the kind plus sqlx's error text (never bound
+/// values).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DbFailure {
+    pub kind: StoreErrorKind,
+    pub message: String,
+}
+
+impl From<sqlx::Error> for DbFailure {
+    fn from(e: sqlx::Error) -> Self {
+        Self {
+            kind: classify(&e),
+            message: e.to_string(),
+        }
+    }
+}
+
+impl From<sqlx::Error> for crate::chat_session_store::ChatSessionStoreError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Database(e.into())
+    }
+}
+
 // Primary SQLite result codes (the low byte of an extended code).
 const SQLITE_BUSY: i32 = 5;
 const SQLITE_LOCKED: i32 = 6;
@@ -32,6 +55,76 @@ pub fn classify(err: &sqlx::Error) -> StoreErrorKind {
             }
         }
         _ => StoreErrorKind::Other,
+    }
+}
+
+impl crate::chat_session_store::ChatSessionStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        use crate::chat_session_store::ChatSessionStoreError as E;
+        match self {
+            E::Database(d) => Some(d.kind),
+            E::Backend(_) => Some(StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
+impl crate::ai_provider_store::AiProviderStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        use crate::ai_provider_store::AiProviderStoreError as E;
+        match self {
+            E::Database(d) => Some(d.kind),
+            E::Backend(_) => Some(StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
+impl crate::policy_store::PolicyStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        use crate::policy_store::PolicyStoreError as E;
+        match self {
+            E::Database(d) => Some(d.kind),
+            E::Backend(_) => Some(StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
+impl crate::ledger_store::LedgerStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        use crate::ledger_store::LedgerStoreError as E;
+        match self {
+            E::Database(d) => Some(d.kind),
+            E::Backend(_) => Some(StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
+impl crate::prompt_history_store::PromptHistoryStoreError {
+    /// Machine-readable kind of the failure; `None` for errors that are not
+    /// a database failure.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        use crate::prompt_history_store::PromptHistoryStoreError as E;
+        match self {
+            E::Database(d) => Some(d.kind),
+            E::Backend(_) => Some(StoreErrorKind::Other),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
     }
 }
 
@@ -138,5 +231,20 @@ mod tests {
     fn io_error_is_io() {
         let err = sqlx::Error::Io(std::io::Error::other("x"));
         assert_eq!(classify(&err), StoreErrorKind::Io);
+    }
+
+    /// Issue #885: a foreign-key violation keeps its kind in the chat store.
+    #[tokio::test]
+    async fn chat_store_constraint_failure_keeps_its_kind() {
+        let options = SqliteConnectOptions::new().filename(":memory:");
+        let profile_store = crate::SqliteProfileStore::connect_with(options)
+            .await
+            .unwrap();
+        let err = profile_store
+            .chat_session_store()
+            .create_session(&ssh_manager_core::shared::ServerId::new(), None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind(), Some(StoreErrorKind::Constraint));
     }
 }

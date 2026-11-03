@@ -745,10 +745,11 @@ mod store_code_tests {
 
     #[test]
     fn test_chat_session_store_error_reaches_the_frontend_with_a_store_code() {
-        let err = persistence_sqlite::ChatSessionStoreError::Database {
-            kind: StoreErrorKind::Constraint,
-            message: "FOREIGN KEY constraint failed".into(),
-        };
+        let err =
+            persistence_sqlite::ChatSessionStoreError::Database(persistence_sqlite::DbFailure {
+                kind: StoreErrorKind::Constraint,
+                message: "FOREIGN KEY constraint failed".into(),
+            });
         assert_eq!(
             code_of(Err::<(), _>(err).store_err().unwrap_err()),
             Some(STORE_CONSTRAINT)
@@ -758,10 +759,10 @@ mod store_code_tests {
     #[test]
     fn test_ai_provider_store_error_reaches_the_frontend_with_a_store_code() {
         use persistence_sqlite::AiProviderStoreError;
-        let err = AiProviderStoreError::Database {
+        let err = AiProviderStoreError::Database(persistence_sqlite::DbFailure {
             kind: StoreErrorKind::Corrupt,
             message: "malformed".into(),
-        };
+        });
         assert_eq!(code_of(store_command_error(err)), Some(STORE_CORRUPT));
     }
 }

@@ -90,7 +90,7 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
-pub use error_kind::{classify, StoreErrorKind};
+pub use error_kind::{classify, DbFailure, StoreErrorKind};
 pub use extension_db::{
     validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
     ExtensionRegistration,

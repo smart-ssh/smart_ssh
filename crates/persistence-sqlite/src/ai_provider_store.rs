@@ -97,19 +97,14 @@ pub enum AiProviderStoreError {
     /// s. Aufgabenstellung).
     ActiveProviderDeletionForbidden(ProviderId),
     Backend(String),
-    /// A SQLite failure with its machine-readable kind (issue #885).
-    Database {
-        kind: crate::error_kind::StoreErrorKind,
-        message: String,
-    },
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
 }
 
 impl std::fmt::Display for AiProviderStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AiProviderStoreError::Database { message, .. } => {
-                write!(f, "Datenbankfehler: {message}")
-            }
+            AiProviderStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             AiProviderStoreError::NotFound(id) => {
                 write!(f, "AI-Provider-Konfiguration '{}' nicht gefunden", id.0)
             }
@@ -126,24 +121,8 @@ impl std::fmt::Display for AiProviderStoreError {
 
 impl std::error::Error for AiProviderStoreError {}
 
-impl AiProviderStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
-        match self {
-            AiProviderStoreError::Database { kind, .. } => Some(*kind),
-            AiProviderStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
 fn backend_err(e: sqlx::Error) -> AiProviderStoreError {
-    AiProviderStoreError::Database {
-        kind: crate::error_kind::classify(&e),
-        message: e.to_string(),
-    }
+    AiProviderStoreError::Database(e.into())
 }
 
 fn parse_uuid(raw: &str) -> Result<uuid::Uuid, AiProviderStoreError> {

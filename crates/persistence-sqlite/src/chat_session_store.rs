@@ -33,11 +33,8 @@ use ssh_manager_core::shared::ServerId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatSessionStoreError {
     Backend(String),
-    /// A SQLite failure with its machine-readable kind (issue #885).
-    Database {
-        kind: crate::error_kind::StoreErrorKind,
-        message: String,
-    },
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
     /// Die geladene `content`-Spalte einer Nachricht ließ sich nicht als
     /// `MessageContent` deserialisieren — z. B. korrupte/fremde Daten.
     /// Eigene Variante statt in `Backend` verpackt, damit Aufrufer diesen
@@ -53,9 +50,7 @@ pub enum ChatSessionStoreError {
 impl std::fmt::Display for ChatSessionStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ChatSessionStoreError::Database { message, .. } => {
-                write!(f, "Datenbankfehler: {message}")
-            }
+            ChatSessionStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             ChatSessionStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
             ChatSessionStoreError::CorruptContent { message_id, reason } => write!(
                 f,
@@ -66,26 +61,6 @@ impl std::fmt::Display for ChatSessionStoreError {
 }
 
 impl std::error::Error for ChatSessionStoreError {}
-
-impl ChatSessionStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<crate::error_kind::StoreErrorKind> {
-        match self {
-            ChatSessionStoreError::Database { kind, .. } => Some(*kind),
-            ChatSessionStoreError::Backend(_) => Some(crate::error_kind::StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
-fn backend_err(e: sqlx::Error) -> ChatSessionStoreError {
-    ChatSessionStoreError::Database {
-        kind: crate::error_kind::classify(&e),
-        message: e.to_string(),
-    }
-}
 
 fn role_to_text(role: Role) -> &'static str {
     match role {
@@ -185,7 +160,7 @@ impl SqliteChatSessionStore {
         .bind(ai_provider_id.map(|id| id.to_string()))
         .execute(&self.pool)
         .await
-        .map_err(backend_err)?;
+        ?;
 
         Ok(id)
     }
@@ -222,7 +197,7 @@ impl SqliteChatSessionStore {
         .bind(&session_id_str)
         .fetch_one(&self.pool)
         .await
-        .map_err(backend_err)?
+        ?
         .get("next");
 
         let content_json = serde_json::to_string(&message.content).map_err(|e| {
@@ -244,8 +219,7 @@ impl SqliteChatSessionStore {
         .bind(next_sequence)
         .bind(Utc::now().to_rfc3339())
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
 
         Ok(message_id)
     }
@@ -265,14 +239,13 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
 
         rows.into_iter()
             .map(|row| {
                 let id: String = row.get("id");
                 let role_raw: String = row.get("role");
-                let content_raw: String = row.try_get("content").map_err(backend_err)?;
+                let content_raw: String = row.try_get("content")?;
                 let content: MessageContent = serde_json::from_str(&content_raw).map_err(|e| {
                     ChatSessionStoreError::CorruptContent {
                         message_id: id.clone(),
@@ -293,8 +266,7 @@ impl SqliteChatSessionStore {
             .bind(Utc::now().to_rfc3339())
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
@@ -310,8 +282,7 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         Ok(res.rows_affected() > 0)
     }
 
@@ -333,8 +304,7 @@ impl SqliteChatSessionStore {
         sqlx::query("UPDATE chat_sessions SET ended_at = NULL WHERE id = ?")
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
@@ -360,8 +330,7 @@ impl SqliteChatSessionStore {
         .bind(rounds_covered)
         .bind(session_id.to_string())
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         Ok(())
     }
 
@@ -378,12 +347,11 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_optional(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let Some(row) = row else {
             return Ok(None);
         };
-        let text: Option<String> = row.try_get("summary_text").map_err(backend_err)?;
+        let text: Option<String> = row.try_get("summary_text")?;
         let rounds_covered: Option<i64> = row.get("summary_rounds_covered");
         let (Some(text), Some(rounds_covered)) = (text, rounds_covered) else {
             return Ok(None);
@@ -407,7 +375,7 @@ impl SqliteChatSessionStore {
         .bind(server_id.0.to_string())
         .fetch_all(&self.pool)
         .await
-        .map_err(backend_err)?;
+        ?;
 
         rows.into_iter()
             .map(|row| {
@@ -444,8 +412,7 @@ impl SqliteChatSessionStore {
             .bind(new_title)
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
@@ -468,8 +435,7 @@ impl SqliteChatSessionStore {
                 .bind(title)
                 .bind(session_id.to_string())
                 .execute(&self.pool)
-                .await
-                .map_err(backend_err)?;
+                .await?;
         Ok(result.rows_affected() > 0)
     }
 
@@ -479,8 +445,7 @@ impl SqliteChatSessionStore {
         let row = sqlx::query("SELECT title FROM chat_sessions WHERE id = ?")
             .bind(session_id.to_string())
             .fetch_optional(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(row.is_some_and(|r| r.get::<Option<String>, _>("title").is_some()))
     }
 
@@ -497,12 +462,11 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_optional(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let Some(row) = row else {
             return Ok(None);
         };
-        let raw: String = row.try_get("content").map_err(backend_err)?;
+        let raw: String = row.try_get("content")?;
         match serde_json::from_str::<MessageContent>(&raw) {
             Ok(MessageContent::Text(text)) => Ok(Some(text)),
             Ok(_) => Ok(None),
@@ -524,8 +488,7 @@ impl SqliteChatSessionStore {
               AND m.role = 'user' AND m.content_type = 'text')",
         )
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let mut out = Vec::new();
         for row in rows {
             let id_raw: String = row.get("id");
@@ -546,8 +509,7 @@ impl SqliteChatSessionStore {
         let result = sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         // Issue #504: only after a successful delete, once per removed session.
         if result.rows_affected() > 0 {
             notify_removed(&self.removal, &[session_id]);
@@ -572,8 +534,7 @@ impl SqliteChatSessionStore {
         )
         .bind(cutoff.to_rfc3339())
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let ids: Vec<Uuid> = rows
             .iter()
             .filter_map(|r| r.try_get::<String, _>("id").ok())
@@ -1650,7 +1611,7 @@ mod tests {
 
         assert!(matches!(
             chat_store.load_session(session_id).await,
-            Err(ChatSessionStoreError::Database { .. })
+            Err(ChatSessionStoreError::Database(_))
         ));
     }
 
@@ -1671,7 +1632,7 @@ mod tests {
 
         assert!(matches!(
             chat_store.load_summary(session_id).await,
-            Err(ChatSessionStoreError::Database { .. })
+            Err(ChatSessionStoreError::Database(_))
         ));
     }
 
@@ -1686,19 +1647,5 @@ mod tests {
 
         let loaded = chat_store.load_summary(session_id).await.unwrap();
         assert_eq!(loaded, None);
-    }
-
-    /// Issue #885: a foreign-key violation keeps its kind.
-    #[tokio::test]
-    async fn test_constraint_failure_keeps_its_kind() {
-        let (_profile_store, chat_store) = in_memory_chat_session_store().await;
-        let err = chat_store
-            .create_session(&ServerId::new(), None)
-            .await
-            .unwrap_err();
-        assert_eq!(
-            err.kind(),
-            Some(crate::error_kind::StoreErrorKind::Constraint)
-        );
     }
 }

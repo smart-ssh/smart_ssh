@@ -513,4 +513,17 @@ mod tests {
             Some(b.id)
         );
     }
+
+    /// Issue #885: a store failure in a command flow carries a `STORE_*` code.
+    #[tokio::test]
+    async fn test_issue_885_store_failure_carries_a_store_code() {
+        let store = InMemoryProfileStore::new();
+        store
+            .fail_get_group
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let err = move_group(&store, GroupId::new(), Some(GroupId::new()))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, Some(crate::error::STORE_FAILED));
+    }
 }
