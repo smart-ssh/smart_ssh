@@ -1,10 +1,9 @@
 {
   "apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.test.tsx": 3374,
-  "apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx": 1449,
-  "apps/smart-ssh-community/frontend/src/components/ServerForm.tsx": 2021,
+  "apps/smart-ssh-community/frontend/src/components/ServerForm.tsx": 1499,
   "apps/smart-ssh-community/frontend/src/types.ts": 1648,
-  "crates/ai-providers/src/anthropic.rs": 1398,
-  "crates/ai-providers/src/openai_compatible.rs": 1331,
+  "crates/ai-providers/src/anthropic.rs": 1293,
+  "crates/ai-providers/src/openai_compatible.rs": 1257,
   "crates/ai-providers/src/request_logging.rs": 1308,
   "crates/app-logic/src/compaction.rs": 1696,
   "crates/app-logic/src/database_startup/tests.rs": 2309,

@@ -189,6 +189,12 @@ pub(crate) enum RawEvent {
     ContextLimitError,
 }
 
+impl From<AiEvent> for RawEvent {
+    fn from(event: AiEvent) -> Self {
+        RawEvent::Public(event)
+    }
+}
+
 pub(crate) fn to_raw_stream(
     inner: Pin<Box<dyn Stream<Item = AiEvent> + Send>>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
@@ -204,21 +210,16 @@ pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = Raw
 }
 
 use crate::action::{parameters_json_schema, tool_call_event};
+use crate::common::frame_loop::{self, FrameHandler};
 use crate::common::http_retry::{send_with_retry, SendLoopParams, SendOutcome};
 use crate::common::prompt_format::{message_content_text, role_str};
-use crate::error::{
-    error_stream, map_stream_error_object, map_transport_error, provider_request_id, timeout_error,
-    ProviderErrorInfo,
-};
+use crate::error::{error_stream, map_stream_error_object, provider_request_id, ProviderErrorInfo};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
     log_provider_transport_error, log_stop_reason, log_tool_call_fragment,
 };
-use crate::sse::{
-    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
-    SSE_INACTIVITY_TIMEOUT,
-};
+use crate::sse::{build_http_client, SseFrame};
 use ssh_manager_core::ai::AiUsage;
 
 pub struct OpenAiCompatibleProvider {
@@ -631,7 +632,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             retry_used: RetryKind::None,
             inner: None,
             finished: false,
-            parse: event_stream_from_response,
+            parse: parse_sse_response,
         };
         retry_stream_with_overload("openai_compatible", &self.model, &self.last_request, state)
     }
@@ -819,9 +820,6 @@ pub(crate) struct ToolCallAccumulator {
 }
 
 pub(crate) struct OpenAiStreamState {
-    /// Issue #694: restarted only by real content frames.
-    pub(crate) content_deadline: tokio::time::Instant,
-    pub(crate) frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     pub(crate) tool_calls: BTreeMap<u64, ToolCallAccumulator>,
     pub(crate) fallback_text: String,
     /// Spec 0049, Fund 2: API-Key + jeder `extra_headers`-Wert, für die
@@ -1141,7 +1139,7 @@ impl OpenAiStreamState {
     }
 }
 
-fn event_stream_from_response(
+fn parse_sse_response(
     response: reqwest::Response,
     native_tool_calling: bool,
     request_id: Uuid,
@@ -1149,106 +1147,103 @@ fn event_stream_from_response(
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    process_frame_stream(
-        Box::pin(sse_frame_stream(response)),
-        native_tool_calling,
-        request_id,
-        api_key,
-        extra_headers,
-        provider_request_id,
+    frame_loop::event_stream_from_response(
+        response,
+        OpenAiStreamState::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
     )
 }
 
-/// Von `event_stream_from_response` losgelöst, damit sich das
-/// Inaktivitäts-Timeout-Verhalten (`SSE_INACTIVITY_TIMEOUT`) direkt mit
-/// einem synthetischen, nie liefernden `frames`-Stream testen lässt — ganz
-/// ohne echten HTTP-Request/Mock-Server.
-fn process_frame_stream(
-    frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
+/// Test entry: the shared frame loop over a synthetic `frames` stream.
+#[cfg(test)]
+fn frame_stream(
+    frames: frame_loop::FrameStream,
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
-    let secrets: Vec<String> = std::iter::once(api_key)
-        .chain(extra_headers.into_iter().map(|(_, value)| value))
-        .collect();
-    let state = OpenAiStreamState {
-        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
+    frame_loop::process_frame_stream(
         frames,
-        tool_calls: BTreeMap::new(),
-        fallback_text: String::new(),
-        secrets,
-        text_delta_total_len: 0,
-        reasoning_delta_total_len: 0,
-        native_tool_calling,
-        pending: VecDeque::new(),
-        finished: false,
-        request_id,
-        provider_request_id,
-        finish_reason: None,
-        usage: AiUsage::default(),
-    };
+        OpenAiStreamState::new(
+            native_tool_calling,
+            request_id,
+            api_key,
+            extra_headers,
+            provider_request_id,
+        ),
+    )
+}
 
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(event) = state.pending.pop_front() {
-                return Some((event, state));
-            }
-            if state.finished {
-                return None;
-            }
-            match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
-                Ok(Some(Ok(frame))) => {
-                    if frame_is_content(&frame) {
-                        state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
-                    }
-                    if frame.data.trim() == "[DONE]" {
-                        state.finished = true;
-                        let events = state.finalize(false);
-                        state.pending.extend(events);
-                        continue;
-                    }
-                    if let Ok(chunk) = serde_json::from_str::<Value>(&frame.data) {
-                        state.handle_chunk(&chunk);
-                    }
-                    // Nicht als JSON parsebare Frames werden ignoriert statt
-                    // den Stream mit einem Fehler abzubrechen — ein
-                    // einzelnes kaputtes Chunk soll nicht die ganze
-                    // Antwort unbrauchbar machen.
-                }
-                Ok(Some(Err(err))) => {
-                    let mapped = map_transport_error(&err);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-                Ok(None) => {
-                    state.finished = true;
-                    // Spec 0065, Teil 3: `abrupt = true` — kein `[DONE]`
-                    // gesehen, s. `finalize`-Doc-Kommentar.
-                    let events = state.finalize(true);
-                    state.pending.extend(events);
-                }
-                Err(_elapsed) => {
-                    // s. Begründung bei `SSE_INACTIVITY_TIMEOUT` (crate::sse)
-                    // — ohne dieses Limit würde ein hängender Request den
-                    // Chat-Turn für immer ohne jede Fehlermeldung blockieren.
-                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-            }
+impl OpenAiStreamState {
+    /// Shared by Chat Completions and Responses: both stream into this state.
+    pub(crate) fn new(
+        native_tool_calling: bool,
+        request_id: Uuid,
+        api_key: String,
+        extra_headers: Vec<(String, String)>,
+        provider_request_id: Option<String>,
+    ) -> Self {
+        let secrets: Vec<String> = std::iter::once(api_key)
+            .chain(extra_headers.into_iter().map(|(_, value)| value))
+            .collect();
+        Self {
+            tool_calls: BTreeMap::new(),
+            fallback_text: String::new(),
+            secrets,
+            text_delta_total_len: 0,
+            reasoning_delta_total_len: 0,
+            native_tool_calling,
+            pending: VecDeque::new(),
+            finished: false,
+            request_id,
+            provider_request_id,
+            finish_reason: None,
+            usage: AiUsage::default(),
         }
-    }))
+    }
+
+    /// Redacted logging of a transport/timeout error (Spec 0049, finding 2).
+    pub(crate) fn log_transport_error_redacted(&self, error: &AiError) {
+        let secrets: Vec<&str> = self.secrets.iter().map(String::as_str).collect();
+        log_provider_transport_error(self.request_id, error, &secrets);
+    }
+}
+
+impl FrameHandler for OpenAiStreamState {
+    type Event = RawEvent;
+
+    fn on_frame(&mut self, frame: &SseFrame) -> Vec<RawEvent> {
+        if frame.data.trim() == "[DONE]" {
+            self.finished = true;
+            let events = self.finalize(false);
+            self.pending.extend(events);
+        } else if let Ok(chunk) = serde_json::from_str::<Value>(&frame.data) {
+            self.handle_chunk(&chunk);
+        }
+        // Unparsable frames are ignored instead of aborting the stream: one
+        // broken chunk must not make the whole response unusable.
+        self.pending.drain(..).collect()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// Spec 0065, part 3: `abrupt = true` means no `[DONE]` was seen.
+    fn finalize(&mut self, abrupt: bool) -> Vec<RawEvent> {
+        OpenAiStreamState::finalize(self, abrupt)
+    }
+
+    fn log_transport_error(&self, error: &AiError) {
+        self.log_transport_error_redacted(error);
+    }
 }
 #[cfg(test)]
 mod tests;
