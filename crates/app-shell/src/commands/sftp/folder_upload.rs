@@ -196,7 +196,7 @@ pub(super) async fn preview_impl(
 /// Second step: the upload. `confirmed_overwrites` are the remote paths the
 /// user saw in the preview and agreed to overwrite; any other existing file
 /// is left untouched and listed as skipped.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 #[tauri::command]
 pub async fn sftp_upload_folder(
     app: AppHandle,
@@ -269,7 +269,7 @@ async fn ensure_remote_dir(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(super) async fn upload_folder_impl(
     emitter: &dyn EventEmitter,
     session: &Session,

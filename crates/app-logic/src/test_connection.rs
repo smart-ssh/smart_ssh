@@ -124,7 +124,7 @@ pub async fn test_connection(
 /// Versuchs — bei Erfolg wie bei Fehlschlag. Bricht der Timeout den Versuch
 /// ab, wird der gerade laufende Schritt mit `SSH_TIMEOUT` geschlossen.
 /// Das Protokoll geht nur an die Oberfläche, nie ins Log.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn test_connection_with_limits(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
@@ -160,7 +160,7 @@ pub struct TestProgress {
 
 /// `test_connection` with live `connect-progress` events and cancellation
 /// (Issue #633). A cancelled test ends with `SSH_CONNECT_CANCELLED`.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn test_connection_tracked(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
@@ -185,7 +185,7 @@ pub async fn test_connection_tracked(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn test_connection_with_progress(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),
@@ -227,7 +227,7 @@ async fn test_connection_with_progress(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn run_test_connection(
     profile_store: &dyn ProfileStore,
     real_credential_store: &(dyn CredentialStore + Send + Sync),

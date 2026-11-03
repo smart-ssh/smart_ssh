@@ -1,6 +1,7 @@
 //! Issue #980: the Android launcher icons are the Smart SSH logo, not the
 //! Tauri template, and `gen/android` carries exactly the files of the single
 //! source of truth `icons/android/` (see `docs/android-build.md`).
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::fs;
 use std::path::{Path, PathBuf};

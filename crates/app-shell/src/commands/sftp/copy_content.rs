@@ -157,7 +157,7 @@ impl CopyContentJobs {
 /// Fortschritt geht über `on_progress`, `sftp_cancel_copy_content` bricht
 /// ab. Kein Filter-Engine-/KI-Gate (Spec 0054, Sicherheitsmodell).
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn sftp_copy_content(
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
@@ -286,7 +286,7 @@ pub(super) async fn copy_content_read(
 /// previous staged file is removed only after the new one is on the clipboard.
 /// Returns the file name. No filter-engine/AI gate (Spec 0054 security model).
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn sftp_copy_file(
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,

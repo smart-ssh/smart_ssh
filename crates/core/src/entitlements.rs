@@ -67,7 +67,10 @@ impl<'de> Deserialize<'de> for Feature {
 
 /// Transition constants for the ids extensions use today. Editions declare
 /// their own constants; these go away in a later release.
-#[allow(non_upper_case_globals)]
+#[expect(
+    non_upper_case_globals,
+    reason = "transition constants keep their former enum-variant spelling"
+)]
 impl Feature {
     #[deprecated(note = "editions declare their own feature constants; this goes away")]
     pub const DocumentExport: Feature = Feature::new("document_export");
@@ -238,7 +241,10 @@ mod tests {
     const EXPORT: Feature = Feature::new("document_export");
     const HISTORY: Feature = Feature::new("session_history");
 
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "the test pins the values of the deprecated transition constants"
+    )]
     #[test]
     fn test_deprecated_constants_keep_today_values() {
         assert_eq!(Feature::DocumentExport.id(), "document_export");

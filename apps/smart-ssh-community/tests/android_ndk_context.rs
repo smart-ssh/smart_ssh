@@ -5,6 +5,7 @@
 //! tao >= 0.37 => kein Kotlin-Aufruf und keine `Keyring.kt`; tao < 0.37 =>
 //! Test scheitert, weil die App den Kontext dann wieder selbst anlegen muss
 //! (siehe `docs/android-build.md`).
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -804,8 +804,7 @@ fn resolve_proxy_jumps(
             let mut seen: Vec<usize> = Vec::new();
             let mut cur = start;
             loop {
-                if seen.contains(&cur) {
-                    let at = seen.iter().position(|&x| x == cur).unwrap();
+                if let Some(at) = seen.iter().position(|&x| x == cur) {
                     found = Some(seen[at..].to_vec());
                     break 'outer;
                 }

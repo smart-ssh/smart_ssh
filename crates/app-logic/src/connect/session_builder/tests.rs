@@ -1,6 +1,6 @@
 //! Tests of the session builder with in-memory stores (issue #839): a
 //! scripted transport, real SQLite stores in a temp dir, no Tauri.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![expect(clippy::expect_used, reason = "test code")]
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};

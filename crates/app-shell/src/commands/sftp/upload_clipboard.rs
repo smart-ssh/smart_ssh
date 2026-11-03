@@ -9,7 +9,7 @@ use super::*;
 /// is opened, anything is read or a transfer starts.
 // Tauri command arguments are the IPC interface; grouping them into a
 // struct would change the frontend call shape.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 #[tauri::command]
 pub async fn sftp_upload(
     app: AppHandle,

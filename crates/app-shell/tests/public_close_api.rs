@@ -6,7 +6,6 @@ use app_logic::state::SessionId;
 
 fn assert_open_sessions<T: OpenSessions>() {}
 
-#[allow(dead_code)]
 async fn embedding_crate_closes_a_session<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     id: SessionId,

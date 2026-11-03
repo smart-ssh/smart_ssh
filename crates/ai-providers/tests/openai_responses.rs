@@ -70,9 +70,9 @@ async fn sent_bodies(server: &MockServer) -> Vec<serde_json::Value> {
     server
         .received_requests()
         .await
-        .unwrap()
+        .expect("request recording is enabled")
         .iter()
-        .map(|r| serde_json::from_slice(&r.body).unwrap())
+        .map(|r| serde_json::from_slice(&r.body).expect("request body is JSON"))
         .collect()
 }
 

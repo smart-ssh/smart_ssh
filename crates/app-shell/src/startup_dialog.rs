@@ -48,7 +48,10 @@ pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
 }
 
 #[cfg(target_os = "android")]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "no caller yet; kept for non-fatal startup notices (see doc comment)"
+)]
 pub fn show_warning(title: &str, message: &str) {
     tracing::warn!(
         title,
@@ -140,7 +143,10 @@ pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
 /// nicht-fatale Hinweise beim Start braucht — und ein zweites Mal denselben
 /// `rfd`-Aufruf zu schreiben wäre die schlechtere Lösung als ein `allow`.
 #[cfg(not(target_os = "android"))]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "no caller yet; kept for non-fatal startup notices (see doc comment)"
+)]
 pub fn show_warning(title: &str, message: &str) {
     tracing::warn!(title, message, "showing non-fatal startup warning dialog");
     MessageDialog::new()
