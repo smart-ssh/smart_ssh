@@ -1025,8 +1025,12 @@ pub fn spawn_terminal_actor(
     mut shell: Box<dyn ssh_manager_core::ssh::InteractiveShell>,
     mut commands: mpsc::UnboundedReceiver<TerminalCommand>,
     emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
 ) {
-    tokio::spawn(async move {
+    // Issue #881: runs in the session scope; closing the session cancels it
+    // (no further output event, no status event — the close path emits its
+    // own).
+    tasks.spawn("terminal-actor", async move {
         // `Some(reason)` löst am Ende ein `connection-status-changed`-Event
         // aus, `None` unterdrückt es bewusst — das passiert nur, wenn der
         // Sender absichtlich gedroppt wurde (`app_shell::commands::disconnect`
@@ -1123,10 +1127,11 @@ pub fn spawn_connection_watch(
     session: &Arc<Session>,
     mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
     emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
 ) {
     let epoch = session.transport.epoch();
     let session = Arc::downgrade(session);
-    tokio::spawn(async move {
+    tasks.spawn("connection-watch", async move {
         let loss = loop {
             if let Some(loss) = watch.borrow_and_update().clone() {
                 break loss;

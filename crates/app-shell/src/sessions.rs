@@ -22,6 +22,7 @@ use app_logic::events::{emit_connection_status_changed, ConnectionStatus, EventE
 use app_logic::local_path_grants::LocalPathGrants;
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
+use app_logic::tasks::TaskSupervisor;
 use tauri::{AppHandle, Manager, Runtime};
 
 use crate::elevated_sftp::ElevatedSftpRegistry;
@@ -30,6 +31,9 @@ use crate::event_emitter::TauriEventEmitter;
 /// Upper bound for each of "running command winds down" and "transport
 /// disconnects", so closing never hangs on a dead connection.
 const CLOSE_STEP_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// How long closing waits for the session's background tasks to end.
+const SESSION_TASKS_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Everything the close sequence touches, borrowed from the app state.
 pub(crate) struct CloseContext<'a> {
@@ -44,6 +48,8 @@ pub(crate) struct CloseContext<'a> {
     pub(crate) cancellations:
         &'a app_logic::confirmation::ConfirmationRegistry<app_logic::state::ActionId, ()>,
     pub(crate) emitter: &'a dyn EventEmitter,
+    /// Issue #881: owner of the session scope that is cancelled on close.
+    pub(crate) tasks: &'a TaskSupervisor,
 }
 
 impl<'a> CloseContext<'a> {
@@ -52,6 +58,7 @@ impl<'a> CloseContext<'a> {
         elevated: &'a ElevatedSftpRegistry,
         grants: &'a LocalPathGrants,
         emitter: &'a dyn EventEmitter,
+        tasks: &'a TaskSupervisor,
     ) -> Self {
         Self {
             sessions: &state.sessions,
@@ -61,7 +68,15 @@ impl<'a> CloseContext<'a> {
             confirmations: &state.pending_action_confirmations,
             cancellations: &state.running_command_cancellations,
             emitter,
+            tasks,
         }
+    }
+
+    async fn close_task_scope(&self, session_id: SessionId) {
+        // `close_session_scope` already logs laggards (names only).
+        self.tasks
+            .close_session_scope(session_id, SESSION_TASKS_TIMEOUT)
+            .await;
     }
 
     /// The full close sequence. Returns the removed session (`None` if there
@@ -85,7 +100,12 @@ impl<'a> CloseContext<'a> {
             self.mcp_sessions,
             self.confirmations,
         );
-        let session = session?;
+        let Some(session) = session else {
+            // No `Session` (closed during the host-key dialog): nothing is
+            // known to run, but the scope is closed all the same.
+            self.close_task_scope(session_id).await;
+            return None;
+        };
 
         // Best-effort from here: a failing disconnect (connection already
         // dead) never keeps the session open; it is already removed.
@@ -96,6 +116,11 @@ impl<'a> CloseContext<'a> {
             let _ = self.cancellations.resolve(&action_id, ());
         }
         let _ = tokio::time::timeout(CLOSE_STEP_TIMEOUT, session.transport.wait_until_idle()).await;
+        // Issue #881: the elevated channel is revoked and the confirmation
+        // rejected above; now the session's background tasks (terminal
+        // actor, connection watch, SFTP pumps, auto-reconnect, MCP action
+        // task) are cancelled and awaited.
+        self.close_task_scope(session_id).await;
         let _ = tokio::time::timeout(CLOSE_STEP_TIMEOUT, async {
             session.transport.lock().await.disconnect().await
         })
@@ -131,7 +156,8 @@ pub(crate) async fn close_session_returning<R: Runtime>(
     let elevated = app.state::<ElevatedSftpRegistry>();
     let grants = app.state::<LocalPathGrants>();
     let emitter = TauriEventEmitter(app.clone());
-    CloseContext::new(&state, &elevated, &grants, &emitter)
+    let tasks = app.state::<Arc<TaskSupervisor>>();
+    CloseContext::new(&state, &elevated, &grants, &emitter, &tasks)
         .close(session_id)
         .await
 }
@@ -170,7 +196,11 @@ impl<R: Runtime> app_logic::backup::OpenSessions for AppOpenSessions<R> {
         let elevated = self.app.state::<ElevatedSftpRegistry>();
         let grants = self.app.state::<LocalPathGrants>();
         let emitter = TauriEventEmitter(self.app.clone());
-        close_all_remote(&CloseContext::new(&state, &elevated, &grants, &emitter)).await;
+        let tasks = self.app.state::<Arc<TaskSupervisor>>();
+        close_all_remote(&CloseContext::new(
+            &state, &elevated, &grants, &emitter, &tasks,
+        ))
+        .await;
     }
 }
 
@@ -216,6 +246,7 @@ mod tests {
         confirmations: ConfirmationRegistry<ActionId, ActionUserDecision>,
         cancellations: ConfirmationRegistry<ActionId, ()>,
         emitter: TestEmitter,
+        tasks: TaskSupervisor,
     }
 
     impl Rig {
@@ -227,6 +258,7 @@ mod tests {
                 confirmations: ConfirmationRegistry::new(),
                 cancellations: ConfirmationRegistry::new(),
                 emitter: TestEmitter::default(),
+                tasks: TaskSupervisor::new(),
             }
         }
 
@@ -239,6 +271,7 @@ mod tests {
                 confirmations: &self.confirmations,
                 cancellations: &self.cancellations,
                 emitter: &self.emitter,
+                tasks: &self.tasks,
             }
         }
     }
@@ -525,6 +558,128 @@ mod tests {
             offenders.is_empty(),
             "SessionManager::remove must only be called by ElevatedSftpRegistry::remove_session \
              (use app_shell::sessions::close_session): {offenders:?}"
+        );
+    }
+
+    /// Shell fed from a channel: `read` blocks until a chunk arrives.
+    struct ChannelShell(tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>);
+
+    #[async_trait]
+    impl InteractiveShell for ChannelShell {
+        async fn write(&mut self, _data: &[u8]) -> Result<(), SshError> {
+            Ok(())
+        }
+        async fn read(&mut self) -> Result<Vec<u8>, SshError> {
+            Ok(self.0.recv().await.unwrap_or_default())
+        }
+        async fn resize(&mut self, _size: PtySize) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    fn output_events(emitter: &TestEmitter) -> usize {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "terminal-output")
+            .count()
+    }
+
+    /// Issue #881: closing a session ends its terminal actor and connection
+    /// watch (`running_in == 0`), and the actor emits no further output.
+    #[tokio::test(start_paused = true)]
+    async fn test_close_ends_session_tasks_and_terminal_output() {
+        let rig = Rig::new(Box::new(working_transport()));
+        let id = rig.f.session_id;
+        let scope = rig.tasks.session_scope(id);
+        let actor_events = Arc::new(TestEmitter::default());
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+        *rig.f.session.conn.terminal.lock().unwrap() = Some(cmd_tx);
+        app_logic::session::spawn_terminal_actor(
+            id,
+            rig.f.session.clone(),
+            Box::new(ChannelShell(chunk_rx)),
+            cmd_rx,
+            actor_events.clone(),
+            &scope,
+        );
+        let (_loss_tx, loss_rx) = tokio::sync::watch::channel(None);
+        app_logic::session::spawn_connection_watch(
+            id,
+            &rig.f.session,
+            loss_rx,
+            actor_events.clone(),
+            &scope,
+        );
+        assert_eq!(rig.tasks.running_in(id), 2);
+
+        chunk_tx.send(b"before".to_vec()).unwrap();
+        while output_events(&actor_events) == 0 {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(rig.ctx().close(id).await.is_some());
+        assert_eq!(rig.tasks.running_in(id), 0);
+
+        // The shell would deliver more; nobody reads it any more.
+        let _ = chunk_tx.send(b"after".to_vec());
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(output_events(&actor_events), 1);
+    }
+
+    /// Issue #881: the auto-reconnect run is a session-scope task; closing
+    /// the session during a backoff wait (virtual time) ends it.
+    #[tokio::test(start_paused = true)]
+    async fn test_close_cancels_task_waiting_in_backoff() {
+        let rig = Rig::new(Box::new(working_transport()));
+        let id = rig.f.session_id;
+        let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
+        let (alive_tx, alive_rx) = tokio::sync::oneshot::channel::<()>();
+        // Not the session's own stop handle: `close` stops that one, and the
+        // point here is that the scope alone ends the run.
+        let stop = Arc::new(app_logic::auto_reconnect::StopHandle::default());
+        let attempts = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let counted = attempts.clone();
+        rig.tasks
+            .session_scope(id)
+            .spawn("auto-reconnect", async move {
+                let _alive = alive_tx;
+                // The real run: every attempt fails retryably, so it sits in
+                // a backoff wait (2, 4, 8, 15 … s) most of the time.
+                app_logic::auto_reconnect::run_auto_reconnect(
+                    Duration::from_secs(3600),
+                    &stop,
+                    move |_| {
+                        let _ = started_tx.send(());
+                    },
+                    || {
+                        counted.fetch_add(1, Ordering::SeqCst);
+                        async { app_logic::auto_reconnect::AttemptResult::Retry }
+                    },
+                )
+                .await;
+            });
+        // Virtual time runs through two attempts and into the next backoff.
+        tokio::time::sleep(Duration::from_secs(7)).await;
+        assert!(started_rx.try_recv().is_ok(), "an attempt has started");
+        assert_eq!(rig.tasks.running_in(id), 1);
+
+        assert!(rig.ctx().close(id).await.is_some());
+
+        assert_eq!(rig.tasks.running_in(id), 0);
+        // The future was dropped, not left waiting: its sender is gone.
+        assert!(alive_rx.await.is_err());
+        let before = attempts.load(Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_secs(600)).await;
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            before,
+            "no attempt after close"
         );
     }
 }
