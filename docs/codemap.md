@@ -39,14 +39,14 @@ here, update this file in the same change.
 1. Frontend: `apps/smart-ssh-community/frontend/src/api.ts` — `sendChatMessage` (called from `apps/smart-ssh-community/frontend/src/components/ChatPanel.tsx` — `ChatPanel`).
 2. Tauri command: `crates/app-shell/src/commands/chat.rs` — `send_chat_message`, `send_chat_message_impl`.
 3. Chat turn: `crates/app-logic/src/orchestration/chat_turn.rs` — `run_chat_turn`, `run_one_round`; the AI answer arrives as AiEvent values (`crates/core/src/ai/types.rs` — `AiEvent`).
-4. Action proposed: `crates/app-logic/src/orchestration/action_exec.rs` — `handle_action_proposed`, `evaluate_action`.
+4. Action proposed: `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_action_proposed`, `evaluate_action`.
 5. Filter engine: `crates/core/src/filter/engine.rs` — `FilterEngine::evaluate` (a rule-based deny ends the path).
 6. Risk classifier: `crates/core/src/risk/classifier.rs` — `RuleBasedRiskClassifier`; the AI second opinion (escalation only) is `crates/app-logic/src/second_opinion.rs` — `fetch_second_opinion_with_usage`.
-7. Confirmation: `crates/app-logic/src/orchestration/action_exec.rs` — `handle_user_decision`, waiting on `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; the user answer enters through `crates/app-shell/src/commands/chat.rs`.
-8. Execution: `crates/app-logic/src/orchestration/action_exec.rs` — `execute_action`, `execute_suggested_command`, which call `crates/core/src/ssh/transport.rs` — `SshTransport`; the output is redacted (`crates/core/src/ai/redactor.rs` — `OutputRedactor`) before it is stored or sent to the AI.
+7. Confirmation: `crates/app-logic/src/orchestration/action_exec/decision.rs` — `handle_user_decision`, waiting on `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; the user answer enters through `crates/app-shell/src/commands/chat.rs`.
+8. Execution: `crates/app-logic/src/orchestration/action_exec/execute.rs` — `execute_action`, `execute_suggested_command`, which call `crates/core/src/ssh/transport.rs` — `SshTransport`; the output is redacted (`crates/core/src/ai/redactor.rs` — `OutputRedactor`) before it is stored or sent to the AI.
 9. Transport: `crates/ssh-transport/src/transport.rs` — `RusshTransport` (or `crates/ssh-transport/src/local.rs` — `LocalTransport`).
 
-External MCP clients enter at step 4 through `crates/app-logic/src/orchestration/action_exec.rs` — `handle_mcp_action_proposed`.
+External MCP clients enter at step 4 through `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_mcp_action_proposed`.
 
 ## 3. Frontend map
 
@@ -95,7 +95,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
 | Real SSH tests | `crates/ssh-transport/tests/integration.rs` |
 | Elevated SFTP channel | `crates/app-shell/src/elevated_sftp.rs` — `ElevatedSftp`, `ElevatedSftpSlot`; sudo/sftp-server logic `crates/core/src/ssh/elevated.rs` — `is_safe_absolute_path`; commands `crates/app-shell/src/commands/elevation.rs` |
-| SFTP commands | `crates/app-shell/src/commands/sftp/mod.rs` (shared imports, re-exports) with one file per group: `sftp/{list,download,upload_clipboard,delete,permissions,rename_mkdir,copy_content,edit_session}.rs`; transfers `crates/app-shell/src/commands/sftp/transfer.rs` |
+| SFTP commands | `crates/app-shell/src/commands/sftp/mod.rs` (shared imports, re-exports) with one file per group: `sftp/{list,download,upload_clipboard,delete,permissions,rename_mkdir,copy_content,edit_session}.rs`; transfers `crates/app-shell/src/commands/sftp/transfer.rs`; Tauri-free recursion/chmod/chown/rename logic `crates/app-logic/src/sftp_ops.rs` |
 | Browser access gate for file browsing | `crates/app-shell/src/commands/elevation.rs` — `BrowserAccess`, `BrowserChannel` |
 | MCP server | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`; backend glue `crates/app-shell/src/mcp_backend.rs`; settings `crates/app-shell/src/mcp_settings.rs` |
 | Speech input | `crates/speech/src/lib.rs` — `ModelManager`; Tauri side `crates/app-shell/src/voice_input.rs` — `get_speech_language`; models `crates/app-shell/src/speech_models.rs` |
@@ -126,7 +126,7 @@ Production code:
 - `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`to_raw_stream`), retry (`RetryState`), web research citations.
 - `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: request building, `connect_and_stream`, `process_frame_stream`, tool-call buffering (`OpenAiStreamState`).
 - `crates/app-shell/src/commands/sftp/` — SFTP commands (one file per group): listing (`sftp_list`), `sftp_download`, `sftp_upload`, mutations, edit sessions.
-- `crates/app-logic/src/orchestration/action_exec.rs` — `handle_action_proposed` (entry), `evaluate_action` (filter plus risk), `handle_user_decision` (confirmation), `execute_action` and `execute_suggested_command` (run and redact), `check_for_injected_instructions`.
+- `crates/app-logic/src/orchestration/action_exec.rs` (module root) with `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_action_proposed` (entry), `evaluate_action` (filter plus risk); `crates/app-logic/src/orchestration/action_exec/risk.rs` (escalation helpers); `crates/app-logic/src/orchestration/action_exec/decision.rs` — `handle_user_decision` (confirmation); `crates/app-logic/src/orchestration/action_exec/execute.rs` — `execute_action`, `execute_suggested_command` (run and redact); `crates/app-logic/src/orchestration/action_exec/injection.rs` — `check_for_injected_instructions`; `crates/app-logic/src/orchestration/action_exec/logging.rs` (command log lines).
 - `crates/core/src/filter/parser.rs` — shell-command parsing for the filter: `split_top_level_segments`, here-string and shell-wrapper analysis, `analyse_options`.
 - `crates/app-logic/src/servers.rs` — server CRUD: `create_server`, `update_server`, `delete_server`, `move_server_to_group`.
 

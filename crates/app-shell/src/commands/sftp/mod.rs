@@ -20,7 +20,9 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
+#[cfg(test)]
+use ssh_manager_core::ssh::RemoteEntry;
+use ssh_manager_core::ssh::{SftpSession, SshError};
 
 use crate::elevated_sftp::ElevatedSftpRegistry;
 use crate::event_emitter::TauriEventEmitter;
@@ -94,9 +96,6 @@ pub(crate) use copy_content::*;
 
 mod edit_session;
 pub(crate) use edit_session::*;
-
-#[cfg(test)]
-mod tests_rename_overwrite;
 
 #[cfg(test)]
 mod tests_mutation;
