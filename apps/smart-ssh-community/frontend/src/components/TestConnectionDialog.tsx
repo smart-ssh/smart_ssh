@@ -4,7 +4,7 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectStepSnapshot, TestConnectionReport } from "../types";
 import { ConnectProgressList } from "./ConnectProgressList";
-import { TestResultBadge } from "./ServerForm";
+import { TestResultBadge } from "./serverForm/TestResultBadge";
 import { Button, DialogFrame, Spinner } from "./ui";
 
 interface Props {
