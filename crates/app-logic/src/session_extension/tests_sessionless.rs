@@ -4,8 +4,7 @@ use super::*;
 use crate::events::TestEmitter;
 use crate::server_credentials::sudo_password_credential_ref;
 use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
-use chrono::Utc;
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
+use ssh_manager_core::testing::ServerBuilder;
 use std::sync::atomic::Ordering::SeqCst;
 
 const NOTICE: &str = "Some secret values for this server could not be loaded";
@@ -14,28 +13,6 @@ struct Ext;
 impl SessionExtension for Ext {
     fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
         vec![SecretString::from("server-secret-111".to_string())]
-    }
-}
-
-fn server() -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: "web".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
     }
 }
 
@@ -66,7 +43,7 @@ async fn run(
 
 #[tokio::test]
 async fn test_failing_get_server_masks_server_secret_and_notices_once() {
-    let srv = server();
+    let srv = ServerBuilder::new().name("web").build();
     let store = InMemoryProfileStore::new().with_server(srv.clone());
     store.fail_get_server.store(true, SeqCst);
     let (masked, n) = run(&store, &InMemoryCredentialStore::new(), srv.id).await;
@@ -76,7 +53,7 @@ async fn test_failing_get_server_masks_server_secret_and_notices_once() {
 
 #[tokio::test]
 async fn test_failing_sudo_read_notices_once() {
-    let srv = server();
+    let srv = ServerBuilder::new().name("web").build();
     let store = InMemoryProfileStore::new().with_server(srv.clone());
     let creds = InMemoryCredentialStore::new()
         .with_secret(&sudo_password_credential_ref(srv.id), "sudo-pw-222")
@@ -87,7 +64,7 @@ async fn test_failing_sudo_read_notices_once() {
 
 #[tokio::test]
 async fn test_healthy_stores_no_notice_and_sudo_masked() {
-    let srv = server();
+    let srv = ServerBuilder::new().name("web").build();
     let store = InMemoryProfileStore::new().with_server(srv.clone());
     let creds = InMemoryCredentialStore::new()
         .with_secret(&sudo_password_credential_ref(srv.id), "sudo-pw-222");

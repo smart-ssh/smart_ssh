@@ -1,4 +1,5 @@
 import { commandErrorCode, commandErrorMessage } from "./api";
+import { dynamicKey, type TranslateFn } from "./i18nTypes";
 
 /** Spec 0024, Abschnitt 5: Mapping von stabilen Backend-`code`s (s.
  * `SshError`/`AiError`/`Decision`/`CommandError` in `crates/core`/
@@ -295,7 +296,7 @@ export function isRetryableAiError(code: string | null | undefined): boolean {
  * `Display`-Text des Backend-Fehlers) — nie eine leere Anzeige (Spec 0024,
  * Abschnitt 5). */
 export function translateErrorCode(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   code: string | null | undefined,
   fallback: string,
   params?: Record<string, unknown>,
@@ -303,15 +304,15 @@ export function translateErrorCode(
   if (!code || !KNOWN_ERROR_CODES.has(code)) return fallback;
   // Issue #631: the usage-limit text names the date access returns on.
   if (code === "AI_PROVIDER_USAGE_LIMIT" && typeof params?.date === "string" && params.date) {
-    return t(`errors.${code}_DATE`, params);
+    return t(dynamicKey(`errors.${code}_DATE`), params);
   }
-  return t(`errors.${code}`, params);
+  return t(dynamicKey(`errors.${code}`), params) // code is in KNOWN_ERROR_CODES;
 }
 
 /** The display text for a rejected command: the translated error code, else
  * the backend's own message (Spec 0024, Abschnitt 5). */
 export function commandErrorText(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   err: unknown,
 ): string {
   return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));

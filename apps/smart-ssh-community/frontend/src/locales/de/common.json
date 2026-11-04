@@ -540,7 +540,7 @@
     "ollamaProbeAdopt": "Ollama übernehmen",
     "ollamaProbeDismiss": "Nein danke",
     "ollamaProbeEmptyHeading": "Ollama läuft, aber es ist noch kein Modell geladen.",
-    "ollamaProbePullHint": "Ein Modell laden: im Terminal `ollama pull <modell>` ausführen, dann erneut suchen.",
+    "ollamaProbePullHint": "Ein Modell laden: im Terminal `ollama pull <model>` ausführen, dann erneut suchen.",
     "ollamaProbeRetry": "Erneut suchen",
     "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen.",

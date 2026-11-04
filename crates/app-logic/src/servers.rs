@@ -414,39 +414,21 @@ pub async fn move_server_to_group(
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
+    use ssh_manager_core::testing::ServerBuilder;
 
-    use ssh_manager_core::profiles::{AuthMethod, CredentialRef, PostIngestPolicy};
+    use ssh_manager_core::profiles::{AuthMethod, CredentialRef};
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
 
-    fn server(name: &str, jump_host: Option<ServerId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: name.to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
     #[tokio::test]
     async fn test_compute_delete_server_result_preview_does_not_delete() {
-        let target = server("target", None);
-        let dependent = server("dependent", Some(target.id));
+        let target = ServerBuilder::new().name("target").jump_host(None).build();
+        let dependent = ServerBuilder::new()
+            .name("dependent")
+            .jump_host(Some(target.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_server(target.clone())
             .with_server(dependent.clone());
@@ -472,8 +454,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_compute_delete_server_result_lists_no_dependents_when_none_reference_it() {
-        let target = server("target", None);
-        let unrelated = server("unrelated", None);
+        let target = ServerBuilder::new().name("target").jump_host(None).build();
+        let unrelated = ServerBuilder::new()
+            .name("unrelated")
+            .jump_host(None)
+            .build();
         let store = InMemoryProfileStore::new()
             .with_server(target.clone())
             .with_server(unrelated.clone());
@@ -491,12 +476,13 @@ mod tests {
         jump_host: Option<ServerId>,
         credential_ref: &CredentialRef,
     ) -> Server {
-        Server {
-            auth: AuthMethod::Password {
+        ServerBuilder::new()
+            .name(name)
+            .jump_host(jump_host)
+            .auth(AuthMethod::Password {
                 credential_ref: credential_ref.clone(),
-            },
-            ..server(name, jump_host)
-        }
+            })
+            .build()
     }
 
     /// spec-reviewer-Fund (Review dieses Schritts): ruft die tatsächliche
@@ -559,7 +545,10 @@ mod tests {
     async fn test_delete_server_confirm_true_deletes_row_secret_and_nulls_dependent_jump_host() {
         let credential_ref = CredentialRef::new("test:server-password");
         let target = server_with_password("target", None, &credential_ref);
-        let dependent = server("dependent", Some(target.id));
+        let dependent = ServerBuilder::new()
+            .name("dependent")
+            .jump_host(Some(target.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_server(target.clone())
             .with_server(dependent.clone());
@@ -668,7 +657,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_unusable_servers_returns_only_the_unusable_entries() {
-        let readable = server("readable", None);
+        let readable = ServerBuilder::new()
+            .name("readable")
+            .jump_host(None)
+            .build();
         let broken = unusable("broken");
         let store = InMemoryProfileStore::new()
             .with_server(readable)
@@ -709,7 +701,10 @@ mod tests {
     #[tokio::test]
     async fn test_delete_unusable_server_removes_row_and_every_slot_of_its_scheme() {
         let broken = unusable("broken");
-        let readable = server("readable", Some(broken.id));
+        let readable = ServerBuilder::new()
+            .name("readable")
+            .jump_host(Some(broken.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_server(readable.clone())
             .with_unusable_server(broken.clone());
@@ -774,7 +769,10 @@ mod tests {
     /// lesbaren Server ist er deshalb gesperrt.
     #[tokio::test]
     async fn test_delete_unusable_server_refuses_a_usable_server() {
-        let readable = server("readable", None);
+        let readable = ServerBuilder::new()
+            .name("readable")
+            .jump_host(None)
+            .build();
         let store = InMemoryProfileStore::new().with_server(readable.clone());
         let sudo = crate::server_credentials::sudo_password_credential_ref(readable.id);
         let credentials = InMemoryCredentialStore::new().with_secret(&sudo, "s3cret");
@@ -829,8 +827,11 @@ mod tests {
         )
         .await
         .unwrap();
-        let readable = server("readable", None);
-        let newer = server("newer", None);
+        let readable = ServerBuilder::new()
+            .name("readable")
+            .jump_host(None)
+            .build();
+        let newer = ServerBuilder::new().name("newer").jump_host(None).build();
         store.create_server(&readable).await.unwrap();
         store.create_server(&newer).await.unwrap();
         persistence_sqlite::test_support::set_raw_auth_method(
@@ -1073,7 +1074,7 @@ mod tests {
     const IDENTITY_PATH: &str = "/home/deploy/.ssh/id_ed25519";
 
     fn stored_server(id: ServerId, auth: AuthMethod) -> Server {
-        let mut s = server("target", None);
+        let mut s = ServerBuilder::new().name("target").jump_host(None).build();
         s.id = id;
         s.auth = auth;
         s

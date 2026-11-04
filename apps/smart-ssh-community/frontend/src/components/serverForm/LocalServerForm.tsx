@@ -47,7 +47,7 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       // `preventScroll`: s. identischer Kommentar in `NotesPanel.tsx`.
       localNotesRef.current?.focus({ preventScroll: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-focus once per loaded server, guarded by a ref
   }, [loaded.id]);
   // Spec 0058, Teil 1 (Etappe 5): derselbe Hinweis wie `NotesPanel`, hier
   // für den lokalen Pseudo-Server separat nachgebaut (der `NotesPanel`

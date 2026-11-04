@@ -11,38 +11,17 @@
 //! Verständnis davon bestünde einen reinen Rundlauf-Test trotzdem (§4.2
 //! Punkt 5). `ssh -G` urteilt unabhängig von unserem Parser.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
-use chrono::Utc;
 use ssh_manager_core::profiles::ssh_config::build_export;
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
+use ssh_manager_core::profiles::AuthMethod;
 use ssh_manager_core::shared::ServerId;
 use uuid::Uuid;
 
 const LOCAL: ServerId = ServerId(Uuid::nil());
-
-fn server(name: &str, host: &str, port: u16, user: &str) -> Server {
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: host.to_string(),
-        port,
-        username: user.to_string(),
-        group_id: None,
-        tags: vec![],
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    }
-}
 
 /// `ssh -F <config> -G <host>` — prüft die Datei, baut **keine** Verbindung
 /// (§6.3.2). Gibt die geparsten `schlüsselwort → wert`-Zeilen zurück; bei
@@ -74,7 +53,12 @@ fn ssh_g(config: &Path, host: &str) -> (i32, HashMap<String, String>) {
 
 #[test]
 fn t_6_3_2_ssh_g_akzeptiert_die_exportierte_datei() {
-    let mut target = server("web1", "10.0.0.5", 2222, "max mustermann");
+    let mut target = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.5")
+        .port(2222)
+        .username("max mustermann")
+        .build();
     target.auth = AuthMethod::IdentityFile {
         path: "/tmp/does-not-need-to-exist-for-ssh-dash-g".to_string(),
         passphrase_ref: None,
@@ -109,8 +93,18 @@ fn t_6_3_2_ssh_g_akzeptiert_die_exportierte_datei() {
 
 #[test]
 fn t_6_3_12_proxyjump_mit_umbenanntem_alias_besteht_ssh_g() {
-    let bastion = server("prod bastion", "10.0.0.1", 22, "");
-    let mut target = server("target", "10.0.0.2", 22, "");
+    let bastion = ServerBuilder::new()
+        .name("prod bastion")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
+    let mut target = ServerBuilder::new()
+        .name("target")
+        .host("10.0.0.2")
+        .port(22)
+        .username("")
+        .build();
     target.jump_host = Some(bastion.id);
 
     let plan = build_export(&[bastion, target], &[], LOCAL);
@@ -148,7 +142,12 @@ fn t_6_3_12_proxyjump_mit_umbenanntem_alias_besteht_ssh_g() {
 /// Zeuge dazu, mit demselben bösartigen Namen wie dort.
 #[test]
 fn t_6_4_6a_ssh_g_besteht_mit_boesartigem_namen() {
-    let s = server("evil\n#\"name", "10.0.0.1", 22, "");
+    let s = ServerBuilder::new()
+        .name("evil\n#\"name")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
     let alias = &plan.exported[0].alias;
 
@@ -169,7 +168,12 @@ fn t_6_4_6a_ssh_g_besteht_mit_boesartigem_namen() {
 /// eingebettetem `"`.
 #[test]
 fn t_review1_quote_value_maskiert_eingebettetes_anfuehrungszeichen() {
-    let s = server("web1", "10.0.0.1", 22, "a \"b c");
+    let s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("a \"b c")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
 
     let dir = tempfile::tempdir().unwrap();
@@ -192,7 +196,12 @@ fn t_review1_quote_value_maskiert_eingebettetes_anfuehrungszeichen() {
 /// schließenden Zeichen — zeigt den Fehler zuverlässig).
 #[test]
 fn t_review1_quote_value_maskiert_trailing_backslash() {
-    let s = server("web1", "10.0.0.1", 22, "a b\\");
+    let s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("a b\\")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
 
     let dir = tempfile::tempdir().unwrap();
@@ -339,7 +348,14 @@ mod unusable_rows {
 
     async fn check(reason: UnusableReason) {
         let store = InMemoryProfileStore::new()
-            .with_server(server("usable-one", "usable.example.com", 22, "me"))
+            .with_server(
+                ServerBuilder::new()
+                    .name("usable-one")
+                    .host("usable.example.com")
+                    .port(22)
+                    .username("me")
+                    .build(),
+            )
             .with_unusable_server(unusable(reason));
         let plan = load_export_plan(&store)
             .await

@@ -4,6 +4,7 @@ import type {
   PostIngestPolicy,
   ServerDto,
 } from "../../types";
+import type { TranslateFn } from "../../i18nTypes";
 
 /** Formular-lokaler Zustand — getrennt von [`AuthMethodInput`], weil
  * Textfelder immer einen String brauchen (nie `null`), auch wenn die
@@ -229,7 +230,7 @@ export function serverFormReducer(state: ServerFormState, action: ServerFormActi
  * aufzurufen — diese Funktion läuft außerhalb einer Komponente, Hooks sind
  * hier nicht erlaubt. */
 export function authKindLabels(
-  t: (key: string) => string,
+  t: TranslateFn,
 ): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),

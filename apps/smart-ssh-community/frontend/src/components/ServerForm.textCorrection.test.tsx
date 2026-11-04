@@ -73,7 +73,7 @@ describe("ServerForm text correction (issue #217)", () => {
     vi.mocked(getServer).mockResolvedValue(SERVER);
     renderNew();
     expect(await screen.findByDisplayValue("db01.example.lan")).toBeTruthy();
-    for (const key of ["serverForm.host", "serverForm.username"]) {
+    for (const key of ["serverForm.host", "serverForm.username"] as const) {
       const field = screen.getByLabelText(testI18n.t(key));
       expect(field.getAttribute("autocapitalize")).toBe("off");
       expect(field.getAttribute("autocorrect")).toBe("off");

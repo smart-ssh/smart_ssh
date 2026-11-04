@@ -1,3 +1,4 @@
+import { dynamicKey, type TranslateFn } from "../i18nTypes";
 /** Tier ids are defined by the edition that registers them (Spec 0037).
  * The core knows only `FREE_TIER`; every other id arrives from an edition's
  * entitlements and is shown with its registered label, or generically. */
@@ -22,7 +23,8 @@ export function resetTiersForTests(): void {
 
 /** Display label of a tier id: the registered label translated with `t`,
  * otherwise the generic fallback (the id itself). */
-export function tierLabel(id: string, t: (key: string) => string): string {
+export function tierLabel(id: string, t: TranslateFn): string {
   const reg = tiers.get(id);
-  return reg ? t(reg.labelKey) : id;
+  // The label key is supplied by the registering extension (its own bundle).
+  return reg ? t(dynamicKey(reg.labelKey)) : id;
 }

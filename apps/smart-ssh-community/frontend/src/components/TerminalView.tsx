@@ -182,7 +182,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
     };
     // `t` ist bewusst keine Abhängigkeit: ein Sprachwechsel soll das
     // Terminal nicht neu öffnen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a language change must not reopen the terminal
   }, [sessionId]);
 
   // Issue #355: Hinweiszeile beim Verlust, Trennlinie und neue Shell nach
@@ -198,7 +198,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       term.writeln(`\r\n${t("session.reconnectedSeparator")}`);
       startShellRef.current();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is read only when the link state changes
   }, [link]);
 
   const onRowKey = useCallback((key: TerminalKeyId) => {

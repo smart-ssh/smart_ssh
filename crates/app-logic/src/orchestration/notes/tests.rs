@@ -9,6 +9,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use ssh_manager_core::ai::{AiError, AiEvent, DefaultOutputRedactor};
 use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
 use ssh_manager_core::shared::ServerId;
+use ssh_manager_core::testing::ServerBuilder;
 
 use crate::dto::ActionUserDecision;
 use crate::events::TestEmitter;
@@ -277,7 +278,8 @@ async fn test_disconnect_suggestion_emits_event_and_accept_persists_revision() {
         .history
         .push(command_result_message());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
 
@@ -436,25 +438,11 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
 // --- Spec 0057, §4.2 (Etappe 4): Sitzungsende-Notiz-Kürzungs-Dialog ----
 
 fn server_with_notes(id: ServerId, notes: &str) -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id,
-        name: "Test-Server".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: notes.to_string(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
+    ServerBuilder::new()
+        .id(id)
+        .name("Test-Server")
+        .notes(notes)
+        .build()
 }
 
 /// spec-reviewer-Fund (Review dieses Schritts): Test-Double, das
@@ -1928,7 +1916,8 @@ async fn test_propose_note_update_current_server_resolves_to_session_server_id()
     );
     let expected_server_id = session.server_id;
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let turn = run_chat_turn(
@@ -2168,7 +2157,8 @@ async fn test_t8_spec_0096_note_proposal_from_chat_is_redacted_in_event_and_revi
         MockSshTransport::default(),
     );
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let turn = run_chat_turn(
@@ -2228,7 +2218,8 @@ async fn test_t9_spec_0096_note_proposal_on_disconnect_is_redacted_in_event_and_
         .history
         .push(command_result_message());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let flow = suggest_note_update_on_disconnect(
@@ -2292,7 +2283,8 @@ async fn test_t9_spec_0096_note_proposal_on_disconnect_is_redacted_in_event_and_
 async fn test_t11_spec_0096_note_proposal_via_mcp_is_redacted_in_event_and_revision() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let flow = crate::orchestration::handle_mcp_action_proposed(
