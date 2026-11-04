@@ -115,6 +115,13 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
   nur über eine Testhilfe, die in Produktivbauten nicht enthalten ist.
 - **A3.4** Kein Verhaltensunterschied im Betrieb. Die Zusagen aus Spec 0085
   A3 gelten unverändert; ihre verbotenen Fälle bleiben Übersetzungsfehler.
+- **A3.5** Die Reihenfolge, in der die Sperren einer Sitzung genommen werden
+  dürfen (normaler SFTP-Kanal vor Transport), ist Teil der Schnittstelle: Die
+  umgekehrte Reihenfolge lässt sich nicht ausdrücken. Sichtbar ist das so: Das
+  Trennen einer Sitzung kommt innerhalb von 2 Sekunden zurück, auch wenn
+  gerade ein KI-Kommando läuft (es wird abgebrochen) oder der erhöhte Kanal
+  geprüft wird; die Prüfung hält den Transport nur, bis ihr Kommando gestartet
+  ist (sofern der Transport das getrennte Starten kann).
 
 ### A4 — Verweise in Kommentaren
 

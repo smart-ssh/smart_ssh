@@ -35,9 +35,11 @@ pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 /// Abschnitt 5, `app_shell::commands::sftp_*`) braucht dieselbe Lazy-Open-Logik,
 /// läuft aber komplett außerhalb der KI-Kernschleife dieser Datei.
 pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
-    let mut guard = session.lock_sftp().await;
-    if !guard.is_open() {
-        let mut transport = session.transport.lock().await;
+    // Lock hierarchy (docs/architecture.md, "Lock hierarchy of a session"):
+    // SFTP channel first, transport second — only `SessionLocks` offers it.
+    let mut locks = session.locks();
+    let (mut guard, transport) = locks.sftp_then_transport_if_closed().await;
+    if let Some(mut transport) = transport {
         let sftp = transport.open_sftp().await?;
         // Spec 0085, A3.2: die eine Stelle, die den normalen Kanal befüllt —
         // und sie nimmt ihn aus dem Transport dieser Sitzung selbst.
@@ -152,6 +154,7 @@ pub(crate) async fn execute_read_remote_file(
         // spec-reviewer-Fund (Runde 1): Der Fehler wird hier nur
         // herausgereicht und erst NACH diesem Block gemeldet. Sonst liefe
         // `emit_action_error` (nimmt `session.context`) unter der noch
+        // (docs/architecture.md, "Lock hierarchy of a session")
         // gehaltenen SFTP-Sperre — eine Sperrreihenfolge sftp→context, die
         // es an dieser Stelle vorher nicht gab.
         match guard.sftp_or_err() {
