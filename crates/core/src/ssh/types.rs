@@ -66,7 +66,22 @@ pub enum ExecOutputChunk {
 
 /// Receiving end is owned by the caller; a dropped receiver only ends the
 /// live display, never the command (sending errors are ignored).
-pub type ExecOutputSink = tokio::sync::mpsc::UnboundedSender<ExecOutputChunk>;
+///
+/// The channel is bounded ([`EXEC_OUTPUT_SINK_CAPACITY`]). Producers never
+/// block on it: they `try_send`, keep the last slot for one final
+/// [`ExecOutputChunk::Truncated`], and stop forwarding once the consumer lags
+/// that far behind (issue #922).
+pub type ExecOutputSink = tokio::sync::mpsc::Sender<ExecOutputChunk>;
+
+/// Number of chunks the live-output channel holds (issue #922). Beyond it the
+/// live view is cut off and marked truncated; the captured result is not
+/// affected.
+pub const EXEC_OUTPUT_SINK_CAPACITY: usize = 256;
+
+/// Creates the live-output channel with [`EXEC_OUTPUT_SINK_CAPACITY`].
+pub fn exec_output_channel() -> (ExecOutputSink, tokio::sync::mpsc::Receiver<ExecOutputChunk>) {
+    tokio::sync::mpsc::channel(EXEC_OUTPUT_SINK_CAPACITY)
+}
 
 /// Terminalgröße für eine PTY-Shell (Spec 0005, Abschnitt 4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
