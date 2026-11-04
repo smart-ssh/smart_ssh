@@ -742,7 +742,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                  className="rounded text-fg-subtle hover:text-fg-bright focus-ring-flush"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -763,7 +763,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
               aria-label={t("filterRules.simulateTags")}
-              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-fg focus-ring-flush"
             />
           </div>
         </div>

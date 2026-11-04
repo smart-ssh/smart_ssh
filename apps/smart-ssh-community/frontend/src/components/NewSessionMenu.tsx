@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
 
 const itemClass =
-  "block min-h-11 w-full px-3 py-1.5 text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg";
+  "block min-h-11 w-full px-3 py-1.5 text-left text-fg-soft hover:bg-accent/14 focus-ring-inset";
 
 export function NewSessionMenu({
   x,

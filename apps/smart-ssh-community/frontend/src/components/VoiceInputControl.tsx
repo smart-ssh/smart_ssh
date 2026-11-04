@@ -61,7 +61,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
         aria-pressed={recording}
         title={`${label} (${shortcut})`}
         data-voice-state={voice.phase}
-        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:cursor-not-allowed disabled:opacity-70 ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-ring-flush disabled:cursor-not-allowed disabled:opacity-70 ${
           recording
             ? "animate-pulse border-danger-border-strong bg-danger-subtle-hover text-danger-fg-faint"
             : "border-border-strong bg-surface-raised text-fg hover:bg-border"

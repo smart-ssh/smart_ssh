@@ -35,7 +35,7 @@ export function DirectoryMenu({
   const menuRef = useRef<HTMLFieldSetElement>(null);
   const getAnchor = useCallback(() => ({ x, y }), [x, y]);
   const placed = useMenuPlacement(menuRef, getAnchor, true);
-  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg`;
+  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-fg-soft hover:bg-accent/14 focus-ring-inset`;
   return (
     <fieldset
       ref={menuRef}

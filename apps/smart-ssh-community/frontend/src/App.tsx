@@ -27,8 +27,6 @@ import { useIsNarrow } from "./hooks/useIsNarrow";
 import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
 import { useSessionTabs } from "./useSessionTabs";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 
 type Tab = MainTab;
 
@@ -389,7 +387,7 @@ function MainScreen({
                 type="button"
                 onClick={() => setTab(entry.id)}
                 aria-current={tab === entry.id ? "page" : undefined}
-                className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                className={`focus-ring font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                   tab === entry.id
                     ? "border-accent/55 bg-accent/16 text-accent-fg"
                     : "border-transparent text-fg-subtle hover:bg-surface-raised"

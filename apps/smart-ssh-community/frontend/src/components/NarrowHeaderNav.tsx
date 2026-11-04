@@ -10,9 +10,7 @@ import type { SessionTab } from "../useSessionTabs";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
-const ENTRY_BASE = `${FOCUS_RING} font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
+const ENTRY_BASE = `focus-ring font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
 const entryTone = (current: boolean) =>
   current ? "border-accent/55 bg-accent/16 text-accent-fg-soft" : "border-transparent text-fg-muted hover:bg-surface-raised";
 
@@ -47,7 +45,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
           e.currentTarget.focus();
           setOpen(true);
         }}
-        className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-fg-soft hover:bg-surface-raised`}
+        className={`focus-ring flex h-11 w-11 shrink-0 items-center justify-center text-fg-soft hover:bg-surface-raised`}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
           <path d="M4 6h16M4 12h16M4 18h16" />
@@ -151,7 +149,7 @@ function NarrowMenu({
                       type="button"
                       aria-current={current ? "page" : undefined}
                       onClick={pick(() => onSwitch(s.sessionId))}
-                      className={`${FOCUS_RING} font-heading flex min-h-11 min-w-0 flex-1 items-center gap-1.5 px-3 text-left text-sm font-semibold tracking-wide ${current ? "text-accent-fg-soft" : "text-fg-muted"}`}
+                      className={`focus-ring font-heading flex min-h-11 min-w-0 flex-1 items-center gap-1.5 px-3 text-left text-sm font-semibold tracking-wide ${current ? "text-accent-fg-soft" : "text-fg-muted"}`}
                     >
                       <SessionTabContent tab={s} t={t} label={label} labelClass="truncate" />
                     </button>
@@ -160,7 +158,7 @@ function NarrowMenu({
                       type="button"
                       onClick={() => onRequestClose(s.sessionId)}
                       aria-label={t("sessionTabs.closeTab", { name: label })}
-                      className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-fg-subtle hover:text-fg-soft`}
+                      className={`focus-ring flex h-11 w-11 shrink-0 items-center justify-center text-fg-subtle hover:text-fg-soft`}
                     >
                       ✕
                     </button>

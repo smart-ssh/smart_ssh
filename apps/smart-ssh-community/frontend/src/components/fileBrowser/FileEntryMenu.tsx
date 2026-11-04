@@ -66,7 +66,7 @@ export function FileEntryMenu({
     focusMenuTrigger(entry.path);
     fn();
   };
-  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg`;
+  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-fg-soft hover:bg-accent/14 focus-ring-inset`;
   return (
     <div
       ref={menuRef}
@@ -125,7 +125,7 @@ export function FileEntryMenu({
       <button
         type="button"
         onClick={act(() => onDelete(entry))}
-        className={`block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-danger-fg hover:bg-danger/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg`}
+        className={`block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-danger-fg hover:bg-danger/12 focus-ring-inset`}
       >
         {t("fileBrowser.menu.delete")}
       </button>

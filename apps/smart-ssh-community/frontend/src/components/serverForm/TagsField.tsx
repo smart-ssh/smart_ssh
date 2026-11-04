@@ -28,7 +28,7 @@ export function TagsField({ tags, tagDraft, setTagDraft, addTag: handleAddTag, r
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                  className="rounded text-fg-subtle hover:text-fg-bright focus-ring-flush"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -48,7 +48,7 @@ export function TagsField({ tags, tagDraft, setTagDraft, addTag: handleAddTag, r
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-ring-flush"
             />
           </div>
           {children}

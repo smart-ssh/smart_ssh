@@ -230,7 +230,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                     setNarrowView("detail");
                   }}
                   aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-ring-inset ${
                     category.id === active?.id
                       ? "bg-accent text-surface-sunken"
                       : "text-fg-muted hover:bg-surface-raised"

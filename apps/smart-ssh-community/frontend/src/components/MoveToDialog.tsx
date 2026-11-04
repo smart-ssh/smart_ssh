@@ -35,7 +35,7 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
     onMove(item, target);
   };
   const optionClass =
-    "flex min-h-11 w-full items-center rounded px-3 py-2 text-left text-sm text-fg hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-40";
+    "flex min-h-11 w-full items-center rounded px-3 py-2 text-left text-sm text-fg hover:bg-surface-raised focus-ring-flush disabled:opacity-40";
   const disabledFor = (target: DropTarget) => classifyDrop(item, target, groups, servers) !== "valid";
   return (
     <DialogFrame

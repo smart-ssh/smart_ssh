@@ -53,7 +53,7 @@ export function ColumnsMenu({
           role="menuitemcheckbox"
           aria-checked={!hidden.includes(c)}
           onClick={() => onToggle(c)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg"
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-fg-soft hover:bg-accent/14 focus-ring-inset"
         >
           <span aria-hidden="true" className="w-3">{hidden.includes(c) ? "" : "✓"}</span>
           {t(`fileBrowser.column.${c}`)}
