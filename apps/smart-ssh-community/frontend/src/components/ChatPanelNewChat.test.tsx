@@ -69,6 +69,7 @@ function confirmEvent(): ChatActionProposedEvent {
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

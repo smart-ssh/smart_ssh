@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { retryChatTurn, getChatHistory } from "../api";
 import { onChatAiRetrying, onChatError, onChatTextDelta } from "../events";
+import { chatError } from "../test/fixtures";
 import type { ChatAiRetryingEvent, ChatErrorEvent } from "../types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
@@ -62,14 +63,14 @@ async function renderWithUserTurn() {
   await waitFor(() => expect(onChatError).toHaveBeenCalled());
 }
 
-const overloaded: ChatErrorEvent = {
+const overloaded: ChatErrorEvent = chatError({
   sessionId: "session-1",
   message: "KI-Provider ist überlastet",
   code: "AI_PROVIDER_OVERLOADED",
   providerErrorType: "overloaded_error",
   httpStatus: 529,
   providerMessage: "Overloaded",
-};
+});
 
 describe("ChatPanel AI error card (issue #600)", () => {
   beforeEach(() => {
@@ -98,13 +99,13 @@ describe("ChatPanel AI error card (issue #600)", () => {
   it("shows the usage-limit text with the date access returns (issue #631)", async () => {
     await renderWithUserTurn();
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "Nutzungslimit",
         code: "AI_PROVIDER_USAGE_LIMIT",
         providerErrorType: "invalid_request_error",
         accessReturns: "2026-11-01 at 00:00 UTC",
-      }),
+      })),
     );
     expect(
       screen.getByText(
@@ -119,11 +120,11 @@ describe("ChatPanel AI error card (issue #600)", () => {
   it("shows the usage-limit text without a date when the provider sent none (issue #631)", async () => {
     await renderWithUserTurn();
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "Nutzungslimit",
         code: "AI_PROVIDER_USAGE_LIMIT",
-      }),
+      })),
     );
     expect(
       screen.getByText(
@@ -135,10 +136,10 @@ describe("ChatPanel AI error card (issue #600)", () => {
   it("shows 'stream' when there is no HTTP status", async () => {
     await renderWithUserTurn();
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         ...overloaded,
-        httpStatus: undefined,
-      }),
+        httpStatus: null,
+      })),
     );
     expect(screen.getByTestId("chat-error-details").textContent).toContain(
       "status: stream",
@@ -160,11 +161,11 @@ describe("ChatPanel AI error card (issue #600)", () => {
   it("offers no Try again for non-retryable codes", async () => {
     await renderWithUserTurn();
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "x",
         code: "AI_AUTH_FAILED",
-      }),
+      })),
     );
     expect(
       screen.queryByRole("button", { name: "Erneut versuchen" }),

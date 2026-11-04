@@ -7,6 +7,7 @@ import {
   onChatError,
   onChatTextDelta,
 } from "../events";
+import { chatError } from "../test/fixtures";
 import type { ChatAiRequestStartedEvent, ChatErrorEvent } from "../types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
@@ -155,13 +156,13 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     await screen.findByText("check the disk");
     await waitFor(() => expect(onChatError).toHaveBeenCalled());
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "x",
         code: "AI_TIMEOUT",
         providerName: "Claude",
         timeoutSecs: 120,
-      }),
+      })),
     );
     expect(screen.getByText(/Claude/).textContent).toContain("120 s");
     expect(
@@ -177,13 +178,13 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     await screen.findByText("check the disk");
     await waitFor(() => expect(onChatError).toHaveBeenCalled());
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "x",
         code: "AI_TOTAL_DEADLINE",
         providerName: "Claude",
         timeoutSecs: 600,
-      }),
+      })),
     );
     expect(screen.getByText(/Claude/).textContent).toContain("10 Minuten");
     expect(

@@ -92,6 +92,7 @@ const events: HostKeyVerificationNeededEvent[] = [
     kind: "unknown",
     fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     expectedFingerprint: null,
+    keyType: null,
   },
   {
     sessionId,
@@ -101,6 +102,7 @@ const events: HostKeyVerificationNeededEvent[] = [
     kind: "mismatch",
     fingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
     expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
+    keyType: null,
   },
 ];
 

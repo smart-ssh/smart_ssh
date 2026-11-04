@@ -77,6 +77,7 @@ function proposed(
     decision: "AutoExec",
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,
