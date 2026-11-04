@@ -16,12 +16,14 @@ const storeSet = vi.fn();
 const storeSave = vi.fn();
 
 const invokeMock = vi.fn();
-vi.mock("./api", () => ({
-  setRiskSecondOpinionSettings: (enabled: boolean, providerId: string | null) =>
-    invokeMock("set_risk_second_opinion_settings", { enabled, providerId }),
-  setRedRiskAlwaysConfirm: (value: boolean) =>
-    invokeMock("set_red_risk_always_confirm", { value }),
-}));
+vi.mock("./api", async () =>
+  (await import("./test/apiMock")).createApiMock({
+    setRiskSecondOpinionSettings: (enabled: boolean, providerId: string | null) =>
+      invokeMock("set_risk_second_opinion_settings", { enabled, providerId }),
+    setRedRiskAlwaysConfirm: (value: boolean) =>
+      invokeMock("set_red_risk_always_confirm", { value }),
+  }),
+);
 
 vi.mock("./i18n", () => ({
   settingsStore: () => Promise.resolve({ get: storeGet, set: storeSet, save: storeSave }),

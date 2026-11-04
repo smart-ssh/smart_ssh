@@ -5,7 +5,11 @@ describe("createApiMock", () => {
   it("mocks every function export of api.ts except the pure error helpers", async () => {
     const actual = await vi.importActual<Record<string, unknown>>("../api");
     const mock = (await createApiMock()) as unknown as Record<string, unknown>;
-    const pure = new Set(["commandErrorMessage", "commandErrorCode"]);
+    const pure = new Set([
+      "commandErrorMessage",
+      "commandErrorCode",
+      "commandErrorConnectLog",
+    ]);
     const names = Object.keys(actual).filter(
       (n) => typeof actual[n] === "function" && !pure.has(n),
     );

@@ -20,18 +20,20 @@ import { useSftpTransfers } from "./useSftpTransfers";
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({ onDragDropEvent: vi.fn(() => Promise.resolve(() => {})) }),
 }));
-vi.mock("../../api", () => ({
-  claimDroppedPaths: vi.fn(),
-  pickUploadFiles: vi.fn(),
-  pickUploadFolder: vi.fn(),
-  readLocalTextPreview: vi.fn(),
-  sftpExists: vi.fn(),
-  sftpLocalPathsAreFolders: vi.fn(),
-  sftpReadText: vi.fn(),
-  sftpUpload: vi.fn(),
-  sftpUploadFolder: vi.fn(),
-  sftpUploadFolderPreview: vi.fn(),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    claimDroppedPaths: vi.fn(),
+    pickUploadFiles: vi.fn(),
+    pickUploadFolder: vi.fn(),
+    readLocalTextPreview: vi.fn(),
+    sftpExists: vi.fn(),
+    sftpLocalPathsAreFolders: vi.fn(),
+    sftpReadText: vi.fn(),
+    sftpUpload: vi.fn(),
+    sftpUploadFolder: vi.fn(),
+    sftpUploadFolderPreview: vi.fn(),
+  }),
+);
 vi.mock("../../events", () => ({
   onSftpTransferStarted: vi.fn(),
   onSftpTransferProgress: vi.fn(),
