@@ -76,7 +76,7 @@ export function useVoiceInput(handlers: VoiceHandlers) {
         setErrorKey(voiceErrorKey(commandErrorCode(err)));
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable callback by design; reads state through refs
   }, []);
 
   const openConsent = async () => {

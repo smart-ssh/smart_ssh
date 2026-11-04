@@ -85,18 +85,10 @@ describe("serverFormReducer", () => {
     expect(s.dirty).toBe(false);
   });
 
-  it("addTag trims, ignores empties and duplicates, and clears the draft", () => {
-    let s = serverFormReducer(fresh(), { type: "setField", field: "tagDraft", value: "  x " });
-    s = serverFormReducer(s, { type: "addTag" });
-    expect(s.tags).toEqual(["x"]);
-    expect(s.tagDraft).toBe("");
-    s = serverFormReducer(s, { type: "setField", field: "tagDraft", value: "x" });
-    s = serverFormReducer(s, { type: "addTag" });
-    expect(s.tags).toEqual(["x"]);
-    s = serverFormReducer(s, { type: "setField", field: "tagDraft", value: "  " });
-    s = serverFormReducer(s, { type: "addTag" });
-    expect(s.tags).toEqual(["x"]);
-    s = serverFormReducer(s, { type: "removeTag", tag: "x" });
+  it("setTags replaces the tag list", () => {
+    let s = serverFormReducer(fresh(), { type: "setTags", tags: ["x", "y"] });
+    expect(s.tags).toEqual(["x", "y"]);
+    s = serverFormReducer(s, { type: "setTags", tags: [] });
     expect(s.tags).toEqual([]);
   });
 

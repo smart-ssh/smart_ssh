@@ -205,7 +205,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     if (!providersLoaded) return;
     if (providers.some((p) => p.providerType === "ollama")) return;
     void runOllamaProbe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- probe runs once when the providers have loaded
   }, [providersLoaded]);
 
   /** Spec 0069, Teil B4 (E2): Bestätigung des Nutzers ist der Klick selbst

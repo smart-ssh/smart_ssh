@@ -132,14 +132,14 @@ export function useDialogFocusTrap({
         previous.focus();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only trap; callbacks are read through refs
   }, []);
 
   // A2: Anfangsfokus beim Mount und bei jedem `resetKey`-Wechsel. Muss
   // **nach** dem Effekt oben deklariert sein, s. dessen Kommentar.
   useEffect(() => {
     initialFocusRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus on mount and on resetKey only
   }, [resetKey]);
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
