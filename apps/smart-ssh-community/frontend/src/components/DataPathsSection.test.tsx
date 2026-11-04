@@ -10,11 +10,12 @@ import { testI18n } from "../testI18n";
 import type { DataPathEntryDto } from "../types";
 import { DataPathsSection } from "./DataPathsSection";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  getDataPaths: vi.fn(),
-  openDataPathFolder: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getDataPaths: vi.fn(),
+    openDataPathFolder: vi.fn(),
+  }),
+);
 
 const ENTRIES: DataPathEntryDto[] = [
   { id: "database", label: null, path: "/data/smart-ssh.db", isDirectory: false },

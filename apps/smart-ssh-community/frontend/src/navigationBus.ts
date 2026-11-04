@@ -7,18 +7,19 @@
  * durch den Baum zu reichen, den `NoteShrinkSuggestionToast` (an der
  * `App`-Wurzel) gar nicht kennt. */
 
+import { createBus } from "./createBus";
+
 type Listener = (serverId: string) => void;
 
-const listeners = new Set<Listener>();
+const noteEditBus = createBus<string>();
 
 export function publishRequestServerNoteEdit(serverId: string): void {
-  for (const listener of listeners) listener(serverId);
+  noteEditBus.publish(serverId);
 }
 
 /** Gibt eine Unsubscribe-Funktion zurück (React-`useEffect`-Cleanup-Form). */
 export function subscribeRequestServerNoteEdit(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  return noteEditBus.subscribe(listener);
 }
 
 /** Issue #611: an extension asks to resume a saved chat session of a server.
@@ -32,28 +33,26 @@ export interface ResumeChatSessionRequest {
 
 type ResumeListener = (request: ResumeChatSessionRequest) => void;
 
-const resumeListeners = new Set<ResumeListener>();
+const resumeBus = createBus<ResumeChatSessionRequest>();
 
 export function requestResumeChatSession(serverId: string, chatSessionId: string): void {
-  for (const listener of Array.from(resumeListeners)) listener({ serverId, chatSessionId });
+  resumeBus.publish({ serverId, chatSessionId });
 }
 
 export function subscribeRequestResumeChatSession(listener: ResumeListener): () => void {
-  resumeListeners.add(listener);
-  return () => resumeListeners.delete(listener);
+  return resumeBus.subscribe(listener);
 }
 
 /** Issue #696: a chat card asks to open one filter rule for editing in the
  * filter rules tab. `App` switches the tab; `FilterRulesView` selects it. */
 type OpenFilterRuleListener = (ruleId: string) => void;
 
-const openFilterRuleListeners = new Set<OpenFilterRuleListener>();
+const openFilterRuleBus = createBus<string>();
 
 export function requestOpenFilterRule(ruleId: string): void {
-  for (const listener of Array.from(openFilterRuleListeners)) listener(ruleId);
+  openFilterRuleBus.publish(ruleId);
 }
 
 export function subscribeRequestOpenFilterRule(listener: OpenFilterRuleListener): () => void {
-  openFilterRuleListeners.add(listener);
-  return () => openFilterRuleListeners.delete(listener);
+  return openFilterRuleBus.subscribe(listener);
 }

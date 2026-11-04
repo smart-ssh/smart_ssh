@@ -22,10 +22,11 @@ vi.mock("@tauri-apps/api/webview", () => ({
     },
   }),
 }));
-vi.mock("../../api", () => ({
-  listPromptHistory: vi.fn(),
-  commandErrorMessage: (e: unknown) => String(e),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    listPromptHistory: vi.fn(),
+  }),
+);
 
 const attachment = (id: string): ComposerAttachment => ({
   id,

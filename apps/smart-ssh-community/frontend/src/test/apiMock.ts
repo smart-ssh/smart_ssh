@@ -48,7 +48,11 @@ export async function createApiMock(
   for (const [name, value] of Object.entries(actual)) {
     if (typeof value !== "function") {
       mock[name] = value;
-    } else if (name === "commandErrorMessage" || name === "commandErrorCode") {
+    } else if (
+      name === "commandErrorMessage" ||
+      name === "commandErrorCode" ||
+      name === "commandErrorConnectLog"
+    ) {
       mock[name] = value;
     } else {
       mock[name] =

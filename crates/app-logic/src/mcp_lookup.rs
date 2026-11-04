@@ -105,10 +105,11 @@ impl<'a> McpLookup<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ssh_manager_core::testing::ServerBuilder;
 
     use chrono::Utc;
     use ssh_manager_core::ai::REDACTED_PLACEHOLDER;
-    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::profiles::{Group, GroupId};
 
     use crate::server_credentials::sudo_password_credential_ref;
     use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
@@ -116,28 +117,6 @@ mod tests {
     const TOKEN: &str = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
     const KEY_BODY: &str = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB";
     const SUDO_PASSWORD: &str = "Zq9!unusual.sudo";
-
-    fn server(name: &str, notes: &str, group_id: Option<GroupId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: name.to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id,
-            tags: Vec::new(),
-            auth: AuthMethod::Agent,
-            notes: notes.to_string(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
 
     fn group(name: &str, notes: &str) -> Group {
         let now = Utc::now();
@@ -169,8 +148,16 @@ mod tests {
     /// Notizen, auch keine redigierten.
     #[tokio::test]
     async fn test_server_notes_for_non_allowlisted_server_is_unknown_server() {
-        let hidden = server("hidden", &secret_notes(), None);
-        let visible = server("visible", "", None);
+        let hidden = ServerBuilder::new()
+            .name("hidden")
+            .notes(&secret_notes())
+            .group_id(None)
+            .build();
+        let visible = ServerBuilder::new()
+            .name("visible")
+            .notes("")
+            .group_id(None)
+            .build();
         let profiles = InMemoryProfileStore::new()
             .with_server(hidden.clone())
             .with_server(visible.clone());
@@ -215,7 +202,11 @@ mod tests {
     /// steht an ihrer Stelle, harmloser Text bleibt erhalten.
     #[tokio::test]
     async fn test_server_notes_redacts_private_key_and_sudo_password() {
-        let srv = server("web-01", &secret_notes(), None);
+        let srv = ServerBuilder::new()
+            .name("web-01")
+            .notes(&secret_notes())
+            .group_id(None)
+            .build();
         let profiles = InMemoryProfileStore::new().with_server(srv.clone());
         let credentials = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(srv.id), SUDO_PASSWORD);
@@ -260,8 +251,16 @@ mod tests {
         }
 
         let notes = format!("login with {EXT_SECRET} please");
-        let a = server("a", &notes, None);
-        let b = server("b", &notes, None);
+        let a = ServerBuilder::new()
+            .name("a")
+            .notes(&notes)
+            .group_id(None)
+            .build();
+        let b = ServerBuilder::new()
+            .name("b")
+            .notes(&notes)
+            .group_id(None)
+            .build();
         let profiles = InMemoryProfileStore::new()
             .with_server(a.clone())
             .with_server(b.clone());
@@ -287,7 +286,11 @@ mod tests {
     #[tokio::test]
     async fn test_server_notes_fences_each_section_as_server_note() {
         let grp = group("prod", &format!("token={TOKEN}"));
-        let srv = server("web-01", "nur Server-Notiz", Some(grp.id));
+        let srv = ServerBuilder::new()
+            .name("web-01")
+            .notes("nur Server-Notiz")
+            .group_id(Some(grp.id))
+            .build();
         let profiles = InMemoryProfileStore::new()
             .with_group(grp)
             .with_server(srv.clone());
@@ -319,9 +322,21 @@ mod tests {
     /// freigegebener, aber gelöschter Server fällt still heraus.
     #[tokio::test]
     async fn test_list_servers_returns_only_allowlisted_servers() {
-        let a = server("allowed-a", "", None);
-        let b = server("allowed-b", "", None);
-        let hidden = server("hidden", "", None);
+        let a = ServerBuilder::new()
+            .name("allowed-a")
+            .notes("")
+            .group_id(None)
+            .build();
+        let b = ServerBuilder::new()
+            .name("allowed-b")
+            .notes("")
+            .group_id(None)
+            .build();
+        let hidden = ServerBuilder::new()
+            .name("hidden")
+            .notes("")
+            .group_id(None)
+            .build();
         let profiles = InMemoryProfileStore::new()
             .with_server(a.clone())
             .with_server(b.clone())
@@ -357,7 +372,11 @@ mod tests {
     /// Leere Allow-Liste: nichts ist sichtbar, obwohl Server existieren.
     #[tokio::test]
     async fn test_list_servers_with_empty_allowlist_is_empty() {
-        let srv = server("web-01", "", None);
+        let srv = ServerBuilder::new()
+            .name("web-01")
+            .notes("")
+            .group_id(None)
+            .build();
         let profiles = InMemoryProfileStore::new().with_server(srv);
         let credentials = InMemoryCredentialStore::new();
         let allowed = allow(&[]);

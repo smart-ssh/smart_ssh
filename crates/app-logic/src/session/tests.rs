@@ -1,5 +1,6 @@
 //! Unit tests for `session`.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::pin::Pin;
 
 use futures::Stream;
@@ -922,7 +923,7 @@ mod lookup_failures {
     use crate::test_support::{log_capture, InMemoryCredentialStore, InMemoryProfileStore};
     use chrono::Utc;
     use secrecy::SecretString;
-    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::profiles::{Group, GroupId};
     use std::sync::atomic::Ordering::SeqCst;
 
     /// Server secret for everyone, group secret only when the scope has the
@@ -952,34 +953,15 @@ mod lookup_failures {
         }
     }
 
-    fn server(group_id: Option<GroupId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: "web".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id,
-            tags: Vec::new(),
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
     const TEXT: &str = "s=server-secret-111 g=group-secret-222";
 
     #[tokio::test]
     async fn test_get_server_failure_keeps_server_secret_masked_and_flags_incomplete() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1008,7 +990,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_group_chain_failure_flags_incomplete_and_keeps_server_secret() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1026,7 +1011,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_healthy_lookup_is_complete() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1038,7 +1026,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_rebuild_with_failing_get_server_keeps_group_secret_and_flags_session() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
