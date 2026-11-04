@@ -47,6 +47,7 @@ pub mod document_export;
 pub mod dto;
 pub mod ephemeral_credentials;
 pub mod error;
+pub mod event_names;
 pub mod events;
 /// Extension API: the documented, supported surface for extension crates.
 pub mod ext;

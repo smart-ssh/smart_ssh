@@ -270,7 +270,7 @@ pub fn emit_auto_reconnect_changed(
         phase,
         attempt,
     }) {
-        emitter.emit_event("auto-reconnect-changed", value);
+        emitter.emit_event(crate::event_names::AUTO_RECONNECT_CHANGED, value);
     }
 }
 

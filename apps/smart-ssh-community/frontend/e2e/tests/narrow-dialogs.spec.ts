@@ -91,7 +91,7 @@ async function openEntryMenuItem(app: import("../support/app").AppDriver, item: 
   await page.getByRole("tab", { name: "Files", exact: true }).click();
   await expect(page.getByText("notes.txt")).toBeVisible();
   await page.getByRole("button", { name: /^Actions: notes.txt$/ }).click();
-  await page.getByRole("button", { name: item, exact: typeof item === "string" }).click();
+  await page.getByRole("menuitem", { name: item, exact: typeof item === "string" }).click();
 }
 
 test("sm: file properties dialog is a full-screen sheet @phone", async ({ app }) => {

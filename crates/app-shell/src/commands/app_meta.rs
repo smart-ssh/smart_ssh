@@ -185,6 +185,15 @@ pub fn get_entitlements(
     catalogue.filter(state.entitlements.current())
 }
 
+/// Tells the frontend that the entitlement set changed (see
+/// `get_entitlements`).
+pub(crate) fn emit_entitlements_changed(
+    app: &tauri::AppHandle,
+    current: ssh_manager_core::entitlements::Entitlements,
+) {
+    tauri::Emitter::emit(app, app_logic::event_names::ENTITLEMENTS_CHANGED, current).ok();
+}
+
 /// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets
 /// (Spec 0014, Abschnitt 3 & 6). Liefert `"custom"`, wenn die
 /// plattformspezifische Overlay-Titelleiste des Plugins aktiv ist
