@@ -236,7 +236,7 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         if let Some(chunks) = self.streamed.get(command).cloned() {
             for chunk in chunks {
-                let _ = sink.send(chunk);
+                let _ = sink.send(chunk).await;
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
@@ -293,7 +293,7 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
         sink: ssh_manager_core::ssh::ExecOutputSink,
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         for chunk in self.chunks {
-            let _ = sink.send(chunk);
+            let _ = sink.send(chunk).await;
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
         // Like a real transport, keep the live channel open until the

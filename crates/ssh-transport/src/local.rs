@@ -1296,7 +1296,7 @@ mod tests {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         let mut transport = LocalTransport::new();
-        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
         let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
         let finished = Arc::new(AtomicBool::new(false));
         let finished_in_exec = finished.clone();
@@ -1365,7 +1365,7 @@ mod tests {
         let command = "yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         #[cfg(windows)]
         let command = "for /L %i in (1,0,2) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
         let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
 
         let outcome = tokio::time::timeout(
