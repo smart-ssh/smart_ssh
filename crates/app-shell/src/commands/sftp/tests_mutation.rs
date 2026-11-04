@@ -69,6 +69,12 @@ impl SftpSession for CancelAfter {
     ) -> Result<TransferEnd, SshError> {
         self.inner.write_file_chunked(p, n, f).await
     }
+    async fn read_range(&mut self, p: &str, o: u64, n: usize) -> Result<Vec<u8>, SshError> {
+        self.inner.read_range(p, o, n).await
+    }
+    async fn write_range(&mut self, p: &str, o: u64, d: &[u8], t: bool) -> Result<(), SshError> {
+        self.inner.write_range(p, o, d, t).await
+    }
     async fn stat(&mut self, p: &str) -> Result<RemoteEntry, SshError> {
         self.inner.stat(p).await
     }
