@@ -597,7 +597,7 @@ describe("ServerList new session (issue #657)", () => {
     renderWithTab();
     const row = (await screen.findByText("prod-1")).closest("button")!;
     fireEvent.contextMenu(row);
-    fireEvent.click(await screen.findByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Neue Sitzung" }));
     await waitFor(() =>
       expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }),
     );

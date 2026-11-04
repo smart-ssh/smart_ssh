@@ -12,3 +12,5 @@ export type { TabItem } from "./Tabs";
 export { Tooltip } from "./Tooltip";
 export { ErrorBoundary } from "./ErrorBoundary";
 export type { ErrorBoundaryProps } from "./ErrorBoundary";
+export { Menu, MenuItem, MenuSeparator } from "./Menu";
+export type { MenuItemProps, MenuProps } from "./Menu";

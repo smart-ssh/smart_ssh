@@ -1,7 +1,6 @@
-import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { type RemoteEntryDto } from "../../types";
-import { useMenuPlacement } from "../../hooks/useMenuPlacement";
+import { Menu, MenuItem, MenuSeparator } from "../ui";
 import { currentCaps, findMenuTrigger, focusMenuTrigger } from "./shared";
 
 /** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
@@ -17,6 +16,7 @@ export function FileEntryMenu({
   narrow,
   className,
   point,
+  onClose,
   onOpenLocally,
   onDownloadDefault,
   onDownloadChoose,
@@ -37,6 +37,7 @@ export function FileEntryMenu({
   className: string;
   /** Context menu: opens at this viewport point; otherwise anchored to the ⋮ button. */
   point?: { x: number; y: number };
+  onClose: () => void;
   onOpenLocally: (entry: RemoteEntryDto) => void;
   onDownloadDefault: (entry: RemoteEntryDto) => void;
   onDownloadChoose: (entry: RemoteEntryDto) => void;
@@ -53,82 +54,42 @@ export function FileEntryMenu({
 }) {
   const caps = currentCaps();
   const { t } = useTranslation();
-  // Issue #627: always fully inside the window (flips/shifts at the edges).
-  const menuRef = useRef<HTMLDivElement>(null);
-  const getAnchor = useCallback(
-    () => point ?? findMenuTrigger(entry.path),
-    [point?.x, point?.y, entry.path], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const style = useMenuPlacement(menuRef, getAnchor, true, { align: point ? "start" : "end", gap: point ? 0 : 4 });
   // The menu unmounts when an action runs. Focus the ⋮ button first, so a
   // dialog opened by the action remembers it and gives focus back on close.
   const act = (fn: () => void) => () => {
     focusMenuTrigger(entry.path);
     fn();
   };
-  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg`;
+  const item = (key: string, onClick: () => void, danger = false) => (
+    <MenuItem narrow={narrow} danger={danger} onClick={onClick}>
+      {t(`fileBrowser.menu.${key}`)}
+    </MenuItem>
+  );
   return (
-    <div
-      ref={menuRef}
-      className={
-        narrow
-          ? "fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-border bg-surface py-1 text-left text-xs shadow-lg"
-          : `${className} w-52 border border-border bg-surface py-1 text-left text-xs shadow-lg`
-      }
-      style={narrow ? undefined : style}
+    <Menu
+      label={entry.name}
+      anchor={() => point ?? findMenuTrigger(entry.path)}
+      onClose={onClose}
+      returnFocusTo={point ? undefined : () => findMenuTrigger(entry.path)}
+      narrow={narrow}
+      align={point ? "start" : "end"}
+      gap={point ? 0 : 4}
+      className={`${className.replace(/^fixed\s*/, "")} w-52`.trim()}
     >
-      <button type="button" onClick={act(() => onDownloadDefault(entry))} className={itemClass}>
-        {t("fileBrowser.menu.download")}
-      </button>
-      {(caps.folderPicker || !entry.isDir) && (
-        <button type="button" onClick={act(() => onDownloadChoose(entry))} className={itemClass}>
-          {t("fileBrowser.menu.downloadTo")}
-        </button>
-      )}
-      {!entry.isDir && (
-        <button type="button" onClick={act(() => onCopyContent(entry))} className={itemClass}>
-          {t("fileBrowser.menu.copyContent")}
-        </button>
-      )}
-      {!entry.isDir && caps.fileClipboard && (
-        <button type="button" onClick={act(() => onCopyFile(entry))} className={itemClass}>
-          {t("fileBrowser.menu.copyFile")}
-        </button>
-      )}
-      {!entry.isDir && (
-        <button type="button" onClick={act(() => onOpenLocally(entry))} className={itemClass}>
-          {t("fileBrowser.menu.openLocally")}
-        </button>
-      )}
-      <button type="button" onClick={act(() => onCopyPath(entry))} className={itemClass}>
-        {t("fileBrowser.menu.copyPath")}
-      </button>
-      <button type="button" onClick={act(() => onShowProperties(entry))} className={itemClass}>
-        {t("fileBrowser.menu.properties")}
-      </button>
-      <button type="button" onClick={act(onRefresh)} className={itemClass}>
-        {t("fileBrowser.menu.refresh")}
-      </button>
-      <div className="my-1 border-t border-surface-raised" />
-      <button type="button" onClick={act(() => onChmod(entry))} className={itemClass}>
-        {t("fileBrowser.menu.chmod")}
-      </button>
-      <button type="button" onClick={act(() => onChown(entry))} className={itemClass}>
-        {t("fileBrowser.menu.chown")}
-      </button>
-      <button type="button" onClick={act(() => onRename(entry))} className={itemClass}>
-        {t("fileBrowser.menu.rename")}
-      </button>
-      <button type="button" onClick={act(() => onCut(entry))} className={itemClass}>
-        {t("fileBrowser.menu.cut")}
-      </button>
-      <button
-        type="button"
-        onClick={act(() => onDelete(entry))}
-        className={`block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-danger-fg hover:bg-danger/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg`}
-      >
-        {t("fileBrowser.menu.delete")}
-      </button>
-    </div>
+      {item("download", act(() => onDownloadDefault(entry)))}
+      {(caps.folderPicker || !entry.isDir) && item("downloadTo", act(() => onDownloadChoose(entry)))}
+      {!entry.isDir && item("copyContent", act(() => onCopyContent(entry)))}
+      {!entry.isDir && caps.fileClipboard && item("copyFile", act(() => onCopyFile(entry)))}
+      {!entry.isDir && item("openLocally", act(() => onOpenLocally(entry)))}
+      {item("copyPath", act(() => onCopyPath(entry)))}
+      {item("properties", act(() => onShowProperties(entry)))}
+      {item("refresh", act(onRefresh))}
+      <MenuSeparator />
+      {item("chmod", act(() => onChmod(entry)))}
+      {item("chown", act(() => onChown(entry)))}
+      {item("rename", act(() => onRename(entry)))}
+      {item("cut", act(() => onCut(entry)))}
+      {item("delete", act(() => onDelete(entry)), true)}
+    </Menu>
   );
 }
