@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import i18next from "i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { detectFallbackPlatform, platformCapabilities } from "./titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../platform";
 import {
   closeEditSession,
   commandErrorCode,
@@ -12,11 +12,11 @@ import {
   sftpReadText,
   sftpStat,
   sftpUpload,
-} from "./api";
-import { translateErrorCode } from "./errorCodes";
-import { appForFileName, loadFileTypeApps } from "./fileTypeSettings";
-import { classifyPreviewReadFailure, type PreviewReadFailure } from "./previewReadFailure";
-import type { RemoteEntryDto } from "./types";
+} from "../api";
+import { translateErrorCode } from "../errorCodes";
+import { appForFileName, loadFileTypeApps } from "../fileTypeSettings";
+import { classifyPreviewReadFailure, type PreviewReadFailure } from "../previewReadFailure";
+import type { RemoteEntryDto } from "../types";
 
 /** Spec 0054, Teil 4: wie oft auf eine lokale Änderung der Bearbeitungskopie
  * geprüft wird. Ein Sekundenwert im niedrigen einstelligen Bereich ist für

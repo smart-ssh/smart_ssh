@@ -90,7 +90,7 @@ export function ChownDialog({
             type="checkbox"
             checked={recursive}
             onChange={(e) => setRecursive(e.target.checked)}
-            className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+            className="mt-1 focus-ring-flush"
           />
           <span>
             <strong>{t("fileBrowser.chown.recursive")}</strong> {t("fileBrowser.chown.recursiveWarning")}

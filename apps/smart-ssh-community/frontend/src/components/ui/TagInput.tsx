@@ -60,7 +60,7 @@ export function TagInput({
             type="button"
             disabled={disabled}
             onClick={() => onChange(value.filter((other) => other !== tag))}
-            className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+            className="rounded text-fg-subtle hover:text-fg-bright focus-ring-flush"
             aria-label={t("serverForm.removeTagAria", { tag })}
           >
             ✕
@@ -85,7 +85,7 @@ export function TagInput({
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-labelledby={labelledBy}
-        className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+        className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-ring-flush"
       />
     </div>
   );

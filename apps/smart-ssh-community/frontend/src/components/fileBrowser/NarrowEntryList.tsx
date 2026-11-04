@@ -51,7 +51,7 @@ export function NarrowEntryList({
                 <button
                   type="button"
                   onClick={() => load(entry.path)}
-                  className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                  className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-ring-flush"
                   title={entry.name}
                 >
                   📁 {entry.name}
@@ -75,7 +75,7 @@ export function NarrowEntryList({
               aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
               aria-haspopup="true"
               aria-expanded={rowMenuOpen}
-              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-ring-flush"
             >
               ⋯
             </button>

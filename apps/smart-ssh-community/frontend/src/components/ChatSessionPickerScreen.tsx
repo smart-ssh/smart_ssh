@@ -105,7 +105,7 @@ export function ChatSessionPickerScreen({
               type="button"
               onClick={() => onResume(session.sessionId)}
               disabled={busySessionId === session.sessionId}
-              className="min-w-0 flex-1 rounded text-left narrow:min-h-11 focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded text-left narrow:min-h-11 focus-ring-flush disabled:opacity-50"
             >
               {renamingId === session.sessionId ? (
                 <input
@@ -126,7 +126,7 @@ export function ChatSessionPickerScreen({
                       setRenamingId(null);
                     }
                   }}
-                  className="w-full rounded border border-border-strong bg-surface px-1.5 py-0.5 text-sm text-fg focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:outline-none"
+                  className="w-full rounded border border-border-strong bg-surface px-1.5 py-0.5 text-sm text-fg focus-ring-flush"
                 />
               ) : (
                 <p className="truncate text-sm text-fg" title={session.title ?? undefined}>

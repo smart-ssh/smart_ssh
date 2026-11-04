@@ -12,15 +12,15 @@ import {
   sftpReadText,
   sftpStat,
   sftpUpload,
-} from "./api";
+} from "../api";
 import { useLocalEditSession } from "./useLocalEditSession";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn(),
 }));
 
-vi.mock("./api", async () =>
-  (await import("./test/apiMock")).createApiMock({
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
     sftpOpenForEditing: vi.fn(),
     localFileMtime: vi.fn(),
     closeEditSession: vi.fn(() => Promise.resolve()),
@@ -31,7 +31,7 @@ vi.mock("./api", async () =>
   }),
 );
 
-vi.mock("./fileTypeSettings", () => ({
+vi.mock("../fileTypeSettings", () => ({
   loadFileTypeApps: vi.fn(() => Promise.resolve({})),
   appForFileName: () => null,
 }));

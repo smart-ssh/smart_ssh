@@ -1,6 +1,6 @@
 import { type Dispatch, type RefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { appendToDraft, loadVoiceInputEnabled, subscribeVoiceInputEnabled } from "../../voiceInputSettings";
-import type { VoiceHandlers, VoicePhase } from "../../useVoiceInput";
+import type { VoiceHandlers, VoicePhase } from "../../hooks/useVoiceInput";
 
 /**
  * Spec 0108: voice input state of the chat composer. Recognised text goes
