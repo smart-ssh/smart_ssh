@@ -54,7 +54,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
 
   return (
     <>
-      <button
+      <Button variant="bare"
         type="button"
         onClick={() => void toggle()}
         disabled={transcribing}
@@ -70,7 +70,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
       >
         {transcribing ? <Spinner /> : <MicIcon />}
         {recording && <span className="font-mono text-xs">{formatElapsed(voice.elapsed)}</span>}
-      </button>
+      </Button>
       <span aria-live="polite" className="sr-only">
         {recording ? t("voice.recordingStatus") : transcribing ? t("voice.transcribing") : ""}
       </span>
@@ -80,9 +80,9 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
           className="basis-full rounded bg-danger-subtle px-3 py-2 text-xs text-danger-fg-soft"
         >
           {t(voice.errorKey)}{" "}
-          <button type="button" className="underline" onClick={voice.clearError}>
+          <Button variant="bare" type="button" className="underline" onClick={voice.clearError}>
             {t("voice.dismiss")}
-          </button>
+          </Button>
         </p>
       )}
       {voice.consent && (

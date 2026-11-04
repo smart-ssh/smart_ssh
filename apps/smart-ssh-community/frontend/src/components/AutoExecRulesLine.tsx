@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { listRules, listServers } from "../api";
 import { requestOpenFilterRule } from "../navigationBus";
 import type { AutoExecRule, Scope } from "../types";
+import { Button } from "./ui";
 
 /** Issue #696, Spec 0011: muted line under the command of an automatically
  * run action — "Ran automatically · rule `<pattern>` · <scope>", one entry per
@@ -53,14 +54,14 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
           {" · "}
           {t("actionCard.autoRanRule")}{" "}
           {existing.has(rule.ruleId) ? (
-            <button
+            <Button variant="bare"
               type="button"
               className="font-mono underline hover:text-fg-soft"
               title={t("actionCard.autoRanOpenRule")}
               onClick={() => requestOpenFilterRule(rule.ruleId)}
             >
               {rule.patternValue}
-            </button>
+            </Button>
           ) : (
             <span className="font-mono">{rule.patternValue}</span>
           )}

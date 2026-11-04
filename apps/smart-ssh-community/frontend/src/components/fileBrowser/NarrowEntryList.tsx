@@ -3,6 +3,7 @@ import { formatDateTime } from "../../formatDateTime";
 import { formatBytes } from "../../format";
 import type { RemoteEntryDto } from "../../types";
 import type { OpenEntryMenu } from "./shared";
+import { Button } from "../ui";
 
 interface NarrowEntryListProps {
   entries: RemoteEntryDto[];
@@ -48,14 +49,14 @@ export function NarrowEntryList({
           >
             <div className="min-w-0 flex-1 py-1">
               {entry.isDir ? (
-                <button
+                <Button variant="bare"
                   type="button"
                   onClick={() => load(entry.path)}
                   className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-ring-flush"
                   title={entry.name}
                 >
                   📁 {entry.name}
-                </button>
+                </Button>
               ) : (
                 <span className="block truncate text-sm text-fg-soft group-hover:underline" title={entry.name}>
                   📄 {entry.name}
@@ -63,7 +64,7 @@ export function NarrowEntryList({
               )}
               <span className="block truncate text-fg-subtle">{details || "—"}</span>
             </div>
-            <button
+            <Button variant="bare"
               type="button"
               onClick={(e) => {
                 // Same reasoning as the wide row button: keep the click away from the
@@ -78,7 +79,7 @@ export function NarrowEntryList({
               className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-ring-flush"
             >
               ⋯
-            </button>
+            </Button>
             {rowMenuOpen && renderEntryMenu(entry, "")}
           </li>
         );

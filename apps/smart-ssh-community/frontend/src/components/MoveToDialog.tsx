@@ -46,13 +46,13 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
     >
       <ul className="divide-y divide-surface-raised rounded border border-border">
         <li>
-          <button type="button" className={optionClass} disabled={disabledFor({ kind: "root" })} onClick={() => choose({ kind: "root" })}>
+          <Button variant="bare" type="button" className={optionClass} disabled={disabledFor({ kind: "root" })} onClick={() => choose({ kind: "root" })}>
             {t("mainScreen.ungrouped")}
-          </button>
+          </Button>
         </li>
         {entries.map(({ group, depth }) => (
           <li key={group.id}>
-            <button
+            <Button variant="bare"
               type="button"
               className={optionClass}
               style={{ paddingLeft: `${depth * 16 + 12}px` }}
@@ -60,7 +60,7 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
               onClick={() => choose({ kind: "group", id: group.id })}
             >
               <span className="min-w-0 break-words">📁 {group.name}</span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

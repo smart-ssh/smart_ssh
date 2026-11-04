@@ -76,7 +76,7 @@ export function ElevationControls({
           style={menuStyle}
           className="fixed z-20 rounded border border-border-strong bg-surface-raised p-1 shadow-lg"
         >
-          <button
+          <Button variant="bare"
             type="button"
             role="menuitem"
             ref={otherUserItemRef}
@@ -89,7 +89,7 @@ export function ElevationControls({
             }}
           >
             {t("fileElevation.otherUser")}
-          </button>
+          </Button>
         </div>
       )}
       {otherUserForm}
