@@ -393,6 +393,7 @@ pub(crate) fn session_with_ai_provider(
         },
         persistence: ChatPersistence {
             chat_content: Default::default(),
+            title_attempts: Default::default(),
             // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
             // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
             // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`

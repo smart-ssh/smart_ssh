@@ -57,7 +57,7 @@ mod swappable;
 mod transport_state;
 
 pub use ai_config::AiConfig;
-pub use chat_persistence::ChatPersistence;
+pub use chat_persistence::{ChatPersistence, TitleAttempts};
 pub use manager::*;
 pub use require::{require_session, session_not_found};
 pub use safety_state::SafetyState;

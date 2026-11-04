@@ -223,6 +223,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
     Fixture {

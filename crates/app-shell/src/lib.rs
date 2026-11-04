@@ -402,6 +402,7 @@ pub(crate) async fn open_and_assemble(
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
         chat_content: chat_content.clone(),
+        title_attempts: Default::default(),
     };
     Ok(app_state)
 }
