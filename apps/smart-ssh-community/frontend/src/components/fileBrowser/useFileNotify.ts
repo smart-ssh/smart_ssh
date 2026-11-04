@@ -1,12 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { commandErrorCode, commandErrorMessage, sftpElevationStatus } from "../../api";
+import { isMacLike, isWindowsLike } from "../../platform";
 import { showToast } from "../../toastBus";
 
 /** „Im Finder/Explorer zeigen“ — Beschriftung passend zum Betriebssystem. */
 function revealLabelKey(): string {
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes("mac")) return "fileToasts.revealFinder";
-  if (platform.includes("win")) return "fileToasts.revealExplorer";
+  if (isMacLike()) return "fileToasts.revealFinder";
+  if (isWindowsLike()) return "fileToasts.revealExplorer";
   return "fileToasts.revealFileManager";
 }
 

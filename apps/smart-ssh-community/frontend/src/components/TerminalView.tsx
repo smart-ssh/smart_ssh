@@ -8,7 +8,7 @@ import { base64ToBytes, onTerminalOutput } from "../events";
 import { notifyMissingStartDirectory } from "../startDirectory";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSoftKeyboardViewport } from "../hooks/useSoftKeyboardViewport";
-import { detectFallbackPlatform } from "../titlebarLayout";
+import { detectFallbackPlatform } from "../platform";
 import { applyModifiers, keySequence, type TerminalKeyId } from "../terminalKeys";
 import { TerminalKeyRow } from "./TerminalKeyRow";
 

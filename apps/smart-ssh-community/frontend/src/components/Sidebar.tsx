@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../platform";
 import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import { folderForNewItem } from "../newItemFolder";
@@ -11,7 +11,7 @@ import {
   type DropTarget,
 } from "../treeDrag";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
-import { useTreeDrag } from "../useTreeDrag";
+import { useTreeDrag } from "../hooks/useTreeDrag";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
