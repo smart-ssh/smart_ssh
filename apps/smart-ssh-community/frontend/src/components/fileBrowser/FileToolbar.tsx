@@ -168,7 +168,7 @@ export function FileToolbar({
                       ]
                     : []),
                 ].map((item) => (
-                  <button
+                  <Button variant="bare"
                     key={item.key}
                     type="button"
                     role="menuitem"
@@ -180,7 +180,7 @@ export function FileToolbar({
                     }}
                   >
                     {item.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

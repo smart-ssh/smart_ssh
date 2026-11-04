@@ -149,21 +149,21 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               </div>
 
               <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-danger-border-strong/30 pt-4">
-                <button
+                <Button variant="bare"
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
                   className="font-heading bg-danger-border-strong px-3 py-2 text-sm font-bold tracking-wide text-danger-fg-faintest hover:bg-danger focus-ring focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.cancelConnection")}
-                </button>
-                <button
+                </Button>
+                <Button variant="bare"
                   type="button"
                   onClick={() => decide("trust")}
                   className="font-heading border border-fg-bright/15 px-3 py-2 text-sm font-semibold tracking-wide text-danger-fg-softer hover:bg-fg-bright/6 focus-ring focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.trustAnyway")}
-                </button>
+                </Button>
               </div>
             </div>
           </>

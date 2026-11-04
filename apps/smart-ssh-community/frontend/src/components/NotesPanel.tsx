@@ -226,7 +226,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
             return (
               <li key={r.id} className="text-sm">
                 <div className="flex items-center justify-between gap-2 px-3 py-2">
-                  <button
+                  <Button variant="bare"
                     type="button"
                     onClick={() => toggleExpanded(r.id)}
                     aria-expanded={expanded}
@@ -240,7 +240,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                           provider: r.editedBy.provider,
                           model: r.editedBy.model,
                         })}
-                  </button>
+                  </Button>
                   <Button size="sm" onClick={() => handleRollback(r.id)} className="ml-2 shrink-0">
                     {t("notes.restore")}
                   </Button>

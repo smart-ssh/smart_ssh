@@ -145,14 +145,14 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
           {isLocalNoteLarge && (
             <div className="mt-1 rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
               <p>{t("serverForm.largeNoteHint")}</p>
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={handleSummarizeLocalNoteNow}
                 disabled={localShrink.requesting}
                 className="mt-1.5 underline hover:no-underline disabled:opacity-50"
               >
                 {localShrink.requesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
-              </button>
+              </Button>
               {localShrink.error && <p className="mt-1 text-danger-fg">{localShrink.error}</p>}
             </div>
           )}

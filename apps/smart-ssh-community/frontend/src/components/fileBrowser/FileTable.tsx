@@ -7,6 +7,7 @@ import type { FileManagerColumnWidths, HideableFileColumn } from "../../settings
 import type { RemoteEntryDto } from "../../api/types";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { ACTIONS_COLUMN_WIDTH, COLUMN_ORDER, NAME_MIN_WIDTH, STICKY_TH, type OpenEntryMenu } from "./shared";
+import { Button } from "../ui";
 
 interface FileTableProps {
   entries: RemoteEntryDto[];
@@ -45,7 +46,7 @@ export function FileTable({
   const sortAria = (column: FileSortColumn): "ascending" | "descending" | "none" =>
     fileSort.column !== column ? "none" : fileSort.direction === "asc" ? "ascending" : "descending";
   const sortButton = (column: FileSortColumn) => (
-    <button
+    <Button variant="bare"
       type="button"
       onClick={() => onSort(column)}
       data-testid={`column-sort-${column}`}
@@ -55,7 +56,7 @@ export function FileTable({
       {fileSort.column === column && (
         <span aria-hidden="true">{fileSort.direction === "asc" ? "▲" : "▼"}</span>
       )}
-    </button>
+    </Button>
   );
 
   return (
@@ -148,14 +149,14 @@ export function FileTable({
           >
             <td className="max-w-0 px-2 py-1">
               {entry.isDir ? (
-                <button
+                <Button variant="bare"
                   type="button"
                   onClick={() => load(entry.path)}
                   className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-ring-flush"
                   title={entry.name}
                 >
                   📁 {entry.name}
-                </button>
+                </Button>
               ) : (
                 <span className="block truncate text-fg-soft group-hover:underline" title={entry.name}>
                   📄 {entry.name}
@@ -176,7 +177,7 @@ export function FileTable({
               </td>
             ))}
             <td className="relative px-2 py-1 text-right">
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={(e) => {
                   // Bug-Fix (Spec 0054, Teil 0): das "Klick-außerhalb
@@ -214,7 +215,7 @@ export function FileTable({
                 className="rounded px-1.5 text-fg-subtle hover:text-fg focus-ring-flush"
               >
                 ⋮
-              </button>
+              </Button>
               {openMenu?.anchor === "row" && openMenu.entry.path === entry.path &&
                 renderEntryMenu(entry, "fixed z-10")}
             </td>

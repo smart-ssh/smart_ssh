@@ -19,6 +19,7 @@ theme only.
 | `secondary` | Every other action, Cancel. The default. | Slate fill, border |
 | `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Red tint |
 | `ghost` | Low-emphasis actions inside content, link-like actions. | No fill, accent text |
+| `bare` | Controls with their own look (tabs, list rows, icon toggles, inline links). The caller passes all classes; no base styling or size. | None |
 
 Sizes: `md` (default) for dialogs and forms, `sm` for toolbars and inline
 actions. A button's label says what it does ("Delete server", not "OK").

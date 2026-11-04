@@ -349,13 +349,13 @@ export function ConfirmActionForm({
       <div className="flex flex-wrap items-center gap-2">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
          * look stays hand-written; the focus ring is the shared one. */}
-        <button
+        <Button variant="bare"
           type="button"
           onClick={handleApprove}
           className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-ring"
         >
           {t("confirmDialog.execute")}
-        </button>
+        </Button>
         <Button
           variant="danger"
           size="sm"

@@ -70,14 +70,14 @@ export function Composer({
                   {a.unredactedHint && (
                     <span className="text-warning-fg-soft">{t("chat.attachmentUnredacted")}</span>
                   )}
-                  <button
+                  <Button variant="bare"
                     type="button"
                     aria-label={t("chat.attachmentRemove", { name: a.name })}
                     onClick={() => composerCtx.removeAttachment(a.id)}
                     className="text-fg-muted hover:text-fg-bright focus-ring-flush"
                   >
                     ×
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -139,7 +139,7 @@ export function Composer({
             )
           ) : (
             composerActions.map((action) => (
-              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><button
+              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><Button variant="bare"
                 type="button"
                 aria-label={action.label}
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
@@ -148,7 +148,7 @@ export function Composer({
                 className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-ring-flush disabled:opacity-50"
               >
                 {action.icon}
-              </button></ErrorBoundary>
+              </Button></ErrorBoundary>
             ))
           )}
           {voiceEnabled && (

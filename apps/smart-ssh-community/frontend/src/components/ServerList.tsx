@@ -440,7 +440,7 @@ export function ServerList({
 
   const renderServerRow = (server: ServerDto, depth: number) => (
     <li key={server.id} className={narrow ? "flex items-center" : undefined}>
-      <button
+      <Button variant="bare"
         type="button"
         // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
         {...(server.isLocal
@@ -492,7 +492,7 @@ export function ServerList({
             <span className="text-xs text-accent-fg-soft">{t("mainScreen.connecting")}</span>
           )}
         </div>
-      </button>
+      </Button>
     </li>
   );
 
@@ -537,7 +537,7 @@ export function ServerList({
       >
         {/* Issue #49: Auf-/Zuklappen (Issue #978: kein „+" und kein „⋯" mehr im Connect-Baum). */}
         <div className="flex items-center hover:bg-surface-raised">
-          <button
+          <Button variant="bare"
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
@@ -573,7 +573,7 @@ export function ServerList({
               📁 {node.group.name}
             </span>
             {node.group.isCopy && <CopyBadge />}
-          </button>
+          </Button>
         </div>
         {!collapsed &&
           (node.children.length > 0 ||
