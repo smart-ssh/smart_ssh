@@ -144,6 +144,7 @@ fn session_with_ai_transport_and_server_id(
         },
         persistence: crate::session::ChatPersistence {
             chat_content: Default::default(),
+            title_attempts: Default::default(),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),

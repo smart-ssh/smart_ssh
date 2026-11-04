@@ -1363,7 +1363,7 @@ async fn test_execute_cancellable_returns_partial_output_on_cancel() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
 
     // Cancel only once the client has actually received the first line
     // (observed through the streaming sink of the same drain loop), so
@@ -1431,7 +1431,7 @@ async fn test_execute_streaming_delivers_both_streams_live_and_stays_cancellable
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
 
     // Cancels only after both live chunks have arrived — so the chunks
     // provably came in while the command was running.
@@ -1488,7 +1488,7 @@ async fn test_execute_streaming_stops_forwarding_at_the_cap() {
     let expected = transport.execute("flood").await.unwrap();
 
     let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
     let outcome = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         transport.execute_streaming("flood", None, cancel_rx, sink),

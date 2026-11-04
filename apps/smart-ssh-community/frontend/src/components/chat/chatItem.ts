@@ -193,6 +193,10 @@ export function describeAction(
   if ("WriteRemoteFile" in action) {
     return { label: t("actionCard.writeFile", { path: action.WriteRemoteFile.path }) };
   }
+  if ("AskUser" in action) {
+    // Questions travel as their own event and never reach the action card.
+    return { label: action.AskUser.question };
+  }
   const name = targetName ?? t("actionCard.unknownTarget");
   const isGroup = action.ProposeNoteUpdate.target === "CurrentServerGroup";
   return {

@@ -451,21 +451,6 @@ impl TitleFailure {
     }
 }
 
-/// Issue #551: chat sessions whose first-answer title attempt was already
-/// started in this process — the request runs at most once per session.
-static TITLE_ATTEMPTED: std::sync::Mutex<Vec<uuid::Uuid>> = std::sync::Mutex::new(Vec::new());
-
-fn claim_title_attempt(id: uuid::Uuid) -> bool {
-    let mut attempted = TITLE_ATTEMPTED
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if attempted.contains(&id) {
-        return false;
-    }
-    attempted.push(id);
-    true
-}
-
 /// Issue #551: title generation right after the first finished AI answer of
 /// a persisted session (Spec 0034, section 7). One attempt per session;
 /// no-op if the session already has a title. Runs inside the chat turn
@@ -480,7 +465,9 @@ pub async fn generate_session_title_after_first_answer(
     let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
-    if session.persistence.chat_session_store.is_none() || !claim_title_attempt(chat_session_id) {
+    if session.persistence.chat_session_store.is_none()
+        || !session.persistence.title_attempts.claim(chat_session_id)
+    {
         return;
     }
     ensure_session_title(session, session_id, emitter).await;

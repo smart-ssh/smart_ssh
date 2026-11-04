@@ -3,7 +3,7 @@
   "crates/ai-providers/src/request_logging.rs": 1308,
   "crates/app-logic/src/compaction.rs": 1249,
   "crates/app-logic/src/database_startup/tests.rs": 2309,
-  "crates/app-logic/src/events.rs": 1677,
+  "crates/app-logic/src/events.rs": 1620,
   "crates/app-logic/src/key_files.rs": 1205,
   "crates/app-logic/src/orchestration/action_exec/tests_files_and_ledger.rs": 2303,
   "crates/app-logic/src/orchestration/chat_turn/tests_compaction.rs": 2460,

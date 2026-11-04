@@ -563,7 +563,10 @@ pub async fn delete_chat_session(
         .chat_session_store
         .delete_session(session_id)
         .await
-        .store_err()
+        .store_err()?;
+    // Issue #922: the title-attempt entry goes with the session.
+    state.title_attempts.forget(session_id);
+    Ok(())
 }
 
 /// Spec 0031, Abschnitt 4: der eigentliche Türsteher vor

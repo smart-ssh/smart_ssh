@@ -14,6 +14,7 @@ use crate::state::{ActionId, SessionId};
 /// Why the backend settled a pending confirmation on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ConfirmationSettledReason {
     Reconnect,
     Timeout,
@@ -21,7 +22,8 @@ pub enum ConfirmationSettledReason {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ActionConfirmationSettledPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ActionConfirmationSettledPayload {
     session_id: SessionId,
     action_id: ActionId,
     reason: ConfirmationSettledReason,

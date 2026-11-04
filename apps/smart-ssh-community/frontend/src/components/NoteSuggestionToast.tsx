@@ -38,7 +38,14 @@ interface PendingSuggestion {
 }
 
 function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
-  return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
+  const update = noteUpdateOf(event);
+  return update?.target === "CurrentServer" ? "server" : "group";
+}
+
+/** The note update of the event; the backend only sends this event for a
+ * `ProposeNoteUpdate` action. */
+function noteUpdateOf(event: NoteUpdateSuggestedEvent) {
+  return "ProposeNoteUpdate" in event.action ? event.action.ProposeNoteUpdate : null;
 }
 
 /** Spec 0023, Abschnitt 3/4: prominenter Titel statt der früheren
@@ -81,7 +88,7 @@ export function NoteSuggestionToast() {
           actionId: event.actionId,
           targetKind: targetKindFromEvent(event),
           targetName: event.targetName,
-          newContent: event.action.ProposeNoteUpdate.new_content,
+          newContent: noteUpdateOf(event)?.new_content ?? "",
           previousNoteContent: event.previousNoteContent,
           summaryIncomplete: event.summaryIncomplete === true,
           expanded: false,

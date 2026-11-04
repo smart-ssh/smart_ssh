@@ -98,6 +98,7 @@ fn test_session(server_id: ServerId) -> Session {
         },
         persistence: app_logic::session::ChatPersistence {
             chat_content: Default::default(),
+            title_attempts: Default::default(),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),

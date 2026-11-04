@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// ohne eigene Vergleichslogik.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RiskLevel {
     None,
     Yellow,
@@ -31,6 +32,7 @@ pub enum RiskLevel {
 /// `docs/adr/0084-red-risk-requires-confirm.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RiskAssessment {
     pub server_risk: RiskLevel,
     /// `None`, solange `server_risk == RiskLevel::None` — welches Muster
