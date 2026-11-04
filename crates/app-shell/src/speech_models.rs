@@ -15,7 +15,7 @@ const SELECTED_MODEL_KEY: &str = "speechModel";
 const MODELS_SUBDIR: &str = "speech-models";
 /// Event with `{ model, state, done?, total?, key? }`, emitted on every
 /// progress step and on the final state of a download.
-pub(crate) const STATUS_EVENT: &str = "speech-model-status";
+pub(crate) const STATUS_EVENT: &str = app_logic::event_names::SPEECH_MODEL_STATUS;
 
 /// Lazily created so nothing touches the disk before the first command.
 #[derive(Default)]

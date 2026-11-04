@@ -34,7 +34,7 @@ use crate::startup_gate::StartupGate;
 use crate::window_prompt::{StartupPromptAnswer, WindowStartupPrompt};
 
 /// Das Ereignis, mit dem das Fenster erfährt, dass der Zustand jetzt steht.
-pub const UNLOCKED_EVENT: &str = "startup:unlocked";
+pub const UNLOCKED_EVENT: &str = app_logic::event_names::STARTUP_UNLOCKED;
 
 /// Fehlercodes dieser Etappe (A20).
 pub const WRONG_MASTER_PASSWORD_CODE: &str = "WRONG_MASTER_PASSWORD";

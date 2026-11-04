@@ -20,11 +20,11 @@ const LANGUAGE_KEY: &str = "speechLanguage";
 /// Event with `{ state: "recording" | "transcribing" | "idle" | "finished" }`.
 /// `finished` follows an automatic stop at the maximum length; the text is
 /// collected with `stop_voice_recording`.
-pub(crate) const STATE_EVENT: &str = "speech-recording-state";
+pub(crate) const STATE_EVENT: &str = app_logic::event_names::SPEECH_RECORDING_STATE;
 /// Event with `{ text, revision }`: the provisional text of the running
 /// recording so far, while recording only (Spec 0108, 5.7). It stays on the
 /// machine; the final text is still only returned by `stop_voice_recording`.
-pub(crate) const PARTIAL_EVENT: &str = "speech-partial-text";
+pub(crate) const PARTIAL_EVENT: &str = app_logic::event_names::SPEECH_PARTIAL_TEXT;
 
 #[derive(Default)]
 pub struct VoiceRecorder(OnceLock<Recorder>);
