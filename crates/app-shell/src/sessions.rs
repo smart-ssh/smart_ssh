@@ -563,7 +563,7 @@ mod tests {
     }
 
     /// Shell fed from a channel: `read` blocks until a chunk arrives.
-    struct ChannelShell(tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>);
+    struct ChannelShell(tokio::sync::mpsc::Receiver<Vec<u8>>);
 
     #[async_trait]
     impl InteractiveShell for ChannelShell {
@@ -596,8 +596,8 @@ mod tests {
         let id = rig.f.session_id;
         let scope = rig.tasks.session_scope(id);
         let actor_events = Arc::new(TestEmitter::default());
-        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::channel(16);
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(4);
         *rig.f.session.conn.terminal.lock().unwrap() = Some(cmd_tx);
         app_logic::session::spawn_terminal_actor(
             id,
@@ -617,20 +617,65 @@ mod tests {
         );
         assert_eq!(rig.tasks.running_in(id), 2);
 
-        chunk_tx.send(b"before".to_vec()).unwrap();
-        while output_events(&actor_events) == 0 {
-            tokio::task::yield_now().await;
-        }
+        chunk_tx.send(b"before".to_vec()).await.unwrap();
+        // Output is coalesced (issue #922): it arrives after the interval.
+        tokio::time::sleep(app_logic::session::TERMINAL_COALESCE_INTERVAL * 2).await;
+        assert_eq!(output_events(&actor_events), 1);
 
         assert!(rig.ctx().close(id).await.is_some());
         assert_eq!(rig.tasks.running_in(id), 0);
 
         // The shell would deliver more; nobody reads it any more.
-        let _ = chunk_tx.send(b"after".to_vec());
+        let _ = chunk_tx.send(b"after".to_vec()).await;
         for _ in 0..20 {
             tokio::task::yield_now().await;
         }
         assert_eq!(output_events(&actor_events), 1);
+    }
+
+    /// Issue #922: a burst of 10,000 one-byte chunks is merged into few
+    /// `terminal-output` events (at most one per interval window); the
+    /// concatenated payloads equal the input.
+    #[tokio::test(start_paused = true)]
+    async fn test_terminal_output_is_coalesced_without_loss() {
+        use base64::Engine as _;
+        let rig = Rig::new(Box::new(working_transport()));
+        let id = rig.f.session_id;
+        let scope = rig.tasks.session_scope(id);
+        let events = Arc::new(TestEmitter::default());
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::channel(16);
+        let (_cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(4);
+        app_logic::session::spawn_terminal_actor(
+            id,
+            rig.f.session.clone(),
+            Box::new(ChannelShell(chunk_rx)),
+            cmd_rx,
+            events.clone(),
+            &scope,
+        );
+        let input: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+        let started = tokio::time::Instant::now();
+        for b in &input {
+            chunk_tx.send(vec![*b]).await.unwrap();
+        }
+        // Everything was sent within one virtual instant; wait for the flush.
+        tokio::time::sleep(app_logic::session::TERMINAL_COALESCE_INTERVAL * 2).await;
+        let windows = (started.elapsed().as_millis() / 16 + 1) as usize;
+        let payloads: Vec<Vec<u8>> = events
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "terminal-output")
+            .map(|(_, p)| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(p["data"].as_str().unwrap())
+                    .unwrap()
+            })
+            .collect();
+        assert!(payloads.len() <= windows, "{} events", payloads.len());
+        assert!(payloads.len() < 100);
+        assert_eq!(payloads.concat(), input);
     }
 
     /// Issue #881: the auto-reconnect run is a session-scope task; closing
