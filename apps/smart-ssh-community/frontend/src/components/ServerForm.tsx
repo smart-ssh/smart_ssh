@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { onNoteShrinkSucceeded } from "../events";
-import type { GroupDto, ServerDto } from "../types";
+import { onNoteShrinkSucceeded } from "../api/events";
+import type { GroupDto, ServerDto } from "../api/types";
 import type { MovedTo } from "./GroupForm";
 import { LocalServerForm } from "./serverForm/LocalServerForm";
 import { RemoteServerForm } from "./serverForm/RemoteServerForm";

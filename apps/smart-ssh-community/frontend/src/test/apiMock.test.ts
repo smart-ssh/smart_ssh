@@ -3,7 +3,7 @@ import { createApiMock } from "./apiMock";
 
 describe("createApiMock", () => {
   it("mocks every function export of api.ts except the pure error helpers", async () => {
-    const actual = await vi.importActual<Record<string, unknown>>("../api");
+    const actual = await vi.importActual<Record<string, unknown>>("../api/api");
     const mock = (await createApiMock()) as unknown as Record<string, unknown>;
     const pure = new Set([
       "commandErrorMessage",

@@ -1,6 +1,6 @@
 // Helpers for tests that need an open session tab.
 import type { Page } from "@playwright/test";
-import type { ChatActionProposedEvent } from "../../src/types";
+import type { ChatActionProposedEvent } from "../../src/api/types";
 import { expect, type AppDriver } from "./app";
 
 interface ModelSnapshot {
@@ -37,6 +37,7 @@ export function redCommandProposal(
     decision: { Confirm: { reason: "Command needs confirmation", code: "CONFIRM_REQUIRED" } },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

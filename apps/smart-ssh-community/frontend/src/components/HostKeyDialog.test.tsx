@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { HostKeyInfo, HostKeyUserDecision } from "../types";
+import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
 import { HostKeyDialog } from "./HostKeyDialog";
 
 const unknownEvent: HostKeyInfo = {

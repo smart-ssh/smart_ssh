@@ -46,6 +46,9 @@ pub(crate) struct CappedOutput {
     /// truncation notice), plus one `Truncated` when the cap is reached.
     /// Display only — `None` for the non-streaming paths.
     sink: Option<ExecOutputSink>,
+    /// Issue #922: set once the live copy was cut off (consumer too slow or
+    /// cap reached); nothing more is forwarded afterwards.
+    live_closed: bool,
 }
 
 impl CappedOutput {
@@ -57,6 +60,7 @@ impl CappedOutput {
             stdout_truncated: false,
             stderr_truncated: false,
             sink,
+            live_closed: false,
         }
     }
 
@@ -83,18 +87,31 @@ impl CappedOutput {
     /// Sends the kept part of a chunk to the live sink. A closed receiver
     /// only ends the live display, never the command — send errors are
     /// deliberately ignored (the final result does not depend on them).
-    fn forward(&self, stream: OutputStream, kept: &[u8], newly_truncated: bool) {
+    fn forward(&mut self, stream: OutputStream, kept: &[u8], newly_truncated: bool) {
         let Some(sink) = &self.sink else {
             return;
         };
+        if self.live_closed {
+            return;
+        }
         if !kept.is_empty() {
-            let _ = sink.send(ExecOutputChunk::Data {
-                stream,
-                bytes: kept.to_vec(),
-            });
+            // Issue #922: the last slot is reserved for `Truncated`, so the
+            // consumer always learns that the live copy ends here. Whole
+            // chunks only are dropped, never part of one.
+            if sink.capacity() > 1 {
+                let _ = sink.try_send(ExecOutputChunk::Data {
+                    stream,
+                    bytes: kept.to_vec(),
+                });
+            } else {
+                let _ = sink.try_send(ExecOutputChunk::Truncated);
+                self.live_closed = true;
+                return;
+            }
         }
         if newly_truncated {
-            let _ = sink.send(ExecOutputChunk::Truncated);
+            let _ = sink.try_send(ExecOutputChunk::Truncated);
+            self.live_closed = true;
         }
     }
 
@@ -223,4 +240,42 @@ pub(crate) fn accumulate_exec_output(
         acc.push(msg);
     }
     acc.into_output()
+}
+
+#[cfg(test)]
+mod live_sink_tests {
+    use super::*;
+
+    /// Issue #922: 50 MB in small chunks with a consumer that never reads —
+    /// the channel stays within its capacity, the last slot holds
+    /// `Truncated`, and the captured output is complete (up to its own cap).
+    #[test]
+    fn paused_consumer_bounds_channel_and_keeps_captured_output() {
+        let (sink, mut rx) = ssh_manager_core::ssh::exec_output_channel();
+        let total = 50 * 1024 * 1024;
+        let mut out = CappedOutput::with_limit_and_sink(total, Some(sink));
+        let chunk = vec![b'x'; 1024];
+        for _ in 0..(total / chunk.len()) {
+            out.push_stdout(&chunk);
+        }
+        let (stdout, _) = out.into_parts();
+        assert_eq!(stdout.len(), total);
+
+        let mut data = 0;
+        let mut truncated = 0;
+        while let Ok(c) = rx.try_recv() {
+            match c {
+                ExecOutputChunk::Data { .. } => {
+                    assert_eq!(truncated, 0, "no data after Truncated");
+                    data += 1;
+                }
+                ExecOutputChunk::Truncated => truncated += 1,
+            }
+        }
+        assert_eq!(
+            data + truncated,
+            ssh_manager_core::ssh::EXEC_OUTPUT_SINK_CAPACITY
+        );
+        assert_eq!(truncated, 1);
+    }
 }

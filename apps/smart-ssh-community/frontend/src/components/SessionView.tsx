@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { reconnectSession, stopAutoReconnect } from "../api";
-import { commandErrorText } from "../errorCodes";
-import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
-import type { McpSessionInfo } from "../types";
+import { reconnectSession, stopAutoReconnect } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { onAutoReconnectChanged, onConnectionStatusChanged } from "../api/events";
+import type { McpSessionInfo } from "../api/types";
 import { sessionTabLabel } from "../hooks/useSessionTabs";
-import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../settings/layoutSettings";
 import { useDragResize } from "../hooks/useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
@@ -382,13 +382,13 @@ export function SessionView({
               <output className="font-mono text-xs text-warning-fg-soft">
                 {t("session.reconnectingAuto", { attempt: autoAttempt })}
               </output>
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={handleStopAutoReconnect}
                 className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
               >
                 {t("session.stopReconnect")}
-              </button>
+              </Button>
             </>
           )}
           {gaveUp && autoAttempt === null && (
@@ -482,7 +482,7 @@ export function SessionView({
         >
           {!narrow && (
             <div className="flex h-8 shrink-0 items-center gap-3 border-b border-surface-raised px-3">
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={() => setRightPanelView("terminal")}
                 aria-pressed={rightPanelView === "terminal"}
@@ -491,8 +491,8 @@ export function SessionView({
                 }`}
               >
                 {t("session.terminalTab")}
-              </button>
-              <button
+              </Button>
+              <Button variant="bare"
                 type="button"
                 onClick={() => setRightPanelView("files")}
                 aria-pressed={rightPanelView === "files"}
@@ -508,7 +508,7 @@ export function SessionView({
                     ⚠ {filesElevatedUser}
                   </span>
                 )}
-              </button>
+              </Button>
             </div>
           )}
           <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1 p-2" : "hidden"}>

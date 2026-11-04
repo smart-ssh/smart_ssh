@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
-import type { ServerDto } from "../../types";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
+import type { ServerDto } from "../../api/types";
 import { ConnectStepLog } from "../ConnectStepLog";
 import { Button, TabPanel } from "../ui";
 import { Field, FIELD_CONTROL_CLASS } from "../ui/Field";

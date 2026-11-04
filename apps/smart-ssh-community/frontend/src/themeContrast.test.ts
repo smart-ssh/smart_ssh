@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvedTheme } from "./themeTokens";
+import { resolvedTheme } from "./lib/themeTokens";
 
 // Issue #804: WCAG AA (4.5:1) on the token values of both appearances.
 function lum(hex: string): number {

@@ -3008,7 +3008,7 @@ fn missing_keyword_lists(langs: &[String]) -> Vec<String> {
 fn test_every_supported_ui_language_has_a_keyword_list() {
     let ts = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../apps/smart-ssh-community/frontend/src/languages.ts"),
+            .join("../../apps/smart-ssh-community/frontend/src/lib/languages.ts"),
     )
     .expect("languages.ts is readable");
     let langs = registered_ui_languages(&ts);

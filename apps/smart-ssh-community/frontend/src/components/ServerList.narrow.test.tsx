@@ -7,10 +7,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ServerList } from "./ServerList";
 import { setNarrow, setWide } from "../test/matchMedia";
-import { listGroups, listServers } from "../api";
+import { listGroups, listServers } from "../api/api";
 
 function localServer(): ServerDto {
   return {
@@ -58,7 +58,7 @@ function remoteServer(): ServerDto {
   };
 }
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   // Spec 0047, Fund D2: `commandErrorCode`/`commandErrorMessage` bleiben die
   // echten Implementierungen (nicht gemockt) statt der bisherigen
   // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
@@ -72,11 +72,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { PostIngestPolicy } from "../../types";
+import type { PostIngestPolicy } from "../../api/types";
 import { TabPanel } from "../ui";
 import type { ServerModel } from "./formTypes";
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { convertIdentityFileToKeychain, inspectKeyFile } from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import type { KeyFileFactsDto, ServerDto } from "../../types";
+import { convertIdentityFileToKeychain, inspectKeyFile } from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import type { KeyFileFactsDto, ServerDto } from "../../api/types";
 
 interface Options {
   serverId: string | null;

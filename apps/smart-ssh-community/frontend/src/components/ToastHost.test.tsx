@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import { showToast } from "../toastBus";
+import { showToast } from "../buses/toastBus";
 import { SUCCESS_TOAST_MS, ToastHost } from "./ToastHost";
 
 function renderHost() {

@@ -19,6 +19,7 @@ theme only.
 | `secondary` | Every other action, Cancel. The default. | Slate fill, border |
 | `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Red tint |
 | `ghost` | Low-emphasis actions inside content, link-like actions. | No fill, accent text |
+| `bare` | Controls with their own look (tabs, list rows, icon toggles, inline links). The caller passes all classes; no base styling or size. | None |
 
 Sizes: `md` (default) for dialogs and forms, `sm` for toolbars and inline
 actions. A button's label says what it does ("Delete server", not "OK").
@@ -155,7 +156,7 @@ Spec 0113 describes the behaviour; this section is the rulebook for code.
 
 Every context menu, dropdown and popup is `position: fixed` and positioned with
 `useMenuPlacement` (`src/hooks/useMenuPlacement.ts`, geometry in
-`src/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
+`src/lib/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
 edges, shifts as a last resort and scrolls when the window is smaller than the
 menu. Do not hand-position menus with `absolute`/`top-full` or raw click
 coordinates. In the narrow layout menus remain bottom sheets (the hook returns

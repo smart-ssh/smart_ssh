@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../formatDateTime";
-import { deleteChatSession, renameChatSession } from "../api";
-import type { ChatSessionSummaryDto } from "../types";
+import { formatDateTime } from "../lib/formatDateTime";
+import { deleteChatSession, renameChatSession } from "../api/api";
+import type { ChatSessionSummaryDto } from "../api/types";
 import { Button, DialogFrame } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 interface ChatSessionPickerScreenProps {
   serverName: string;
@@ -101,7 +101,7 @@ export function ChatSessionPickerScreen({
       <ul className="max-h-72 narrow:max-h-none divide-y divide-border overflow-y-auto rounded border border-border">
         {sessions.map((session) => (
           <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
-            <button
+            <Button variant="bare"
               type="button"
               onClick={() => onResume(session.sessionId)}
               disabled={busySessionId === session.sessionId}
@@ -137,7 +137,7 @@ export function ChatSessionPickerScreen({
                 {formatDateTime(session.startedAt, i18n.language)} ·{" "}
                 {t("chatSessionPicker.messageCount", { count: session.messageCount })}
               </p>
-            </button>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

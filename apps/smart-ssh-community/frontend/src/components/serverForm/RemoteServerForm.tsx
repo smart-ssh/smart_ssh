@@ -6,9 +6,9 @@ import {
   createServer,
   previewEffectiveNotes,
   updateServer,
-} from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import type { GroupDto, ServerDto } from "../../types";
+} from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import type { GroupDto, ServerDto } from "../../api/types";
 import { HostKeyDialog } from "../HostKeyDialog";
 import { NotesPanel } from "../NotesPanel";
 import { TestConnectionDialog } from "../TestConnectionDialog";

@@ -24,7 +24,7 @@ const longServers = () => ({
 
 async function showToasts(page: Page) {
   await page.evaluate(async () => {
-    const path = "/src/toastBus.ts";
+    const path = "/src/buses/toastBus.ts";
     const bus = await import(/* @vite-ignore */ path);
     bus.showToast({ kind: "error", message: `Could not save the settings: ${"a very long reason ".repeat(8)}` });
     bus.showToast({ kind: "info", message: "Heads up" });

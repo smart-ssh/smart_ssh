@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../platform";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
@@ -11,10 +11,10 @@ import {
   listServers,
   listUnusableServers,
   inspectKeyFile,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
+import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
 import {
   classifyDrop,
   dropHighlightClass,
@@ -22,7 +22,7 @@ import {
   performMove,
   type DragItem,
   type DropTarget,
-} from "../treeDrag";
+} from "../lib/treeDrag";
 import type {
   ChatSessionSummaryDto,
   ConnectStepRecord,
@@ -30,13 +30,13 @@ import type {
   KeepGroupResult,
   ServerDto,
   UnusableServerDto,
-} from "../types";
+} from "../api/types";
 import { useTreeDrag } from "../hooks/useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
-import { unusableReasonText } from "../unusableServer";
+import { unusableReasonText } from "../lib/unusableServer";
 import { Button, DialogFrame } from "./ui";
 
 /** Spec 0103: marks a server or group that the backup import moved into
@@ -440,7 +440,7 @@ export function ServerList({
 
   const renderServerRow = (server: ServerDto, depth: number) => (
     <li key={server.id} className={narrow ? "flex items-center" : undefined}>
-      <button
+      <Button variant="bare"
         type="button"
         // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
         {...(server.isLocal
@@ -492,7 +492,7 @@ export function ServerList({
             <span className="text-xs text-accent-fg-soft">{t("mainScreen.connecting")}</span>
           )}
         </div>
-      </button>
+      </Button>
     </li>
   );
 
@@ -537,7 +537,7 @@ export function ServerList({
       >
         {/* Issue #49: Auf-/Zuklappen (Issue #978: kein „+" und kein „⋯" mehr im Connect-Baum). */}
         <div className="flex items-center hover:bg-surface-raised">
-          <button
+          <Button variant="bare"
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
@@ -573,7 +573,7 @@ export function ServerList({
               📁 {node.group.name}
             </span>
             {node.group.isCopy && <CopyBadge />}
-          </button>
+          </Button>
         </div>
         {!collapsed &&
           (node.children.length > 0 ||

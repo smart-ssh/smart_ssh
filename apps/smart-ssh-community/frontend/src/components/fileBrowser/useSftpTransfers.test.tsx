@@ -3,24 +3,24 @@ import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sftpExists, sftpReadText, readLocalTextPreview, sftpUpload } from "../../api";
+import { sftpExists, sftpReadText, readLocalTextPreview, sftpUpload } from "../../api/api";
 import {
   onSftpTransferFinished,
   onSftpTransferProgress,
   onSftpTransferStarted,
-} from "../../events";
+} from "../../api/events";
 import { testI18n } from "../../testI18n";
 import type {
   SftpTransferFinishedEvent,
   SftpTransferProgressEvent,
   SftpTransferStartedEvent,
-} from "../../types";
+} from "../../api/types";
 import { useSftpTransfers } from "./useSftpTransfers";
 
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({ onDragDropEvent: vi.fn(() => Promise.resolve(() => {})) }),
 }));
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     claimDroppedPaths: vi.fn(),
     pickUploadFiles: vi.fn(),
@@ -34,12 +34,12 @@ vi.mock("../../api", async () =>
     sftpUploadFolderPreview: vi.fn(),
   }),
 );
-vi.mock("../../events", () => ({
+vi.mock("../../api/events", () => ({
   onSftpTransferStarted: vi.fn(),
   onSftpTransferProgress: vi.fn(),
   onSftpTransferFinished: vi.fn(),
 }));
-vi.mock("../../toastBus", () => ({ showToast: vi.fn() }));
+vi.mock("../../buses/toastBus", () => ({ showToast: vi.fn() }));
 
 type Handler<T> = (event: T) => void;
 let started: Handler<SftpTransferStartedEvent>;
@@ -100,7 +100,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("s1", "a");
     start("s1", "b");
-    act(() => progress({ sessionId: "s1", transferId: "b", bytesDone: 40, totalBytes: 100 }));
+    act(() => progress({ sessionId: "s1", transferId: "b", bytesDone: 40, totalBytes: 100, folder: null, entries: null }));
     const [a, b] = result.current.transfers;
     expect(a.bytesDone).toBeUndefined();
     expect(b.bytesDone).toBe(40);
@@ -110,7 +110,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("other", "x");
     start("s1", "a");
-    act(() => progress({ sessionId: "other", transferId: "a", bytesDone: 9, totalBytes: 100 }));
+    act(() => progress({ sessionId: "other", transferId: "a", bytesDone: 9, totalBytes: 100, folder: null, entries: null }));
     expect(result.current.transfers.map((t) => t.id)).toEqual(["a"]);
     expect(result.current.transfers[0].bytesDone).toBeUndefined();
   });
@@ -118,7 +118,7 @@ describe("useSftpTransfers", () => {
   it("marks a cancelled transfer as stopped and keeps its row", () => {
     const { result } = setup();
     start("s1", "a");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: "cancelled" }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: "cancelled", incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers[0].stopped).toBe("cancelled");
     expect(load).not.toHaveBeenCalled();
   });
@@ -127,7 +127,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("s1", "a");
     start("s1", "b");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: null }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: null, incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers.map((t) => t.id)).toEqual(["b"]);
     expect(load).toHaveBeenCalledWith("/home/u");
     act(() => result.current.dismissTransfer("b"));
@@ -137,7 +137,7 @@ describe("useSftpTransfers", () => {
   it("keeps a failed transfer with its error", () => {
     const { result } = setup();
     start("s1", "a");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: "boom" }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: "boom", stopped: null, incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers[0].error).toBe("boom");
   });
 
@@ -153,7 +153,7 @@ describe("useSftpTransfers", () => {
     vi.mocked(sftpReadText).mockResolvedValue("remote");
     vi.mocked(sftpUpload).mockResolvedValue(undefined as never);
     const { result } = setup();
-    const { sftpLocalPathsAreFolders } = await import("../../api");
+    const { sftpLocalPathsAreFolders } = await import("../../api/api");
     vi.mocked(sftpLocalPathsAreFolders).mockResolvedValue([false]);
     await act(() => result.current.uploadMany(["/tmp/f.txt"]));
     expect(result.current.uploadConflict?.remotePath).toBe("/home/u/f.txt");
@@ -167,7 +167,7 @@ describe("useSftpTransfers", () => {
     vi.mocked(sftpExists).mockResolvedValue(true);
     vi.mocked(readLocalTextPreview).mockResolvedValue({} as never);
     vi.mocked(sftpReadText).mockResolvedValue("remote");
-    const { sftpLocalPathsAreFolders } = await import("../../api");
+    const { sftpLocalPathsAreFolders } = await import("../../api/api");
     vi.mocked(sftpLocalPathsAreFolders).mockResolvedValue([false]);
     const { result } = setup();
     await act(() => result.current.uploadMany(["/tmp/f.txt"]));

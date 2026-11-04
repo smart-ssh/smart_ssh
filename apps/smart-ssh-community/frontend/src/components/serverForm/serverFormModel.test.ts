@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ServerDto } from "../../types";
+import type { ServerDto } from "../../api/types";
 import {
   authStateFromKind,
   initialServerFormState,

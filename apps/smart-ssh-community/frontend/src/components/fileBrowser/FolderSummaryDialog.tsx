@@ -1,6 +1,6 @@
 import { dynamicKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import type { FolderUploadSummaryDto } from "../../types";
+import type { FolderUploadSummaryDto } from "../../api/types";
 import { Button, DialogFrame } from "../ui";
 
 interface FolderSummaryDialogProps {

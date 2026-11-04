@@ -1,7 +1,7 @@
 import type { TranslationKey } from "../i18nTypes";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode } from "../api";
+import { commandErrorCode } from "../api/api";
 import {
   cancelSpeechModelDownload,
   deleteSpeechModel,
@@ -17,12 +17,12 @@ import {
   startSpeechModelDownload,
   type SpeechModelId,
   type SpeechModelStatus,
-} from "../voiceApi";
+} from "../api/voiceApi";
 import {
   loadVoiceInputEnabled,
   saveVoiceInputEnabled,
   voiceErrorKey,
-} from "../voiceInputSettings";
+} from "../settings/voiceInputSettings";
 import { Button } from "./ui";
 
 /** ISO codes offered for a fixed recognition language (all supported by Whisper). */

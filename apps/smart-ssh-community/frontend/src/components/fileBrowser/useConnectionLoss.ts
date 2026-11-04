@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { onConnectionStatusChanged } from "../../events";
+import { onConnectionStatusChanged } from "../../api/events";
 
 /** Connection lost / restored handling of the file browser. */
 export function useConnectionLoss(

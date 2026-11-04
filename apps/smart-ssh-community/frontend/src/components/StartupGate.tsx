@@ -6,16 +6,16 @@ import {
   startOverFromUnlockScreen,
   unlockWithMasterPassword,
   answerStartupPrompt,
-} from "../api";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
+} from "../api/api";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
 import { applyStoredLanguage } from "../i18n";
-import { applyStoredTheme } from "../theme";
-import { commandErrorText } from "../errorCodes";
-import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
+import { applyStoredTheme } from "../lib/theme";
+import { commandErrorText } from "../api/errorCodes";
+import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../api/types";
 import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import type { TranslateFn } from "../i18nTypes";
 
 interface StartupGateProps {

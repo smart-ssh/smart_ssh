@@ -11,6 +11,7 @@ import {
   checkRepo,
   findMismatches,
   parseFrontendNames,
+  parsePayloadKeys,
   parseLiteralListeners,
   parseRustNames,
 } from "../../../../scripts/check-event-names.mjs";
@@ -87,6 +88,28 @@ describe("findMismatches", () => {
   it("fails on a listener with a string literal", () => {
     const problems = run(RUST, FRONTEND, [{ call: "listen", file: "src/x.ts", line: 3 }]);
     expect(problems).toEqual([expect.objectContaining({ where: "src/x.ts:3" })]);
+  });
+
+  it("fails when an event constant has no payload entry (issue #920)", () => {
+    const keys = parsePayloadKeys('export type EventPayloads = {\n  "data-changed": DataChangedPayload,\n};');
+    const problems = findMismatches({
+      rust: parseRustNames(RUST),
+      frontend: parseFrontendNames(FRONTEND),
+      literals: [],
+      payloadKeys: keys,
+    });
+    expect(problems).toEqual([expect.objectContaining({ name: "CHAT_ERROR", kind: expect.stringMatching(/no payload type/) })]);
+    const ok = parsePayloadKeys('  "chat-error": ChatErrorPayload,\n  "data-changed": X,');
+    expect(
+      findMismatches({ rust: parseRustNames(RUST), frontend: parseFrontendNames(FRONTEND), literals: [], payloadKeys: ok }),
+    ).toEqual([]);
+  });
+
+  it("flags listenTyped/typedListener with a literal", () => {
+    expect(parseLiteralListeners('listenTyped("a", h); typedListener("b");').map((l) => l.call)).toEqual([
+      "listenTyped",
+      "typedListener",
+    ]);
   });
 
   it("fails on a stale allowlist entry", () => {

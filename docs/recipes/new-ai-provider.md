@@ -47,12 +47,12 @@ checklist, test-only files under "Required tests").
       test.
 - [ ] `crates/app-shell/src/commands/connect/mod.rs` – builds the session from the
       active configuration (context window, provider label).
-- [ ] Frontend: `apps/smart-ssh-community/frontend/src/types.ts`
+- [ ] Frontend: `apps/smart-ssh-community/frontend/src/api/types.ts`
       (`ProviderType` union, `needsBaseUrl`, `supportsWebResearch`,
       `supportsModelDiscovery`),
       `apps/smart-ssh-community/frontend/src/components/AddAiProviderDialog.tsx`
       (option and defaults),
-      `apps/smart-ssh-community/frontend/src/apiKeyFormat.ts` (key prefix
+      `apps/smart-ssh-community/frontend/src/lib/apiKeyFormat.ts` (key prefix
       check) and the texts per `new-ui-text.md`.
 - [ ] `docs/specs/` – the provider specs (`docs/specs/0006-ai-provider-trait.md`,
       `docs/specs/0025-extended-openai-compatible-providers.md`) when behaviour changes;
@@ -100,7 +100,7 @@ items 8 and 11). The new provider must go through the same path:
   `crates/app-logic/src/secret_migration/tests.rs`,
   `crates/app-logic/src/orchestration/chat_turn/tests_usage.rs`,
   `crates/app-shell/src/commands/connect/tests_flow.rs`.
-- Frontend: Vitest for `apiKeyFormat.ts` and `types.ts` helpers.
+- Frontend: Vitest for `lib/apiKeyFormat.ts` and `types.ts` helpers.
 
 ## Guard that catches a forgotten step
 

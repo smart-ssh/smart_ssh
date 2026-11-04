@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { sessionIsRoot } from "../../api";
+import { sessionIsRoot } from "../../api/api";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { useMenuPlacement } from "../../hooks/useMenuPlacement";
 

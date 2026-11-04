@@ -46,13 +46,13 @@ import {
   sftpStat,
   sftpUpload,
   sessionIsRoot,
-} from "../api";
+} from "../api/api";
 import {
   onConnectionStatusChanged,
   onSftpTransferFinished,
   onSftpTransferProgress,
   onSftpTransferStarted,
-} from "../events";
+} from "../api/events";
 import {
   loadFileManagerColumnWidths,
   loadFileManagerSort,
@@ -60,13 +60,13 @@ import {
   loadHiddenFileColumns,
   saveHiddenFileColumns,
   saveFileManagerSort,
-} from "../layoutSettings";
+} from "../settings/layoutSettings";
 import { testI18n } from "../testI18n";
-import { showToast } from "../toastBus";
-import type { RemoteEntryDto, SftpTransferStartedEvent } from "../types";
+import { showToast } from "../buses/toastBus";
+import type { RemoteEntryDto, SftpTransferStartedEvent } from "../api/types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     commandErrorMessage: (err: unknown) =>
       typeof err === "object" && err !== null && "message" in err
@@ -92,7 +92,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
@@ -104,11 +104,11 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   revealItemInDir: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("../toastBus", () => ({
+vi.mock("../buses/toastBus", () => ({
   showToast: vi.fn(),
 }));
 
-vi.mock("../fileTypeSettings", () => ({
+vi.mock("../settings/fileTypeSettings", () => ({
   loadFileTypeApps: vi.fn(() => Promise.resolve({})),
   appForFileName: () => null,
 }));
@@ -170,7 +170,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
 }));
 
-vi.mock("../layoutSettings", () => ({
+vi.mock("../settings/layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
   loadHiddenFileColumns: vi.fn(() => Promise.resolve([])),

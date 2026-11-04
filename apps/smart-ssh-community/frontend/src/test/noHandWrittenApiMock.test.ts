@@ -10,7 +10,7 @@ const SRC = join(__dirname, "..");
 // Every `vi.mock("<relative>/api", <factory>)` must build its module with
 // `createApiMock` — sync or async, with or without `importActual`. The factory
 // is read up to the parenthesis that closes the `vi.mock(` call.
-const API_MOCK_START = /vi\.mock\(\s*["'](?:\.\.?\/)+api["']/g;
+const API_MOCK_START = /vi\.mock\(\s*["'](?:\.\.?\/)+api(?:\/api)?["']/g;
 
 function factoryText(source: string, from: number): string {
   let depth = 1;

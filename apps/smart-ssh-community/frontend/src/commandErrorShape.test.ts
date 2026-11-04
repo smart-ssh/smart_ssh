@@ -5,7 +5,7 @@ import {
   commandErrorFeatureLocked,
   commandErrorCode,
   commandErrorMessage,
-} from "./api";
+} from "./api/api";
 
 // The same file pins the Rust serialisation of `ssh_manager_core::ipc_error::CommandError`.
 describe("command error JSON shapes", () => {

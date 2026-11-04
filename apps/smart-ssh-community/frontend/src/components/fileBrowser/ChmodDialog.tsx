@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type RemoteEntryDto } from "../../types";
+import { type RemoteEntryDto } from "../../api/types";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "../ui";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Reihen-Reihenfolge der chmod-Checkbox-Matrix: owner/group/other × je
  * einer Bit-Maske pro Spalte (r/w/x), spiegelt exakt `RemoteEntry::

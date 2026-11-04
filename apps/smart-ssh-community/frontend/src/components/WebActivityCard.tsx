@@ -1,6 +1,6 @@
 import { dynamicKey } from "../i18nTypes";
 import { useTranslation } from "react-i18next";
-import type { WebActivityDto } from "../types";
+import type { WebActivityDto } from "../api/types";
 
 /** Fehlercodes der Web-Werkzeuge, für die es einen eigenen Text gibt
  * (`chat.webErrors.<code>`); alle anderen zeigen den allgemeinen Text

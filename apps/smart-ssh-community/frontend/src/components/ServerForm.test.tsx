@@ -26,13 +26,13 @@ import {
   testConnection,
   trustHostKey,
   updateServer,
-} from "../api";
-import { pickFilePath } from "../fileDialog";
+} from "../api/api";
+import { pickFilePath } from "../api/fileDialog";
 import { testI18n } from "../testI18n";
-import type { KeyFileFactsDto, ServerDto, TestConnectionReport } from "../types";
+import type { KeyFileFactsDto, ServerDto, TestConnectionReport } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     cancelConnect: vi.fn(() => Promise.resolve()),
     clearServerSudoPassword: vi.fn(),
@@ -53,17 +53,17 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 

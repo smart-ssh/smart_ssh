@@ -1,6 +1,6 @@
 import { COLUMN_ORDER } from "./shared";
 import { useTranslation } from "react-i18next";
-import { type HideableFileColumn } from "../../layoutSettings";
+import { type HideableFileColumn } from "../../settings/layoutSettings";
 import { Menu, MenuItem } from "../ui";
 
 /** Issue #653: right-click menu on the header row — one checkbox per

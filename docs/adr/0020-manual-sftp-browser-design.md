@@ -42,7 +42,7 @@ nicht fest, der native Speichern-Dialog muss also den Pfad liefern (wie bei
 `export_document`, Spec 0012). Beim Upload steht die Quelle bereits fest,
 bevor der Command aufgerufen wird — entweder über den nativen Öffnen-Dialog
 (`@tauri-apps/plugin-dialog`, bereits etabliertes Muster aus
-`frontend/src/fileDialog.ts`) oder über einen OS-Drag-and-Drop-Vorgang, bei
+`frontend/src/api/fileDialog.ts`) oder über einen OS-Drag-and-Drop-Vorgang, bei
 dem der Pfad direkt aus dem Drop-Ereignis kommt. Beides sind explizite
 Nutzeraktionen, nur eben keine, die der *Backend*-Command selbst auslösen
 müsste.

@@ -12,8 +12,8 @@ import {
   statusMarker,
   stepLabel,
   stepStatusText,
-} from "../connectStepLog";
-import type { ConnectStepRecord } from "../types";
+} from "../lib/connectStepLog";
+import type { ConnectStepRecord } from "../api/types";
 import { Button } from "./ui";
 
 export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {

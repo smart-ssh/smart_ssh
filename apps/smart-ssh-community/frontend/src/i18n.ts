@@ -10,7 +10,7 @@ import {
   languageForLocale,
   SUPPORTED_LANGUAGES,
   type SupportedLanguage,
-} from "./languages";
+} from "./lib/languages";
 
 export { SUPPORTED_LANGUAGES, type SupportedLanguage };
 

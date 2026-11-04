@@ -18,7 +18,7 @@ pub(crate) async fn run_probe(
 ) -> Result<ssh_manager_core::ssh::CommandOutput, String> {
     // The sender must outlive the run: a dropped sender would cancel it.
     let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    let (sink, _sink_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, _sink_rx) = ssh_manager_core::ssh::exec_output_channel();
     let mut transport = session.transport.lock().await;
     let started = tokio::time::timeout(PROBE_TIMEOUT, transport.start_exec(command, None)).await;
     match started {

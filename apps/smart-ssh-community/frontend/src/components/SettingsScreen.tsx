@@ -7,7 +7,7 @@ import {
   listSettingsSectionsForCategory,
   subscribeSettingsSections,
 } from "../extensions/registry";
-import { resolveSectionLabel } from "../resolveSectionLabel";
+import { resolveSectionLabel } from "../lib/resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { BackupSettings } from "./BackupSettings";
@@ -222,7 +222,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
           <ul className="flex-1">
             {categories.map((category) => (
               <li key={category.id}>
-                <button
+                <Button variant="bare"
                   type="button"
                   ref={category.id === active?.id ? activeNavRef : undefined}
                   onClick={() => {
@@ -237,7 +237,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                   }`}
                 >
                   {category.label}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

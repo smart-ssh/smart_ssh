@@ -2,7 +2,7 @@
 // live step list (same component as the connecting tab), a Cancel button while
 // the test runs and a Close button with the final result once it is done.
 import { useTranslation } from "react-i18next";
-import type { ConnectStepSnapshot, TestConnectionReport } from "../types";
+import type { ConnectStepSnapshot, TestConnectionReport } from "../api/types";
 import { ConnectProgressList } from "./ConnectProgressList";
 import { TestResultBadge } from "./serverForm/TestResultBadge";
 import { Button, DialogFrame, Spinner } from "./ui";

@@ -561,6 +561,7 @@ mod map_sftp_error_tests {
     /// Ein echter `SendError` aus einem `mpsc`-Kanal, dessen Empfänger weg
     /// ist — so, wie `russh-sftp` ihn per `From` selbst erzeugt.
     fn real_send_error() -> RusshSftpError {
+        // Allowed unbounded channel (issue #922): test-only helper, one message.
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<u8>();
         drop(rx);
         tx.send(1).unwrap_err().into()

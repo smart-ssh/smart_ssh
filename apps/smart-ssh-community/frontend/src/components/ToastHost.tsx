@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui";
-import { subscribeToasts, type Toast } from "../toastBus";
+import { subscribeToasts, type Toast } from "../buses/toastBus";
 
 /** Erfolgsmeldungen verschwinden von selbst, Fehler (und Hinweise, Issue
  * #37) bleiben stehen, bis der Nutzer sie schließt (Spec 0067, Teil B2). */

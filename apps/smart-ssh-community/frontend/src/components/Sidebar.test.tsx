@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { Sidebar, type Selection } from "./Sidebar";
 
 function group(id: string, name: string, parentId: string | null): GroupDto {

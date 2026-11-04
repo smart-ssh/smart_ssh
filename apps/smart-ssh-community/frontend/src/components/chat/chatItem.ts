@@ -1,5 +1,5 @@
 import { type ComposerAttachment } from "../../extensions/registry";
-import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../types";
+import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../api/types";
 import type { TranslateFn } from "../../i18nTypes";
 
 export type ChatItem =
@@ -192,6 +192,10 @@ export function describeAction(
   }
   if ("WriteRemoteFile" in action) {
     return { label: t("actionCard.writeFile", { path: action.WriteRemoteFile.path }) };
+  }
+  if ("AskUser" in action) {
+    // Questions travel as their own event and never reach the action card.
+    return { label: action.AskUser.question };
   }
   const name = targetName ?? t("actionCard.unknownTarget");
   const isGroup = action.ProposeNoteUpdate.target === "CurrentServerGroup";

@@ -91,7 +91,7 @@ impl Throttle {
 
 /// Issue #921: local file I/O runs on the blocking pool, never as blocking
 /// `std::fs` on an async worker.
-async fn blocking_io<T: Send + 'static>(
+pub(super) async fn blocking_io<T: Send + 'static>(
     f: impl FnOnce() -> std::io::Result<T> + Send + 'static,
 ) -> std::io::Result<T> {
     tokio::task::spawn_blocking(f)

@@ -19,12 +19,12 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
   updateAiProvider,
-} from "../api";
-import type { AiProviderConfigDto } from "../types";
+} from "../api/api";
+import type { AiProviderConfigDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([])),
     addAiProvider: vi.fn(() => Promise.resolve("new-id")),
@@ -47,7 +47,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -753,7 +753,7 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
     fireEvent.click(toggle);
 
     await waitFor(() => expect(toggle).not.toBeChecked());
-    const { saveRedRiskAlwaysConfirm } = await import("../riskSettings");
+    const { saveRedRiskAlwaysConfirm } = await import("../settings/riskSettings");
     expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false);
   });
 });

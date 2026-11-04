@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../formatDateTime";
+import { formatDateTime } from "../lib/formatDateTime";
 import {
   commandErrorMessage,
   largeNoteDialogThresholdChars,
@@ -9,9 +9,9 @@ import {
   rollbackNote,
   updateGroupNotes,
   updateServerNotes,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import type { NoteRevisionDto, NoteTarget } from "../types";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import type { NoteRevisionDto, NoteTarget } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
@@ -226,7 +226,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
             return (
               <li key={r.id} className="text-sm">
                 <div className="flex items-center justify-between gap-2 px-3 py-2">
-                  <button
+                  <Button variant="bare"
                     type="button"
                     onClick={() => toggleExpanded(r.id)}
                     aria-expanded={expanded}
@@ -240,7 +240,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                           provider: r.editedBy.provider,
                           model: r.editedBy.model,
                         })}
-                  </button>
+                  </Button>
                   <Button size="sm" onClick={() => handleRollback(r.id)} className="ml-2 shrink-0">
                     {t("notes.restore")}
                   </Button>

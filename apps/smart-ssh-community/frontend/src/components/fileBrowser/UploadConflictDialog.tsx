@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { formatBytes } from "../../format";
-import { previewReadFailureHint } from "../../previewReadFailure";
+import { formatBytes } from "../../lib/format";
+import { previewReadFailureHint } from "../../lib/previewReadFailure";
 import { Button, DialogFrame } from "../ui";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import type { UploadConflict } from "./shared";

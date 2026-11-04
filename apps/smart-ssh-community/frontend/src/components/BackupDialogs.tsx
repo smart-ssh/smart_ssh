@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { characterCount } from "../passwordLength";
-import { clipboardWriteText } from "../api";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { characterCount } from "../lib/passwordLength";
+import { clipboardWriteText } from "../api/api";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 
 /** K5: minimum length; the backend checks the same limit. */

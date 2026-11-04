@@ -13,25 +13,25 @@ import {
   sftpUpload,
   sftpUploadFolder,
   sftpUploadFolderPreview,
-} from "../../api";
-import { isPointerInside } from "../../dropZone";
+} from "../../api/api";
+import { isPointerInside } from "../../lib/dropZone";
 import {
   onSftpTransferFinished,
   onSftpTransferProgress,
   onSftpTransferStarted,
-} from "../../events";
-import { joinPath, localBaseName } from "../../remotePath";
-import { nextRate } from "../../transferRate";
-import { showToast } from "../../toastBus";
+} from "../../api/events";
+import { joinPath, localBaseName } from "../../lib/remotePath";
+import { nextRate } from "../../lib/transferRate";
+import { showToast } from "../../buses/toastBus";
 import {
   classifyPreviewReadFailure,
   type PreviewReadFailure,
-} from "../../previewReadFailure";
+} from "../../lib/previewReadFailure";
 import type {
   FolderUploadPreviewDto,
   FolderUploadSummaryDto,
   RemoteEntryDto,
-} from "../../types";
+} from "../../api/types";
 import { currentCaps, type Transfer, type UploadConflict } from "./shared";
 
 interface UseSftpTransfersOptions {

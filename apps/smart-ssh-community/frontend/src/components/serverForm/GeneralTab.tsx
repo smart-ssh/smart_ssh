@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { flattenGroupOptions, groupOptionLabel } from "../../groupTree";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
-import type { GroupDto } from "../../types";
+import { flattenGroupOptions, groupOptionLabel } from "../../lib/groupTree";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
+import type { GroupDto } from "../../api/types";
 import { TabPanel } from "../ui";
 import { Field, FIELD_CONTROL_CLASS } from "../ui/Field";
 import type { ServerModel } from "./formTypes";

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, sftpList, sftpStartDirectory } from "../../api";
-import { notifyMissingStartDirectory } from "../../startDirectory";
-import type { RemoteEntryDto } from "../../types";
+import { commandErrorMessage, sftpList, sftpStartDirectory } from "../../api/api";
+import { notifyMissingStartDirectory } from "../../lib/startDirectory";
+import type { RemoteEntryDto } from "../../api/types";
 
 /**
  * Loading and navigating one remote directory of a session: current path,

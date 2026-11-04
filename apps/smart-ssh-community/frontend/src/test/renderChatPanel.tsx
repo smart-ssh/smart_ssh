@@ -1,12 +1,12 @@
 // Renders `ChatPanel` the way the ChatPanel tests need it (issue #906):
 // i18n provider, default session/server ids and a no-op `onActionSettled`.
 // Returns the render result plus the mocked `api` module (the file must have
-// installed it with `vi.mock("../api", …createApiMock…)`).
+// installed it with `vi.mock("../api/api", …createApiMock…)`).
 import { render } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { I18nextProvider } from "react-i18next";
 import { vi } from "vitest";
-import * as api from "../api";
+import * as api from "../api/api";
 import { ChatPanel } from "../components/ChatPanel";
 import { testI18n } from "../testI18n";
 

@@ -12,7 +12,7 @@ import {
   respondToAction,
   sendChatMessage,
   stopAutoContinuation,
-} from "../api";
+} from "../api/api";
 import {
   onActionConfirmationSettled,
   onActionDecisionEscalated,
@@ -25,12 +25,12 @@ import {
   onChatTextDelta,
   onChatWebActivity,
   onChatWebResearchUnavailable,
-} from "../events";
+} from "../api/events";
 import type {
   ActionDecisionEscalatedEvent,
   ChatActionProposedEvent,
   ChatWebActivityEvent,
-} from "../types";
+} from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 // jsdom implementiert `Element.scrollTo` nicht — `ChatPanel`s
@@ -38,7 +38,7 @@ import { renderChatPanel } from "../test/renderChatPanel";
 // `items`-Änderung auf.
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -46,11 +46,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -434,6 +434,7 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
       decision: "AutoExec",
       previousNoteContent: null,
       usesStoredSudoPassword: false,
+      autoExecRules: [],
       previousFileContent: null,
       previousFileSize: null,
       targetName: null,
@@ -565,6 +566,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       deltaHandler!({ sessionId: "session-1", delta: "Antwort vorher" });
       webHandler!({
         sessionId: "session-1",
+        activityId: "web-1",
         activity: {
           kind: "search",
           input: "openssh 10 changelog",
@@ -587,6 +589,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       // Eine Recherche für eine andere Sitzung erscheint nicht.
       webHandler!({
         sessionId: "other-session",
+        activityId: "web-2",
         activity: {
           kind: "search",
           input: "fremde Suche",
@@ -665,6 +668,7 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

@@ -121,7 +121,7 @@ Light (`src/theme/light.css`) is the worked example.
    `dark.css` under `html[data-theme="<name>"] { … }` (palette primitives,
    tokens with literal values, `--term-*`, window controls), and import it
    from `index.css`.
-2. Add the name to `ResolvedTheme` and `THEME_CHOICES` in `src/theme.ts`
+2. Add the name to `ResolvedTheme` and `THEME_CHOICES` in `src/lib/theme.ts`
    (resolution rules) and a label `appearance.<name>` in every locale. A test
    fails when a theme file misses a variable that has a literal value in
    `dark.css`.

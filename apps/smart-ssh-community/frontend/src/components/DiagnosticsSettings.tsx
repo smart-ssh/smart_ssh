@@ -7,10 +7,10 @@ import {
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
-} from "../api";
-import type { KeychainStatusDto } from "../types";
+} from "../api/api";
+import type { KeychainStatusDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene

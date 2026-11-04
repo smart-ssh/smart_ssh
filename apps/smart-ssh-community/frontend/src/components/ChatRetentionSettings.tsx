@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AutoReconnectSettings } from "./AutoReconnectSettings";
 import { FIELD_CONTROL_CLASS } from "./ui";
-import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api";
+import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api/api";
 
 /** Spec 0034, Abschnitt 5: optionale Aufbewahrungsdauer für persistente
  * Chat-Sitzungen — Default "nie automatisch löschen" (`null`). Reines

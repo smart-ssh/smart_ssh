@@ -1,9 +1,9 @@
 import { useEffect, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../hooks/useVoiceInput";
-import { isMacLike } from "../platform";
-import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../voiceApi";
-import { formatElapsed } from "../voiceInputSettings";
+import { isMacLike } from "../lib/platform";
+import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../api/voiceApi";
+import { formatElapsed } from "../settings/voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
 
 const IS_MAC = isMacLike();
@@ -54,7 +54,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
 
   return (
     <>
-      <button
+      <Button variant="bare"
         type="button"
         onClick={() => void toggle()}
         disabled={transcribing}
@@ -70,7 +70,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
       >
         {transcribing ? <Spinner /> : <MicIcon />}
         {recording && <span className="font-mono text-xs">{formatElapsed(voice.elapsed)}</span>}
-      </button>
+      </Button>
       <span aria-live="polite" className="sr-only">
         {recording ? t("voice.recordingStatus") : transcribing ? t("voice.transcribing") : ""}
       </span>
@@ -80,9 +80,9 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
           className="basis-full rounded bg-danger-subtle px-3 py-2 text-xs text-danger-fg-soft"
         >
           {t(voice.errorKey)}{" "}
-          <button type="button" className="underline" onClick={voice.clearError}>
+          <Button variant="bare" type="button" className="underline" onClick={voice.clearError}>
             {t("voice.dismiss")}
-          </button>
+          </Button>
         </p>
       )}
       {voice.consent && (

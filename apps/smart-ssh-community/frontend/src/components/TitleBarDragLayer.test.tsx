@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishFeatureLocked } from "../extensions/featureLockedBus";
 import { FeatureLockedDialog } from "../extensions/FeatureLockedDialog";
 import { testI18n } from "../testI18n";
-import type { HostKeyInfo } from "../types";
+import type { HostKeyInfo } from "../api/types";
 import { AppHeader } from "./AppHeader";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { ModalBackdrop } from "./ModalBackdrop";
