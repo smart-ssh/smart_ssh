@@ -16,6 +16,9 @@
 export * from "./extensions";
 export type { Entitlements, Feature, Tier, FeatureLockedPayload } from "./extensions/entitlements";
 
+export { showToast } from "./buses/toastBus";
+export type { ToastInput } from "./buses/toastBus";
+
 export { bootstrap } from "./bootstrap";
 export type { BootstrapOptions } from "./bootstrap";
 
