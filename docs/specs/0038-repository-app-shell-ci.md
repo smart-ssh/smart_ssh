@@ -432,12 +432,12 @@ Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
 die Fehler-Helfer, `listServers`, `listGroups`, `listAiProviders`,
 `listChatSessions`, `getStartupState`, einige Hilfen
 (`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
-`pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`, `setUiPreference`) und
+`pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`, `setUiPreference`), `showToast` (zeigt die regulären Erfolgs-, Fehler- und Info-Hinweise) und
 DTO-Typen (u. a. `GroupDto`) sowie die Typen `ComposerContext` und
-`ComposerAction`. `smart-ssh/test-support` bietet die Medienabfrage-Hilfen
+`ComposerAction` sowie `ToastInput`. `smart-ssh/test-support` bietet die Medienabfrage-Hilfen
 (`installMatchMediaMock`, `setWide`, `setNarrow`) und die Hilfen der
 Composer-Registrierung (`listComposerActions`, `listComposerDropHandlers`,
-`resetComposerRegistryForTests`) und `resetTiersForTests`. Relative Importe interner Dateien sind nicht unterstützt und
+`resetComposerRegistryForTests`), `resetTiersForTests` und `ToastHost` (nur für Tests, um erzeugte Hinweise zu prüfen). Relative Importe interner Dateien sind nicht unterstützt und
 können bei jeder Umbenennung brechen. Exporte ändern sich nur zusammen mit
 einem Changelog-Eintrag und einer Anpassung dieser Spec; ein Test hält die
 Liste fest.
