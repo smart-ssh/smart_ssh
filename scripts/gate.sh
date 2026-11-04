@@ -65,8 +65,8 @@ stage_rust() {
       echo "::error::cargo-nextest is missing: --ci mode runs the tests with it"
       exit 1
     fi
-    "${runner[@]}" cargo nextest run --workspace --locked --profile ci
-    "${runner[@]}" cargo test --workspace --locked --doc
+    ${runner[@]+"${runner[@]}"} cargo nextest run --workspace --locked --profile ci
+    ${runner[@]+"${runner[@]}"} cargo test --workspace --locked --doc
   elif cargo nextest --version >/dev/null 2>&1; then
     cargo nextest run --workspace --locked --no-fail-fast
     cargo test --workspace --locked --doc
