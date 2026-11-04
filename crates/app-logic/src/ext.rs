@@ -50,6 +50,11 @@ pub use crate::backup::{
 };
 pub use crate::host_key_store::FileHostKeyStore;
 
+// --- Background tasks ----------------------------------------------------
+// Supervised spawning: an extension obtains the app scope through
+// `app_shell::app_scope` and spawns on it; the task ends at app exit.
+pub use crate::tasks::{ScopeKey, ShutdownReport, TaskScope, TaskSupervisor};
+
 // --- Events --------------------------------------------------------------
 pub use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 

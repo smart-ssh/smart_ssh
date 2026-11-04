@@ -79,7 +79,7 @@ mod wiring;
 pub use db_extensions::DbExtension;
 pub use extension_plugins::UnlockedPluginFactory;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
-pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
+pub use services::{app_scope, BackgroundService, RunningService, ServiceContext, ServiceHost};
 use std::sync::Arc;
 pub use wiring::{Edition, UnlockedPlugin, Wiring};
 
