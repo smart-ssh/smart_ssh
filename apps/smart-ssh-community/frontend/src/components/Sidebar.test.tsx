@@ -9,7 +9,7 @@ import type { GroupDto, ServerDto } from "../types";
 import { Sidebar, type Selection } from "./Sidebar";
 
 function group(id: string, name: string, parentId: string | null): GroupDto {
-  return { id, name, parentId, notes: "" };
+  return { isCopy: false, id, name, parentId, notes: "" };
 }
 
 function server(id: string, name: string, groupId: string | null, isLocal = false): ServerDto {

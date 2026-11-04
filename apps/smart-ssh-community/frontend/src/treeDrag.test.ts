@@ -19,7 +19,7 @@ vi.mock("./api", async () =>
 );
 
 function group(id: string, parentId: string | null): GroupDto {
-  return { id, name: id, parentId, notes: "" };
+  return { isCopy: false, id, name: id, parentId, notes: "" };
 }
 
 function server(id: string, groupId: string | null, isLocal = false): ServerDto {

@@ -29,7 +29,7 @@ import {
 } from "../api";
 import { pickFilePath } from "../fileDialog";
 import { testI18n } from "../testI18n";
-import type { KeyFileFactsDto, ServerDto, TestConnectionResult } from "../types";
+import type { KeyFileFactsDto, ServerDto, TestConnectionReport } from "../types";
 import { ServerForm } from "./ServerForm";
 
 vi.mock("../api", async () =>
@@ -88,6 +88,8 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
@@ -723,9 +725,10 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
 // ausblendet (hier per Inline-Style nachgebildet, `jsdom` kennt die
 // Tailwind-Klasse `hidden` nicht).
 describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () => {
-  const results: TestConnectionResult[] = [
+  const results: TestConnectionReport[] = [
     {
       kind: "hostKeyUnknown",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -734,6 +737,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
     {
       kind: "hostKeyMismatch",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -743,7 +747,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
   ];
 
-  function dialogFor(result: TestConnectionResult) {
+  function dialogFor(result: TestConnectionReport) {
     const isMismatch = result.kind === "hostKeyMismatch";
     return {
       dialog: screen.getByRole(isMismatch ? "alertdialog" : "dialog"),
@@ -807,9 +811,9 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
   });
 
   it.each(results)("$kind: Dialog bleibt sichtbar und fokussiert, wenn während des Tests ein anderer Tab aktiv wurde", async (result) => {
-    let resolveTest: (r: TestConnectionResult) => void = () => {};
+    let resolveTest: (r: TestConnectionReport) => void = () => {};
     vi.mocked(testConnection).mockImplementation(
-      () => new Promise<TestConnectionResult>((resolve) => {
+      () => new Promise<TestConnectionReport>((resolve) => {
         resolveTest = resolve;
       }),
     );

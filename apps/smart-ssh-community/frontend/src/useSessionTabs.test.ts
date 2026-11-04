@@ -237,6 +237,7 @@ describe("useSessionTabs / MCP tabs (Spec 0104)", () => {
   it("restores MCP tabs after a reload without making them active", async () => {
     vi.mocked(listSessions).mockResolvedValue([
       {
+        chatSessionId: null,
         sessionId: "mcp-1",
         serverId: "server-1",
         serverName: "prod-db",

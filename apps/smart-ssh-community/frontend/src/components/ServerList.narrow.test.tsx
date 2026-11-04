@@ -31,6 +31,8 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 

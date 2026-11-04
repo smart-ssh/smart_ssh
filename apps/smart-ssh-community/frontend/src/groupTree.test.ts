@@ -33,6 +33,8 @@ function server(
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }

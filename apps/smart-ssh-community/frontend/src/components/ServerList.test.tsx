@@ -45,6 +45,8 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 
@@ -122,6 +124,7 @@ function group(overrides: Partial<GroupDto> = {}): GroupDto {
     name: "Prod",
     parentId: null,
     notes: "",
+    isCopy: false,
     ...overrides,
   };
 }
