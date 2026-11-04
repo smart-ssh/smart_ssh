@@ -1,194 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
-
-use async_trait::async_trait;
 use chrono::Utc;
 use secrecy::{ExposeSecret, SecretString};
 
 use super::*;
 use crate::shared::ServerId;
-
-// --- Test-Only Stores ---------------------------------------------------
-
-struct InMemoryCredentialStore {
-    secrets: Mutex<HashMap<String, SecretString>>,
-}
-
-impl InMemoryCredentialStore {
-    fn new() -> Self {
-        Self {
-            secrets: Mutex::new(HashMap::new()),
-        }
-    }
-}
-
-impl CredentialStore for InMemoryCredentialStore {
-    fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
-        self.secrets
-            .lock()
-            .unwrap()
-            .get(r.as_str())
-            .cloned()
-            .ok_or_else(|| CredentialError::NotFound(r.clone()))
-    }
-
-    fn set(&self, r: &CredentialRef, value: SecretString) -> CredentialResult<()> {
-        self.secrets
-            .lock()
-            .unwrap()
-            .insert(r.as_str().to_string(), value);
-        Ok(())
-    }
-
-    fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
-        self.secrets.lock().unwrap().remove(r.as_str());
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct InMemoryProfileStore {
-    // Mutex statt einfachem HashMap, weil die schreibenden `ProfileStore`-
-    // Methoden `&self` nehmen (nicht `&mut self`) — analog zu
-    // `InMemoryCredentialStore` oben und zur echten `SqliteProfileStore`
-    // (Connection-Pool ist auch nur über `&self` erreichbar).
-    groups: Mutex<HashMap<GroupId, Group>>,
-    servers: Mutex<HashMap<ServerId, Server>>,
-    note_revisions: Mutex<Vec<NoteRevision>>,
-}
-
-impl InMemoryProfileStore {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn with_group(self, group: Group) -> Self {
-        self.groups.lock().unwrap().insert(group.id, group);
-        self
-    }
-
-    fn with_server(self, server: Server) -> Self {
-        self.servers.lock().unwrap().insert(server.id, server);
-        self
-    }
-}
-
-#[async_trait]
-impl ProfileStore for InMemoryProfileStore {
-    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-        self.servers
-            .lock()
-            .unwrap()
-            .get(id)
-            .cloned()
-            .ok_or(ProfileError::ServerNotFound(*id))
-    }
-
-    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
-        self.groups
-            .lock()
-            .unwrap()
-            .get(id)
-            .cloned()
-            .ok_or(ProfileError::GroupNotFound(*id))
-    }
-
-    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
-        Ok(self.servers.lock().unwrap().values().cloned().collect())
-    }
-
-    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
-        Ok(self.groups.lock().unwrap().values().cloned().collect())
-    }
-
-    // Bewusst ohne Nachbildung von ON DELETE CASCADE/SET NULL: die
-    // Referenzielle-Integritäts-Semantik aus der SQLite-Migration (Spec
-    // 0004) wird gegen `SqliteProfileStore` getestet
-    // (`persistence-sqlite`-Crate), nicht hier — diese Implementierung dient
-    // nur den reinen `profiles`-Unit-Tests (effective_notes, group_chain,
-    // record_revision), die keine Kaskaden brauchen.
-
-    async fn create_group(&self, group: &Group) -> ProfileResult<()> {
-        self.groups.lock().unwrap().insert(group.id, group.clone());
-        Ok(())
-    }
-
-    async fn update_group(&self, group: &Group) -> ProfileResult<()> {
-        let mut groups = self.groups.lock().unwrap();
-        if !groups.contains_key(&group.id) {
-            return Err(ProfileError::GroupNotFound(group.id));
-        }
-        groups.insert(group.id, group.clone());
-        Ok(())
-    }
-
-    async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
-        self.groups
-            .lock()
-            .unwrap()
-            .remove(id)
-            .map(|_| ())
-            .ok_or(ProfileError::GroupNotFound(*id))
-    }
-
-    async fn create_server(&self, server: &Server) -> ProfileResult<()> {
-        self.servers
-            .lock()
-            .unwrap()
-            .insert(server.id, server.clone());
-        Ok(())
-    }
-
-    async fn update_server(&self, server: &Server) -> ProfileResult<()> {
-        let mut servers = self.servers.lock().unwrap();
-        if !servers.contains_key(&server.id) {
-            return Err(ProfileError::ServerNotFound(server.id));
-        }
-        servers.insert(server.id, server.clone());
-        Ok(())
-    }
-
-    async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
-        self.servers
-            .lock()
-            .unwrap()
-            .remove(id)
-            .map(|_| ())
-            .ok_or(ProfileError::ServerNotFound(*id))
-    }
-
-    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
-        match revision.target {
-            NoteTarget::Server(id) => {
-                let mut servers = self.servers.lock().unwrap();
-                let server = servers
-                    .get_mut(&id)
-                    .ok_or(ProfileError::ServerNotFound(id))?;
-                server.notes = revision.content.clone();
-                server.updated_at = revision.created_at;
-            }
-            NoteTarget::Group(id) => {
-                let mut groups = self.groups.lock().unwrap();
-                let group = groups.get_mut(&id).ok_or(ProfileError::GroupNotFound(id))?;
-                group.notes = revision.content.clone();
-                group.updated_at = revision.created_at;
-            }
-        }
-        self.note_revisions.lock().unwrap().push(revision.clone());
-        Ok(())
-    }
-
-    async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>> {
-        Ok(self
-            .note_revisions
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|r| r.target == target)
-            .cloned()
-            .collect())
-    }
-}
+use crate::testing::{InMemoryCredentialStore, InMemoryProfileStore, ServerBuilder};
 
 // --- Test-Fixtures --------------------------------------------------------
 
@@ -199,28 +14,6 @@ fn group(name: &str, parent: Option<GroupId>, notes: &str) -> Group {
         name: name.to_string(),
         parent_id: parent,
         notes: notes.to_string(),
-        created_at: now,
-        updated_at: now,
-    }
-}
-
-fn server(name: &str, group_id: Option<GroupId>, notes: &str) -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: notes.to_string(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
         created_at: now,
         updated_at: now,
     }
@@ -241,11 +34,11 @@ async fn test_effective_notes_orders_root_first_server_last() {
         Some(mid.id),
         "Web-Cluster: nginx als Reverse Proxy.",
     );
-    let srv = server(
-        "web-01",
-        Some(leaf.id),
-        "web-01: PHP 8.2, MySQL 8 unter /opt/lamp.",
-    );
+    let srv = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(leaf.id))
+        .notes("web-01: PHP 8.2, MySQL 8 unter /opt/lamp.")
+        .build();
 
     let store = InMemoryProfileStore::new()
         .with_group(root.clone())
@@ -291,7 +84,11 @@ async fn test_effective_notes_orders_root_first_server_last() {
 async fn test_effective_notes_skips_empty_notes() {
     let root = group("Kunde A", None, "");
     let mid = group("Produktion", Some(root.id), "   ");
-    let srv = server("web-01", Some(mid.id), "web-01: relevant.");
+    let srv = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(mid.id))
+        .notes("web-01: relevant.")
+        .build();
 
     let store = InMemoryProfileStore::new()
         .with_group(root.clone())
@@ -316,11 +113,11 @@ async fn test_effective_notes_skips_empty_notes() {
 
 #[tokio::test]
 async fn test_effective_notes_server_without_group_yields_only_server_context() {
-    let srv = server(
-        "standalone",
-        None,
-        "standalone: eigenständig, keine Gruppe.",
-    );
+    let srv = ServerBuilder::new()
+        .name("standalone")
+        .group_id(None)
+        .notes("standalone: eigenständig, keine Gruppe.")
+        .build();
     let store = InMemoryProfileStore::new().with_server(srv.clone());
 
     let notes = effective_notes(&srv, &store)
@@ -355,7 +152,11 @@ async fn test_effective_notes_propagates_cycle_error_instead_of_hanging() {
     let mut b = group("B", None, "b-notes");
     a.parent_id = Some(b.id);
     b.parent_id = Some(a.id);
-    let srv = server("srv", Some(a.id), "srv-notes");
+    let srv = ServerBuilder::new()
+        .name("srv")
+        .group_id(Some(a.id))
+        .notes("srv-notes")
+        .build();
 
     let store = InMemoryProfileStore::new()
         .with_group(a)

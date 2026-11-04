@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
 import { sftpCancelTransfer } from "../../api";
 import { formatBytes } from "../../format";
@@ -92,13 +93,13 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
               <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent-fg" />
               <span className="min-w-0 flex-1 truncate text-fg-muted">
                 {t(
-                  {
+                  ({
                     upload: "fileBrowser.transferUpload",
                     download: "fileBrowser.transferDownload",
                     delete: "fileBrowser.transferDelete",
                     chmod: "fileBrowser.transferChmod",
                     chown: "fileBrowser.transferChown",
-                  }[transfer.kind],
+                  } satisfies Record<typeof transfer.kind, TranslationKey>)[transfer.kind],
                   { name: transfer.fileName },
                 )}
                 {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}

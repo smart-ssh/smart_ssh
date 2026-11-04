@@ -14,3 +14,5 @@ export { ErrorBoundary } from "./ErrorBoundary";
 export type { ErrorBoundaryProps } from "./ErrorBoundary";
 export { Menu, MenuItem, MenuSeparator } from "./Menu";
 export type { MenuItemProps, MenuProps } from "./Menu";
+export { TagInput } from "./TagInput";
+export type { TagInputProps } from "./TagInput";

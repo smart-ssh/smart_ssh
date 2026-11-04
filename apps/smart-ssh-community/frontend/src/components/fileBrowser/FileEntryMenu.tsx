@@ -11,6 +11,10 @@ import { currentCaps, findMenuTrigger, focusMenuTrigger } from "./shared";
  * Eigenschaften, Aktualisieren), dann — durch einen Trenner abgesetzt — die
  * server-verändernden Aktionen (Umbenennen, Löschen; chmod/Verschieben
  * folgen in Teil 3). */
+type MenuKey =
+  | "download" | "downloadTo" | "copyContent" | "copyFile" | "openLocally" | "copyPath"
+  | "properties" | "refresh" | "chmod" | "chown" | "rename" | "cut" | "delete";
+
 export function FileEntryMenu({
   entry,
   narrow,
@@ -60,7 +64,7 @@ export function FileEntryMenu({
     focusMenuTrigger(entry.path);
     fn();
   };
-  const item = (key: string, onClick: () => void, danger = false) => (
+  const item = (key: MenuKey, onClick: () => void, danger = false) => (
     <MenuItem narrow={narrow} danger={danger} onClick={onClick}>
       {t(`fileBrowser.menu.${key}`)}
     </MenuItem>

@@ -36,7 +36,7 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the export once on mount
   }, []);
 
   const handleCopyIncludeHint = async () => {

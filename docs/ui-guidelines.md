@@ -53,6 +53,14 @@ Tailwind's 4 px scale, with these steps: `1` (4 px) inside compact controls,
 form fields and between paragraphs, `4` between a dialog body and its action
 row, `6` as dialog padding. Prefer `gap-*` and `space-y-*` over single margins.
 
+## Tag input
+
+Use `TagInput` (`components/ui/TagInput.tsx`) for every free-form tag editor.
+Enter or comma adds the trimmed draft (empty and duplicate drafts are
+dropped), blur adds too, Backspace on an empty draft removes the last tag, and
+every chip has a remove button labelled with the tag. `readOnlyTags` are shown
+first and cannot be removed; give the input an `aria-label` (or `labelledBy`).
+
 ## Form fields
 
 Use `Field`. Layout, top to bottom: label, control, help text, error text.

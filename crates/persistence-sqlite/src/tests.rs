@@ -5,11 +5,11 @@
 
 use chrono::Utc;
 use sqlx::sqlite::SqliteConnectOptions;
+use ssh_manager_core::testing::ServerBuilder;
 use uuid::Uuid;
 
 use ssh_manager_core::profiles::{
-    AuthMethod, Group, GroupId, NoteEditor, NoteRevision, NoteTarget, PostIngestPolicy,
-    ProfileError, ProfileStore, Server,
+    AuthMethod, Group, GroupId, NoteEditor, NoteRevision, NoteTarget, ProfileError, ProfileStore,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -34,28 +34,6 @@ fn make_group(name: &str, parent: Option<GroupId>) -> Group {
     }
 }
 
-fn make_server(name: &str, group_id: Option<GroupId>, tags: Vec<String>) -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id,
-        tags,
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
 /// Spec Abschnitt 6, Testfall 1: "Gruppe anlegen, Server anlegen, wieder
 /// abrufen → Felder identisch".
 #[tokio::test]
@@ -71,11 +49,11 @@ async fn test_create_and_get_group_and_server_roundtrip() {
     // Tags alphabetisch sortiert angelegt, da `get_server` sie sortiert
     // zurückgibt (s. `SqliteProfileStore::fetch_tags`) — sonst würde der
     // Vec<String>-Vergleich an der Reihenfolge scheitern, nicht am Inhalt.
-    let server = make_server(
-        "web-01",
-        Some(group.id),
-        vec!["production".to_string(), "web".to_string()],
-    );
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(group.id))
+        .tags(vec!["production".to_string(), "web".to_string()])
+        .build();
     store.create_server(&server).await.unwrap();
 
     let fetched_server = store.get_server(&server.id).await.unwrap();
@@ -109,7 +87,11 @@ async fn test_delete_server_removes_tags_but_not_group() {
 
     let group = make_group("Kunde A", None);
     store.create_group(&group).await.unwrap();
-    let server = make_server("web-01", Some(group.id), vec!["production".to_string()]);
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(group.id))
+        .tags(vec!["production".to_string()])
+        .build();
     store.create_server(&server).await.unwrap();
 
     store.delete_server(&server.id).await.unwrap();
@@ -141,7 +123,11 @@ async fn test_delete_group_sets_server_group_id_null_and_keeps_server() {
 
     let group = make_group("Kunde A", None);
     store.create_group(&group).await.unwrap();
-    let server = make_server("web-01", Some(group.id), vec![]);
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(group.id))
+        .tags(vec![])
+        .build();
     store.create_server(&server).await.unwrap();
 
     store.delete_group(&group.id).await.unwrap();
@@ -166,7 +152,11 @@ async fn test_delete_group_sets_server_group_id_null_and_keeps_server() {
 async fn test_record_note_revision_persists_history_and_updates_notes_field() {
     let store = in_memory_store().await;
 
-    let server = make_server("web-01", None, vec![]);
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(None)
+        .tags(vec![])
+        .build();
     store.create_server(&server).await.unwrap();
 
     let revision1 = NoteRevision {
@@ -219,8 +209,16 @@ async fn test_record_note_revision_persists_history_and_updates_notes_field() {
 async fn test_list_note_revisions_returns_persisted_revisions_for_correct_target() {
     let store = in_memory_store().await;
 
-    let server_a = make_server("server-a", None, vec![]);
-    let server_b = make_server("server-b", None, vec![]);
+    let server_a = ServerBuilder::new()
+        .name("server-a")
+        .group_id(None)
+        .tags(vec![])
+        .build();
+    let server_b = ServerBuilder::new()
+        .name("server-b")
+        .group_id(None)
+        .tags(vec![])
+        .build();
     store.create_server(&server_a).await.unwrap();
     store.create_server(&server_b).await.unwrap();
 
@@ -301,7 +299,11 @@ async fn test_group_only_notes_leave_server_scoped_notes_and_history_empty() {
 
     let group = make_group("Team A", None);
     store.create_group(&group).await.unwrap();
-    let server = make_server("web-01", Some(group.id), vec![]);
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(group.id))
+        .tags(vec![])
+        .build();
     store.create_server(&server).await.unwrap();
 
     let group_revision = NoteRevision {
@@ -472,7 +474,11 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     };
     let group = make_group("Produktion", None);
     old_store.create_group(&group).await.unwrap();
-    let server = make_server("web-01", Some(group.id), vec!["prod".to_string()]);
+    let server = ServerBuilder::new()
+        .name("web-01")
+        .group_id(Some(group.id))
+        .tags(vec!["prod".to_string()])
+        .build();
     // Rohes SQL mit genau den Spalten, die `servers` auf dieser Schema-Stufe
     // hat — die aktuelle `create_server`-API schreibt auch später
     // hinzugekommene Spalten (z. B. `sftp_server_path`, 0014), die es hier
@@ -689,7 +695,11 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
 #[tokio::test]
 async fn test_sftp_server_path_override_roundtrip() {
     let store = in_memory_store().await;
-    let mut server = make_server("mit-override", None, Vec::new());
+    let mut server = ServerBuilder::new()
+        .name("mit-override")
+        .group_id(None)
+        .tags(Vec::new())
+        .build();
     server.sftp_server_path = Some("/usr/libexec/openssh/sftp-server".to_string());
     store.create_server(&server).await.unwrap();
     assert_eq!(
@@ -719,7 +729,11 @@ async fn test_sftp_server_path_override_roundtrip() {
 #[tokio::test]
 async fn test_start_directory_roundtrip() {
     let store = in_memory_store().await;
-    let mut server = make_server("mit-startverzeichnis", None, Vec::new());
+    let mut server = ServerBuilder::new()
+        .name("mit-startverzeichnis")
+        .group_id(None)
+        .tags(Vec::new())
+        .build();
     server.start_directory = Some("/srv/it's my app".to_string());
     store.create_server(&server).await.unwrap();
     assert_eq!(
@@ -777,7 +791,11 @@ async fn test_start_directory_column_is_nullable() {
 #[tokio::test]
 async fn test_identity_file_auth_survives_the_database_roundtrip() {
     let store = in_memory_store().await;
-    let mut server = make_server("mit-schluesseldatei", None, Vec::new());
+    let mut server = ServerBuilder::new()
+        .name("mit-schluesseldatei")
+        .group_id(None)
+        .tags(Vec::new())
+        .build();
     let passphrase_ref = ssh_manager_core::profiles::CredentialRef::new("server:x:passphrase");
     // Bewusst mit `~`: Gespeichert wird, was der Nutzer getippt hat.
     server.auth = AuthMethod::IdentityFile {
@@ -834,7 +852,11 @@ async fn insert_server_with_raw_auth(
     group_id: Option<GroupId>,
     auth_json: &str,
 ) -> ServerId {
-    let server = make_server(name, group_id, vec!["prod".to_string()]);
+    let server = ServerBuilder::new()
+        .name(name)
+        .group_id(group_id)
+        .tags(vec!["prod".to_string()])
+        .build();
     store.create_server(&server).await.unwrap();
     sqlx::query("UPDATE servers SET auth_method = ? WHERE id = ?")
         .bind(auth_json)
@@ -858,7 +880,11 @@ async fn test_unknown_auth_method_does_not_break_the_server_list() {
     let store = in_memory_store().await;
     let group = make_group("Produktion", None);
     store.create_group(&group).await.unwrap();
-    let readable = make_server("a-readable", None, vec![]);
+    let readable = ServerBuilder::new()
+        .name("a-readable")
+        .group_id(None)
+        .tags(vec![])
+        .build();
     store.create_server(&readable).await.unwrap();
     let unusable_id =
         insert_server_with_raw_auth(&store, "b-newer", Some(group.id), UNKNOWN_AUTH_JSON).await;
@@ -887,7 +913,11 @@ async fn test_unknown_auth_method_does_not_break_the_server_list() {
 #[tokio::test]
 async fn test_malformed_auth_method_is_handled_like_an_unknown_one() {
     let store = in_memory_store().await;
-    let readable = make_server("readable", None, vec![]);
+    let readable = ServerBuilder::new()
+        .name("readable")
+        .group_id(None)
+        .tags(vec![])
+        .build();
     store.create_server(&readable).await.unwrap();
     let broken_id = insert_server_with_raw_auth(&store, "broken", None, MALFORMED_AUTH_JSON).await;
 
@@ -964,7 +994,11 @@ async fn test_copy_marker_defaults_to_false_and_survives_updates() {
     let store = in_memory_store().await;
     let group = make_group("g", None);
     store.create_group(&group).await.unwrap();
-    let mut server = make_server("s", Some(group.id), vec![]);
+    let mut server = ServerBuilder::new()
+        .name("s")
+        .group_id(Some(group.id))
+        .tags(vec![])
+        .build();
     store.create_server(&server).await.unwrap();
     let backup = store.backup_store();
     assert_eq!(backup.copy_marked().await.unwrap(), Default::default());
@@ -986,7 +1020,11 @@ async fn test_copy_marker_defaults_to_false_and_survives_updates() {
 #[tokio::test]
 async fn test_profile_store_constraint_failure_keeps_its_kind() {
     let store = in_memory_store().await;
-    let server = make_server("dup", None, vec![]);
+    let server = ServerBuilder::new()
+        .name("dup")
+        .group_id(None)
+        .tags(vec![])
+        .build();
     store.create_server(&server).await.unwrap();
     let err = store.create_server(&server).await.unwrap_err();
     assert_eq!(

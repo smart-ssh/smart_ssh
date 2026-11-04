@@ -104,7 +104,7 @@ export function QuickRuleButton({
     return () => {
       stale = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the inputs listed here change
   }, [open, command, scopeKey, sessionId]);
 
   const handlePick = (suggestion: ExplainedSuggestionDto) => {

@@ -19,10 +19,6 @@
     "count": 1,
     "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
   },
-  "components/FilterRulesView.tsx": {
-    "count": 1,
-    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
-  },
   "components/HostKeyDialog.tsx": {
     "count": 2,
     "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
@@ -100,10 +96,6 @@
     "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
   },
   "components/serverForm/LocalServerForm.tsx": {
-    "count": 1,
-    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
-  },
-  "components/serverForm/TagsField.tsx": {
     "count": 1,
     "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
   }
