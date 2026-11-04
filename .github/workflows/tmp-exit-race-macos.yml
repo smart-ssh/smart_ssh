@@ -1,0 +1,48 @@
+# TEMPORARY (issue #1145): evidence job for the exit race. Removed before merge.
+name: tmp-exit-race-macos
+on:
+  pull_request:
+    paths: [".github/workflows/tmp-exit-race-macos.yml"]
+permissions:
+  contents: read
+jobs:
+  loop:
+    runs-on: macos-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: ["", "9dd19978"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.ref }}
+      - name: Read pinned Rust toolchain
+        id: rust-toolchain
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
+      - name: Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Build test binary
+        run: |
+          cargo test --locked -p app-logic --lib --no-run --message-format=json \
+            | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -1 > /tmp/bin.txt
+          cat /tmp/bin.txt
+      - name: Loop
+        working-directory: crates/app-logic
+        run: |
+          BIN="$(cat /tmp/bin.txt)"
+          for t in \
+            secret_migration::tests::test_a10_a_reference_pointing_at_the_root_key_is_never_migrated \
+            orchestration::chat_turn::tests_continuation::test_auto_title_generation_skipped_without_user_message; do
+            crashes=0; fails=0
+            for i in $(seq 1 3000); do
+              "$BIN" --exact "$t" >/tmp/out.txt 2>&1; rc=$?
+              if [ $rc -ge 128 ]; then crashes=$((crashes+1)); elif [ $rc -ne 0 ]; then fails=$((fails+1)); fi
+            done
+            echo "RESULT ref='${{ matrix.ref }}' test=$t runs=3000 crashes=$crashes other_failures=$fails"
+          done
