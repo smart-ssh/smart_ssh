@@ -1487,9 +1487,11 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
                 tokio::task::yield_now().await;
             }
         };
-        expect_event_within(&emitter, "Aktion muss enden", async {
-            tokio::join!(handled, responder)
-        })
+        expect_event_within(
+            &emitter,
+            "Aktion muss enden",
+            Box::pin(async { tokio::join!(handled, responder) }),
+        )
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
