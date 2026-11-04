@@ -125,6 +125,7 @@ fn dummy_session(server_id: ServerId) -> Session {
         },
         persistence: crate::session::ChatPersistence {
             chat_content: Arc::default(),
+            title_attempts: Arc::default(),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
@@ -871,6 +872,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         pending_ssh_config_import: StdMutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
 
@@ -1090,4 +1092,20 @@ mod lookup_failures {
 /// A live session scope for the spawn helpers under test.
 fn test_scope() -> crate::tasks::TaskScope {
     crate::tasks::TaskSupervisor::new().session_scope(Uuid::new_v4())
+}
+
+/// Issue #922: one title attempt per chat session id; the entry is gone
+/// after `forget` (called when the chat session is deleted), so a new
+/// session with that id could claim again and the set does not keep growing.
+#[test]
+fn test_title_attempt_is_claimed_once_and_forgotten_on_delete() {
+    let attempts = TitleAttempts::default();
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    assert!(attempts.claim(a));
+    assert!(!attempts.claim(a));
+    assert!(attempts.claim(b));
+    attempts.forget(a);
+    assert_eq!(attempts.len(), 1);
+    assert!(attempts.claim(a));
 }
