@@ -9,14 +9,9 @@ import { testI18n } from "../testI18n";
 import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
 import { UnusableServerPanel } from "./UnusableServerPanel";
 
-vi.mock("../api", async () => {
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
-    deleteUnusableServer: vi.fn(),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-  };
-});
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({ deleteUnusableServer: vi.fn() }),
+);
 
 const SERVER: UnusableServerDto = {
   id: "unusable-1",

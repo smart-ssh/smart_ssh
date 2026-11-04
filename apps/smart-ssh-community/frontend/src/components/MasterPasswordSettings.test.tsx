@@ -10,20 +10,14 @@ import { getMasterPasswordMode, setUpMasterPassword, switchToOsKeychain } from "
 import { testI18n } from "../testI18n";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 
-vi.mock("../api", () => ({
-  getMasterPasswordMode: vi.fn(),
-  setUpMasterPassword: vi.fn(() => Promise.resolve("password")),
-  changeMasterPassword: vi.fn(() => Promise.resolve()),
-  switchToOsKeychain: vi.fn(),
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getMasterPasswordMode: vi.fn(),
+    setUpMasterPassword: vi.fn(() => Promise.resolve("password" as const)),
+    changeMasterPassword: vi.fn(() => Promise.resolve()),
+    switchToOsKeychain: vi.fn(),
+  }),
+);
 
 function renderSettings() {
   return render(

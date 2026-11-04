@@ -11,13 +11,14 @@ const rules: RuleDto[] = [
   { id: "r2", patternType: "glob", patternValue: "df *", action: "Allow", scope: "Global", priority: 1, patternError: null },
 ];
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
-  listRules: () => Promise.resolve(rules),
-  listServers: () => Promise.resolve([]),
-  listKnownTags: () => Promise.resolve([]),
-  listHardBlacklist: () => Promise.resolve([]),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listRules: () => Promise.resolve(rules),
+    listServers: () => Promise.resolve([]),
+    listKnownTags: () => Promise.resolve([]),
+    listHardBlacklist: () => Promise.resolve([]),
+  }),
+);
 
 function renderView(initialRuleId: string | null, onConsumed = vi.fn()) {
   render(
