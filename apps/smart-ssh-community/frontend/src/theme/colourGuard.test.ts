@@ -43,13 +43,17 @@ describe("colour guard", () => {
 const FOCUS_RING_ALLOWLIST: Record<string, string> = {
   "App.tsx": "ring colour chosen for contrast on the warning banner",
   "components/fileBrowser/ElevationBanner.tsx": "ring colour chosen for contrast on the warning banner",
+  "components/ChatPanel.tsx": "accent-coloured outline on the floating scroll-to-bottom button",
+  "components/FirstRunNoticeScreen.tsx": "accent-coloured outline on an inline link",
+  "components/StartupPromptDialog.tsx": "accent-coloured outline on an inline link",
   "components/QuestionCard.tsx": "ring colour chosen for contrast on the solid accent button",
 };
-const LITERAL_FOCUS_RING = /focus-visible:ring-2|FOCUS_RING\b/;
+const LITERAL_FOCUS_RING = /focus-visible:ring-2|focus-visible:outline-2|FOCUS_RING\b/;
 
 describe("focus ring guard", () => {
   it("detects the literal chain in fixtures", () => {
     expect(LITERAL_FOCUS_RING.test('"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"')).toBe(true);
+    expect(LITERAL_FOCUS_RING.test('"focus-visible:outline focus-visible:outline-2"')).toBe(true);
     expect(LITERAL_FOCUS_RING.test('"focus-ring rounded"')).toBe(false);
   });
 
