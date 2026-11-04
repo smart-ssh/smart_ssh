@@ -103,7 +103,7 @@ export function ServerForm({
     return () => {
       unlisten.then((fn) => fn());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listener is re-registered per loaded server; loadServer is read at event time
   }, [loaded?.id]);
 
   // Spec 0032, section 6: the local pseudo-server cannot be a jump host.

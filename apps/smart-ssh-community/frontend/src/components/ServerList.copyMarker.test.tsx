@@ -30,6 +30,8 @@ function server(id: string, name: string, extra: Partial<ServerDto> = {}): Serve
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...extra,
   };
 }
@@ -102,7 +104,7 @@ describe("copy marker in the server list", () => {
     const row = (await screen.findByText("old-srv")).closest("button") as HTMLElement;
     fireEvent.contextMenu(row);
     vi.mocked(listServers).mockResolvedValue([server("b", "old-srv", { groupId: "g-old" })]);
-    fireEvent.click(await screen.findByRole("button", { name: KEEP }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: KEEP }));
     await waitFor(() => expect(keepServerAsRegularEntry).toHaveBeenCalledWith("b"));
     await waitFor(() => expect(screen.queryAllByTestId("copy-badge")).toHaveLength(1));
   });
@@ -111,7 +113,7 @@ describe("copy marker in the server list", () => {
     renderList();
     const header = (await screen.findByText(/old-group/)).closest("button") as HTMLElement;
     fireEvent.contextMenu(header);
-    fireEvent.click(await screen.findByRole("button", { name: KEEP }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: KEEP }));
     const dialog = await screen.findByRole("dialog");
     expect(keepGroupAsRegularEntry).toHaveBeenCalledWith("g-copy", false);
     expect(within(dialog).getByText(testI18n.t("copyMarker.groupConfirmBody", { groups: 2, servers: 3 }))).toBeInTheDocument();

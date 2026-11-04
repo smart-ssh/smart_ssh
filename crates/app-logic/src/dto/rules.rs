@@ -16,6 +16,7 @@ use ssh_manager_core::shared::ServerId;
 /// flache Felder bilden das direkter ab als ein getaggtes Enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum PatternType {
     Glob,
     Regex,
@@ -45,6 +46,7 @@ impl From<&Pattern> for PatternType {
 /// ADR-Vorschlag am Ende der Aufgabe.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RuleInput {
     pub pattern_type: PatternType,
     pub pattern_value: String,
@@ -78,6 +80,7 @@ impl RuleInput {
 /// `RuleDto` ohne Umformung direkt als Formular-Vorbefüllung eignet.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RuleDto {
     pub id: RuleId,
     pub pattern_type: PatternType,
@@ -121,6 +124,7 @@ impl From<&StoredRule> for RuleDto {
 /// ganz ohne serde-Sonderfall nötig zu machen.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct PatternDto {
     pub kind: &'static str,
     pub value: String,
@@ -146,6 +150,7 @@ impl From<&Pattern> for PatternDto {
 /// belasten.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct EvalContextInput {
     pub server_id: Option<ServerId>,
     pub tags: Vec<String>,
@@ -164,6 +169,7 @@ impl From<EvalContextInput> for EvalContext {
 /// Abschnitt 4/6).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct EvaluationTraceDto {
     pub decision: Decision,
     pub matched_rule: Option<RuleId>,
@@ -199,6 +205,7 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
 /// Frontend übersetzt daraus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum SuggestionKind {
     /// Das Kommando selbst, unverändert.
     Exact,
@@ -218,6 +225,7 @@ pub enum SuggestionKind {
 /// Ein einzelnes Muster eines Vorschlags.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SuggestionPatternDto {
     pub pattern_type: PatternType,
     pub pattern_value: String,
@@ -228,6 +236,7 @@ pub struct SuggestionPatternDto {
 /// einer **Menge** von Mustern, die zusammen (atomar) angelegt werden.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct PatternSuggestionDto {
     pub kind: SuggestionKind,
     /// Parameter für die Beschriftung (Programme bzw. `tool sub`), ohne
@@ -241,6 +250,7 @@ pub struct PatternSuggestionDto {
 /// Zustand eines Teilkommandos im Bestätigungsdialog (Spec 0011).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum SegmentCoverageState {
     /// Eine Allow-Regel lässt das Teilkommando automatisch laufen.
     Covered,
@@ -254,6 +264,7 @@ pub enum SegmentCoverageState {
 /// Die Regel, die ein Teilkommando abdeckt (nur Anzeige).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct CoveringRuleDto {
     pub pattern_type: PatternType,
     pub pattern_value: String,
@@ -264,6 +275,7 @@ pub struct CoveringRuleDto {
 /// segments the rule covered (one entry for an unsplit command).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AutoExecRuleDto {
     pub rule_id: RuleId,
     pub pattern_type: PatternType,
@@ -276,6 +288,7 @@ pub struct AutoExecRuleDto {
 /// (`FILTER_*`-Codes), keine Texte.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SegmentCoverageDto {
     pub index: usize,
     pub text: String,
@@ -290,6 +303,7 @@ pub struct SegmentCoverageDto {
 /// Eskalation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct VerdictReasonDto {
     pub code: String,
     pub segment_index: Option<usize>,
@@ -299,6 +313,7 @@ pub struct VerdictReasonDto {
 /// Kandidatenregeln.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SuggestionVerdictDto {
     pub auto_exec: bool,
     pub reasons: Vec<VerdictReasonDto>,
@@ -306,6 +321,7 @@ pub struct SuggestionVerdictDto {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ExplainedSuggestionDto {
     #[serde(flatten)]
     pub suggestion: PatternSuggestionDto,
@@ -315,6 +331,7 @@ pub struct ExplainedSuggestionDto {
 /// Antwort von `explain_confirmation`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ConfirmationExplanationDto {
     /// Leer bei einem Teilkommando ohne regelunabhängigen Grund.
     pub segments: Vec<SegmentCoverageDto>,

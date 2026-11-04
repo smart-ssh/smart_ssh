@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   checkA11yRules,
   describeProblem,
+  findRequiredRuleProblems,
   findA11yRuleProblems,
   ParseError,
   parseConfiguredA11yRules,
@@ -200,5 +201,35 @@ describe("checkA11yRules", () => {
     const { problems, enabledCount } = checkA11yRules({ frontendDir: FRONTEND_DIR });
     expect(problems).toEqual([]);
     expect(enabledCount).toBeGreaterThan(0);
+  });
+});
+
+describe("findRequiredRuleProblems", () => {
+  const ok = { "react/rules-of-hooks": "error", "react/exhaustive-deps": "error" };
+
+  it("passes when both hook rules are error", () => {
+    expect(findRequiredRuleProblems(config(ok))).toEqual([]);
+  });
+
+  it("reports exhaustive-deps when it is downgraded, missing or off", () => {
+    expect(findRequiredRuleProblems(config({ ...ok, "react/exhaustive-deps": "warn" }))).toEqual([
+      { name: "react/exhaustive-deps", severity: "warn" },
+    ]);
+    expect(findRequiredRuleProblems(config({ "react/rules-of-hooks": "error" }))).toEqual([
+      { name: "react/exhaustive-deps", severity: undefined },
+    ]);
+    expect(findRequiredRuleProblems(config({ ...ok, "react/exhaustive-deps": "off" }))[0].name).toBe(
+      "react/exhaustive-deps",
+    );
+  });
+
+  it("reports rules-of-hooks when it is downgraded", () => {
+    expect(findRequiredRuleProblems(config({ ...ok, "react/rules-of-hooks": ["warn"] }))).toEqual([
+      { name: "react/rules-of-hooks", severity: "warn" },
+    ]);
+  });
+
+  it("finds no problem in the real config", () => {
+    expect(checkA11yRules({ frontendDir: FRONTEND_DIR }).requiredProblems).toEqual([]);
   });
 });

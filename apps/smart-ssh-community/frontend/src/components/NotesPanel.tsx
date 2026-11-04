@@ -75,7 +75,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       // (spec-reviewer-Fund, Review dieses Schritts).
       textareaRef.current?.focus({ preventScroll: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus the note once on mount
   }, []);
 
   const toggleExpanded = (revisionId: string) => {
@@ -100,7 +100,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
 
   useEffect(() => {
     if (showHistory) loadHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadHistory re-runs only when the history panel or target changes
   }, [showHistory, target]);
 
   const handleSave = async () => {

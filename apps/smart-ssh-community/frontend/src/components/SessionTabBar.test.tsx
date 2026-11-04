@@ -150,7 +150,7 @@ describe("SessionTabBar new session (issue #657)", () => {
     );
     expect(screen.getByText("prod-db (2)")).toBeInTheDocument();
     fireEvent.contextMenu(screen.getByText("prod-db (2)"));
-    fireEvent.click(screen.getByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Neue Sitzung" }));
     expect(onNewSession).toHaveBeenCalledWith({ id: "server-1", name: "prod-db" });
   });
 });

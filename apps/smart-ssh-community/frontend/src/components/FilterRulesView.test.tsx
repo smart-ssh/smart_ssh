@@ -21,7 +21,7 @@ vi.mock("../api", async () =>
 );
 
 function taggedServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "server-1",
     name: "prod-1",
     host: "prod-1.internal",

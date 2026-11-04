@@ -1071,7 +1071,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
             let current = handle_for_entitlements
                 .state::<crate::wiring::EntitlementCatalogue>()
                 .filter(current);
-            tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current).ok();
+            commands::emit_entitlements_changed(&handle_for_entitlements, current);
         }
     });
 }

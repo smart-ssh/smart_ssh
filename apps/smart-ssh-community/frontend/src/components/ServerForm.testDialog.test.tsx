@@ -54,7 +54,7 @@ vi.mock("../riskSettings", () => ({
 
 const SERVER_ID = "11111111-1111-4111-8111-111111111111";
 
-const server: ServerDto = {
+const server: ServerDto = { isCopy: false, startDirectory: null,
   id: SERVER_ID,
   name: "web-01",
   host: "example.invalid",

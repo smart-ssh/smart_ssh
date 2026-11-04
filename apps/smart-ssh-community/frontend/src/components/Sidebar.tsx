@@ -1,3 +1,4 @@
+import { dynamicKey } from "../i18nTypes";
 import { useRef, useState } from "react";
 import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { useTranslation } from "react-i18next";
@@ -314,7 +315,7 @@ export function Sidebar({
                 {manageViews.map((view) => {
                   const key = `extensionView:${view.id}`;
                   const selected = selection?.kind === "extensionView" && selection.id === view.id;
-                  const label = i18n.exists(view.label) ? t(view.label) : view.label;
+                  const label = i18n.exists(view.label) ? t(dynamicKey(view.label)) : view.label;
                   return (
                     <div key={view.id} role={narrow ? "listitem" : "none"}>
                     {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}

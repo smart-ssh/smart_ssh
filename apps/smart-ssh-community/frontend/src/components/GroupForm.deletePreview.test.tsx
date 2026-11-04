@@ -27,7 +27,7 @@ function renderForm() {
       <GroupForm
         groupId="g1"
         defaultParentId={null}
-        allGroups={[{ id: "g1", name: "Produktion", parentId: null, notes: "" }]}
+        allGroups={[{ isCopy: false, id: "g1", name: "Produktion", parentId: null, notes: "" }]}
         onSaved={() => {}}
         onDeleted={() => {}}
       />

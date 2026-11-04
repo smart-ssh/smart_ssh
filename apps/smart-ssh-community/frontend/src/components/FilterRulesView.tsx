@@ -25,7 +25,7 @@ import type {
   ServerDto,
 } from "../types";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, FIELD_CONTROL_CLASS, TagInput } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
 
 type ScopeKind = "global" | "server" | "tag";
@@ -137,7 +137,7 @@ export function FilterRulesView({
       group.rules.sort((a, b) => b.priority - a.priority);
     }
     return [...byKey.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- grouping depends on rules, servers and the language only
   }, [rules, servers, t]);
 
   // Spec 0077, 3.2.3: Grund, warum ein Pfeil gesperrt ist — die Regel selbst
@@ -642,7 +642,6 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
   const [command, setCommand] = useState("");
   const [serverId, setServerId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [tagDraft, setTagDraft] = useState("");
   const [result, setResult] = useState<EvaluationTraceDto | null>(null);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -662,12 +661,6 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
   // Regelliste, damit „passt nicht" nicht als Ergebnis eines gültigen
   // Musters gelesen wird.
   const invalidRules = useMemo(() => rules.filter((r) => !!r.patternError), [rules]);
-
-  const handleAddTag = () => {
-    const value = tagDraft.trim();
-    if (value && !tags.includes(value)) setTags([...tags, value]);
-    setTagDraft("");
-  };
 
   const handleTest = async () => {
     if (!command.trim()) return;
@@ -721,51 +714,14 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
         </label>
         <div className="block text-sm text-fg-muted">
           {t("filterRules.simulateTags")}
-          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-border-strong bg-surface p-1.5">
-            {selectedServerTags
-              .filter((tag) => !tags.includes(tag))
-              .map((tag) => (
-                <span
-                  key={`server-${tag}`}
-                  title={t("filterRules.tagFromServer")}
-                  className="flex items-center gap-1 rounded bg-accent-subtle-hover/60 px-2 py-0.5 text-xs text-accent-fg-softer"
-                >
-                  {tag}
-                </span>
-              ))}
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="flex items-center gap-1 rounded bg-border px-2 py-0.5 text-xs text-fg"
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="rounded text-fg-subtle hover:text-fg-bright focus-ring-flush"
-                  aria-label={t("serverForm.removeTagAria", { tag })}
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              type="text"
-              value={tagDraft}
-              onChange={(e) => setTagDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  handleAddTag();
-                }
-              }}
-              onBlur={handleAddTag}
-              placeholder={t("serverForm.tagPlaceholder")}
-              aria-label={t("filterRules.simulateTags")}
-              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-fg focus-ring-flush"
-            />
-          </div>
+          <TagInput
+            value={tags}
+            onChange={setTags}
+            readOnlyTags={selectedServerTags}
+            readOnlyTitle={t("filterRules.tagFromServer")}
+            placeholder={t("serverForm.tagPlaceholder")}
+            aria-label={t("filterRules.simulateTags")}
+          />
         </div>
       </div>
 

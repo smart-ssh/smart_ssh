@@ -47,7 +47,7 @@ pub fn emit_settled_for_rejection(
         reason,
     };
     match serde_json::to_value(&payload) {
-        Ok(value) => emitter.emit_event("action-confirmation-settled", value),
+        Ok(value) => emitter.emit_event(crate::event_names::ACTION_CONFIRMATION_SETTLED, value),
         Err(err) => tracing::warn!(error = %err, "action-confirmation-settled not serializable"),
     }
 }
