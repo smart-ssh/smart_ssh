@@ -10,6 +10,7 @@ use ssh_manager_core::ssh::RemoteEntry;
 /// das Frontend braucht dafür keine eigene Unix-Rechte-Formatierungslogik.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RemoteEntryDto {
     pub name: String,
     pub path: String,

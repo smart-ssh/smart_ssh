@@ -7,7 +7,7 @@ import {
   toAuthMethodInput,
 } from "./serverFormModel";
 
-const server: ServerDto = {
+const server: ServerDto = { isCopy: false,
   id: "s1",
   name: "Prod",
   host: "prod.example.com",

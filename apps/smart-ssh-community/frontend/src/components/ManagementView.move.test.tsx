@@ -19,11 +19,11 @@ import type { GroupDto, ServerDto } from "../types";
 import { ManagementView } from "./ManagementView";
 
 function group(id: string, name: string, parentId: string | null): GroupDto {
-  return { id, name, parentId, notes: "" };
+  return { isCopy: false, id, name, parentId, notes: "" };
 }
 
 function server(id: string, name: string, groupId: string | null): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id,
     name,
     host: `${name}.example.invalid`,

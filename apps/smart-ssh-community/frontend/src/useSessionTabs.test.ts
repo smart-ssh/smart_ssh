@@ -47,7 +47,7 @@ vi.mock("./events", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listSessions).mockResolvedValue([
-    {
+    { chatSessionId: null,
       sessionId: "session-1",
       serverId: "server-1",
       serverName: "prod-db",
@@ -237,6 +237,7 @@ describe("useSessionTabs / MCP tabs (Spec 0104)", () => {
   it("restores MCP tabs after a reload without making them active", async () => {
     vi.mocked(listSessions).mockResolvedValue([
       {
+        chatSessionId: null,
         sessionId: "mcp-1",
         serverId: "server-1",
         serverName: "prod-db",
@@ -244,7 +245,7 @@ describe("useSessionTabs / MCP tabs (Spec 0104)", () => {
         hasPendingAction: true,
         mcp: { clientName: "Claude Code" },
       },
-      {
+      { chatSessionId: null,
         sessionId: "session-1",
         serverId: "server-1",
         serverName: "prod-db",
@@ -281,6 +282,7 @@ describe("useSessionTabs / closing the active tab (Spec 0104, §3)", () => {
       status: "connected" as const,
       hasPendingAction: false,
       mcp: null,
+      chatSessionId: null,
     };
   }
   function mcpSession(sessionId: string) {

@@ -105,6 +105,8 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         targetUser: "root",
         sftpServerPath: null,
         failure: { kind: "checkFailed", sudoersLine: null, detail: commandErrorMessage(err) },
+        warning: null,
+        runningOperations: [],
       });
     } finally {
       setEnablingElevation(false);

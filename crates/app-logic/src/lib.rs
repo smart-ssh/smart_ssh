@@ -19,6 +19,9 @@
 //! (`app-logic`) enthält keinen Typ, keine Funktion und kein Feld, über das
 //! er erreichbar ist (A1).
 
+#[cfg(all(test, feature = "ts-export"))]
+mod ts_export;
+
 pub mod ai_provider_factory;
 pub mod ai_usage;
 pub mod auto_reconnect;

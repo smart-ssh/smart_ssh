@@ -64,10 +64,12 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
-const group: GroupDto = { id: "g-1", name: "Prod", parentId: null, notes: "" };
+const group: GroupDto = { isCopy: false, id: "g-1", name: "Prod", parentId: null, notes: "" };
 
 function ServerSection({ serverId, dirty }: { serverId: string; dirty: boolean }) {
   return <p>server-ext {serverId} {dirty ? "dirty" : "clean"}</p>;
