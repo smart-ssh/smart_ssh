@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DROP_TARGET_ATTRIBUTE, parseDropTarget, type DragItem, type DropTarget } from "./treeDrag";
+import { DROP_TARGET_ATTRIBUTE, parseDropTarget, type DragItem, type DropTarget } from "../treeDrag";
 
 /** Ab dieser Zeigerbewegung (in px) wird aus einem Klick ein Ziehen —
  * darunter bleibt es ein normaler Klick (Verbinden, Auswählen,

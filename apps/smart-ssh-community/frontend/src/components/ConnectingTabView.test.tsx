@@ -4,7 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { ConnectStepSnapshot } from "../types";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { ConnectingTabView } from "./ConnectingTabView";
 
 const snap = (

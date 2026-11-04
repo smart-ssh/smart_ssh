@@ -1,11 +1,12 @@
 import { useEffect, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../useVoiceInput";
+import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../hooks/useVoiceInput";
+import { isMacLike } from "../platform";
 import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../voiceApi";
 import { formatElapsed } from "../voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
 
-const IS_MAC = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
+const IS_MAC = isMacLike();
 
 /** Spec 0108 §5.1: toggles recording with Ctrl+Shift+M (Cmd+Shift+M on macOS). */
 export function isVoiceShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {

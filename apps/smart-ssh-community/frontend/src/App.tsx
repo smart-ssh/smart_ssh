@@ -25,7 +25,7 @@ import {
 } from "./navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
 import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
-import { useSessionTabs } from "./useSessionTabs";
+import { useSessionTabs } from "./hooks/useSessionTabs";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
