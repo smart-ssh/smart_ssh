@@ -299,7 +299,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           unmount a focused button (focus would fall back to <body>). While at
           the bottom it is invisible, aria-hidden and out of the Tab order. */}
       {(
-        <Button variant="bare"
+        <button
           type="button"
           ref={jumpButtonRef}
           onClick={() => {
@@ -316,7 +316,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 4v12M5 11l5 5 5-5" />
           </svg>
-        </Button>
+        </button>
       )}
       </div>
 
