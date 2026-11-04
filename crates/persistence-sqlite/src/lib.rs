@@ -46,6 +46,8 @@ mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
 #[cfg(test)]
+mod tests_concurrent_writes;
+#[cfg(test)]
 mod tests_credential_store;
 #[cfg(test)]
 mod tests_data_changes;

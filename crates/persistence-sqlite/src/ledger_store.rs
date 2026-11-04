@@ -129,12 +129,18 @@ impl SqliteLedgerStore {
     ) -> Result<Uuid, LedgerStoreError> {
         let session_id_str = session_id.to_string();
 
+        // Issue #903: read-max and insert in one `BEGIN IMMEDIATE` transaction.
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend_err)?;
         let next_sequence: i64 = sqlx::query(
             "SELECT COALESCE(MAX(sequence), -1) + 1 AS next FROM ledger_entries \
              WHERE session_id = ?",
         )
         .bind(&session_id_str)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         .map_err(backend_err)?
         .get("next");
@@ -158,9 +164,10 @@ impl SqliteLedgerStore {
         .bind(entry_type_for(content))
         .bind(&content_json)
         .bind(Utc::now().to_rfc3339())
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(backend_err)?;
+        tx.commit().await.map_err(backend_err)?;
 
         Ok(entry_id)
     }
