@@ -5,7 +5,8 @@
 # Usage: scripts/gate.sh [--ci] [rust|boundary|frontend ...]
 #   no stage  = all stages, in this order
 #   --ci      = CI mode: `npm ci` always, SMART_SSH_REQUIRE_CLIPBOARD_TESTS=1,
-#               and on Linux `cargo test` runs under `xvfb-run -a`
+#               and on Linux the tests run under `xvfb-run -a` (cargo-nextest,
+#               profile `ci`, required in this mode)
 #
 # Every Cargo build/test/clippy/tree call uses `--locked`: the checked-in
 # Cargo.lock is what gets tested, a stale lockfile fails instead of being
@@ -45,9 +46,12 @@ stage_rust() {
   cargo fmt --all --check
   step "cargo clippy"
   cargo clippy --workspace --all-targets --locked -- -D warnings
-  step "cargo test"
+  step "cargo nextest"
   # Issue #358: the clipboard round-trip test needs a display and must not be
-  # skipped in CI.
+  # skipped in CI. Issue #901: CI runs the tests with cargo-nextest (profile
+  # `ci`, retries + JUnit report; doctests separately because nextest skips
+  # them). Locally without nextest the script falls back to `cargo test`.
+  local runner=()
   if [ "$ci" -eq 1 ]; then
     export SMART_SSH_REQUIRE_CLIPBOARD_TESTS=1
     if [ "$(uname -s)" = "Linux" ]; then
@@ -55,11 +59,19 @@ stage_rust() {
         echo "::error::xvfb-run is missing: the clipboard test needs a virtual X server in --ci mode (install xvfb)"
         exit 1
       fi
-      xvfb-run -a cargo test --workspace --locked --no-fail-fast
-    else
-      cargo test --workspace --locked --no-fail-fast
+      runner=(xvfb-run -a)
     fi
+    if ! cargo nextest --version >/dev/null 2>&1; then
+      echo "::error::cargo-nextest is missing: --ci mode runs the tests with it"
+      exit 1
+    fi
+    ${runner[@]+"${runner[@]}"} cargo nextest run --workspace --locked --profile ci
+    ${runner[@]+"${runner[@]}"} cargo test --workspace --locked --doc
+  elif cargo nextest --version >/dev/null 2>&1; then
+    cargo nextest run --workspace --locked --no-fail-fast
+    cargo test --workspace --locked --doc
   else
+    echo "cargo-nextest not installed: falling back to cargo test"
     cargo test --workspace --locked --no-fail-fast
   fi
   step "cargo build (without test-support)"
