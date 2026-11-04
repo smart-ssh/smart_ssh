@@ -3,7 +3,7 @@
 // `generated/ipc.ts`); the events that `app-shell` emits directly are listed
 // here by hand. `npm run check-events` fails when an `EVENT` constant has no
 // entry in either place.
-import type { EventPayloads as GeneratedEventPayloads } from "./generated/ipc";
+import type { EventPayloads as GeneratedEventPayloads } from "../generated/ipc";
 import type { SpeechModelStatusEvent, SpeechPartialEvent, RecordingState } from "./voiceApi";
 import type { StartupPromptRequest } from "./types";
 
