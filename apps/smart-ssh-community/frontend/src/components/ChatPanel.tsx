@@ -67,7 +67,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     atBottom,
     onScroll: handleChatScroll,
     scrollToBottom,
-  } = useStickToBottom(scrollRef, contentRef, items);
+  } = useStickToBottom(scrollRef, contentRef, items, () => {
+    // Runs before the state change that hides the jump button (#758): once
+    // the button is `invisible`, the browser may drop its focus to <body>
+    // before any layout effect gets to hand it on.
+    if (document.activeElement === jumpButtonRef.current) inputRef.current?.focus();
+  });
   /** Issue #325: live output per running action, kept outside `items` so
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
@@ -299,8 +304,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           unmount a focused button (focus would fall back to <body>). While at
           the bottom it is invisible, aria-hidden and out of the Tab order. */}
       {(
-        <button
-          type="button"
+        <Button
+          variant="bare"
           ref={jumpButtonRef}
           onClick={() => {
             scrollToBottom();
@@ -316,7 +321,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 4v12M5 11l5 5 5-5" />
           </svg>
-        </button>
+        </Button>
       )}
       </div>
 
