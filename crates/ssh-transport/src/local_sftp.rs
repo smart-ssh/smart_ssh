@@ -262,6 +262,55 @@ impl SftpSession for LocalFileSession {
         }
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let mut file = tokio::fs::File::open(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        file.seek(std::io::SeekFrom::Start(offset))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let mut buf = Vec::new();
+        file.take(len as u64)
+            .read_to_end(&mut buf)
+            .await
+            .map_err(|e| io_err(path, e))?;
+        Ok(buf)
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+        let resolved = self.resolve(path);
+        let mut file = if truncate {
+            tokio::fs::File::create(resolved).await
+        } else {
+            tokio::fs::OpenOptions::new()
+                .write(true)
+                .open(resolved)
+                .await
+        }
+        .map_err(|e| io_err(path, e))?;
+        if !truncate {
+            file.seek(std::io::SeekFrom::Start(offset))
+                .await
+                .map_err(|e| io_err(path, e))?;
+        }
+        file.write_all(data).await.map_err(|e| io_err(path, e))?;
+        file.flush().await.map_err(|e| io_err(path, e))?;
+        Ok(())
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::metadata(self.resolve(path))
             .await
