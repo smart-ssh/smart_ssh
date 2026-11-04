@@ -70,7 +70,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
     return () => {
       mounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens the file picker once on mount
   }, []);
 
   const describe = (err: unknown) => {

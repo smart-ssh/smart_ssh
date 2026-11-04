@@ -39,7 +39,7 @@ export function useDismissMenus(
       document.removeEventListener("click", handler);
       document.removeEventListener("keydown", keyHandler);
     };
-  }, [openMenu]);
+  }, [openMenu, setOpenMenu]);
 
   // Issue #570: Kontextmenü auf leerer Fläche — Klick außerhalb und Escape
   // schließen es wie das Eintragsmenü.
@@ -55,5 +55,5 @@ export function useDismissMenus(
       document.removeEventListener("click", handler);
       document.removeEventListener("keydown", keyHandler);
     };
-  }, [dirMenu]);
+  }, [dirMenu, setDirMenu]);
 }

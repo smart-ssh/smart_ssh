@@ -137,7 +137,7 @@ export function FilterRulesView({
       group.rules.sort((a, b) => b.priority - a.priority);
     }
     return [...byKey.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- grouping depends on rules, servers and the language only
   }, [rules, servers, t]);
 
   // Spec 0077, 3.2.3: Grund, warum ein Pfeil gesperrt ist — die Regel selbst

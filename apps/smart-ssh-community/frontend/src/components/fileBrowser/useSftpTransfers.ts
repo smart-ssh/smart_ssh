@@ -269,7 +269,7 @@ export function useSftpTransfers(
     // through `uploadManyRef` when the drop is handled, so there is no window
     // between a channel switch (banner already committed) and a re-registered
     // listener in which a drop would still use the previous channel.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registered per visibility only (Issue #29, see above)
   }, [isVisible, sessionId]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →
