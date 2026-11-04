@@ -1,8 +1,8 @@
 import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import { sftpCancelTransfer } from "../../api";
-import { formatBytes } from "../../format";
-import { formatDuration, formatSpeed } from "../../transferRate";
+import { sftpCancelTransfer } from "../../api/api";
+import { formatBytes } from "../../lib/format";
+import { formatDuration, formatSpeed } from "../../lib/transferRate";
 import { Button } from "../ui";
 import type { Transfer } from "./shared";
 

@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type RemoteEntryDto } from "../../types";
+import { type RemoteEntryDto } from "../../api/types";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "../ui";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Issue #654: "Change owner…" dialog. User and group are prefilled with the
  * current name (or number); a field the user leaves as it was is sent as

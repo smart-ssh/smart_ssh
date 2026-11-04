@@ -2,7 +2,7 @@
 // focus, dialogs close with Escape and give focus back, axe scans, and no
 // clipped text with long names at both window sizes.
 import type { Locator, Page } from "@playwright/test";
-import type { RemoteEntryDto } from "../../src/types";
+import type { RemoteEntryDto } from "../../src/api/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";

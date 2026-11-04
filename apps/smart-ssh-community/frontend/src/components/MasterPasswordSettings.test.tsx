@@ -6,11 +6,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getMasterPasswordMode, setUpMasterPassword, switchToOsKeychain } from "../api";
+import { getMasterPasswordMode, setUpMasterPassword, switchToOsKeychain } from "../api/api";
 import { testI18n } from "../testI18n";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     getMasterPasswordMode: vi.fn(),
     setUpMasterPassword: vi.fn(() => Promise.resolve("password" as const)),

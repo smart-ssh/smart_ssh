@@ -1,6 +1,6 @@
 // UI review of the server tree and server management (issue #382): axe scan,
 // Tab order, Escape + focus return and clipping for every screen in scope.
-import type { SshConfigExportResultDto, SshConfigImportPreviewDto } from "../../src/types";
+import type { SshConfigExportResultDto, SshConfigImportPreviewDto } from "../../src/api/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, failingStepLog, group, populated, server } from "../support/data";

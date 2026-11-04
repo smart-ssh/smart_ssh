@@ -9,10 +9,10 @@ import {
   commandErrorMessage,
   sftpCopyContent,
   sftpCopyFile,
-} from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { showToast } from "../../toastBus";
-import type { RemoteEntryDto } from "../../types";
+} from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { showToast } from "../../buses/toastBus";
+import type { RemoteEntryDto } from "../../api/types";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
 
 /** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */

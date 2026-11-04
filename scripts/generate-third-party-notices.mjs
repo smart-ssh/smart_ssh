@@ -40,8 +40,8 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 // Skripts von einem Ladefehler oder einer zufällig getroffenen anderen
 // Antwort (z. B. der SPA-Startseite im Dev-Build) unterscheidet.
 // Maßgebliche Quelle der Kennzeile (Issue #7, ADR 0100): die Frontend-Kopie
-// (`src/thirdPartyNoticesMarker.ts`) und jede Kopie in den Workflows unter
-// `.github/` werden von `src/thirdPartyNoticesMarker.test.ts` gegen genau
+// (`src/lib/thirdPartyNoticesMarker.ts`) und jede Kopie in den Workflows unter
+// `.github/` werden von `src/lib/thirdPartyNoticesMarker.test.ts` gegen genau
 // diese Zeile geprüft.
 export const MARKER = "SMART-SSH-THIRD-PARTY-NOTICES-V1";
 

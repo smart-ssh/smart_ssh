@@ -22,8 +22,8 @@ import {
   listSessions,
   respondToAction,
   resumeChatSession,
-} from "../api";
-import { translateErrorCode } from "../errorCodes";
+} from "../api/api";
+import { translateErrorCode } from "../api/errorCodes";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
@@ -32,15 +32,15 @@ import {
   onConnectProgress,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
-} from "../events";
-import { forgetChatSessionId, setChatSessionId } from "../chatSessionIds";
-import { clearHostKeyPrompt } from "../hostKeyPromptBus";
+} from "../api/events";
+import { forgetChatSessionId, setChatSessionId } from "../lib/chatSessionIds";
+import { clearHostKeyPrompt } from "../buses/hostKeyPromptBus";
 import type {
   ConnectStepRecord,
   ConnectStepSnapshot,
   ConnectionStatus,
   McpSessionInfo,
-} from "../types";
+} from "../api/types";
 
 /** Issue #548: lifecycle of a tab. `connecting`/`failed` tabs are created
  * right when a connect starts and turn into the `connected` session tab in

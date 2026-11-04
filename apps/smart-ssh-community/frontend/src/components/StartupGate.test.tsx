@@ -10,13 +10,13 @@ import {
   quitApplication,
   startOverFromUnlockScreen,
   unlockWithMasterPassword,
-} from "../api";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
-import type { StartupPromptRequest, StartupStateDto } from "../types";
+} from "../api/api";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
+import type { StartupPromptRequest, StartupStateDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { StartupGate } from "./StartupGate";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     getStartupState: vi.fn(),
     unlockWithMasterPassword: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
   onStartupUnlocked: vi.fn(() => Promise.resolve(() => {})),
 }));

@@ -36,7 +36,7 @@ here, update this file in the same change.
 
 ## 2. From chat message to command on the server
 
-1. Frontend: `apps/smart-ssh-community/frontend/src/api.ts` — `sendChatMessage` (called from `apps/smart-ssh-community/frontend/src/components/ChatPanel.tsx` — `ChatPanel`).
+1. Frontend: `apps/smart-ssh-community/frontend/src/api/api.ts` — `sendChatMessage` (called from `apps/smart-ssh-community/frontend/src/components/ChatPanel.tsx` — `ChatPanel`).
 2. Tauri command: `crates/app-shell/src/commands/chat.rs` — `send_chat_message`, `send_chat_message_impl`.
 3. Chat turn: `crates/app-logic/src/orchestration/chat_turn.rs` — `run_chat_turn`, `run_one_round`; the AI answer arrives as AiEvent values (`crates/core/src/ai/types.rs` — `AiEvent`).
 4. Action proposed: `crates/app-logic/src/orchestration/action_exec/propose.rs` — `handle_action_proposed`, `evaluate_action`.
@@ -54,18 +54,18 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 
 | Area | Main modules |
 |---|---|
-| Bridge to the backend | `apps/smart-ssh-community/frontend/src/api.ts` (one `invoke` wrapper per command), `apps/smart-ssh-community/frontend/src/events.ts` — `onConnectionStatusChanged`, `apps/smart-ssh-community/frontend/src/types.ts` (DTO types), `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
-| App shell and navigation | `apps/smart-ssh-community/frontend/src/App.tsx`, `apps/smart-ssh-community/frontend/src/components/AppHeader.tsx`, `apps/smart-ssh-community/frontend/src/components/Sidebar.tsx`, `apps/smart-ssh-community/frontend/src/navEntries.ts` |
+| Bridge to the backend | `apps/smart-ssh-community/frontend/src/api/api.ts` (one `invoke` wrapper per command), `apps/smart-ssh-community/frontend/src/api/events.ts` — `onConnectionStatusChanged`, `apps/smart-ssh-community/frontend/src/api/types.ts` (DTO types), `apps/smart-ssh-community/frontend/src/api/errorCodes.ts` |
+| App shell and navigation | `apps/smart-ssh-community/frontend/src/App.tsx`, `apps/smart-ssh-community/frontend/src/components/AppHeader.tsx`, `apps/smart-ssh-community/frontend/src/components/Sidebar.tsx`, `apps/smart-ssh-community/frontend/src/lib/navEntries.ts` |
 | Startup | `apps/smart-ssh-community/frontend/src/components/StartupGate.tsx`, `apps/smart-ssh-community/frontend/src/components/FirstRunNoticeScreen.tsx` |
 | Sessions and tabs | `apps/smart-ssh-community/frontend/src/hooks/useSessionTabs.ts`, `apps/smart-ssh-community/frontend/src/components/SessionView.tsx`, `apps/smart-ssh-community/frontend/src/components/SessionTabBar.tsx`, `apps/smart-ssh-community/frontend/src/components/TerminalView.tsx` |
 | Chat | `apps/smart-ssh-community/frontend/src/components/ChatPanel.tsx` — `ChatPanel`; `apps/smart-ssh-community/frontend/src/components/chat/ChatItemView.tsx` — `ChatItemView`; `apps/smart-ssh-community/frontend/src/components/QuestionCard.tsx`; `apps/smart-ssh-community/frontend/src/components/LiveCommandOutput.tsx` |
-| Files | `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx` — `FileBrowserPanel`; `apps/smart-ssh-community/frontend/src/hooks/useLocalEditSession.ts`; `apps/smart-ssh-community/frontend/src/remotePath.ts` |
+| Files | `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx` — `FileBrowserPanel`; `apps/smart-ssh-community/frontend/src/hooks/useLocalEditSession.ts`; `apps/smart-ssh-community/frontend/src/lib/remotePath.ts` |
 | Notes | `apps/smart-ssh-community/frontend/src/components/NotesPanel.tsx`, `apps/smart-ssh-community/frontend/src/components/NoteDiffPreview.tsx` |
-| Server and group management | `apps/smart-ssh-community/frontend/src/components/ManagementView.tsx`, `apps/smart-ssh-community/frontend/src/components/ServerForm.tsx` — `ServerForm`; `apps/smart-ssh-community/frontend/src/components/GroupForm.tsx`; `apps/smart-ssh-community/frontend/src/components/ServerList.tsx`; `apps/smart-ssh-community/frontend/src/groupTree.ts` |
+| Server and group management | `apps/smart-ssh-community/frontend/src/components/ManagementView.tsx`, `apps/smart-ssh-community/frontend/src/components/ServerForm.tsx` — `ServerForm`; `apps/smart-ssh-community/frontend/src/components/GroupForm.tsx`; `apps/smart-ssh-community/frontend/src/components/ServerList.tsx`; `apps/smart-ssh-community/frontend/src/lib/groupTree.ts` |
 | Filter rules | `apps/smart-ssh-community/frontend/src/components/FilterRulesView.tsx` |
 | Settings | `apps/smart-ssh-community/frontend/src/components/SettingsScreen.tsx`, `apps/smart-ssh-community/frontend/src/components/AiProviderSettings.tsx`, `apps/smart-ssh-community/frontend/src/components/McpServerSettings.tsx`, `apps/smart-ssh-community/frontend/src/components/BackupSettings.tsx` |
-| Messages and dialogs | `apps/smart-ssh-community/frontend/src/toastBus.ts`, `apps/smart-ssh-community/frontend/src/components/HostKeyDialog.tsx`, `apps/smart-ssh-community/frontend/src/components/ModalBackdrop.tsx`, `apps/smart-ssh-community/frontend/src/hooks/useDialogFocusTrap.ts` |
-| Voice input | `apps/smart-ssh-community/frontend/src/hooks/useVoiceInput.ts`, `apps/smart-ssh-community/frontend/src/voiceApi.ts` |
+| Messages and dialogs | `apps/smart-ssh-community/frontend/src/buses/toastBus.ts`, `apps/smart-ssh-community/frontend/src/components/HostKeyDialog.tsx`, `apps/smart-ssh-community/frontend/src/components/ModalBackdrop.tsx`, `apps/smart-ssh-community/frontend/src/hooks/useDialogFocusTrap.ts` |
+| Voice input | `apps/smart-ssh-community/frontend/src/hooks/useVoiceInput.ts`, `apps/smart-ssh-community/frontend/src/api/voiceApi.ts` |
 | i18n and theme | `apps/smart-ssh-community/frontend/src/i18n.ts`, `apps/smart-ssh-community/frontend/src/locales/`, `apps/smart-ssh-community/frontend/src/theme/dark.css` |
 | Extensions | `apps/smart-ssh-community/frontend/src/extensions/registry.ts`, `apps/smart-ssh-community/frontend/src/extensions/registerBuiltinExtensions.ts`, `apps/smart-ssh-community/frontend/src/extensions/entitlements.ts` |
 | Browser tests | `apps/smart-ssh-community/frontend/e2e/harness/` (fake backend), `apps/smart-ssh-community/frontend/e2e/support/`, `apps/smart-ssh-community/frontend/e2e/tests/` |
@@ -83,16 +83,16 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 
 | What | Where |
 |---|---|
-| Event names (backend → frontend) | `crates/app-logic/src/event_names.rs` (Rust) and `apps/smart-ssh-community/frontend/src/eventNames.ts`; consistency check: `scripts/check-event-names.mjs` |
+| Event names (backend → frontend) | `crates/app-logic/src/event_names.rs` (Rust) and `apps/smart-ssh-community/frontend/src/api/eventNames.ts`; consistency check: `scripts/check-event-names.mjs` |
 | Tauri command registration | `crates/app-shell/src/lib.rs` — `run` (the generate_handler list); consistency check: `scripts/check-tauri-commands.mjs` |
 | Tauri commands, one file per topic | `crates/app-shell/src/commands/` — e.g. `crates/app-shell/src/commands/chat.rs`, `crates/app-shell/src/commands/servers.rs`, `crates/app-shell/src/commands/rules.rs` |
 | Database migrations | `crates/persistence-sqlite/migrations/` (`NNNN_name.sql`, consecutive); applied in `crates/persistence-sqlite/src/store.rs` |
 | Locale files | `apps/smart-ssh-community/frontend/src/locales/` (one folder per language); parity test `apps/smart-ssh-community/frontend/src/locales/localeKeyParity.test.ts` |
-| Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/events.ts` |
+| Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/api/events.ts` |
 | Session assembly after connect (probes, sudo password, redactor, history) | `crates/app-logic/src/connect/session_builder.rs` — `build_session`; Tauri-bound inputs resolved in `crates/app-shell/src/commands/connect/mod.rs` — `connect_session_with_progress` |
 | Host key decision during connect | `crates/app-logic/src/connect/host_key_flow.rs` — `resolve_pending_host_key`; Tauri side `crates/app-shell/src/commands/connect/transport.rs` — `establish_transport` |
-| DTOs sent to the frontend | `crates/app-logic/src/dto/` (`ServerDto` in `crates/app-logic/src/dto/server.rs`); TS side `apps/smart-ssh-community/frontend/src/types.ts` |
-| Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
+| DTOs sent to the frontend | `crates/app-logic/src/dto/` (`ServerDto` in `crates/app-logic/src/dto/server.rs`); TS side `apps/smart-ssh-community/frontend/src/api/types.ts` |
+| Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/api/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session/mod.rs` — `Session` |
 | In-memory stores and `ServerBuilder` for tests | `crates/core/src/testing.rs` (feature `test-support`) — `InMemoryProfileStore`, `InMemoryCredentialStore`, `ServerBuilder`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
@@ -150,7 +150,7 @@ Recipes are grep commands in fenced blocks, so the checker leaves them alone.
 
 - **New `Session` or `Server` profile field.** Many struct literals across several crates, plus store, backup, DTO and frontend sites. The full checklist with the grep commands is in [`docs/recipes/new-session-or-server-field.md`](recipes/new-session-or-server-field.md).
 - **New AI provider type.** See [`docs/recipes/new-ai-provider.md`](recipes/new-ai-provider.md).
-- **New parameter on a Tauri command.** If the `invoke` lacks it, every call fails: update the wrapper in `apps/smart-ssh-community/frontend/src/api.ts` at once (with a default) and adjust `toHaveBeenCalledWith(...)` expectations in tests.
+- **New parameter on a Tauri command.** If the `invoke` lacks it, every call fails: update the wrapper in `apps/smart-ssh-community/frontend/src/api/api.ts` at once (with a default) and adjust `toHaveBeenCalledWith(...)` expectations in tests.
 - **New API or event function in the frontend.** Add it to every test that replaces the api or events module with `vi.mock`, otherwise you get `undefined is not a function`; mocks followed by `.catch` must return a promise.
 - **New `AiEvent` variant.** Every `match event` gets an arm: the main round and the side calls in orchestration, compaction and the risk second opinion:
 

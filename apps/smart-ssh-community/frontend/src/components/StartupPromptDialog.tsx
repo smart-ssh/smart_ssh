@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { characterCount } from "../passwordLength";
-import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
+import { characterCount } from "../lib/passwordLength";
+import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../api/types";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import type { ButtonVariant } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
  *

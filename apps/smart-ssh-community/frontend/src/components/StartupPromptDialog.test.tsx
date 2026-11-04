@@ -10,7 +10,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import type { StartupPromptKind } from "../types";
+import type { StartupPromptKind } from "../api/types";
 import { testI18n } from "../testI18n";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 

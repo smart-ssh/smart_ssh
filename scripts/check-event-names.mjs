@@ -3,7 +3,7 @@
 //   1. Rust     — `pub const X: &str = "…";` items in
 //                 `crates/app-logic/src/event_names.rs`: every event the core emits.
 //   2. Frontend — `export const EVENT = { X: "…", … } as const` in
-//                 `apps/smart-ssh-community/frontend/src/eventNames.ts`: the
+//                 `apps/smart-ssh-community/frontend/src/api/eventNames.ts`: the
 //                 events the core UI listens to.
 //   3. Listeners — `listen(` / `once(` / `listenTyped(` / `typedListener(` in non-test
 //                 frontend files must take a constant, not a string literal.
@@ -13,7 +13,7 @@
 // from the frontend list and not in NOT_CONSUMED_BY_CORE_UI (below).
 //   4. Payloads — every frontend constant has a payload entry (`"name": Type`) in
 //                 `src/generated/ipc.ts` (`EventPayloads`, from the Rust
-//                 payload structs) or in `src/eventPayloads.ts` (events that
+//                 payload structs) or in `src/api/eventPayloads.ts` (events that
 //                 `app-shell` emits directly), Issue #920.
 // The payload types themselves are checked by the TypeScript compiler. Text based, no dependencies, like
 // `check-tauri-commands.mjs`.
@@ -30,10 +30,10 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 const RUST_FILE = "crates/app-logic/src/event_names.rs";
-const EVENT_NAMES_FILE = "apps/smart-ssh-community/frontend/src/eventNames.ts";
+const EVENT_NAMES_FILE = "apps/smart-ssh-community/frontend/src/api/eventNames.ts";
 const PAYLOAD_FILES = [
   "apps/smart-ssh-community/frontend/src/generated/ipc.ts",
-  "apps/smart-ssh-community/frontend/src/eventPayloads.ts",
+  "apps/smart-ssh-community/frontend/src/api/eventPayloads.ts",
 ];
 const FRONTEND_SRC = "apps/smart-ssh-community/frontend/src";
 

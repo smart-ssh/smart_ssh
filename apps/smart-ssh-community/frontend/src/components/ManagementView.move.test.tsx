@@ -13,9 +13,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { moveGroup, moveServerToGroup, updateGroup, updateServer } from "../api";
+import { moveGroup, moveServerToGroup, updateGroup, updateServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ManagementView } from "./ManagementView";
 
 function group(id: string, name: string, parentId: string | null): GroupDto {
@@ -52,7 +52,7 @@ const backend = vi.hoisted(() => ({
   servers: [] as ServerDto[],
 }));
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve(backend.groups.map((g) => ({ ...g })))),
@@ -90,16 +90,16 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 

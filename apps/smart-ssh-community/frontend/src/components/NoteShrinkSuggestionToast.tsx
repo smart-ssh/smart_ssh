@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, requestNoteShrink } from "../api";
-import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../events";
-import { publishRequestServerNoteEdit } from "../navigationBus";
+import { commandErrorMessage, requestNoteShrink } from "../api/api";
+import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../api/events";
+import { publishRequestServerNoteEdit } from "../buses/navigationBus";
 import { Button } from "./ui";
 
 interface PendingShrinkSuggestion {

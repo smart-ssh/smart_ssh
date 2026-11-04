@@ -1,13 +1,13 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetChatSessionIdsForTests, setChatSessionId } from "../chatSessionIds";
+import { resetChatSessionIdsForTests, setChatSessionId } from "../lib/chatSessionIds";
 import {
   registerSessionHeaderItem,
   resetRegistryForTests,
   unregisterSessionHeaderItem,
 } from "./registry";
 import { SessionHeaderItems } from "./SessionHeaderItems";
-import { requestResumeChatSession, subscribeRequestResumeChatSession } from "../navigationBus";
+import { requestResumeChatSession, subscribeRequestResumeChatSession } from "../buses/navigationBus";
 
 function Probe({ id }: { id: string }) {
   return (props: { runtimeSessionId: string; serverId: string; chatSessionId: string | null }) => (

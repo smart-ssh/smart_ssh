@@ -156,7 +156,7 @@ Spec 0113 describes the behaviour; this section is the rulebook for code.
 
 Every context menu, dropdown and popup is `position: fixed` and positioned with
 `useMenuPlacement` (`src/hooks/useMenuPlacement.ts`, geometry in
-`src/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
+`src/lib/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
 edges, shifts as a last resort and scrolls when the window is smaller than the
 menu. Do not hand-position menus with `absolute`/`top-full` or raw click
 coordinates. In the narrow layout menus remain bottom sheets (the hook returns

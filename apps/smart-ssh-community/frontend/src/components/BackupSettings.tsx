@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { backupKeyStatus, commandErrorMessage, exportEncryptedBackup } from "../api";
-import type { BackupExportDto } from "../api";
+import { backupKeyStatus, commandErrorMessage, exportEncryptedBackup } from "../api/api";
+import type { BackupExportDto } from "../api/api";
 import { Button } from "./ui";
 import { BackupImportDialog } from "./BackupImportDialog";
 import { BackupKeySetup, backupCodeUnconfirmed } from "./BackupKeySetup";

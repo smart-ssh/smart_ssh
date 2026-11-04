@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANGUAGE_REGISTRY } from "../languages";
+import { LANGUAGE_REGISTRY } from "../lib/languages";
 import allowlist from "./lengthAllowlist.json";
 import en from "./en/common.json";
 import identicalAllowlist from "./identicalAllowlist.json";

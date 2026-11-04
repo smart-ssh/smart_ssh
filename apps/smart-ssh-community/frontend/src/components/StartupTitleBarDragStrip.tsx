@@ -1,5 +1,5 @@
-import { TITLEBAR_DRAG_LAYER_Z_INDEX } from "../modalLayer";
-import { TITLEBAR_HEIGHT_CLASS, titlebarDragInsetStyle, usePlatform } from "../titlebarLayout";
+import { TITLEBAR_DRAG_LAYER_Z_INDEX } from "../lib/modalLayer";
+import { TITLEBAR_HEIGHT_CLASS, titlebarDragInsetStyle, usePlatform } from "../lib/titlebarLayout";
 
 /**
  * Issue #163 / Spec 0014, Abschnitt 5: Drag-Region der Startmasken vor der

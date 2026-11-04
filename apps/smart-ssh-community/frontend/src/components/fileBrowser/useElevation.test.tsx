@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sftpElevationDisable, sftpElevationEnable } from "../../api";
+import { sftpElevationDisable, sftpElevationEnable } from "../../api/api";
 import { useElevation } from "./useElevation";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     sftpElevationDisable: vi.fn(),
     sftpElevationEnable: vi.fn(),

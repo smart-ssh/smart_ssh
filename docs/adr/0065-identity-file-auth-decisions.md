@@ -333,7 +333,7 @@ mitzuerledigen hieße, eine fremde Klasse still in einem Spec-0076-Commit zu
 ändern.
 
 **c) Die Frontend-Typen kennen `identity_file` nicht.**
-`apps/smart-ssh-community/frontend/src/types.ts:13`, dazu `ServerDto` ohne
+`apps/smart-ssh-community/frontend/src/api/types.ts:13`, dazu `ServerDto` ohne
 `identityFilePath` und `ServerForm.tsx`.
 
 *Warum nicht behoben:* Schritt 5, ausdrücklich nicht Teil dieses Laufs.

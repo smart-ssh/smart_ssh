@@ -8,9 +8,9 @@ import {
   confirmBackupImport,
   pickBackupImportFile,
   startBackupImport,
-} from "../api";
-import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../api/api";
+import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { BackupKeySetup } from "./BackupKeySetup";
 

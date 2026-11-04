@@ -7,12 +7,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { deleteGroup } from "../api";
+import { deleteGroup } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DeleteGroupResult } from "../types";
+import type { DeleteGroupResult } from "../api/types";
 import { GroupForm } from "./GroupForm";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     createGroup: vi.fn(),
     updateGroup: vi.fn(),

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { previewReadFailureHint } from "../../previewReadFailure";
-import { formatBytes } from "../../format";
+import { previewReadFailureHint } from "../../lib/previewReadFailure";
+import { formatBytes } from "../../lib/format";
 import type { UploadOffer } from "../../hooks/useLocalEditSession";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import { Button, DialogFrame } from "../ui";

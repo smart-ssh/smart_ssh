@@ -2,7 +2,7 @@
 // Drop-Routing und Anhänge im fortgesetzten Verlauf.
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getChatHistory, sendChatMessage } from "../api";
+import { getChatHistory, sendChatMessage } from "../api/api";
 import {
   registerComposerAction,
   registerComposerDropHandler,
@@ -29,7 +29,7 @@ vi.mock("@tauri-apps/api/webview", () => ({
   }),
 }));
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -37,11 +37,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

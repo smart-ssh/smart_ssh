@@ -13,11 +13,11 @@ import {
   sftpMkdir,
   sftpRename,
   sftpStat,
-} from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { displayPath, joinPath, localBaseName, parentPath } from "../../remotePath";
-import { showToast } from "../../toastBus";
-import type { DeletePreviewDto, RemoteEntryDto } from "../../types";
+} from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { displayPath, joinPath, localBaseName, parentPath } from "../../lib/remotePath";
+import { showToast } from "../../buses/toastBus";
+import type { DeletePreviewDto, RemoteEntryDto } from "../../api/types";
 import { isValidEntryName, type MoveKind } from "./shared";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
 

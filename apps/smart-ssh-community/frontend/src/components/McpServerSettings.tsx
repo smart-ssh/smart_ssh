@@ -8,9 +8,9 @@ import {
   setMcpServerAllowedServers,
   setMcpServerConfirmTimeoutSecs,
   setMcpServerEnabled,
-} from "../api";
+} from "../api/api";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
-import type { McpServerSettingsDto, ServerDto } from "../types";
+import type { McpServerSettingsDto, ServerDto } from "../api/types";
 
 /** Beispiel-Konfiguration für Claude Code (`.mcp.json`/`claude mcp add
  * --transport http`) — exakt das Format, das Claude Code für einen

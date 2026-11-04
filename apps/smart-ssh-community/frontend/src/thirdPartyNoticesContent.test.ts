@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "./thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "./lib/thirdPartyNoticesMarker";
 
 const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NOTICES_PATH = path.join(FRONTEND_DIR, "public/third-party-notices.txt");

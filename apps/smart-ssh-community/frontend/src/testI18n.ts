@@ -6,7 +6,7 @@
 // Tests reale Übersetzungstexte statt roher Keys sehen.
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
-import { LANGUAGE_REGISTRY } from "./languages";
+import { LANGUAGE_REGISTRY } from "./lib/languages";
 
 export const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({

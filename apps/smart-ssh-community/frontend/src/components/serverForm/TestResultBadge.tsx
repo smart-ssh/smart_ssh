@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { translateErrorCode } from "../../errorCodes";
-import type { TestConnectionResult } from "../../types";
+import { translateErrorCode } from "../../api/errorCodes";
+import type { TestConnectionResult } from "../../api/types";
 
 // Spec 0069, Teil A5, Test 20: exportiert (statt modulprivat), damit sich
 // die code->Übersetzung ohne einen vollständigen `ServerForm`-Render

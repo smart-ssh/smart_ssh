@@ -10,8 +10,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import type { Entitlements } from "./entitlements";
-import { EVENT } from "../eventNames";
-import { listenTyped } from "../listenTyped";
+import { EVENT } from "../api/eventNames";
+import { listenTyped } from "../api/listenTyped";
 
 export interface UseEntitlementsResult {
   entitlements: Entitlements | null;

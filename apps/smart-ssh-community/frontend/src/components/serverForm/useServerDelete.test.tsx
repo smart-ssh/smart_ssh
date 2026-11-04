@@ -2,12 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteServer } from "../../api";
+import { deleteServer } from "../../api/api";
 import { testI18n } from "../../testI18n";
-import type { DeleteServerResult } from "../../types";
+import type { DeleteServerResult } from "../../api/types";
 import { useServerDelete } from "./useServerDelete";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     deleteServer: vi.fn(),
   }),

@@ -15,9 +15,9 @@ translates (see `docs/architecture.md`).
 - [ ] `crates/app-shell/src/startup_gate.rs` – only if the command must work
       while the app is locked: add it to `ALLOWED_WHILE_LOCKED`. Every other
       command is refused until unlock; do not add one without a reason.
-- [ ] `apps/smart-ssh-community/frontend/src/api.ts` – typed wrapper around
+- [ ] `apps/smart-ssh-community/frontend/src/api/api.ts` – typed wrapper around
       `invoke`.
-- [ ] `apps/smart-ssh-community/frontend/src/types.ts` – argument/result
+- [ ] `apps/smart-ssh-community/frontend/src/api/types.ts` – argument/result
       types, mirroring the DTOs in `crates/app-logic/src/dto/` (serde
       `rename_all`, see the regression tests in `crates/app-logic/src/dto/`).
 - [ ] `apps/smart-ssh-community/frontend/e2e/harness/fakeBackend.ts` – a

@@ -3,8 +3,8 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useVoiceComposer } from "./useVoiceComposer";
 
-vi.mock("../../voiceInputSettings", async (importActual) => ({
-  ...(await importActual<typeof import("../../voiceInputSettings")>()),
+vi.mock("../../settings/voiceInputSettings", async (importActual) => ({
+  ...(await importActual<typeof import("../../settings/voiceInputSettings")>()),
   loadVoiceInputEnabled: vi.fn(() => Promise.resolve(true)),
   subscribeVoiceInputEnabled: vi.fn(() => () => {}),
 }));

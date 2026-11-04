@@ -1,7 +1,7 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
-import { sftpDownload, sftpDownloadDefault, sftpDownloadDir } from "../../api";
-import type { DownloadResultDto, RemoteEntryDto } from "../../types";
+import { sftpDownload, sftpDownloadDefault, sftpDownloadDir } from "../../api/api";
+import type { DownloadResultDto, RemoteEntryDto } from "../../api/types";
 import { currentCaps } from "./shared";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
 

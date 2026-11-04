@@ -6,8 +6,8 @@ import {
   normalizeExtension,
   saveFileTypeApps,
   type FileTypeAppSettings,
-} from "../fileTypeSettings";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../settings/fileTypeSettings";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
 interface Row {

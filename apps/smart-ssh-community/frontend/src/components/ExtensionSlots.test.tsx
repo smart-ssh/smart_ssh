@@ -3,15 +3,15 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getServer, listGroups, listServers } from "../api";
+import { getServer, listGroups, listServers } from "../api/api";
 import { registerGroupFormSection, registerManageView, registerServerFormSection, resetRegistryForTests } from "../extensions";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { GroupForm } from "./GroupForm";
 import { ManagementView } from "./ManagementView";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     clearServerSudoPassword: vi.fn(),
     convertIdentityFileToKeychain: vi.fn(),
@@ -36,12 +36,12 @@ vi.mock("../api", async () =>
     updateServer: vi.fn(),
   }),
 );
-vi.mock("../events", () => ({ onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})) }));
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/events", () => ({ onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})) }));
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 

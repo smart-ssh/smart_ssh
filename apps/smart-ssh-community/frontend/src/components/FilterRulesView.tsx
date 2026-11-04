@@ -12,8 +12,8 @@ import {
   listServers,
   swapRulePriorities,
   updateRule,
-} from "../api";
-import { translateErrorCode } from "../errorCodes";
+} from "../api/api";
+import { translateErrorCode } from "../api/errorCodes";
 import type {
   EvaluationTraceDto,
   PatternDto,
@@ -23,8 +23,8 @@ import type {
   RuleInput,
   Scope,
   ServerDto,
-} from "../types";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../api/types";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS, TagInput } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
 

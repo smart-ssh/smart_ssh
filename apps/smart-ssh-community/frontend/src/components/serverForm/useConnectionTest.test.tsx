@@ -2,19 +2,19 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { testConnection, trustHostKey } from "../../api";
+import { testConnection, trustHostKey } from "../../api/api";
 import { testI18n } from "../../testI18n";
-import type { ServerInput, TestConnectionReport } from "../../types";
+import type { ServerInput, TestConnectionReport } from "../../api/types";
 import { useConnectionTest } from "./useConnectionTest";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     cancelConnect: vi.fn(() => Promise.resolve()),
     testConnection: vi.fn(),
     trustHostKey: vi.fn(),
   }),
 );
-vi.mock("../../events", () => ({
+vi.mock("../../api/events", () => ({
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 

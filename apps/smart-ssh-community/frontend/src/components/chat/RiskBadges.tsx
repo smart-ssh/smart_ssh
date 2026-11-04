@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { RiskAssessment } from "../../types";
+import type { RiskAssessment } from "../../api/types";
 import { Tooltip } from "../ui";
 
 export const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none">, string> = {

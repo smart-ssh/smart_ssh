@@ -7,26 +7,26 @@ import {
   acceptAndCreateRule,
   explainConfirmation,
   respondToAction,
-} from "../api";
-import { onChatActionOutput, onChatActionProposed } from "../events";
+} from "../api/api";
+import { onChatActionOutput, onChatActionProposed } from "../api/events";
 import type {
   ChatActionProposedEvent,
   ConfirmationExplanationDto,
-} from "../types";
+} from "../api/types";
 import { testI18n } from "../testI18n";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock(),
 );
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

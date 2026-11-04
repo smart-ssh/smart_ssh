@@ -3,9 +3,9 @@
 // goes through the same `onMove` (→ `performMove`) as a drop.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import { classifyDrop, type DragItem, type DropTarget } from "../treeDrag";
-import type { GroupDto, ServerDto } from "../types";
+import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
+import { classifyDrop, type DragItem, type DropTarget } from "../lib/treeDrag";
+import type { GroupDto, ServerDto } from "../api/types";
 import { Button, DialogFrame } from "./ui";
 
 interface Props {

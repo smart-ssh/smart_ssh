@@ -7,12 +7,12 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { open } from "@tauri-apps/plugin-dialog";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { loadFileTypeApps, saveFileTypeApps } from "../fileTypeSettings";
+import { loadFileTypeApps, saveFileTypeApps } from "../settings/fileTypeSettings";
 import { testI18n } from "../testI18n";
 import { FileTypeSettings } from "./FileTypeSettings";
 
-vi.mock("../fileTypeSettings", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../fileTypeSettings")>();
+vi.mock("../settings/fileTypeSettings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../settings/fileTypeSettings")>();
   return {
     ...actual,
     loadFileTypeApps: vi.fn(),

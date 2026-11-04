@@ -4,7 +4,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../settings/layoutSettings";
 import { testI18n } from "../testI18n";
 import { registerSessionHeaderItem, resetRegistryForTests } from "../extensions/registry";
 import { SessionView } from "./SessionView";
@@ -17,12 +17,12 @@ vi.mock("./ChatPanel", () => ({
 vi.mock("./TerminalView", () => ({ TerminalView: () => <div>terminal-stub</div> }));
 vi.mock("./FileBrowserPanel", () => ({ FileBrowserPanel: () => <div>file-browser-stub</div> }));
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../layoutSettings", () => ({
+vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
 }));

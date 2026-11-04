@@ -17,11 +17,11 @@ vi.mock("./FileBrowserPanel", () => ({
     return <div>file-browser-stub</div>;
   },
 }));
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
-vi.mock("../layoutSettings", () => ({
+vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
 }));

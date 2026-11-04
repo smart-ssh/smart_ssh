@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 // Spec 0099, A1.8/A4.3: die Kennzeile der erzeugten Datei — eine Kopie für
 // das ganze Frontend, gegen das Generierungs-Skript geprüft (Issue #7).
-import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER } from "../lib/thirdPartyNoticesMarker";
 import { Button, DialogFrame } from "./ui";
 
 // A4.4: eine relative Adresse — die Datei liegt im eigenen Bundle

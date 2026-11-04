@@ -1,9 +1,9 @@
 import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage } from "../api";
+import { commandErrorMessage } from "../api/api";
 import { setLanguage, type SupportedLanguage } from "../i18n";
-import { languagesForPicker } from "../languages";
-import { THEME_CHOICES, getThemeChoice, setThemeChoice, subscribeTheme, type ThemeChoice } from "../theme";
+import { languagesForPicker } from "../lib/languages";
+import { THEME_CHOICES, getThemeChoice, setThemeChoice, subscribeTheme, type ThemeChoice } from "../lib/theme";
 import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöster

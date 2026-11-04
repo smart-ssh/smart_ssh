@@ -18,9 +18,12 @@ path = "src/lib.rs"
 # unter `[dev-dependencies]` (dasselbe Muster wie `app-logic/test-support`).
 # Kein Produktivbau aktiviert es, und damit faengt der
 # `cargo build --workspace`-Schritt des Gates einen Produktivaufruf ab.
-test-support = []
+test-support = ["dep:openssl-sys", "dep:libc"]
 
 [dependencies]
+# Issue #1145: test builds only (`test-support`), see `test_exit_guard`.
+openssl-sys = { version = "0.9", optional = true }
+libc = { workspace = true, optional = true }
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 directories = { workspace = true }
@@ -47,6 +50,8 @@ zeroize = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
+openssl-sys = "0.9"
+libc = { workspace = true }
 # Issue #113: `crypto::legacy_field_content::encrypt_for_tests` erzeugt
 # feldweise verschluesselte Altzeilen fuer die Tests der Umstellung. Dieselbe
 # Abhaengigkeit wie oben, nur mit dem Test-Feature -- dasselbe Muster wie in

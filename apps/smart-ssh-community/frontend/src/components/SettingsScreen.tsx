@@ -7,7 +7,7 @@ import {
   listSettingsSectionsForCategory,
   subscribeSettingsSections,
 } from "../extensions/registry";
-import { resolveSectionLabel } from "../resolveSectionLabel";
+import { resolveSectionLabel } from "../lib/resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { BackupSettings } from "./BackupSettings";

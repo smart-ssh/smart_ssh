@@ -72,7 +72,7 @@ wurden verworfen:
   konkurrierende Quellen für denselben Anzeigetext geschaffen.
 
 Stattdessen prüft `resolveSectionLabel(label, id, i18n, t)` (neu:
-`src/resolveSectionLabel.ts`) zur Render-Zeit in `SettingsScreen.tsx` per
+`src/lib/resolveSectionLabel.ts`) zur Render-Zeit in `SettingsScreen.tsx` per
 `i18n.exists(label)`, ob der String als Pfad in den geladenen
 Sprachdateien existiert — wenn ja, wird er übersetzt (`t(label)`), wenn
 nein, unverändert als Text gerendert. Kein neues Feld, keine Konvention,

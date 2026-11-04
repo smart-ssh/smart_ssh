@@ -1,5 +1,5 @@
 import { type ComposerAttachment } from "../../extensions/registry";
-import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../types";
+import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../api/types";
 import type { TranslateFn } from "../../i18nTypes";
 
 export type ChatItem =
