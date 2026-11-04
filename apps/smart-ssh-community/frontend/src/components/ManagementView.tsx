@@ -5,10 +5,10 @@ import {
   listGroups,
   listServers,
   listUnusableServers,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import { performMove, type DragItem, type DropTarget } from "../treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { performMove, type DragItem, type DropTarget } from "../lib/treeDrag";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
 import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
@@ -81,7 +81,7 @@ export function ManagementView({
       setNewFormRevision((n) => n + 1);
       onInitialSelectionConsumed?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to a new initialSelection only; callbacks and setters are not triggers
   }, [initialSelection]);
 
   // Issue #49: erhöht bei jeder Auswahl (auch einem erneuten Klick auf

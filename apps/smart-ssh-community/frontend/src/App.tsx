@@ -16,19 +16,17 @@ import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
-import { commandErrorMessage, listAiProviders } from "./api";
+import { commandErrorMessage, listAiProviders } from "./api/api";
 import {
   subscribeRequestResumeChatSession,
   subscribeRequestOpenFilterRule,
   subscribeRequestServerNoteEdit,
   type ResumeChatSessionRequest,
-} from "./navigationBus";
+} from "./buses/navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
-import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
-import { useSessionTabs } from "./useSessionTabs";
+import { MAIN_TAB_ENTRIES, type MainTab } from "./lib/navEntries";
+import { useSessionTabs } from "./hooks/useSessionTabs";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 
 type Tab = MainTab;
 
@@ -384,19 +382,19 @@ function MainScreen({
           <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
           <nav className="flex gap-1">
             {MAIN_TAB_ENTRIES.map((entry) => (
-              <button
+              <Button variant="bare"
                 key={entry.id}
                 type="button"
                 onClick={() => setTab(entry.id)}
                 aria-current={tab === entry.id ? "page" : undefined}
-                className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                className={`focus-ring font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                   tab === entry.id
                     ? "border-accent/55 bg-accent/16 text-accent-fg"
                     : "border-transparent text-fg-subtle hover:bg-surface-raised"
                 }`}
               >
                 {t(entry.labelKey)}
-              </button>
+              </Button>
             ))}
           </nav>
         </div>
@@ -409,13 +407,13 @@ function MainScreen({
           {hasActiveProvider === false && (
             <p className="rounded border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-fg-softer">
               {t("mainScreen.noActiveProvider")}{" "}
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={openSettingsFrom}
                 className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fg-soft"
               >
                 {t("mainScreen.setupProviderNow")}
-              </button>
+              </Button>
               .
             </p>
           )}

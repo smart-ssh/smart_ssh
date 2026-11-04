@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
@@ -11,10 +11,10 @@ import {
   listServers,
   listUnusableServers,
   inspectKeyFile,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
+import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
 import {
   classifyDrop,
   dropHighlightClass,
@@ -22,7 +22,7 @@ import {
   performMove,
   type DragItem,
   type DropTarget,
-} from "../treeDrag";
+} from "../lib/treeDrag";
 import type {
   ChatSessionSummaryDto,
   ConnectStepRecord,
@@ -30,13 +30,13 @@ import type {
   KeepGroupResult,
   ServerDto,
   UnusableServerDto,
-} from "../types";
-import { useTreeDrag } from "../useTreeDrag";
+} from "../api/types";
+import { useTreeDrag } from "../hooks/useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
-import { unusableReasonText } from "../unusableServer";
+import { unusableReasonText } from "../lib/unusableServer";
 import { Button, DialogFrame } from "./ui";
 
 /** Spec 0103: marks a server or group that the backup import moved into
@@ -321,7 +321,7 @@ export function ServerList({
       return;
     }
     void performConnect(server, resumeRequest.chatSessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- performConnect is recreated each render; the request is consumed once
   }, [resumeRequest, loading, firstRunAcknowledged, servers]);
 
   // Issue #692: same flow as a click on the server (open tab → switch,
@@ -335,7 +335,7 @@ export function ServerList({
       return;
     }
     void handleConnect(server);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleConnect is recreated each render; the request is consumed once
   }, [connectRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
@@ -440,7 +440,7 @@ export function ServerList({
 
   const renderServerRow = (server: ServerDto, depth: number) => (
     <li key={server.id} className={narrow ? "flex items-center" : undefined}>
-      <button
+      <Button variant="bare"
         type="button"
         // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
         {...(server.isLocal
@@ -453,7 +453,7 @@ export function ServerList({
         }}
        
         style={{ paddingLeft: `${indent(depth)}px` }}
-        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg aria-disabled:opacity-60"
+        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-ring-inset aria-disabled:opacity-60"
       >
         <div className="min-w-0">
           <p className="font-medium break-words text-fg">{server.name}</p>
@@ -492,7 +492,7 @@ export function ServerList({
             <span className="text-xs text-accent-fg-soft">{t("mainScreen.connecting")}</span>
           )}
         </div>
-      </button>
+      </Button>
     </li>
   );
 
@@ -537,7 +537,7 @@ export function ServerList({
       >
         {/* Issue #49: Auf-/Zuklappen (Issue #978: kein „+" und kein „⋯" mehr im Connect-Baum). */}
         <div className="flex items-center hover:bg-surface-raised">
-          <button
+          <Button variant="bare"
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
@@ -552,7 +552,7 @@ export function ServerList({
                 : undefined
             }
             style={{ paddingLeft: `${indent(depth)}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg"
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-ring-inset"
           >
             <svg
               data-testid="group-chevron"
@@ -573,7 +573,7 @@ export function ServerList({
               📁 {node.group.name}
             </span>
             {node.group.isCopy && <CopyBadge />}
-          </button>
+          </Button>
         </div>
         {!collapsed &&
           (node.children.length > 0 ||

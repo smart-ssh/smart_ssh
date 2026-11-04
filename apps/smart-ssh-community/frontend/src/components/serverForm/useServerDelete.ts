@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { deleteServer } from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import type { DeleteServerResult } from "../../types";
+import { deleteServer } from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import type { DeleteServerResult } from "../../api/types";
 
 interface Options {
   /** `null` = the server is not saved yet (nothing to delete). */

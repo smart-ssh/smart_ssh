@@ -276,6 +276,26 @@ pub trait SftpSession: Send {
         chunk_size: usize,
         next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
     ) -> Result<TransferEnd, SshError>;
+    /// Issue #921: reads up to `len` bytes of `path` starting at `offset`
+    /// (one SFTP open/read/close). An empty result means end of file. Lets a
+    /// caller release the session's SFTP lock between two chunks of a long
+    /// download instead of holding it for the whole transfer.
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError>;
+    /// Issue #921: writes `data` to `path` at `offset`. With `truncate` the
+    /// file is created or emptied first (first chunk of an upload, also for
+    /// an empty file); without it the existing file is opened as is.
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP
     /// `LSTAT`) — meldet für einen Symlink dessen eigenen Typ (`is_dir ==

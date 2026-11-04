@@ -7,10 +7,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ServerList } from "./ServerList";
 import { setNarrow, setWide } from "../test/matchMedia";
-import { listGroups, listServers } from "../api";
+import { listGroups, listServers } from "../api/api";
 
 function localServer(): ServerDto {
   return {
@@ -31,11 +31,13 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -56,29 +58,25 @@ function remoteServer(): ServerDto {
   };
 }
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   // Spec 0047, Fund D2: `commandErrorCode`/`commandErrorMessage` bleiben die
   // echten Implementierungen (nicht gemockt) statt der bisherigen
   // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
   // Zusammenspiel mit `translateErrorCode` in `ServerList`s `describeError`.
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     resumeChatSession: vi.fn(),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
@@ -106,7 +104,7 @@ function renderList(
 
 
 function folder(id: string, name: string, parentId: string | null): GroupDto {
-  return { id, name, parentId, notes: "" };
+  return { isCopy: false, id, name, parentId, notes: "" };
 }
 
 const pad = (el: HTMLElement) => parseFloat(el.style.paddingLeft);

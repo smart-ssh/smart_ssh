@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clipboardWriteText, commandErrorMessage, exportSshConfig } from "../api";
-import type { SshConfigExportResultDto } from "../types";
+import { clipboardWriteText, commandErrorMessage, exportSshConfig } from "../api/api";
+import type { SshConfigExportResultDto } from "../api/types";
 import { Button, DialogFrame } from "./ui";
 
 interface SshConfigExportDialogProps {
@@ -36,7 +36,7 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the export once on mount
   }, []);
 
   const handleCopyIncludeHint = async () => {

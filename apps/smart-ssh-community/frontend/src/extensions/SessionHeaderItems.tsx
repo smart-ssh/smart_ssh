@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { ErrorBoundary } from "../components/ui";
-import { useChatSessionId } from "../chatSessionIds";
+import { useChatSessionId } from "../lib/chatSessionIds";
 import { listSessionHeaderItems, subscribeFormSlots } from "./registry";
 
 /** Issue #611 (Spec 0038, Abschnitt 4): renders the registered session

@@ -2,7 +2,7 @@
 // phone width. Tagged `@phone`: runs in the phone projects only.
 import { expect, test } from "../support/app";
 import type { Locator, Page } from "@playwright/test";
-import type { RemoteEntryDto, SshConfigImportPreviewDto } from "../../src/types";
+import type { RemoteEntryDto, SshConfigImportPreviewDto } from "../../src/api/types";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, populated, server } from "../support/data";
 import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
@@ -91,7 +91,7 @@ async function openEntryMenuItem(app: import("../support/app").AppDriver, item: 
   await page.getByRole("tab", { name: "Files", exact: true }).click();
   await expect(page.getByText("notes.txt")).toBeVisible();
   await page.getByRole("button", { name: /^Actions: notes.txt$/ }).click();
-  await page.getByRole("button", { name: item, exact: typeof item === "string" }).click();
+  await page.getByRole("menuitem", { name: item, exact: typeof item === "string" }).click();
 }
 
 test("sm: file properties dialog is a full-screen sheet @phone", async ({ app }) => {
@@ -193,7 +193,7 @@ test("toasts stay inside the viewport and do not cover the composer @phone", asy
   await page.getByRole("button", { name: /^db-primary\b/ }).click();
   await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
   await page.evaluate(async () => {
-    const path = "/src/toastBus.ts";
+    const path = "/src/buses/toastBus.ts";
     const bus = await import(/* @vite-ignore */ path);
     bus.showToast({ kind: "error", message: `Could not save the settings: ${"a very long reason ".repeat(8)}` });
     bus.showToast({ kind: "info", message: "Saved", action: { label: "Undo", onClick: () => {} } });

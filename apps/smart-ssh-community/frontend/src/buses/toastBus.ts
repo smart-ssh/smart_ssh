@@ -1,0 +1,38 @@
+/** Spec 0067, Teil B: app-weite Erfolgs-/Fehlermeldungen. Dasselbe
+ * Bus-Muster wie `navigationBus.ts` — eine zentrale Anlaufstelle statt
+ * Props quer durch den Baum; angezeigt von `ToastHost` an der App-Wurzel. */
+
+import { createBus } from "./createBus";
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface ToastInput {
+  /** `info` (Issue #37): neutraler Hinweis, kein Fehler — bleibt wie ein
+   * Fehler stehen, bis der Nutzer ihn schließt. */
+  kind: "success" | "error" | "info";
+  message: string;
+  action?: ToastAction;
+}
+
+export interface Toast extends ToastInput {
+  id: number;
+}
+
+type Listener = (toast: Toast) => void;
+
+// Replays a toast raised before `ToastHost` mounted (issue #905).
+const bus = createBus<Toast>({ replayLast: true });
+let nextId = 1;
+
+export function showToast(input: ToastInput): void {
+  const toast = { ...input, id: nextId++ };
+  bus.publish(toast);
+}
+
+/** Gibt eine Unsubscribe-Funktion zurück (React-`useEffect`-Cleanup-Form). */
+export function subscribeToasts(listener: Listener): () => void {
+  return bus.subscribe(listener);
+}

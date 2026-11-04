@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, createBackupKeyWithCode, newBackupCode, setBackupPassphrase } from "../api";
+import { commandErrorMessage, createBackupKeyWithCode, newBackupCode, setBackupPassphrase } from "../api/api";
 import { Button, DialogFrame } from "./ui";
 import { PassphraseDialog, RecoveryCodeDialog } from "./BackupDialogs";
 

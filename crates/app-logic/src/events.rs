@@ -20,14 +20,14 @@
 //! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
 
 use serde::Serialize;
-use uuid::Uuid;
-
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 use ssh_manager_core::shared::ServerId;
+use uuid::Uuid;
 
 use crate::dto::{ActionOrigin, AutoExecRuleDto};
+use crate::event_names as names;
 use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
@@ -45,7 +45,8 @@ pub use crate::status::ConnectionStatus;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DataChangedPayload<'a> {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct DataChangedPayload<'a> {
     kinds: &'a std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
 }
 
@@ -56,12 +57,13 @@ pub fn emit_data_changed(
     emitter: &dyn EventEmitter,
     kinds: &std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
 ) {
-    emit(emitter, "data-changed", &DataChangedPayload { kinds });
+    emit(emitter, names::DATA_CHANGED, &DataChangedPayload { kinds });
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConnectionStatusChangedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ConnectionStatusChangedPayload {
     session_id: SessionId,
     status: ConnectionStatus,
     reason: Option<String>,
@@ -75,7 +77,7 @@ pub fn emit_connection_status_changed(
 ) {
     emit(
         emitter,
-        "connection-status-changed",
+        names::CONNECTION_STATUS_CHANGED,
         &ConnectionStatusChangedPayload {
             session_id,
             status,
@@ -86,7 +88,8 @@ pub fn emit_connection_status_changed(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatSessionChangedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatSessionChangedPayload {
     session_id: SessionId,
     chat_session_id: Option<String>,
 }
@@ -101,7 +104,7 @@ pub fn emit_chat_session_changed(
 ) {
     emit(
         emitter,
-        "chat-session-changed",
+        names::CHAT_SESSION_CHANGED,
         &ChatSessionChangedPayload {
             session_id,
             chat_session_id: chat_session_id.map(|id| id.to_string()),
@@ -111,6 +114,7 @@ pub fn emit_chat_session_changed(
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum HostKeyKind {
     Unknown,
     Mismatch,
@@ -118,7 +122,8 @@ pub enum HostKeyKind {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct HostKeyVerificationNeededPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct HostKeyVerificationNeededPayload {
     session_id: SessionId,
     /// Issue #37: Kennung genau dieser Abfrage (Generation der
     /// Registrierung in `pending_host_key_confirmations`). Ein
@@ -154,7 +159,7 @@ pub fn emit_host_key_verification_needed(
 ) {
     emit(
         emitter,
-        "host-key-verification-needed",
+        names::HOST_KEY_VERIFICATION_NEEDED,
         &HostKeyVerificationNeededPayload {
             session_id,
             prompt_id,
@@ -171,6 +176,7 @@ pub fn emit_host_key_verification_needed(
 /// Issue #37: warum eine Host-Key-Abfrage im Backend geendet hat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum HostKeyPromptEndReason {
     /// Der Nutzer hat über `confirm_host_key` entschieden.
     Decided,
@@ -182,7 +188,8 @@ pub enum HostKeyPromptEndReason {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct HostKeyVerificationEndedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct HostKeyVerificationEndedPayload {
     session_id: SessionId,
     prompt_id: u64,
     reason: HostKeyPromptEndReason,
@@ -200,7 +207,7 @@ pub fn emit_host_key_verification_ended(
 ) {
     emit(
         emitter,
-        "host-key-verification-ended",
+        names::HOST_KEY_VERIFICATION_ENDED,
         &HostKeyVerificationEndedPayload {
             session_id,
             prompt_id,
@@ -211,7 +218,8 @@ pub fn emit_host_key_verification_ended(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConnectProgressPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ConnectProgressPayload {
     attempt_id: String,
     server_id: ServerId,
     /// 1-based retry counter; a new attempt starts a fresh step list.
@@ -232,7 +240,7 @@ pub fn emit_connect_progress(
 ) {
     emit(
         emitter,
-        "connect-progress",
+        names::CONNECT_PROGRESS,
         &ConnectProgressPayload {
             attempt_id: attempt_id.to_string(),
             server_id,
@@ -244,7 +252,8 @@ pub fn emit_connect_progress(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TerminalOutputPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct TerminalOutputPayload {
     session_id: SessionId,
     /// Base64-kodiert statt als JSON-Zahlenarray: Terminal-Output kann
     /// hochfrequent/umfangreich sein (z. B. `cat` einer großen Datei) — ein
@@ -259,7 +268,7 @@ pub fn emit_terminal_output(emitter: &dyn EventEmitter, session_id: SessionId, d
     use base64::Engine;
     emit(
         emitter,
-        "terminal-output",
+        names::TERMINAL_OUTPUT,
         &TerminalOutputPayload {
             session_id,
             data: base64::engine::general_purpose::STANDARD.encode(data),
@@ -269,7 +278,8 @@ pub fn emit_terminal_output(emitter: &dyn EventEmitter, session_id: SessionId, d
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatTextDeltaPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatTextDeltaPayload {
     session_id: SessionId,
     delta: String,
 }
@@ -277,14 +287,15 @@ struct ChatTextDeltaPayload {
 pub fn emit_chat_text_delta(emitter: &dyn EventEmitter, session_id: SessionId, delta: String) {
     emit(
         emitter,
-        "chat-text-delta",
+        names::CHAT_TEXT_DELTA,
         &ChatTextDeltaPayload { session_id, delta },
     );
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatAutoContinuationStartedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatAutoContinuationStartedPayload {
     session_id: SessionId,
     round: usize,
 }
@@ -302,14 +313,15 @@ pub fn emit_chat_auto_continuation_started(
 ) {
     emit(
         emitter,
-        "chat-auto-continuation-started",
+        names::CHAT_AUTO_CONTINUATION_STARTED,
         &ChatAutoContinuationStartedPayload { session_id, round },
     );
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AiBudgetWaitingPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct AiBudgetWaitingPayload {
     session_id: SessionId,
     wait_seconds: u64,
 }
@@ -332,7 +344,7 @@ pub fn emit_ai_budget_waiting(
 ) {
     emit(
         emitter,
-        "ai-budget-waiting",
+        names::AI_BUDGET_WAITING,
         &AiBudgetWaitingPayload {
             session_id,
             wait_seconds,
@@ -342,7 +354,8 @@ pub fn emit_ai_budget_waiting(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatActionProposedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatActionProposedPayload {
     session_id: SessionId,
     action_id: ActionId,
     action: AiAction,
@@ -427,13 +440,14 @@ pub fn emit_chat_action_proposed(
     };
     // Returned so the caller can keep it for a chat re-sync (issue #1020).
     let value = serde_json::to_value(&payload).ok();
-    emit(emitter, "chat-action-proposed", &payload);
+    emit(emitter, names::CHAT_ACTION_PROPOSED, &payload);
     value
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RiskAssessmentUpdatedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct RiskAssessmentUpdatedPayload {
     session_id: SessionId,
     action_id: ActionId,
     data_risk: RiskLevel,
@@ -463,7 +477,7 @@ pub fn emit_risk_assessment_updated(
 ) {
     emit(
         emitter,
-        "risk-assessment-updated",
+        names::RISK_ASSESSMENT_UPDATED,
         &RiskAssessmentUpdatedPayload {
             session_id,
             action_id,
@@ -476,7 +490,8 @@ pub fn emit_risk_assessment_updated(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ActionDecisionEscalatedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ActionDecisionEscalatedPayload {
     session_id: SessionId,
     action_id: ActionId,
     reason: String,
@@ -507,7 +522,7 @@ pub fn emit_action_decision_escalated(
 ) {
     emit(
         emitter,
-        "action-decision-escalated",
+        names::ACTION_DECISION_ESCALATED,
         &ActionDecisionEscalatedPayload {
             session_id,
             action_id,
@@ -535,7 +550,8 @@ pub fn emit_action_decision_escalated(
 /// Aufgabe.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NoteUpdateSuggestedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct NoteUpdateSuggestedPayload {
     session_id: SessionId,
     action_id: ActionId,
     action: AiAction,
@@ -567,7 +583,7 @@ pub fn emit_note_update_suggested(
 ) {
     emit(
         emitter,
-        "note-update-suggested",
+        names::NOTE_UPDATE_SUGGESTED,
         &NoteUpdateSuggestedPayload {
             session_id,
             action_id,
@@ -584,14 +600,15 @@ pub fn emit_note_update_suggested(
 /// only the action id — never note content.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NoteUpdateExpiredPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct NoteUpdateExpiredPayload {
     action_id: ActionId,
 }
 
 pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId) {
     emit(
         emitter,
-        "note-update-expired",
+        names::NOTE_UPDATE_EXPIRED,
         &NoteUpdateExpiredPayload { action_id },
     );
 }
@@ -610,7 +627,8 @@ pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId)
 /// ist der eigentliche Korrelationsschlüssel.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NoteShrinkSuggestedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct NoteShrinkSuggestedPayload {
     server_id: ServerId,
     server_name: String,
 }
@@ -622,7 +640,7 @@ pub fn emit_note_shrink_suggested(
 ) {
     emit(
         emitter,
-        "note-shrink-suggested",
+        names::NOTE_SHRINK_SUGGESTED,
         &NoteShrinkSuggestedPayload {
             server_id,
             server_name,
@@ -637,7 +655,8 @@ pub fn emit_note_shrink_suggested(
 /// inzwischen möglicherweise längst beendete Session gebunden wäre).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NoteShrinkFailedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct NoteShrinkFailedPayload {
     server_id: ServerId,
     message: String,
 }
@@ -645,7 +664,7 @@ struct NoteShrinkFailedPayload {
 pub fn emit_note_shrink_failed(emitter: &dyn EventEmitter, server_id: ServerId, message: String) {
     emit(
         emitter,
-        "note-shrink-failed",
+        names::NOTE_SHRINK_FAILED,
         &NoteShrinkFailedPayload { server_id, message },
     );
 }
@@ -663,14 +682,15 @@ pub fn emit_note_shrink_failed(emitter: &dyn EventEmitter, server_id: ServerId, 
 /// aktuellen Stand neu (`onNotesChanged()`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NoteShrinkSucceededPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct NoteShrinkSucceededPayload {
     server_id: ServerId,
 }
 
 pub fn emit_note_shrink_succeeded(emitter: &dyn EventEmitter, server_id: ServerId) {
     emit(
         emitter,
-        "note-shrink-succeeded",
+        names::NOTE_SHRINK_SUCCEEDED,
         &NoteShrinkSucceededPayload { server_id },
     );
 }
@@ -682,7 +702,8 @@ pub fn emit_note_shrink_succeeded(emitter: &dyn EventEmitter, server_id: ServerI
 /// nur totes Gewicht.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatDocumentGeneratedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatDocumentGeneratedPayload {
     session_id: SessionId,
     action_id: ActionId,
     title: String,
@@ -698,7 +719,7 @@ pub fn emit_chat_document_generated(
 ) {
     emit(
         emitter,
-        "chat-document-generated",
+        names::CHAT_DOCUMENT_GENERATED,
         &ChatDocumentGeneratedPayload {
             session_id,
             action_id,
@@ -711,7 +732,8 @@ pub fn emit_chat_document_generated(
 /// Issue #545: payload of `chat-question-asked`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatQuestionAskedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatQuestionAskedPayload {
     session_id: SessionId,
     question_id: uuid::Uuid,
     question: String,
@@ -731,7 +753,7 @@ pub fn emit_chat_question_asked(
 ) {
     emit(
         emitter,
-        "chat-question-asked",
+        names::CHAT_QUESTION_ASKED,
         &ChatQuestionAskedPayload {
             session_id,
             question_id,
@@ -755,6 +777,7 @@ pub fn emit_chat_question_asked(
     rename_all_fields = "camelCase",
     tag = "kind"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ActionResultPayload {
     Command {
         command: String,
@@ -790,7 +813,8 @@ pub enum ActionResultPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatActionResultPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatActionResultPayload {
     session_id: SessionId,
     action_id: ActionId,
     result: ActionResultPayload,
@@ -804,7 +828,7 @@ pub fn emit_chat_action_result(
 ) {
     emit(
         emitter,
-        "chat-action-result",
+        names::CHAT_ACTION_RESULT,
         &ChatActionResultPayload {
             session_id,
             action_id,
@@ -815,7 +839,8 @@ pub fn emit_chat_action_result(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatActionOutputPayload<'a> {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatActionOutputPayload<'a> {
     session_id: SessionId,
     action_id: ActionId,
     stdout: &'a str,
@@ -839,7 +864,7 @@ pub fn emit_chat_action_output(
 ) {
     emit(
         emitter,
-        "chat-action-output",
+        names::CHAT_ACTION_OUTPUT,
         &ChatActionOutputPayload {
             session_id,
             action_id,
@@ -852,7 +877,8 @@ pub fn emit_chat_action_output(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatActionWaitingInputPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatActionWaitingInputPayload {
     session_id: SessionId,
     action_id: ActionId,
     waiting: bool,
@@ -869,7 +895,7 @@ pub fn emit_chat_action_waiting_input(
 ) {
     emit(
         emitter,
-        "chat-action-waiting-input",
+        names::CHAT_ACTION_WAITING_INPUT,
         &ChatActionWaitingInputPayload {
             session_id,
             action_id,
@@ -881,13 +907,15 @@ pub fn emit_chat_action_waiting_input(
 /// Payload of every chat event that carries only the session id.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SessionOnlyPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct SessionOnlyPayload {
     session_id: SessionId,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatErrorPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatErrorPayload {
     session_id: SessionId,
     message: String,
     code: Option<&'static str>,
@@ -899,6 +927,7 @@ struct ChatErrorPayload {
 /// "Details"). `provider_message` must already be redacted.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ChatErrorDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_error_type: Option<String>,
@@ -959,7 +988,7 @@ pub fn emit_chat_error_with_details(
 ) {
     emit(
         emitter,
-        "chat-error",
+        names::CHAT_ERROR,
         &ChatErrorPayload {
             session_id,
             message,
@@ -984,14 +1013,15 @@ pub fn emit_chat_error_with_details(
 pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-truncated",
+        names::CHAT_RESPONSE_TRUNCATED,
         &SessionOnlyPayload { session_id },
     );
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatAiRequestStartedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatAiRequestStartedPayload {
     session_id: SessionId,
     provider_name: String,
 }
@@ -1006,7 +1036,7 @@ pub fn emit_chat_ai_request_started(
 ) {
     emit(
         emitter,
-        "chat-ai-request-started",
+        names::CHAT_AI_REQUEST_STARTED,
         &ChatAiRequestStartedPayload {
             session_id,
             provider_name: provider_name.to_string(),
@@ -1016,7 +1046,8 @@ pub fn emit_chat_ai_request_started(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatAiRetryingPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatAiRetryingPayload {
     session_id: SessionId,
     attempt: u32,
     max_attempts: u32,
@@ -1035,7 +1066,7 @@ pub fn emit_chat_ai_retrying(
 ) {
     emit(
         emitter,
-        "chat-ai-retrying",
+        names::CHAT_AI_RETRYING,
         &ChatAiRetryingPayload {
             session_id,
             attempt,
@@ -1047,7 +1078,8 @@ pub fn emit_chat_ai_retrying(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatWebActivityPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatWebActivityPayload {
     session_id: SessionId,
     /// Issue #693: binds a later `chat-injection-check` event to this card.
     activity_id: Uuid,
@@ -1067,7 +1099,7 @@ pub fn emit_chat_web_activity(
 ) {
     emit(
         emitter,
-        "chat-web-activity",
+        names::CHAT_WEB_ACTIVITY,
         &ChatWebActivityPayload {
             session_id,
             activity_id,
@@ -1080,6 +1112,7 @@ pub fn emit_chat_web_activity(
 /// one piece of fetched content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum InjectionCheckState {
     Running,
     Clean,
@@ -1096,7 +1129,8 @@ pub const INJECTION_REASON_MAX_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatInjectionCheckPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatInjectionCheckPayload {
     session_id: SessionId,
     item_id: Uuid,
     #[serde(flatten)]
@@ -1115,7 +1149,7 @@ pub fn emit_chat_injection_check(
 ) {
     emit(
         emitter,
-        "chat-injection-check",
+        names::CHAT_INJECTION_CHECK,
         &ChatInjectionCheckPayload {
             session_id,
             item_id,
@@ -1134,7 +1168,7 @@ pub fn emit_chat_injection_check(
 pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-web-research-unavailable",
+        names::CHAT_WEB_RESEARCH_UNAVAILABLE,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1160,7 +1194,7 @@ pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id
 pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-empty",
+        names::CHAT_RESPONSE_EMPTY,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1171,7 +1205,7 @@ pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionI
 pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-refused",
+        names::CHAT_RESPONSE_REFUSED,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1183,7 +1217,7 @@ pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: Sessio
 pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-cancelled",
+        names::CHAT_RESPONSE_CANCELLED,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1195,14 +1229,15 @@ pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: Sess
 pub fn emit_chat_queued_messages_sent(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-queued-messages-sent",
+        names::CHAT_QUEUED_MESSAGES_SENT,
         &SessionOnlyPayload { session_id },
     );
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatAutoContinuationLimitReachedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatAutoContinuationLimitReachedPayload {
     session_id: SessionId,
     limit: usize,
 }
@@ -1226,7 +1261,7 @@ pub fn emit_chat_auto_continuation_limit_reached(
 ) {
     emit(
         emitter,
-        "chat-auto-continuation-limit-reached",
+        names::CHAT_AUTO_CONTINUATION_LIMIT_REACHED,
         &ChatAutoContinuationLimitReachedPayload { session_id, limit },
     );
 }
@@ -1235,6 +1270,7 @@ pub fn emit_chat_auto_continuation_limit_reached(
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum SftpTransferKind {
     Upload,
     Download,
@@ -1248,7 +1284,8 @@ pub enum SftpTransferKind {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SftpTransferStartedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct SftpTransferStartedPayload {
     session_id: SessionId,
     transfer_id: Uuid,
     kind: SftpTransferKind,
@@ -1271,7 +1308,7 @@ pub fn emit_sftp_transfer_started(
 ) {
     emit(
         emitter,
-        "sftp-transfer-started",
+        names::SFTP_TRANSFER_STARTED,
         &SftpTransferStartedPayload {
             session_id,
             transfer_id,
@@ -1284,7 +1321,8 @@ pub fn emit_sftp_transfer_started(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SftpTransferFinishedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct SftpTransferFinishedPayload {
     session_id: SessionId,
     transfer_id: Uuid,
     /// `None` bei Erfolg, sonst die Fehlermeldung.
@@ -1293,6 +1331,7 @@ struct SftpTransferFinishedPayload {
     /// Ausschalten des erhöhten Modus bzw. Widerruf). Dann ist `error`
     /// `None` — ein Abbruch ist kein Kanalfehler.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(type = "\"cancelled\" | \"stopped\" | null"))]
     stopped: Option<&'static str>,
     /// Issue #622: bei einem abgebrochenen Upload, dessen Teildatei auf dem
     /// Server nicht entfernt werden konnte: ihr Pfad.
@@ -1311,7 +1350,7 @@ pub fn emit_sftp_transfer_finished(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1334,7 +1373,7 @@ pub fn emit_sftp_transfer_stopped(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1358,7 +1397,7 @@ pub fn emit_sftp_entries_finished(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1373,6 +1412,7 @@ pub fn emit_sftp_entries_finished(
 /// Issue #658: entries done / total of a recursive delete/chmod.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SftpEntriesProgress {
     pub done: u64,
     pub total: Option<u64>,
@@ -1387,7 +1427,7 @@ pub fn emit_sftp_entries_progress(
 ) {
     emit(
         emitter,
-        "sftp-transfer-progress",
+        names::SFTP_TRANSFER_PROGRESS,
         &SftpTransferProgressPayload {
             session_id,
             transfer_id,
@@ -1401,7 +1441,8 @@ pub fn emit_sftp_entries_progress(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SftpTransferProgressPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct SftpTransferProgressPayload {
     session_id: SessionId,
     transfer_id: Uuid,
     bytes_done: u64,
@@ -1418,6 +1459,7 @@ struct SftpTransferProgressPayload {
 /// Issue #622: Gesamtfortschritt eines Ordner-Transfers.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SftpFolderProgress {
     pub files_done: u64,
     pub files_total: u64,
@@ -1437,7 +1479,7 @@ pub fn emit_sftp_transfer_progress(
 ) {
     emit(
         emitter,
-        "sftp-transfer-progress",
+        names::SFTP_TRANSFER_PROGRESS,
         &SftpTransferProgressPayload {
             session_id,
             transfer_id,
@@ -1453,7 +1495,8 @@ pub fn emit_sftp_transfer_progress(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct McpActionTabRequestedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct McpActionTabRequestedPayload {
     session_id: SessionId,
     server_id: ServerId,
     /// Spec 0104: `clientInfo.name` des MCP-Clients (`None` ohne Namen) —
@@ -1478,7 +1521,7 @@ pub fn emit_mcp_action_tab_requested(
 ) {
     emit(
         emitter,
-        "mcp-action-tab-requested",
+        names::MCP_ACTION_TAB_REQUESTED,
         &McpActionTabRequestedPayload {
             session_id,
             server_id,
@@ -1536,112 +1579,12 @@ impl EventEmitter for TestEmitter {
 mod payload_shape;
 
 #[cfg(test)]
-mod tests {
-    //! Regressionstest, s. ausführliche Begründung in
-    //! `crate::dto::tests` — `rename_all` auf einem `#[serde(tag = ...)]`-
-    //! Enum färbt nur die Tag-Werte camelCase, nicht die Feldnamen
-    //! innerhalb der Varianten; `exit_code` blieb dadurch snake_case und
-    //! kam im Frontend als `undefined` an (`result.exitCode`).
-
-    use super::*;
-
-    /// Issue #672: the payload is exactly `{"kinds": [...]}` — kind names only.
-    #[test]
-    fn test_data_changed_payload_carries_only_kinds() {
-        use ssh_manager_core::data_change::DataKind;
-        let emitter = TestEmitter::default();
-        emit_data_changed(
-            &emitter,
-            &std::collections::BTreeSet::from([DataKind::Servers, DataKind::HostKeys]),
-        );
-        let events = emitter.events.lock().unwrap();
-        assert_eq!(events[0].0, "data-changed");
-        assert_eq!(
-            events[0].1,
-            serde_json::json!({"kinds": ["servers", "host_keys"]})
-        );
-    }
-
-    /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
-    /// for a session without a persisted chat).
-    #[test]
-    fn test_chat_session_changed_payload_shape() {
-        let emitter = TestEmitter::default();
-        let session_id = Uuid::new_v4();
-        let chat = Uuid::new_v4();
-        emit_chat_session_changed(&emitter, session_id, Some(chat));
-        emit_chat_session_changed(&emitter, session_id, None);
-        let events = emitter.events.lock().unwrap();
-        assert_eq!(events[0].0, "chat-session-changed");
-        assert_eq!(events[0].1["sessionId"], session_id.to_string());
-        assert_eq!(events[0].1["chatSessionId"], chat.to_string());
-        assert!(events[1].1["chatSessionId"].is_null());
-    }
-
-    /// Issue #37: `host-key-verification-needed` trägt additiv die
-    /// `promptId`, an der das Frontend das passende Ende-Ereignis erkennt.
-    #[test]
-    fn test_host_key_verification_needed_carries_prompt_id() {
-        let emitter = TestEmitter::default();
-        let session_id = Uuid::new_v4();
-        emit_host_key_verification_needed(
-            &emitter,
-            session_id,
-            7,
-            "prod-1.internal".to_string(),
-            2222,
-            HostKeyKind::Unknown,
-            "SHA256:abc".to_string(),
-            None,
-            Some("ssh-ed25519".to_string()),
-        );
-        let events = emitter.events.lock().unwrap();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].0, "host-key-verification-needed");
-        assert_eq!(events[0].1["sessionId"], session_id.to_string());
-        assert_eq!(events[0].1["promptId"], 7);
-        assert_eq!(events[0].1["fingerprint"], "SHA256:abc");
-        assert_eq!(events[0].1["keyType"], "ssh-ed25519");
-    }
-
-    #[test]
-    fn test_host_key_verification_needed_key_type_is_null_when_unknown() {
-        let emitter = TestEmitter::default();
-        emit_host_key_verification_needed(
-            &emitter,
-            Uuid::new_v4(),
-            1,
-            "h".to_string(),
-            22,
-            HostKeyKind::Unknown,
-            "SHA256:abc".to_string(),
-            None,
-            None,
-        );
-        let events = emitter.events.lock().unwrap();
-        assert!(events[0].1["keyType"].is_null());
-    }
-
-    #[test]
-    fn test_action_result_payload_command_uses_camel_case_exit_code() {
-        let value = ActionResultPayload::Command {
-            command: "ls".to_string(),
-            stdout: "out".to_string(),
-            stderr: String::new(),
-            exit_code: Some(0),
-            cancelled: false,
-            truncated: false,
-        };
-        let json = serde_json::to_value(&value).unwrap();
-
-        assert_eq!(json["exitCode"], 0);
-        assert!(json.get("exit_code").is_none());
-    }
-}
+mod tests;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ChatContextUsagePayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ChatContextUsagePayload {
     session_id: SessionId,
     input_tokens: u64,
     window_tokens: u64,
@@ -1657,7 +1600,7 @@ pub fn emit_chat_context_usage(
 ) {
     emit(
         emitter,
-        "chat-context-usage",
+        names::CHAT_CONTEXT_USAGE,
         &ChatContextUsagePayload {
             session_id,
             input_tokens,
@@ -1671,7 +1614,7 @@ pub fn emit_chat_context_usage(
 pub fn emit_chat_context_compacted(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-context-compacted",
+        names::CHAT_CONTEXT_COMPACTED,
         &SessionOnlyPayload { session_id },
     );
 }

@@ -3,13 +3,13 @@ import { useTranslation } from "react-i18next";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from "../api";
-import { base64ToBytes, onTerminalOutput } from "../events";
-import { notifyMissingStartDirectory } from "../startDirectory";
+import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from "../api/api";
+import { base64ToBytes, onTerminalOutput } from "../api/events";
+import { notifyMissingStartDirectory } from "../lib/startDirectory";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSoftKeyboardViewport } from "../hooks/useSoftKeyboardViewport";
-import { detectFallbackPlatform } from "../titlebarLayout";
-import { applyModifiers, keySequence, type TerminalKeyId } from "../terminalKeys";
+import { detectFallbackPlatform } from "../lib/platform";
+import { applyModifiers, keySequence, type TerminalKeyId } from "../lib/terminalKeys";
 import { TerminalKeyRow } from "./TerminalKeyRow";
 
 /** xterm theme built from the `term-*` colour tokens (theme/dark.css). */
@@ -182,7 +182,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
     };
     // `t` ist bewusst keine Abhängigkeit: ein Sprachwechsel soll das
     // Terminal nicht neu öffnen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a language change must not reopen the terminal
   }, [sessionId]);
 
   // Issue #355: Hinweiszeile beim Verlust, Trennlinie und neue Shell nach
@@ -198,7 +198,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       term.writeln(`\r\n${t("session.reconnectedSeparator")}`);
       startShellRef.current();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is read only when the link state changes
   }, [link]);
 
   const onRowKey = useCallback((key: TerminalKeyId) => {

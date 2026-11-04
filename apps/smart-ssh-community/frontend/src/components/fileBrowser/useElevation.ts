@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { commandErrorMessage, sftpElevationDisable, sftpElevationEnable } from "../../api";
-import type { ElevationResultDto, RunningOperationDto } from "../../types";
+import { commandErrorMessage, sftpElevationDisable, sftpElevationEnable } from "../../api/api";
+import type { ElevationResultDto, RunningOperationDto } from "../../api/types";
 
 /** Issue #622: asked before ending elevated rights (or changing the target
  * user) while elevated operations still run. */
@@ -105,6 +105,8 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         targetUser: "root",
         sftpServerPath: null,
         failure: { kind: "checkFailed", sudoersLine: null, detail: commandErrorMessage(err) },
+        warning: null,
+        runningOperations: [],
       });
     } finally {
       setEnablingElevation(false);

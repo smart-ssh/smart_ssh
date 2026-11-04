@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { deleteUnusableServer } from "../api";
-import { commandErrorText } from "../errorCodes";
-import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
-import { unusableReasonText } from "../unusableServer";
+import { deleteUnusableServer } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import type { DeleteUnusableServerResult, UnusableServerDto } from "../api/types";
+import { unusableReasonText } from "../lib/unusableServer";
 import { Button } from "./ui";
 
 interface UnusableServerPanelProps {

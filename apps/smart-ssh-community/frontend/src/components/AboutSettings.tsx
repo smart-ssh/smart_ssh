@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAppInfo } from "../api";
-import type { AppInfoDto } from "../types";
+import { getAppInfo } from "../api/api";
+import type { AppInfoDto } from "../api/types";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
 import { Button } from "./ui";
 
@@ -11,7 +11,7 @@ import { Button } from "./ui";
  *
  * Spec-Reviewer-Fund (Spec 0052, Review dieses Schritts): eine frühere
  * Fassung legte den Text *in* den Kopieren-Button — ein Mousedown auf
- * einem `<button>` startet in mehreren Browser-Engines aber keine
+ * einem `<Button variant="bare">` startet in mehreren Browser-Engines aber keine
  * Textselektion, womit der von der Spec verlangte Minimalfall ("mind.
  * selektierbarer Text") am Ende weder per Klick noch per Markieren
  * funktioniert hätte. Text (`<code>`, `select-text`) und Kopieren-Button

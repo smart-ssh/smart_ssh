@@ -9,22 +9,22 @@ import {
   listAiProviders,
   setActiveAiProvider,
   updateAiProvider,
-} from "../api";
+} from "../api/api";
 import { Button } from "./ui";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
 import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
-import { commandErrorText } from "../errorCodes";
-import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
+import { commandErrorText } from "../api/errorCodes";
+import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../lib/ollama";
 import {
   loadRedRiskAlwaysConfirm,
   loadRiskClassifierSettings,
   saveRedRiskAlwaysConfirm,
   saveRiskClassifierSettings,
-} from "../riskSettings";
+} from "../settings/riskSettings";
 import {
   type AiProviderConfigDto,
   supportsWebResearch,
-} from "../types";
+} from "../api/types";
 
 /** Spec 0069, Teil B3: die fünf unterscheidbaren Anzeigezustände der
  * Ollama-Erkennungskarte. Kein eigener `idle`-artiger Zustand nötig —
@@ -205,7 +205,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     if (!providersLoaded) return;
     if (providers.some((p) => p.providerType === "ollama")) return;
     void runOllamaProbe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- probe runs once when the providers have loaded
   }, [providersLoaded]);
 
   /** Spec 0069, Teil B4 (E2): Bestätigung des Nutzers ist der Klick selbst

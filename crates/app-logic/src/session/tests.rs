@@ -1,5 +1,6 @@
 //! Unit tests for `session`.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::pin::Pin;
 
 use futures::Stream;
@@ -124,6 +125,7 @@ fn dummy_session(server_id: ServerId) -> Session {
         },
         persistence: crate::session::ChatPersistence {
             chat_content: Arc::default(),
+            title_attempts: Arc::default(),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
@@ -870,6 +872,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         pending_ssh_config_import: StdMutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
 
@@ -922,7 +925,7 @@ mod lookup_failures {
     use crate::test_support::{log_capture, InMemoryCredentialStore, InMemoryProfileStore};
     use chrono::Utc;
     use secrecy::SecretString;
-    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::profiles::{Group, GroupId};
     use std::sync::atomic::Ordering::SeqCst;
 
     /// Server secret for everyone, group secret only when the scope has the
@@ -952,34 +955,15 @@ mod lookup_failures {
         }
     }
 
-    fn server(group_id: Option<GroupId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: "web".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id,
-            tags: Vec::new(),
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
     const TEXT: &str = "s=server-secret-111 g=group-secret-222";
 
     #[tokio::test]
     async fn test_get_server_failure_keeps_server_secret_masked_and_flags_incomplete() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1008,7 +992,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_group_chain_failure_flags_incomplete_and_keeps_server_secret() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1026,7 +1013,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_healthy_lookup_is_complete() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1038,7 +1028,10 @@ mod lookup_failures {
     #[tokio::test]
     async fn test_rebuild_with_failing_get_server_keeps_group_secret_and_flags_session() {
         let g = group();
-        let srv = server(Some(g.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(g.id))
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(g.clone())
             .with_server(srv.clone());
@@ -1099,4 +1092,20 @@ mod lookup_failures {
 /// A live session scope for the spawn helpers under test.
 fn test_scope() -> crate::tasks::TaskScope {
     crate::tasks::TaskSupervisor::new().session_scope(Uuid::new_v4())
+}
+
+/// Issue #922: one title attempt per chat session id; the entry is gone
+/// after `forget` (called when the chat session is deleted), so a new
+/// session with that id could claim again and the set does not keep growing.
+#[test]
+fn test_title_attempt_is_claimed_once_and_forgotten_on_delete() {
+    let attempts = TitleAttempts::default();
+    let a = Uuid::new_v4();
+    let b = Uuid::new_v4();
+    assert!(attempts.claim(a));
+    assert!(!attempts.claim(a));
+    assert!(attempts.claim(b));
+    attempts.forget(a);
+    assert_eq!(attempts.len(), 1);
+    assert!(attempts.claim(a));
 }

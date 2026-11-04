@@ -4,20 +4,19 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { respondToAction } from "../api";
-import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../events";
+import { respondToAction } from "../api/api";
+import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../api/events";
 import { testI18n } from "../testI18n";
-import type { NoteUpdateSuggestedEvent } from "../types";
+import type { NoteUpdateSuggestedEvent } from "../api/types";
 import { NoteSuggestionToast } from "./NoteSuggestionToast";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    (err as { code?: string } | null)?.code ?? null,
-  respondToAction: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    respondToAction: vi.fn(() => Promise.resolve()),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteUpdateSuggested: vi.fn(() => Promise.resolve(() => {})),
   onNoteUpdateExpired: vi.fn(() => Promise.resolve(() => {})),
 }));

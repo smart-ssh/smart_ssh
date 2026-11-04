@@ -4,14 +4,9 @@
 //! "Produktion" → Server "web-01"), setzt auf jeder Ebene Notizen und gibt
 //! den über `effective_notes()` zusammengesetzten Kontext auf stdout aus.
 //!
-//! `InMemoryProfileStore` aus `core::profiles::tests` ist bewusst nur unter
-//! `#[cfg(test)]` verfügbar (Aufgabenstellung, Punkt 3) — Cargo-Examples
-//! werden aber *nicht* im Test-Modus kompiliert, `#[cfg(test)]`-Items sind
-//! hier schlicht nicht vorhanden. Damit dieses Demo trotzdem eigenständig
-//! (`cargo run --example profiles_demo`) läuft, definiert es unten eine
-//! eigene, minimale `ProfileStore`-Implementierung — das beweist nebenbei,
-//! dass der Trait wie vorgesehen auch außerhalb der Testsuite einfach zu
-//! implementieren ist.
+//! Der Store ist `InMemoryProfileStore` aus `ssh_manager_core::testing` (Issue
+//! #909); das Modul gibt es nur mit dem Feature `test-support`, deshalb
+//! verlangt das Beispiel es per `required-features`.
 //!
 //! `#[tokio::main]`, weil `ProfileStore` seit der Umstellung auf
 //! `async-trait` (Teil 1 der SQLite-Persistenz-Anbindung, Spec 0004) async
@@ -20,144 +15,9 @@
 //!
 //! Führe aus mit: `cargo run -p ssh-manager-core --example profiles_demo`
 
-use ssh_manager_core::sync::lock_tolerating_poison;
-use std::collections::HashMap;
-use std::sync::Mutex;
-
-use async_trait::async_trait;
 use chrono::Utc;
-use ssh_manager_core::profiles::{
-    effective_notes, AuthMethod, Group, GroupId, NoteRevision, NoteTarget, PostIngestPolicy,
-    ProfileError, ProfileResult, ProfileStore, Server,
-};
-use ssh_manager_core::shared::ServerId;
-
-/// Minimale, funktionierende `ProfileStore`-Implementierung fürs Demo (kein
-/// Mock/Stub) — Mutex-gekapselt, weil der Trait schreibende Methoden über
-/// `&self` verlangt (analog zu `SqliteProfileStore`, dessen Connection-Pool
-/// intern ebenfalls nur über `&self` genutzt wird).
-#[derive(Default)]
-struct DemoProfileStore {
-    groups: Mutex<HashMap<GroupId, Group>>,
-    servers: Mutex<HashMap<ServerId, Server>>,
-    note_revisions: Mutex<Vec<NoteRevision>>,
-}
-
-impl DemoProfileStore {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn insert_group(&self, group: Group) {
-        lock_tolerating_poison(&self.groups).insert(group.id, group);
-    }
-
-    fn insert_server(&self, server: Server) {
-        lock_tolerating_poison(&self.servers).insert(server.id, server);
-    }
-}
-
-#[async_trait]
-impl ProfileStore for DemoProfileStore {
-    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-        lock_tolerating_poison(&self.servers)
-            .get(id)
-            .cloned()
-            .ok_or(ProfileError::ServerNotFound(*id))
-    }
-
-    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
-        lock_tolerating_poison(&self.groups)
-            .get(id)
-            .cloned()
-            .ok_or(ProfileError::GroupNotFound(*id))
-    }
-
-    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
-        Ok(lock_tolerating_poison(&self.servers)
-            .values()
-            .cloned()
-            .collect())
-    }
-
-    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
-        Ok(lock_tolerating_poison(&self.groups)
-            .values()
-            .cloned()
-            .collect())
-    }
-
-    async fn create_group(&self, group: &Group) -> ProfileResult<()> {
-        lock_tolerating_poison(&self.groups).insert(group.id, group.clone());
-        Ok(())
-    }
-
-    async fn update_group(&self, group: &Group) -> ProfileResult<()> {
-        let mut groups = lock_tolerating_poison(&self.groups);
-        if !groups.contains_key(&group.id) {
-            return Err(ProfileError::GroupNotFound(group.id));
-        }
-        groups.insert(group.id, group.clone());
-        Ok(())
-    }
-
-    async fn delete_group(&self, id: &GroupId) -> ProfileResult<()> {
-        lock_tolerating_poison(&self.groups)
-            .remove(id)
-            .map(|_| ())
-            .ok_or(ProfileError::GroupNotFound(*id))
-    }
-
-    async fn create_server(&self, server: &Server) -> ProfileResult<()> {
-        lock_tolerating_poison(&self.servers).insert(server.id, server.clone());
-        Ok(())
-    }
-
-    async fn update_server(&self, server: &Server) -> ProfileResult<()> {
-        let mut servers = lock_tolerating_poison(&self.servers);
-        if !servers.contains_key(&server.id) {
-            return Err(ProfileError::ServerNotFound(server.id));
-        }
-        servers.insert(server.id, server.clone());
-        Ok(())
-    }
-
-    async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
-        lock_tolerating_poison(&self.servers)
-            .remove(id)
-            .map(|_| ())
-            .ok_or(ProfileError::ServerNotFound(*id))
-    }
-
-    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
-        match revision.target {
-            NoteTarget::Server(id) => {
-                let mut servers = lock_tolerating_poison(&self.servers);
-                let server = servers
-                    .get_mut(&id)
-                    .ok_or(ProfileError::ServerNotFound(id))?;
-                server.notes = revision.content.clone();
-                server.updated_at = revision.created_at;
-            }
-            NoteTarget::Group(id) => {
-                let mut groups = lock_tolerating_poison(&self.groups);
-                let group = groups.get_mut(&id).ok_or(ProfileError::GroupNotFound(id))?;
-                group.notes = revision.content.clone();
-                group.updated_at = revision.created_at;
-            }
-        }
-        lock_tolerating_poison(&self.note_revisions).push(revision.clone());
-        Ok(())
-    }
-
-    async fn list_note_revisions(&self, target: NoteTarget) -> ProfileResult<Vec<NoteRevision>> {
-        Ok(lock_tolerating_poison(&self.note_revisions)
-            .iter()
-            .filter(|r| r.target == target)
-            .cloned()
-            .collect())
-    }
-}
+use ssh_manager_core::profiles::{effective_notes, AuthMethod, Group, GroupId, ProfileStore};
+use ssh_manager_core::testing::{InMemoryProfileStore, ServerBuilder};
 
 fn new_group(name: &str, parent_id: Option<GroupId>, notes: &str) -> Group {
     let now = Utc::now();
@@ -173,7 +33,7 @@ fn new_group(name: &str, parent_id: Option<GroupId>, notes: &str) -> Group {
 
 #[tokio::main]
 async fn main() {
-    let store = DemoProfileStore::new();
+    let store = InMemoryProfileStore::new();
 
     let kunde_a = new_group(
         "Kunde A",
@@ -186,31 +46,21 @@ async fn main() {
         "Produktions-Umgebung von Kunde A. Änderungen nur im Wartungsfenster (Di 22-24 Uhr).",
     );
 
-    let now = Utc::now();
-    let web01 = Server {
-        id: ServerId::new(),
-        name: "web-01".to_string(),
-        host: "web-01.kunde-a.internal".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: Some(produktion.id),
-        tags: vec!["production".to_string()],
-        auth: AuthMethod::Agent,
-        notes: "web-01: PHP 8.2 und MySQL 8 sind unter /opt/lamp installiert, \
-                Config liegt in /opt/lamp/conf."
-            .to_string(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let web01 = ServerBuilder::new()
+        .name("web-01")
+        .host("web-01.kunde-a.internal")
+        .group_id(Some(produktion.id))
+        .tags(vec!["production".to_string()])
+        .auth(AuthMethod::Agent)
+        .notes(
+            "web-01: PHP 8.2 und MySQL 8 sind unter /opt/lamp installiert, \
+             Config liegt in /opt/lamp/conf.",
+        )
+        .build();
 
-    store.insert_group(kunde_a);
-    store.insert_group(produktion);
-    store.insert_server(web01.clone());
+    store.create_group(&kunde_a).await.expect("create group");
+    store.create_group(&produktion).await.expect("create group");
+    store.create_server(&web01).await.expect("create server");
 
     match effective_notes(&web01, &store).await {
         Ok(context) => {

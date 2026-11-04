@@ -2,6 +2,7 @@
 //! scripted transport, real SQLite stores in a temp dir, no Tauri.
 #![expect(clippy::expect_used, reason = "test code")]
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
@@ -12,9 +13,7 @@ use ssh_manager_core::ai::{
     fence_untrusted, AiEvent, ChatMessage, MessageContent, OutputRedactor, ProviderId,
     ProviderType, RedactedContext, Role, UntrustedKind,
 };
-use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, PostIngestPolicy, ProfileStore, Server,
-};
+use ssh_manager_core::profiles::{CredentialRef, ProfileStore, Server};
 use ssh_manager_core::ssh::{
     CommandOutput, HostKeyDecision, HostKeyStore, InteractiveShell, PtySize, SshError, SshTransport,
 };
@@ -93,28 +92,6 @@ impl SessionExtension for SecretExtension {
     }
 }
 
-fn server() -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id: ServerId(uuid::Uuid::new_v4()),
-        name: "web-1".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "root".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::Balanced,
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
 fn provider_config() -> AiProviderConfig {
     let now = chrono::Utc::now();
     AiProviderConfig {
@@ -150,7 +127,11 @@ async fn fixture(
     let db = SqliteProfileStore::connect_plaintext(&dir.path().join("main.db"))
         .await
         .unwrap();
-    let server = server();
+    let server = ServerBuilder::new()
+        .name("web-1")
+        .username("root")
+        .post_ingest_policy(ssh_manager_core::profiles::PostIngestPolicy::Balanced)
+        .build();
     let config = provider_config();
     db.create_server(&server).await.unwrap();
     db.ai_provider_store().create(&config).await.unwrap();
@@ -187,6 +168,7 @@ async fn fixture(
         pending_ssh_config_import: Mutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
     Fixture {
@@ -255,7 +237,11 @@ fn ok(text: &str) -> Result<String, ()> {
 
 #[tokio::test]
 async fn test_sudo_password_is_masked_by_the_built_redactor() {
-    let probe = server();
+    let probe = ServerBuilder::new()
+        .name("web-1")
+        .username("root")
+        .post_ingest_policy(ssh_manager_core::profiles::PostIngestPolicy::Balanced)
+        .build();
     let creds = InMemoryCredentialStore::new().with_secret(
         &crate::credential_slots::sudo_password_credential_ref(probe.id),
         SUDO_SECRET,

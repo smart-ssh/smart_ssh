@@ -24,6 +24,10 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "user-initiated elevated file browser: probe and open_sftp_via_exec with validated target user",
     ),
     (
+        "app-shell/src/elevated_sftp/probe.rs",
+        "the elevation probes (path detection, sudo -n -l), moved out of elevated_sftp.rs unchanged in kind",
+    ),
+    (
         "core/src/ssh/transport.rs",
         "the SshTransport trait's default methods delegating to its own exec methods",
     ),

@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useTranslation } from "react-i18next";
@@ -12,25 +13,25 @@ import {
   sftpUpload,
   sftpUploadFolder,
   sftpUploadFolderPreview,
-} from "../../api";
-import { isPointerInside } from "../../dropZone";
+} from "../../api/api";
+import { isPointerInside } from "../../lib/dropZone";
 import {
   onSftpTransferFinished,
   onSftpTransferProgress,
   onSftpTransferStarted,
-} from "../../events";
-import { joinPath, localBaseName } from "../../remotePath";
-import { nextRate } from "../../transferRate";
-import { showToast } from "../../toastBus";
+} from "../../api/events";
+import { joinPath, localBaseName } from "../../lib/remotePath";
+import { nextRate } from "../../lib/transferRate";
+import { showToast } from "../../buses/toastBus";
 import {
   classifyPreviewReadFailure,
   type PreviewReadFailure,
-} from "../../previewReadFailure";
+} from "../../lib/previewReadFailure";
 import type {
   FolderUploadPreviewDto,
   FolderUploadSummaryDto,
   RemoteEntryDto,
-} from "../../types";
+} from "../../api/types";
 import { currentCaps, type Transfer, type UploadConflict } from "./shared";
 
 interface UseSftpTransfersOptions {
@@ -45,8 +46,8 @@ interface UseSftpTransfersOptions {
   load: (targetPath: string, userOverride?: string | null) => void;
   /** Listed entries, used for the size of a conflicting remote file. */
   entries: RemoteEntryDto[];
-  notifyOk: (key: string, options: Record<string, unknown>, action?: () => void) => void;
-  notifyFailed: (key: string, name: string, err: unknown) => void;
+  notifyOk: (key: TranslationKey, options: Record<string, unknown>, action?: () => void) => void;
+  notifyFailed: (key: TranslationKey, name: string, err: unknown) => void;
   /** Suffix naming the elevated mode, appended to toasts. */
   modeSuffix: string;
 }
@@ -268,7 +269,7 @@ export function useSftpTransfers(
     // through `uploadManyRef` when the drop is handled, so there is no window
     // between a channel switch (banner already committed) and a re-registered
     // listener in which a drop would still use the previous channel.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registered per visibility only (Issue #29, see above)
   }, [isVisible, sessionId]);
 
   /** Spec 0054, Teil 3: "Hochladen ... Überschreibt bestehende →

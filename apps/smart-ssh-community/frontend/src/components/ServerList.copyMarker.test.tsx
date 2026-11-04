@@ -5,9 +5,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ServerList } from "./ServerList";
-import { keepGroupAsRegularEntry, keepServerAsRegularEntry, listGroups, listServers } from "../api";
+import { keepGroupAsRegularEntry, keepServerAsRegularEntry, listGroups, listServers } from "../api/api";
 
 const KEEP = testI18n.t("copyMarker.keep");
 
@@ -30,6 +30,8 @@ function server(id: string, name: string, extra: Partial<ServerDto> = {}): Serve
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...extra,
   };
 }
@@ -41,9 +43,8 @@ const grp = (id: string, name: string, isCopy: boolean): GroupDto => ({
   isCopy,
 });
 
-vi.mock("../api", async () => {
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+vi.mock("../api/api", async () => {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(),
     listGroups: vi.fn(),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
@@ -52,15 +53,12 @@ vi.mock("../api", async () => {
     keepGroupAsRegularEntry: vi.fn((_id: string, confirm: boolean) =>
       Promise.resolve({ applied: confirm, groups: 2, servers: 3 }),
     ),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
 }));
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
@@ -106,7 +104,7 @@ describe("copy marker in the server list", () => {
     const row = (await screen.findByText("old-srv")).closest("button") as HTMLElement;
     fireEvent.contextMenu(row);
     vi.mocked(listServers).mockResolvedValue([server("b", "old-srv", { groupId: "g-old" })]);
-    fireEvent.click(await screen.findByRole("button", { name: KEEP }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: KEEP }));
     await waitFor(() => expect(keepServerAsRegularEntry).toHaveBeenCalledWith("b"));
     await waitFor(() => expect(screen.queryAllByTestId("copy-badge")).toHaveLength(1));
   });
@@ -115,7 +113,7 @@ describe("copy marker in the server list", () => {
     renderList();
     const header = (await screen.findByText(/old-group/)).closest("button") as HTMLElement;
     fireEvent.contextMenu(header);
-    fireEvent.click(await screen.findByRole("button", { name: KEEP }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: KEEP }));
     const dialog = await screen.findByRole("dialog");
     expect(keepGroupAsRegularEntry).toHaveBeenCalledWith("g-copy", false);
     expect(within(dialog).getByText(testI18n.t("copyMarker.groupConfirmBody", { groups: 2, servers: 3 }))).toBeInTheDocument();

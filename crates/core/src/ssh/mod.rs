@@ -41,6 +41,7 @@ pub use transport::{
     SftpSession, SshTransport, TransferEnd,
 };
 pub use types::{
-    CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk, ExecOutputSink, Hop,
-    HostKeyDecision, OutputStream, PtySize, RemoteEntry,
+    exec_output_channel, CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk,
+    ExecOutputSink, Hop, HostKeyDecision, OutputStream, PtySize, RemoteEntry,
+    EXEC_OUTPUT_SINK_CAPACITY,
 };

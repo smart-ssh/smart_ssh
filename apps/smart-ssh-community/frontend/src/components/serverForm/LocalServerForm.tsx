@@ -7,9 +7,9 @@ import {
   requestNoteShrink,
   updateLocalServerNotes,
   updateLocalServerTags,
-} from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import type { ServerDto } from "../../types";
+} from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import type { ServerDto } from "../../api/types";
 import { Button, TabPanel, Tabs } from "../ui";
 import { ExtensionTabPanels } from "./ExtensionTabPanels";
 import type { ServerModel } from "./formTypes";
@@ -35,7 +35,7 @@ interface Props {
  * and notes are saved through their own dedicated commands. */
 export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved, autoFocusNotes }: Props) {
   const { t } = useTranslation();
-  const { tags, tagDraft, setTagDraft, addTag, removeTag, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
+  const { tags, setTags, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
   const { tabsIdBase, activeTab, tabItems, setActiveTab } = tabs;
   const [savingLocal, setSavingLocal] = useState({ notes: false, tags: false });
   const localNotesRef = useRef<HTMLTextAreaElement>(null);
@@ -47,7 +47,7 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       // `preventScroll`: s. identischer Kommentar in `NotesPanel.tsx`.
       localNotesRef.current?.focus({ preventScroll: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-focus once per loaded server, guarded by a ref
   }, [loaded.id]);
   // Spec 0058, Teil 1 (Etappe 5): derselbe Hinweis wie `NotesPanel`, hier
   // für den lokalen Pseudo-Server separat nachgebaut (der `NotesPanel`
@@ -122,12 +122,9 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
         <TagsField
           tags={tags}
-          tagDraft={tagDraft}
-          setTagDraft={setTagDraft}
-          addTag={addTag}
-          removeTag={(tag) => {
-            markDirty();
-            removeTag(tag);
+          setTags={(next) => {
+            if (next.length < tags.length) markDirty();
+            setTags(next);
           }}
         >
           <Button variant="primary" size="sm"
@@ -148,14 +145,14 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
           {isLocalNoteLarge && (
             <div className="mt-1 rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
               <p>{t("serverForm.largeNoteHint")}</p>
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={handleSummarizeLocalNoteNow}
                 disabled={localShrink.requesting}
                 className="mt-1.5 underline hover:no-underline disabled:opacity-50"
               >
                 {localShrink.requesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
-              </button>
+              </Button>
               {localShrink.error && <p className="mt-1 text-danger-fg">{localShrink.error}</p>}
             </div>
           )}

@@ -19,46 +19,35 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
   updateAiProvider,
-} from "../api";
-import type { AiProviderConfigDto } from "../types";
+} from "../api/api";
+import type { AiProviderConfigDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  addAiProvider: vi.fn(() => Promise.resolve("new-id")),
-  deleteAiProvider: vi.fn(),
-  // Spec 0069, Teil B1: jeder dieser Tests mountet die Komponente ohne
-  // vorhandenen Ollama-Provider — das löst die automatische Probe aus
-  // (`runOllamaProbe`, ruft `discoverModels` auf). Ein bewusst
-  // fehlschlagender Default (statt eines unkonfigurierten `vi.fn()`, der
-  // `undefined` zurückgäbe und `models.length` crashen ließe) hält diese
-  // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
-  // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
-  // "jeder andere Fehler → keine Karte").
-  discoverModels: vi.fn(() =>
-    Promise.reject(new Error("not configured in this test")),
-  ),
-  fetchAttestationInfo: vi.fn(),
-  setActiveAiProvider: vi.fn(),
-  testAiProviderCredentials: vi.fn(),
-  updateAiProvider: vi.fn(() => Promise.resolve()),
-  // Spec 0069, Teil B: `runOllamaProbe` braucht das tatsächliche
-  // `code`-Extraktionsverhalten (wie in `ServerList.test.tsx` bereits
-  // etabliert), Spec 0071 braucht `.message`-Extraktion für
-  // `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte — echte Implementierungen
-  // statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    addAiProvider: vi.fn(() => Promise.resolve("new-id")),
+    deleteAiProvider: vi.fn(),
+    // Spec 0069, Teil B1: jeder dieser Tests mountet die Komponente ohne
+    // vorhandenen Ollama-Provider — das löst die automatische Probe aus
+    // (`runOllamaProbe`, ruft `discoverModels` auf). Ein bewusst
+    // fehlschlagender Default (statt eines unkonfigurierten `vi.fn()`, der
+    // `undefined` zurückgäbe und `models.length` crashen ließe) hält diese
+    // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
+    // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
+    // "jeder andere Fehler → keine Karte").
+    discoverModels: vi.fn(() =>
+      Promise.reject(new Error("not configured in this test")),
+    ),
+    fetchAttestationInfo: vi.fn(),
+    setActiveAiProvider: vi.fn(),
+    testAiProviderCredentials: vi.fn(),
+    updateAiProvider: vi.fn(() => Promise.resolve()),
+  }),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -764,7 +753,7 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
     fireEvent.click(toggle);
 
     await waitFor(() => expect(toggle).not.toBeChecked());
-    const { saveRedRiskAlwaysConfirm } = await import("../riskSettings");
+    const { saveRedRiskAlwaysConfirm } = await import("../settings/riskSettings");
     expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false);
   });
 });

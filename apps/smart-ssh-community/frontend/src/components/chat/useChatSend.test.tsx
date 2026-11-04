@@ -1,18 +1,18 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { continueTruncatedResponse, retryChatTurn, sendChatMessage } from "../../api";
+import { continueTruncatedResponse, retryChatTurn, sendChatMessage } from "../../api/api";
 import { useChatSend } from "./useChatSend";
 
-vi.mock("../../api", () => ({
-  sendChatMessage: vi.fn(),
-  continueTruncatedResponse: vi.fn(),
-  retryChatTurn: vi.fn(),
-  stopAutoContinuation: vi.fn(),
-  startNewChat: vi.fn(),
-  commandErrorCode: () => null,
-  commandErrorMessage: (e: unknown) => String(e),
-}));
+vi.mock("../../api/api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    sendChatMessage: vi.fn(),
+    continueTruncatedResponse: vi.fn(),
+    retryChatTurn: vi.fn(),
+    stopAutoContinuation: vi.fn(),
+    startNewChat: vi.fn(),
+  }),
+);
 
 function setup(draft = "hello") {
   const composer = {

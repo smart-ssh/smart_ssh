@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -8,10 +9,10 @@ import {
   commandErrorMessage,
   sftpCopyContent,
   sftpCopyFile,
-} from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { showToast } from "../../toastBus";
-import type { RemoteEntryDto } from "../../types";
+} from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { showToast } from "../../buses/toastBus";
+import type { RemoteEntryDto } from "../../api/types";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
 
 /** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */
@@ -67,7 +68,7 @@ export function useFileClipboard(
     entry: RemoteEntryDto,
     run: (requestId: string, onProgress: (p: { done: number; total: number | null }) => void) => Promise<void>,
     passThroughCodes: string[],
-    okKey: string,
+    okKey: TranslationKey,
   ) => {
     closeMenu();
     const requestId = crypto.randomUUID();

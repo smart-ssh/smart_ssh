@@ -39,7 +39,7 @@ use credentials_keyring::{KeychainAvailability, KeychainUnavailableReason};
 use persistence_sqlite::{detect_database_file_state, DatabaseFileState};
 
 /// Das Ereignis, mit dem das Fenster nach einer Entscheidung gefragt wird.
-pub const STARTUP_PROMPT_EVENT: &str = "startup:prompt";
+pub const STARTUP_PROMPT_EVENT: &str = app_logic::event_names::STARTUP_PROMPT;
 
 /// Wie lange auf die Antwort aus dem Fenster gewartet wird (Spec 0101,
 /// Klarstellung 9, vierter Punkt; Spec 0059).

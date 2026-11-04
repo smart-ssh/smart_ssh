@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ServerList } from "./ServerList";
 import {
   listChatSessions,
@@ -17,9 +17,9 @@ import {
   moveGroup,
   moveServerToGroup,
   resumeChatSession,
-} from "../api";
-import { onHostKeyVerificationNeeded } from "../events";
-import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
+} from "../api/api";
+import { onHostKeyVerificationNeeded } from "../api/events";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
 import {
   registerFirstRunNoticeExtension,
   resetRegistryForTests,
@@ -45,11 +45,13 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -70,13 +72,12 @@ function remoteServer(): ServerDto {
   };
 }
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   // Spec 0047, Fund D2: `commandErrorCode`/`commandErrorMessage` bleiben die
   // echten Implementierungen (nicht gemockt) statt der bisherigen
   // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
   // Zusammenspiel mit `translateErrorCode` in `ServerList`s `describeError`.
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
@@ -84,17 +85,14 @@ vi.mock("../api", async () => {
     resumeChatSession: vi.fn(),
     moveServerToGroup: vi.fn(() => Promise.resolve()),
     moveGroup: vi.fn(() => Promise.resolve()),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
@@ -126,6 +124,7 @@ function group(overrides: Partial<GroupDto> = {}): GroupDto {
     name: "Prod",
     parentId: null,
     notes: "",
+    isCopy: false,
     ...overrides,
   };
 }
@@ -570,7 +569,7 @@ describe("ServerList resume request (Issue #611)", () => {
 
   it("shows the first-run notice before resuming when it is not acknowledged", async () => {
     startConnectMock.mockClear();
-    const { loadFirstRunNoticeAcknowledged } = await import("../firstRunNotice");
+    const { loadFirstRunNoticeAcknowledged } = await import("../lib/firstRunNotice");
     vi.mocked(loadFirstRunNoticeAcknowledged).mockResolvedValueOnce(false);
     renderWithRequest({});
     await screen.findByRole("dialog");
@@ -601,7 +600,7 @@ describe("ServerList new session (issue #657)", () => {
     renderWithTab();
     const row = (await screen.findByText("prod-1")).closest("button")!;
     fireEvent.contextMenu(row);
-    fireEvent.click(await screen.findByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Neue Sitzung" }));
     await waitFor(() =>
       expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }),
     );

@@ -26,54 +26,44 @@ import {
   testConnection,
   trustHostKey,
   updateServer,
-} from "../api";
-import { pickFilePath } from "../fileDialog";
+} from "../api/api";
+import { pickFilePath } from "../api/fileDialog";
 import { testI18n } from "../testI18n";
-import type { KeyFileFactsDto, ServerDto, TestConnectionResult } from "../types";
+import type { KeyFileFactsDto, ServerDto, TestConnectionReport } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  // Spec 0069, Teil B (echte `code`-Extraktion für `runOllamaProbe`,
-  // s. `ServerList.test.tsx`) und Spec 0071 (echte `.message`-Extraktion
-  // für `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte) — echte
-  // Implementierungen statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  cancelConnect: vi.fn(() => Promise.resolve()),
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    cancelConnect: vi.fn(() => Promise.resolve()),
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -98,6 +88,8 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
@@ -733,9 +725,10 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
 // ausblendet (hier per Inline-Style nachgebildet, `jsdom` kennt die
 // Tailwind-Klasse `hidden` nicht).
 describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () => {
-  const results: TestConnectionResult[] = [
+  const results: TestConnectionReport[] = [
     {
       kind: "hostKeyUnknown",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -744,6 +737,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
     {
       kind: "hostKeyMismatch",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -753,7 +747,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
   ];
 
-  function dialogFor(result: TestConnectionResult) {
+  function dialogFor(result: TestConnectionReport) {
     const isMismatch = result.kind === "hostKeyMismatch";
     return {
       dialog: screen.getByRole(isMismatch ? "alertdialog" : "dialog"),
@@ -817,9 +811,9 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
   });
 
   it.each(results)("$kind: Dialog bleibt sichtbar und fokussiert, wenn während des Tests ein anderer Tab aktiv wurde", async (result) => {
-    let resolveTest: (r: TestConnectionResult) => void = () => {};
+    let resolveTest: (r: TestConnectionReport) => void = () => {};
     vi.mocked(testConnection).mockImplementation(
-      () => new Promise<TestConnectionResult>((resolve) => {
+      () => new Promise<TestConnectionReport>((resolve) => {
         resolveTest = resolve;
       }),
     );

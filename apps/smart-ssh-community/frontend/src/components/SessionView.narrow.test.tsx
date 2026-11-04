@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../i18nTypes";
 // Issue #580, Spec 0113 §4: below 640 px the session view shows one pane at a
 // time behind an AI / Terminal / Files tab strip.
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -16,11 +17,11 @@ vi.mock("./FileBrowserPanel", () => ({
     return <div>file-browser-stub</div>;
   },
 }));
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
-vi.mock("../layoutSettings", () => ({
+vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
 }));
@@ -33,7 +34,7 @@ vi.stubGlobal(
   },
 );
 
-const t = (key: string) => testI18n.t(key);
+const t = (key: TranslationKey) => testI18n.t(key);
 
 function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void } = {}) {
   return render(

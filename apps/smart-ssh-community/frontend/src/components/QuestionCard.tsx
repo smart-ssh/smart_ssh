@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { QuestionOption } from "../types";
+import type { QuestionOption } from "../api/types";
+import { Button } from "./ui";
 
 /** Issue #547 (Spec 0111 §5): lock state of a question card, derived from
  * the chat item list by `deriveQuestionStates`. */
@@ -79,12 +80,12 @@ export function QuestionCard({
             const isMarked = marked.includes(o.label);
             return (
               <li key={`${i}-${o.label}`}>
-                <button
+                <Button variant="bare"
                   type="button"
                   disabled={locked}
                   aria-pressed={multiSelect ? isMarked : undefined}
                   onClick={() => choose(o.label)}
-                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus-ring-flush ${
                     isMarked
                       ? "border-accent-fg bg-accent-subtle-hover/60 text-accent-fg-faintest"
                       : "border-border text-fg-soft enabled:hover:bg-surface-raised"
@@ -109,20 +110,20 @@ export function QuestionCard({
                       </span>
                     )}
                   </span>
-                </button>
+                </Button>
               </li>
             );
           })}
         </ul>
         {multiSelect && !locked && (
-          <button
+          <Button variant="bare"
             type="button"
             disabled={ticked.length === 0}
             onClick={submitMulti}
             className="mt-2 rounded bg-accent px-3 py-1 text-xs text-on-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
           >
             {t("chat.question.send")}
-          </button>
+          </Button>
         )}
         {locked && state.ownWords && (
           <p className="mt-2 text-xs text-fg-subtle">

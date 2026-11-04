@@ -397,11 +397,11 @@ pub(crate) async fn open_and_assemble(
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: app_logic::state::McpState::default(),
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
-        // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
         chat_content: chat_content.clone(),
+        title_attempts: Default::default(),
     };
     Ok(app_state)
 }
@@ -1071,7 +1071,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
             let current = handle_for_entitlements
                 .state::<crate::wiring::EntitlementCatalogue>()
                 .filter(current);
-            tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current).ok();
+            commands::emit_entitlements_changed(&handle_for_entitlements, current);
         }
     });
 }

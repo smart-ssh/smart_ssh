@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { characterCount } from "../passwordLength";
+import { characterCount } from "../lib/passwordLength";
 import {
   changeMasterPassword,
   commandErrorCode,
   getMasterPasswordMode,
   setUpMasterPassword,
   switchToOsKeychain,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
  * lehnt mit `MASTER_PASSWORD_REJECTED` ab; hier bleibt nur der Knopf aus. */

@@ -1,6 +1,6 @@
 // Builders for fake-backend data. Defaults mirror what the real backend
 // sends for an ordinary password server; tests override only what matters.
-import type { AiProviderConfigDto, ConnectStepRecord, GroupDto, ServerDto } from "../../src/types";
+import type { AiProviderConfigDto, ConnectStepRecord, GroupDto, ServerDto } from "../../src/api/types";
 import type { FakeBackendFixture } from "../harness/fixtureTypes";
 
 export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "name">): ServerDto {
@@ -21,12 +21,13 @@ export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "n
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
     startDirectory: null,
+    isCopy: false,
     ...overrides,
   };
 }
 
 export function group(overrides: Partial<GroupDto> & Pick<GroupDto, "id" | "name">): GroupDto {
-  return { parentId: null, notes: "", ...overrides };
+  return { parentId: null, notes: "", isCopy: false, ...overrides };
 }
 
 export function aiProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {

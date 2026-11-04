@@ -4,9 +4,9 @@ import { ContextUsageIndicator } from "../ContextUsageIndicator";
 import { VoiceInputControl } from "../VoiceInputControl";
 import { Button, ErrorBoundary } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
-import { formatBytes } from "../../format";
+import { formatBytes } from "../../lib/format";
 import type { ComposerAction, ComposerAttachment, ComposerContext } from "../../extensions/registry";
-import type { VoiceHandlers, VoicePhase } from "../../useVoiceInput";
+import type { VoiceHandlers, VoicePhase } from "../../hooks/useVoiceInput";
 
 interface ComposerProps {
   draft: string;
@@ -70,14 +70,14 @@ export function Composer({
                   {a.unredactedHint && (
                     <span className="text-warning-fg-soft">{t("chat.attachmentUnredacted")}</span>
                   )}
-                  <button
+                  <Button variant="bare"
                     type="button"
                     aria-label={t("chat.attachmentRemove", { name: a.name })}
                     onClick={() => composerCtx.removeAttachment(a.id)}
-                    className="text-fg-muted hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                    className="text-fg-muted hover:text-fg-bright focus-ring-flush"
                   >
                     ×
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -104,7 +104,7 @@ export function Composer({
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg`}
+            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-ring-flush`}
           />
           {narrow ? (
             composerActions.length > 0 && (
@@ -139,16 +139,16 @@ export function Composer({
             )
           ) : (
             composerActions.map((action) => (
-              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><button
+              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><Button variant="bare"
                 type="button"
                 aria-label={action.label}
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
                 disabled={action.disabled}
                 onClick={() => invokeComposerAction(action)}
-                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-50"
+                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-ring-flush disabled:opacity-50"
               >
                 {action.icon}
-              </button></ErrorBoundary>
+              </Button></ErrorBoundary>
             ))
           )}
           {voiceEnabled && (

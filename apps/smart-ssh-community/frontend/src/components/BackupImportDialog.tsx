@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -7,9 +8,9 @@ import {
   confirmBackupImport,
   pickBackupImportFile,
   startBackupImport,
-} from "../api";
-import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../api/api";
+import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { BackupKeySetup } from "./BackupKeySetup";
 
@@ -19,7 +20,7 @@ interface Props {
   onRestored: () => void;
 }
 
-const ERROR_KEYS: Record<string, string> = {
+const ERROR_KEYS: Record<string, TranslationKey> = {
   BACKUP_CANNOT_OPEN: "backup.errors.cannotOpen",
   BACKUP_CODE_TYPO: "backup.errors.typo",
   BACKUP_NOT_A_BACKUP: "backup.errors.notBackup",
@@ -69,7 +70,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
     return () => {
       mounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens the file picker once on mount
   }, []);
 
   const describe = (err: unknown) => {

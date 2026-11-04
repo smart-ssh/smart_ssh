@@ -1,8 +1,8 @@
-import { detectFallbackPlatform, platformCapabilities } from "../../titlebarLayout";
-import type { HideableFileColumn } from "../../layoutSettings";
-import type { RateState } from "../../transferRate";
-import type { PreviewReadFailure } from "../../previewReadFailure";
-import type { LocalFilePreviewDto, RemoteEntryDto } from "../../types";
+import { detectFallbackPlatform, platformCapabilities } from "../../lib/platform";
+import type { HideableFileColumn } from "../../settings/layoutSettings";
+import type { RateState } from "../../lib/transferRate";
+import type { PreviewReadFailure } from "../../lib/previewReadFailure";
+import type { LocalFilePreviewDto, RemoteEntryDto } from "../../api/types";
 
 /** Issue #653: display order of the hideable columns (Name comes first). */
 export const COLUMN_ORDER: readonly HideableFileColumn[] = ["size", "permissions", "owner", "modified"];

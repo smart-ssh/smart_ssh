@@ -1,5 +1,5 @@
 // Helpers for the connecting tab (issue #548).
-import type { ConnectProgressEvent, ConnectStepSnapshot } from "../../src/types";
+import type { ConnectProgressEvent, ConnectStepSnapshot } from "../../src/api/types";
 import type { AppDriver } from "./app";
 import { expect } from "./app";
 

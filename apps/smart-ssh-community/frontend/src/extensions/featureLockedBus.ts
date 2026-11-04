@@ -6,18 +6,19 @@
  * diesen Bus und zeigt den Hinweis ("Diese Funktion erfordert Pro") —
  * einzelne Komponenten müssen `feature_locked` nicht selbst auswerten. */
 
+import { createBus } from "../buses/createBus";
 import type { FeatureLockedPayload } from "./entitlements";
 
 type Listener = (payload: FeatureLockedPayload) => void;
 
-const listeners = new Set<Listener>();
+// Replays a payload raised before `FeatureLockedDialog` mounted (issue #905).
+const bus = createBus<FeatureLockedPayload>({ replayLast: true });
 
 export function publishFeatureLocked(payload: FeatureLockedPayload): void {
-  for (const listener of listeners) listener(payload);
+  bus.publish(payload);
 }
 
 /** Gibt eine Unsubscribe-Funktion zurück (React-`useEffect`-Cleanup-Form). */
 export function subscribeFeatureLocked(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  return bus.subscribe(listener);
 }

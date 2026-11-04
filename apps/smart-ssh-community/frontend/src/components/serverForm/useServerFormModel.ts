@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { clearServerSudoPassword, commandErrorMessage, getServer, listStoredHostKeys } from "../../api";
-import { loadRiskClassifierSettings } from "../../riskSettings";
-import { checkStartDirectory } from "../../startDirectory";
-import type { PostIngestPolicy, ServerInput, StoredHostKeyDto } from "../../types";
+import { clearServerSudoPassword, commandErrorMessage, getServer, listStoredHostKeys } from "../../api/api";
+import { loadRiskClassifierSettings } from "../../settings/riskSettings";
+import { checkStartDirectory } from "../../lib/startDirectory";
+import type { PostIngestPolicy, ServerInput, StoredHostKeyDto } from "../../api/types";
 import {
   type AuthFormState,
   type ServerFormFieldKey,
@@ -109,7 +109,6 @@ export function useServerFormModel({ serverId, defaultGroupId, onBeforeLoad, onL
     setUsername: (v: string) => setField("username", v),
     setGroupId: useCallback((v: string | null) => dispatch({ type: "setField", field: "groupId", value: v }), []),
     setJumpHost: (v: string | null) => setField("jumpHost", v),
-    setTagDraft: (v: string) => setField("tagDraft", v),
     setSudoPassword: (v: string) => setField("sudoPassword", v),
     setPostIngestPolicy: (v: PostIngestPolicy) => setField("postIngestPolicy", v),
     setAiInjectionCheckEnabled: (v: boolean) => setField("aiInjectionCheckEnabled", v),
@@ -117,8 +116,7 @@ export function useServerFormModel({ serverId, defaultGroupId, onBeforeLoad, onL
     setStartDirectory: (v: string) => setField("startDirectory", v),
     setLocalNotes: (v: string) => setField("localNotes", v),
     setAuth: (auth: AuthFormState) => dispatch({ type: "setAuth", auth }),
-    addTag: () => dispatch({ type: "addTag" }),
-    removeTag: (tag: string) => dispatch({ type: "removeTag", tag }),
+    setTags: (tags: string[]) => dispatch({ type: "setTags", tags }),
     markDirty: useCallback(() => dispatch({ type: "markDirty" }), []),
     markSaved: useCallback(() => dispatch({ type: "saved" }), []),
     secondOpinionAvailable,

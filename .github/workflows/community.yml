@@ -537,6 +537,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Issue #1143: the runner starts with ~12 GB free; the two-target debug
+      # build (target/ plus Gradle and the NDK) fills the rest and the job dies
+      # with "No space left on device" on some runs. Drop preinstalled toolchains
+      # this job never uses (not the Android SDK, JDK or Node).
+      - name: Free disk space
+        shell: bash
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules/.cache
+          df -h /
+
       - name: Setup JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:

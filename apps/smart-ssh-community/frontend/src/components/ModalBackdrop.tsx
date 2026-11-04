@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { registerOpenModal } from "../modalLayer";
+import { registerOpenModal } from "../lib/modalLayer";
 
 /** `"app"`: per `createPortal` an `document.body`; `"sessionTab"`: an Ort
  * und Stelle, verschwindet mit seinem Tab. */

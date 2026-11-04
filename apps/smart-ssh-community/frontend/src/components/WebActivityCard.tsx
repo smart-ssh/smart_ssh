@@ -1,5 +1,6 @@
+import { dynamicKey } from "../i18nTypes";
 import { useTranslation } from "react-i18next";
-import type { WebActivityDto } from "../types";
+import type { WebActivityDto } from "../api/types";
 
 /** Fehlercodes der Web-Werkzeuge, für die es einen eigenen Text gibt
  * (`chat.webErrors.<code>`); alle anderen zeigen den allgemeinen Text
@@ -33,7 +34,7 @@ export function WebActivityCard({ activity }: { activity: WebActivityDto }) {
     activity.errorCode === null
       ? null
       : KNOWN_WEB_ERROR_CODES.has(activity.errorCode)
-        ? t(`chat.webErrors.${activity.errorCode}`)
+        ? t(dynamicKey(`chat.webErrors.${activity.errorCode}`)) // guarded by KNOWN_WEB_ERROR_CODES
         : t("chat.webErrors.other", { code: activity.errorCode });
 
   return (

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, sftpList, sftpStartDirectory } from "../../api";
-import { notifyMissingStartDirectory } from "../../startDirectory";
-import type { RemoteEntryDto } from "../../types";
+import { commandErrorMessage, sftpList, sftpStartDirectory } from "../../api/api";
+import { notifyMissingStartDirectory } from "../../lib/startDirectory";
+import type { RemoteEntryDto } from "../../api/types";
 
 /**
  * Loading and navigating one remote directory of a session: current path,
@@ -48,7 +48,7 @@ export function useRemoteDirectory(
         })
         .catch((err) => setError(commandErrorMessage(err)))
         .finally(() => setLoading(false));
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads state through refs; identity is irrelevant
     },
     [sessionId, channelUser],
   );
@@ -75,7 +75,7 @@ export function useRemoteDirectory(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per session
   }, [sessionId]);
 
   const pathRef = useRef(path);

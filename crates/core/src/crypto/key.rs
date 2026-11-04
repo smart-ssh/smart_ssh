@@ -165,37 +165,7 @@ fn generate_key() -> RootKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    #[derive(Default)]
-    struct InMemoryCredentialStore {
-        entries: Mutex<HashMap<String, SecretString>>,
-    }
-
-    impl CredentialStore for InMemoryCredentialStore {
-        fn get(&self, r: &CredentialRef) -> Result<SecretString, CredentialError> {
-            self.entries
-                .lock()
-                .unwrap()
-                .get(r.as_str())
-                .cloned()
-                .ok_or_else(|| CredentialError::NotFound(r.clone()))
-        }
-
-        fn set(&self, r: &CredentialRef, value: SecretString) -> Result<(), CredentialError> {
-            self.entries
-                .lock()
-                .unwrap()
-                .insert(r.as_str().to_string(), value);
-            Ok(())
-        }
-
-        fn delete(&self, r: &CredentialRef) -> Result<(), CredentialError> {
-            self.entries.lock().unwrap().remove(r.as_str());
-            Ok(())
-        }
-    }
+    use crate::testing::InMemoryCredentialStore;
 
     struct AlwaysFailingCredentialStore;
     impl CredentialStore for AlwaysFailingCredentialStore {
@@ -221,12 +191,12 @@ mod tests {
         assert!(matches!(read_root_key(&store), RootKeyState::NotFound));
 
         assert!(
-            store.entries.lock().unwrap().is_empty(),
+            store.secrets.lock().unwrap().is_empty(),
             "das Lesen darf keinen Eintrag hinterlassen"
         );
         // Und auch ein zweites Lesen nicht.
         assert!(matches!(read_root_key(&store), RootKeyState::NotFound));
-        assert!(store.entries.lock().unwrap().is_empty());
+        assert!(store.secrets.lock().unwrap().is_empty());
     }
 
     #[test]

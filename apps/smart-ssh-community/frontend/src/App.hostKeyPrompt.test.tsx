@@ -12,21 +12,17 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { confirmHostKey, connect, listServers, listSessions } from "./api";
-import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "./events";
+import { confirmHostKey, connect, listServers, listSessions } from "./api/api";
+import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "./api/events";
 import { testI18n } from "./testI18n";
 import type {
   HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
   ServerDto,
-} from "./types";
+} from "./api/types";
 
-vi.mock("./api", async () => {
-  const actual = await vi.importActual<typeof import("./api")>("./api");
-  return {
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
+vi.mock("./api/api", async () => {
+  return (await import("./test/apiMock")).createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listServers: vi.fn(() => Promise.resolve([])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
@@ -39,19 +35,19 @@ vi.mock("./api", async () => {
     disconnect: vi.fn(),
     getServer: vi.fn(),
     respondToAction: vi.fn(),
-  };
+  });
 });
 
 // Jeder Event-Listener ist ein No-op — außer `host-key-verification-needed`,
 // dessen Abonnenten hier mitgezählt werden (genau einer darf existieren).
-vi.mock("./events", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("./events");
+vi.mock("./api/events", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("./api/events");
   return Object.fromEntries(
     Object.keys(actual).map((name) => [name, vi.fn(() => Promise.resolve(() => {}))]),
   );
 });
 
-vi.mock("./firstRunNotice", () => ({
+vi.mock("./lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
@@ -96,6 +92,7 @@ const events: HostKeyVerificationNeededEvent[] = [
     kind: "unknown",
     fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     expectedFingerprint: null,
+    keyType: null,
   },
   {
     sessionId,
@@ -105,6 +102,7 @@ const events: HostKeyVerificationNeededEvent[] = [
     kind: "mismatch",
     fingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
     expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
+    keyType: null,
   },
 ];
 
@@ -114,7 +112,7 @@ const rejectLabelFor = (event: HostKeyVerificationNeededEvent) =>
   event.kind === "mismatch" ? "Verbindung abbrechen" : "Ablehnen";
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",

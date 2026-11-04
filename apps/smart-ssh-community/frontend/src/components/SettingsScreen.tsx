@@ -7,7 +7,7 @@ import {
   listSettingsSectionsForCategory,
   subscribeSettingsSections,
 } from "../extensions/registry";
-import { resolveSectionLabel } from "../resolveSectionLabel";
+import { resolveSectionLabel } from "../lib/resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { BackupSettings } from "./BackupSettings";
@@ -155,7 +155,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
       if (previous && document.contains(previous)) previous.focus();
     };
     // Mount-only: the return target is captured when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: the return target is captured when the dialog opens
   }, []);
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const container = containerRef.current;
@@ -222,7 +222,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
           <ul className="flex-1">
             {categories.map((category) => (
               <li key={category.id}>
-                <button
+                <Button variant="bare"
                   type="button"
                   ref={category.id === active?.id ? activeNavRef : undefined}
                   onClick={() => {
@@ -230,14 +230,14 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                     setNarrowView("detail");
                   }}
                   aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-ring-inset ${
                     category.id === active?.id
                       ? "bg-accent text-surface-sunken"
                       : "text-fg-muted hover:bg-surface-raised"
                   }`}
                 >
                   {category.label}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

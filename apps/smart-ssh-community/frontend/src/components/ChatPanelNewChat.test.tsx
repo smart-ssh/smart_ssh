@@ -4,14 +4,14 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage, startNewChat } from "../api";
-import { onChatActionProposed, onChatContextUsage } from "../events";
-import type { ChatActionProposedEvent } from "../types";
+import { sendChatMessage, startNewChat } from "../api/api";
+import { onChatActionProposed, onChatContextUsage } from "../api/events";
+import type { ChatActionProposedEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -19,36 +19,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
-  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
-  onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
-  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
-  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
-  onChatError: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextCompacted: () => Promise.resolve(() => {}),
-  onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
-  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
-  onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
-}));
+vi.mock("../api/events", async () =>
+  (await import("../test/eventsMock")).createEventsMock(),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -69,6 +44,7 @@ function confirmEvent(): ChatActionProposedEvent {
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

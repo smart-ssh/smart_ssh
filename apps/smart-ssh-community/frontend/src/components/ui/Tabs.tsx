@@ -68,7 +68,7 @@ export function Tabs({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+            className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-ring-flush ${
               selected
                 ? "border-accent-fg text-fg"
                 : "border-transparent text-fg-muted hover:text-fg-bright"

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { sftpCancelCopyContent } from "../../api";
+import { sftpCancelCopyContent } from "../../api/api";
 import { Button } from "../ui";
 import { formatMb } from "./shared";
 import type { CopyJob } from "./useFileClipboard";

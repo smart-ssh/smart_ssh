@@ -17,7 +17,11 @@ path = "src/lib.rs"
 # `[dev-dependencies]`, sodass es nie in einen Release-Build gerät.
 test-support = []
 
+# Issue #919: generates src/generated/ipc.ts; not compiled without the feature.
+ts-export = ["dep:ts-rs"]
+
 [dependencies]
+ts-rs = { workspace = true, optional = true }
 # Spec 0101, A14: Argon2id leitet den Schlüssel ab, unter dem der
 # Wurzelschlüssel K im Passwort-Modus verpackt liegt. Wie `hkdf` und `sha2`
 # liegt die Crate bereits im Abhängigkeitsbaum dieses Workspace (s. Spec
@@ -70,6 +74,10 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # prüft, dass das Kommando nicht darin landet. Nur für Tests — dieselbe
 # Fassung und dasselbe Muster wie in `ai-providers`/`app-shell`.
 tracing-subscriber = { workspace = true, features = ["json"] }
+
+[[example]]
+name = "profiles_demo"
+required-features = ["test-support"]
 
 [lints]
 workspace = true

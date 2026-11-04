@@ -1,7 +1,8 @@
+import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api";
-import type { DataPathEntryDto } from "../types";
+import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api/api";
+import type { DataPathEntryDto } from "../api/types";
 import { Button } from "./ui";
 
 /** Issue #16: Wo diese Instanz ihre Daten ablegt — Datenbank, Logs,
@@ -27,7 +28,7 @@ export function DataPathsSection() {
   const labelFor = (entry: DataPathEntryDto) => {
     if (entry.label) return entry.label;
     const key = `diagnostics.dataPaths.${entry.id}`;
-    const text = t(key);
+    const text = t(dynamicKey(key)); // built-in ids have a key; unknown ids fall back to the id
     return text === key ? entry.id : text;
   };
 

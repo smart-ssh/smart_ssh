@@ -7,6 +7,7 @@ use serde::Serialize;
 /// verständliche Erklärung samt kopierbarer sudoers-Zeile.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationResultDto {
     pub active: bool,
     pub target_user: String,
@@ -28,6 +29,7 @@ pub struct ElevationResultDto {
 /// Bestätigungsdialog vor dem Ausschalten/Umschalten.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RunningOperationDto {
     pub id: String,
     /// `download` | `upload` | `delete` | `chmod`.
@@ -44,6 +46,7 @@ pub struct RunningOperationDto {
 /// muss das Stoppen bestätigen.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationDisableDto {
     pub disabled: bool,
     pub running_operations: Vec<RunningOperationDto>,
@@ -51,6 +54,7 @@ pub struct ElevationDisableDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationWarningDto {
     pub kind: ElevationWarningKind,
     /// Der auffällige Eintrag (Datei oder Verzeichnis).
@@ -59,12 +63,14 @@ pub struct ElevationWarningDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ElevationWarningKind {
     SftpServerUnsafe,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationFailureDto {
     pub kind: ElevationFailureKind,
     /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad>` —
@@ -76,6 +82,7 @@ pub struct ElevationFailureDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ElevationFailureKind {
     /// Lokaler Pseudo-Server o. ä. — kein erhöhter Modus möglich.
     Unsupported,

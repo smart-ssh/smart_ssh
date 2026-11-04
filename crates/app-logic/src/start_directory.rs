@@ -157,6 +157,7 @@ pub async fn open_shell_in_start_directory(
         let mut transport = session.transport.lock().await;
         transport.open_shell(size).await?
     };
+    // Sperrreihenfolge: docs/architecture.md, "Lock hierarchy of a session".
     // Erst nach dem Öffnen: die Prüfung braucht den Transport-Lock für den
     // SFTP-Kanal selbst, und der Hinweis soll nur verbraucht werden, wenn es
     // überhaupt ein Terminal gibt, das ihn auslöst.
@@ -242,6 +243,25 @@ pub(crate) mod test_stubs {
         ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
             unreachable!()
         }
+        async fn read_range(
+            &mut self,
+            _path: &str,
+            _offset: u64,
+            _len: usize,
+        ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+            unreachable!("this test does not transfer files")
+        }
+
+        async fn write_range(
+            &mut self,
+            _path: &str,
+            _offset: u64,
+            _data: &[u8],
+            _truncate: bool,
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!("this test does not transfer files")
+        }
+
         async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
             self.stats.lock().unwrap().push(path.to_string());
             let is_dir = self.dirs.contains(path);

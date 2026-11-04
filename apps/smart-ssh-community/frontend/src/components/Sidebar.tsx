@@ -1,22 +1,23 @@
+import { dynamicKey } from "../i18nTypes";
 import { useRef, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { useTranslation } from "react-i18next";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import { folderForNewItem } from "../newItemFolder";
+import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
+import { folderForNewItem } from "../lib/newItemFolder";
 import {
   classifyDrop,
   dropHighlightClass,
   groupDropTargetValue,
   type DragItem,
   type DropTarget,
-} from "../treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
-import { useTreeDrag } from "../useTreeDrag";
+} from "../lib/treeDrag";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
+import { useTreeDrag } from "../hooks/useTreeDrag";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
-import { unusableReasonText } from "../unusableServer";
+import { unusableReasonText } from "../lib/unusableServer";
 import { Button } from "./ui";
 
 export type Selection =
@@ -69,7 +70,7 @@ function visibleKeys(
 
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
  * clientseitig aufgebauter Baum — Baum-Aufbau selbst über
- * `../groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
+ * `../lib/groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
  * Implementierung wie die gruppierte Hauptübersicht, kein zweiter
  * Nachbau). Der lokale Pseudo-Server (Spec 0032) ist Teil von `servers`,
  * aber NICHT Teil von `tree` (`buildGroupTree` klammert ihn bewusst aus
@@ -193,7 +194,7 @@ export function Sidebar({
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
           isSelected("group", node.group.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
         }`}
       >
@@ -222,7 +223,7 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "server", id: server.id })}
       title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
         isSelected("server", server.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
       }`}
     >
@@ -246,7 +247,7 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
       title={unusableReasonText(t, server.reason)}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-surface-raised focus-ring-inset ${
         isSelected("unusableServer", server.id) ? "bg-surface-raised text-warning-fg-softer" : "text-warning-fg-soft/80"
       }`}
     >
@@ -314,7 +315,7 @@ export function Sidebar({
                 {manageViews.map((view) => {
                   const key = `extensionView:${view.id}`;
                   const selected = selection?.kind === "extensionView" && selection.id === view.id;
-                  const label = i18n.exists(view.label) ? t(view.label) : view.label;
+                  const label = i18n.exists(view.label) ? t(dynamicKey(view.label)) : view.label;
                   return (
                     <div key={view.id} role={narrow ? "listitem" : "none"}>
                     {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
@@ -327,7 +328,7 @@ export function Sidebar({
                       onClick={() => onSelect({ kind: "extensionView", id: view.id })}
                       title={label}
                       style={{ paddingLeft: "8px" }}
-                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
                         selected ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
                       }`}
                     >

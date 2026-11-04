@@ -1,18 +1,19 @@
 // Issue #694: AI wait line and named timeout errors.
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getChatHistory, sendChatMessage } from "../api";
+import { getChatHistory, sendChatMessage } from "../api/api";
 import {
   onChatAiRequestStarted,
   onChatError,
   onChatTextDelta,
-} from "../events";
-import type { ChatAiRequestStartedEvent, ChatErrorEvent } from "../types";
+} from "../api/events";
+import { chatError } from "../test/fixtures";
+import type { ChatAiRequestStartedEvent, ChatErrorEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -20,36 +21,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
-  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
-  onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
-  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
-  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
-  onChatError: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextCompacted: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
-  onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
-  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
-  onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
-}));
+vi.mock("../api/events", async () =>
+  (await import("../test/eventsMock")).createEventsMock(),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -155,13 +131,13 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     await screen.findByText("check the disk");
     await waitFor(() => expect(onChatError).toHaveBeenCalled());
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "x",
         code: "AI_TIMEOUT",
         providerName: "Claude",
         timeoutSecs: 120,
-      }),
+      })),
     );
     expect(screen.getByText(/Claude/).textContent).toContain("120 s");
     expect(
@@ -177,13 +153,13 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     await screen.findByText("check the disk");
     await waitFor(() => expect(onChatError).toHaveBeenCalled());
     act(() =>
-      handlerOf<ChatErrorEvent>(onChatError)({
+      handlerOf<ChatErrorEvent>(onChatError)(chatError({
         sessionId: "session-1",
         message: "x",
         code: "AI_TOTAL_DEADLINE",
         providerName: "Claude",
         timeoutSecs: 600,
-      }),
+      })),
     );
     expect(screen.getByText(/Claude/).textContent).toContain("10 Minuten");
     expect(

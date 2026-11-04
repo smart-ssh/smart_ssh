@@ -1,3 +1,4 @@
+import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,10 +7,10 @@ import {
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
-} from "../api";
-import type { KeychainStatusDto } from "../types";
+} from "../api/api";
+import type { KeychainStatusDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
@@ -41,7 +42,7 @@ export function DiagnosticsSettings() {
     if (keychain.available) return t("diagnostics.keychainAvailable");
     const reason = keychain.reason ?? "unknown";
     const key = `diagnostics.keychainUnavailable.${reason}`;
-    const text = t(key);
+    const text = t(dynamicKey(key)); // an unknown reason falls back to the "unknown" text below
     return text === key ? t("diagnostics.keychainUnavailable.unknown") : text;
   };
 

@@ -3,37 +3,37 @@
 import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { getServer } from "../api";
+import { getServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { ServerDto } from "../types";
+import type { ServerDto } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  inspectKeyFile: vi.fn(),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
-vi.mock("../events", () => ({
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    inspectKeyFile: vi.fn(),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-const SERVER: ServerDto = {
+const SERVER: ServerDto = { isCopy: false, startDirectory: null,
   id: "00000000-0000-0000-0000-000000000217",
   name: "web-01",
   host: "db01.example.lan",
@@ -73,7 +73,7 @@ describe("ServerForm text correction (issue #217)", () => {
     vi.mocked(getServer).mockResolvedValue(SERVER);
     renderNew();
     expect(await screen.findByDisplayValue("db01.example.lan")).toBeTruthy();
-    for (const key of ["serverForm.host", "serverForm.username"]) {
+    for (const key of ["serverForm.host", "serverForm.username"] as const) {
       const field = screen.getByLabelText(testI18n.t(key));
       expect(field.getAttribute("autocapitalize")).toBe("off");
       expect(field.getAttribute("autocorrect")).toBe("off");

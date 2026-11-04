@@ -37,7 +37,7 @@ pub async fn open_terminal(
     let (shell, start) =
         open_shell_in_start_directory(&session, PtySize { cols: 80, rows: 24 }).await?;
 
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::channel(app_logic::session::TERMINAL_COMMAND_CAPACITY);
     *lock_tolerating_poison(&session.conn.terminal) = Some(tx);
     spawn_terminal_actor(
         session_id,
@@ -50,7 +50,7 @@ pub async fn open_terminal(
     Ok(start)
 }
 
-fn terminal_sender(session: &Session) -> CommandResult<mpsc::UnboundedSender<TerminalCommand>> {
+fn terminal_sender(session: &Session) -> CommandResult<mpsc::Sender<TerminalCommand>> {
     lock_tolerating_poison(&session.conn.terminal)
         .clone()
         .ok_or_else(|| {
@@ -70,6 +70,7 @@ pub async fn terminal_input(
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Write(data))
+        .await
         .map_err(|_| "Terminal-Kanal bereits geschlossen")
         .or_code("TERMINAL_CHANNEL_CLOSED")?;
     Ok(())
@@ -85,6 +86,7 @@ pub async fn terminal_resize(
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
     terminal_sender(&session)?
         .send(TerminalCommand::Resize(PtySize { cols, rows }))
+        .await
         .map_err(|_| "Terminal-Kanal bereits geschlossen")
         .or_code("TERMINAL_CHANNEL_CLOSED")?;
     Ok(())

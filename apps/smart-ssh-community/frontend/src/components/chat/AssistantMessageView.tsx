@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { DocumentFormat } from "../../types";
+import type { DocumentFormat } from "../../api/types";
 import { Button } from "../ui";
 import { MARKDOWN_COMPONENTS } from "./DocumentCard";
 
@@ -65,7 +65,7 @@ export function AssistantMessageView({
   };
 
   // Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): ein per
-  // Mausklick betätigter `<button>` bekommt in WKWebView (macOS/Tauri)
+  // Mausklick betätigter `<Button variant="bare">` bekommt in WKWebView (macOS/Tauri)
   // standardmäßig KEINEN Fokus — `focus-within` greift für einen
   // Maus-Klick auf "In Notiz übernehmen"/"Als Markdown" also nie. Bewegt
   // der Nutzer danach die Maus weg, würde die Leiste (inkl. Erfolgs-/

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { explainConfirmation } from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import type { ConfirmationExplanationDto } from "../../types";
+import { explainConfirmation } from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import type { ConfirmationExplanationDto } from "../../api/types";
+import type { TranslateFn } from "../../i18nTypes";
 
 /** Issue #596: backend reason codes as a translated, de-duplicated list. */
 export function reasonList(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   codes: string[],
 ): string {
   return [...new Set(codes)]

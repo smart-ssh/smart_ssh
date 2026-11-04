@@ -6,21 +6,22 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { EvaluationTraceDto, RuleDto, ServerDto } from "../types";
+import type { EvaluationTraceDto, RuleDto, ServerDto } from "../api/types";
 import { TestPanel } from "./FilterRulesView";
 
 const evaluateExplainedMock = vi.fn<
   (command: string, ctx: { serverId: string | null; tags: string[] }) => Promise<EvaluationTraceDto>
 >();
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
-    evaluateExplainedMock(command, ctx),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
+      evaluateExplainedMock(command, ctx),
+  }),
+);
 
 function taggedServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "server-1",
     name: "prod-1",
     host: "prod-1.internal",

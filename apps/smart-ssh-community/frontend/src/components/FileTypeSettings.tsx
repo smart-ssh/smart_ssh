@@ -6,8 +6,8 @@ import {
   normalizeExtension,
   saveFileTypeApps,
   type FileTypeAppSettings,
-} from "../fileTypeSettings";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../settings/fileTypeSettings";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
 interface Row {
@@ -59,7 +59,7 @@ export function FileTypeSettings() {
         console.warn("Konnte Dateityp-Zuordnungen nicht laden:", err);
         setLoadError(t("fileTypes.loadFailed"));
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
 
   const updateRow = (id: string, patch: Partial<Pick<Row, "extension" | "appPath">>) => {

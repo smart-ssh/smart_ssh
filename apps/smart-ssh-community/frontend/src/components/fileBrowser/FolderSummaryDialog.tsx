@@ -1,5 +1,6 @@
+import { dynamicKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import type { FolderUploadSummaryDto } from "../../types";
+import type { FolderUploadSummaryDto } from "../../api/types";
 import { Button, DialogFrame } from "../ui";
 
 interface FolderSummaryDialogProps {
@@ -44,7 +45,7 @@ export function FolderSummaryDialog({ folderSummary, onClose }: FolderSummaryDia
             <li key={"s:" + e.path} className="break-all">
               <span className="text-warning-fg-soft">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
               <span className="font-mono">{e.path}</span> —{" "}
-              {t("fileBrowser.folderUpload.reason." + e.reason)}
+              {t(dynamicKey("fileBrowser.folderUpload.reason." + e.reason))}
             </li>
           ))}
         </ul>

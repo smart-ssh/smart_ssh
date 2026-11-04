@@ -11,7 +11,7 @@ import type {
   ServerDto,
   SessionSummaryDto,
   ChatSessionSummaryDto,
-} from "../../src/types";
+} from "../../src/api/types";
 import type {
   CannedResponse,
   E2eBridge,
@@ -105,7 +105,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
   const openSession = (server: ServerDto): string => {
     const sessionId = freshId("session");
-    model.sessions.push({
+    model.sessions.push({ chatSessionId: null,
       sessionId,
       serverId: server.id,
       serverName: server.name,

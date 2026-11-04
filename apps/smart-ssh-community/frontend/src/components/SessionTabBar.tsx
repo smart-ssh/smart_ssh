@@ -1,11 +1,10 @@
 import { useCallback, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { numberedServerName, type SessionTab } from "../useSessionTabs";
+import { numberedServerName, type SessionTab } from "../hooks/useSessionTabs";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
+import { Button } from "./ui";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 
 interface SessionTabBarProps {
   tabs: SessionTab[];
@@ -83,20 +82,20 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       onBlur={onBlur}
       className="flex w-full items-center gap-1 overflow-x-auto"
     >
-      <button
+      <Button variant="bare"
         type="button"
         {...stopProps(null)}
         aria-current={activeSessionId === null ? "page" : undefined}
         onClick={() => onSwitch(null)}
         title={t("sessionTabs.overview")}
-        className={`${FOCUS_RING} font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
+        className={`focus-ring font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
           activeSessionId === null
             ? "border-accent/55 bg-accent/16 text-accent-fg"
             : "border-transparent text-fg-subtle hover:bg-surface-raised"
         }`}
       >
         {t("sessionTabs.overview")}
-      </button>
+      </Button>
 
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
@@ -123,12 +122,12 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                 : "border-transparent text-fg-subtle hover:bg-surface-raised"
             }`}
           >
-            <button
+            <Button variant="bare"
               type="button"
               {...stopProps(tab.sessionId)}
               aria-current={active ? "page" : undefined}
               onClick={() => onSwitch(tab.sessionId)}
-              className={`${FOCUS_RING} font-heading flex items-center gap-1.5 font-semibold tracking-wide`}
+              className={`focus-ring font-heading flex items-center gap-1.5 font-semibold tracking-wide`}
               title={
                 tab.mcp
                   ? `${label} — ${t("sessionTabs.mcp.tabHint")}`
@@ -143,18 +142,18 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                 label={label}
                 labelClass={tab.mcp ? "max-w-[24ch] truncate" : tab.phase !== "connected" ? "max-w-[28ch] truncate" : "max-w-[12ch] truncate"}
               />
-            </button>
-            <button
+            </Button>
+            <Button variant="bare"
               type="button"
               onClick={() => onRequestClose(tab.sessionId)}
               aria-label={t("sessionTabs.closeTab", { name: label })}
               // Eigener Tab-Stopp nur im aktiven Tab; die übrigen schließt die
               // Entf-Taste auf dem fokussierten Tab (Roving-Tabindex).
               tabIndex={active ? 0 : -1}
-              className={`${FOCUS_RING} inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
+              className={`focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
             >
               ✕
-            </button>
+            </Button>
           </div>
         );
       })}

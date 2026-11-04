@@ -7,19 +7,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { deleteGroup } from "../api";
+import { deleteGroup } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DeleteGroupResult } from "../types";
+import type { DeleteGroupResult } from "../api/types";
 import { GroupForm } from "./GroupForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  deleteGroup: vi.fn(),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(10000)),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(10000)),
+  }),
+);
 
 function renderForm() {
   return render(
@@ -27,7 +27,7 @@ function renderForm() {
       <GroupForm
         groupId="g1"
         defaultParentId={null}
-        allGroups={[{ id: "g1", name: "Produktion", parentId: null, notes: "" }]}
+        allGroups={[{ isCopy: false, id: "g1", name: "Produktion", parentId: null, notes: "" }]}
         onSaved={() => {}}
         onDeleted={() => {}}
       />

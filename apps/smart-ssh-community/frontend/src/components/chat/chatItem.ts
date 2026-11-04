@@ -1,5 +1,6 @@
 import { type ComposerAttachment } from "../../extensions/registry";
-import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../types";
+import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../api/types";
+import type { TranslateFn } from "../../i18nTypes";
 
 export type ChatItem =
   | {
@@ -176,7 +177,7 @@ export type ChatItem =
  * anderen Aktionstypen bleibt der Parameter ungenutzt.
  */
 export function describeAction(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   action: AiAction,
   targetName: string | null,
 ): { label: string; command?: string } {
@@ -191,6 +192,10 @@ export function describeAction(
   }
   if ("WriteRemoteFile" in action) {
     return { label: t("actionCard.writeFile", { path: action.WriteRemoteFile.path }) };
+  }
+  if ("AskUser" in action) {
+    // Questions travel as their own event and never reach the action card.
+    return { label: action.AskUser.question };
   }
   const name = targetName ?? t("actionCard.unknownTarget");
   const isGroup = action.ProposeNoteUpdate.target === "CurrentServerGroup";
@@ -247,7 +252,7 @@ export function truncateMcpClientName(name: string): string {
 }
 
 export function decisionBadge(
-  t: (key: string) => string,
+  t: TranslateFn,
   decision: Decision,
 ): { text: string; className: string } {
   if (decision === "AutoExec") {

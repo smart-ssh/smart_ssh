@@ -270,6 +270,67 @@ impl SftpSession for MockSftpSession {
         Ok(end)
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("read_range {path}"));
+        let content = &inner
+            .files
+            .get(path)
+            .ok_or_else(|| Self::not_found(path))?
+            .content;
+        let start = usize::try_from(offset)
+            .unwrap_or(usize::MAX)
+            .min(content.len());
+        let end = start.saturating_add(len).min(content.len());
+        Ok(content[start..end].to_vec())
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("write_range {path}"));
+        if inner.permission_denied_paths.contains(path) {
+            return Err(SshError::SftpPermissionDenied(format!(
+                "keine Schreibrechte für {path}"
+            )));
+        }
+        if truncate {
+            inner.files.insert(
+                path.to_string(),
+                MockFile {
+                    content: Vec::new(),
+                    permissions: 0o644,
+                    modified: Some(Utc::now()),
+                },
+            );
+        }
+        let file = inner
+            .files
+            .get_mut(path)
+            .ok_or_else(|| Self::not_found(path))?;
+        let start = usize::try_from(offset).unwrap_or(usize::MAX);
+        if file.content.len() < start {
+            file.content.resize(start, 0);
+        }
+        let end = start + data.len();
+        if file.content.len() < end {
+            file.content.resize(end, 0);
+        }
+        file.content[start..end].copy_from_slice(data);
+        file.modified = Some(Utc::now());
+        Ok(())
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("stat {path}"));

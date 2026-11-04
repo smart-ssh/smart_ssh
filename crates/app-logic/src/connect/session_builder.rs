@@ -436,6 +436,7 @@ pub async fn build_session(
         },
         persistence: ChatPersistence {
             chat_content: state.chat_content.clone(),
+            title_attempts: state.title_attempts.clone(),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
             // Spec 0057, §1: same gating as `chat_session_store` (FK, migration 0011).
             ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),

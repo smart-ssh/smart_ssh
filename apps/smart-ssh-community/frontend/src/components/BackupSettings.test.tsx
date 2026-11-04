@@ -5,24 +5,24 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import * as api from "../api";
+import * as api from "../api/api";
 import { testI18n } from "../testI18n";
 import { BackupSettings } from "./BackupSettings";
 
-vi.mock("../api", () => ({
-  backupKeyStatus: vi.fn(),
-  createBackupKeyWithCode: vi.fn(),
-  newBackupCode: vi.fn(),
-  setBackupPassphrase: vi.fn(() => Promise.resolve()),
-  exportEncryptedBackup: vi.fn(),
-  pickBackupImportFile: vi.fn(),
-  startBackupImport: vi.fn(),
-  confirmBackupImport: vi.fn(),
-  cancelBackupImport: vi.fn(() => Promise.resolve()),
-  clipboardWriteText: vi.fn(() => Promise.resolve()),
-  commandErrorMessage: (e: unknown) => (e as { message?: string }).message ?? String(e),
-  commandErrorCode: (e: unknown) => (e as { code?: string | null }).code ?? null,
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    backupKeyStatus: vi.fn(),
+    createBackupKeyWithCode: vi.fn(),
+    newBackupCode: vi.fn(),
+    setBackupPassphrase: vi.fn(() => Promise.resolve()),
+    exportEncryptedBackup: vi.fn(),
+    pickBackupImportFile: vi.fn(),
+    startBackupImport: vi.fn(),
+    confirmBackupImport: vi.fn(),
+    cancelBackupImport: vi.fn(() => Promise.resolve()),
+    clipboardWriteText: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 const COUNTS = { servers: 12, groups: 2, rules: 30, notes: 8, aiProviders: 1 };
 const FILE_COUNTS = { servers: 15, groups: 3, rules: 42, notes: 11, aiProviders: 2 };

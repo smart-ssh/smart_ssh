@@ -3,7 +3,8 @@ import type {
   AuthMethodKind,
   PostIngestPolicy,
   ServerDto,
-} from "../../types";
+} from "../../api/types";
+import type { TranslateFn } from "../../i18nTypes";
 
 /** Formular-lokaler Zustand — getrennt von [`AuthMethodInput`], weil
  * Textfelder immer einen String brauchen (nie `null`), auch wenn die
@@ -106,7 +107,6 @@ export interface ServerFormState {
   groupId: string | null;
   jumpHost: string | null;
   tags: string[];
-  tagDraft: string;
   auth: AuthFormState;
   sudoPassword: string;
   hasSudoPassword: boolean;
@@ -125,8 +125,7 @@ export type ServerFormAction =
   | { type: "load"; server: ServerDto }
   | { type: "setField"; field: ServerFormFieldKey; value: ServerFormState[ServerFormFieldKey] }
   | { type: "setAuth"; auth: AuthFormState }
-  | { type: "addTag" }
-  | { type: "removeTag"; tag: string }
+  | { type: "setTags"; tags: string[] }
   | { type: "markDirty" }
   | { type: "reset"; defaultGroupId: string | null }
   | { type: "saved" };
@@ -142,7 +141,6 @@ export function initialServerFormState(defaultGroupId: string | null): ServerFor
     groupId: defaultGroupId,
     jumpHost: null,
     tags: [],
-    tagDraft: "",
     auth: authStateFromKind("password"),
     sudoPassword: "",
     hasSudoPassword: false,
@@ -200,20 +198,13 @@ export function serverFormReducer(state: ServerFormState, action: ServerFormActi
       return { ...state, [action.field]: action.value };
     case "setAuth":
       return { ...state, auth: action.auth };
-    case "addTag": {
-      const value = state.tagDraft.trim();
-      if (value && !state.tags.includes(value)) {
-        return { ...state, tags: [...state.tags, value], tagDraft: "" };
-      }
-      return { ...state, tagDraft: "" };
-    }
-    case "removeTag":
-      return { ...state, tags: state.tags.filter((tagValue) => tagValue !== action.tag) };
+    case "setTags":
+      return { ...state, tags: action.tags };
     case "markDirty":
       return state.dirty ? state : { ...state, dirty: true };
     case "reset":
       // Create mode: back to empty defaults. Like before, `dirty`, the
-      // tag draft, local notes, start directory and SFTP path stay as they are.
+      // local notes, start directory and SFTP path stay as they are.
       return {
         ...state,
         loaded: null,
@@ -239,7 +230,7 @@ export function serverFormReducer(state: ServerFormState, action: ServerFormActi
  * aufzurufen — diese Funktion läuft außerhalb einer Komponente, Hooks sind
  * hier nicht erlaubt. */
 export function authKindLabels(
-  t: (key: string) => string,
+  t: TranslateFn,
 ): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),

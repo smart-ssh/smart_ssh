@@ -1,15 +1,15 @@
 import { StrictMode, type ComponentType, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
-import { getStartupState } from './api.ts'
+import { getStartupState } from './api/api.ts'
 import { AppRoot } from './components/AppRoot.tsx'
 import { StartupGate } from './components/StartupGate.tsx'
 import { ErrorBoundary } from './components/ui'
 import { initI18n } from './i18n.ts'
-import { installContextMenuSuppression } from './contextMenu.ts'
-import type { StartupStateDto } from './types.ts'
-import { detectFallbackPlatform } from './titlebarLayout.ts'
-import { applyStoredTheme, initTheme } from './theme.ts'
+import { installContextMenuSuppression } from './lib/contextMenu.ts'
+import type { StartupStateDto } from './api/types.ts'
+import { detectFallbackPlatform } from './lib/platform.ts'
+import { applyStoredTheme, initTheme } from './lib/theme.ts'
 
 export interface BootstrapOptions {
   /** Runs after initI18n and before the first render; may be async. */

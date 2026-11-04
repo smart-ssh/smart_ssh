@@ -17,6 +17,7 @@
 #[path = "../../../../ssh-transport/tests/fixtures/test_server.rs"]
 mod two_hop_fixture;
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -26,7 +27,7 @@ use async_trait::async_trait;
 use persistence_sqlite::{AiProviderConfig, SqliteProfileStore};
 use ssh_manager_core::ai::{ChatMessage, MessageContent, ProviderId, ProviderType, Role};
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, CredentialStore, PostIngestPolicy, ProfileStore, Server,
+    AuthMethod, CredentialRef, CredentialStore, ProfileStore, Server,
 };
 use ssh_manager_core::ssh::{
     CommandOutput, ConnectionTarget, HostKeyDecision, HostKeyStore, InteractiveShell,
@@ -132,28 +133,6 @@ impl HostKeyStore for NoHostKeys {
     }
 }
 
-fn server() -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id: ServerId(uuid::Uuid::new_v4()),
-        name: "web-1".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "root".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::Balanced,
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
 fn provider_config() -> AiProviderConfig {
     let now = chrono::Utc::now();
     AiProviderConfig {
@@ -194,7 +173,11 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
     let chat_db = SqliteProfileStore::connect_plaintext(&dir.path().join("chat.db"))
         .await
         .unwrap();
-    let server = server();
+    let server = ServerBuilder::new()
+        .name("web-1")
+        .username("root")
+        .post_ingest_policy(ssh_manager_core::profiles::PostIngestPolicy::Balanced)
+        .build();
     let provider = provider_config();
     for db in [&main_db, &chat_db] {
         db.create_server(&server).await.unwrap();
@@ -240,6 +223,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
     Fixture {
@@ -886,7 +870,11 @@ async fn test_reconnect_goes_through_the_jump_host_chain_again() {
     let closed = Arc::new(AtomicBool::new(false));
     let connector = ScriptedConnector::new(connected(&closed));
     let fx = fixture(connector.clone()).await;
-    let mut jump = server();
+    let mut jump = ServerBuilder::new()
+        .name("web-1")
+        .username("root")
+        .post_ingest_policy(ssh_manager_core::profiles::PostIngestPolicy::Balanced)
+        .build();
     jump.name = "bastion".to_string();
     fx.state.profile_store.create_server(&jump).await.unwrap();
     let mut target = fx
@@ -1009,7 +997,11 @@ impl BastionProxy {
 }
 
 fn password_server(name: &str, port: u16, jump_host: Option<ServerId>) -> Server {
-    let mut server = server();
+    let mut server = ServerBuilder::new()
+        .name("web-1")
+        .username("root")
+        .post_ingest_policy(ssh_manager_core::profiles::PostIngestPolicy::Balanced)
+        .build();
     server.name = name.to_string();
     server.host = "127.0.0.1".to_string();
     server.port = port;
@@ -1702,5 +1694,37 @@ async fn test_cancel_of_unknown_attempt_is_a_noop() {
     let connector = StepConnector::new(vec![]);
     let fx = fixture(connector).await;
     assert!(!fx.state.connect_attempts.cancel("does-not-exist"));
+    reset(app.handle());
+}
+
+/// Issue #922: the title-attempt entry of a chat session is removed by the
+/// `delete_chat_session` command (not just by `TitleAttempts::forget`).
+#[tokio::test]
+async fn test_delete_chat_session_forgets_its_title_attempt() {
+    use tauri::Manager as _;
+    let _guard = lock_async().await;
+    let app = acknowledged_app();
+    let disconnected = Arc::new(AtomicBool::new(false));
+    let connector = ScriptedConnector::new(connected(&disconnected));
+    let fx = fixture(connector).await;
+    let chat_id = fx
+        .state
+        .chat_session_store
+        .create_session(&fx.server_id, None)
+        .await
+        .unwrap();
+    assert!(fx.state.title_attempts.claim(chat_id));
+    assert!(!fx.state.title_attempts.claim(chat_id), "claimed once");
+    app.manage(fx.state);
+
+    delete_chat_session(app.state::<AppState>(), chat_id)
+        .await
+        .expect("delete succeeds");
+
+    let state = app.state::<AppState>();
+    assert!(
+        state.title_attempts.claim(chat_id),
+        "entry must be gone after the session is deleted"
+    );
     reset(app.handle());
 }

@@ -11,12 +11,13 @@ import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import { ManagementView } from "./ManagementView";
 
-vi.mock("../api", () => ({
-  listUnusableServers: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve([])),
-  listServers: vi.fn(() => Promise.resolve([])),
-  commandErrorMessage: (err: unknown) => String(err),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve([])),
+    listServers: vi.fn(() => Promise.resolve([])),
+  }),
+);
 
 function renderWithLanguage(language: "de" | "en") {
   void testI18n.changeLanguage(language);

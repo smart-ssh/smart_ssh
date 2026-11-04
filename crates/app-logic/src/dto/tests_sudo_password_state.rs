@@ -29,35 +29,13 @@ use ssh_manager_core::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialStore, Group, GroupId, NoteEditor,
     NoteRevision, PostIngestPolicy, Server,
 };
-use ssh_manager_core::shared::ServerId;
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::ssh::RemoteEntry;
-
-fn server() -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: "web-01".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
+use ssh_manager_core::testing::ServerBuilder;
 
 #[test]
 fn test_stored_sudo_password_is_reported_as_present() {
-    let server = server();
+    let server = ServerBuilder::new().name("web-01").build();
     let store = InMemoryCredentialStore::new()
         .with_secret(&sudo_password_credential_ref(server.id), "sudo-secret");
 
@@ -69,7 +47,7 @@ fn test_stored_sudo_password_is_reported_as_present() {
 
 #[test]
 fn test_missing_entry_is_reported_as_absent_not_unknown() {
-    let server = server();
+    let server = ServerBuilder::new().name("web-01").build();
     let store = InMemoryCredentialStore::new();
 
     let dto = ServerDto::from_server(&server, &store);
@@ -88,7 +66,7 @@ fn test_missing_entry_is_reported_as_absent_not_unknown() {
 /// kann.
 #[test]
 fn test_unreadable_keychain_is_reported_as_unknown_not_as_absent() {
-    let server = server();
+    let server = ServerBuilder::new().name("web-01").build();
     let store = InMemoryCredentialStore::new()
         .with_secret(&sudo_password_credential_ref(server.id), "sudo-secret")
         .with_failing_get();
@@ -110,7 +88,7 @@ fn test_unreadable_keychain_is_reported_as_unknown_not_as_absent() {
 /// mehr angezeigt.
 #[test]
 fn test_secrets_left_behind_is_serialised_as_camel_case() {
-    let server = server();
+    let server = ServerBuilder::new().name("web-01").build();
     let store = InMemoryCredentialStore::new();
     let result = DeleteServerResult {
         server: ServerDto::from_server(&server, &store),
@@ -131,7 +109,7 @@ fn test_secrets_left_behind_is_serialised_as_camel_case() {
 /// camelCase, wie alle anderen `ServerDto`-Felder (s. `rename_all`).
 #[test]
 fn test_unknown_flag_is_serialised_as_camel_case() {
-    let server = server();
+    let server = ServerBuilder::new().name("web-01").build();
     let store = InMemoryCredentialStore::new().with_failing_get();
 
     let json = serde_json::to_value(ServerDto::from_server(&server, &store)).unwrap();

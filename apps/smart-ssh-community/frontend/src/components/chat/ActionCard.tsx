@@ -4,17 +4,17 @@ import { CoverageList } from "./CoverageList";
 import { RiskBadges, RiskHintFootnote } from "./RiskBadges";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cancelRunningCommand, takeChatContentIntoNote } from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { type LiveOutput } from "../../liveOutput";
+import { cancelRunningCommand, takeChatContentIntoNote } from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { type LiveOutput } from "../../lib/liveOutput";
 import { LiveCommandOutput } from "../LiveCommandOutput";
-import { formatBytes } from "../../format";
-import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../types";
+import { formatBytes } from "../../lib/format";
+import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import { Button } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 export function ActionCard({
   item,
@@ -349,13 +349,13 @@ export function ConfirmActionForm({
       <div className="flex flex-wrap items-center gap-2">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
          * look stays hand-written; the focus ring is the shared one. */}
-        <button
+        <Button variant="bare"
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-ring"
         >
           {t("confirmDialog.execute")}
-        </button>
+        </Button>
         <Button
           variant="danger"
           size="sm"

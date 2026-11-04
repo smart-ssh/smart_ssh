@@ -15,6 +15,7 @@ use super::{ServerDto, UnusableServerDto};
 /// zusätzliches Feld auf einem bereits geladenen Wert.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct GroupDto {
     pub id: String,
     pub name: String,
@@ -29,6 +30,7 @@ pub struct GroupDto {
 /// of what was cleared.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct KeepGroupResult {
     pub applied: bool,
     pub groups: usize,
@@ -50,6 +52,7 @@ impl From<&Group> for GroupDto {
 /// Vorschau bzw. Ergebnis von `delete_group` (Spec 0008, Abschnitt 3).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct DeleteGroupResult {
     pub child_groups_to_delete: Vec<GroupDto>,
     pub servers_to_unassign: Vec<ServerDto>,

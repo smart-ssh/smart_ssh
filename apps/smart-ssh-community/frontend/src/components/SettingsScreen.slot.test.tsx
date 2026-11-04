@@ -14,12 +14,12 @@ import { SettingsScreen } from "./SettingsScreen";
 vi.mock("./BackupSettings", () => ({
   BackupSettings: () => <p>builtin-backup</p>,
 }));
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  discoverModels: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    discoverModels: vi.fn(),
+  }),
+);
 
 const mk = (text: string) => () => <p>{text}</p>;
 

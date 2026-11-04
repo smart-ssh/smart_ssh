@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KeyboardEvent } from "react";
-import { listPromptHistory } from "../../api";
+import { listPromptHistory } from "../../api/api";
 import {
   registerComposerDropHandler,
   resetComposerRegistryForTests,
@@ -22,10 +22,11 @@ vi.mock("@tauri-apps/api/webview", () => ({
     },
   }),
 }));
-vi.mock("../../api", () => ({
-  listPromptHistory: vi.fn(),
-  commandErrorMessage: (e: unknown) => String(e),
-}));
+vi.mock("../../api/api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    listPromptHistory: vi.fn(),
+  }),
+);
 
 const attachment = (id: string): ComposerAttachment => ({
   id,

@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,9 +7,9 @@ import {
   DEFAULT_AUTO_RECONNECT_SECONDS,
   loadAutoReconnectSeconds,
   saveAutoReconnectSeconds,
-} from "../autoReconnectSettings";
+} from "../settings/autoReconnectSettings";
 
-const LABEL_KEY: Record<AutoReconnectSeconds, string> = {
+const LABEL_KEY: Record<AutoReconnectSeconds, TranslationKey> = {
   0: "autoReconnect.off",
   30: "autoReconnect.seconds30",
   60: "autoReconnect.seconds60",

@@ -77,7 +77,7 @@ npm run test:e2e:ui   # Playwright UI mode, for local debugging
 `#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
 entry has no definition, a non-test frontend file `invoke`s an
 unregistered name, or a name in the startup gate's allow list is not
-registered (issue #101). Then it runs `npm run check-a11y-rules`
+registered (issue #101). Then `npm run check-events` (`scripts/check-event-names.mjs`, issue #918) fails when the event name constants in `crates/app-logic/src/event_names.rs` and `src/api/eventNames.ts` drift apart or a `listen(`/`once(` call uses a string literal. Then it runs `npm run check-a11y-rules`
 (`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
 `jsx-a11y` rule that the installed oxlint enables is not listed with
 `error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
@@ -358,7 +358,7 @@ not by hand-editing, so the lockfile stays consistent).
   touched anyway; when one is renamed or removed, drop it from that list.
   Note that `crates/app-logic/src/test_connection.rs` is production code (the
   "test connection" feature), not a test file.
-- Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
+- Frontend: pure logic (`lib/groupTree.ts`, `lib/remotePath.ts`, `api/errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component. Async frontend tests
   follow ADR 0122 R6–R15 (`docs/adr/0122-plattform-und-zeitunabhaengige-tests.md`):

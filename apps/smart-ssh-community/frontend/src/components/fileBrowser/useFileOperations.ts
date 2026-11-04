@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useEffect, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -12,11 +13,11 @@ import {
   sftpMkdir,
   sftpRename,
   sftpStat,
-} from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { displayPath, joinPath, localBaseName, parentPath } from "../../remotePath";
-import { showToast } from "../../toastBus";
-import type { DeletePreviewDto, RemoteEntryDto } from "../../types";
+} from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { displayPath, joinPath, localBaseName, parentPath } from "../../lib/remotePath";
+import { showToast } from "../../buses/toastBus";
+import type { DeletePreviewDto, RemoteEntryDto } from "../../api/types";
 import { isValidEntryName, type MoveKind } from "./shared";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
 
@@ -145,7 +146,7 @@ export function useFileOperations(
     };
     // Spec-Reviewer-Fund: die Vorschau muss im selben Modus zählen, in dem
     // danach gelöscht wird.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the preview counts in the same mode as the later delete (spec-reviewer finding)
   }, [sessionId, deleteTarget, channelUser]);
 
   const open = (next: Exclude<OperationDialog, { kind: "none" }>) => {
@@ -246,7 +247,7 @@ export function useFileOperations(
 
   /** Issue #570: ein Fehler aus "Neuer Ordner"/"Neue Datei" — "Name
    * existiert" und "Zugriff verweigert" mit übersetztem Grund. */
-  const notifyCreateFailed = (key: string, name: string, err: unknown) => {
+  const notifyCreateFailed = (key: TranslationKey, name: string, err: unknown) => {
     const code = commandErrorCode(err);
     notifyFailed(
       key,
@@ -260,8 +261,8 @@ export function useFileOperations(
   const confirmCreate = (
     kind: "mkdir" | "newFile",
     create: typeof sftpMkdir,
-    doneKey: string,
-    failedKey: string,
+    doneKey: TranslationKey,
+    failedKey: TranslationKey,
   ) => {
     if (dialog.kind !== kind) return;
     const name = dialog.value.trim();

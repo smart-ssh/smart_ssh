@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import type { ButtonHTMLAttributes } from "react";
 
 /** Button variants, see `docs/ui-guidelines.md`. */
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "bare";
 export type ButtonSize = "sm" | "md";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -12,7 +12,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BASE =
   "inline-flex items-center justify-center gap-1.5 rounded font-semibold transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus " +
+  "focus-ring-flush " +
   "focus-visible:ring-offset-1 focus-visible:ring-offset-surface " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -22,6 +22,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
     "border border-border-strong bg-surface-raised text-fg hover:bg-surface-hover",
   danger: "border border-danger-border bg-danger-subtle text-danger-fg-soft hover:bg-danger-subtle-hover",
   ghost: "text-accent-fg hover:bg-surface-raised hover:text-accent-fg-soft",
+  // No look of its own: the caller supplies every class (tabs, list rows,
+  // icon toggles, link-like text). Still gets `type="button"` and the ref.
+  bare: "",
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -37,7 +40,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     { variant = "secondary", size = "md", type = "button", className, ...rest },
     ref,
   ) {
-    const classes = [BASE, VARIANTS[variant], SIZES[size], className]
+    const bare = variant === "bare";
+    const classes = [bare ? "" : BASE, VARIANTS[variant], bare ? "" : SIZES[size], className]
       .filter(Boolean)
       .join(" ");
     return <button ref={ref} type={type} className={classes} {...rest} />;

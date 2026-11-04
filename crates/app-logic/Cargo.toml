@@ -21,7 +21,11 @@ path = "src/lib.rs"
 # ebenfalls `test-support`). Kein Produktivbau aktiviert es.
 test-support = []
 
+# Issue #919: generates src/generated/ipc.ts; not compiled without the feature.
+ts-export = ["dep:ts-rs", "ssh-manager-core/ts-export"]
+
 [dependencies]
+ts-rs = { workspace = true, optional = true }
 # Issue #104: NFKC-Normalisierung der Urteilswerte (Spec 0074).
 unicode-normalization = { workspace = true }
 ai-providers = { workspace = true }

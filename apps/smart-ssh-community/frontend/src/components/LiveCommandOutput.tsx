@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { LiveOutput } from "../liveOutput";
+import type { LiveOutput } from "../lib/liveOutput";
 
 /** Distance (px) from the bottom that still counts as "at the end". */
 const STICK_THRESHOLD_PX = 16;

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "../ui";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Gemeinsame kleine Eingabeaufforderung für "Umbenennen" und "Neuer
  * Ordner" — beide brauchen nur einen einzelnen Namen mit Bestätigen/

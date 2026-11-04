@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import type { DropKind } from "../treeDrag";
-import type { TreeDragState } from "../useTreeDrag";
+import type { DropKind } from "../lib/treeDrag";
+import type { TreeDragState } from "../hooks/useTreeDrag";
 
 /** Issue #48 / Spec 0103: Beschriftung, die beim Ziehen dem Zeiger folgt —
  * was gezogen wird und was ein Loslassen hier bewirkt. `pointer-events:

@@ -32,18 +32,19 @@ vi.mock("@xterm/addon-fit", () => ({
   },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   base64ToBytes: () => new Uint8Array(),
   onTerminalOutput: () => Promise.resolve(() => {}),
 }));
 const openTerminal = vi.fn(() => Promise.resolve(null));
-vi.mock("../api", () => ({
-  commandErrorMessage: String,
-  openTerminal: (...a: unknown[]) => openTerminal(...(a as [])),
-  terminalInput: () => Promise.resolve(),
-  terminalResize: () => Promise.resolve(),
-}));
-vi.mock("../startDirectory", () => ({ notifyMissingStartDirectory: () => {} }));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    openTerminal: (...a: unknown[]) => openTerminal(...(a as [])) as never,
+    terminalInput: () => Promise.resolve(),
+    terminalResize: () => Promise.resolve(),
+  }),
+);
+vi.mock("../lib/startDirectory", () => ({ notifyMissingStartDirectory: () => {} }));
 
 import { TerminalView, type TerminalLink } from "./TerminalView";
 

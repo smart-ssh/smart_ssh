@@ -1,17 +1,18 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, sftpElevationStatus } from "../../api";
-import { showToast } from "../../toastBus";
+import { commandErrorCode, commandErrorMessage, sftpElevationStatus } from "../../api/api";
+import { isMacLike, isWindowsLike } from "../../lib/platform";
+import { showToast } from "../../buses/toastBus";
 
 /** „Im Finder/Explorer zeigen“ — Beschriftung passend zum Betriebssystem. */
-function revealLabelKey(): string {
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes("mac")) return "fileToasts.revealFinder";
-  if (platform.includes("win")) return "fileToasts.revealExplorer";
+function revealLabelKey(): TranslationKey {
+  if (isMacLike()) return "fileToasts.revealFinder";
+  if (isWindowsLike()) return "fileToasts.revealExplorer";
   return "fileToasts.revealFileManager";
 }
 
-export type NotifyOk = (key: string, options: Record<string, unknown>, action?: () => void) => void;
-export type NotifyFailed = (key: string, name: string, err: unknown) => void;
+export type NotifyOk = (key: TranslationKey, options: Record<string, unknown>, action?: () => void) => void;
+export type NotifyFailed = (key: TranslationKey, name: string, err: unknown) => void;
 
 /**
  * Spec 0067, Teil B: every file action reports its result as a toast. Only

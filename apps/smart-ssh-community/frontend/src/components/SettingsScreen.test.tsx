@@ -12,56 +12,45 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
-import { SUPPORTED_LANGUAGES } from "../languages";
+import { SUPPORTED_LANGUAGES } from "../lib/languages";
 import { testI18n } from "../testI18n";
 import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
 import { SettingsScreen } from "./SettingsScreen";
 
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  addAiProvider: vi.fn(),
-  deleteAiProvider: vi.fn(),
-  discoverModels: vi.fn(),
-  fetchAttestationInfo: vi.fn(),
-  setActiveAiProvider: vi.fn(),
-  openLogDirectory: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-  // Spec 0069, Teil B1: `AiProviderSettings` (gerendert unter "KI-Provider")
-  // löst beim Mounten ohne vorhandenen Ollama-Provider automatisch eine
-  // Hintergrund-Probe aus (`discoverModels` → im Fehlerfall
-  // `commandErrorCode`) — ohne diesen Eintrag bricht die Probe mit einer
-  // "No commandErrorCode export" Unhandled Rejection ab.
-  commandErrorCode: (err: unknown) => {
-    if (typeof err === "object" && err !== null && "code" in err) {
-      const code = (err as { code: unknown }).code;
-      if (typeof code === "string") return code;
-    }
-    return null;
-  },
-  // Spec 0055, Teil 3: die Regressionstests unten klicken tatsächlich in
-  // "Sitzungen & Daten"/"MCP-Server" hinein (anders als die Tests oben, die
-  // nur die Nav-Einträge prüfen) — beide Sektionen laden beim Mounten
-  // echte Daten.
-  getChatSessionRetentionDays: vi.fn(() => Promise.resolve(null)),
-  setChatSessionRetentionDays: vi.fn(),
-  getMcpServerSettings: vi.fn(() =>
-    Promise.resolve({
-      enabled: false,
-      endpoint: "http://127.0.0.1:0",
-      token: "",
-      confirmTimeoutSecs: 120,
-      allowedServerIds: [],
-    }),
-  ),
-  listServers: vi.fn(() => Promise.resolve([])),
-  regenerateMcpServerToken: vi.fn(),
-  setMcpServerAllowedServers: vi.fn(),
-  setMcpServerConfirmTimeoutSecs: vi.fn(),
-  setMcpServerEnabled: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    addAiProvider: vi.fn(),
+    deleteAiProvider: vi.fn(),
+    discoverModels: vi.fn(),
+    fetchAttestationInfo: vi.fn(),
+    setActiveAiProvider: vi.fn(),
+    openLogDirectory: vi.fn(),
+    // Spec 0055, Teil 3: die Regressionstests unten klicken tatsächlich in
+    // "Sitzungen & Daten"/"MCP-Server" hinein (anders als die Tests oben, die
+    // nur die Nav-Einträge prüfen) — beide Sektionen laden beim Mounten
+    // echte Daten.
+    getChatSessionRetentionDays: vi.fn(() => Promise.resolve(null)),
+    setChatSessionRetentionDays: vi.fn(),
+    getMcpServerSettings: vi.fn(() =>
+      Promise.resolve({
+        enabled: false,
+        endpoint: "http://127.0.0.1:0",
+        token: "",
+        confirmTimeoutSecs: 120,
+        allowedServerIds: [],
+      }),
+    ),
+    listServers: vi.fn(() => Promise.resolve([])),
+    regenerateMcpServerToken: vi.fn(),
+    setMcpServerAllowedServers: vi.fn(),
+    setMcpServerConfirmTimeoutSecs: vi.fn(),
+    setMcpServerEnabled: vi.fn(),
+  }),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
   loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),

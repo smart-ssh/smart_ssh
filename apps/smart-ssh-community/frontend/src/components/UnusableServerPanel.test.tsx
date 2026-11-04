@@ -4,19 +4,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteUnusableServer } from "../api";
+import { deleteUnusableServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
+import type { DeleteUnusableServerResult, UnusableServerDto } from "../api/types";
 import { UnusableServerPanel } from "./UnusableServerPanel";
 
-vi.mock("../api", async () => {
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
-    deleteUnusableServer: vi.fn(),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-  };
-});
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({ deleteUnusableServer: vi.fn() }),
+);
 
 const SERVER: UnusableServerDto = {
   id: "unusable-1",

@@ -20,7 +20,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { SessionTabBar } from "./SessionTabBar";
 
 const CONNECTED: Pick<SessionTab, "phase" | "attemptId" | "progress" | "failure"> = {
@@ -150,7 +150,7 @@ describe("SessionTabBar new session (issue #657)", () => {
     );
     expect(screen.getByText("prod-db (2)")).toBeInTheDocument();
     fireEvent.contextMenu(screen.getByText("prod-db (2)"));
-    fireEvent.click(screen.getByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Neue Sitzung" }));
     expect(onNewSession).toHaveBeenCalledWith({ id: "server-1", name: "prod-db" });
   });
 });

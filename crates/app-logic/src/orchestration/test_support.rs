@@ -17,9 +17,7 @@ use ssh_manager_core::ai::{
     SessionContext,
 };
 use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
-use ssh_manager_core::profiles::{
-    AiAction, Group, GroupId, NoteRevision, ProfileResult, ProfileStore, Server,
-};
+use ssh_manager_core::profiles::{AiAction, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError};
 
@@ -238,7 +236,7 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         if let Some(chunks) = self.streamed.get(command).cloned() {
             for chunk in chunks {
-                let _ = sink.send(chunk);
+                let _ = sink.send(chunk).await;
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
@@ -295,7 +293,7 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
         sink: ssh_manager_core::ssh::ExecOutputSink,
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         for chunk in self.chunks {
-            let _ = sink.send(chunk);
+            let _ = sink.send(chunk).await;
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
         // Like a real transport, keep the live channel open until the
@@ -315,81 +313,7 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct InMemoryProfileStore {
-    pub(crate) note_revisions: StdMutex<Vec<NoteRevision>>,
-    /// Nur von den Spec-0040-Abschnitt-6-Tests ("In Notiz übernehmen")
-    /// befüllt, die einen tatsächlich auflösbaren `get_server`-Aufruf
-    /// brauchen, um einen bestehenden Notizinhalt vorzuspiegeln — alle
-    /// anderen Tests in diesem Modul lassen die Map leer und verlassen
-    /// sich weiterhin auf den bisherigen `ServerNotFound`-Fallback
-    /// unten.
-    pub(crate) servers: StdMutex<HashMap<ServerId, Server>>,
-    /// Issue #843: `get_server` fails with a backend error (not
-    /// `ServerNotFound`).
-    pub(crate) fail_get_server: std::sync::atomic::AtomicBool,
-}
-
-#[async_trait]
-impl ProfileStore for InMemoryProfileStore {
-    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-        if self
-            .fail_get_server
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            return Err(ssh_manager_core::profiles::ProfileError::Backend(
-                "disk I/O error".to_string(),
-            ));
-        }
-        self.servers.lock().unwrap().get(id).cloned().ok_or(
-            ssh_manager_core::profiles::ProfileError::ServerNotFound(*id),
-        )
-    }
-    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
-        Err(ssh_manager_core::profiles::ProfileError::GroupNotFound(*id))
-    }
-    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
-        Ok(Vec::new())
-    }
-    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
-        Ok(Vec::new())
-    }
-    async fn create_group(&self, _group: &Group) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn update_group(&self, _group: &Group) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn delete_group(&self, _id: &GroupId) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn create_server(&self, _server: &Server) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn update_server(&self, _server: &Server) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn delete_server(&self, _id: &ServerId) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
-        self.note_revisions.lock().unwrap().push(revision.clone());
-        Ok(())
-    }
-    async fn list_note_revisions(
-        &self,
-        target: ssh_manager_core::profiles::NoteTarget,
-    ) -> ProfileResult<Vec<NoteRevision>> {
-        Ok(self
-            .note_revisions
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|r| r.target == target)
-            .cloned()
-            .collect())
-    }
-}
+pub(crate) use ssh_manager_core::testing::InMemoryProfileStore;
 
 pub(crate) fn test_session(ai_events: Vec<AiEvent>, transport: MockSshTransport) -> Session {
     session_with_ai_provider(MockAiProvider::new(ai_events), transport)
@@ -469,6 +393,7 @@ pub(crate) fn session_with_ai_provider(
         },
         persistence: ChatPersistence {
             chat_content: Default::default(),
+            title_attempts: Default::default(),
             // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
             // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
             // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`

@@ -5,8 +5,8 @@ import type {
   NoteUpdateSuggestedEvent,
   SshConfigImportPreviewDto,
   SshConfigPreviewEntryDto,
-} from "../../src/types";
-import { THIRD_PARTY_NOTICES_MARKER } from "../../src/thirdPartyNoticesMarker";
+} from "../../src/api/types";
+import { THIRD_PARTY_NOTICES_MARKER } from "../../src/lib/thirdPartyNoticesMarker";
 import { expect, test } from "../support/app";
 import { failingStepLog, populated, server, ACKNOWLEDGED } from "../support/data";
 import { expectOnlyContentScrolls, expectUsable, scrollContainerWithin } from "../support/layout";

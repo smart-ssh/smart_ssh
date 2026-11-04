@@ -2,7 +2,7 @@
 // On success the tab turns into the normal session view in place.
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { ConnectProgressList } from "./ConnectProgressList";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { Button, Spinner } from "./ui";

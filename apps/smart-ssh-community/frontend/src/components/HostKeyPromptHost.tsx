@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { confirmHostKey } from "../api";
-import { commandErrorText } from "../errorCodes";
-import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "../events";
-import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
-import { showToast } from "../toastBus";
-import type { HostKeyVerificationNeededEvent } from "../types";
+import { confirmHostKey } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "../api/events";
+import { subscribeHostKeyPromptClear } from "../buses/hostKeyPromptBus";
+import { showToast } from "../buses/toastBus";
+import type { HostKeyVerificationNeededEvent } from "../api/types";
 import { HostKeyDialog } from "./HostKeyDialog";
 
 /**

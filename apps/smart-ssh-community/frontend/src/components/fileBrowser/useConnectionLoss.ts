@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { onConnectionStatusChanged } from "../../events";
+import { onConnectionStatusChanged } from "../../api/events";
 
 /** Connection lost / restored handling of the file browser. */
 export function useConnectionLoss(
@@ -28,6 +28,6 @@ export function useConnectionLoss(
       unlisten.then((fn) => fn());
     };
     // `updateElevation` liest nur Refs/State-Setter und `sessionId`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listener is re-registered per session only
   }, [sessionId]);
 }

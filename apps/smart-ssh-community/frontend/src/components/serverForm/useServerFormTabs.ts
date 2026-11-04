@@ -1,9 +1,9 @@
 import { useEffect, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerSettingsTabs } from "../../extensions/FormSlots";
-import { resolveSectionLabel } from "../../resolveSectionLabel";
+import { resolveSectionLabel } from "../../lib/resolveSectionLabel";
 import { useTabsIdBase, type TabItem } from "../ui";
-import type { ServerDto } from "../../types";
+import type { ServerDto } from "../../api/types";
 import type { ServerTab } from "./formTypes";
 
 interface Options {
@@ -76,7 +76,7 @@ export function useServerFormTabs({ serverId, isLocal, loaded, autoFocusNotes, f
     activeExt && !state.openedExtTabs.has(activeExt) ? new Set(state.openedExtTabs).add(activeExt) : state.openedExtTabs;
   useEffect(() => {
     if (activeExt) update({ openedExtTabs: mountedExtTabs });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- remember the opened extension tab only when the active tab or server changes
   }, [activeExt, serverId]);
 
   // Tabs whose fields fail the browser validation (the form is `noValidate`,

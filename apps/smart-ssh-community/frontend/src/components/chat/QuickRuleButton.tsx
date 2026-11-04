@@ -1,11 +1,11 @@
 import { reasonList } from "./CoverageList";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, explainConfirmation } from "../../api";
+import { commandErrorMessage, explainConfirmation } from "../../api/api";
 import { useMenuPlacement } from "../../hooks/useMenuPlacement";
-import type { ExplainedSuggestionDto, SuggestionVerdictDto, SuggestionPatternDto, Scope } from "../../types";
+import type { ExplainedSuggestionDto, SuggestionVerdictDto, SuggestionPatternDto, Scope } from "../../api/types";
 import { Button } from "../ui";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Spec 0011, Abschnitt 4: zusätzlicher Button neben Ausführen/Ablehnen,
  * öffnet ein kompaktes Dropdown mit Muster-Vorschlägen + Scope-Auswahl
@@ -104,7 +104,7 @@ export function QuickRuleButton({
     return () => {
       stale = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the inputs listed here change
   }, [open, command, scopeKey, sessionId]);
 
   const handlePick = (suggestion: ExplainedSuggestionDto) => {

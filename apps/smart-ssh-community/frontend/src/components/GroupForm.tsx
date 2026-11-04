@@ -1,12 +1,12 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createGroup, deleteGroup, updateGroup } from "../api";
-import { commandErrorText } from "../errorCodes";
+import { createGroup, deleteGroup, updateGroup } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
 import { GroupFormSections } from "../extensions/FormSlots";
-import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
-import type { DeleteGroupResult, GroupDto } from "../types";
+import { flattenGroupOptions, groupOptionLabel } from "../lib/groupTree";
+import type { DeleteGroupResult, GroupDto } from "../api/types";
 import { NotesPanel } from "./NotesPanel";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button } from "./ui";
 
 /** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen

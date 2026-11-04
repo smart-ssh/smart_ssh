@@ -1,7 +1,7 @@
 // Issue #578, Spec 0113: the single JS definition of the narrow breakpoint.
 // The CSS side is `@custom-variant narrow` in `index.css` (`narrow:` prefix);
 // both must use the same query.
-import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { useMediaQuery } from "./useMediaQuery";
 
 /** First wide width in px; windows below it use the narrow layout. */

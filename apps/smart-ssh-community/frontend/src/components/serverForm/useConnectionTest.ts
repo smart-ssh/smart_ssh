@@ -1,14 +1,14 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cancelConnect, commandErrorCode, testConnection, trustHostKey } from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import { onConnectProgress } from "../../events";
+import { cancelConnect, commandErrorCode, testConnection, trustHostKey } from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import { onConnectProgress } from "../../api/events";
 import type {
   ConnectStepSnapshot,
   HostKeyInfo,
   ServerInput,
   TestConnectionReport,
-} from "../../types";
+} from "../../api/types";
 
 interface Options {
   /** `null` = the server is not saved yet. */

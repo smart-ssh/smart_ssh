@@ -8,8 +8,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { commandErrorMessage, listPromptHistory } from "../../api";
-import { isPointerInside } from "../../dropZone";
+import { commandErrorMessage, listPromptHistory } from "../../api/api";
+import { isPointerInside } from "../../lib/dropZone";
 import {
   type ComposerAction,
   type ComposerAttachment,
@@ -18,7 +18,7 @@ import {
   listComposerDropHandlers,
   subscribeComposer,
 } from "../../extensions/registry";
-import { initialHistoryNavState, navigateHistory, type HistoryNavState } from "../../promptHistoryNav";
+import { initialHistoryNavState, navigateHistory, type HistoryNavState } from "../../lib/promptHistoryNav";
 
 /**
  * Chat input state: draft, attachments, composer extension slot, native drop

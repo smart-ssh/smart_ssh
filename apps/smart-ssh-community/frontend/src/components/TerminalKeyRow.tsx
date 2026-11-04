@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import type { TerminalKeyId } from "../terminalKeys";
+import type { TerminalKeyId } from "../lib/terminalKeys";
+import { Button } from "./ui";
 
 interface TerminalKeyRowProps {
   ctrl: boolean;
@@ -13,7 +14,7 @@ interface TerminalKeyRowProps {
 export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: TerminalKeyRowProps) {
   const { t } = useTranslation();
   const base =
-    "min-h-11 min-w-11 shrink-0 rounded border border-border bg-surface-raised px-3 font-mono text-sm text-fg-soft active:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg";
+    "min-h-11 min-w-11 shrink-0 rounded border border-border bg-surface-raised px-3 font-mono text-sm text-fg-soft active:bg-border focus-ring-flush";
   // Keep focus (and the soft keyboard) in the terminal when a key is tapped.
   const keepFocus = (e: React.MouseEvent | React.PointerEvent) => e.preventDefault();
   const keys: { id: TerminalKeyId; label: string; aria?: string }[] = [
@@ -40,10 +41,10 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
       data-testid="terminal-key-row"
       className="flex gap-1 overflow-x-auto pt-2"
     >
-      <button type="button" className={base} onPointerDown={keepFocus} onClick={() => onKey("esc")}>
+      <Button variant="bare" type="button" className={base} onPointerDown={keepFocus} onClick={() => onKey("esc")}>
         Esc
-      </button>
-      <button
+      </Button>
+      <Button variant="bare"
         type="button"
         className={mod(ctrl)}
         aria-pressed={ctrl}
@@ -51,8 +52,8 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
         onClick={onToggleCtrl}
       >
         Ctrl
-      </button>
-      <button
+      </Button>
+      <Button variant="bare"
         type="button"
         className={mod(alt)}
         aria-pressed={alt}
@@ -60,11 +61,11 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
         onClick={onToggleAlt}
       >
         Alt
-      </button>
+      </Button>
       {keys
         .filter((k) => k.id !== "esc")
         .map((k) => (
-          <button
+          <Button variant="bare"
             key={k.id}
             type="button"
             className={base}
@@ -73,7 +74,7 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
             onClick={() => onKey(k.id)}
           >
             {k.label}
-          </button>
+          </Button>
         ))}
     </div>
   );

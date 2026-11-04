@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use ssh_manager_core::ai::{LiveOutputRedactor, OutputRedactor};
@@ -29,7 +29,7 @@ pub(crate) const WAITING_FOR_INPUT_AFTER: Duration = Duration::from_secs(3);
 /// ended, was cancelled or failed). Output still held back at that point is
 /// not flushed: the final `chat-action-result` replaces the live view.
 pub(crate) async fn forward_live_output(
-    mut chunks: UnboundedReceiver<ExecOutputChunk>,
+    mut chunks: Receiver<ExecOutputChunk>,
     redactor: &dyn OutputRedactor,
     emitter: &dyn EventEmitter,
     session_id: SessionId,
@@ -131,7 +131,7 @@ mod tests {
     /// chunks within one (virtual) second yields at most about ten events.
     #[tokio::test(start_paused = true)]
     async fn test_fast_producer_is_throttled_to_ten_events_per_second() {
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
         let session_id = Uuid::new_v4();
@@ -145,6 +145,7 @@ mod tests {
                     stream: OutputStream::Stdout,
                     bytes: chunk.clone(),
                 })
+                .await
                 .unwrap();
                 tokio::time::sleep(Duration::from_millis(1)).await;
             }
@@ -182,7 +183,7 @@ mod tests {
     /// one followed, in its own event when they arrive a second apart.
     #[tokio::test(start_paused = true)]
     async fn test_slow_lines_appear_one_after_another() {
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
 
@@ -192,6 +193,7 @@ mod tests {
                     stream: OutputStream::Stdout,
                     bytes: format!("{i}\n").into_bytes(),
                 })
+                .await
                 .unwrap();
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
@@ -218,18 +220,20 @@ mod tests {
     /// AC "stderr appears live and as stderr".
     #[tokio::test(start_paused = true)]
     async fn test_stderr_is_forwarded_as_stderr() {
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
         sink.send(ExecOutputChunk::Data {
             stream: OutputStream::Stderr,
             bytes: b"warning one\nwarning two\n".to_vec(),
         })
+        .await
         .unwrap();
         sink.send(ExecOutputChunk::Data {
             stream: OutputStream::Stdout,
             bytes: b"out one\nout two\n".to_vec(),
         })
+        .await
         .unwrap();
         let producer = async move {
             tokio::time::sleep(Duration::from_millis(250)).await;
@@ -258,7 +262,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn test_secret_is_masked_in_the_live_view() {
         const SECRET: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
         let raw = format!("cloning\ntoken {SECRET} in use\ndone\nend\n");
@@ -268,6 +272,7 @@ mod tests {
                     stream: OutputStream::Stdout,
                     bytes: part.to_vec(),
                 })
+                .await
                 .unwrap();
                 tokio::time::sleep(Duration::from_millis(30)).await;
             }
@@ -293,15 +298,16 @@ mod tests {
     /// AC "truncation notice in the live view": `Truncated` is reported once.
     #[tokio::test(start_paused = true)]
     async fn test_truncation_is_reported_once() {
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
         sink.send(ExecOutputChunk::Data {
             stream: OutputStream::Stdout,
             bytes: b"a\nb\n".to_vec(),
         })
+        .await
         .unwrap();
-        sink.send(ExecOutputChunk::Truncated).unwrap();
+        sink.send(ExecOutputChunk::Truncated).await.unwrap();
         let producer = async move {
             tokio::time::sleep(Duration::from_millis(350)).await;
             drop(sink);
@@ -338,7 +344,7 @@ mod tests {
     /// Runs the forwarder against `script` (delay before each chunk, bytes)
     /// and `quiet_after` of silence before the channel closes.
     async fn run_script(script: Vec<(u64, &'static [u8])>, quiet_after: u64) -> (Vec<bool>, bool) {
-        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, chunks) = ssh_manager_core::ssh::exec_output_channel();
         let emitter = TestEmitter::default();
         let redactor = DefaultOutputRedactor::new();
         let flag = Arc::new(AtomicBool::new(false));
@@ -349,6 +355,7 @@ mod tests {
                     stream: OutputStream::Stdout,
                     bytes: bytes.to_vec(),
                 })
+                .await
                 .unwrap();
             }
             tokio::time::sleep(Duration::from_millis(quiet_after)).await;

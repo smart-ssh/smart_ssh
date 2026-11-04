@@ -5,26 +5,27 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { i18n as I18n } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { onNoteShrinkSuggested } from "../events";
-import { publishRequestServerNoteEdit } from "../navigationBus";
+import { onNoteShrinkSuggested } from "../api/events";
+import { publishRequestServerNoteEdit } from "../buses/navigationBus";
 import { testI18n } from "../testI18n";
-import type { NoteShrinkSuggestedEvent } from "../types";
+import type { NoteShrinkSuggestedEvent } from "../api/types";
 import {
   NoteShrinkSuggestionToast,
   resetSnoozedNoteShrinkServersForTests,
 } from "./NoteShrinkSuggestionToast";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  requestNoteShrink: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    requestNoteShrink: vi.fn(() => Promise.resolve()),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSuggested: vi.fn(() => Promise.resolve(() => {})),
   onNoteShrinkFailed: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../navigationBus", () => ({
+vi.mock("../buses/navigationBus", () => ({
   publishRequestServerNoteEdit: vi.fn(),
 }));
 

@@ -13,10 +13,15 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::shared::ServerId;
 
+use crate::backup_store::ServerRow;
 use crate::error::{PersistenceError, PersistenceResult};
 use crate::mapping::{
     auth_method_from_json, auth_method_to_json, parse_timestamp, parse_uuid,
     post_ingest_policy_from_text, post_ingest_policy_to_text,
+};
+use crate::server_columns::{
+    bind_server_row, PROFILE_INSERT, PROFILE_INSERT_COLUMNS, PROFILE_UPDATE,
+    PROFILE_UPDATE_COLUMNS, SELECT_LIST,
 };
 
 /// Spec 0059, Fall 4: prüft aktiv, ob `dir` beschreibbar ist, statt sich auf
@@ -73,6 +78,18 @@ pub struct SqliteProfileStore {
     /// Issue #672: coalesced "data changed" notification, shared with the
     /// policy, AI-provider and credential stores made from this store.
     pub(crate) data_changes: DataChangeNotifier,
+}
+
+/// Issue #1145: in test builds a dropped store hands its pool to a guard that
+/// closes it and waits, so the process never runs its exit handlers
+/// (`sqlcipher_atexit`) while the worker thread is still closing the
+/// connection. Production keeps the
+/// pool until the end of the program and is unchanged.
+#[cfg(any(test, feature = "test-support"))]
+impl Drop for SqliteProfileStore {
+    fn drop(&mut self) {
+        crate::test_exit_guard::close_before_exit(&self.pool);
+    }
 }
 
 impl SqliteProfileStore {
@@ -247,6 +264,8 @@ impl SqliteProfileStore {
         // 0004 — sonst würden alle `ON DELETE CASCADE`/`SET NULL`-Regeln aus
         // dem Schema still wirkungslos, ohne dass ein Test das auffinge).
         let options = options.foreign_keys(true);
+        #[cfg(any(test, feature = "test-support"))]
+        crate::test_exit_guard::init_openssl_without_atexit();
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             // spec-reviewer Runde 1 (Spec 0101, A2): **kein** Neuaufbau der
@@ -561,7 +580,6 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
     let auth_json: String = row.get("auth_method");
     let port_raw: i64 = row.get("port");
     let post_ingest_policy_raw: String = row.get("post_ingest_policy");
-    let ai_injection_check_enabled: bool = row.get("ai_injection_check_enabled");
     let sftp_server_path: Option<String> = row.get("sftp_server_path");
     let start_directory: Option<String> = row.get("start_directory");
     let created_at: String = row.get("created_at");
@@ -591,11 +609,34 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
             .transpose()?
             .map(ServerId),
         post_ingest_policy: post_ingest_policy_from_text(&post_ingest_policy_raw),
-        ai_injection_check_enabled,
+        ai_injection_check_enabled: row.get("ai_injection_check_enabled"),
         sftp_server_path,
         start_directory,
         created_at: parse_timestamp(&created_at, "servers.created_at")?,
         updated_at: parse_timestamp(&updated_at, "servers.updated_at")?,
+    })
+}
+
+/// Domain `Server` → the shared persisted row. `is_copy` is not part of the
+/// domain type; the profile store never writes it (see `server_columns`).
+fn server_to_row(server: &Server) -> ProfileResult<ServerRow> {
+    Ok(ServerRow {
+        id: server.id.0,
+        name: server.name.clone(),
+        host: server.host.clone(),
+        port: server.port,
+        username: server.username.clone(),
+        group_id: server.group_id.map(|g| g.0),
+        auth_method: auth_method_to_json(&server.auth)?,
+        notes: server.notes.clone(),
+        jump_host_id: server.jump_host.map(|s| s.0),
+        created_at: server.created_at.to_rfc3339(),
+        updated_at: server.updated_at.to_rfc3339(),
+        post_ingest_policy: post_ingest_policy_to_text(server.post_ingest_policy).to_string(),
+        ai_injection_check_enabled: server.ai_injection_check_enabled,
+        sftp_server_path: server.sftp_server_path.clone(),
+        start_directory: server.start_directory.clone(),
+        is_copy: false,
     })
 }
 
@@ -623,11 +664,10 @@ impl ProfileStore for SqliteProfileStore {
 
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
         let id_str = id.0.to_string();
-        let row = sqlx::query(
-            "SELECT id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
-             start_directory, created_at, updated_at FROM servers WHERE id = ?",
-        )
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SELECT {} FROM servers WHERE id = ?",
+            *SELECT_LIST
+        )))
         .bind(&id_str)
         .fetch_optional(&self.pool)
         .await
@@ -648,11 +688,10 @@ impl ProfileStore for SqliteProfileStore {
     }
 
     async fn list_server_entries(&self) -> ProfileResult<ServerListing> {
-        let rows = sqlx::query(
-            "SELECT id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
-             start_directory, created_at, updated_at FROM servers ORDER BY name",
-        )
+        let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SELECT {} FROM servers ORDER BY name",
+            *SELECT_LIST
+        )))
         .fetch_all(&self.pool)
         .await
         .map_err(backend_err)?;
@@ -756,28 +795,12 @@ impl ProfileStore for SqliteProfileStore {
     async fn create_server(&self, server: &Server) -> ProfileResult<()> {
         let mut tx = self.pool.begin().await.map_err(backend_err)?;
 
-        sqlx::query(
-            "INSERT INTO servers \
-             (id, name, host, port, username, group_id, auth_method, notes, jump_host_id, \
-              post_ingest_policy, ai_injection_check_enabled, sftp_server_path, \
-              start_directory, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        let row = server_to_row(server)?;
+        bind_server_row(
+            sqlx::query(sqlx::AssertSqlSafe(PROFILE_INSERT.as_str())),
+            &PROFILE_INSERT_COLUMNS,
+            &row,
         )
-        .bind(server.id.0.to_string())
-        .bind(&server.name)
-        .bind(&server.host)
-        .bind(i64::from(server.port))
-        .bind(&server.username)
-        .bind(server.group_id.map(|g| g.0.to_string()))
-        .bind(auth_method_to_json(&server.auth)?)
-        .bind(&server.notes)
-        .bind(server.jump_host.map(|s| s.0.to_string()))
-        .bind(post_ingest_policy_to_text(server.post_ingest_policy))
-        .bind(server.ai_injection_check_enabled)
-        .bind(&server.sftp_server_path)
-        .bind(&server.start_directory)
-        .bind(server.created_at.to_rfc3339())
-        .bind(server.updated_at.to_rfc3339())
         .execute(&mut *tx)
         .await
         .map_err(backend_err)?;
@@ -800,25 +823,12 @@ impl ProfileStore for SqliteProfileStore {
     async fn update_server(&self, server: &Server) -> ProfileResult<()> {
         let mut tx = self.pool.begin().await.map_err(backend_err)?;
 
-        let result = sqlx::query(
-            "UPDATE servers SET name = ?, host = ?, port = ?, username = ?, group_id = ?, \
-             auth_method = ?, notes = ?, jump_host_id = ?, post_ingest_policy = ?, \
-             ai_injection_check_enabled = ?, sftp_server_path = ?, start_directory = ?, \
-             updated_at = ? WHERE id = ?",
+        let row = server_to_row(server)?;
+        let result = bind_server_row(
+            sqlx::query(sqlx::AssertSqlSafe(PROFILE_UPDATE.as_str())),
+            &PROFILE_UPDATE_COLUMNS,
+            &row,
         )
-        .bind(&server.name)
-        .bind(&server.host)
-        .bind(i64::from(server.port))
-        .bind(&server.username)
-        .bind(server.group_id.map(|g| g.0.to_string()))
-        .bind(auth_method_to_json(&server.auth)?)
-        .bind(&server.notes)
-        .bind(server.jump_host.map(|s| s.0.to_string()))
-        .bind(post_ingest_policy_to_text(server.post_ingest_policy))
-        .bind(server.ai_injection_check_enabled)
-        .bind(&server.sftp_server_path)
-        .bind(&server.start_directory)
-        .bind(server.updated_at.to_rfc3339())
         .bind(server.id.0.to_string())
         .execute(&mut *tx)
         .await
