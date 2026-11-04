@@ -309,3 +309,23 @@ html[data-theme="light"] .prose-invert {
 :lang(ko) {
   word-break: keep-all;
 }
+
+/* Keyboard focus indicator, defined once (issue #917, THEMING.md). Change size,
+   offset or colour here. `focus-ring` is the standard ring with an offset from
+   the surface; `-flush` has no offset; `-inset` draws inside the element (for
+   items clipped by an overflow container). */
+@utility focus-ring {
+  &:focus-visible {
+    @apply outline-none ring-2 ring-focus ring-offset-1 ring-offset-surface;
+  }
+}
+@utility focus-ring-flush {
+  &:focus-visible {
+    @apply outline-none ring-2 ring-focus;
+  }
+}
+@utility focus-ring-inset {
+  &:focus-visible {
+    @apply outline-none ring-2 ring-inset ring-focus;
+  }
+}

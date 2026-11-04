@@ -24,7 +24,7 @@ use app_logic::events::{
 };
 use app_logic::session::Session;
 use app_logic::state::SessionId;
-use ssh_manager_core::ssh::{ChunkControl, ChunkSource, SftpSession, TransferEnd};
+use ssh_manager_core::ssh::{SftpSession, TransferEnd};
 
 use crate::commands::elevation::{
     audit_elevated_change, file_name_of, lock_browser_sftp, BrowserChannel,
@@ -89,6 +89,16 @@ impl Throttle {
     }
 }
 
+/// Issue #921: local file I/O runs on the blocking pool, never as blocking
+/// `std::fs` on an async worker.
+async fn blocking_io<T: Send + 'static>(
+    f: impl FnOnce() -> std::io::Result<T> + Send + 'static,
+) -> std::io::Result<T> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(std::io::Error::other)?
+}
+
 /// `<ziel>.part-<zufall>` im selben Ordner (gleiches Dateisystem → Umbenennen
 /// ist atomar).
 fn temp_path_for(target: &Path) -> PathBuf {
@@ -144,43 +154,62 @@ pub(super) async fn download_file(
     let temp = temp_path_for(&local_path);
     let mut written = 0u64;
     let result: CommandResult<TransferEnd> = async {
-        let mut file = create_temp(&temp, run.channel.is_elevated())?;
-        let mut io_error: Option<std::io::Error> = None;
+        let owner_only = run.channel.is_elevated();
+        let temp_for_create = temp.clone();
+        let mut file = blocking_io(move || create_temp(&temp_for_create, owner_only)).await?;
         let mut throttle = Throttle(None);
-        let end = {
-            let mut guard = lock_browser_sftp(run.session, run.channel).await;
-            let mut sftp = guard.sftp().await?;
-            sftp.read_file_chunked(remote_path, TRANSFER_CHUNK_BYTES, &mut |chunk| {
-                if run.should_stop() {
-                    return ChunkControl::Stop;
-                }
-                if let Err(e) = file.write_all(chunk) {
-                    io_error = Some(e);
-                    return ChunkControl::Stop;
-                }
-                written += chunk.len() as u64;
-                run.op.set_bytes_done(base_bytes + written);
-                if throttle.due() {
-                    emit_sftp_transfer_progress(
-                        run.emitter,
-                        run.session_id,
-                        transfer_id,
-                        written,
-                        total_bytes,
-                        run.folder.then(|| run.op.folder_progress()).flatten(),
-                    );
-                }
-                ChunkControl::Continue
+        // Issue #921: the session's SFTP lock is taken per chunk and released
+        // before the chunk is written locally, so other operations of the
+        // session (listing, previews, AI file reads) are not queued behind
+        // the whole transfer. Every re-acquire re-checks the channel (the
+        // guard's `sftp()` repeats the revocation/identity checks).
+        let end = loop {
+            if run.should_stop() {
+                break TransferEnd::Stopped;
+            }
+            let chunk = {
+                let mut guard = lock_browser_sftp(run.session, run.channel).await;
+                let mut sftp = guard.sftp().await?;
+                sftp.read_range(remote_path, written, TRANSFER_CHUNK_BYTES)
+                    .await?
+            };
+            if chunk.is_empty() {
+                break TransferEnd::Completed;
+            }
+            // Revoked or stopped while the chunk was in flight: drop it.
+            if run.should_stop() {
+                break TransferEnd::Stopped;
+            }
+            let len = chunk.len() as u64;
+            file = blocking_io(move || {
+                let mut file = file;
+                file.write_all(&chunk)?;
+                Ok(file)
             })
-            .await?
+            .await?;
+            written += len;
+            run.op.set_bytes_done(base_bytes + written);
+            if throttle.due() {
+                emit_sftp_transfer_progress(
+                    run.emitter,
+                    run.session_id,
+                    transfer_id,
+                    written,
+                    total_bytes,
+                    run.folder.then(|| run.op.folder_progress()).flatten(),
+                );
+            }
         };
-        if let Some(e) = io_error {
-            return Err(e.into());
-        }
         if end == TransferEnd::Completed {
-            file.flush()?;
-            drop(file);
-            std::fs::rename(&temp, &local_path)?;
+            let temp = temp.clone();
+            let target = local_path.clone();
+            blocking_io(move || {
+                let mut file = file;
+                file.flush()?;
+                drop(file);
+                std::fs::rename(&temp, &target)
+            })
+            .await?;
         }
         Ok(end)
     }
@@ -197,7 +226,8 @@ pub(super) async fn download_file(
 
     // Temp-Datei weg, wenn sie nicht zur fertigen Datei wurde.
     if !matches!(result, Ok(TransferEnd::Completed)) {
-        if let Err(e) = std::fs::remove_file(&temp) {
+        let temp = temp.clone();
+        if let Err(e) = blocking_io(move || std::fs::remove_file(&temp)).await {
             if e.kind() != std::io::ErrorKind::NotFound {
                 tracing::warn!(error = %e, "could not remove partial download file");
             }
@@ -263,11 +293,9 @@ pub(super) async fn upload_file(
     let file_name = file_name_of(remote_path);
     run.op.set_current_transfer(transfer_id);
     let local_for_stat = local_path.to_path_buf();
-    let total_bytes = tokio::task::spawn_blocking(move || {
-        std::fs::metadata(&local_for_stat).map(|m| m.len()).ok()
-    })
-    .await
-    .unwrap_or(None);
+    let total_bytes = blocking_io(move || std::fs::metadata(&local_for_stat).map(|m| m.len()))
+        .await
+        .ok();
     emit_sftp_transfer_started(
         run.emitter,
         run.session_id,
@@ -279,56 +307,77 @@ pub(super) async fn upload_file(
 
     let mut sent = 0u64;
     let mut partial_may_exist = false;
+    let mut elevated_user: Option<String> = None;
     let result: CommandResult<TransferEnd> = async {
-        let mut file = std::fs::File::open(local_path)?;
-        let mut io_error: Option<std::io::Error> = None;
+        let local = local_path.to_path_buf();
+        let mut file = blocking_io(move || std::fs::File::open(local)).await?;
         let mut throttle = Throttle(None);
-        let mut guard = lock_browser_sftp(run.session, run.channel).await;
-        let elevated_user = guard.elevated_user();
-        let mut sftp = guard.sftp().await?;
-        partial_may_exist = true;
-        let written = sftp
-            .write_file_chunked(remote_path, TRANSFER_CHUNK_BYTES, &mut |buf| {
-                if run.should_stop() {
-                    return ChunkSource::Stop;
-                }
-                match file.read(buf) {
-                    Ok(0) => ChunkSource::Eof,
-                    Ok(n) => {
-                        sent += n as u64;
-                        run.op.set_bytes_done(base_bytes + sent);
-                        if throttle.due() {
-                            emit_sftp_transfer_progress(
-                                run.emitter,
-                                run.session_id,
-                                transfer_id,
-                                sent,
-                                total_bytes,
-                                run.folder.then(|| run.op.folder_progress()).flatten(),
-                            );
-                        }
-                        ChunkSource::Data(n)
+        let mut first = true;
+        // Issue #921: like the download, the SFTP lock is taken per chunk.
+        // The first chunk (also for an empty file) creates or truncates the
+        // remote file; later chunks write at the running offset.
+        let end = loop {
+            if run.should_stop() {
+                break TransferEnd::Stopped;
+            }
+            let (f, buf) = blocking_io(move || {
+                let mut file = file;
+                let mut buf = vec![0u8; TRANSFER_CHUNK_BYTES];
+                let mut filled = 0;
+                while filled < buf.len() {
+                    let n = file.read(&mut buf[filled..])?;
+                    if n == 0 {
+                        break;
                     }
-                    Err(e) => {
-                        io_error = Some(e);
-                        ChunkSource::Stop
-                    }
+                    filled += n;
                 }
+                buf.truncate(filled);
+                Ok((file, buf))
             })
-            .await;
+            .await?;
+            file = f;
+            if buf.is_empty() && !first {
+                break TransferEnd::Completed;
+            }
+            // Revoked or stopped while the chunk was read: send nothing more.
+            if run.should_stop() {
+                break TransferEnd::Stopped;
+            }
+            {
+                let mut guard = lock_browser_sftp(run.session, run.channel).await;
+                elevated_user = guard.elevated_user();
+                let mut sftp = guard.sftp().await?;
+                partial_may_exist = true;
+                sftp.write_range(remote_path, sent, &buf, first).await?;
+            }
+            first = false;
+            if buf.is_empty() {
+                break TransferEnd::Completed;
+            }
+            sent += buf.len() as u64;
+            run.op.set_bytes_done(base_bytes + sent);
+            if throttle.due() {
+                emit_sftp_transfer_progress(
+                    run.emitter,
+                    run.session_id,
+                    transfer_id,
+                    sent,
+                    total_bytes,
+                    run.folder.then(|| run.op.folder_progress()).flatten(),
+                );
+            }
+        };
+        Ok(end)
+    }
+    .await;
+    if partial_may_exist {
         audit_elevated_change(
             elevated_user.as_deref(),
             "upload",
             remote_path,
-            matches!(written, Ok(TransferEnd::Completed)),
+            matches!(result, Ok(TransferEnd::Completed)),
         );
-        let end = written?;
-        if let Some(e) = io_error {
-            return Err(e.into());
-        }
-        Ok(end)
     }
-    .await;
 
     let result = match result {
         Ok(TransferEnd::Stopped) if run.stop_reason() == Some(StopReason::Revoked) => {
@@ -343,7 +392,11 @@ pub(super) async fn upload_file(
             Ok(sent)
         }
         Ok(TransferEnd::Stopped) => {
-            let incomplete = remove_partial_upload(run, remote_path).await;
+            let incomplete = if partial_may_exist {
+                remove_partial_upload(run, remote_path).await
+            } else {
+                None
+            };
             emit_sftp_transfer_stopped(
                 run.emitter,
                 run.session_id,
