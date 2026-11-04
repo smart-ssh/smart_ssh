@@ -36,7 +36,13 @@ anderen nicht ab, jedes meldet sein eigenes Ergebnis.
   Formatprüfung (`cargo fmt --all --check`), Clippy über alle Ziele mit
   Warnungen als Fehler, alle Tests des Workspace, Build des Workspace ohne
   Test-Features. Der Testschritt läuft bis zum Ende weiter, auch wenn ein
-  Test-Binary scheitert, damit ein Lauf alle scheiternden Ziele zeigt. Der
+  Test-Binary scheitert, damit ein Lauf alle scheiternden Ziele zeigt. Die
+  Tests laufen mit `cargo nextest` (Profil `ci`: bis zu zwei Wiederholungen,
+  ein hängender Test wird nach 3 × 120 s abgebrochen und scheitert mit
+  seinem Namen); Doctests laufen in einem eigenen Schritt. Der Lauf schreibt
+  einen JUnit-Bericht, der je Betriebssystem als Artefakt hochgeladen wird,
+  auch bei Fehlern. Ein Test, der erst bei einer Wiederholung besteht,
+  lässt den Job scheitern, und seine Namen werden ausgegeben. Der
   Build ohne Test-Features fängt Produktivcode, der einen nur für Tests
   gedachten Zugang aufruft.
 - **A10 — Grenzprüfung.** Die Tauri-freie Anwendungslogik (Spec 0084) hat

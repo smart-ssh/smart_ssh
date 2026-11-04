@@ -80,6 +80,18 @@ pub struct SqliteProfileStore {
     pub(crate) data_changes: DataChangeNotifier,
 }
 
+/// Issue #1145: in test builds a dropped store hands its pool to a guard that
+/// closes it and waits, so the process never runs its exit handlers
+/// (`sqlcipher_atexit`) while the worker thread is still closing the
+/// connection. Production keeps the
+/// pool until the end of the program and is unchanged.
+#[cfg(any(test, feature = "test-support"))]
+impl Drop for SqliteProfileStore {
+    fn drop(&mut self) {
+        crate::test_exit_guard::close_before_exit(&self.pool);
+    }
+}
+
 impl SqliteProfileStore {
     /// Baut den Connection-Pool zu `db_path` auf, führt die eingebetteten
     /// Migrationen aus (`sqlx::migrate!()` — zur Compile-Zeit eingebettet,
@@ -252,6 +264,8 @@ impl SqliteProfileStore {
         // 0004 — sonst würden alle `ON DELETE CASCADE`/`SET NULL`-Regeln aus
         // dem Schema still wirkungslos, ohne dass ein Test das auffinge).
         let options = options.foreign_keys(true);
+        #[cfg(any(test, feature = "test-support"))]
+        crate::test_exit_guard::init_openssl_without_atexit();
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             // spec-reviewer Runde 1 (Spec 0101, A2): **kein** Neuaufbau der

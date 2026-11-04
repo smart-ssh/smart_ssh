@@ -9,6 +9,8 @@ export function useStickToBottom(
   scrollRef: RefObject<HTMLElement | null>,
   contentRef: RefObject<HTMLElement | null>,
   dep: unknown,
+  /** Called synchronously when a scroll reaches the bottom, before `atBottom` flips. */
+  onReachBottom?: () => void,
 ) {
   const followRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
@@ -24,8 +26,9 @@ export function useStickToBottom(
     // A programmatic pin ends at the bottom, so it can only confirm "follow".
     const near = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD_PX;
     followRef.current = near;
+    if (near) onReachBottom?.();
     setAtBottom(near);
-  }, [scrollRef]);
+  }, [scrollRef, onReachBottom]);
 
   /** Scrolls to the bottom and resumes following. */
   const scrollToBottom = useCallback(() => {
