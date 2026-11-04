@@ -42,7 +42,11 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// the first `#[cfg(test)]` on is dropped. Comment lines do not count.
 fn production_lines(path: &Path) -> Vec<(usize, String)> {
     let name = path.file_name().unwrap().to_string_lossy();
-    if name.starts_with("tests") || name == "test_support.rs" || name == "property_tests.rs" {
+    if name.starts_with("tests")
+        || name == "test_support.rs"
+        || name == "test_exit_guard.rs"
+        || name == "property_tests.rs"
+    {
         return Vec::new();
     }
     let text = std::fs::read_to_string(path).unwrap();
