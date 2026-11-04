@@ -71,7 +71,7 @@ pub(super) fn authorize_local_path(
     local_path: &str,
 ) -> CommandResult<GrantedLocalPath> {
     if sessions.get(session_id).is_none() {
-        return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
+        return Err(app_logic::local_path_grants::local_path_not_granted());
     }
     let edit_dir = edit_session_dir_in(edit_root, session_id).ok();
     grants.check(
@@ -115,16 +115,18 @@ pub async fn pick_upload_files(
         let path = match handle.as_path() {
             Some(p) => p.to_path_buf(),
             None => {
-                let dir = staging
-                    .as_deref()
-                    .ok_or_else(|| CommandError::from("No cache directory available"))?;
+                let dir = staging.as_deref().ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?;
                 // Same display name twice: keep both copies apart.
                 let dir = dir.join(paths.len().to_string());
                 let h = handle.clone();
                 let o = crate::local_file::platform_opener(&app);
                 tokio::task::spawn_blocking(move || h.stage_into(o.as_ref(), &dir))
                     .await
-                    .map_err(|e| CommandError::from(e.to_string()))??
+                    .map_err(|e| {
+                        CommandError::with_code(e.to_string(), "BACKGROUND_TASK_FAILED")
+                    })??
             }
         };
         paths.push(path);
@@ -189,7 +191,10 @@ pub async fn clipboard_write_text(
 ) -> CommandResult<()> {
     clipboard.set_text(&text).map_err(|e| {
         tracing::debug!(error = %e, "clipboard text write failed");
-        CommandError::from("The clipboard could not be written")
+        CommandError::with_code(
+            "The clipboard could not be written",
+            "CLIPBOARD_WRITE_FAILED",
+        )
     })
 }
 
@@ -280,7 +285,7 @@ pub async fn claim_clipboard_files(
     app_logic::session::require_session(&state.sessions, session_id)?;
     let files = clipboard.get_files().map_err(|err| {
         tracing::debug!(error = %err, "clipboard could not be read for paste");
-        CommandError::from("The clipboard could not be read")
+        CommandError::with_code("The clipboard could not be read", "CLIPBOARD_READ_FAILED")
     })?;
     claim_clipboard_files_impl(
         &state.sessions,

@@ -8,6 +8,7 @@ mod transport;
 
 pub(super) use system_context::build_session_system_context;
 
+use app_logic::error::ResultCodeExt;
 pub(crate) use progress::ConnectProgress;
 use progress::{cancelled_error, or_cancelled};
 use transport::establish_transport;
@@ -21,7 +22,7 @@ use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, SshError};
 
-use app_logic::ai_provider_factory::build_ai_provider_from_config;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::connect::session_builder::{
     build_session, redaction_for_reconnect, BuiltSession, SessionBuildInput,
 };
@@ -101,9 +102,9 @@ use app_logic::connect::session_builder::should_create_chat_session;
 use app_logic::session::Session;
 
 /// Spec 0047, Fund D2: `SshError` trägt seit Spec 0024 einen stabilen
-/// `code()` fürs Frontend-Mapping — der blanket `?` auf
-/// `ssh_transport::connect(...)` (über `CommandError`s
-/// `impl<E: Display> From<E>`) verwarf ihn bislang und lieferte
+/// `code()` fürs Frontend-Mapping — das frühere pauschale `?` auf
+/// `ssh_transport::connect(...)` (über die damalige Pauschal-Umwandlung)
+/// verwarf ihn bislang und lieferte
 /// `code: None`. Ein Tester mit nicht erreichbarem Server sah dadurch nur
 /// den rohen, hart-deutschen `Display`-Text inkl. OS-Fehlertext, auch im
 /// englischen UI. Eigene, kleine Funktion statt eines Inline-`.map_err`
@@ -199,9 +200,10 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
                 .sessions
                 .claim_chat_session_for_resume(existing_id)
                 .map_err(|_| {
-                    CommandError::from(
+                    CommandError::with_code(
                         "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
                          werden.",
+                        "CHAT_SESSION_BEING_DELETED",
                     )
                 })?,
         ),
@@ -220,12 +222,13 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     };
     let active_config = active_ai_provider_config(state).await?;
     // Issue #162: Einstellung des Providers (Default an).
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config_async(
         &state.rate_limit_registry,
-        state.credential_store.as_ref(),
+        state.credential_store.clone(),
         &active_config,
         active_config.web_research_enabled,
     )
+    .await
     .map_err(secret_store_error)?;
 
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
@@ -394,7 +397,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
         let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
         let (redactor, sudo_password) =
-            redaction_for_reconnect(state, &session, server_id, &lookup);
+            redaction_for_reconnect(state, &session, server_id, &lookup).await;
         Ok::<_, CommandError>((transport, redactor, sudo_password))
     }
     .await;
@@ -543,14 +546,17 @@ pub async fn delete_chat_session(
     {
         Ok(claim) => claim,
         Err(app_logic::session::ChatSessionClaimError::InUse) => {
-            return Err(
+            return Err(CommandError::with_code(
                 "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
-                 löschen."
-                    .into(),
-            );
+                 löschen.",
+                "CHAT_SESSION_IN_USE",
+            ));
         }
         Err(app_logic::session::ChatSessionClaimError::BeingDeleted) => {
-            return Err("Diese Chat-Sitzung wird gerade gelöscht.".into());
+            return Err(CommandError::with_code(
+                "Diese Chat-Sitzung wird gerade gelöscht.",
+                "CHAT_SESSION_BEING_DELETED",
+            ));
         }
     };
     state
@@ -601,6 +607,7 @@ pub async fn confirm_host_key(
 ) -> CommandResult<()> {
     state
         .pending_host_key_confirmations
-        .resolve(&session_id, decision)?;
+        .resolve(&session_id, decision)
+        .or_code("CONFIRMATION_NOT_PENDING")?;
     Ok(())
 }

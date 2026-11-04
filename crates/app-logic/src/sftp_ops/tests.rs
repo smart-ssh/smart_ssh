@@ -424,7 +424,7 @@ struct Collect {
 impl TreeVisitor for Collect {
     async fn visit(&mut self, dir: &str, entry: RemoteEntry) -> CommandResult<()> {
         if self.fail_on.as_deref() == Some(entry.path.as_str()) {
-            return Err("visitor failed".into());
+            return Err(CommandError::with_code("visitor failed", "TEST_ERROR"));
         }
         self.seen.push((dir.to_string(), entry.path));
         Ok(())

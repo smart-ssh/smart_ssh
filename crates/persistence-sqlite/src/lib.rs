@@ -31,6 +31,7 @@ mod mapping;
 mod paths;
 mod policy_store;
 mod prompt_history_store;
+pub mod runtime_bridge;
 mod store;
 /// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
 /// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
@@ -44,6 +45,8 @@ mod tests;
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
+#[cfg(test)]
+mod tests_concurrent_writes;
 #[cfg(test)]
 mod tests_credential_store;
 #[cfg(test)]
@@ -72,6 +75,8 @@ mod tests_raw_file;
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
+#[cfg(test)]
+mod tests_runtime_bridge_guard;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
@@ -90,7 +95,9 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
-pub use error_kind::{classify, DbFailure, StoreErrorKind};
+pub use error_kind::{
+    classify, DbFailure, StoreErrorKind, FILTER_RULE_PATTERN_INVALID, STORE_ERROR_CODES,
+};
 pub use extension_db::{
     validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
     ExtensionRegistration,

@@ -280,6 +280,7 @@ const CMD_CONT: &str = r"(?:\\\r?\n)*";
 /// zählt.
 const HT_OPT: &str = r"(?:(?:[ \t]|\\\r?\n)+-[A-Za-z]+(?:(?:[ \t]|\\\r?\n)+\d+)?)";
 
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 fn built_in_patterns() -> Vec<PatternRule> {
     let mut patterns: Vec<PatternRule> = vec![
         // Spec 0078 §3 (Q-BL-0248-02, Fund des regression-guard, gemessen):

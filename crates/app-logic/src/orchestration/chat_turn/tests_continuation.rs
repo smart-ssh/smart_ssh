@@ -504,6 +504,7 @@ async fn test_auto_continuation_cap_resets_for_each_new_user_message() {
 /// zweiten (automatischen) Runde noch offen ist, genau der in
 /// `app_shell::commands::stop_auto_continuation` gesetzte Zustand.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dialog_intact() {
     let provider = MockAiProvider::with_rounds(vec![
         // Runde 1: AutoExec (löst automatisch Runde 2 aus).
@@ -642,6 +643,7 @@ async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dia
 /// Store-Zugriffe: genau einer für den Lesepfad, keiner mehr für die
 /// Kommandos, und das Passwort kommt tatsächlich bei der Ausführung an.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_sudo_password_credential_store_not_read_again_across_multiple_commands() {
     let server_id = ServerId::new();
     let credential_ref = crate::server_credentials::sudo_password_credential_ref(server_id);
@@ -1020,6 +1022,7 @@ fn has_event(emitter: &TestEmitter, name: &str) -> bool {
 /// kein Warten auf das Ende der Antwort, Stream (= HTTP-Verbindung)
 /// verworfen, bereits gestreamter Text bleibt im Verlauf.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_stop_aborts_in_flight_ai_stream_immediately() {
     let (provider, _gate, dropped, send_calls) = gated_provider(vec![AiEvent::Done]);
     let session = session_with_ai_provider(provider, MockSshTransport::default());
@@ -1065,6 +1068,7 @@ async fn test_stop_aborts_in_flight_ai_stream_immediately() {
 /// vollständiger Tool-Call im Stream bereit, wird er trotzdem NIE an
 /// Filter/Confirm/Ausführung weitergegeben.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_stop_never_forwards_an_already_ready_tool_call() {
     let (provider, gate, _dropped, _send_calls) = gated_provider(vec![
         AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -1116,6 +1120,7 @@ async fn test_stop_never_forwards_an_already_ready_tool_call() {
 /// Spec 0066, §1: ein Stopp während der Wartezeit vor dem Send
 /// (Pacing/Rate-Limit-Gate) verhindert den Request ganz.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_stop_during_pre_send_wait_prevents_the_request() {
     let (provider, _gate, _dropped, send_calls) = gated_provider(vec![AiEvent::Done]);
     let session = session_with_ai_provider(provider, MockSshTransport::default());
@@ -1482,9 +1487,11 @@ async fn test_secret_path_read_always_requires_confirm_even_with_allow_rule() {
                 tokio::task::yield_now().await;
             }
         };
-        expect_event_within(&emitter, "Aktion muss enden", async {
-            tokio::join!(handled, responder)
-        })
+        expect_event_within(
+            &emitter,
+            "Aktion muss enden",
+            Box::pin(async { tokio::join!(handled, responder) }),
+        )
         .await;
 
         let events = emitter.events.lock().unwrap().clone();
@@ -2330,26 +2337,12 @@ struct FlakyExt {
     ok_calls: usize,
 }
 
+#[async_trait::async_trait]
 impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
     fn name(&self) -> &str {
         "files"
     }
-    fn take_pending(
-        &self,
-        _s: Uuid,
-        _id: &str,
-    ) -> Option<crate::chat_content_extension::PendingContent> {
-        None
-    }
-    fn persist(
-        &self,
-        _s: Uuid,
-        _part_id: &str,
-        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
-    ) -> Result<(), crate::chat_content_extension::ChatContentError> {
-        Ok(())
-    }
-    fn resolve(
+    async fn resolve(
         &self,
         _s: Uuid,
         _part: &ssh_manager_core::ai::ExtensionPart,

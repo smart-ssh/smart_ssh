@@ -58,6 +58,7 @@ impl TestExt {
     }
 }
 
+#[async_trait::async_trait]
 impl ChatContentExtension for TestExt {
     fn name(&self) -> &str {
         "files"
@@ -65,7 +66,7 @@ impl ChatContentExtension for TestExt {
     fn take_pending(&self, _s: Uuid, id: &str) -> Option<PendingContent> {
         self.pending.get(id).cloned()
     }
-    fn persist(
+    async fn persist(
         &self,
         _s: Uuid,
         part_id: &str,
@@ -77,7 +78,7 @@ impl ChatContentExtension for TestExt {
         self.persisted.lock().unwrap().push(part_id.to_string());
         Ok(())
     }
-    fn resolve(
+    async fn resolve(
         &self,
         _s: Uuid,
         part: &ExtensionPart,
@@ -220,13 +221,13 @@ fn accept_redacts_text_and_label_before_persist() {
     assert!(!debug.contains(SECRET), "{debug}");
 }
 
-#[test]
-fn persist_error_is_reported_and_stores_nothing_in_history() {
+#[tokio::test]
+async fn persist_error_is_reported_and_stores_nothing_in_history() {
     let mut ext = TestExt::new(Box::new(|_| Ok(None))).with_pending("id0", "a", vec![text("x")]);
     ext.persist_fails = true;
     let reg = registry(ext);
     let prepared = accept_extension_content(&reg, &redactor(), Uuid::new_v4(), &ids(1)).unwrap();
-    assert!(prepared.persist(Uuid::new_v4()).is_err());
+    assert!(prepared.persist(Uuid::new_v4()).await.is_err());
 }
 
 #[tokio::test]
@@ -496,6 +497,7 @@ struct KeyedExt {
     pending: Mutex<HashMap<(Uuid, String), String>>,
 }
 
+#[async_trait::async_trait]
 impl ChatContentExtension for KeyedExt {
     fn name(&self) -> &str {
         "files"
@@ -508,7 +510,7 @@ impl ChatContentExtension for KeyedExt {
             blocks: vec![text(&t)],
         })
     }
-    fn persist(
+    async fn persist(
         &self,
         s: Uuid,
         part_id: &str,
@@ -518,7 +520,7 @@ impl ChatContentExtension for KeyedExt {
         self.store.lock().unwrap().insert((s, part_id.into()), t);
         Ok(())
     }
-    fn resolve(
+    async fn resolve(
         &self,
         s: Uuid,
         part: &ExtensionPart,
@@ -553,7 +555,7 @@ async fn hooks_use_the_chat_session_id_so_content_survives_resume() {
         .unwrap()
         .insert((chat_a, "id0".into()), "orig".into());
     let prepared = accept_extension_content(&reg, &redactor(), key, &ids(1)).unwrap();
-    prepared.persist(key).unwrap();
+    prepared.persist(key).await.unwrap();
     let part_id = ext.store.lock().unwrap().keys().next().unwrap().1.clone();
     let mut p = part("f.txt");
     p.id = part_id;
@@ -578,4 +580,59 @@ async fn hooks_use_the_chat_session_id_so_content_survives_resume() {
     // Without a saved chat the tab id is the fallback.
     *session.persistence.chat_session_id.lock().await = None;
     assert_eq!(session.extension_content_key(tab1).await, tab1);
+}
+
+/// Extension whose `persist` completes only after the test releases it.
+struct GatedPersistExt {
+    release: tokio::sync::Notify,
+    started: tokio::sync::Notify,
+    done: Mutex<bool>,
+}
+
+#[async_trait::async_trait]
+impl ChatContentExtension for GatedPersistExt {
+    fn name(&self) -> &str {
+        "files"
+    }
+    fn take_pending(&self, _s: Uuid, _id: &str) -> Option<PendingContent> {
+        Some(PendingContent {
+            label: "a".into(),
+            kind: "doc".into(),
+            blocks: vec![text("x")],
+        })
+    }
+    async fn persist(
+        &self,
+        _s: Uuid,
+        _part_id: &str,
+        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
+    ) -> Result<(), ChatContentError> {
+        self.started.notify_one();
+        self.release.notified().await;
+        *self.done.lock().unwrap() = true;
+        Ok(())
+    }
+}
+
+/// Issue #899: the registry path awaits an async `persist`; the caller (the
+/// send path) only continues once it completed.
+#[tokio::test]
+async fn async_persist_blocks_until_released() {
+    let ext = Arc::new(GatedPersistExt {
+        release: tokio::sync::Notify::new(),
+        started: tokio::sync::Notify::new(),
+        done: Mutex::new(false),
+    });
+    let reg = Arc::new(ChatContentRegistry::new(vec![ext.clone()]));
+    let prepared = accept_extension_content(&reg, &redactor(), Uuid::new_v4(), &ids(1)).unwrap();
+    let mut persist = Box::pin(prepared.persist(Uuid::new_v4()));
+    // Drive the future until `persist` of the extension is entered and parked.
+    tokio::select! {
+        _ = &mut persist => panic!("persist finished before the release"),
+        _ = ext.started.notified() => {}
+    }
+    assert!(!*ext.done.lock().unwrap());
+    ext.release.notify_one();
+    persist.await.unwrap();
+    assert!(*ext.done.lock().unwrap());
 }

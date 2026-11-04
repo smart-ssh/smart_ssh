@@ -198,7 +198,33 @@ impl fmt::Display for SshError {
     }
 }
 
+impl crate::ipc_error::ErrorCode for SshError {
+    fn code(&self) -> &'static str {
+        SshError::code(self)
+    }
+}
+
 impl SshError {
+    /// Every code [`Self::code`] can return (uniqueness test in `app-logic`).
+    pub const CODES: &'static [&'static str] = &[
+        "SSH_CONNECTION_FAILED",
+        "SSH_AUTH_FAILED",
+        "SSH_HOST_KEY_REJECTED",
+        "SSH_CHANNEL_ERROR",
+        "SSH_TIMEOUT",
+        "SSH_JUMP_HOST_CYCLE",
+        "SSH_CREDENTIAL_RESOLUTION_FAILED",
+        "SSH_SFTP_PERMISSION_DENIED",
+        "SSH_SFTP_ALREADY_EXISTS",
+        "SSH_CONNECTION_REFUSED",
+        "SSH_HOST_NOT_FOUND",
+        "SSH_HOST_UNREACHABLE",
+        "SSH_CONNECTION_CLOSED",
+        "SSH_SESSION_CLOSED",
+        "KEY_FILE_NOT_FOUND_ON_DEVICE",
+        SECRET_STORE_FAILED,
+    ];
+
     /// Stabiler, sprachunabhängiger Bezeichner je Fehlerart (Spec 0024,
     /// Abschnitt 5) — fürs Frontend-Mapping auf Übersetzungs-Keys. Bleibt
     /// über Code-Änderungen hinweg stabil, anders als der `Display`-Text

@@ -48,6 +48,7 @@ async fn test_auto_continuation_after_autoexec_triggers_second_send_call() {
 /// Fall 2 (Spec 0021, Abschnitt 3): "Ausführen" im Bestätigungsdialog
 /// verhält sich fortsetzungstechnisch identisch zu `AutoExec`.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_auto_continuation_after_confirm_approve_triggers_second_send_call() {
     let provider = MockAiProvider::with_rounds(vec![
         vec![
@@ -105,6 +106,7 @@ async fn test_auto_continuation_after_confirm_approve_triggers_second_send_call(
 /// `send()`-Aufruf, dessen Kontext einen `ActionRejected`-Eintrag mit
 /// `RejectionReason::User` enthält (nicht `Blocked` — das ist Fall 4).
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_auto_continuation_after_user_deny_pushes_rejection_and_triggers_second_send_call() {
     let provider = MockAiProvider::with_rounds(vec![
         vec![
@@ -224,6 +226,7 @@ async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_
 /// Testfehler mit der Liste der empfangenen Events erscheinen, statt den
 /// gesamten Testlauf aufzuhängen.
 #[tokio::test]
+#[expect(clippy::large_futures, reason = "test future built inline; not boxed")]
 async fn test_regression_pending_action_cleared_and_turn_completes_after_deny() {
     let session = test_session(
         vec![

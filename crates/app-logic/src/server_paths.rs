@@ -4,6 +4,8 @@
 
 use ssh_manager_core::profiles::trim_credential_value;
 
+use crate::error::{CommandResult, ResultCodeExt};
+
 /// Spec 0067, A2: leerer Override = automatisch (`None`); sonst muss es ein
 /// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
 /// der angezeigten sudoers-Zeile.
@@ -61,3 +63,15 @@ mod tests_sftp_server_path;
 
 #[cfg(test)]
 mod tests_start_directory;
+
+/// [`normalize_sftp_server_path`] for the command layer: a rejection carries
+/// the stable code `SERVER_SFTP_PATH_INVALID`.
+pub fn checked_sftp_server_path(input: Option<String>) -> CommandResult<Option<String>> {
+    normalize_sftp_server_path(input).or_code("SERVER_SFTP_PATH_INVALID")
+}
+
+/// [`normalize_start_directory_input`] for the command layer: a rejection
+/// carries the stable code `SERVER_START_DIRECTORY_INVALID`.
+pub fn checked_start_directory(input: Option<String>) -> CommandResult<Option<String>> {
+    normalize_start_directory_input(input).or_code("SERVER_START_DIRECTORY_INVALID")
+}

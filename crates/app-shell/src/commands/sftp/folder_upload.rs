@@ -101,9 +101,7 @@ fn snapshot_for(
     session_id: SessionId,
 ) -> CommandResult<GrantSnapshot> {
     if sessions.get(session_id).is_none() {
-        return Err(CommandError::from(
-            app_logic::local_path_grants::LOCAL_PATH_NOT_GRANTED,
-        ));
+        return Err(app_logic::local_path_grants::local_path_not_granted());
     }
     let edit_dir = super::edit_session_dir_in(edit_root, session_id).ok();
     Ok(grants.snapshot(session_id, edit_dir.as_deref()))
@@ -116,7 +114,12 @@ async fn plan_blocking(
     let (root, snapshot) = (root.clone(), snapshot.clone());
     tokio::task::spawn_blocking(move || plan_folder(&root, &snapshot))
         .await
-        .map_err(|e| format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"))?
+        .map_err(|e| {
+            app_logic::error::CommandError::with_code(
+                format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"),
+                "BACKGROUND_TASK_FAILED",
+            )
+        })?
 }
 
 /// `Some(is_dir)` if the remote path exists, `None` otherwise.
@@ -257,8 +260,9 @@ async fn ensure_remote_dir(
     let mut sftp = guard.sftp().await?;
     match remote_kind(&mut sftp, path).await {
         Some(true) => Ok(false),
-        Some(false) => Err(CommandError::from(
+        Some(false) => Err(CommandError::with_code(
             "Am Zielpfad existiert bereits eine Datei, kein Ordner.",
+            "SFTP_TARGET_IS_A_FILE",
         )),
         None => {
             let result = sftp.create_dir(path).await;
@@ -393,7 +397,12 @@ pub(super) async fn upload_folder_impl(
         let (snap, path) = (snapshot.clone(), file.local.as_path().to_path_buf());
         let fresh = tokio::task::spawn_blocking(move || snap.check(&path))
             .await
-            .map_err(|e| format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"))?;
+            .map_err(|e| {
+                app_logic::error::CommandError::with_code(
+                    format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"),
+                    "BACKGROUND_TASK_FAILED",
+                )
+            })?;
         let result = match fresh {
             Ok(local) => {
                 upload_file(

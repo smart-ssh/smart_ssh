@@ -106,6 +106,7 @@ impl SessionExtension for MySessionExtension {
 
 struct MyChatContent;
 
+#[async_trait::async_trait]
 impl ChatContentExtension for MyChatContent {
     fn name(&self) -> &str {
         "facade"

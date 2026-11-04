@@ -34,7 +34,9 @@ use ssh_manager_core::ai::{
 use ssh_manager_core::sync::lock_tolerating_poison;
 
 use crate::events::EventEmitter;
-use crate::orchestration::{seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget};
+use crate::orchestration::{
+    seal_session_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+};
 use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 use crate::session::Session;
 use crate::state::SessionId;
@@ -739,12 +741,7 @@ async fn generate_rolling_summary(
     };
     // Issue #505/#833: compaction requests go through the same sealing entry
     // point, as the last step; a sealing failure means no summary.
-    let summary_context = match seal_for_send(
-        summary_context,
-        session.redactor.as_ref(),
-        &session.persistence.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
+    let summary_context = match seal_session_for_send(session, session_id, summary_context).await {
         Ok(context) => context,
         Err(_) => return None,
     };

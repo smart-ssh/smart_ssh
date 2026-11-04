@@ -121,6 +121,7 @@ async fn test_every_release_fixture_upgrades_step_by_step_without_losing_data() 
     }
 }
 
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     let release = fixture.release;
     let dir = tempfile::tempdir().expect("temp dir");
@@ -317,6 +318,8 @@ fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot,
 /// Die Daten des Release, gelesen über die Stores dieses Builds — Feld für
 /// Feld, auch der früher feldweise verschlüsselte Chat, Prompt-Historie,
 /// Ledger und Zusammenfassung (nach der Umstellung, Issue #113).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str) {
     let groups = store.list_groups().await.expect("groups readable");
     let parent = groups

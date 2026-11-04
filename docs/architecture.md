@@ -197,6 +197,18 @@ Wohin neue Logik gehört (alle Tauri-frei; jedes `pub mod` aus `lib.rs`):
 - `start_directory` — Startverzeichnis einer Sitzung; `folder_upload` — Plan eines rekursiven Ordner-Uploads.
 - `mcp_lookup`, `mcp_sessions` — lesende MCP-Tools und MCP-eigene Sitzungen.
 - `ai_provider_factory` — baut den konkreten KI-Provider; `ai_usage` — Erweiterungspunkt Nutzungsbeobachtung; `chat_content_extension` — Erweiterungspunkt für Chat-Inhalte.
+  `persist`, `resolve`, `session_removed` und `reconcile` sind `async` (Issue #899), damit eine Erweiterung auf async Speicher (z. B. sqlx) ohne eigene Sync-über-Async-Brücke zugreifen kann; `name`, `source` und `take_pending` bleiben synchron. Eine Implementierung trägt `#[async_trait::async_trait]` und schreibt `async fn`:
+
+  ```rust
+  #[async_trait::async_trait]
+  impl ChatContentExtension for MyContent {
+      fn name(&self) -> &str { "mycontent" }
+      async fn persist(&self, session_id: Uuid, part_id: &str, blocks: Vec<RedactedBlock>)
+          -> Result<(), ChatContentError> {
+          self.store.insert(session_id, part_id, blocks).await.map_err(|e| ChatContentError(e.to_string()))
+      }
+  }
+  ```
 - `state` — gemeinsamer `AppState`; `events` — Events Richtung Frontend; `dto` — DTOs der IPC-Grenze; `error` — Fehlertyp der Commands.
 
 **Persistenznahe Dienste**

@@ -104,8 +104,9 @@ fn content_type_for(content: &MessageContent) -> &'static str {
 /// delete, retention delete and (via the profile store) server delete. Called
 /// only after the delete succeeded; a crash in between is covered by the
 /// extension's `reconcile` at the next start.
+#[async_trait::async_trait]
 pub trait ChatSessionRemovalObserver: Send + Sync {
-    fn sessions_removed(&self, session_ids: &[Uuid]);
+    async fn sessions_removed(&self, session_ids: &[Uuid]);
 }
 
 /// Slot shared between the profile store and every chat store made from it,
@@ -113,12 +114,12 @@ pub trait ChatSessionRemovalObserver: Send + Sync {
 pub(crate) type RemovalHook =
     std::sync::Arc<std::sync::OnceLock<std::sync::Arc<dyn ChatSessionRemovalObserver>>>;
 
-pub(crate) fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
+pub(crate) async fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
     if ids.is_empty() {
         return;
     }
     if let Some(observer) = hook.get() {
-        observer.sessions_removed(ids);
+        observer.sessions_removed(ids).await;
     }
 }
 
@@ -191,11 +192,16 @@ impl SqliteChatSessionStore {
         }
         let session_id_str = session_id.to_string();
 
+        // Issue #903: read-max and insert in one transaction. `BEGIN
+        // IMMEDIATE` takes the write lock up front, so no other writer can
+        // slip between the SELECT and the INSERT (and the UNIQUE index from
+        // migration 0027 backs it up).
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let next_sequence: i64 = sqlx::query(
             "SELECT COALESCE(MAX(sequence), -1) + 1 AS next FROM chat_messages WHERE session_id = ?",
         )
         .bind(&session_id_str)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         ?
         .get("next");
@@ -218,8 +224,9 @@ impl SqliteChatSessionStore {
         .bind(&content_json)
         .bind(next_sequence)
         .bind(Utc::now().to_rfc3339())
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(message_id)
     }
@@ -512,7 +519,7 @@ impl SqliteChatSessionStore {
             .await?;
         // Issue #504: only after a successful delete, once per removed session.
         if result.rows_affected() > 0 {
-            notify_removed(&self.removal, &[session_id]);
+            notify_removed(&self.removal, &[session_id]).await;
         }
         Ok(())
     }
@@ -540,7 +547,7 @@ impl SqliteChatSessionStore {
             .filter_map(|r| r.try_get::<String, _>("id").ok())
             .filter_map(|raw| Uuid::parse_str(&raw).ok())
             .collect();
-        notify_removed(&self.removal, &ids);
+        notify_removed(&self.removal, &ids).await;
         Ok(rows.len() as u64)
     }
 }
@@ -1422,14 +1429,15 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=26).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=27).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.
     #[derive(Default)]
     struct Recording(std::sync::Mutex<Vec<Vec<Uuid>>>);
+    #[async_trait::async_trait]
     impl ChatSessionRemovalObserver for Recording {
-        fn sessions_removed(&self, ids: &[Uuid]) {
+        async fn sessions_removed(&self, ids: &[Uuid]) {
             self.0.lock().unwrap().push(ids.to_vec());
         }
     }

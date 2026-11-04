@@ -130,6 +130,7 @@ impl SmartSshMcpServer {
     /// `ConfirmationRegistry`-Eintrag verwaisen lassen — ein späterer Klick
     /// auf "Genehmigen" im UI würde dann augenscheinlich nichts mehr
     /// bewirken, weil niemand mehr auf das Ergebnis wartet.
+    #[expect(clippy::cognitive_complexity, reason = "split planned")]
     async fn run_confirmable(
         &self,
         tool_name: &'static str,

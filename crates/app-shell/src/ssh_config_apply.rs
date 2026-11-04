@@ -137,6 +137,7 @@ impl From<&KeyFileError> for IdentityFallbackReason {
 /// `choices` ist die Wahl des Nutzers je Eintrag; ein Eintrag ohne Wahl
 /// gilt als ausgewählt mit den Vorgaben. Konflikte werden **übersprungen**,
 /// solange kein `rename_to` gesetzt ist (§3.1.8, Vorgabe).
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn apply_import(
     plan: &ImportPlan,
     choices: &[EntryChoice],
@@ -783,7 +784,9 @@ pub async fn preview_ssh_config_import(
         Some(_) => None,
         None => Some(
             crate::edit_copies::picked_root()
-                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
                 .join(uuid::Uuid::new_v4().to_string()),
         ),
     };
@@ -804,7 +807,7 @@ pub async fn preview_ssh_config_import(
         app_logic::ssh_config_import::ImportAbort::ChosenIsBackup => {
             CommandError::with_code(abort.to_string(), "SSH_CONFIG_IS_BACKUP")
         }
-        other => CommandError::from(other.to_string()),
+        other => CommandError::with_code(other.to_string(), "SSH_CONFIG_IMPORT_ABORTED"),
     })?;
 
     // §4.1: Ohne den Bestand sind weder Konflikte noch `ProxyJump`-Ziele im
@@ -863,8 +866,9 @@ pub async fn apply_ssh_config_import(
     // `take` macht aus dem Kommentar "der Plan ist verbraucht" eine Tatsache.
     let pending = lock_tolerating_poison(&state.pending_ssh_config_import).take();
     let Some(pending) = pending else {
-        return Err(CommandError::from(
-            "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.".to_string(),
+        return Err(CommandError::with_code(
+            "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.",
+            "SSH_CONFIG_NO_IMPORT_PREVIEW",
         ));
     };
 

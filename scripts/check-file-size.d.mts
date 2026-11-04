@@ -20,3 +20,4 @@ export function main(
   argv: string[],
   out?: { log: (m: string) => void; error: (m: string) => void },
 ): number;
+export function countSizedLines(text: string): number;
