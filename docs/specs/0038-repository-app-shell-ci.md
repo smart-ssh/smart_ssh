@@ -312,6 +312,10 @@ Nach Themen:
   `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,
   `ImportPreview`, `ImportStart`, `ImportSummary`, `PendingImport`,
   `SnapshotCounts`, `open_backup`, `FileHostKeyStore`.
+- **Hintergrundaufgaben:** `TaskSupervisor`, `TaskScope`, `ScopeKey`,
+  `ShutdownReport`. Eine Erweiterung holt den App-Scope mit
+  `app_shell::app_scope(&AppHandle)` und startet ihre Aufgaben dort; sie
+  werden beim Beenden der App abgebrochen und abgewartet, wie die der Hülle.
 - **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
   `emit_connection_status_changed`.
 - **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`. Der Command-Fehlertyp `CommandError` (`{ message, code, feature_locked, connect_log }`) liegt in `ssh_manager_core::ipc_error` und ist der Typ, den Erweiterungs-Plugins zurückgeben; seine JSON-Form ist durch eine gemeinsame Fixture für Rust und Frontend festgelegt.

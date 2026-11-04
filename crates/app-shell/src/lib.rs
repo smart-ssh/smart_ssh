@@ -76,6 +76,7 @@ mod voice_input;
 mod window_prompt;
 mod wiring;
 
+pub use background_tasks::app_scope;
 pub use db_extensions::DbExtension;
 pub use extension_plugins::UnlockedPluginFactory;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
