@@ -57,11 +57,15 @@ mod swappable;
 mod transport_state;
 
 pub use ai_config::AiConfig;
+mod terminal_output;
 pub use chat_persistence::{ChatPersistence, TitleAttempts};
 pub use manager::*;
 pub use require::{require_session, session_not_found};
 pub use safety_state::SafetyState;
 pub use swappable::{SwappableRedactor, SwappableSudoPassword};
+pub use terminal_output::{
+    TERMINAL_COALESCE_INTERVAL, TERMINAL_COALESCE_MAX_BYTES, TERMINAL_COMMAND_CAPACITY,
+};
 pub use transport_state::TransportState;
 
 /// Objektsicherer Wrapper um `FilterEngine<S>::evaluate` (Aufgabenstellung
@@ -1019,31 +1023,6 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
     })
 }
 
-/// Issue #922: longest time terminal output is held back to be merged with
-/// the following chunks into one `terminal-output` event.
-pub const TERMINAL_COALESCE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
-
-/// Issue #922: size at which collected terminal output is emitted at once,
-/// without waiting for [`TERMINAL_COALESCE_INTERVAL`].
-pub const TERMINAL_COALESCE_MAX_BYTES: usize = 64 * 1024;
-
-/// Capacity of the terminal command channel (keystrokes, resize). A sender
-/// that would exceed it waits (issue #922).
-pub const TERMINAL_COMMAND_CAPACITY: usize = 64;
-
-fn flush_terminal_output(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    pending: &mut Vec<u8>,
-    flush_at: &mut Option<tokio::time::Instant>,
-) {
-    *flush_at = None;
-    if !pending.is_empty() {
-        crate::events::emit_terminal_output(emitter, session_id, pending);
-        pending.clear();
-    }
-}
-
 /// Startet den Terminal-Aktor (Modul-Kommentar, Punkt 3) als eigenen Task.
 /// Läuft, bis `shell.read()` EOF liefert (leerer Chunk, s.
 /// `ssh_transport::RusshShell::read`), ein Lesefehler auftritt, oder der
@@ -1082,7 +1061,7 @@ pub fn spawn_terminal_actor(
                             }
                             pending.extend_from_slice(&data);
                             if pending.len() >= TERMINAL_COALESCE_MAX_BYTES {
-                                flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
+                                terminal_output::flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
                             }
                         }
                         Ok(_) => break Some(None), // leerer Chunk == EOF/Close (s. InteractiveShell-Doc)
@@ -1092,7 +1071,7 @@ pub fn spawn_terminal_actor(
                 _ = async { tokio::time::sleep_until(flush_at.unwrap_or_else(tokio::time::Instant::now)).await },
                     if flush_at.is_some() =>
                 {
-                    flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
+                    terminal_output::flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
                 }
                 cmd = commands.recv() => {
                     match cmd {
@@ -1118,7 +1097,7 @@ pub fn spawn_terminal_actor(
         };
 
         // Output read before the end is still shown.
-        flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
+        terminal_output::flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
 
         if let Some(reason) = disconnect_reason {
             // Spec 0017, Abschnitt 2: unerwarteter Verbindungsabbruch (nicht
