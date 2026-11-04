@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { translateErrorCode } from "../../errorCodes";
 import { Button } from "../ui";
+import type { TranslateFn } from "../../i18nTypes";
 
 // Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
 // DOM-Prüfung der Badge-Position) — sonst rein intern von `ChatPanel`
@@ -11,7 +12,7 @@ import { Button } from "../ui";
  * translated text of an AI error card. */
 /** Issue #694: timeout errors name the provider and the limit. */
 export function errorCardText(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   item: Extract<ChatItem, { type: "error" }>,
 ): string {
   const d = item.details;

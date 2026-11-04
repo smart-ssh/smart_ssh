@@ -35,7 +35,7 @@ interface Props {
  * and notes are saved through their own dedicated commands. */
 export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved, autoFocusNotes }: Props) {
   const { t } = useTranslation();
-  const { tags, tagDraft, setTagDraft, addTag, removeTag, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
+  const { tags, setTags, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
   const { tabsIdBase, activeTab, tabItems, setActiveTab } = tabs;
   const [savingLocal, setSavingLocal] = useState({ notes: false, tags: false });
   const localNotesRef = useRef<HTMLTextAreaElement>(null);
@@ -47,7 +47,7 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       // `preventScroll`: s. identischer Kommentar in `NotesPanel.tsx`.
       localNotesRef.current?.focus({ preventScroll: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-focus once per loaded server, guarded by a ref
   }, [loaded.id]);
   // Spec 0058, Teil 1 (Etappe 5): derselbe Hinweis wie `NotesPanel`, hier
   // für den lokalen Pseudo-Server separat nachgebaut (der `NotesPanel`
@@ -122,12 +122,9 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
         <TagsField
           tags={tags}
-          tagDraft={tagDraft}
-          setTagDraft={setTagDraft}
-          addTag={addTag}
-          removeTag={(tag) => {
-            markDirty();
-            removeTag(tag);
+          setTags={(next) => {
+            if (next.length < tags.length) markDirty();
+            setTags(next);
           }}
         >
           <Button variant="primary" size="sm"

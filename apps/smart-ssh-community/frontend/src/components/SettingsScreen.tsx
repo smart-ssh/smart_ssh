@@ -155,7 +155,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
       if (previous && document.contains(previous)) previous.focus();
     };
     // Mount-only: the return target is captured when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: the return target is captured when the dialog opens
   }, []);
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const container = containerRef.current;

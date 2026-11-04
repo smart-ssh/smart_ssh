@@ -1,3 +1,4 @@
+import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -41,7 +42,7 @@ export function DiagnosticsSettings() {
     if (keychain.available) return t("diagnostics.keychainAvailable");
     const reason = keychain.reason ?? "unknown";
     const key = `diagnostics.keychainUnavailable.${reason}`;
-    const text = t(key);
+    const text = t(dynamicKey(key)); // an unknown reason falls back to the "unknown" text below
     return text === key ? t("diagnostics.keychainUnavailable.unknown") : text;
   };
 

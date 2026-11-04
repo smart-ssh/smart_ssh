@@ -215,7 +215,7 @@ export function useSessionTabs() {
         setActiveSessionId((prev) => prev ?? firstUserTab?.sessionId ?? null);
       })
       .catch((err) => console.error(commandErrorMessage(err)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore tabs once on mount
   }, []);
 
   // Spec 0114 §4: after the app returns from the background, events may have

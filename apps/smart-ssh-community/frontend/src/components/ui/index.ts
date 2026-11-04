@@ -12,3 +12,5 @@ export type { TabItem } from "./Tabs";
 export { Tooltip } from "./Tooltip";
 export { ErrorBoundary } from "./ErrorBoundary";
 export type { ErrorBoundaryProps } from "./ErrorBoundary";
+export { TagInput } from "./TagInput";
+export type { TagInputProps } from "./TagInput";

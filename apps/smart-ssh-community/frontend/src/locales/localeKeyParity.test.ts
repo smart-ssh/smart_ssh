@@ -22,7 +22,7 @@ describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
       expect(lengthProblems(resources, en, allowed)).toEqual([]);
     });
 
-    it.runIf(NEW_LANGUAGES.includes(code))("enthält alle Platzhalter und Tags des Englischen unverändert", () => {
+    it("enthält alle Platzhalter und Tags des Englischen unverändert", () => {
       expect(markerProblems(resources, en)).toEqual([]);
     });
 
@@ -51,6 +51,12 @@ describe("markerProblems / identicalProblems", () => {
     expect(markerProblems({ a: "{{n}} x" }, { a: "{{count}} x" })).toHaveLength(1);
     expect(markerProblems({ a: "<0>x</0>" }, { a: "<0>x</0>" })).toEqual([]);
     expect(markerProblems({ a: "x" }, { a: "<0>x</0>" })).toHaveLength(1);
+  });
+  it("erkennt einen fehlenden Platzhalter in einem deutschen Wert", () => {
+    const english = { greet: "Hello {{name}}", n: { files_other: "{{count}} files" } };
+    expect(markerProblems({ greet: "Hallo {{name}}", n: { files_other: "{{count}} Dateien" } }, english)).toEqual([]);
+    expect(markerProblems({ greet: "Hallo", n: { files_other: "{{count}} Dateien" } }, english)).toHaveLength(1);
+    expect(markerProblems({ greet: "Hallo {{name}}", n: { files_other: "Dateien" } }, english)).toHaveLength(1);
   });
   it("erkennt gleiche Werte, ignoriert reine Platzhalter", () => {
     expect(identicalProblems({ a: "Open", b: "{{n}}" }, { a: "Open", b: "{{n}}" })).toEqual(["a: identical to English"]);

@@ -2,6 +2,7 @@
 //! text, right before the transport call, and nowhere else.
 
 use ssh_manager_core::filter::PolicyRules;
+use ssh_manager_core::testing::ServerBuilder;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -491,7 +492,7 @@ async fn test_without_a_transform_the_text_is_sent_unchanged() {
 
 mod group_chain_scope {
     use chrono::Utc;
-    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::profiles::{Group, GroupId};
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
@@ -528,28 +529,6 @@ mod group_chain_scope {
         }
     }
 
-    fn server(group_id: Option<GroupId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: "web".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id,
-            tags: vec!["prod".to_string()],
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
     fn session_for(server_id: ServerId, recorder: Arc<ScopeRecorder>) -> Session {
         let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
         session.set_server_id_for_tests(server_id);
@@ -562,7 +541,11 @@ mod group_chain_scope {
         let root = group(None);
         let mid = group(Some(root.id));
         let leaf = group(Some(mid.id));
-        let srv = server(Some(leaf.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(leaf.id))
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(root.clone())
             .with_group(mid.clone())
@@ -585,7 +568,11 @@ mod group_chain_scope {
 
     #[tokio::test]
     async fn test_server_without_group_has_empty_chain() {
-        let srv = server(None);
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(None)
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new().with_server(srv.clone());
         let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
         let session = session_for(srv.id, recorder.clone());
@@ -616,7 +603,11 @@ mod group_chain_scope {
     /// is empty and the text is still prepared.
     #[tokio::test]
     async fn test_failing_group_lookup_gives_empty_chain_and_text_is_prepared() {
-        let srv = server(Some(GroupId::new()));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(GroupId::new()))
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new().with_server(srv.clone());
         let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
         let session = session_for(srv.id, recorder.clone());
@@ -639,7 +630,11 @@ mod group_chain_scope {
             .build()
             .unwrap();
         runtime.block_on(async {
-            let srv = server(Some(GroupId::new()));
+            let srv = ServerBuilder::new()
+                .name("web")
+                .group_id(Some(GroupId::new()))
+                .tags(vec!["prod".to_string()])
+                .build();
             let store = InMemoryProfileStore::new().with_server(srv.clone());
             let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
             session.set_server_id_for_tests(srv.id);

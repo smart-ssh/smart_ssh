@@ -321,7 +321,7 @@ export function ServerList({
       return;
     }
     void performConnect(server, resumeRequest.chatSessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- performConnect is recreated each render; the request is consumed once
   }, [resumeRequest, loading, firstRunAcknowledged, servers]);
 
   // Issue #692: same flow as a click on the server (open tab → switch,
@@ -335,7 +335,7 @@ export function ServerList({
       return;
     }
     void handleConnect(server);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleConnect is recreated each render; the request is consumed once
   }, [connectRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten

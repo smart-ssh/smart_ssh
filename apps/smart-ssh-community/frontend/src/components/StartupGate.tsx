@@ -16,6 +16,7 @@ import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import type { TranslateFn } from "../i18nTypes";
 
 interface StartupGateProps {
   /** Der Zustand, den `main.tsx` schon geholt hat, damit die Maske ohne
@@ -159,6 +160,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       void prompt.then((unlisten) => unlisten()).catch(() => {});
       void unlocked.then((unlisten) => unlisten()).catch(() => {});
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a language change must not re-register the listeners
   }, [initialState, refresh, listenAttempt]);
 
   // §2 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
@@ -178,6 +180,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Abhängigkeiten sind allein der Bildschirm und der Zuhörer: `run`
     // entsteht bei jedem Render neu, und der Merker oben stellt ohnehin
     // sicher, dass es bei genau einem Aufruf bleibt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run is recreated each render; a ref guards the single call
   }, [listening, state?.screen, continueAttempt]);
 
   async function run(action: () => Promise<StartupStateDto>) {
@@ -407,7 +410,7 @@ function StartOver({
 }: {
   busy: boolean;
   onClick: () => void;
-  t: (key: string) => string;
+  t: TranslateFn;
 }) {
   return (
     <Button variant="danger" onClick={onClick} disabled={busy}>

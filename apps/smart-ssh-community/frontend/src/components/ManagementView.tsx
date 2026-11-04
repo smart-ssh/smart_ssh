@@ -81,7 +81,7 @@ export function ManagementView({
       setNewFormRevision((n) => n + 1);
       onInitialSelectionConsumed?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to a new initialSelection only; callbacks and setters are not triggers
   }, [initialSelection]);
 
   // Issue #49: erhöht bei jeder Auswahl (auch einem erneuten Klick auf
