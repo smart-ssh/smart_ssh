@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { TerminalKeyId } from "../terminalKeys";
+import { Button } from "./ui";
 
 interface TerminalKeyRowProps {
   ctrl: boolean;
@@ -40,10 +41,10 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
       data-testid="terminal-key-row"
       className="flex gap-1 overflow-x-auto pt-2"
     >
-      <button type="button" className={base} onPointerDown={keepFocus} onClick={() => onKey("esc")}>
+      <Button variant="bare" type="button" className={base} onPointerDown={keepFocus} onClick={() => onKey("esc")}>
         Esc
-      </button>
-      <button
+      </Button>
+      <Button variant="bare"
         type="button"
         className={mod(ctrl)}
         aria-pressed={ctrl}
@@ -51,8 +52,8 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
         onClick={onToggleCtrl}
       >
         Ctrl
-      </button>
-      <button
+      </Button>
+      <Button variant="bare"
         type="button"
         className={mod(alt)}
         aria-pressed={alt}
@@ -60,11 +61,11 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
         onClick={onToggleAlt}
       >
         Alt
-      </button>
+      </Button>
       {keys
         .filter((k) => k.id !== "esc")
         .map((k) => (
-          <button
+          <Button variant="bare"
             key={k.id}
             type="button"
             className={base}
@@ -73,7 +74,7 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
             onClick={() => onKey(k.id)}
           >
             {k.label}
-          </button>
+          </Button>
         ))}
     </div>
   );

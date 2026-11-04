@@ -9,6 +9,7 @@ import { MAIN_TAB_ENTRIES, type MainTab } from "../navEntries";
 import type { SessionTab } from "../hooks/useSessionTabs";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
+import { Button } from "./ui";
 
 const ENTRY_BASE = `focus-ring font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
 const entryTone = (current: boolean) =>
@@ -33,7 +34,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
 
   return (
     <div data-tauri-drag-region className="flex w-full min-w-0 items-center gap-2">
-      <button
+      <Button variant="bare"
         ref={burgerRef}
         type="button"
         aria-haspopup="dialog"
@@ -50,7 +51,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
-      </button>
+      </Button>
       <span
         data-tauri-drag-region
         data-testid="narrow-title"
@@ -116,7 +117,7 @@ function NarrowMenu({
           {MAIN_TAB_ENTRIES.map((entry) => {
             const current = overview && tab === entry.id;
             return (
-              <button
+              <Button variant="bare"
                 key={entry.id}
                 ref={current ? initialRef : undefined}
                 type="button"
@@ -125,12 +126,12 @@ function NarrowMenu({
                 className={`${ENTRY_BASE} ${entryTone(current)}`}
               >
                 {t(entry.labelKey)}
-              </button>
+              </Button>
             );
           })}
-          <button type="button" onClick={pick(onOpenSettings)} className={`${ENTRY_BASE} ${entryTone(false)}`}>
+          <Button variant="bare" type="button" onClick={pick(onOpenSettings)} className={`${ENTRY_BASE} ${entryTone(false)}`}>
             {t("settings.title")}
-          </button>
+          </Button>
         </nav>
 
         {tabs.length > 0 && (
@@ -144,7 +145,7 @@ function NarrowMenu({
                 const label = tabDisplayLabel(s, t);
                 return (
                   <li key={s.sessionId} className={`flex items-center border ${current ? "border-accent/55 bg-accent/16" : "border-transparent"}`}>
-                    <button
+                    <Button variant="bare"
                       ref={!overview && current ? initialRef : undefined}
                       type="button"
                       aria-current={current ? "page" : undefined}
@@ -152,16 +153,16 @@ function NarrowMenu({
                       className={`focus-ring font-heading flex min-h-11 min-w-0 flex-1 items-center gap-1.5 px-3 text-left text-sm font-semibold tracking-wide ${current ? "text-accent-fg-soft" : "text-fg-muted"}`}
                     >
                       <SessionTabContent tab={s} t={t} label={label} labelClass="truncate" />
-                    </button>
+                    </Button>
                     {/* Closing keeps the menu open, like closing a tab. */}
-                    <button
+                    <Button variant="bare"
                       type="button"
                       onClick={() => onRequestClose(s.sessionId)}
                       aria-label={t("sessionTabs.closeTab", { name: label })}
                       className={`focus-ring flex h-11 w-11 shrink-0 items-center justify-center text-fg-subtle hover:text-fg-soft`}
                     >
                       ✕
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
