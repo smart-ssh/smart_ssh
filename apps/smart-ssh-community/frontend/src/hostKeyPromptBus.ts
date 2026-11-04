@@ -5,16 +5,17 @@
  * Host-Key-Dialog über dieses Signal — dasselbe Bus-Muster wie
  * `toastBus.ts`, statt Props quer durch `MainScreen` zu reichen. */
 
+import { createBus } from "./createBus";
+
 type Listener = () => void;
 
-const listeners = new Set<Listener>();
+const bus = createBus<void>();
 
 export function clearHostKeyPrompt(): void {
-  for (const listener of listeners) listener();
+  bus.publish();
 }
 
 /** Gibt eine Unsubscribe-Funktion zurück (React-`useEffect`-Cleanup-Form). */
 export function subscribeHostKeyPromptClear(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  return bus.subscribe(listener);
 }
