@@ -100,7 +100,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("s1", "a");
     start("s1", "b");
-    act(() => progress({ sessionId: "s1", transferId: "b", bytesDone: 40, totalBytes: 100 }));
+    act(() => progress({ sessionId: "s1", transferId: "b", bytesDone: 40, totalBytes: 100, folder: null, entries: null }));
     const [a, b] = result.current.transfers;
     expect(a.bytesDone).toBeUndefined();
     expect(b.bytesDone).toBe(40);
@@ -110,7 +110,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("other", "x");
     start("s1", "a");
-    act(() => progress({ sessionId: "other", transferId: "a", bytesDone: 9, totalBytes: 100 }));
+    act(() => progress({ sessionId: "other", transferId: "a", bytesDone: 9, totalBytes: 100, folder: null, entries: null }));
     expect(result.current.transfers.map((t) => t.id)).toEqual(["a"]);
     expect(result.current.transfers[0].bytesDone).toBeUndefined();
   });
@@ -118,7 +118,7 @@ describe("useSftpTransfers", () => {
   it("marks a cancelled transfer as stopped and keeps its row", () => {
     const { result } = setup();
     start("s1", "a");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: "cancelled" }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: "cancelled", incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers[0].stopped).toBe("cancelled");
     expect(load).not.toHaveBeenCalled();
   });
@@ -127,7 +127,7 @@ describe("useSftpTransfers", () => {
     const { result } = setup();
     start("s1", "a");
     start("s1", "b");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: null }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: null, stopped: null, incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers.map((t) => t.id)).toEqual(["b"]);
     expect(load).toHaveBeenCalledWith("/home/u");
     act(() => result.current.dismissTransfer("b"));
@@ -137,7 +137,7 @@ describe("useSftpTransfers", () => {
   it("keeps a failed transfer with its error", () => {
     const { result } = setup();
     start("s1", "a");
-    act(() => finished({ sessionId: "s1", transferId: "a", error: "boom" }));
+    act(() => finished({ sessionId: "s1", transferId: "a", error: "boom", stopped: null, incompleteRemotePath: null, entriesDone: null }));
     expect(result.current.transfers[0].error).toBe("boom");
   });
 

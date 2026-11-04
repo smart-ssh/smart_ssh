@@ -353,6 +353,66 @@ impl SftpSession for RusshSftpSession {
         Ok(end)
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        use tokio::io::AsyncSeekExt;
+        let mut file = self
+            .inner
+            .open(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        file.seek(std::io::SeekFrom::Start(offset))
+            .await
+            .map_err(|e| self.map_io_error("Lesefehler", path, &e))?;
+        let mut buf = vec![0u8; len.max(1)];
+        let mut filled = 0;
+        // A single `read` may return less than asked; only 0 means EOF.
+        while filled < buf.len() {
+            let n = file
+                .read(&mut buf[filled..])
+                .await
+                .map_err(|e| self.map_io_error("Lesefehler", path, &e))?;
+            if n == 0 {
+                break;
+            }
+            filled += n;
+        }
+        buf.truncate(filled);
+        Ok(buf)
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        use tokio::io::AsyncSeekExt;
+        let mut file = if truncate {
+            self.inner.create(path).await
+        } else {
+            self.inner.open_with_flags(path, OpenFlags::WRITE).await
+        }
+        .map_err(|e| self.map_error(path, e))?;
+        if !truncate {
+            file.seek(std::io::SeekFrom::Start(offset))
+                .await
+                .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
+        }
+        file.write_all(data)
+            .await
+            .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
+        file.shutdown()
+            .await
+            .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
+        Ok(())
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = self
             .inner

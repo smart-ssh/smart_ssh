@@ -346,6 +346,7 @@ impl ConnectLog {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum StepDetail {
     /// DNS / TCP: `host:port` being contacted.
     Contacting { target: String },
@@ -363,14 +364,25 @@ pub enum StepDetail {
 /// One step as sent in the `connect-progress` event (Issue #546).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ConnectStepSnapshot {
     /// Step kind, camelCase (`dnsResolution`, `tcpConnect`, `tunnelOpen`,
     /// `handshake`, `hostKeyCheck`, `authentication`, `sessionReady`).
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(
+            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\""
+        )
+    )]
     pub kind: String,
     pub hop_index: usize,
     /// Hop label (`user@host:port`, Spec 0076 naming).
     pub hop: String,
     /// `running` | `ok` | `failed`.
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"running\" | \"ok\" | \"skipped\" | \"failed\"")
+    )]
     pub status: String,
     /// Error code when `failed`.
     pub error_code: Option<String>,

@@ -4,13 +4,10 @@
 // not cross the IPC boundary as a DTO.
 
 import type {
-  ActionOrigin,
-  ConnectionStatus,
-  Decision,
+  HostKeyKind,
   PatternType,
   ProviderType,
   Scope,
-  WebActivityDto,
 } from "./generated/ipc";
 
 export type {
@@ -142,6 +139,137 @@ export function supportsModelDiscovery(type: ProviderType): boolean {
   );
 }
 
+// Event payloads and their helper types: generated from the Rust payload
+// structs (issue #920). The `*Event` names are kept as aliases.
+export type {
+  ActionDecisionEscalatedPayload,
+  ActionResultPayload,
+  AiAction,
+  AiBudgetWaitingPayload,
+  AutoReconnectChangedPayload,
+  ChatActionOutputPayload,
+  ChatActionProposedPayload,
+  ChatActionResultPayload,
+  ChatActionWaitingInputPayload,
+  ChatAiRequestStartedPayload,
+  ChatAiRetryingPayload,
+  ChatAutoContinuationLimitReachedPayload,
+  ChatAutoContinuationStartedPayload,
+  ChatContextUsagePayload,
+  ChatDocumentGeneratedPayload,
+  ChatErrorPayload,
+  ChatInjectionCheckPayload,
+  ChatQuestionAskedPayload,
+  ChatSessionChangedPayload,
+  ChatTextDeltaPayload,
+  ChatWebActivityPayload,
+  ConnectProgressPayload,
+  ConnectStepSnapshot,
+  ConnectionStatusChangedPayload,
+  HostKeyKind,
+  HostKeyPromptEndReason,
+  HostKeyVerificationEndedPayload,
+  HostKeyVerificationNeededPayload,
+  InjectionCheckState,
+  McpActionTabRequestedPayload,
+  NoteShrinkFailedPayload,
+  NoteShrinkSucceededPayload,
+  NoteShrinkSuggestedPayload,
+  NoteTargetSelector,
+  NoteUpdateExpiredPayload,
+  NoteUpdateSuggestedPayload,
+  RiskAssessment,
+  RiskAssessmentUpdatedPayload,
+  RiskLevel,
+  SessionOnlyPayload,
+  SftpTransferFinishedPayload,
+  SftpTransferKind,
+  SftpTransferProgressPayload,
+  SftpTransferStartedPayload,
+  StepDetail,
+  TerminalOutputPayload,
+} from "./generated/ipc";
+import type {
+  ActionDecisionEscalatedPayload,
+  AiBudgetWaitingPayload,
+  AutoReconnectChangedPayload,
+  ChatActionOutputPayload,
+  ChatActionProposedPayload,
+  ChatActionResultPayload,
+  ChatActionWaitingInputPayload,
+  ChatAiRequestStartedPayload,
+  ChatAiRetryingPayload,
+  ChatAutoContinuationLimitReachedPayload,
+  ChatAutoContinuationStartedPayload,
+  ChatContextUsagePayload,
+  ChatDocumentGeneratedPayload,
+  ChatErrorPayload,
+  ChatInjectionCheckPayload,
+  ChatQuestionAskedPayload,
+  ChatSessionChangedPayload,
+  ChatTextDeltaPayload,
+  ChatWebActivityPayload,
+  ConnectProgressPayload,
+  ConnectionStatusChangedPayload,
+  HostKeyVerificationEndedPayload,
+  HostKeyVerificationNeededPayload,
+  McpActionTabRequestedPayload,
+  NoteShrinkFailedPayload,
+  NoteShrinkSucceededPayload,
+  NoteShrinkSuggestedPayload,
+  NoteUpdateExpiredPayload,
+  NoteUpdateSuggestedPayload,
+  RiskAssessmentUpdatedPayload,
+  SessionOnlyPayload,
+  SftpTransferFinishedPayload,
+  SftpTransferProgressPayload,
+  SftpTransferStartedPayload,
+  StepDetail,
+  TerminalOutputPayload,
+} from "./generated/ipc";
+export type ChatSessionChangedEvent = ChatSessionChangedPayload;
+export type ConnectionStatusChangedEvent = ConnectionStatusChangedPayload;
+export type AutoReconnectChangedEvent = AutoReconnectChangedPayload;
+export type HostKeyVerificationNeededEvent = HostKeyVerificationNeededPayload;
+export type HostKeyVerificationEndedEvent = HostKeyVerificationEndedPayload;
+export type ConnectProgressEvent = ConnectProgressPayload;
+export type TerminalOutputEvent = TerminalOutputPayload;
+export type ChatTextDeltaEvent = ChatTextDeltaPayload;
+export type ChatActionProposedEvent = ChatActionProposedPayload;
+export type RiskAssessmentUpdatedEvent = RiskAssessmentUpdatedPayload;
+export type ActionDecisionEscalatedEvent = ActionDecisionEscalatedPayload;
+export type NoteUpdateSuggestedEvent = NoteUpdateSuggestedPayload;
+export type NoteShrinkSuggestedEvent = NoteShrinkSuggestedPayload;
+export type NoteShrinkFailedEvent = NoteShrinkFailedPayload;
+export type NoteShrinkSucceededEvent = NoteShrinkSucceededPayload;
+export type ChatAutoContinuationStartedEvent = ChatAutoContinuationStartedPayload;
+export type AiBudgetWaitingEvent = AiBudgetWaitingPayload;
+export type ChatInjectionCheckEvent = ChatInjectionCheckPayload;
+export type ChatActionResultEvent = ChatActionResultPayload;
+export type ChatActionOutputEvent = ChatActionOutputPayload;
+export type ChatActionWaitingInputEvent = ChatActionWaitingInputPayload;
+export type ChatErrorEvent = ChatErrorPayload;
+export type ChatAiRequestStartedEvent = ChatAiRequestStartedPayload;
+export type ChatAiRetryingEvent = ChatAiRetryingPayload;
+export type ChatAutoContinuationLimitReachedEvent = ChatAutoContinuationLimitReachedPayload;
+export type ChatResponseTruncatedEvent = SessionOnlyPayload;
+export type ChatContextUsageEvent = ChatContextUsagePayload;
+export type ChatContextCompactedEvent = SessionOnlyPayload;
+export type ChatWebActivityEvent = ChatWebActivityPayload;
+export type ChatResponseEmptyEvent = SessionOnlyPayload;
+export type ChatResponseRefusedEvent = SessionOnlyPayload;
+export type ChatWebResearchUnavailableEvent = SessionOnlyPayload;
+export type ChatResponseCancelledEvent = SessionOnlyPayload;
+export type ChatQueuedMessagesSentEvent = SessionOnlyPayload;
+export type ChatDocumentGeneratedEvent = ChatDocumentGeneratedPayload;
+export type ChatQuestionAskedEvent = ChatQuestionAskedPayload;
+export type SftpTransferStartedEvent = SftpTransferStartedPayload;
+export type SftpTransferFinishedEvent = SftpTransferFinishedPayload;
+export type SftpTransferProgressEvent = SftpTransferProgressPayload;
+export type McpActionTabRequestedEvent = McpActionTabRequestedPayload;
+export type NoteUpdateExpiredEvent = NoteUpdateExpiredPayload;
+export type ConnectStepDetail = StepDetail;
+
 // --- Teil 2: Session/Terminal/Chat ------------------------------------
 //
 // `AiAction`/`NoteTarget`/`Decision` (core::profiles/core::filter) tragen
@@ -154,59 +282,6 @@ export function supportsModelDiscovery(type: ProviderType): boolean {
 // "camelCase"`.
 
 export type NoteTarget = { Server: string } | { Group: string };
-
-/** Spec 0016, Abschnitt 6 — löst das frühere `{ target_type, target_id }`
- * ab: die KI wählt nur noch relativ zur aktuellen Session, nie eine
- * konkrete `ServerId`/`GroupId` (die löst das Backend selbst auf). Als
- * reiner Unit-Varianten-Enum serialisiert Rusts Serde-Default-Tagging das
- * als bloßen String (`"CurrentServer"`/`"CurrentServerGroup"`), nicht als
- * Objekt wie `NoteTarget`. */
-export type NoteTargetSelector = "CurrentServer" | "CurrentServerGroup";
-
-export type AiAction =
-  | { SuggestCommand: { command: string } }
-  | { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } }
-  | { GenerateDocument: { title: string; content_markdown: string } }
-  | { ReadRemoteFile: { path: string } }
-  | { WriteRemoteFile: { path: string; content: string } };
-
-/** Spec 0026, Abschnitt 2 — kein "grün": Abwesenheit eines Badges im UI
- * bedeutet bereits "laut bekannten Mustern unauffällig", kein
- * Sicherheitsversprechen. */
-export type RiskLevel = "none" | "yellow" | "red";
-
-export interface RiskAssessment {
-  serverRisk: RiskLevel;
-  serverRiskReason: string | null;
-  dataRisk: RiskLevel;
-  dataRiskReason: string | null;
-  /** Spec 0026, Abschnitt 3: `true`, sobald die optionale KI-Zweitmeinung
-   * tatsächlich eingeflossen ist. */
-  aiReviewed: boolean;
-}
-
-/** Issue #611: the persisted chat session a runtime session uses now
- * (`null`: local pseudo-server / no-persist). */
-export interface ChatSessionChangedEvent {
-  sessionId: string;
-  chatSessionId: string | null;
-}
-
-export interface ConnectionStatusChangedEvent {
-  sessionId: string;
-  status: ConnectionStatus;
-  reason: string | null;
-}
-
-/** Issue #356, Spec 0107 §8: Stand der automatischen Neuverbindung. */
-export interface AutoReconnectChangedEvent {
-  sessionId: string;
-  phase: "running" | "reconnected" | "gave_up" | "stopped" | "blocked";
-  /** Nummer des laufenden bzw. nächsten Versuchs (nur bei `running`). */
-  attempt: number;
-}
-
-export type HostKeyKind = "unknown" | "mismatch";
 
 /** Gemeinsame Form für `HostKeyDialog` — sowohl
  * `HostKeyVerificationNeededEvent` (Spec 0007, regulärer `connect()`) als
@@ -227,116 +302,6 @@ export interface HostKeyInfo {
   keyType?: string | null;
 }
 
-export interface HostKeyVerificationNeededEvent extends HostKeyInfo {
-  sessionId: string;
-  /** Issue #37: Kennung genau dieser Abfrage. Ein `connect()`-Retry kann
-   * unter derselben `sessionId` eine neue Abfrage anlegen; das passende
-   * `HostKeyVerificationEndedEvent` trägt dieselbe `promptId`. */
-  promptId: number;
-}
-
-/** Issue #37: warum das Backend nicht mehr auf eine Host-Key-Abfrage wartet. */
-export type HostKeyPromptEndReason = "decided" | "timed_out" | "abandoned";
-
-/** Issue #37: `host-key-verification-ended` — das Backend wartet nicht mehr
- * auf die Abfrage (`sessionId`, `promptId`). Rein informativ: Timeout und
- * Abbruch gelten im Backend bereits als Ablehnung. */
-export interface HostKeyVerificationEndedEvent {
-  sessionId: string;
-  promptId: number;
-  reason: HostKeyPromptEndReason;
-}
-
-/** Issue #546: detail of a connect step — a stable code plus parameters, to
- * be translated by the frontend. Never carries secrets. */
-export type ConnectStepDetail =
-  | { code: "contacting"; target: string }
-  | { code: "tunnel"; hop: string }
-  | { code: "waitingForResponse" }
-  | { code: "waitingForDecision" }
-  | { code: "authMethod"; method: string };
-
-/** Issue #546: one step in a `connect-progress` event. */
-export interface ConnectStepSnapshot {
-  kind:
-    | "dnsResolution"
-    | "tcpConnect"
-    | "tunnelOpen"
-    | "handshake"
-    | "hostKeyCheck"
-    | "authentication"
-    | "sessionReady";
-  hopIndex: number;
-  /** `user@host:port` of the hop (Spec 0076 naming). */
-  hop: string;
-  status: "running" | "ok" | "skipped" | "failed";
-  errorCode: string | null;
-  detail: ConnectStepDetail | null;
-}
-
-/** Issue #546: `connect-progress` — the full current step list of a running
- * connect. `attempt` is 1-based and counts retries (e.g. after Trust); a new
- * attempt starts a fresh list. */
-export interface ConnectProgressEvent {
-  attemptId: string;
-  serverId: string;
-  attempt: number;
-  steps: ConnectStepSnapshot[];
-}
-
-export interface TerminalOutputEvent {
-  sessionId: string;
-  /** Base64-kodiert (s. `crate::events`-Modul-Kommentar). */
-  data: string;
-}
-
-export interface ChatTextDeltaEvent {
-  sessionId: string;
-  delta: string;
-}
-
-export interface ChatActionProposedEvent {
-  sessionId: string;
-  actionId: string;
-  action: AiAction;
-  decision: Decision;
-  /** Spec 0019, Abschnitt 3: nur bei `ProposeNoteUpdate` gesetzt — aktueller
-   * Inhalt des Ziels, für die Diff-Vorschau. */
-  previousNoteContent: string | null;
-  /** Spec 0018, Abschnitt 7: ob beim Ausführen automatisch ein hinterlegtes
-   * Sudo-Passwort eingespeist würde. */
-  usesStoredSudoPassword: boolean;
-  /** Spec 0020, Abschnitt 4.2, Punkt 3: nur bei `WriteRemoteFile` gesetzt —
-   * aktueller Inhalt der Zieldatei für die Diff-Vorschau (dieselbe
-   * `NoteDiffPreview`-Komponente wie bei `ProposeNoteUpdate`). `null`, wenn
-   * die Datei noch nicht existiert ODER sich nicht als Text dekodieren
-   * lässt (dann ist stattdessen `previousFileSize` gesetzt). */
-  previousFileContent: string | null;
-  /** Nur gesetzt, wenn `previousFileContent` wegen einer Binärdatei `null`
-   * ist — Größe der ALTEN Datei in Bytes, für einen Größenvergleich-Hinweis
-   * statt einer Diff-Ansicht. */
-  previousFileSize: number | null;
-  /** Spec 0023, Abschnitt 3: nur bei `action: ProposeNoteUpdate` gesetzt —
-   * Server- oder Gruppenname des bereits serverseitig aufgelösten Ziels.
-   * Immer anzeigen, auch wenn es der aktuell offene Server der Session ist
-   * (Konsistenz statt Redundanzvermeidung) — genau das fehlende Stück, das
-   * den in Spec 0023 gemeldeten Bug verursacht hat. `null` nur, wenn die
-   * Zielauflösung serverseitig fehlschlägt (z. B. Server inzwischen
-   * gelöscht). */
-  targetName: string | null;
-  /** Spec 0026, Abschnitt 2: nur für `SuggestCommand`/`ReadRemoteFile`/
-   * `WriteRemoteFile` gesetzt (`null` für `ProposeNoteUpdate`) — bereits
-   * die regelbasierte Einschätzung, `aiReviewed: false` beim ersten Event.
-   * Kann später über `risk-assessment-updated` (s. `events.ts`) auf der
-   * Daten-Risiko-Achse angehoben werden. */
-  riskAssessment: RiskAssessment | null;
-  /** Spec 0028, Abschnitt 6/9a. */
-  origin: ActionOrigin;
-  /** Issue #696: only for `decision: "AutoExec"` — the rules that let the
-   * command run without confirmation (display only). Empty otherwise. */
-  autoExecRules?: AutoExecRule[];
-}
-
 /** Issue #696: one rule behind an automatic run; `segmentIndices` are the
  * top-level segments of a chain it covered. */
 export interface AutoExecRule {
@@ -345,265 +310,6 @@ export interface AutoExecRule {
   patternValue: string;
   scope: Scope;
   segmentIndices: number[];
-}
-
-/** Spec 0026, Abschnitt 3, Punkt 4. */
-export interface RiskAssessmentUpdatedEvent {
-  sessionId: string;
-  actionId: string;
-  dataRisk: RiskLevel;
-  reason: string | null;
-  /** Issue #102: die Zweitmeinung konnte nicht eingeholt werden
-   * (Provider-Fehler oder kein erkennbares Urteil). `dataRisk` ist dann die
-   * regelbasierte Stufe. Optional, damit ältere Payloads weiter passen. */
-  secondOpinionUnavailable?: boolean;
-}
-
-/** Spec 0092, A3.2: Die Entscheidung zu `actionId` hat sich NACH
- * `chat-action-proposed` von `AutoExec` zu `Confirm` verschärft — die
- * KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben. Kommt immer NACH
- * `RiskAssessmentUpdatedEvent` für dieselbe `actionId` (s. `events.ts`).
- * `reason`/`code` bauen sich die Karte und die Tab-Leiste selbst zu einem
- * `Decision.Confirm` zusammen, weil dieses Event (anders als
- * `chat-action-proposed`) nicht den ganzen `Decision`-Enum überträgt. */
-export interface ActionDecisionEscalatedEvent {
-  sessionId: string;
-  actionId: string;
-  reason: string;
-  code: string;
-}
-
-/** Spec 0010 — `action` ist hier immer `{ ProposeNoteUpdate: {...} }`, nie
- * `SuggestCommand` (s. `crate::events::NoteUpdateSuggestedPayload`). Kein
- * `decision`-Feld (anders als `ChatActionProposedEvent`): wäre für
- * `ProposeNoteUpdate` ohnehin immer "Confirm". */
-export interface NoteUpdateSuggestedEvent {
-  sessionId: string;
-  actionId: string;
-  action: { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } };
-  /** Spec 0019, Abschnitt 3 — s. `ChatActionProposedEvent`-Doc-Kommentar. */
-  previousNoteContent: string | null;
-  /** Spec 0023, Abschnitt 3 — s. `ChatActionProposedEvent.targetName`-Doc-
-   * Kommentar. Besonders wichtig für dieses Event: es ist bewusst app-weit
-   * statt tab-gebunden (Spec 0010, Abschnitt 2, Punkt 6), der Nutzer hat
-   * beim Empfang womöglich einen ganz anderen Server offen. */
-  targetName: string | null;
-  /** Spec 0057, §4.2 (Issue #94): `true` nur, wenn der Vorschlag aus "Ja,
-   * zusammenfassen" stammt und die KI-Antwort vom Provider wegen des
-   * Längenlimits abgeschnitten wurde. Jeder andere Vorschlag: `false`. */
-  summaryIncomplete: boolean;
-}
-
-/** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog ("Deine Notiz für diesen
- * Server ist sehr groß …"), bevor überhaupt ein KI-Aufruf stattgefunden hat.
- * Bewusst kein `sessionId` (s. `crate::events::NoteShrinkSuggestedPayload`):
- * der Vorschlag bezieht sich immer auf den SERVER, nie auf eine bestimmte
- * Sitzung. */
-export interface NoteShrinkSuggestedEvent {
-  serverId: string;
-  serverName: string;
-}
-
-/** Spec 0057, §4.2/§6: Gegenstück zu einem erfolgreichen `note-update-
- * suggested` nach "Ja, zusammenfassen" — der KI-Aufruf ist fehlgeschlagen
- * oder abgelaufen, die gespeicherte Notiz bleibt unverändert. */
-export interface NoteShrinkFailedEvent {
-  serverId: string;
-  message: string;
-}
-
-/** Spec 0058 (Politur-Paket), spec-reviewer-Fund: das Erfolgs-Gegenstück zu
- * `NoteShrinkFailedEvent` — ein zeitgleich offener Notiz-Editor (z. B. über
- * den neuen "Jetzt zusammenfassen"-Link im Editor selbst ausgelöst, s.
- * `NotesPanel.tsx`) muss nach Zustimmung neu laden, sonst überschreibt sein
- * nächster "Speichern"-Klick die gerade akzeptierte Zusammenfassung. */
-export interface NoteShrinkSucceededEvent {
-  serverId: string;
-}
-
-/** Spec 0021, Abschnitt 5: signalisiert eine *automatische* Folgerunde (die
- * KI antwortet auf ein Aktionsergebnis, ohne dass der Nutzer getippt hat) —
- * Grundlage für den "Automatik läuft"-Indikator. `round` ist nur zur
- * Diagnose/Anzeige gedacht (z. B. "Runde 3"), keine Ablauflogik hängt im
- * Frontend daran. */
-export interface ChatAutoContinuationStartedEvent {
-  sessionId: string;
-  round: number;
-}
-
-/** Spec 0061, Abschnitt 4: die App wartet proaktiv vor einem KI-Aufruf,
- * weil das aus den Rate-Limit-Headern bekannte Restbudget knapp ist (oder
- * der geschätzte Request es überschreiten würde) — rein informativ, kein
- * Abbrechen-/Trotzdem-Button, der Request geht nach `waitSeconds`
- * automatisch raus. */
-export interface AiBudgetWaitingEvent {
-  sessionId: string;
-  waitSeconds: number;
-}
-
-export type ActionResultPayload =
-  | {
-      kind: "command";
-      command: string;
-      stdout: string;
-      stderr: string;
-      exitCode: number | null;
-      /** Spec 0027: `true`, wenn der Nutzer dieses Kommando manuell
-       * abgebrochen hat, bevor es von selbst beendet war — dann ist
-       * `exitCode` immer `null`, keine Störung. */
-      cancelled: boolean;
-      /** Spec 0043, Fund A: `true`, wenn `stdout`/`stderr` beim Streaming am
-       * konfigurierten Output-Cap abgeschnitten wurden — Ausgabe ist
-       * unvollständig, nicht fehlerhaft. */
-      truncated: boolean;
-    }
-  | { kind: "noteUpdate"; summary: string }
-  /** Spec 0020, Abschnitt 4.1 — `content` ist bereits redigiert (Spec 0006). */
-  | { kind: "fileRead"; path: string; content: string }
-  /** Spec 0020, Abschnitt 4.2/4.3 — `backupPath` ist `null` nur, wenn die
-   * Datei vor dem Schreiben nicht existierte. */
-  | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
-
-/** Issue #693 (Spec 0039, §5.2): state of the injection check of one
- * checked item. `reason` is untrusted text — render as plain text only. */
-export type InjectionCheckState =
-  | { state: "running" }
-  | { state: "clean" }
-  | { state: "suspected"; reason: string }
-  | { state: "unavailable" };
-
-/** Issue #693 — `chat-injection-check`; `itemId` is the action id of a
- * command result / file read, or the activity id of a web research card. */
-export type ChatInjectionCheckEvent = { sessionId: string; itemId: string } & InjectionCheckState;
-
-export interface ChatActionResultEvent {
-  sessionId: string;
-  actionId: string;
-  result: ActionResultPayload;
-}
-
-/** Issue #325 (Spec 0106): live output of a running `SuggestCommand`.
- * `stdout`/`stderr` are newly released, already redacted text to append;
- * at most about ten events per second and action. Display only — the
- * final `chat-action-result` replaces it. */
-export interface ChatActionOutputEvent {
-  sessionId: string;
-  actionId: string;
-  stdout: string;
-  stderr: string;
-  /** `true` once the output size limit was reached. */
-  truncated: boolean;
-}
-
-/** Issue #327 — the backend's guess whether a running command waits for
- * input; `waiting: false` when output arrived again. Display only. */
-export interface ChatActionWaitingInputEvent {
-  sessionId: string;
-  actionId: string;
-  waiting: boolean;
-}
-
-export interface ChatErrorEvent {
-  sessionId: string;
-  message: string;
-  /** Spec 0024, Abschnitt 5 — stabiler Backend-Code (`SshError`/`AiError`),
-   * `null`/`undefined` wenn keiner vorliegt (reine Validierungsmeldung ohne
-   * typisierten Fehler dahinter). Übersetzung via `translateErrorCode`. */
-  code?: string | null;
-  /** Issue #600 — provider details for the "Details" view (the message is
-   * already redacted by the backend). */
-  providerErrorType?: string | null;
-  httpStatus?: number | null;
-  providerMessage?: string | null;
-  /** Issue #694 — set for the timeout errors: provider name and the exceeded
-   * limit in seconds. */
-  providerName?: string | null;
-  timeoutSecs?: number | null;
-  /** Issue #631 — when access returns after a provider usage limit. */
-  accessReturns?: string | null;
-}
-
-/** Issue #694 — a request to the AI provider was sent; the chat shows the
- * wait line until content arrives. */
-export interface ChatAiRequestStartedEvent {
-  sessionId: string;
-  providerName: string;
-}
-
-/** Issue #600 — the AI provider is overloaded; the request is repeated
- * automatically after `delaySecs`. */
-export interface ChatAiRetryingEvent {
-  sessionId: string;
-  attempt: number;
-  maxAttempts: number;
-  delaySecs: number;
-}
-
-export interface ChatAutoContinuationLimitReachedEvent {
-  sessionId: string;
-  limit: number;
-}
-
-/** Spec 0065, Teil 2 — die zuletzt gestreamte KI-Antwort wurde durch das
- * Längenlimit abgeschnitten (kein Tool-Call betroffen, der Fall läuft
- * separat über den Retry). Zeigt einen Hinweis + „Weiter"-Aktion
- * (`continue_truncated_response`) an der letzten KI-Nachricht. */
-export interface ChatResponseTruncatedEvent {
-  sessionId: string;
-}
-
-/** Issue #601: real input size of the last request vs. the model window. */
-export interface ChatContextUsageEvent {
-  sessionId: string;
-  inputTokens: number;
-  windowTokens: number;
-}
-
-/** Issue #601: older chat parts were summarized/cut for a request. */
-export interface ChatContextCompactedEvent {
-  sessionId: string;
-}
-
-/** Spec 0105 — `chat-web-activity`. */
-export interface ChatWebActivityEvent {
-  sessionId: string;
-  /** Issue #693: binds `chat-injection-check` events to this card. */
-  activityId?: string;
-  activity: WebActivityDto;
-}
-
-/** Spec 0080, A2 — eine Runde endete ohne jeden Text und ohne vorgeschlagene
- * Aktion (z. B. ein Reasoning-Modell, dessen Denk-Tokens das ganze Budget
- * vor jedem Text aufbrauchen). Zeigt einen reinen Hinweis ohne „Weiter" und
- * ohne Export-/Notiz-Leiste — es gibt nichts, das fortgesetzt oder
- * exportiert werden könnte. */
-export interface ChatResponseEmptyEvent {
-  sessionId: string;
-}
-
-/** Issue #647 — the model declined the request (`refusal` /
- * `content_filter`). Shows a plain notice; text streamed before stays. */
-export interface ChatResponseRefusedEvent {
-  sessionId: string;
-}
-
-/** Spec 0105 §7 (Issue #169) — das Provider-Konto hat die Web-Werkzeuge
- * abgeschaltet; die Sitzung fragt ab jetzt ohne Web-Recherche weiter. Trägt
- * bewusst keinen Fehlertext des Providers. */
-export interface ChatWebResearchUnavailableEvent {
-  sessionId: string;
-}
-
-/** Spec 0066, §1 — der Nutzer hat die laufende KI-Anfrage per Stopp
- * abgebrochen. */
-export interface ChatResponseCancelledEvent {
-  sessionId: string;
-}
-
-/** Spec 0066, §2 — während eines laufenden Turns eingereihte Nachrichten
- * wurden jetzt an die KI übergeben. */
-export interface ChatQueuedMessagesSentEvent {
-  sessionId: string;
 }
 
 // --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
@@ -648,31 +354,12 @@ export type TestAiProviderCredentialsResult =
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 
-/** Spec 0012, Abschnitt 3 — kein `decision`-Feld: `GenerateDocument`
- * durchläuft nie einen Bestätigungsdialog (s. `crate::events`-Payload). */
-export interface ChatDocumentGeneratedEvent {
-  sessionId: string;
-  actionId: string;
-  title: string;
-  contentMarkdown: string;
-}
-
 // --- Issue #545: KI-Rückfragen mit Antwortoptionen ------------------------
 
 /** One answer option of an AI question. */
 export interface QuestionOption {
   label: string;
   description: string | null;
-}
-
-/** Issue #545: payload of `chat-question-asked`. The question is never
- * executable; the answer is sent as a normal user message. */
-export interface ChatQuestionAskedEvent {
-  sessionId: string;
-  questionId: string;
-  question: string;
-  options: QuestionOption[];
-  multiSelect: boolean;
 }
 
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
@@ -727,65 +414,7 @@ export interface FolderUploadSummaryDto {
   notAttempted: number;
 }
 
-/** Issue #658: `delete` / `chmod` are recursive folder operations. */
-export type SftpTransferKind = "upload" | "download" | "delete" | "chmod" | "chown";
-
-export interface SftpTransferStartedEvent {
-  sessionId: string;
-  transferId: string;
-  kind: SftpTransferKind;
-  fileName: string;
-  /** `null`, wenn die Größe vorab nicht ermittelbar war (s.
-   * `crate::events`-Moduldoc zur Fortschritts-Design-Entscheidung: kein
-   * echter Byte-Fortschritt, nur Start/Ende plus — falls bekannt —
-   * Gesamtgröße). */
-  totalBytes: number | null;
-}
-
-export interface SftpTransferFinishedEvent {
-  sessionId: string;
-  transferId: string;
-  /** `null` bei Erfolg, sonst die Fehlermeldung. */
-  error: string | null;
-  /** Issue #622: stopped by the cancel button or by ending elevated rights
-   * (no error). */
-  stopped?: "cancelled" | "stopped" | null;
-  /** Issue #622: a stopped upload whose partial remote file could not be
-   * removed. */
-  incompleteRemotePath?: string | null;
-  /** Issue #658: recursive delete/chmod — entries changed before the end. */
-  entriesDone?: number | null;
-}
-
-/** Issue #622: throttled progress of a running transfer. */
-export interface SftpTransferProgressEvent {
-  sessionId: string;
-  transferId: string;
-  bytesDone: number;
-  totalBytes: number | null;
-  /** Folder transfers: aggregate over all files. */
-  folder?: {
-    filesDone: number;
-    filesTotal: number;
-    bytesDone: number;
-    bytesTotal: number;
-  };
-  /** Issue #658: recursive delete/chmod; `total` is `null` while counting. */
-  entries?: { done: number; total: number | null };
-}
-
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
-
-/** Spec 0028, Abschnitt 9a / Spec 0104: signalisiert, für die MCP-Sitzung
- * `sessionId` einen Tab anzuzeigen (falls noch keiner existiert) — ohne zu
- * ihm zu wechseln (Spec 0104, §3). Nur für die vier aktionsauslösenden
- * MCP-Tools, nicht für `list_servers`/`get_server_notes`. */
-export interface McpActionTabRequestedEvent {
-  sessionId: string;
-  serverId: string;
-  /** `clientInfo.name` des MCP-Clients, `null` ohne Namen. */
-  clientName: string | null;
-}
 
 export interface McpServerSettingsDto {
   enabled: boolean;
@@ -1104,9 +733,4 @@ export interface StartDirectoryDto {
 /** Spec 0102: Ergebnis von `open_terminal`. */
 export interface TerminalStartDto {
   missingDirectory: string | null;
-}
-
-/** Issue #628: a pending note confirmation timed out in the backend. */
-export interface NoteUpdateExpiredEvent {
-  actionId: string;
 }

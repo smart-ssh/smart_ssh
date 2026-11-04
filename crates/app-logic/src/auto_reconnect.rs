@@ -242,6 +242,7 @@ impl AutoReconnectState {
 /// What the header shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AutoReconnectPhase {
     /// Attempts run (the payload carries the number of the next/current one).
     Running,
@@ -253,7 +254,8 @@ pub enum AutoReconnectPhase {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AutoReconnectChangedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct AutoReconnectChangedPayload {
     session_id: SessionId,
     phase: AutoReconnectPhase,
     attempt: u32,
