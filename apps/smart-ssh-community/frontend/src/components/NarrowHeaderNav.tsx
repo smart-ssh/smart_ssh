@@ -4,9 +4,9 @@
 // wide layout (`navEntries.ts`, `SessionTabParts.tsx`).
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDialogFocusTrap } from "../useDialogFocusTrap";
+import { useDialogFocusTrap } from "../hooks/useDialogFocusTrap";
 import { MAIN_TAB_ENTRIES, type MainTab } from "../navEntries";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
 

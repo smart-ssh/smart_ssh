@@ -1,7 +1,7 @@
 import { useId, useRef } from "react";
 import type { FormEvent, ReactNode, RefObject } from "react";
 
-import { useDialogFocusTrap } from "../../useDialogFocusTrap";
+import { useDialogFocusTrap } from "../../hooks/useDialogFocusTrap";
 import { ModalBackdrop, type ModalBackdropLayer } from "../ModalBackdrop";
 
 export interface DialogFrameProps {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../platform";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
@@ -31,7 +31,7 @@ import type {
   ServerDto,
   UnusableServerDto,
 } from "../types";
-import { useTreeDrag } from "../useTreeDrag";
+import { useTreeDrag } from "../hooks/useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";

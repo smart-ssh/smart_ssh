@@ -6,7 +6,7 @@ import { Button, ErrorBoundary } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { formatBytes } from "../../format";
 import type { ComposerAction, ComposerAttachment, ComposerContext } from "../../extensions/registry";
-import type { VoiceHandlers, VoicePhase } from "../../useVoiceInput";
+import type { VoiceHandlers, VoicePhase } from "../../hooks/useVoiceInput";
 
 interface ComposerProps {
   draft: string;

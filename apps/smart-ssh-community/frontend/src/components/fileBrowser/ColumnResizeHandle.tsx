@@ -1,4 +1,4 @@
-import { useDragResize } from "../../useDragResize";
+import { useDragResize } from "../../hooks/useDragResize";
 
 /** Spec 0053, Teil 1: Drag-Handle am rechten Rand eines Spaltenkopfs — die
  * Trefferfläche (`w-2`, per `-right-1` über die Spaltengrenze zentriert)

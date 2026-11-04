@@ -25,7 +25,7 @@ import {
 } from "./navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
 import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
-import { useSessionTabs } from "./useSessionTabs";
+import { useSessionTabs } from "./hooks/useSessionTabs";
 
 
 type Tab = MainTab;

@@ -1,6 +1,6 @@
 import { useCallback, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { numberedServerName, type SessionTab } from "../useSessionTabs";
+import { numberedServerName, type SessionTab } from "../hooks/useSessionTabs";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
 
