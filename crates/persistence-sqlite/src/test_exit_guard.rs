@@ -13,6 +13,14 @@
 //!   runtime. Such pools are parked and closed by an exit handler that is
 //!   registered after SQLCipher's own (handlers run in reverse order), when
 //!   the runtime is long gone and the pending tasks have been dropped.
+//! * [`wait_for_workers`] (Linux, issue #1168): a connection can also be dropped
+//!   *unclosed*, when the test's runtime is dropped with the "return connection
+//!   to pool" task still queued. The worker thread then sees its command
+//!   channel close and calls `sqlite3_close` on its own, in the background,
+//!   with no pool left that could be awaited. The exit handler waits until
+//!   those threads are gone, so `sqlcipher_atexit` cannot free the codec state
+//!   under them (backtrace: `sqlite3FreeCodecArg` null deref on
+//!   `sqlx-sqlite-worker`).
 //! * [`init_openssl_without_atexit`] initialises OpenSSL with
 //!   `OPENSSL_INIT_NO_ATEXIT` (what `openssl_sys::init` does), so the worker
 //!   thread's own TSD cleanup after the close cannot race `OPENSSL_cleanup`.
@@ -67,4 +75,32 @@ extern "C" fn close_parked() {
             }
         })
         .map(|handle| handle.join());
+    wait_for_workers();
 }
+
+/// Waits (bounded) until no `sqlx-sqlite-worker` thread is left. Such a thread
+/// is only alive after the handler above if its connection was dropped
+/// unclosed and it is still running `sqlite3_close`.
+#[cfg(target_os = "linux")]
+fn wait_for_workers() {
+    use std::time::{Duration, Instant};
+
+    fn worker_threads() -> usize {
+        let Ok(dir) = std::fs::read_dir("/proc/self/task") else {
+            return 0;
+        };
+        dir.flatten()
+            .filter_map(|task| std::fs::read_to_string(task.path().join("comm")).ok())
+            // `comm` is cut to 15 bytes: "sqlx-sqlite-wor".
+            .filter(|comm| comm.starts_with("sqlx-sqlite-wor"))
+            .count()
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while worker_threads() > 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn wait_for_workers() {}
