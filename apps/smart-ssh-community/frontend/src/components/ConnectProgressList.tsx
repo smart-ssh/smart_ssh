@@ -5,8 +5,9 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectStepDetail, ConnectStepSnapshot } from "../types";
 import { Spinner } from "./ui";
+import type { TranslateFn } from "../i18nTypes";
 
-type T = (key: string, options?: Record<string, unknown>) => string;
+type T = TranslateFn;
 
 export function snapshotDetailText(t: T, detail: ConnectStepDetail | null): string {
   if (!detail) return "";

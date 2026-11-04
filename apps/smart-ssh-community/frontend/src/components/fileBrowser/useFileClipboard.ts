@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -67,7 +68,7 @@ export function useFileClipboard(
     entry: RemoteEntryDto,
     run: (requestId: string, onProgress: (p: { done: number; total: number | null }) => void) => Promise<void>,
     passThroughCodes: string[],
-    okKey: string,
+    okKey: TranslationKey,
   ) => {
     closeMenu();
     const requestId = crypto.randomUUID();
