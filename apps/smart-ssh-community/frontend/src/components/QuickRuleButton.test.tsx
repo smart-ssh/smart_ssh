@@ -3,12 +3,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { explainConfirmation } from "../api";
-import type { ExplainedSuggestionDto } from "../types";
+import { explainConfirmation } from "../api/api";
+import type { ExplainedSuggestionDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { QuickRuleButton } from "./ChatPanel";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     explainConfirmation: vi.fn(),
   }),

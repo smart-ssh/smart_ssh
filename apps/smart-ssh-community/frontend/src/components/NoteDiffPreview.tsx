@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { formatBytes } from "../format";
-import { isDiffTooLargeToCompute, shortNoteDiff } from "../textDiff";
+import { formatBytes } from "../lib/format";
+import { isDiffTooLargeToCompute, shortNoteDiff } from "../lib/textDiff";
 
 /**
  * Spec 0019, Abschnitt 4: kurze Änderungs-Vorschau für einen

@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, exportDocument, listAiProviders } from "../api";
+import { commandErrorMessage, exportDocument, listAiProviders } from "../api/api";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import { Composer } from "./chat/Composer";
 import { useChatComposer } from "./chat/useChatComposer";
 import { useVoiceComposer } from "./chat/useVoiceComposer";
-import { loadRiskClassifierSettings } from "../riskSettings";
-import type { DocumentFormat } from "../types";
-import { freshId } from "../chatResync";
+import { loadRiskClassifierSettings } from "../settings/riskSettings";
+import type { DocumentFormat } from "../api/types";
+import { freshId } from "../lib/chatResync";
 import { Button } from "./ui";
 import { deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { useChatTranscript } from "./chat/useChatTranscript";

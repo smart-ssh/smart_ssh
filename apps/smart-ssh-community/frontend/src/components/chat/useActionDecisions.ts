@@ -1,7 +1,7 @@
 import { type Dispatch, useRef } from "react";
-import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, respondToAction } from "../../api";
-import { freshId } from "../../chatResync";
-import type { ActionUserDecision, Scope, SuggestionPatternDto, SuggestionVerdictDto } from "../../types";
+import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, respondToAction } from "../../api/api";
+import { freshId } from "../../lib/chatResync";
+import type { ActionUserDecision, Scope, SuggestionPatternDto, SuggestionVerdictDto } from "../../api/types";
 import type { ChatTranscriptAction } from "./chatTranscriptReducer";
 
 /**

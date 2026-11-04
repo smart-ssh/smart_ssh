@@ -2,16 +2,16 @@
 // opinion setting changes while an answer streams.
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getChatHistory } from "../api";
-import { onChatActionProposed, onChatTextDelta } from "../events";
-import { loadRiskClassifierSettings } from "../riskSettings";
-import type { ChatActionProposedEvent } from "../types";
+import { getChatHistory } from "../api/api";
+import { onChatActionProposed, onChatTextDelta } from "../api/events";
+import { loadRiskClassifierSettings } from "../settings/riskSettings";
+import type { ChatActionProposedEvent } from "../api/types";
 import { testI18n } from "../testI18n";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -20,11 +20,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(),
 }));
 

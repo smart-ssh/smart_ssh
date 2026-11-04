@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { parentPath } from "../../remotePath";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { parentPath } from "../../lib/remotePath";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS } from "../ui";
 
 interface FileToolbarProps {

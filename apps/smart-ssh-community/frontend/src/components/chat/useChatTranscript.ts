@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, type Dispatch } from "react";
-import { getChatHistory, getChatResync } from "../../api";
-import { isRetryableAiError } from "../../errorCodes";
-import { actionItemFromProposed, freshId, historyEntryToItem } from "../../chatResync";
+import { getChatHistory, getChatResync } from "../../api/api";
+import { isRetryableAiError } from "../../api/errorCodes";
+import { actionItemFromProposed, freshId, historyEntryToItem } from "../../lib/chatResync";
 import {
   onActionConfirmationSettled,
   onActionDecisionEscalated,
@@ -29,8 +29,8 @@ import {
   onChatWebActivity,
   onChatWebResearchUnavailable,
   onRiskAssessmentUpdated,
-} from "../../events";
-import type { InjectionCheckState } from "../../types";
+} from "../../api/events";
+import type { InjectionCheckState } from "../../api/types";
 import {
   chatTranscriptReducer,
   initialChatTranscriptState,

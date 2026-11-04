@@ -7,7 +7,7 @@ import {
   DEFAULT_AUTO_RECONNECT_SECONDS,
   loadAutoReconnectSeconds,
   saveAutoReconnectSeconds,
-} from "../autoReconnectSettings";
+} from "../settings/autoReconnectSettings";
 
 const LABEL_KEY: Record<AutoReconnectSeconds, TranslationKey> = {
   0: "autoReconnect.off",

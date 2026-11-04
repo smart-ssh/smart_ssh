@@ -7,9 +7,9 @@ import {
   requestNoteShrink,
   updateLocalServerNotes,
   updateLocalServerTags,
-} from "../../api";
-import { commandErrorText } from "../../errorCodes";
-import type { ServerDto } from "../../types";
+} from "../../api/api";
+import { commandErrorText } from "../../api/errorCodes";
+import type { ServerDto } from "../../api/types";
 import { Button, TabPanel, Tabs } from "../ui";
 import { ExtensionTabPanels } from "./ExtensionTabPanels";
 import type { ServerModel } from "./formTypes";

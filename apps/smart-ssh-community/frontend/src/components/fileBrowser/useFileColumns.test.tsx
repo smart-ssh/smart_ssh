@@ -7,10 +7,10 @@ import {
   loadHiddenFileColumns,
   saveFileManagerSort,
   saveHiddenFileColumns,
-} from "../../layoutSettings";
+} from "../../settings/layoutSettings";
 import { useFileColumns } from "./useFileColumns";
 
-vi.mock("../../layoutSettings", () => ({
+vi.mock("../../settings/layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
   loadFileManagerSort: vi.fn(),

@@ -2,7 +2,7 @@
 // focus indicators, Escape and focus return of the dialogs, and long content
 // at both window sizes (docs/ui-guidelines.md).
 import type { Page } from "@playwright/test";
-import { THIRD_PARTY_NOTICES_MARKER } from "../../src/thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER } from "../../src/lib/thirdPartyNoticesMarker";
 import { expect, openSettings, test } from "../support/app";
 import { populated, server } from "../support/data";
 import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";

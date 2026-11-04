@@ -2,12 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { convertIdentityFileToKeychain, inspectKeyFile } from "../../api";
+import { convertIdentityFileToKeychain, inspectKeyFile } from "../../api/api";
 import { testI18n } from "../../testI18n";
-import type { KeyFileFactsDto, ServerDto } from "../../types";
+import type { KeyFileFactsDto, ServerDto } from "../../api/types";
 import { useIdentityFile } from "./useIdentityFile";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     convertIdentityFileToKeychain: vi.fn(),
     inspectKeyFile: vi.fn(),

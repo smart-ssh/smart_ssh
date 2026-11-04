@@ -13,21 +13,21 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseAllowedWhileLocked } from "../../../../../scripts/check-tauri-commands.mjs";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
 import { testI18n } from "../testI18n";
-import type { StartupPromptRequest, StartupStateDto } from "../types";
+import type { StartupPromptRequest, StartupStateDto } from "../api/types";
 import { AppHeader } from "./AppHeader";
 import { StartupGate } from "./StartupGate";
 
 const invokeMock = vi.fn();
 
-// Bewusst **nicht** `../api` attrappiert: Die echten API-Funktionen gehen
+// Bewusst **nicht** `../api/api` attrappiert: Die echten API-Funktionen gehen
 // über `invoke`, so sieht der Test jedes Kommando, das die Maske auslöst.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
   onStartupUnlocked: vi.fn(() => Promise.resolve(() => {})),
 }));

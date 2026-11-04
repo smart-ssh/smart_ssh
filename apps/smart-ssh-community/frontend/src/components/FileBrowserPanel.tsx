@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { sortEntries } from "../fileSort";
-import { displayPath } from "../remotePath";
-import type { RemoteEntryDto } from "../types";
+import { sortEntries } from "../lib/fileSort";
+import { displayPath } from "../lib/remotePath";
+import type { RemoteEntryDto } from "../api/types";
 import { FileEntryMenu } from "./fileBrowser/FileEntryMenu";
 import { ColumnsMenu } from "./fileBrowser/ColumnsMenu";
 import { DirectoryMenu } from "./fileBrowser/DirectoryMenu";

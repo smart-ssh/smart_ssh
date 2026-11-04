@@ -11,7 +11,7 @@ import {
   unregisterDocumentAction,
 } from "../extensions/registry";
 import { testI18n } from "../testI18n";
-import type { RiskAssessment } from "../types";
+import type { RiskAssessment } from "../api/types";
 import { ChatItemView, type ChatItem } from "./ChatPanel";
 
 type ActionItem = Extract<ChatItem, { type: "action" }>;

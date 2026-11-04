@@ -1,5 +1,5 @@
 //! Names of every event the core emits towards the frontend (Issue #918).
-//! The frontend mirrors them in `src/eventNames.ts`; `npm run check-events`
+//! The frontend mirrors them in `src/api/eventNames.ts`; `npm run check-events`
 //! keeps both lists in sync.
 
 pub const DATA_CHANGED: &str = "data-changed";

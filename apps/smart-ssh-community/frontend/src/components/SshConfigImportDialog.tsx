@@ -1,17 +1,17 @@
 import type { TranslateFn } from "../i18nTypes";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { applySshConfigImport, commandErrorCode, commandErrorMessage, previewSshConfigImport } from "../api";
-import { showToast } from "../toastBus";
+import { applySshConfigImport, commandErrorCode, commandErrorMessage, previewSshConfigImport } from "../api/api";
+import { showToast } from "../buses/toastBus";
 import type {
   SshConfigEntryChoice,
   SshConfigIdentityMode,
   SshConfigImportPreviewDto,
   SshConfigPreviewEntryDto,
   SshConfigPreviewTagDto,
-} from "../types";
+} from "../api/types";
 import { Button, DialogFrame } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 interface SshConfigImportDialogProps {
   onClose: () => void;

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { HostKeyInfo, HostKeyUserDecision } from "../types";
+import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
 import { useDialogFocusTrap } from "../hooks/useDialogFocusTrap";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { Button } from "./ui";

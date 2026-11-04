@@ -1,9 +1,9 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { respondToAction } from "../../api";
+import { respondToAction } from "../../api/api";
 import { useActionDecisions } from "./useActionDecisions";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     respondToAction: vi.fn(),
     acceptAndCreateRule: vi.fn(),

@@ -5,12 +5,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getDataPaths, openDataPathFolder } from "../api";
+import { getDataPaths, openDataPathFolder } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DataPathEntryDto } from "../types";
+import type { DataPathEntryDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     getDataPaths: vi.fn(),
     openDataPathFolder: vi.fn(),

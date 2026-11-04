@@ -13,11 +13,11 @@ import {
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
-} from "../api";
+} from "../api/api";
 import { testI18n } from "../testI18n";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     // Assertions match the `Error: <msg>` form of `String(err)`, not the bare message.
     commandErrorMessage: (err: unknown) => String(err),

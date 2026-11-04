@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { apiKeyFormatWarning } from "../apiKeyFormat";
+import { apiKeyFormatWarning } from "../lib/apiKeyFormat";
 import {
   addAiProvider,
   commandErrorCode,
@@ -8,11 +8,11 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
   updateAiProvider,
-} from "../api";
+} from "../api/api";
 import { Button } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
-import { commandErrorText, translateErrorCode } from "../errorCodes";
-import { effectiveApiKey, OLLAMA_BASE_URL } from "../ollama";
+import { commandErrorText, translateErrorCode } from "../api/errorCodes";
+import { effectiveApiKey, OLLAMA_BASE_URL } from "../lib/ollama";
 import {
   type AiProviderConfigDto,
   type AiProviderConfigInput,
@@ -21,14 +21,14 @@ import {
   needsBaseUrl,
   supportsModelDiscovery,
   supportsWebResearch,
-} from "../types";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../api/types";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import {
   type DiscoveryInputs,
   discoveryInputsOf,
   sameDiscoveryInputs,
   shouldAutoDiscover,
-} from "../modelDiscoveryTrigger";
+} from "../lib/modelDiscoveryTrigger";
 import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
 
 const PROVIDER_TYPES: ProviderType[] = [

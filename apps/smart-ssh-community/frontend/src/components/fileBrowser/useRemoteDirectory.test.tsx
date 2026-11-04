@@ -3,18 +3,18 @@ import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sftpList, sftpStartDirectory } from "../../api";
+import { sftpList, sftpStartDirectory } from "../../api/api";
 import { testI18n } from "../../testI18n";
-import type { RemoteEntryDto } from "../../types";
+import type { RemoteEntryDto } from "../../api/types";
 import { useRemoteDirectory } from "./useRemoteDirectory";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     sftpList: vi.fn(),
     sftpStartDirectory: vi.fn(),
   }),
 );
-vi.mock("../../toastBus", () => ({ showToast: vi.fn() }));
+vi.mock("../../buses/toastBus", () => ({ showToast: vi.fn() }));
 
 const entry = (name: string): RemoteEntryDto =>
   ({

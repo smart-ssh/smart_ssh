@@ -2,19 +2,19 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelConnect, getServer, testConnection } from "../api";
+import { cancelConnect, getServer, testConnection } from "../api/api";
 import { testI18n } from "../testI18n";
 import type {
   ConnectProgressEvent,
   ConnectStepSnapshot,
   ServerDto,
   TestConnectionReport,
-} from "../types";
+} from "../api/types";
 import { ServerForm } from "./ServerForm";
 
 let progressHandler: (e: ConnectProgressEvent) => void = () => {};
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     cancelConnect: vi.fn(() => Promise.resolve()),
     clearServerSudoPassword: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
   onConnectProgress: vi.fn((h: (e: ConnectProgressEvent) => void) => {
     progressHandler = h;
@@ -43,12 +43,12 @@ vi.mock("../events", () => ({
   }),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 

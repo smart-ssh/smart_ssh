@@ -12,7 +12,7 @@ import {
   respondToAction,
   sendChatMessage,
   stopAutoContinuation,
-} from "../api";
+} from "../api/api";
 import {
   onActionConfirmationSettled,
   onActionDecisionEscalated,
@@ -25,12 +25,12 @@ import {
   onChatTextDelta,
   onChatWebActivity,
   onChatWebResearchUnavailable,
-} from "../events";
+} from "../api/events";
 import type {
   ActionDecisionEscalatedEvent,
   ChatActionProposedEvent,
   ChatWebActivityEvent,
-} from "../types";
+} from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 // jsdom implementiert `Element.scrollTo` nicht — `ChatPanel`s
@@ -38,7 +38,7 @@ import { renderChatPanel } from "../test/renderChatPanel";
 // `items`-Änderung auf.
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -46,11 +46,11 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

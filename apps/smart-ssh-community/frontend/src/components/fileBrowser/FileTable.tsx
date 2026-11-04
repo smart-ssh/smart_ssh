@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../../formatDateTime";
-import { formatOwner } from "../../fileOwner";
-import { formatBytes } from "../../format";
-import type { FileSort, FileSortColumn } from "../../fileSort";
-import type { FileManagerColumnWidths, HideableFileColumn } from "../../layoutSettings";
-import type { RemoteEntryDto } from "../../types";
+import { formatDateTime } from "../../lib/formatDateTime";
+import { formatOwner } from "../../lib/fileOwner";
+import { formatBytes } from "../../lib/format";
+import type { FileSort, FileSortColumn } from "../../lib/fileSort";
+import type { FileManagerColumnWidths, HideableFileColumn } from "../../settings/layoutSettings";
+import type { RemoteEntryDto } from "../../api/types";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { ACTIONS_COLUMN_WIDTH, COLUMN_ORDER, NAME_MIN_WIDTH, STICKY_TH, type OpenEntryMenu } from "./shared";
 import { Button } from "../ui";

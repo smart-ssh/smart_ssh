@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supportsWebResearch } from "./types";
+import { supportsWebResearch } from "./api/types";
 
 describe("supportsWebResearch (Spec 0105 §1/§2)", () => {
   it("is on for Anthropic and the official OpenAI endpoint", () => {

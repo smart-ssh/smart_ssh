@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { clearServerSudoPassword, commandErrorMessage, getServer, listStoredHostKeys } from "../../api";
-import { loadRiskClassifierSettings } from "../../riskSettings";
-import { checkStartDirectory } from "../../startDirectory";
-import type { PostIngestPolicy, ServerInput, StoredHostKeyDto } from "../../types";
+import { clearServerSudoPassword, commandErrorMessage, getServer, listStoredHostKeys } from "../../api/api";
+import { loadRiskClassifierSettings } from "../../settings/riskSettings";
+import { checkStartDirectory } from "../../lib/startDirectory";
+import type { PostIngestPolicy, ServerInput, StoredHostKeyDto } from "../../api/types";
 import {
   type AuthFormState,
   type ServerFormFieldKey,

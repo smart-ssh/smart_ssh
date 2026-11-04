@@ -1,9 +1,9 @@
 import { useEffect, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerSettingsTabs } from "../../extensions/FormSlots";
-import { resolveSectionLabel } from "../../resolveSectionLabel";
+import { resolveSectionLabel } from "../../lib/resolveSectionLabel";
 import { useTabsIdBase, type TabItem } from "../ui";
-import type { ServerDto } from "../../types";
+import type { ServerDto } from "../../api/types";
 import type { ServerTab } from "./formTypes";
 
 interface Options {

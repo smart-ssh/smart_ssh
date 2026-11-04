@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { translateErrorCode } from "../errorCodes";
-import type { InjectionCheckState } from "../types";
+import { translateErrorCode } from "../api/errorCodes";
+import type { InjectionCheckState } from "../api/types";
 
 /** Issue #693 (Spec 0039, §5.2): status of the AI check for injected
  * instructions, shown directly under the checked result. The reason comes

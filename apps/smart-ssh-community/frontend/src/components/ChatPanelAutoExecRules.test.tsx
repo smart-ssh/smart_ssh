@@ -4,13 +4,13 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import { subscribeRequestOpenFilterRule } from "../navigationBus";
-import type { AutoExecRule, RuleDto, ServerDto } from "../types";
+import { subscribeRequestOpenFilterRule } from "../buses/navigationBus";
+import type { AutoExecRule, RuleDto, ServerDto } from "../api/types";
 import { ChatItemView, type ChatItem } from "./ChatPanel";
 
 const listRulesMock = vi.fn<() => Promise<RuleDto[]>>();
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listRules: () => listRulesMock(),
     listServers: () =>

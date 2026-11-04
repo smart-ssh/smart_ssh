@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { readEditCopyText, writeEditCopyText } from "../api";
-import { commandErrorMessage } from "../api";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { readEditCopyText, writeEditCopyText } from "../api/api";
+import { commandErrorMessage } from "../api/api";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, DialogFrame, FIELD_CONTROL_CLASS } from "./ui";
 
 interface Props {

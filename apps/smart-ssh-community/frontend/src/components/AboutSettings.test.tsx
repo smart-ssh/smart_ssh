@@ -3,12 +3,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { getAppInfo } from "../api";
+import { getAppInfo } from "../api/api";
 import { testI18n } from "../testI18n";
-import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER } from "../lib/thirdPartyNoticesMarker";
 import { AboutSettings } from "./AboutSettings";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     getAppInfo: vi.fn(),
   }),

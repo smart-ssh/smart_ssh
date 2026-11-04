@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { DocumentFormat } from "../../types";
+import type { DocumentFormat } from "../../api/types";
 import { Button } from "../ui";
 import { MARKDOWN_COMPONENTS } from "./DocumentCard";
 

@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { getAppInfo } from "../api";
-import type { AppInfoDto } from "../types";
-import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../modalLayer";
+import { getAppInfo } from "../api/api";
+import type { AppInfoDto } from "../api/types";
+import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../lib/modalLayer";
 import {
   TITLEBAR_HEIGHT_CLASS,
   titlebarDragInsetStyle,
   titlebarPaddingStyle,
   usePlatform,
   type DecorationMode,
-} from "../titlebarLayout";
+} from "../lib/titlebarLayout";
 
 /** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash (+ Edition,
  * z. B. "· Official" — spec-optional "falls billig", hier billig genug für

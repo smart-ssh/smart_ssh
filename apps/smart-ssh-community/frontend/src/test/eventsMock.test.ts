@@ -3,7 +3,7 @@ import { createEventsMock } from "./eventsMock";
 
 describe("createEventsMock", () => {
   it("mocks every on… function export of events.ts and keeps the rest real", async () => {
-    const actual = await vi.importActual<Record<string, unknown>>("../events");
+    const actual = await vi.importActual<Record<string, unknown>>("../api/events");
     const mock = (await createEventsMock()) as unknown as Record<string, unknown>;
     const listeners = Object.keys(actual).filter(
       (n) => typeof actual[n] === "function" && /^on[A-Z]/.test(n),

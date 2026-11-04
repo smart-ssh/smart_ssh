@@ -1,9 +1,9 @@
 import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, respondToAction } from "../api";
-import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../events";
-import type { NoteUpdateSuggestedEvent } from "../types";
+import { commandErrorCode, commandErrorMessage, respondToAction } from "../api/api";
+import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../api/events";
+import type { NoteUpdateSuggestedEvent } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
 

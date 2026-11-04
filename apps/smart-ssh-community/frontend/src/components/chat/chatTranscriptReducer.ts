@@ -1,6 +1,6 @@
-import type { ActionResultPayload, ActionUserDecision, InjectionCheckState, QuestionOption, WebActivityDto } from "../../types";
-import { appendLiveOutput, type LiveOutput } from "../../liveOutput";
-import { mergeResyncedItems } from "../../chatResync";
+import type { ActionResultPayload, ActionUserDecision, InjectionCheckState, QuestionOption, WebActivityDto } from "../../api/types";
+import { appendLiveOutput, type LiveOutput } from "../../lib/liveOutput";
+import { mergeResyncedItems } from "../../lib/chatResync";
 import type { ChatItem } from "./chatItem";
 
 /** Everything the chat event subscription writes. Pure data, no timers. */

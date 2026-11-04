@@ -6,25 +6,25 @@ import {
   onChatActionProposed,
   onChatActionResult,
   onChatActionWaitingInput,
-} from "../events";
+} from "../api/events";
 import type {
   ChatActionProposedEvent,
   ChatActionResultEvent,
   ChatActionWaitingInputEvent,
-} from "../types";
+} from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock(),
 );
 
-vi.mock("../events", async () =>
+vi.mock("../api/events", async () =>
   (await import("../test/eventsMock")).createEventsMock(),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

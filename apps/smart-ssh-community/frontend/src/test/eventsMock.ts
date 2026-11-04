@@ -8,19 +8,19 @@
 //
 // Usage — one factory per test file (path relative to the test file):
 //
-//   vi.mock("../events", async () => (await import("../test/eventsMock")).createEventsMock());
-//   vi.mock("../events", async () =>
+//   vi.mock("../api/events", async () => (await import("../test/eventsMock")).createEventsMock());
+//   vi.mock("../api/events", async () =>
 //     (await import("../test/eventsMock")).createEventsMock({ onChatTextDelta: vi.fn(...) }));
 //
 // Overrides win over the defaults. ADR 0122 R9: nothing in here waits.
 import { vi } from "vitest";
 
-export type EventsModule = typeof import("../events");
+export type EventsModule = typeof import("../api/events");
 
 export async function createEventsMock(
   overrides: Partial<EventsModule> = {},
 ): Promise<EventsModule> {
-  const actual = await vi.importActual<EventsModule>("../events");
+  const actual = await vi.importActual<EventsModule>("../api/events");
   const mock: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(actual)) {
     mock[name] =

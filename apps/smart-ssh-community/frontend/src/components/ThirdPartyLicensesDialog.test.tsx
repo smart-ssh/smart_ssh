@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "../thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "../lib/thirdPartyNoticesMarker";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
 
 function renderDialog() {

@@ -12,13 +12,13 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
-import { SUPPORTED_LANGUAGES } from "../languages";
+import { SUPPORTED_LANGUAGES } from "../lib/languages";
 import { testI18n } from "../testI18n";
 import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
 import { SettingsScreen } from "./SettingsScreen";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([])),
     addAiProvider: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
   loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),

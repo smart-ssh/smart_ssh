@@ -1,8 +1,8 @@
 import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, sftpElevationStatus } from "../../api";
-import { isMacLike, isWindowsLike } from "../../platform";
-import { showToast } from "../../toastBus";
+import { commandErrorCode, commandErrorMessage, sftpElevationStatus } from "../../api/api";
+import { isMacLike, isWindowsLike } from "../../lib/platform";
+import { showToast } from "../../buses/toastBus";
 
 /** „Im Finder/Explorer zeigen“ — Beschriftung passend zum Betriebssystem. */
 function revealLabelKey(): TranslationKey {

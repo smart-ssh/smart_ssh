@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clipboardWriteText } from "../../api";
-import { type ElevationResultDto } from "../../types";
+import { clipboardWriteText } from "../../api/api";
+import { type ElevationResultDto } from "../../api/types";
 import { Button, DialogFrame } from "../ui";
 
 /** Spec 0067, A3: verständliche Erklärung, warum der erhöhte Modus nicht

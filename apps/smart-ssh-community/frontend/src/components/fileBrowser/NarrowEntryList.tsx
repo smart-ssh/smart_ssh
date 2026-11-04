@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../../formatDateTime";
-import { formatBytes } from "../../format";
-import type { RemoteEntryDto } from "../../types";
+import { formatDateTime } from "../../lib/formatDateTime";
+import { formatBytes } from "../../lib/format";
+import type { RemoteEntryDto } from "../../api/types";
 import type { OpenEntryMenu } from "./shared";
 import { Button } from "../ui";
 

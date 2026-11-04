@@ -20,14 +20,14 @@ vorhandener Liste, oder der Release-Job bricht ab.
    `scripts/generate-third-party-notices.mjs`** — das Skript schreibt die
    Datei, also bestimmt es die Kennzeile.
 2. **Das Frontend hat genau eine Kopie**,
-   `apps/smart-ssh-community/frontend/src/thirdPartyNoticesMarker.ts`
+   `apps/smart-ssh-community/frontend/src/lib/thirdPartyNoticesMarker.ts`
    (`THIRD_PARTY_NOTICES_MARKER`). App und alle Tests importieren sie. Sie
    bleibt eine Kopie statt eines Imports aus dem Skript, wie schon in Spec
    0099 begründet: Die App soll keine Abhängigkeit auf ein Build-Skript
    außerhalb des Frontends bekommen (und ein Import der `.mjs`-Datei bräuchte
    eigene Typdeklarationen für `tsc -b`).
 3. **Der Release-Workflow behält sein Literal**, und ein Test prüft es.
-   `src/thirdPartyNoticesMarker.test.ts` (läuft mit `npm test` in der
+   `src/lib/thirdPartyNoticesMarker.test.ts` (läuft mit `npm test` in der
    Community-CI auf allen drei Plattformen) liest Skript und
    `release.yml` als Text und schlägt fehl, wenn
    - die Frontend-Kopie nicht gleich `MARKER` im Skript ist,

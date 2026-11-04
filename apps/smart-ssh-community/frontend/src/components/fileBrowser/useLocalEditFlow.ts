@@ -1,8 +1,8 @@
 import { useState, type MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage } from "../../api";
-import { showToast } from "../../toastBus";
-import type { RemoteEntryDto } from "../../types";
+import { commandErrorMessage } from "../../api/api";
+import { showToast } from "../../buses/toastBus";
+import type { RemoteEntryDto } from "../../api/types";
 import { useLocalEditSession, type UploadOffer } from "../../hooks/useLocalEditSession";
 import { currentCaps } from "./shared";
 import type { NotifyFailed, NotifyOk } from "./useFileNotify";
