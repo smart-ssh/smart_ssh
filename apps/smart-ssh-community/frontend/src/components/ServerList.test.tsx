@@ -75,8 +75,7 @@ vi.mock("../api", async () => {
   // echten Implementierungen (nicht gemockt) statt der bisherigen
   // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
   // Zusammenspiel mit `translateErrorCode` in `ServerList`s `describeError`.
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
@@ -84,10 +83,7 @@ vi.mock("../api", async () => {
     resumeChatSession: vi.fn(),
     moveServerToGroup: vi.fn(() => Promise.resolve()),
     moveGroup: vi.fn(() => Promise.resolve()),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
 
 vi.mock("../events", () => ({

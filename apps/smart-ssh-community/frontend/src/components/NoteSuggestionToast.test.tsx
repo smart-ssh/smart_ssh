@@ -10,12 +10,11 @@ import { testI18n } from "../testI18n";
 import type { NoteUpdateSuggestedEvent } from "../types";
 import { NoteSuggestionToast } from "./NoteSuggestionToast";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    (err as { code?: string } | null)?.code ?? null,
-  respondToAction: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    respondToAction: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 vi.mock("../events", () => ({
   onNoteUpdateSuggested: vi.fn(() => Promise.resolve(() => {})),

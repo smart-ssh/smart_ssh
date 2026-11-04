@@ -10,11 +10,7 @@ import type { ConnectProgressEvent } from "./types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
 vi.mock("./api", async () => {
-  const actual = await vi.importActual<typeof import("./api")>("./api");
-  return {
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-    commandErrorMessage: actual.commandErrorMessage,
+  return (await import("./test/apiMock")).createApiMock({
     connect: vi.fn(),
     cancelConnect: vi.fn(() => Promise.resolve()),
     disconnect: vi.fn(() => Promise.resolve()),
@@ -22,7 +18,7 @@ vi.mock("./api", async () => {
     listSessions: vi.fn(() => Promise.resolve([])),
     respondToAction: vi.fn(() => Promise.resolve()),
     resumeChatSession: vi.fn(),
-  };
+  });
 });
 
 vi.mock("./events", () => ({

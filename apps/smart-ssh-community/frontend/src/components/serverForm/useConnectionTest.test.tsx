@@ -7,15 +7,13 @@ import { testI18n } from "../../testI18n";
 import type { ServerInput, TestConnectionReport } from "../../types";
 import { useConnectionTest } from "./useConnectionTest";
 
-vi.mock("../../api", () => ({
-  cancelConnect: vi.fn(() => Promise.resolve()),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? (err as { code: string }).code : null,
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : String(err),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    cancelConnect: vi.fn(() => Promise.resolve()),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+  }),
+);
 vi.mock("../../events", () => ({
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));

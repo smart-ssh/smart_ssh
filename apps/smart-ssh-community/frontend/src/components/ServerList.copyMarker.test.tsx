@@ -42,8 +42,7 @@ const grp = (id: string, name: string, isCopy: boolean): GroupDto => ({
 });
 
 vi.mock("../api", async () => {
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(),
     listGroups: vi.fn(),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
@@ -52,10 +51,7 @@ vi.mock("../api", async () => {
     keepGroupAsRegularEntry: vi.fn((_id: string, confirm: boolean) =>
       Promise.resolve({ applied: confirm, groups: 2, servers: 3 }),
     ),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
 vi.mock("../events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),

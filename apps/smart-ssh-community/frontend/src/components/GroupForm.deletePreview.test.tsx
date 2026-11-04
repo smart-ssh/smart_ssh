@@ -12,14 +12,14 @@ import { testI18n } from "../testI18n";
 import type { DeleteGroupResult } from "../types";
 import { GroupForm } from "./GroupForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  deleteGroup: vi.fn(),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(10000)),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(10000)),
+  }),
+);
 
 function renderForm() {
   return render(

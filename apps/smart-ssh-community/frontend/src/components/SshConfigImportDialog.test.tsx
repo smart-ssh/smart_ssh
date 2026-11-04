@@ -14,11 +14,12 @@ import { testI18n } from "../testI18n";
 import type { SshConfigImportPreviewDto } from "../types";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  previewSshConfigImport: vi.fn(),
-  applySshConfigImport: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    previewSshConfigImport: vi.fn(),
+    applySshConfigImport: vi.fn(),
+  }),
+);
 
 // Ohne dieses Zurücksetzen liest ein späterer Test `mock.calls[0]` eines
 // früheren Tests mit — genau der Fehler, den Spec-Reviewer-Funde in anderen

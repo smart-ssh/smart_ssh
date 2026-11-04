@@ -66,56 +66,31 @@ import { showToast } from "../toastBus";
 import type { RemoteEntryDto, SftpTransferStartedEvent } from "../types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? String((err as { code: unknown }).code)
-      : null,
-  sftpCopyContent: vi.fn(),
-  sftpCopyFile: vi.fn(),
-  sftpCancelCopyContent: vi.fn(() => Promise.resolve()),
-  sftpList: vi.fn(),
-  sftpDelete: vi.fn(),
-  sftpDeletePreview: vi.fn(),
-  sftpDownload: vi.fn(),
-  sftpDownloadDefault: vi.fn(),
-  sftpDownloadDir: vi.fn(),
-  sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
-  sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
-  sftpElevationEnable: vi.fn(),
-  sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
-  sftpMkdir: vi.fn(),
-  sftpCreateFile: vi.fn(),
-  sftpReadText: vi.fn(),
-  sftpRename: vi.fn(),
-  sftpUpload: vi.fn(),
-  sftpExists: vi.fn(),
-  sftpChmod: vi.fn(),
-  sftpChown: vi.fn(),
-  readLocalTextPreview: vi.fn(),
-  // Issue #89: the backend hands out the paths of the native drop it
-  // captured — here the paths of the last simulated drop event.
-  claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
-  pickUploadFiles: vi.fn(),
-  clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
-  clipboardWriteText: vi.fn(() => Promise.resolve()),
-  claimClipboardFiles: vi.fn(),
-  pickUploadFolder: vi.fn(),
-  sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
-    Promise.resolve(paths.map(() => false)),
-  ),
-  sftpUploadFolder: vi.fn(),
-  sftpUploadFolderPreview: vi.fn(),
-  sftpStat: vi.fn(),
-  sftpOpenForEditing: vi.fn(),
-  localFileMtime: vi.fn(),
-  closeEditSession: vi.fn(),
-  sessionIsRoot: vi.fn(() => Promise.resolve(false)),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    commandErrorMessage: (err: unknown) =>
+      typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message: unknown }).message)
+        : String(err),
+    commandErrorCode: (err: unknown) =>
+      typeof err === "object" && err !== null && "code" in err
+        ? String((err as { code: unknown }).code)
+        : null,
+    sftpCancelCopyContent: vi.fn(() => Promise.resolve()),
+    sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
+    sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
+    sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
+    // Issue #89: the backend hands out the paths of the native drop it
+    // captured — here the paths of the last simulated drop event.
+    claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
+    clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
+    clipboardWriteText: vi.fn(() => Promise.resolve()),
+    sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
+      Promise.resolve(paths.map(() => false)),
+    ),
+    sessionIsRoot: vi.fn(() => Promise.resolve(false)),
+  }),
+);
 
 vi.mock("../events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
