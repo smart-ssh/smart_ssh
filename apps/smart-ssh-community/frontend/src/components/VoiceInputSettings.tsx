@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode } from "../api";
@@ -37,7 +38,7 @@ export function VoiceInputSettings() {
   const [model, setModel] = useState<SpeechModelId>("base");
   const [statuses, setStatuses] = useState<Partial<Record<SpeechModelId, SpeechModelStatus>>>({});
   const [language, setLanguage] = useState("auto");
-  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
   const fail = (err: unknown) => setErrorKey(voiceErrorKey(commandErrorCode(err)));
 

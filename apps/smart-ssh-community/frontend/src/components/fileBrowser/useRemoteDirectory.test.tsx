@@ -8,11 +8,12 @@ import { testI18n } from "../../testI18n";
 import type { RemoteEntryDto } from "../../types";
 import { useRemoteDirectory } from "./useRemoteDirectory";
 
-vi.mock("../../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  sftpList: vi.fn(),
-  sftpStartDirectory: vi.fn(),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    sftpList: vi.fn(),
+    sftpStartDirectory: vi.fn(),
+  }),
+);
 vi.mock("../../toastBus", () => ({ showToast: vi.fn() }));
 
 const entry = (name: string): RemoteEntryDto =>

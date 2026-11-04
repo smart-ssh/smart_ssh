@@ -9,11 +9,14 @@ import { clipboardWriteText, exportSshConfig } from "../api";
 import { testI18n } from "../testI18n";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  exportSshConfig: vi.fn(),
-  clipboardWriteText: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    // Assertions match the `Error: <msg>` form of `String(err)`, not the bare message.
+    commandErrorMessage: (err: unknown) => String(err),
+    exportSshConfig: vi.fn(),
+    clipboardWriteText: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 beforeEach(() => {
   vi.clearAllMocks();

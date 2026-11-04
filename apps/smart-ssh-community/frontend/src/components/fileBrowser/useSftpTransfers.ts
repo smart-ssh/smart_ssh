@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useTranslation } from "react-i18next";
@@ -45,8 +46,8 @@ interface UseSftpTransfersOptions {
   load: (targetPath: string, userOverride?: string | null) => void;
   /** Listed entries, used for the size of a conflicting remote file. */
   entries: RemoteEntryDto[];
-  notifyOk: (key: string, options: Record<string, unknown>, action?: () => void) => void;
-  notifyFailed: (key: string, name: string, err: unknown) => void;
+  notifyOk: (key: TranslationKey, options: Record<string, unknown>, action?: () => void) => void;
+  notifyFailed: (key: TranslationKey, name: string, err: unknown) => void;
   /** Suffix naming the elevated mode, appended to toasts. */
   modeSuffix: string;
 }

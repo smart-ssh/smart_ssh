@@ -26,11 +26,12 @@
 //! entsteht (die Stores schreiben `&str`, `serde_json` schreibt UTF-8) — für
 //! neue Schreibpfade gilt das nicht automatisch.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::path::Path;
 
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::DatabaseKey;
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
+use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -51,31 +52,6 @@ enum FileEncryption {
     /// in einer der Dateien stünde; ohne sie wäre T3 ein Test, der auch
     /// dann grün bliebe, wenn die Suche gar nichts liest.
     Plaintext,
-}
-
-fn test_server(server_id: ServerId) -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id: server_id,
-        name: "Test-Server".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        // Ausdrücklich ohne Geheimnis: `servers.notes` ist Klartext (Spec
-        // 0096 §1) und laut §3 auch ein Nicht-Ziel — stünde das Geheimnis
-        // hier, würde der Nachweis aus dem falschen Grund rot.
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
 }
 
 /// Schreibt über die **echten** Stores je einen Eintrag mit dem Geheimnis in
@@ -103,7 +79,12 @@ async fn write_secret_through_all_stores(
 
     let server_id = ServerId::new();
     profile_store
-        .create_server(&test_server(server_id))
+        .create_server(
+            &ServerBuilder::new()
+                .id(server_id)
+                .name("Test-Server")
+                .build(),
+        )
         .await
         .expect("servers-Zeile ist FK-Voraussetzung fuer chat_sessions/prompt_history");
 

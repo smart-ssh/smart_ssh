@@ -8,23 +8,23 @@ import { testI18n } from "../testI18n";
 import type { ServerDto } from "../types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  inspectKeyFile: vi.fn(),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    inspectKeyFile: vi.fn(),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 vi.mock("../events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -73,7 +73,7 @@ describe("ServerForm text correction (issue #217)", () => {
     vi.mocked(getServer).mockResolvedValue(SERVER);
     renderNew();
     expect(await screen.findByDisplayValue("db01.example.lan")).toBeTruthy();
-    for (const key of ["serverForm.host", "serverForm.username"]) {
+    for (const key of ["serverForm.host", "serverForm.username"] as const) {
       const field = screen.getByLabelText(testI18n.t(key));
       expect(field.getAttribute("autocapitalize")).toBe("off");
       expect(field.getAttribute("autocorrect")).toBe("off");

@@ -27,25 +27,19 @@ const evaluateExplainedMock = vi.fn<(...args: unknown[]) => Promise<EvaluationTr
   () => Promise.resolve(null),
 );
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  createRule: (...args: unknown[]) => createRuleMock(...args),
-  deleteRule: vi.fn(() => Promise.resolve()),
-  evaluateExplained: (...args: unknown[]) => evaluateExplainedMock(...args),
-  swapRulePriorities: (...args: unknown[]) => swapRulePrioritiesMock(...args),
-  listHardBlacklist: vi.fn(() => Promise.resolve([])),
-  listKnownTags: vi.fn(() => Promise.resolve([])),
-  listRules: () => listRulesMock(),
-  listServers: vi.fn(() => Promise.resolve([])),
-  updateRule: (...args: unknown[]) => updateRuleMock(...args),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createRule: (...args: unknown[]) => createRuleMock(...args),
+    deleteRule: vi.fn(() => Promise.resolve()),
+    evaluateExplained: (...args: unknown[]) => evaluateExplainedMock(...args) as Promise<EvaluationTraceDto>,
+    swapRulePriorities: (...args: unknown[]) => swapRulePrioritiesMock(...args),
+    listHardBlacklist: vi.fn(() => Promise.resolve([])),
+    listKnownTags: vi.fn(() => Promise.resolve([])),
+    listRules: () => listRulesMock(),
+    listServers: vi.fn(() => Promise.resolve([])),
+    updateRule: (...args: unknown[]) => updateRuleMock(...args),
+  }),
+);
 
 function validRule(): RuleDto {
   return {

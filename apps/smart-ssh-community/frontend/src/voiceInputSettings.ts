@@ -1,3 +1,4 @@
+import type { TranslationKey } from "./i18nTypes";
 import { setUiPreference, settingsStore } from "./i18n";
 
 /** Spec 0108 §5.4: „Spracheingabe“ ein/aus, im selben `tauri-plugin-store`
@@ -25,7 +26,7 @@ export async function saveVoiceInputEnabled(enabled: boolean): Promise<void> {
 
 /** Übersetzungsschlüssel (`voice.errors.*`) für einen Fehlercode der
  * Spracheingabe; unbekannte Codes ergeben die allgemeine Meldung. */
-export function voiceErrorKey(code: string | null): string {
+export function voiceErrorKey(code: string | null): TranslationKey {
   switch (code) {
     case "speech_no_device":
       return "voice.errors.noDevice";

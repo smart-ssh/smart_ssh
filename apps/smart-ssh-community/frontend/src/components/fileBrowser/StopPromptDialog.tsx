@@ -1,3 +1,4 @@
+import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
 import { formatBytes } from "../../format";
 import type { RunningOperationDto } from "../../types";
@@ -33,13 +34,13 @@ export function StopPromptDialog({ operations, onCancel, onConfirm }: StopPrompt
             <li key={op.id} className="break-all">
               <span className="font-semibold">
                 {t(
-                  {
+                  ({
                     download: "fileElevation.opDownload",
                     upload: "fileElevation.opUpload",
                     delete: "fileElevation.opDelete",
                     chmod: "fileElevation.opChmod",
                     chown: "fileElevation.opChown",
-                  }[op.kind],
+                  } satisfies Record<typeof op.kind, TranslationKey>)[op.kind],
                 )}
               </span>{" "}
               <span className="font-mono">{op.path}</span>

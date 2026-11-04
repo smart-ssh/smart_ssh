@@ -41,32 +41,32 @@ function server(id: string, name: string, groupId: string | null): ServerDto {
 const GROUPS = [group("g-prod", "Prod", null), group("g-web", "Web", "g-prod")];
 const SERVERS = [server("s-web", "web-1", "g-web")];
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  listUnusableServers: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve(GROUPS)),
-  listServers: vi.fn(() => Promise.resolve(SERVERS)),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  getServer: vi.fn(),
-  createServer: vi.fn(),
-  updateServer: vi.fn(),
-  deleteServer: vi.fn(),
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  deleteGroup: vi.fn(),
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  inspectKeyFile: vi.fn(() => new Promise(() => {})),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  listNoteRevisions: vi.fn(() => Promise.resolve([])),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve(GROUPS)),
+    listServers: vi.fn(() => Promise.resolve(SERVERS)),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    getServer: vi.fn(),
+    createServer: vi.fn(),
+    updateServer: vi.fn(),
+    deleteServer: vi.fn(),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    inspectKeyFile: vi.fn(() => new Promise<never>(() => {})),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    listNoteRevisions: vi.fn(() => Promise.resolve([])),
+  }),
+);
 
 vi.mock("../events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
