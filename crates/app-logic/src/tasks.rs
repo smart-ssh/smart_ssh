@@ -190,6 +190,34 @@ pub struct TaskSupervisor {
     root: CancellationToken,
     handle: Handle,
     scopes: Mutex<HashMap<ScopeKey, TaskScope>>,
+    /// Ids of closed sessions (bounded, oldest forgotten first). A late
+    /// spawn for one of them gets a detached, cancelled scope instead of
+    /// recreating a scope nobody would remove.
+    closed: Mutex<ClosedSessions>,
+}
+
+/// Upper bound for remembered closed session ids. Ids are UUIDs and never
+/// reused, so forgetting the oldest only reopens an old, unlikely race.
+const MAX_CLOSED_SESSIONS: usize = 4096;
+
+#[derive(Default)]
+struct ClosedSessions {
+    order: std::collections::VecDeque<Uuid>,
+    set: std::collections::HashSet<Uuid>,
+}
+
+impl ClosedSessions {
+    fn insert(&mut self, id: Uuid) {
+        if !self.set.insert(id) {
+            return;
+        }
+        self.order.push_back(id);
+        while self.order.len() > MAX_CLOSED_SESSIONS {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+    }
 }
 
 impl TaskSupervisor {
@@ -205,6 +233,7 @@ impl TaskSupervisor {
             root: CancellationToken::new(),
             handle,
             scopes: Mutex::new(HashMap::new()),
+            closed: Mutex::new(ClosedSessions::default()),
         }
     }
 
@@ -223,7 +252,24 @@ impl TaskSupervisor {
 
     /// The scope of session `session_id`, created on first use (a child of
     /// the root: it also ends at app exit).
+    ///
+    /// For a session that was already closed this returns a detached scope
+    /// that is cancelled and closed: every spawn is refused and nothing is
+    /// registered in the supervisor.
     pub fn session_scope(&self, session_id: Uuid) -> TaskScope {
+        if lock_tolerating_poison(&self.closed)
+            .set
+            .contains(&session_id)
+        {
+            let scope = TaskScope::new(
+                ScopeKey::Session(session_id),
+                &self.root,
+                self.handle.clone(),
+            );
+            scope.token.cancel();
+            scope.tracker.close();
+            return scope;
+        }
         self.scope(ScopeKey::Session(session_id))
     }
 
@@ -239,6 +285,9 @@ impl TaskSupervisor {
     /// Cancels the session's tasks, waits up to `timeout` for them to end and
     /// removes the scope. While waiting, the scope refuses new tasks.
     pub async fn close_session_scope(&self, session_id: Uuid, timeout: Duration) -> ShutdownReport {
+        // Remember first, so a spawn racing with the close cannot recreate
+        // the scope after it was removed.
+        lock_tolerating_poison(&self.closed).insert(session_id);
         let scope = lock_tolerating_poison(&self.scopes)
             .get(&ScopeKey::Session(session_id))
             .cloned();
@@ -281,6 +330,34 @@ impl Default for TaskSupervisor {
 mod tests {
     use super::*;
     use tokio::sync::oneshot;
+
+    #[tokio::test(start_paused = true)]
+    async fn test_spawn_after_close_is_refused_and_leaves_no_scope() {
+        let sup = TaskSupervisor::new();
+        let id = Uuid::new_v4();
+        assert!(sup.session_scope(id).spawn("early", std::future::pending()));
+        sup.close_session_scope(id, Duration::from_secs(3)).await;
+        let late = sup.session_scope(id);
+        assert!(!late.spawn("late", async {}));
+        assert!(!late.spawn_blocking("late-blocking", || {}));
+        assert_eq!(sup.running_in(id), 0);
+        assert!(!lock_tolerating_poison(&sup.scopes).contains_key(&ScopeKey::Session(id)));
+        // Closing a session that never had a scope also blocks late spawns.
+        let other = Uuid::new_v4();
+        sup.close_session_scope(other, Duration::from_secs(3)).await;
+        assert!(!sup.session_scope(other).spawn("late", async {}));
+        assert!(!lock_tolerating_poison(&sup.scopes).contains_key(&ScopeKey::Session(other)));
+    }
+
+    #[test]
+    fn test_closed_sessions_are_bounded() {
+        let mut closed = ClosedSessions::default();
+        for _ in 0..MAX_CLOSED_SESSIONS + 10 {
+            closed.insert(Uuid::new_v4());
+        }
+        assert_eq!(closed.set.len(), MAX_CLOSED_SESSIONS);
+        assert_eq!(closed.order.len(), MAX_CLOSED_SESSIONS);
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_task_stops_after_cancel() {
