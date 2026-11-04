@@ -1,6 +1,1 @@
-{
-  "components/ChatPanel.tsx": {
-    "count": 1,
-    "reason": "jump-to-latest button: its focus hand-off to the composer when it hides (#758) breaks in the browser when it is rendered through the Button component (chat-scroll-follow.spec.ts), cause not yet understood"
-  }
-}
+{}
