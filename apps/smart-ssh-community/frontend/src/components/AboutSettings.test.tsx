@@ -8,9 +8,11 @@ import { testI18n } from "../testI18n";
 import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
 import { AboutSettings } from "./AboutSettings";
 
-vi.mock("../api", () => ({
-  getAppInfo: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getAppInfo: vi.fn(),
+  }),
+);
 
 function renderAbout() {
   return render(

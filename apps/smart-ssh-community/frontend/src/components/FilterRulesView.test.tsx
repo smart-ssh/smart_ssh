@@ -13,11 +13,12 @@ const evaluateExplainedMock = vi.fn<
   (command: string, ctx: { serverId: string | null; tags: string[] }) => Promise<EvaluationTraceDto>
 >();
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
-    evaluateExplainedMock(command, ctx),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
+      evaluateExplainedMock(command, ctx),
+  }),
+);
 
 function taggedServer(): ServerDto {
   return {
