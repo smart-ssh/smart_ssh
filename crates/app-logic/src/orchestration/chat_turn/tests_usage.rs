@@ -183,20 +183,51 @@ async fn test_panicking_observer_does_not_break_turn_or_other_observers() {
 
 #[tokio::test]
 async fn test_slow_observer_does_not_delay_the_turn() {
-    struct Slow;
+    // The observer blocks until the test releases it, which happens only
+    // after `run_turn` returned: if the turn waited for the observer, the
+    // observer would have returned (timed out) before the turn did (no timing
+    // assumption on the assertion path).
+    struct Slow {
+        entered: std::sync::mpsc::Sender<()>,
+        release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+        returned: Arc<std::sync::atomic::AtomicBool>,
+    }
     impl AiUsageObserver for Slow {
         fn on_usage(&self, _record: &AiUsageRecord) {
-            std::thread::sleep(Duration::from_secs(3));
+            let _ = self.entered.send(());
+            // Returns on release, or when the test drops the sender.
+            // Bounded so a regression (turn waits inline) fails instead of hanging.
+            let _ = self
+                .release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5));
+            self.returned
+                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let returned = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let session = test_session(
         vec![AiEvent::RequestUsage(usage(1)), AiEvent::Done],
         MockSshTransport::default(),
     )
-    .with_usage_reporting(Some(reporting(vec![Arc::new(Slow)])));
-    let started = std::time::Instant::now();
+    .with_usage_reporting(Some(reporting(vec![Arc::new(Slow {
+        entered: entered_tx,
+        release: std::sync::Mutex::new(release_rx),
+        returned: returned.clone(),
+    })])));
     run_turn(&session).await;
-    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(
+        !returned.load(std::sync::atomic::Ordering::SeqCst),
+        "the turn must finish while the observer is still blocked"
+    );
+    // The observer really was invoked (and is still blocked); now free it.
+    entered_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the observer must have been invoked");
+    drop(release_tx);
 }
 
 #[tokio::test]
