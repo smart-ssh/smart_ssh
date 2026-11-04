@@ -33,6 +33,7 @@ fn is_valid_feature_id(id: &str) -> bool {
 /// `Wiring::entitlement_features`. Serialises as the plain id string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(type = "string"))]
 pub struct Feature(Cow<'static, str>);
 
 impl Feature {
@@ -110,6 +111,7 @@ fn lenient_feature_set<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<Featur
 /// with a generic label), and it serialises as the plain string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(type = "string"))]
 pub struct TierId(Cow<'static, str>);
 
 impl TierId {
@@ -136,6 +138,7 @@ impl fmt::Display for TierId {
 /// Stand.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct Entitlements {
     pub tier: TierId,
     #[serde(deserialize_with = "lenient_feature_set")]
@@ -186,6 +189,7 @@ impl Entitlements {
 /// Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize)]
 #[error("feature {feature:?} is not available in tier {tier:?}")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct FeatureLocked {
     pub feature: Feature,
     pub tier: TierId,

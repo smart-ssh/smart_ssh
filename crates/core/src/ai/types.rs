@@ -15,6 +15,7 @@ use crate::ssh::CommandOutput;
 /// zweiten Ort, der denselben Typ bräuchte (s. `crate::shared`-Modul-
 /// Kommentar für die generelle Regel).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ProviderId(pub Uuid);
 
 impl ProviderId {
@@ -37,6 +38,7 @@ impl Default for ProviderId {
 /// Konstrukt, zwei Randbedingungen, die sich sonst leise auseinander
 /// entwickeln könnten.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ProviderType {
     #[serde(rename = "openai")]
     OpenAi,
