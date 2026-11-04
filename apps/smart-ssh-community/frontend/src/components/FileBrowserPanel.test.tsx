@@ -2265,12 +2265,12 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
       "Cut",
       "Delete",
     ]) {
-      expect(screen.getByRole("button", { name: item })).toBeVisible();
+      expect(screen.getByRole("menuitem", { name: item })).toBeVisible();
     }
     expectNoGerman();
 
     // Cut + paste buttons.
-    fireEvent.click(screen.getByRole("button", { name: "Cut" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Cut" }));
     expect(screen.getByRole("button", { name: "Paste" })).toHaveAttribute("title", "Move a.txt here");
     expect(screen.getByTitle("Cancel cut")).toBeInTheDocument();
 
@@ -2407,7 +2407,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/logs/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Download to…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Download to…" }));
 
     await waitFor(() =>
       expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", "Choose destination folder", null),
@@ -2421,7 +2421,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/a\.txt/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Properties" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Properties" }));
 
     expect(await screen.findByRole("heading", { name: "Properties" })).toBeVisible();
     for (const label of [
@@ -2446,7 +2446,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/logs/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Edit permissions…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit permissions…" }));
 
     expect(await screen.findByRole("heading", { name: "Edit permissions" })).toBeVisible();
     for (const header of ["Read", "Write", "Execute"]) {
@@ -2470,7 +2470,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn(testI18n.cloneInstance({ lng: "fr" }));
     await screen.findByText(/logs/);
     fireEvent.click(screen.getByRole("button", { name: /^Actions: / }));
-    fireEvent.click(screen.getByRole("button", { name: "Modifier les permissions…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Modifier les permissions…" }));
 
     for (const label of ["Propriétaire", "Groupe", "Autres"]) {
       expect(await screen.findByRole("cell", { name: label })).toBeVisible();
@@ -2484,7 +2484,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/a\.txt/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
     expect(await screen.findByRole("heading", { name: "Rename" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
     expectNoGerman();
@@ -2502,7 +2502,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/logs/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     const heading = await screen.findByRole("heading", { name: "Delete folder?" });
     const body = heading.nextElementSibling as HTMLElement;
@@ -2524,7 +2524,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/a\.txt/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     expect(await screen.findByRole("heading", { name: "Delete file?" })).toBeVisible();
     expect(screen.getByText("will be deleted from the server permanently.", { exact: false })).toBeVisible();
@@ -2538,7 +2538,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/a\.txt/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
     fireEvent.change(screen.getByDisplayValue("a.txt"), { target: { value: "b.txt" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
@@ -2584,7 +2584,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     renderEn();
     await screen.findByText(/a\.txt/);
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Open locally…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open locally…" }));
 
     expect(await screen.findByText("Editing “a.txt” locally…")).toBeVisible();
     expect(screen.getByRole("button", { name: "Stop editing" })).toBeVisible();
@@ -2616,7 +2616,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     await screen.findByText(/logs/);
     expect(screen.getByTitle("Übergeordnetes Verzeichnis")).toBeInTheDocument();
     openMenu();
-    fireEvent.click(screen.getByRole("button", { name: "Löschen" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Löschen" }));
 
     const heading = await screen.findByRole("heading", { name: "Ordner löschen?" });
     const body = heading.nextElementSibling as HTMLElement;
@@ -2712,7 +2712,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     await screen.findByText(/a\.txt/);
     const before = vi.mocked(sftpList).mock.calls.length;
     fireEvent.contextMenu(emptySpace(container), { clientX: 10, clientY: 20 });
-    fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Aktualisieren" }));
     await waitFor(() => expect(vi.mocked(sftpList).mock.calls.length).toBeGreaterThan(before));
     expect(screen.queryByText("Neue Datei")).toBeNull();
   });
@@ -2746,7 +2746,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     await screen.findByText("(leeres Verzeichnis)");
 
     fireEvent.contextMenu(container.querySelector("p")!.parentElement!);
-    const menu = screen.getByRole("group", { name: "Ordneraktionen" });
+    const menu = screen.getByRole("menu", { name: "Ordneraktionen" });
     fireEvent.click(within(menu).getByText("Einfügen"));
 
     await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "sub/a.txt", null));
@@ -2841,7 +2841,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       vi.mocked(clipboardHasFiles).mockResolvedValue(true);
       fireEvent.keyDown(document, { key: "Escape" });
       fireEvent.contextMenu(emptySpace(container));
-      expect(await screen.findByRole("button", { name: "Einfügen" })).toBeVisible();
+      expect(await screen.findByRole("menuitem", { name: "Einfügen" })).toBeVisible();
     });
 
     it("hands the confirmed paths to the normal upload flow", async () => {
@@ -2850,7 +2850,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       const { container } = renderPanel();
       await screen.findByText(/a\.txt/);
       fireEvent.contextMenu(emptySpace(container));
-      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Einfügen" }));
 
       await waitFor(() =>
         expect(sftpUpload).toHaveBeenCalledWith("session-1", "/home/u/new.txt", "new.txt", null),
@@ -2865,7 +2865,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       const { container } = renderPanel();
       await screen.findByText(/a\.txt/);
       fireEvent.contextMenu(emptySpace(container));
-      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Einfügen" }));
       await waitFor(() => expect(claimClipboardFiles).toHaveBeenCalled());
       await act(async () => {});
       expect(sftpExists).not.toHaveBeenCalled();
@@ -2879,7 +2879,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       const { container } = renderPanel();
       await screen.findByText(/a\.txt/);
       fireEvent.contextMenu(emptySpace(container));
-      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Einfügen" }));
       await waitFor(() =>
         expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "info" })),
       );
@@ -2897,7 +2897,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
 
       fireEvent.contextMenu(emptySpace(container));
       fireEvent.click(
-        within(await screen.findByRole("group", { name: "Ordneraktionen" })).getByRole("button", {
+        within(await screen.findByRole("menu", { name: "Ordneraktionen" })).getByRole("menuitem", {
           name: "Einfügen",
         }),
       );
