@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listRules, listServers } from "../api";
-import { requestOpenFilterRule } from "../navigationBus";
-import type { AutoExecRule, Scope } from "../types";
+import { listRules, listServers } from "../api/api";
+import { requestOpenFilterRule } from "../buses/navigationBus";
+import type { AutoExecRule, Scope } from "../api/types";
 
 /** Issue #696, Spec 0011: muted line under the command of an automatically
  * run action — "Ran automatically · rule `<pattern>` · <scope>", one entry per

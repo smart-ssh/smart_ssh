@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { type RemoteEntryDto } from "../../types";
+import { type RemoteEntryDto } from "../../api/types";
 import { Menu, MenuItem, MenuSeparator } from "../ui";
 import { currentCaps, findMenuTrigger, focusMenuTrigger } from "./shared";
 

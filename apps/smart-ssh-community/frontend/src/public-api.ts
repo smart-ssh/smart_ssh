@@ -7,6 +7,10 @@
  * entry and an update of Spec 0038 (section 4).
  *
  * Re-exports only; no code lives here.
+ *
+ * Deprecated re-export stubs at the old flat `src/` paths (issue #916), kept so
+ * embedding apps keep building: api, types, languages, navigationBus,
+ * fileDialog, technicalInputProps, resolveSectionLabel.
  */
 
 export * from "./extensions";
@@ -28,21 +32,21 @@ export {
   listGroups,
   listAiProviders,
   listChatSessions,
-} from "./api";
+} from "./api/api";
 
-export { TECHNICAL_INPUT_PROPS } from "./technicalInputProps";
+export { TECHNICAL_INPUT_PROPS } from "./lib/technicalInputProps";
 export {
   detectFallbackPlatform,
   platformCapabilities,
   usePlatform,
   isMacLike,
   isWindowsLike,
-} from "./platform";
-export type { Platform, PlatformCapabilities } from "./platform";
+} from "./lib/platform";
+export type { Platform, PlatformCapabilities } from "./lib/platform";
 export { useIsNarrow } from "./hooks/useIsNarrow";
-export { resolveSectionLabel } from "./resolveSectionLabel";
-export { pickAndReadTextFile } from "./fileDialog";
-export { SUPPORTED_LANGUAGES } from "./languages";
+export { resolveSectionLabel } from "./lib/resolveSectionLabel";
+export { pickAndReadTextFile } from "./api/fileDialog";
+export { SUPPORTED_LANGUAGES } from "./lib/languages";
 export { settingsStore, initI18n, setUiPreference } from "./i18n";
 
 export type {
@@ -50,5 +54,5 @@ export type {
   ChatSessionSummaryDto,
   GroupDto,
   StartupStateDto,
-} from "./types";
+} from "./api/types";
 export type { ComposerContext, ComposerAction } from "./extensions/registry";

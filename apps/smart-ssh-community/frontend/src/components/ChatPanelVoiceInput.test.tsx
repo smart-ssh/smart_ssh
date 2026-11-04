@@ -12,7 +12,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage } from "../api";
+import { sendChatMessage } from "../api/api";
 import { renderChatPanel } from "../test/renderChatPanel";
 import {
   cancelSpeechModelDownload,
@@ -22,15 +22,15 @@ import {
   startSpeechModelDownload,
   startVoiceRecording,
   stopVoiceRecording,
-} from "../voiceApi";
-import { loadVoiceInputEnabled } from "../voiceInputSettings";
+} from "../api/voiceApi";
+import { loadVoiceInputEnabled } from "../settings/voiceInputSettings";
 
 // jsdom implementiert `Element.scrollTo` nicht — `ChatPanel`s
 // Auto-Scroll-Effekt (unabhängig von dieser Spec) ruft es bei jeder
 // `items`-Änderung auf.
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -38,7 +38,7 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
@@ -67,7 +67,7 @@ vi.mock("../events", () => ({
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -82,8 +82,8 @@ const emitStatus = (ev: unknown) =>
 const emitPartial = (text: string, revision: number) =>
   act(() => partialListeners.forEach((h) => h({ text, revision })));
 
-vi.mock("../voiceApi", async (importActual) => ({
-  ...(await importActual<typeof import("../voiceApi")>()),
+vi.mock("../api/voiceApi", async (importActual) => ({
+  ...(await importActual<typeof import("../api/voiceApi")>()),
   getSelectedSpeechModel: vi.fn(() => Promise.resolve("base")),
   getSpeechModelStatus: vi.fn(() =>
     Promise.resolve({ model: "base", state: "ready" }),
@@ -106,8 +106,8 @@ vi.mock("../voiceApi", async (importActual) => ({
   ),
 }));
 
-vi.mock("../voiceInputSettings", async (importActual) => ({
-  ...(await importActual<typeof import("../voiceInputSettings")>()),
+vi.mock("../settings/voiceInputSettings", async (importActual) => ({
+  ...(await importActual<typeof import("../settings/voiceInputSettings")>()),
   loadVoiceInputEnabled: vi.fn(() => Promise.resolve(true)),
 }));
 

@@ -5,10 +5,10 @@ import {
   listGroups,
   listServers,
   listUnusableServers,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import { performMove, type DragItem, type DropTarget } from "../treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { performMove, type DragItem, type DropTarget } from "../lib/treeDrag";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
 import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DeletePreviewDto, RemoteEntryDto } from "../../types";
+import type { DeletePreviewDto, RemoteEntryDto } from "../../api/types";
 import {
   fileOperationsReducer,
   initialFileOperationsState,

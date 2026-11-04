@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { TerminalKeyId } from "../terminalKeys";
+import type { TerminalKeyId } from "../lib/terminalKeys";
 
 interface TerminalKeyRowProps {
   ctrl: boolean;

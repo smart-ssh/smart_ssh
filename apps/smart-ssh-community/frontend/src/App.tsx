@@ -16,15 +16,15 @@ import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
-import { commandErrorMessage, listAiProviders } from "./api";
+import { commandErrorMessage, listAiProviders } from "./api/api";
 import {
   subscribeRequestResumeChatSession,
   subscribeRequestOpenFilterRule,
   subscribeRequestServerNoteEdit,
   type ResumeChatSessionRequest,
-} from "./navigationBus";
+} from "./buses/navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
-import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
+import { MAIN_TAB_ENTRIES, type MainTab } from "./lib/navEntries";
 import { useSessionTabs } from "./hooks/useSessionTabs";
 
 

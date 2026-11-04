@@ -7,8 +7,8 @@ import {
   sendChatMessage,
   startNewChat,
   stopAutoContinuation,
-} from "../../api";
-import { freshId } from "../../chatResync";
+} from "../../api/api";
+import { freshId } from "../../lib/chatResync";
 import type { ChatTranscriptAction } from "./chatTranscriptReducer";
 import type { useChatComposer } from "./useChatComposer";
 

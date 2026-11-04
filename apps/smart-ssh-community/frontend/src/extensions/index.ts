@@ -50,7 +50,7 @@ export type {
 
 /** Issue #611: asks the app to resume a saved chat session of a server,
  * exactly like choosing it in the session picker. */
-export { requestResumeChatSession } from "../navigationBus";
+export { requestResumeChatSession } from "../buses/navigationBus";
 
 export { useEntitlements } from "./useEntitlements";
 export type { UseEntitlementsResult } from "./useEntitlements";

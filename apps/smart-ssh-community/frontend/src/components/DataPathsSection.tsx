@@ -1,8 +1,8 @@
 import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api";
-import type { DataPathEntryDto } from "../types";
+import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api/api";
+import type { DataPathEntryDto } from "../api/types";
 import { Button } from "./ui";
 
 /** Issue #16: Wo diese Instanz ihre Daten ablegt — Datenbank, Logs,

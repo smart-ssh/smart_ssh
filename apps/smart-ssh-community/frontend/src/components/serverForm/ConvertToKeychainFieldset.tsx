@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { translateErrorCode } from "../../errorCodes";
-import type { ServerDto } from "../../types";
+import { translateErrorCode } from "../../api/errorCodes";
+import type { ServerDto } from "../../api/types";
 import { Button } from "../ui";
 import type { IdentityFileState } from "./formTypes";
 

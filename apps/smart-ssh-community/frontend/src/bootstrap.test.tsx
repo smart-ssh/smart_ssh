@@ -2,22 +2,22 @@
 import { screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getStartupState } from "./api";
-import { installContextMenuSuppression } from "./contextMenu";
+import { getStartupState } from "./api/api";
+import { installContextMenuSuppression } from "./lib/contextMenu";
 import { initI18n } from "./i18n";
-import type { StartupStateDto } from "./types";
+import type { StartupStateDto } from "./api/types";
 import { bootstrap } from "./bootstrap";
 
-vi.mock("./api", async () =>
+vi.mock("./api/api", async () =>
   (await import("./test/apiMock")).createApiMock({ getStartupState: vi.fn() }),
 );
 vi.mock("./i18n", () => ({ initI18n: vi.fn(() => Promise.resolve()) }));
-vi.mock("./contextMenu", () => ({ installContextMenuSuppression: vi.fn() }));
-vi.mock("./theme", () => ({
+vi.mock("./lib/contextMenu", () => ({ installContextMenuSuppression: vi.fn() }));
+vi.mock("./lib/theme", () => ({
   initTheme: vi.fn(),
   applyStoredTheme: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("./platform", () => ({ detectFallbackPlatform: () => "android" }));
+vi.mock("./lib/platform", () => ({ detectFallbackPlatform: () => "android" }));
 vi.mock("./App.tsx", () => ({ default: () => <div>THE-APP</div> }));
 vi.mock("./components/AppRoot.tsx", () => ({
   AppRoot: ({ children }: { children: ReactNode }) => <>{children}</>,

@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../formatDateTime";
-import { deleteChatSession, renameChatSession } from "../api";
-import type { ChatSessionSummaryDto } from "../types";
+import { formatDateTime } from "../lib/formatDateTime";
+import { deleteChatSession, renameChatSession } from "../api/api";
+import type { ChatSessionSummaryDto } from "../api/types";
 import { Button, DialogFrame } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 interface ChatSessionPickerScreenProps {
   serverName: string;

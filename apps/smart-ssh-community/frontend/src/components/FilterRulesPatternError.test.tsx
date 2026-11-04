@@ -7,7 +7,7 @@ import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { EvaluationTraceDto, RuleDto } from "../types";
+import type { EvaluationTraceDto, RuleDto } from "../api/types";
 import { FilterRulesView } from "./FilterRulesView";
 
 /** Gekürzte Fassung dessen, was `regex` für `^systemctl stop (.*` liefert —
@@ -27,7 +27,7 @@ const evaluateExplainedMock = vi.fn<(...args: unknown[]) => Promise<EvaluationTr
   () => Promise.resolve(null),
 );
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     createRule: (...args: unknown[]) => createRuleMock(...args),
     deleteRule: vi.fn(() => Promise.resolve()),

@@ -3,7 +3,7 @@
 // translated detail text. A visually hidden `aria-live` region announces only
 // step completions and failures, not every detail change.
 import { useTranslation } from "react-i18next";
-import type { ConnectStepDetail, ConnectStepSnapshot } from "../types";
+import type { ConnectStepDetail, ConnectStepSnapshot } from "../api/types";
 import { Spinner } from "./ui";
 import type { TranslateFn } from "../i18nTypes";
 

@@ -48,7 +48,7 @@ backup and import, the DTO and the frontend.
       --all-targets` shows every missing site; insert it **after the last
       field** of the literal, not after a named one (the order changes with
       every migration).
-- [ ] Frontend: `apps/smart-ssh-community/frontend/src/types.ts` (`Server`
+- [ ] Frontend: `apps/smart-ssh-community/frontend/src/api/types.ts` (`Server`
       and `ServerInput`), the server form, and every test fixture that builds
       a server; texts per `new-ui-text.md`.
 - [ ] Importers/exporters that list server fields (for example the

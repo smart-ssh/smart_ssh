@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { testI18n } from "../testI18n";
 import { describe, expect, it } from "vitest";
-import { formatTokensK, isContextNearLimit } from "../contextUsage";
+import { formatTokensK, isContextNearLimit } from "../lib/contextUsage";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 
 const wrap = (n: number) => (

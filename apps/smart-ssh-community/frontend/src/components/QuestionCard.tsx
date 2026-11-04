@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { QuestionOption } from "../types";
+import type { QuestionOption } from "../api/types";
 
 /** Issue #547 (Spec 0111 §5): lock state of a question card, derived from
  * the chat item list by `deriveQuestionStates`. */

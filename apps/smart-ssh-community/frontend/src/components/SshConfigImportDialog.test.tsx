@@ -9,12 +9,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applySshConfigImport, previewSshConfigImport } from "../api";
+import { applySshConfigImport, previewSshConfigImport } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { SshConfigImportPreviewDto } from "../types";
+import type { SshConfigImportPreviewDto } from "../api/types";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     previewSshConfigImport: vi.fn(),
     applySshConfigImport: vi.fn(),

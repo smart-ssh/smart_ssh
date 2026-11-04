@@ -1,5 +1,5 @@
 // Objects that many component tests build identically (issue #906).
-import type { AiProviderConfigDto } from "../types";
+import type { AiProviderConfigDto } from "../api/types";
 
 /** The active Anthropic provider stub used by the chat tests. */
 export function anthropicProvider(

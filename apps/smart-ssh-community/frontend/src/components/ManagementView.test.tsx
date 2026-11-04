@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import { ManagementView } from "./ManagementView";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([])),

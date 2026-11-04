@@ -3,7 +3,7 @@ import type {
   AuthMethodKind,
   PostIngestPolicy,
   ServerDto,
-} from "../../types";
+} from "../../api/types";
 import type { TranslateFn } from "../../i18nTypes";
 
 /** Formular-lokaler Zustand — getrennt von [`AuthMethodInput`], weil

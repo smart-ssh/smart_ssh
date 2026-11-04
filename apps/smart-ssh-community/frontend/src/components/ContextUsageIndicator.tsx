@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { formatTokensK, isContextNearLimit } from "../contextUsage";
+import { formatTokensK, isContextNearLimit } from "../lib/contextUsage";
 
 /** Issue #601: last real input size vs. the model window. Numbers only. */
 export function ContextUsageIndicator({

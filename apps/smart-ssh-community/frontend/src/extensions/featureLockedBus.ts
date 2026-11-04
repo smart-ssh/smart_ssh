@@ -6,7 +6,7 @@
  * diesen Bus und zeigt den Hinweis ("Diese Funktion erfordert Pro") —
  * einzelne Komponenten müssen `feature_locked` nicht selbst auswerten. */
 
-import { createBus } from "../createBus";
+import { createBus } from "../buses/createBus";
 import type { FeatureLockedPayload } from "./entitlements";
 
 type Listener = (payload: FeatureLockedPayload) => void;

@@ -1,23 +1,23 @@
 import { dynamicKey } from "../i18nTypes";
 import { useRef, useState } from "react";
-import { detectFallbackPlatform, platformCapabilities } from "../platform";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { useTranslation } from "react-i18next";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import { folderForNewItem } from "../newItemFolder";
+import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
+import { folderForNewItem } from "../lib/newItemFolder";
 import {
   classifyDrop,
   dropHighlightClass,
   groupDropTargetValue,
   type DragItem,
   type DropTarget,
-} from "../treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
+} from "../lib/treeDrag";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
 import { useTreeDrag } from "../hooks/useTreeDrag";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
-import { unusableReasonText } from "../unusableServer";
+import { unusableReasonText } from "../lib/unusableServer";
 import { Button } from "./ui";
 
 export type Selection =
@@ -70,7 +70,7 @@ function visibleKeys(
 
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
  * clientseitig aufgebauter Baum — Baum-Aufbau selbst über
- * `../groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
+ * `../lib/groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
  * Implementierung wie die gruppierte Hauptübersicht, kein zweiter
  * Nachbau). Der lokale Pseudo-Server (Spec 0032) ist Teil von `servers`,
  * aber NICHT Teil von `tree` (`buildGroupTree` klammert ihn bewusst aus

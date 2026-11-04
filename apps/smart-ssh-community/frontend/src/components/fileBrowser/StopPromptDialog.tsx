@@ -1,7 +1,7 @@
 import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
-import { formatBytes } from "../../format";
-import type { RunningOperationDto } from "../../types";
+import { formatBytes } from "../../lib/format";
+import type { RunningOperationDto } from "../../api/types";
 import { Button, DialogFrame } from "../ui";
 
 interface StopPromptDialogProps {

@@ -4,17 +4,17 @@ import { CoverageList } from "./CoverageList";
 import { RiskBadges, RiskHintFootnote } from "./RiskBadges";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cancelRunningCommand, takeChatContentIntoNote } from "../../api";
-import { translateErrorCode } from "../../errorCodes";
-import { type LiveOutput } from "../../liveOutput";
+import { cancelRunningCommand, takeChatContentIntoNote } from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
+import { type LiveOutput } from "../../lib/liveOutput";
 import { LiveCommandOutput } from "../LiveCommandOutput";
-import { formatBytes } from "../../format";
-import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../types";
+import { formatBytes } from "../../lib/format";
+import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import { Button } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 export function ActionCard({
   item,

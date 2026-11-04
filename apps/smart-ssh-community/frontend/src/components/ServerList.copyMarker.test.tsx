@@ -5,9 +5,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { ServerList } from "./ServerList";
-import { keepGroupAsRegularEntry, keepServerAsRegularEntry, listGroups, listServers } from "../api";
+import { keepGroupAsRegularEntry, keepServerAsRegularEntry, listGroups, listServers } from "../api/api";
 
 const KEEP = testI18n.t("copyMarker.keep");
 
@@ -43,7 +43,7 @@ const grp = (id: string, name: string, isCopy: boolean): GroupDto => ({
   isCopy,
 });
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(),
     listGroups: vi.fn(),
@@ -55,10 +55,10 @@ vi.mock("../api", async () => {
     ),
   });
 });
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
 }));
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));

@@ -20,7 +20,7 @@ must upgrade without losing any row; migrations are append-only.
 - [ ] Struct literals of any changed domain type across crates
       (`cargo check --workspace --all-targets` lists each one).
 - [ ] DTO in `crates/app-logic/src/dto/` and frontend type in
-      `apps/smart-ssh-community/frontend/src/types.ts` when the field is
+      `apps/smart-ssh-community/frontend/src/api/types.ts` when the field is
       exposed.
 - [ ] `crates/persistence-sqlite/tests/fixtures/releases/` and its `README.md`
       – only when a *release* ships a new schema (a new fixture is written by

@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { continueTruncatedResponse, retryChatTurn, sendChatMessage } from "../../api";
+import { continueTruncatedResponse, retryChatTurn, sendChatMessage } from "../../api/api";
 import { useChatSend } from "./useChatSend";
 
-vi.mock("../../api", async () =>
+vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     sendChatMessage: vi.fn(),
     continueTruncatedResponse: vi.fn(),

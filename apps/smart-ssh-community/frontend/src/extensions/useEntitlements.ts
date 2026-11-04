@@ -11,7 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import type { Entitlements } from "./entitlements";
-import { EVENT } from "../eventNames";
+import { EVENT } from "../api/eventNames";
 
 export interface UseEntitlementsResult {
   entitlements: Entitlements | null;

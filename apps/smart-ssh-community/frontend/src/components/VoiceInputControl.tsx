@@ -1,9 +1,9 @@
 import { useEffect, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../hooks/useVoiceInput";
-import { isMacLike } from "../platform";
-import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../voiceApi";
-import { formatElapsed } from "../voiceInputSettings";
+import { isMacLike } from "../lib/platform";
+import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../api/voiceApi";
+import { formatElapsed } from "../settings/voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
 
 const IS_MAC = isMacLike();

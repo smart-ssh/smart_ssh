@@ -14,7 +14,7 @@ import { SettingsScreen } from "./SettingsScreen";
 vi.mock("./BackupSettings", () => ({
   BackupSettings: () => <p>builtin-backup</p>,
 }));
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([])),
     discoverModels: vi.fn(),

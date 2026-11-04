@@ -4,14 +4,14 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage, startNewChat } from "../api";
-import { onChatActionProposed, onChatContextUsage } from "../events";
-import type { ChatActionProposedEvent } from "../types";
+import { sendChatMessage, startNewChat } from "../api/api";
+import { onChatActionProposed, onChatContextUsage } from "../api/events";
+import type { ChatActionProposedEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -19,7 +19,7 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
@@ -48,7 +48,7 @@ vi.mock("../events", () => ({
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

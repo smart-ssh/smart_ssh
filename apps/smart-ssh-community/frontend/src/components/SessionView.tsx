@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { reconnectSession, stopAutoReconnect } from "../api";
-import { commandErrorText } from "../errorCodes";
-import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
-import type { McpSessionInfo } from "../types";
+import { reconnectSession, stopAutoReconnect } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { onAutoReconnectChanged, onConnectionStatusChanged } from "../api/events";
+import type { McpSessionInfo } from "../api/types";
 import { sessionTabLabel } from "../hooks/useSessionTabs";
-import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../settings/layoutSettings";
 import { useDragResize } from "../hooks/useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { SessionHeaderItems } from "../extensions/SessionHeaderItems";

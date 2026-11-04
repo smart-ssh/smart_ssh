@@ -5,7 +5,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialogFocusTrap } from "../hooks/useDialogFocusTrap";
-import { MAIN_TAB_ENTRIES, type MainTab } from "../navEntries";
+import { MAIN_TAB_ENTRIES, type MainTab } from "../lib/navEntries";
 import type { SessionTab } from "../hooks/useSessionTabs";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";

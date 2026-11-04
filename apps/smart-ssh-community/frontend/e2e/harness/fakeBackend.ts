@@ -11,7 +11,7 @@ import type {
   ServerDto,
   SessionSummaryDto,
   ChatSessionSummaryDto,
-} from "../../src/types";
+} from "../../src/api/types";
 import type {
   CannedResponse,
   E2eBridge,

@@ -1,18 +1,18 @@
 // Issue #600: AI error card (Details, Try again) and retry countdown.
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { retryChatTurn, getChatHistory } from "../api";
-import { onChatAiRetrying, onChatError, onChatTextDelta } from "../events";
-import type { ChatAiRetryingEvent, ChatErrorEvent } from "../types";
+import { retryChatTurn, getChatHistory } from "../api/api";
+import { onChatAiRetrying, onChatError, onChatTextDelta } from "../api/events";
+import type { ChatAiRetryingEvent, ChatErrorEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock(),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
@@ -41,7 +41,7 @@ vi.mock("../events", () => ({
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

@@ -8,13 +8,13 @@ import {
   saveHiddenFileColumns,
   type FileManagerColumnWidths,
   type HideableFileColumn,
-} from "../../layoutSettings";
+} from "../../settings/layoutSettings";
 import {
   DEFAULT_FILE_SORT,
   nextFileSort,
   type FileSort,
   type FileSortColumn,
-} from "../../fileSort";
+} from "../../lib/fileSort";
 import { ACTIONS_COLUMN_WIDTH, NAME_MIN_WIDTH } from "./shared";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten

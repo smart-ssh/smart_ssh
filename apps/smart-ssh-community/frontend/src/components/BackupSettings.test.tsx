@@ -5,11 +5,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import * as api from "../api";
+import * as api from "../api/api";
 import { testI18n } from "../testI18n";
 import { BackupSettings } from "./BackupSettings";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     backupKeyStatus: vi.fn(),
     createBackupKeyWithCode: vi.fn(),

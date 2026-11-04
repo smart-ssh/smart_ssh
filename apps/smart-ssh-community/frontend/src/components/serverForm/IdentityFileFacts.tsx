@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { translateErrorCode } from "../../errorCodes";
-import type { KeyFileFactsDto } from "../../types";
+import { translateErrorCode } from "../../api/errorCodes";
+import type { KeyFileFactsDto } from "../../api/types";
 
 /** Spec 0076, B-3: zeigt den Vorab-Befund über eine Schlüsseldatei —
  * existiert sie, passen die Rechte, sieht sie wie ein OpenSSH-Schlüssel

@@ -8,7 +8,7 @@
 // wartende Bestätigung nicht ablehnen.
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { disconnect, listSessions, respondToAction } from "../api";
+import { disconnect, listSessions, respondToAction } from "../api/api";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
@@ -16,14 +16,14 @@ import {
   onChatSessionChanged,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
-} from "../events";
+} from "../api/events";
 // Registriert die Test-i18n-Instanz global für `useTranslation()` im Hook.
 import "../testI18n";
-import { getChatSessionId, resetChatSessionIdsForTests } from "../chatSessionIds";
-import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "../types";
+import { getChatSessionId, resetChatSessionIdsForTests } from "../lib/chatSessionIds";
+import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "../api/types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
-vi.mock("../api", async () =>
+vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     disconnect: vi.fn(() => Promise.resolve()),
     getServer: vi.fn(() => Promise.resolve({ id: "server-1", name: "prod-db" } as never)),
@@ -32,7 +32,7 @@ vi.mock("../api", async () =>
   }),
 );
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),

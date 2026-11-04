@@ -7,7 +7,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = __dirname;
-const ALLOWED = "platform.ts";
+const ALLOWED = "lib/platform.ts";
 
 /** Returns the `navigator.platform` / `navigator.userAgent` reads (line + text) in `text`. */
 export function findPlatformSniffing(text: string): string[] {

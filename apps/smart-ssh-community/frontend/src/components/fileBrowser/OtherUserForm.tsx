@@ -1,6 +1,6 @@
 import type { CSSProperties, Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS } from "../ui";
 
 interface OtherUserFormProps {

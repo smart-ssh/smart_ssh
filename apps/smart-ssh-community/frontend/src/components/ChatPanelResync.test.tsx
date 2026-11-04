@@ -2,14 +2,14 @@
 // app returns from the background.
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getChatHistory, getChatResync } from "../api";
-import { onChatTextDelta } from "../events";
-import type { ChatResyncDto } from "../chatResync";
+import { getChatHistory, getChatResync } from "../api/api";
+import { onChatTextDelta } from "../api/events";
+import type { ChatResyncDto } from "../lib/chatResync";
 import { renderChatPanel } from "../test/renderChatPanel";
 
 import "../test/scrollTo";
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   const { anthropicProvider } = await import("../test/fixtures");
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
@@ -17,7 +17,7 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
@@ -46,7 +46,7 @@ vi.mock("../events", () => ({
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),

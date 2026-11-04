@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../formatDateTime";
+import { formatDateTime } from "../lib/formatDateTime";
 import {
   commandErrorMessage,
   largeNoteDialogThresholdChars,
@@ -9,9 +9,9 @@ import {
   rollbackNote,
   updateGroupNotes,
   updateServerNotes,
-} from "../api";
-import { commandErrorText } from "../errorCodes";
-import type { NoteRevisionDto, NoteTarget } from "../types";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import type { NoteRevisionDto, NoteTarget } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
 

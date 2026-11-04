@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAppInfo } from "../api";
-import type { AppInfoDto } from "../types";
+import { getAppInfo } from "../api/api";
+import type { AppInfoDto } from "../api/types";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
 import { Button } from "./ui";
 

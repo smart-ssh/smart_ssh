@@ -1,7 +1,7 @@
 import { type ChatItem } from "./chatItem";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { translateErrorCode } from "../../errorCodes";
+import { translateErrorCode } from "../../api/errorCodes";
 import { Button } from "../ui";
 import type { TranslateFn } from "../../i18nTypes";
 

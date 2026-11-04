@@ -4,7 +4,7 @@ import { ContextUsageIndicator } from "../ContextUsageIndicator";
 import { VoiceInputControl } from "../VoiceInputControl";
 import { Button, ErrorBoundary } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
-import { formatBytes } from "../../format";
+import { formatBytes } from "../../lib/format";
 import type { ComposerAction, ComposerAttachment, ComposerContext } from "../../extensions/registry";
 import type { VoiceHandlers, VoicePhase } from "../../hooks/useVoiceInput";
 
