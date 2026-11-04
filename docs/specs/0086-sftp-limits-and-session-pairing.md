@@ -96,6 +96,13 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
   gelingt das nicht, nennt die Zeile den unvollständigen Pfad. Dasselbe gilt
   mit „gestoppt“, wenn der Nutzer das Beenden des erhöhten Modus bestätigt
   (Spec 0085 A1.3).
+- **A5.5** Eine laufende Übertragung hält den SFTP-Kanal der Sitzung nur für
+  das jeweilige Stück, nicht für die ganze Dauer: Auflisten, Vorschau und
+  Dateilesen der KI in derselben Sitzung laufen zwischen zwei Stücken weiter und
+  warten höchstens auf das laufende Stück. Im erhöhten Modus werden Widerruf und
+  Ziel-Nutzer vor jedem Stück erneut geprüft; nach einem Widerruf wird kein
+  weiteres Stück gelesen oder gesendet, die Übertragung endet mit der
+  Widerrufs-Meldung aus A2.
 
 ### A3 — Transport und Kanal bleiben ein Paar
 

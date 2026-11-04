@@ -154,6 +154,25 @@ impl SftpSession for MismatchSftp {
         unreachable!("dieser Test lädt nichts hoch")
     }
 
+    async fn read_range(
+        &mut self,
+        _path: &str,
+        _offset: u64,
+        _len: usize,
+    ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+        unreachable!("this test does not transfer files")
+    }
+
+    async fn write_range(
+        &mut self,
+        _path: &str,
+        _offset: u64,
+        _data: &[u8],
+        _truncate: bool,
+    ) -> Result<(), ssh_manager_core::ssh::SshError> {
+        unreachable!("this test does not transfer files")
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.0.ops.lock().unwrap().push(format!("stat {path}"));
         match self.0.stat {

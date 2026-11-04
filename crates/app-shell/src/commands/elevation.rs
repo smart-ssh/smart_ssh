@@ -614,6 +614,33 @@ impl SftpSession for BrowserSftp<'_> {
             .await
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .read_range(path, offset, len)
+            .await
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .write_range(path, offset, data, truncate)
+            .await
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.operation().await?.sftp().stat(path).await
     }
