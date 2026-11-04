@@ -4,9 +4,9 @@ import { reconnectSession, stopAutoReconnect } from "../api";
 import { commandErrorText } from "../errorCodes";
 import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
 import type { McpSessionInfo } from "../types";
-import { sessionTabLabel } from "../useSessionTabs";
+import { sessionTabLabel } from "../hooks/useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
-import { useDragResize } from "../useDragResize";
+import { useDragResize } from "../hooks/useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
 import { useIsNarrow } from "../hooks/useIsNarrow";
@@ -385,7 +385,7 @@ export function SessionView({
               <button
                 type="button"
                 onClick={handleStopAutoReconnect}
-                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${narrow ? "min-h-11 px-2" : ""}`}
+                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
               >
                 {t("session.stopReconnect")}
               </button>
@@ -486,7 +486,7 @@ export function SessionView({
                 type="button"
                 onClick={() => setRightPanelView("terminal")}
                 aria-pressed={rightPanelView === "terminal"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-ring-flush ${
                   rightPanelView === "terminal" ? "text-accent-fg" : "text-fg-subtle hover:text-fg-soft"
                 }`}
               >
@@ -496,7 +496,7 @@ export function SessionView({
                 type="button"
                 onClick={() => setRightPanelView("files")}
                 aria-pressed={rightPanelView === "files"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-ring-flush ${
                   rightPanelView === "files" ? "text-accent-fg" : "text-fg-subtle hover:text-fg-soft"
                 }`}
               >

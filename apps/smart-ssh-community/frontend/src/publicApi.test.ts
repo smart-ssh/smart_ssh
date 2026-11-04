@@ -42,6 +42,7 @@ const EXPECTED: Record<string, Kind> = {
   TECHNICAL_INPUT_PROPS: obj, useIsNarrow: fn, resolveSectionLabel: fn, pickAndReadTextFile: fn,
   SUPPORTED_LANGUAGES: obj, settingsStore: fn, initI18n: fn,
   setUiPreference: fn,
+  detectFallbackPlatform: fn, platformCapabilities: fn, usePlatform: fn, isMacLike: fn, isWindowsLike: fn,
 };
 
 describe("public-api", () => {

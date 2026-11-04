@@ -31,6 +31,14 @@ export {
 } from "./api";
 
 export { TECHNICAL_INPUT_PROPS } from "./technicalInputProps";
+export {
+  detectFallbackPlatform,
+  platformCapabilities,
+  usePlatform,
+  isMacLike,
+  isWindowsLike,
+} from "./platform";
+export type { Platform, PlatformCapabilities } from "./platform";
 export { useIsNarrow } from "./hooks/useIsNarrow";
 export { resolveSectionLabel } from "./resolveSectionLabel";
 export { pickAndReadTextFile } from "./fileDialog";

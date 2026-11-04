@@ -84,7 +84,7 @@ export function QuestionCard({
                   disabled={locked}
                   aria-pressed={multiSelect ? isMarked : undefined}
                   onClick={() => choose(o.label)}
-                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus-ring-flush ${
                     isMarked
                       ? "border-accent-fg bg-accent-subtle-hover/60 text-accent-fg-faintest"
                       : "border-border text-fg-soft enabled:hover:bg-surface-raised"

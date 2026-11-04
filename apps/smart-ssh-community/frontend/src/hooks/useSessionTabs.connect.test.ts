@@ -3,14 +3,14 @@
 // retries in place and cancels on close.
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelConnect, connect, disconnect, resumeChatSession } from "./api";
-import { onConnectProgress } from "./events";
-import "./testI18n";
-import type { ConnectProgressEvent } from "./types";
+import { cancelConnect, connect, disconnect, resumeChatSession } from "../api";
+import { onConnectProgress } from "../events";
+import "../testI18n";
+import type { ConnectProgressEvent } from "../types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
-vi.mock("./api", async () => {
-  return (await import("./test/apiMock")).createApiMock({
+vi.mock("../api", async () => {
+  return (await import("../test/apiMock")).createApiMock({
     connect: vi.fn(),
     cancelConnect: vi.fn(() => Promise.resolve()),
     disconnect: vi.fn(() => Promise.resolve()),
@@ -21,7 +21,7 @@ vi.mock("./api", async () => {
   });
 });
 
-vi.mock("./events", () => ({
+vi.mock("../events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),

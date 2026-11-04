@@ -1,4 +1,4 @@
-import { detectFallbackPlatform, platformCapabilities } from "../../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../../platform";
 import type { HideableFileColumn } from "../../layoutSettings";
 import type { RateState } from "../../transferRate";
 import type { PreviewReadFailure } from "../../previewReadFailure";

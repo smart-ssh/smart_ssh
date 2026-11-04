@@ -1,11 +1,12 @@
 import { useEffect, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../useVoiceInput";
+import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../hooks/useVoiceInput";
+import { isMacLike } from "../platform";
 import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../voiceApi";
 import { formatElapsed } from "../voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
 
-const IS_MAC = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
+const IS_MAC = isMacLike();
 
 /** Spec 0108 §5.1: toggles recording with Ctrl+Shift+M (Cmd+Shift+M on macOS). */
 export function isVoiceShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
@@ -61,7 +62,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
         aria-pressed={recording}
         title={`${label} (${shortcut})`}
         data-voice-state={voice.phase}
-        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:cursor-not-allowed disabled:opacity-70 ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-ring-flush disabled:cursor-not-allowed disabled:opacity-70 ${
           recording
             ? "animate-pulse border-danger-border-strong bg-danger-subtle-hover text-danger-fg-faint"
             : "border-border-strong bg-surface-raised text-fg hover:bg-border"

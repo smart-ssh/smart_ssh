@@ -89,6 +89,7 @@ toml = { workspace = true }
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene
 # Gebrauch in dieser Crate, deshalb nur noch `[dev-dependencies]`.
 libc = { workspace = true }
+base64 = { workspace = true }
 # Spec 0084, A5: aktiviert `app_logic::test_support`/`app_logic::policy`
 # (dort hinter `#[cfg(any(test, feature = "test-support"))]`) für diese
 # Crates eigene Tests — nur unter `[dev-dependencies]`, landet also nie in

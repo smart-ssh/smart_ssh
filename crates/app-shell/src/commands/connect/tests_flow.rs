@@ -223,6 +223,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: None,
         chat_content: Default::default(),
+        title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
     };
     Fixture {
@@ -1693,5 +1694,37 @@ async fn test_cancel_of_unknown_attempt_is_a_noop() {
     let connector = StepConnector::new(vec![]);
     let fx = fixture(connector).await;
     assert!(!fx.state.connect_attempts.cancel("does-not-exist"));
+    reset(app.handle());
+}
+
+/// Issue #922: the title-attempt entry of a chat session is removed by the
+/// `delete_chat_session` command (not just by `TitleAttempts::forget`).
+#[tokio::test]
+async fn test_delete_chat_session_forgets_its_title_attempt() {
+    use tauri::Manager as _;
+    let _guard = lock_async().await;
+    let app = acknowledged_app();
+    let disconnected = Arc::new(AtomicBool::new(false));
+    let connector = ScriptedConnector::new(connected(&disconnected));
+    let fx = fixture(connector).await;
+    let chat_id = fx
+        .state
+        .chat_session_store
+        .create_session(&fx.server_id, None)
+        .await
+        .unwrap();
+    assert!(fx.state.title_attempts.claim(chat_id));
+    assert!(!fx.state.title_attempts.claim(chat_id), "claimed once");
+    app.manage(fx.state);
+
+    delete_chat_session(app.state::<AppState>(), chat_id)
+        .await
+        .expect("delete succeeds");
+
+    let state = app.state::<AppState>();
+    assert!(
+        state.title_attempts.claim(chat_id),
+        "entry must be gone after the session is deleted"
+    );
     reset(app.handle());
 }

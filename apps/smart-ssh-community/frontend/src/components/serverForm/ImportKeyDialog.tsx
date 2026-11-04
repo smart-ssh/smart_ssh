@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { detectFallbackPlatform, platformCapabilities } from "../../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../../platform";
 import { Button } from "../ui";
 import { DialogFrame } from "../ui/DialogFrame";
 import type { IdentityFileState, ServerModel } from "./formTypes";

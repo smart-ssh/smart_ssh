@@ -293,7 +293,7 @@ async fn run_prepared_command(
     // chunk to `live_sink` while the command runs; `forward_live_output`
     // redacts and throttles it into `chat-action-output` events. Display
     // only. The forwarder ends when the transport drops the sink.
-    let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    let (live_sink, live_chunks) = ssh_manager_core::ssh::exec_output_channel();
     // Issue #327: set by the forwarder while the "probably waiting for
     // input" hint is shown. Backend-owned.
     let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
