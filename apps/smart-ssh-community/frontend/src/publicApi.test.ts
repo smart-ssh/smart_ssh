@@ -33,7 +33,7 @@ const EXPECTED: Record<string, Kind> = {
   tierLabel: fn, publishFeatureLocked: fn, subscribeFeatureLocked: fn,
   FeatureLockedDialog: fn, ModalBackdrop: fn,
   // bootstrap, ui
-  bootstrap: fn, ErrorBoundary: fn, Button: obj, DialogFrame: fn, Field: fn, FIELD_CONTROL_CLASS: "string" as Kind,
+  showToast: fn, bootstrap: fn, ErrorBoundary: fn, Button: obj, DialogFrame: fn, Field: fn, FIELD_CONTROL_CLASS: "string" as Kind,
   Spinner: fn, TabPanel: fn, Tabs: fn, tabId: fn, useTabsIdBase: fn, Tooltip: fn,
   // api and helpers
   invokeCommand: fn, commandErrorMessage: fn, commandErrorCode: fn, commandErrorFeatureLocked: fn,
@@ -62,6 +62,7 @@ describe("public-api", () => {
     expect(typeof testSupport.listComposerActions).toBe("function");
     expect(typeof testSupport.listComposerDropHandlers).toBe("function");
     expect(typeof testSupport.resetComposerRegistryForTests).toBe("function");
+    expect(typeof testSupport.ToastHost).toBe("function");
   });
 
   it("setUiPreference calls set_ui_preference with key and value", async () => {
