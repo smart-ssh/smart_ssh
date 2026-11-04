@@ -2,7 +2,35 @@
 
 use std::sync::Arc;
 
+use std::collections::HashSet;
+use std::sync::Mutex as StdMutex;
+
+use ssh_manager_core::sync::lock_tolerating_poison;
 use tokio::sync::Mutex as AsyncMutex;
+
+/// Issue #551 / #922: chat sessions whose first-answer title attempt was
+/// already started in this process — the request runs at most once per
+/// session. Owned by `AppState`; an entry is removed when its chat session
+/// is deleted, so the set cannot outgrow the stored sessions.
+#[derive(Default)]
+pub struct TitleAttempts(StdMutex<HashSet<uuid::Uuid>>);
+
+impl TitleAttempts {
+    /// `true` exactly once per chat session id (until [`Self::forget`]).
+    pub fn claim(&self, id: uuid::Uuid) -> bool {
+        lock_tolerating_poison(&self.0).insert(id)
+    }
+
+    /// Removes the entry of a deleted chat session.
+    pub fn forget(&self, id: uuid::Uuid) {
+        lock_tolerating_poison(&self.0).remove(&id);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        lock_tolerating_poison(&self.0).len()
+    }
+}
 
 /// Issue #871: where a session persists its chat (chat session store, ledger,
 /// chat session id) plus the chat content extension registry.
@@ -34,4 +62,6 @@ pub struct ChatPersistence {
     /// Issue #505: chat content extensions (`AppState.chat_content`); the
     /// send path seals extension parts through it.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
+    /// Issue #922: process-wide set of title attempts (`AppState.title_attempts`).
+    pub title_attempts: Arc<TitleAttempts>,
 }

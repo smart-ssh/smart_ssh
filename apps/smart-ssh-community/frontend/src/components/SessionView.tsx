@@ -382,13 +382,13 @@ export function SessionView({
               <output className="font-mono text-xs text-warning-fg-soft">
                 {t("session.reconnectingAuto", { attempt: autoAttempt })}
               </output>
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={handleStopAutoReconnect}
                 className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
               >
                 {t("session.stopReconnect")}
-              </button>
+              </Button>
             </>
           )}
           {gaveUp && autoAttempt === null && (
@@ -482,7 +482,7 @@ export function SessionView({
         >
           {!narrow && (
             <div className="flex h-8 shrink-0 items-center gap-3 border-b border-surface-raised px-3">
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={() => setRightPanelView("terminal")}
                 aria-pressed={rightPanelView === "terminal"}
@@ -491,8 +491,8 @@ export function SessionView({
                 }`}
               >
                 {t("session.terminalTab")}
-              </button>
-              <button
+              </Button>
+              <Button variant="bare"
                 type="button"
                 onClick={() => setRightPanelView("files")}
                 aria-pressed={rightPanelView === "files"}
@@ -508,7 +508,7 @@ export function SessionView({
                     ⚠ {filesElevatedUser}
                   </span>
                 )}
-              </button>
+              </Button>
             </div>
           )}
           <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1 p-2" : "hidden"}>

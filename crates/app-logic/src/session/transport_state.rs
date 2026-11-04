@@ -19,7 +19,7 @@ pub struct TransportState {
     /// `terminal_input`/`terminal_resize` senden darüber; `None` (noch kein
     /// `open_terminal` aufgerufen, oder Kanal bereits geschlossen) wird als
     /// Anwenderfehler zurückgemeldet statt zu blockieren.
-    pub terminal: StdMutex<Option<mpsc::UnboundedSender<TerminalCommand>>>,
+    pub terminal: StdMutex<Option<mpsc::Sender<TerminalCommand>>>,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
     /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
     /// konstruiert, s. `app_shell::commands::connect`) und wird von

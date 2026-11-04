@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { numberedServerName, type SessionTab } from "../hooks/useSessionTabs";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
+import { Button } from "./ui";
 
 
 interface SessionTabBarProps {
@@ -81,7 +82,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       onBlur={onBlur}
       className="flex w-full items-center gap-1 overflow-x-auto"
     >
-      <button
+      <Button variant="bare"
         type="button"
         {...stopProps(null)}
         aria-current={activeSessionId === null ? "page" : undefined}
@@ -94,7 +95,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
         }`}
       >
         {t("sessionTabs.overview")}
-      </button>
+      </Button>
 
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
@@ -121,7 +122,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                 : "border-transparent text-fg-subtle hover:bg-surface-raised"
             }`}
           >
-            <button
+            <Button variant="bare"
               type="button"
               {...stopProps(tab.sessionId)}
               aria-current={active ? "page" : undefined}
@@ -141,8 +142,8 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                 label={label}
                 labelClass={tab.mcp ? "max-w-[24ch] truncate" : tab.phase !== "connected" ? "max-w-[28ch] truncate" : "max-w-[12ch] truncate"}
               />
-            </button>
-            <button
+            </Button>
+            <Button variant="bare"
               type="button"
               onClick={() => onRequestClose(tab.sessionId)}
               aria-label={t("sessionTabs.closeTab", { name: label })}
@@ -152,7 +153,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
               className={`focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
             >
               ✕
-            </button>
+            </Button>
           </div>
         );
       })}
