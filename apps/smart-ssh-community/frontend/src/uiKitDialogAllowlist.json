@@ -1,0 +1,6 @@
+{
+  "components/SettingsScreen.tsx": "settings screen is a full-window modal with its own focus trap; moving it onto DialogFrame is follow-up work",
+  "components/HostKeyDialog.tsx": "host-key prompt has its own focus trap and must stay above everything",
+  "components/AppHeader.tsx": "header menu overlay (fixed inset-0 backdrop)",
+  "components/NarrowHeaderNav.tsx": "narrow-layout navigation sheet with its own focus trap"
+}

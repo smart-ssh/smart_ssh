@@ -57,17 +57,17 @@ test.describe("file browser", () => {
 
     await rowMenu(page, "notes.txt").click();
     await expectNoSeriousA11yViolations(page, "file browser: entry menu");
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     await expectNoSeriousA11yViolations(page, "file browser: properties");
     await page.keyboard.press("Escape");
 
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: /^Edit permissions/ }).click();
+    await page.getByRole("menuitem", { name: /^Edit permissions/ }).click();
     await expectNoSeriousA11yViolations(page, "file browser: permissions");
     await page.keyboard.press("Escape");
 
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await expectNoSeriousA11yViolations(page, "file browser: delete");
   });
 
@@ -104,7 +104,7 @@ test.describe("file browser", () => {
       const trigger = rowMenu(page, "notes.txt");
       await trigger.focus();
       await page.keyboard.press("Enter");
-      await page.getByRole("button", { name: c.item, exact: true }).click();
+      await page.getByRole("menuitem", { name: c.item, exact: true }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await page.keyboard.press("Escape");
@@ -125,9 +125,9 @@ test.describe("file browser", () => {
     const page = app.page;
     const trigger = rowMenu(page, "notes.txt");
     await trigger.click();
-    await expect(page.getByRole("button", { name: "Properties", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Properties", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Properties", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "Properties", exact: true })).toBeHidden();
     await expect(trigger).toBeFocused();
   });
 
@@ -139,16 +139,16 @@ test.describe("file browser", () => {
     const open = () => scroller.click({ button: "right", position: { x: box.width - 4, y: box.height - 4 } });
 
     await open();
-    await expect(page.getByRole("button", { name: "New folder", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New folder", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeVisible();
     await expectNoSeriousA11yViolations(page, "file browser: empty-space menu");
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeHidden();
 
     await open();
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeVisible();
     await page.mouse.click(2, 2);
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeHidden();
   });
 
   test("elevation menu: labelled target user field, keyboard operable, axe clean (issue #544)", async ({ app }) => {
@@ -205,7 +205,7 @@ test.describe("file browser", () => {
     const page = app.page;
     await captureScreen(page, "file-browser-list");
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await captureScreen(page, "file-browser-delete");
   });
 });
@@ -254,12 +254,12 @@ test.describe("file browser, narrow layout @phone", () => {
     await openNarrow(app);
     const page = app.page;
     await rowMenu(page, "notes.txt").click();
-    const del = page.getByRole("button", { name: "Delete", exact: true });
+    const del = page.getByRole("menuitem", { name: "Delete", exact: true });
     await expectFullyInViewport(del);
     await expectNoSeriousA11yViolations(page, "file browser narrow: entry menu");
     await captureScreen(page, "file-browser-narrow-menu");
     await expect(del).toBeVisible();
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("deploy");
     await expect(dialog).toContainText("644");

@@ -64,6 +64,10 @@ stage_rust() {
   fi
   step "cargo build (without test-support)"
   cargo build --workspace --locked
+  # Issue #919: the checked-in frontend/src/generated/ipc.ts must match the
+  # Rust IPC types (regenerate with `npm run gen:ipc`).
+  step "ipc.ts is up to date (ts-export)"
+  cargo test -p app-logic --features ts-export --locked export_bindings
 }
 
 # Spec 0084, A3/T4: `app-logic` must not contain tauri/tauri-*/wry/tao/rfd in

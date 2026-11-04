@@ -83,6 +83,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 
 | What | Where |
 |---|---|
+| Event names (backend → frontend) | `crates/app-logic/src/event_names.rs` (Rust) and `apps/smart-ssh-community/frontend/src/eventNames.ts`; consistency check: `scripts/check-event-names.mjs` |
 | Tauri command registration | `crates/app-shell/src/lib.rs` — `run` (the generate_handler list); consistency check: `scripts/check-tauri-commands.mjs` |
 | Tauri commands, one file per topic | `crates/app-shell/src/commands/` — e.g. `crates/app-shell/src/commands/chat.rs`, `crates/app-shell/src/commands/servers.rs`, `crates/app-shell/src/commands/rules.rs` |
 | Database migrations | `crates/persistence-sqlite/migrations/` (`NNNN_name.sql`, consecutive); applied in `crates/persistence-sqlite/src/store.rs` |

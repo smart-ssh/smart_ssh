@@ -19,6 +19,8 @@ const active = (targetUser = "root") => ({
   targetUser,
   sftpServerPath: null,
   failure: null,
+  warning: null,
+  runningOperations: [],
 });
 
 describe("useElevation", () => {

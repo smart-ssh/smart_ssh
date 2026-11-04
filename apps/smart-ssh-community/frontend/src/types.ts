@@ -1,109 +1,108 @@
-// Spiegelt die Rust-DTOs aus `crates/app-logic/src/dto.rs` (Spec 0007,
-// Abschnitt 8.2). Feldnamen camelCase, weil die DTO-Structs dort
-// `#[serde(rename_all = "camelCase")]` tragen; `ProviderType`-Werte
-// bleiben snake_case (exakt wie im SQL-`CHECK`-Constraint), weil dieser
-// eine Typ stattdessen `#[serde(rename = "...")]` pro Variante nutzt.
+// IPC types come from the Rust definitions: `generated/ipc.ts` is written by
+// `npm run gen:ipc` (issue #919). This file re-exports them under their
+// existing names and keeps only the hand-written helpers and the types that do
+// not cross the IPC boundary as a DTO.
 
-export type ProviderType =
-  | "openai"
-  | "anthropic"
-  | "generic_openai_compatible"
-  | "ollama";
+import type {
+  ActionOrigin,
+  ConnectionStatus,
+  Decision,
+  PatternType,
+  ProviderType,
+  Scope,
+  WebActivityDto,
+} from "./generated/ipc";
 
-export type AuthMethodKind =
-  | "password"
-  | "no_password"
-  | "private_key" | "agent" | "certificate" | "identity_file";
-
-/** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
- * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
- * nachdem in der Sitzung Serverinhalt eingelesen wurde. */
-export type PostIngestPolicy = "strict" | "balanced" | "standard";
-
-export interface StoredHostKeyDto {
-  algorithm: string;
-  fingerprint: string;
-}
-
-export interface ServerDto {
-  id: string;
-  /** Spec 0103: moved into "Previous data" by a backup import. */
-  isCopy?: boolean;
-  name: string;
-  host: string;
-  port: number;
-  username: string;
-  groupId: string | null;
-  tags: string[];
-  authKind: AuthMethodKind;
-  /** Spec 0076, B-4: **wo** die Schlüsseldatei liegt — `null` bei jeder
-   * anderen Anmeldeart. Kein Geheimnis, deshalb Teil dieses DTOs (s.
-   * `crate::dto::ServerDto::identity_file_path`-Doc-Kommentar). */
-  identityFilePath: string | null;
-  jumpHost: string | null;
-  notes: string;
-  /** Spec 0018, Abschnitt 4: ob ein Sudo-Passwort im Schlüsselbund
-   * hinterlegt ist — nie der Wert selbst. */
-  hasSudoPassword: boolean;
-  /** Spec 0071, A14: `true`, wenn der Systemschlüsselbund nicht sagen
-   * konnte, ob ein Sudo-Passwort hinterlegt ist. Dann ist
-   * `hasSudoPassword` ebenfalls `false` — dieses Feld muss zuerst geprüft
-   * werden, sonst behauptet die Oberfläche "kein Sudo-Passwort
-   * hinterlegt", obwohl sie es nicht weiß. */
-  sudoPasswordUnknown: boolean;
-
-  /** Spec 0032, Abschnitt 3: `true` genau für den lokalen Pseudo-Server. */
-  isLocal: boolean;
-  postIngestPolicy: PostIngestPolicy;
-  /** Spec 0039, Abschnitt 5.2: nur wirksam, wenn zusätzlich eine
-   * Zweitmeinungs-Provider-Konfiguration vorhanden ist (s.
-   * `loadRiskClassifierSettings` in `riskSettings.ts`). */
-  aiInjectionCheckEnabled: boolean;
-  /** Spec 0067, A2: Override für den `sftp-server`-Pfad im erhöhten
-   * Dateibrowser; `null` = automatisch erkennen. */
-  sftpServerPath: string | null;
-  /** Spec 0102: Startverzeichnis für Terminal und Dateibrowser (`/…` oder
-   * `~/…`); `null` = Home des Login-Nutzers. Optional nur, damit ältere
-   * Test-Fixtures ohne das Feld gültig bleiben; das Backend sendet es immer. */
-  startDirectory?: string | null;
-}
-
-export interface AiProviderConfigDto {
-  id: string;
-  providerType: ProviderType;
-  displayName: string;
-  baseUrl: string | null;
-  model: string;
-  supportsNativeToolCalling: boolean;
-  isActive: boolean;
-  /** Spec 0025, Abschnitt 3. */
-  extraHeaders: [string, string][];
-  /** Spec 0025, Abschnitt 4. */
-  attestationUrl: string | null;
-  /** Spec 0065, Teil 4: `null` = „Automatisch" (Default). */
-  maxTokensOverride: number | null;
-  /** Issue #162 / Spec 0105: serverseitige Web-Recherche des Providers
-   * (Default an; wirkt nur bei Providern, die sie unterstützen). */
-  webResearchEnabled: boolean;
-}
-
-export interface AiProviderConfigInput {
-  providerType: ProviderType;
-  displayName: string;
-  baseUrl: string | null;
-  model: string;
-  supportsNativeToolCalling: boolean;
-  apiKey: string;
-  /** Spec 0025, Abschnitt 3. */
-  extraHeaders: [string, string][];
-  /** Spec 0025, Abschnitt 4. */
-  attestationUrl: string | null;
-  /** Spec 0065, Teil 4: `null` = „Automatisch" — nur relevant für den
-   * Haupt-Chat dieses Providers, Nebenaufrufe behalten ihre kleinen Werte. */
-  maxTokensOverride: number | null;
-  /** Issue #162 / Spec 0105. */
-  webResearchEnabled: boolean;
-}
+export type {
+  ActionOrigin,
+  ActionUserDecision,
+  AiProviderConfigDto,
+  AiProviderConfigInput,
+  AppInfoDto,
+  AuthMethodInput,
+  AuthMethodKind,
+  AutoExecRuleDto,
+  BuildType,
+  ChatHistoryEntryDto,
+  ChatHistoryExtensionPartDto,
+  ChatHistoryRoleDto,
+  ChatSessionSummaryDto,
+  ConfirmationExplanationDto,
+  ConnectAuthMethodKind,
+  ConnectStep,
+  ConnectStepRecord,
+  ConnectionStatus,
+  CoveringRuleDto,
+  Decision,
+  DeleteGroupResult,
+  DeletePreviewDto,
+  DeleteServerResult,
+  DeleteUnusableServerResult,
+  DocumentFormat,
+  DownloadResultDto,
+  EditSessionDto,
+  ElevationDisableDto,
+  ElevationFailureDto,
+  ElevationFailureKind,
+  ElevationResultDto,
+  ElevationWarningDto,
+  ElevationWarningKind,
+  Entitlements,
+  EvalContextInput,
+  EvaluationTraceDto,
+  ExplainedSuggestionDto,
+  ExtensionMedia,
+  Feature,
+  FeatureLocked,
+  GroupDto,
+  GroupId,
+  HostKeyCheckResult,
+  HostKeyUserDecision,
+  KeepGroupResult,
+  KeyFileFactsDto,
+  KeyFileProblemDto,
+  KeychainStatusDto,
+  KeychainUnavailableReasonDto,
+  LocalFilePreviewDto,
+  McpSessionDto,
+  NoteEditorDto,
+  NoteRevisionDto,
+  PatternDto,
+  PatternSuggestionDto,
+  PatternType,
+  PostIngestPolicy,
+  ProviderId,
+  ProviderType,
+  QuestionOptionDto,
+  RemoteEntryDto,
+  RuleAction,
+  RuleDto,
+  RuleId,
+  RuleInput,
+  RunningOperationDto,
+  Scope,
+  SegmentCoverageDto,
+  SegmentCoverageState,
+  ServerDto,
+  ServerId,
+  ServerInput,
+  SessionSummaryDto,
+  StepStatus,
+  StoredHostKeyDto,
+  SuggestionKind,
+  SuggestionPatternDto,
+  SuggestionVerdictDto,
+  TestConnectionReport,
+  TestConnectionResult,
+  TierId,
+  TraceKind,
+  UnusableReasonDto,
+  UnusableServerDto,
+  VerdictReasonDto,
+  WebActivityDto,
+  WebActivityKindDto,
+  WebSourceDto,
+} from "./generated/ipc";
 
 /** Spec 0105: nur diese Provider-Typen haben serverseitige Web-Werkzeuge —
  * nur für sie zeigt das Formular den Schalter. */
@@ -171,22 +170,6 @@ export type AiAction =
   | { ReadRemoteFile: { path: string } }
   | { WriteRemoteFile: { path: string; content: string } };
 
-/** `code` (Spec 0024, Abschnitt 5): stabiler, sprachunabhängiger Bezeichner
- * der Grund-Art, fürs Mapping auf einen Übersetzungs-Key (s.
- * `errorCodes.ts`) — `reason` bleibt der bestehende (deutsche) Anzeigetext,
- * unverändert als Fallback, falls ein `code` nicht gemappt ist. */
-export type Decision =
-  | "AutoExec"
-  | { Confirm: { reason: string; code: string } }
-  | { Deny: { reason: string; code: string } };
-
-/** Spec 0028, Abschnitt 6/9a: Ursprung eines vorgeschlagenen Kommandos —
- * `mcp` zeigt im Bestätigungsdialog "Angefragt über: <clientName oder
- * generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
- * `clientName` ist der optionale `clientInfo.name` aus dem MCP-Handshake,
- * `null` falls der verbindende Client keinen übermittelt hat. */
-export type ActionOrigin = { kind: "internal" } | { kind: "mcp"; clientName: string | null };
-
 /** Spec 0026, Abschnitt 2 — kein "grün": Abwesenheit eines Badges im UI
  * bedeutet bereits "laut bekannten Mustern unauffällig", kein
  * Sicherheitsversprechen. */
@@ -201,15 +184,6 @@ export interface RiskAssessment {
    * tatsächlich eingeflossen ist. */
   aiReviewed: boolean;
 }
-
-/** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
- * `connection-status-changed` (das Event kennt nur die Übergänge
- * connected/disconnected/reconnecting, Issue #355), nur als `SessionSummaryDto.status`. */
-export type ConnectionStatus =
-  | "connected"
-  | "disconnected"
-  | "reconnecting"
-  | "awaiting_host_key";
 
 /** Issue #611: the persisted chat session a runtime session uses now
  * (`null`: local pseudo-server / no-persist). */
@@ -590,24 +564,6 @@ export interface ChatContextCompactedEvent {
   sessionId: string;
 }
 
-/** Spec 0105: eine Quelle einer Web-Recherche. */
-export interface WebSourceDto {
-  title: string;
-  url: string;
-}
-
-/** Spec 0105: eine serverseitige Web-Recherche des Providers — Suchanfrage
- * (`search`) bzw. URL (`fetch`), Treffer, zitierte Quellen, ggf. ein
- * Fehlercode des Providers (z. B. `max_uses_exceeded`). */
-export interface WebActivityDto {
-  kind: "search" | "fetch";
-  input: string;
-  results: WebSourceDto[];
-  cited: WebSourceDto[];
-  contentTruncated: boolean;
-  errorCode: string | null;
-}
-
 /** Spec 0105 — `chat-web-activity`. */
 export interface ChatWebActivityEvent {
   sessionId: string;
@@ -650,55 +606,7 @@ export interface ChatQueuedMessagesSentEvent {
   sessionId: string;
 }
 
-/** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */
-export type HostKeyUserDecision = { decision: "trust" } | { decision: "reject" };
-
-/** Antwort auf ein `chat-action-proposed` mit `decision: Confirm` (`respond_to_action`). */
-export type ActionUserDecision =
-  | { decision: "approve" }
-  | { decision: "deny" }
-  | { decision: "editThenApprove"; command: string };
-
 // --- Spec 0008: Server-/Gruppen-Verwaltung ------------------------------
-
-export interface GroupDto {
-  id: string;
-  name: string;
-  parentId: string | null;
-  notes: string;
-  /** Spec 0103: moved into "Previous data" by a backup import. */
-  isCopy?: boolean;
-}
-
-/** Spec 0103: result of `keep_group_as_regular_entry` (counts include the group itself). */
-export interface KeepGroupResult {
-  applied: boolean;
-  groups: number;
-  servers: number;
-}
-
-export interface DeleteGroupResult {
-  childGroupsToDelete: GroupDto[];
-  serversToUnassign: ServerDto[];
-  /** Issue #177: nicht nutzbare Server, die ebenfalls ihre Gruppe verlieren. */
-  unusableServersToUnassign: UnusableServerDto[];
-  executed: boolean;
-}
-
-/** Vorschau/Ergebnis von `deleteServer` (Spec 0046, Fund 1) — `server`
- * trägt bereits `authKind`/`hasSudoPassword`, daraus lässt sich ableiten,
- * welche Keychain-Secrets beim Löschen entfernt würden. */
-export interface DeleteServerResult {
-  server: ServerDto;
-  serversLosingJumpHost: ServerDto[];
-  executed: boolean;
-  /** Spec 0071, A17: `CredentialRef`-Strings der Secrets, die beim Löschen
-   * **nicht** aus dem Schlüsselbund entfernt werden konnten. Der Server ist
-   * trotzdem gelöscht — die Einträge sind danach verwaist und müssen von
-   * Hand entfernt werden. Leer im Normalfall und immer leer bei
-   * `executed: false`. Kein Secret, nur der Account-Name im Schlüsselbund. */
-  secretsLeftBehind: string[];
-}
 
 /** Issue #100: warum ein gespeicherter Server nicht nutzbar ist —
  * `unknown_auth_method`: von einer neueren Version gespeichert, diese kennt
@@ -706,145 +614,11 @@ export interface DeleteServerResult {
  * beschädigt. */
 export type UnusableReason = "unknown_auth_method" | "unreadable_auth_method";
 
-/** Issue #100: ein gespeicherter Server, dessen Anmeldeart diese Version
- * nicht lesen kann. Absichtlich kein `ServerDto`: Er lässt sich weder
- * verbinden noch bearbeiten, nur anzeigen und löschen. */
-export interface UnusableServerDto {
-  id: string;
-  name: string;
-  host: string;
-  groupId: string | null;
-  reason: UnusableReason;
-}
-
-/** Issue #100: Vorschau/Ergebnis von `deleteUnusableServer` — wie
- * `DeleteServerResult`. */
-export interface DeleteUnusableServerResult {
-  server: UnusableServerDto;
-  serversLosingJumpHost: ServerDto[];
-  executed: boolean;
-  secretsLeftBehind: string[];
-}
-
-/** Eingabe für `create_server`/`update_server`/`test_connection`. */
-export interface ServerInput {
-  name: string;
-  host: string;
-  port: number;
-  username: string;
-  groupId: string | null;
-  tags: string[];
-  auth: AuthMethodInput;
-  jumpHost: string | null;
-  /** Spec 0018, Abschnitt 4: leer/`null` = unverändert (bei `update`) bzw.
-   * "kein Sudo-Passwort" (bei `create`). Entfernen eines bereits gesetzten
-   * Werts läuft über `clearServerSudoPassword`, nicht über dieses Feld. */
-  sudoPassword: string | null;
-  postIngestPolicy: PostIngestPolicy;
-  aiInjectionCheckEnabled: boolean;
-  /** Spec 0067, A2: leer/`null` = automatisch. */
-  sftpServerPath: string | null;
-  /** Spec 0102: leer/`null`/fehlend = nicht gesetzt. */
-  startDirectory?: string | null;
-}
-
-export type AuthMethodInput =
-  | { kind: "password"; value: string | null }
-  /** Issue #632: ausdrücklich "kein Passwort" (entfernt auch ein gespeichertes);
-   * nie mit "leer = unverändert" (`value: null`) zu verwechseln. */
-  | { kind: "noPassword" }
-  | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
-  | { kind: "agent" }
-  | { kind: "certificate"; certContent: string | null; keyContent: string | null }
-  /** Spec 0076, A-1/B-2 — anders als bei den übrigen Varianten ist `path`
-   * kein Secret und nicht optional (s. `crate::dto::AuthMethodInput::
-   * IdentityFile`-Doc-Kommentar: „leer = unverändert" gilt für
-   * Schlüsselbund-Slots, nicht für dieses Klartextfeld). `passphrase`
-   * verhält sich dagegen wie bei `privateKey` (A-5). */
-  | { kind: "identityFile"; path: string; passphrase: string | null };
-
-export type NoteEditorDto =
-  | { kind: "user" }
-  | { kind: "ai"; provider: string; model: string };
-
-export interface NoteRevisionDto {
-  id: string;
-  content: string;
-  editedBy: NoteEditorDto;
-  createdAt: string;
-}
-
-/** Spec 0008, Abschnitt 7 — s. `crate::dto::TestConnectionResult`-Doc-
- * Kommentar für die beiden Abweichungen von der Spec-Skizze
- * (`NetworkError` als Objekt, `host`/`port`/`rawKey` bei den
- * Host-Key-Varianten). */
-export type TestConnectionResult =
-  | { kind: "success" }
-  | { kind: "authenticationFailed" }
-  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string; keyType: string | null }
-  | {
-      kind: "hostKeyMismatch";
-      host: string;
-      port: number;
-      rawKey: number[];
-      expectedFingerprint: string;
-      actualFingerprint: string;
-      keyType: string | null;
-    }
-  | {
-      kind: "networkError";
-      message: string;
-      /** Spec 0069, Teil A4/E3: additiv, optional — `null`/`undefined`
-       * fällt im Frontend auf `message` zurück. */
-      code?: string | null;
-    }
-  | { kind: "timeout" };
-
-/** Issue #51: ein Schritt eines Verbindungsversuchs — s.
- * `ssh_manager_core::ssh::connect_log`. Nur Anzeige, flüchtig. */
-export type ConnectStep =
-  | { kind: "dnsResolution"; host: string; port: number; addresses: string[] }
-  | { kind: "tcpConnect"; address: string | null; port: number }
-  | { kind: "tunnelOpen"; host: string; port: number }
-  | {
-      kind: "handshake";
-      serverVersion: string | null;
-      kex: string | null;
-      hostKeyAlgorithm: string | null;
-      cipher: string | null;
-      mac: string | null;
-    }
-  | {
-      kind: "hostKeyCheck";
-      keyType: string | null;
-      fingerprint: string | null;
-      result: "known" | "unknown" | "changed" | null;
-    }
-  | {
-      kind: "authentication";
-      method: "password" | "privateKey" | "agent" | "certificate" | "identityFile";
-      remainingMethods: string[];
-      partialSuccess: boolean;
-    }
-  | { kind: "sessionReady" };
-
 export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
   | { state: "skipped" }
   | { state: "failed"; code: string };
-
-export interface ConnectStepRecord {
-  hopIndex: number;
-  /** `user@host:port` */
-  hop: string;
-  step: ConnectStep;
-  status: ConnectStepStatus;
-  durationMs: number | null;
-}
-
-/** Issue #51: `test_connection` liefert das Ergebnis flach plus `steps`. */
-export type TestConnectionReport = TestConnectionResult & { steps?: ConnectStepRecord[] };
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
  * Doc-Kommentar für die Mapping-Entscheidung (`RateLimited`/
@@ -868,113 +642,9 @@ export type TestAiProviderCredentialsResult =
 // Dateianfang. `PatternType` (app-shell-DTO) hat dagegen
 // `#[serde(rename_all = "snake_case")]`, also lowercase-Strings.
 
-export type Scope = "Global" | { Server: string } | { Tag: string };
-
-export type RuleAction = "Allow" | "Confirm" | "Deny";
-
-export type PatternType = "glob" | "regex" | "exact";
-
-export interface RuleDto {
-  id: string;
-  patternType: PatternType;
-  patternValue: string;
-  action: RuleAction;
-  scope: Scope;
-  priority: number;
-  /** Spec 0077, 3.2.3: Fehlertext, wenn sich das Muster dieser Regel nicht
-   * übersetzen lässt — sonst `null`. Eine solche Regel kann bei der
-   * Auswertung nicht greifen, soweit ihr Muster nicht übersetzt; die Liste
-   * markiert sie deshalb sichtbar. Kann bei einer Regel entstehen, die eine
-   * ältere Programmfassung gespeichert hat; neu angelegt werden kann sie
-   * nicht mehr (Schicht 1). */
-  patternError: string | null;
-}
-
-/** Eingabe für `create_rule`/`update_rule`. */
-export interface RuleInput {
-  patternType: PatternType;
-  patternValue: string;
-  action: RuleAction;
-  scope: Scope;
-  priority: number;
-}
-
-/** Read-only-Anzeige eines Hard-Blacklist-Musters (`list_hard_blacklist`). */
-export interface PatternDto {
-  kind: PatternType;
-  value: string;
-}
-
-/** Eingabe für `evaluate_explained` — `serverId: null` simuliert "kein
- * Server ausgewählt" (s. `crate::dto::EvalContextInput`-Doc-Kommentar). */
-export interface EvalContextInput {
-  serverId: string | null;
-  tags: string[];
-}
-
-export interface EvaluationTraceDto {
-  decision: Decision;
-  matchedRule: string | null;
-  matchedHardBlacklistEntry: string | null;
-  subCommandTraces: EvaluationTraceDto[];
-  /** What the trace describes: a pipeline/chain segment, a `$(...)` substitution or embedded code. */
-  kind: "Segment" | "Substitution" | "EmbeddedCode";
-  /** Position within the split command; only for `Segment` traces. */
-  segmentIndex: number | null;
-  /** Rule-independent checks that forced at least Confirm, as reason codes. */
-  checks: string[];
-}
-
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export type SuggestionKind = "exact" | "exactPerSegment" | "pathScoped" | "lastArgOpen" | "subcommand" | "tool";
-
-export interface SuggestionPatternDto {
-  patternType: PatternType;
-  patternValue: string;
-}
-
-/** A suggestion is a set of patterns that are created together; the label is
- * rendered by the frontend from `kind` and `names` (no prose from the backend). */
-export interface PatternSuggestionDto {
-  kind: SuggestionKind;
-  names: string[];
-  patterns: SuggestionPatternDto[];
-}
-
 // --- Issue #596: explanation of a pending confirmation -------------------
-
-export type SegmentCoverageState = "covered" | "needsRule" | "blocked";
-
-export interface SegmentCoverageDto {
-  index: number;
-  text: string;
-  state: SegmentCoverageState;
-  /** Covering Allow rule (only for `covered`). */
-  rule: { patternType: PatternType; patternValue: string } | null;
-  /** Fixed reason codes (`FILTER_*`), translated via `errors.<code>`. */
-  reasons: string[];
-}
-
-export interface VerdictReasonDto {
-  code: string;
-  segmentIndex: number | null;
-}
-
-export interface SuggestionVerdictDto {
-  autoExec: boolean;
-  reasons: VerdictReasonDto[];
-}
-
-export interface ExplainedSuggestionDto extends PatternSuggestionDto {
-  verdict: SuggestionVerdictDto;
-}
-
-export interface ConfirmationExplanationDto {
-  /** Empty for a single segment without a rule-independent reason. */
-  segments: SegmentCoverageDto[];
-  suggestions: ExplainedSuggestionDto[];
-}
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 
@@ -986,10 +656,6 @@ export interface ChatDocumentGeneratedEvent {
   title: string;
   contentMarkdown: string;
 }
-
-/** Spec 0037, Abschnitt 4: Word-Export komplett entfernt (kein Gating) —
- * nur noch Markdown. */
-export type DocumentFormat = "markdown";
 
 // --- Issue #545: KI-Rückfragen mit Antwortoptionen ------------------------
 
@@ -1011,21 +677,6 @@ export interface ChatQuestionAskedEvent {
 
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
-/** Sicht auf eine laufende (oder auf Host-Key-Bestätigung wartende) Session
- * für die Tab-Leiste — Grundlage für `list_sessions()`, dient dem
- * Wiederherstellen offener Tabs bei einem Frontend-Neuladen. */
-export interface SessionSummaryDto {
-  sessionId: string;
-  serverId: string;
-  serverName: string;
-  status: ConnectionStatus;
-  hasPendingAction: boolean;
-  /** Issue #611. */
-  chatSessionId?: string | null;
-  /** Spec 0104: gesetzt, wenn die Sitzung einem MCP-Client gehört. */
-  mcp: McpSessionInfo | null;
-}
-
 /** Spec 0104: Kennzeichnung einer MCP-Sitzung (eigener Tab je Server und
  * MCP-Client). */
 export interface McpSessionInfo {
@@ -1033,146 +684,12 @@ export interface McpSessionInfo {
   clientName: string | null;
 }
 
-/** Spec 0034, Abschnitt 6/8: Eintrag im Sitzungs-Auswahl-Screen. */
-export interface ChatSessionSummaryDto {
-  sessionId: string;
-  title: string | null;
-  startedAt: string;
-  endedAt: string | null;
-  messageCount: number;
-}
-
 /** Spec 0034, Abschnitt 6/8: bereits geladene Historie eines Tabs (leer bei
  * `connect()`, befüllt nach `resume_chat_session()`), s.
  * `get_chat_history`. */
 export type ChatHistoryRole = "user" | "assistant" | "action_result";
 
-export type ChatHistoryEntryDto =
-  | { type: "text"; role: ChatHistoryRole; text: string }
-  | {
-      type: "commandResult";
-      role: ChatHistoryRole;
-      command: string;
-      stdout: string;
-      stderr: string;
-      exitCode: number | null;
-      cancelled: boolean;
-      /** Spec 0043, Fund A — s. `ActionResultPayload`'s `truncated`. */
-      truncated: boolean;
-    }
-  | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string }
-  /** Spec 0105. */
-  | { type: "webActivity"; role: ChatHistoryRole; activity: WebActivityDto }
-  /** Issue #504, Spec 0110 §5: Erweiterungsteile — nur Label und Art, nie Inhalt. */
-  | {
-      type: "extensionParts";
-      role: ChatHistoryRole;
-      items: { label: string; media: "text" | "image" | "pdf" }[];
-    }
-  /** Issue #545: a question the AI asked with answer options. */
-  | {
-      type: "question";
-      role: ChatHistoryRole;
-      questionId: string;
-      question: string;
-      options: QuestionOption[];
-      multiSelect: boolean;
-    };
-
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
-
-export interface RemoteEntryDto {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  /** Bereits formatiert, z. B. "rwxr-xr-x" (s. `crate::dto::RemoteEntryDto`). */
-  permissions: string;
-  /** RFC3339, `null` wenn der Server keine Änderungszeit meldet. */
-  modified: string | null;
-  /** Spec 0054, Teil 2: dieselben Bits wie `permissions`, numerisch
-   * (`0o644`-Stil) statt als `rwxr-xr-x`-String — Eigenschaften-Dialog und
-   * Grundlage für den chmod-Dialog (Teil 3). */
-  permissionsOctal: number;
-  /** `null`, wenn der Server keine numerische uid/gid liefert (selten). */
-  uid: number | null;
-  gid: number | null;
-  /** `null`, sofern der Server keine Namensauflösung liefert (die meisten
-   * SFTPv3-Server nicht — dann bleibt nur `uid`/`gid` numerisch). */
-  owner: string | null;
-  group: string | null;
-}
-
-/** Spec 0054, Teil 3: Vorschau vor dem Löschen eines Ordners. */
-/** Spec 0067, A3: `crate::dto::ElevationFailureKind`. */
-export type ElevationFailureKind =
-  | "unsupported"
-  | "invalidUser"
-  | "invalidPath"
-  | "sftpServerNotFound"
-  | "sftpServerUnsafe"
-  | "passwordRequired"
-  | "notAllowed"
-  | "requireTty"
-  | "sudoMissing"
-  | "checkFailed"
-  | "startFailed";
-
-/** Spec 0067, A3: Ergebnis von `sftp_elevation_enable`. */
-export interface ElevationResultDto {
-  active: boolean;
-  targetUser: string;
-  sftpServerPath: string | null;
-  failure: {
-    kind: ElevationFailureKind;
-    /** Zugeschnittene sudoers-Zeile zum Kopieren, falls eine Regel fehlt. */
-    sudoersLine: string | null;
-    /** Bei `sftpServerUnsafe`: der auffällige Pfad. */
-    detail: string | null;
-  } | null;
-  /** Hinweis bei aktivem Kanal: sftp-server ist nicht sicher geschützt. */
-  warning?: { kind: "sftpServerUnsafe"; path: string } | null;
-  /** Issue #622: elevated operations still running when the target user is
-   * changed without confirmation (then `active` stays true, nothing changed). */
-  runningOperations?: RunningOperationDto[];
-}
-
-/** Issue #622: one running elevated operation, listed in the confirmation
- * dialog before elevated rights end. */
-export interface RunningOperationDto {
-  id: string;
-  kind: "download" | "upload" | "delete" | "chmod" | "chown";
-  path: string;
-  bytesDone: number | null;
-  bytesTotal: number | null;
-  filesDone: number | null;
-  filesTotal: number | null;
-}
-
-/** Issue #622: result of `sftp_elevation_disable`. */
-export interface ElevationDisableDto {
-  disabled: boolean;
-  runningOperations: RunningOperationDto[];
-}
-
-/** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
-export interface DownloadResultDto {
-  localPath: string;
-  isDir: boolean;
-  fileCount: number;
-}
-
-export interface DeletePreviewDto {
-  fileCount: number;
-  dirCount: number;
-}
-
-/** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-Vorschau
- * — `text: null` bei einer zu großen/nicht-Text-Datei. */
-export interface LocalFilePreviewDto {
-  text: string | null;
-  size: number;
-}
 
 /** Issue #128 / Spec 0054, Teil 3: Ordner-Upload. */
 export type FolderSkipReason =
@@ -1208,13 +725,6 @@ export interface FolderUploadSummaryDto {
   skipped: FolderSkippedEntryDto[];
   failed: FolderFailedEntryDto[];
   notAttempted: number;
-}
-
-/** Spec 0054, Teil 4: Ergebnis von `sftpOpenForEditing`. */
-export interface EditSessionDto {
-  localPath: string;
-  /** RFC3339, `null` wenn der Server keine Änderungszeit meldet. */
-  remoteModified: string | null;
 }
 
 /** Issue #658: `delete` / `chmod` are recursive folder operations. */
@@ -1289,21 +799,6 @@ export interface McpServerSettingsDto {
 
 // --- Spec 0052: Versions- & Build-Anzeige ---------------------------------
 
-/** Von `crate::dto::AppInfoDto`. */
-export interface AppInfoDto {
-  /** Aus `tauri.conf.json` (Spec 0048), z. B. `"0.4.1"`. */
-  version: string;
-  /** Kurzer Git-Commit-Hash, z. B. `"a5b3e01"`, oder `"unknown"` ohne Git
-   * zur Build-Zeit. */
-  commitHash: string;
-  /** Das geteilte Anzeigeformat: `"0.4.1 (a5b3e01)"`. */
-  versionDisplay: string;
-  /** `"Community"` oder `"Official"`. */
-  edition: string;
-  /** `"Dev"` (Debug-Build, eigenes Datenverzeichnis) oder `"Release"`. */
-  buildType: "Dev" | "Release";
-}
-
 // --- Spec 0071: Systemschlüsselbund-Zustand -------------------------------
 
 /** Warum der Systemschlüsselbund nicht verfügbar ist — von
@@ -1313,15 +808,6 @@ export type KeychainUnavailableReason =
   | "no_secret_service_provider"
   | "locked"
   | "unknown";
-
-/** Von `crate::dto::KeychainStatusDto` (Spec 0071, A15). Trägt bewusst
- * keinen Fehlertext — die anzeigbaren Texte stehen im
- * Übersetzungskatalog. */
-export interface KeychainStatusDto {
-  available: boolean;
-  /** `null`, wenn `available`. */
-  reason: KeychainUnavailableReason | null;
-}
 
 /** Von `app_logic::data_paths::DataPathEntryDto` (Issue #16): ein
  * wirksamer Datenpfad der laufenden Instanz. Nur der Pfad, nie Inhalt. */
@@ -1337,28 +823,6 @@ export interface DataPathEntryDto {
 }
 
 // --- Spec 0076: Anmeldung mit einer Schlüsseldatei -----------------------
-
-/** Der Grund aus `KeyFileFactsDto.problem` (`crate::dto::
- * KeyFileProblemDto`) — `code` ist ein stabiler Bezeichner (Spec 0024,
- * Abschnitt 5, s. `errorCodes.ts`), `message` der deutsche Fallback-Text,
- * falls `code` einmal nicht bekannt ist. Trägt nie Dateiinhalt (§5.2). */
-export interface KeyFileProblemDto {
-  code: string;
-  message: string;
-}
-
-/** Von `crate::dto::KeyFileFactsDto` (Spec 0076, B-3/C-7) — der
- * Vorab-Befund über eine Schlüsseldatei, ohne je den Schlüssel selbst
- * herauszugeben (§4.2, §5.2). */
-export interface KeyFileFactsDto {
-  exists: boolean;
-  /** Nur Unix; auf Windows immer `false` (A-4). */
-  permissionsTooOpen: boolean;
-  validKey: boolean;
-  encrypted: boolean;
-  /** `null`, wenn die Datei grundsätzlich in Frage kommt. */
-  problem: KeyFileProblemDto | null;
-}
 
 // --- Spec 0075: Import/Export von OpenSSH-`ssh_config` -------------------
 

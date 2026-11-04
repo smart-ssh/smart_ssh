@@ -1,0 +1,102 @@
+{
+  "App.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/AboutSettings.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/AutoExecRulesLine.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/ChatPanel.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/ChatSessionPickerScreen.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/HostKeyDialog.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/MoveToDialog.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/NarrowHeaderNav.tsx": {
+    "count": 5,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/NotesPanel.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/QuestionCard.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/ServerList.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/SessionTabBar.tsx": {
+    "count": 3,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/SessionView.tsx": {
+    "count": 3,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/SettingsScreen.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/TerminalKeyRow.tsx": {
+    "count": 4,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/VoiceInputControl.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/chat/ActionCard.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/chat/AssistantMessageView.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/chat/Composer.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/fileBrowser/ElevationBanner.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/fileBrowser/ElevationControls.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/fileBrowser/FileTable.tsx": {
+    "count": 3,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/fileBrowser/FileToolbar.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/fileBrowser/NarrowEntryList.tsx": {
+    "count": 2,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  },
+  "components/serverForm/LocalServerForm.tsx": {
+    "count": 1,
+    "reason": "baseline when the ratchet was introduced (#914); migrate to Button/MenuItem"
+  }
+}

@@ -8,6 +8,7 @@ use serde::Serialize;
 /// mit (s. `app_shell::commands::walk_dirs_and_count_files`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct DeletePreviewDto {
     pub file_count: u64,
     pub dir_count: u64,
@@ -17,6 +18,7 @@ pub struct DeletePreviewDto {
 /// wohin (für „Im Finder zeigen") und wie viele Dateien (Ordner-Download).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct DownloadResultDto {
     /// Lokaler Pfad der heruntergeladenen Datei bzw. des Ordners.
     pub local_path: String,
@@ -30,6 +32,7 @@ pub struct DownloadResultDto {
 /// Fall gesetzt (Grundlage für den Größenvergleich-Hinweis in diesem Fall).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct LocalFilePreviewDto {
     pub text: Option<String>,
     pub size: u64,
@@ -41,6 +44,7 @@ pub struct LocalFilePreviewDto {
 /// vor dem Hochladen.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct EditSessionDto {
     pub local_path: String,
     pub remote_modified: Option<String>,
