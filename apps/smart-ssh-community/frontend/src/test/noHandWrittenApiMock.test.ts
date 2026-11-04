@@ -7,13 +7,28 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(__dirname, "..");
 
-// `vi.mock("<relative>/api", <factory>)` whose factory is not `async`, i.e.
-// `() => ({ … })`, `() => { … }` or `function () { … }`. An async factory
-// that calls `createApiMock` (or spreads `importOriginal`) is allowed.
-const HAND_WRITTEN = /vi\.mock\(\s*["'](?:\.\.?\/)+api["']\s*,\s*(?:\(\s*\)\s*=>|function\b)/;
+// Every `vi.mock("<relative>/api", <factory>)` must build its module with
+// `createApiMock` — sync or async, with or without `importActual`. The factory
+// is read up to the parenthesis that closes the `vi.mock(` call.
+const API_MOCK_START = /vi\.mock\(\s*["'](?:\.\.?\/)+api["']/g;
+
+function factoryText(source: string, from: number): string {
+  let depth = 1;
+  for (let i = from; i < source.length; i++) {
+    const c = source[i];
+    if (c === "(") depth++;
+    else if (c === ")" && --depth === 0) return source.slice(from, i);
+  }
+  return source.slice(from);
+}
 
 export function findHandWrittenApiMock(source: string): boolean {
-  return HAND_WRITTEN.test(source);
+  for (const m of source.matchAll(API_MOCK_START)) {
+    if (!factoryText(source, m.index + m[0].length).includes("createApiMock")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function testFiles(dir: string): string[] {
@@ -33,7 +48,21 @@ describe("no hand-written api mock", () => {
       "}));",
     ].join("\n");
     expect(findHandWrittenApiMock(fixture)).toBe(true);
-    expect(findHandWrittenApiMock(['vi.mock("./api",', "() => ({ a: vi.fn() }));"].join(" "))).toBe(true);
+    expect(
+      findHandWrittenApiMock(
+        ['vi.mock("./api",', "() => ({ a: vi.fn() }));"].join(" "),
+      ),
+    ).toBe(true);
+  });
+
+  it("fails on an async hand-written factory", () => {
+    const fixture = [
+      'vi.mock("./api", async () => {',
+      '  const actual = await vi.importActual<typeof import("./api")>("./api");',
+      "  return { commandErrorCode: actual.commandErrorCode, connect: vi.fn() };",
+      "});",
+    ].join("\n");
+    expect(findHandWrittenApiMock(fixture)).toBe(true);
   });
 
   it("accepts the shared createApiMock factory", () => {
