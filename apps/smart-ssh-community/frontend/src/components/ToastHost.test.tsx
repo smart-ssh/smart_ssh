@@ -22,6 +22,12 @@ describe("ToastHost (Spec 0067, Teil B)", () => {
     vi.useRealTimers();
   });
 
+  it("shows a toast raised before the host mounted (issue #905)", () => {
+    showToast({ kind: "error", message: "early toast" });
+    renderHost();
+    expect(screen.getByText(/early toast/)).toBeInTheDocument();
+  });
+
   it("hides a success toast automatically", () => {
     renderHost();
     act(() => showToast({ kind: "success", message: "„a.txt“ gelöscht" }));
