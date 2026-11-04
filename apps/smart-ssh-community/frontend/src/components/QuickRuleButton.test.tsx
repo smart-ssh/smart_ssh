@@ -8,10 +8,11 @@ import type { ExplainedSuggestionDto } from "../types";
 import { testI18n } from "../testI18n";
 import { QuickRuleButton } from "./ChatPanel";
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
-  explainConfirmation: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    explainConfirmation: vi.fn(),
+  }),
+);
 
 const AUTO = { autoExec: true, reasons: [] };
 const SUGGESTIONS: ExplainedSuggestionDto[] = [

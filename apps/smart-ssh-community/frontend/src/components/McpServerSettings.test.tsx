@@ -5,15 +5,16 @@ import { getMcpServerSettings, listServers } from "../api";
 import { testI18n } from "../testI18n";
 import { McpServerSettings } from "./McpServerSettings";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (e: unknown) => String(e),
-  getMcpServerSettings: vi.fn(),
-  listServers: vi.fn(),
-  regenerateMcpServerToken: vi.fn(),
-  setMcpServerAllowedServers: vi.fn(),
-  setMcpServerConfirmTimeoutSecs: vi.fn(),
-  setMcpServerEnabled: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getMcpServerSettings: vi.fn(),
+    listServers: vi.fn(),
+    regenerateMcpServerToken: vi.fn(),
+    setMcpServerAllowedServers: vi.fn(),
+    setMcpServerConfirmTimeoutSecs: vi.fn(),
+    setMcpServerEnabled: vi.fn(),
+  }),
+);
 
 const settings = {
   enabled: true,

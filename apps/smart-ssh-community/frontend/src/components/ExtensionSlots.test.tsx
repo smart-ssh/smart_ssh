@@ -11,31 +11,31 @@ import { GroupForm } from "./GroupForm";
 import { ManagementView } from "./ManagementView";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  deleteGroup: vi.fn(),
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listGroups: vi.fn(),
-  listServers: vi.fn(),
-  listUnusableServers: vi.fn(() => Promise.resolve([])),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    deleteGroup: vi.fn(),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listGroups: vi.fn(),
+    listServers: vi.fn(),
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 vi.mock("../events", () => ({ onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})) }));
 vi.mock("../fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
