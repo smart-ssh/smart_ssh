@@ -192,11 +192,16 @@ impl SqliteChatSessionStore {
         }
         let session_id_str = session_id.to_string();
 
+        // Issue #903: read-max and insert in one transaction. `BEGIN
+        // IMMEDIATE` takes the write lock up front, so no other writer can
+        // slip between the SELECT and the INSERT (and the UNIQUE index from
+        // migration 0027 backs it up).
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let next_sequence: i64 = sqlx::query(
             "SELECT COALESCE(MAX(sequence), -1) + 1 AS next FROM chat_messages WHERE session_id = ?",
         )
         .bind(&session_id_str)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         ?
         .get("next");
@@ -219,8 +224,9 @@ impl SqliteChatSessionStore {
         .bind(&content_json)
         .bind(next_sequence)
         .bind(Utc::now().to_rfc3339())
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(message_id)
     }
@@ -1423,7 +1429,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=26).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=27).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.
