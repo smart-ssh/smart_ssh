@@ -150,6 +150,16 @@ struct Fixture {
     servers: Vec<ServerId>,
 }
 
+impl Fixture {
+    /// Closes the pool and waits for it. Without this the pool is closed in
+    /// the background at process exit (see `persistence_sqlite::test_exit_guard`,
+    /// issue #1145), which races SQLCipher's exit handler and can turn a
+    /// green test into a crashed test process.
+    async fn close(self) {
+        self.store.close().await;
+    }
+}
+
 /// Zwei Server mit `PrivateKey`-Anmeldung, alle Slots belegt bis auf einen
 /// (der fehlende wird je Test gewählt) — der Aufbau aus T11.
 ///
@@ -451,6 +461,7 @@ async fn test_t11_every_secret_moves_and_every_entry_is_deleted() {
         deletes_after_first,
         "im Zustand *erledigt* darf kein weiteres delete laufen"
     );
+    fixture.close().await;
 }
 
 /// T11, Variante: ein `get` scheitert → **nichts** gelöscht, Zustand bleibt
@@ -491,6 +502,7 @@ async fn test_t11_a_failing_read_deletes_nothing_and_keeps_the_state_open() {
         .await
         .expect("nach „Erneut versuchen“ muss der Umzug gelingen");
     assert_eq!(keyring.count(), 0);
+    fixture.close().await;
 }
 
 /// T11, Variante: `delete` scheitert → die App **startet**, und der nächste
@@ -528,6 +540,7 @@ async fn test_t11_a_failing_delete_still_starts_and_is_retried() {
     assert_eq!(state, STATE_DONE);
     assert!(pending.is_empty());
     assert_eq!(keyring.count(), 0);
+    fixture.close().await;
 }
 
 /// T11, Variante: Ein Server wird gelöscht, **während** das Löschen
@@ -579,6 +592,7 @@ async fn test_t11_entries_of_a_server_deleted_while_pending_are_still_removed() 
     assert_eq!(keyring.count(), 0);
     let (state, _) = fixture.store.secret_migration_state().await.unwrap();
     assert_eq!(state, STATE_DONE);
+    fixture.close().await;
 }
 
 /// T11, Variante „Schlüsselbund-Modus mit scheiterndem `get`": **keine**
@@ -611,6 +625,7 @@ async fn test_t11_the_keychain_mode_offers_no_skip_option() {
         state, STATE_SKIPPED,
         "der Zustand *übersprungen* darf im Schlüsselbund-Modus nicht entstehen"
     );
+    fixture.close().await;
 }
 
 /// T11, Variante *übersprungen* (A11.1): Im Passwort-Modus bietet der
@@ -672,6 +687,7 @@ async fn test_t11_skipped_never_deletes_anything_even_once_the_keychain_works() 
     assert_eq!(keyring.count(), before);
     let (state, _) = fixture.store.secret_migration_state().await.unwrap();
     assert_eq!(state, STATE_SKIPPED, "der Zustand bleibt *übersprungen*");
+    fixture.close().await;
 }
 
 /// A11.1, Gegenprobe zur Schranke: Die Wahl „Ohne Übernahme fortfahren"
@@ -698,6 +714,7 @@ async fn test_a11_1_skip_is_refused_when_it_was_not_offered() {
     let (state, _) = fixture.store.secret_migration_state().await.unwrap();
     assert_eq!(state, STATE_OPEN, "der Zustand bleibt *offen*");
     assert_eq!(keyring.deletes(), 0);
+    fixture.close().await;
 }
 
 /// **Der Umzug darf K nie anfassen** (spec-reviewer Runde 1, Spec 0101
@@ -749,6 +766,7 @@ async fn test_a10_a_reference_pointing_at_the_root_key_is_never_migrated() {
         keyring.has(ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF),
         "K muss im Schlüsselbund liegen bleiben — sonst ist die Datenbank verloren"
     );
+    fixture.close().await;
 }
 
 /// **Auch die festgehaltene Löschliste wird geprüft, nicht nur das
@@ -805,6 +823,7 @@ async fn test_a10_a_tampered_pending_list_never_deletes_the_root_key() {
         (STATE_DONE, &[] as &[String]),
         "die übersprungene Referenz darf die Liste nicht dauerhaft offen halten"
     );
+    fixture.close().await;
 }
 
 /// A10: Eine frische Installation hat nichts umzuziehen und fasst den
@@ -1139,4 +1158,5 @@ async fn test_issue_100_an_unusable_server_does_not_stop_the_migration_or_lose_s
     );
     let (state, _) = fixture.store.secret_migration_state().await.unwrap();
     assert_eq!(state, STATE_DONE);
+    fixture.close().await;
 }
