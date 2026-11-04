@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ref: ["", "9dd19978"]
+        ref: ["", "9dd199781ba293a5eb7a1a43cbb7c8ec0f4f594c"]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
