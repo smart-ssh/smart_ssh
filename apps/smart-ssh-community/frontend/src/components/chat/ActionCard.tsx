@@ -352,7 +352,7 @@ export function ConfirmActionForm({
         <button
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-ring"
         >
           {t("confirmDialog.execute")}
         </button>

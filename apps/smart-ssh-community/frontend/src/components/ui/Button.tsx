@@ -12,7 +12,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BASE =
   "inline-flex items-center justify-center gap-1.5 rounded font-semibold transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus " +
+  "focus-ring-flush " +
   "focus-visible:ring-offset-1 focus-visible:ring-offset-surface " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 

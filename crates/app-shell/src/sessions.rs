@@ -485,6 +485,149 @@ mod tests {
         );
     }
 
+    /// Transport whose commands never end on their own. With `split` it
+    /// supports split start (issue #328) and a started command does not
+    /// hold the transport; without, `execute_streaming` holds it until
+    /// cancelled.
+    struct HangingTransport {
+        split: bool,
+        started: Arc<AtomicBool>,
+        cancelled: Arc<AtomicBool>,
+    }
+
+    struct HangingExec;
+
+    #[async_trait]
+    impl ssh_manager_core::ssh::RunningExec for HangingExec {
+        async fn run(
+            self: Box<Self>,
+            _cancel: tokio::sync::oneshot::Receiver<()>,
+            _sink: ssh_manager_core::ssh::ExecOutputSink,
+        ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+            std::future::pending().await
+        }
+    }
+
+    #[async_trait]
+    impl SshTransport for HangingTransport {
+        async fn execute(&mut self, _c: &str) -> Result<CommandOutput, SshError> {
+            self.started.store(true, Ordering::SeqCst);
+            std::future::pending().await
+        }
+        async fn execute_streaming(
+            &mut self,
+            _c: &str,
+            _stdin: Option<&[u8]>,
+            cancel: tokio::sync::oneshot::Receiver<()>,
+            _sink: ssh_manager_core::ssh::ExecOutputSink,
+        ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+            self.started.store(true, Ordering::SeqCst);
+            let _ = cancel.await;
+            self.cancelled.store(true, Ordering::SeqCst);
+            Ok(ssh_manager_core::ssh::ExecOutcome {
+                output: CommandOutput {
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                    exit_code: None,
+                    truncated: false,
+                },
+                cancelled: true,
+            })
+        }
+        async fn start_exec(
+            &mut self,
+            _c: &str,
+            _stdin: Option<&[u8]>,
+        ) -> Result<Option<Box<dyn ssh_manager_core::ssh::RunningExec>>, SshError> {
+            if self.split {
+                self.started.store(true, Ordering::SeqCst);
+                Ok(Some(Box::new(HangingExec)))
+            } else {
+                Ok(None)
+            }
+        }
+        async fn open_shell(&mut self, _s: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
+            unreachable!()
+        }
+        async fn open_sftp_via_exec(&mut self, _c: &str) -> Result<Box<dyn SftpSession>, SshError> {
+            unreachable!()
+        }
+        async fn disconnect(&mut self) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    /// Issue #923: a disconnect while an AI command runs on a transport
+    /// WITHOUT split start (the command holds the transport lock) returns
+    /// within 2 s and cancels the command.
+    #[tokio::test]
+    async fn test_close_during_command_on_transport_without_split_start_is_prompt() {
+        let started = Arc::new(AtomicBool::new(false));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let rig = Rig::new(Box::new(HangingTransport {
+            split: false,
+            started: started.clone(),
+            cancelled: cancelled.clone(),
+        }));
+        let action_id = uuid::Uuid::new_v4();
+        let cancel_rx = rig.cancellations.register(action_id);
+        let session = rig.f.session.clone();
+        let command = tokio::spawn(async move {
+            // Same shape as the AI command path: slot, then transport.
+            let _slot = session.transport.begin_command(action_id).await;
+            let (sink, _chunks) = ssh_manager_core::ssh::exec_output_channel();
+            let mut transport = session.transport.lock().await;
+            transport
+                .execute_streaming("sleep 1000", None, cancel_rx, sink)
+                .await
+        });
+        while !started.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+        let begun = std::time::Instant::now();
+        let closed =
+            tokio::time::timeout(Duration::from_secs(2), rig.ctx().close(rig.f.session_id))
+                .await
+                .expect("close must return within 2 s");
+        assert!(closed.is_some());
+        assert!(begun.elapsed() < Duration::from_secs(2));
+        let outcome = command.await.unwrap().unwrap();
+        assert!(outcome.cancelled, "the command must be cancelled");
+        assert!(cancelled.load(Ordering::SeqCst));
+    }
+
+    /// Issue #923: a disconnect during the elevation probe returns within
+    /// 2 s — the probe holds the transport lock only until its command has
+    /// started (split start), so the disconnect step does not wait for it.
+    #[tokio::test]
+    async fn test_close_during_elevation_probe_is_prompt() {
+        let started = Arc::new(AtomicBool::new(false));
+        let rig = Rig::new(Box::new(HangingTransport {
+            split: true,
+            started: started.clone(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }));
+        let session = rig.f.session.clone();
+        let probe =
+            tokio::spawn(
+                async move { crate::elevated_sftp::run_probe(&session, "sudo -n -l").await },
+            );
+        while !started.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+        let begun = std::time::Instant::now();
+        let closed = rig.ctx().close(rig.f.session_id).await;
+        assert!(closed.is_some());
+        // The disconnect step alone would take the full 2 s step timeout if
+        // the probe held the transport lock.
+        assert!(
+            begun.elapsed() < Duration::from_millis(1500),
+            "close took {:?}",
+            begun.elapsed()
+        );
+        probe.abort();
+    }
+
     // ---- Guard (Spec 0084, A2.1): nobody but the close path removes sessions.
 
     /// Workspace-relative paths allowed to call `SessionManager::remove`:

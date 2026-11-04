@@ -2,7 +2,7 @@
 // menu (issue #579), so label, state indicator and badges stay identical.
 import type { TFunction } from "i18next";
 import { Spinner } from "./ui";
-import { numberedServerName, sessionTabLabel, type SessionTab } from "../useSessionTabs";
+import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
   connected: "bg-success-strong",

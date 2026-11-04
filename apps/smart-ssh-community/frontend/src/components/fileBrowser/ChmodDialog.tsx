@@ -123,7 +123,7 @@ export function ChmodDialog({
                     checked={(mode & bit) !== 0}
                     onChange={() => toggleBit(bit)}
                     aria-label={`${t(`fileBrowser.chmod.${row.key}`)}: ${t(`fileBrowser.chmod.${key}`)}`}
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                    className="focus-ring-flush"
                   />
                 </td>
               ))}
@@ -147,7 +147,7 @@ export function ChmodDialog({
                 type="checkbox"
                 checked={(mode & bit) !== 0}
                 onChange={() => toggleBit(bit)}
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                className="focus-ring-flush"
               />
               {t(`fileBrowser.chmod.${key}`)}
             </label>
@@ -175,7 +175,7 @@ export function ChmodDialog({
             type="checkbox"
             checked={recursive}
             onChange={(e) => setRecursive(e.target.checked)}
-            className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+            className="mt-1 focus-ring-flush"
           />
           <span>
             <strong>{t("fileBrowser.chmod.recursive")}</strong>{" "}

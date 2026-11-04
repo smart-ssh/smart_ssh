@@ -17,7 +17,7 @@ vi.mock("./theme", () => ({
   initTheme: vi.fn(),
   applyStoredTheme: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("./titlebarLayout", () => ({ detectFallbackPlatform: () => "android" }));
+vi.mock("./platform", () => ({ detectFallbackPlatform: () => "android" }));
 vi.mock("./App.tsx", () => ({ default: () => <div>THE-APP</div> }));
 vi.mock("./components/AppRoot.tsx", () => ({
   AppRoot: ({ children }: { children: ReactNode }) => <>{children}</>,

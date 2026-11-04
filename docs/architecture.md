@@ -276,3 +276,33 @@ cannot use the supervisor; their remaining sites sit on the allowlist in
 `crates/app-logic/tests/no_untracked_spawns.rs`, which fails on any new direct
 `tokio::spawn` / `std::thread::spawn` / `spawn_blocking` in production code and
 may only shrink.
+
+## Lock hierarchy of a session (issue #923)
+
+The async locks of one session have a fixed order. A level may be taken while
+holding a lower number, never the reverse. `app_logic::session::SessionLocks`
+(`Session::locks()`) is the only way to take more than one of them and has no
+method for transport-then-SFTP (a `compile_fail` doctest proves it).
+
+| Level | Lock | Protects |
+|---|---|---|
+| 1 | Elevated-channel slot (`ElevatedSftpRegistry`, `app-shell`) | the elevated SFTP channel of the session |
+| 2 | Normal SFTP channel (`SessionLocks::sftp`) | the one lazily opened SFTP session |
+| 3 | Transport (`SessionLocks::transport`) | the SSH connection; `begin_command`'s slot serialises AI commands and is taken before level 3 |
+
+The other async locks (`context`, `summary`, chat state, …) are leaves: never
+take level 2 or 3 while holding them, and do not take them while holding level
+2 (report errors after the SFTP lock is gone).
+
+Rules:
+
+- No `std::sync` guard is held across `.await` (`clippy::await_holding_lock`
+  is `deny` in the workspace lints).
+- Level 1 is never held together with level 3. Revoking an elevated channel
+  happens outside the transport lock, because `disconnect` releases the channel
+  lock first and then takes the transport.
+- A long command must not keep level 3: use `start_exec` (issue #328) and drop
+  the guard while it runs. Only transports without split start keep it for the
+  whole command; a disconnect cancels the command first and waits at most 2 s
+  per step. The elevation probe works the same way.
+- Single-lock sites may use `session.transport.lock()` / `lock_sftp()` directly.

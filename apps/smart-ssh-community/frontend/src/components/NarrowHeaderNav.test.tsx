@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { setNarrow, setWide } from "../test/matchMedia";
 import { testI18n } from "../testI18n";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { NarrowHeaderNav } from "./NarrowHeaderNav";
 
 const base: Omit<SessionTab, "sessionId" | "serverId" | "serverName" | "phase"> = {
