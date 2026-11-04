@@ -34,6 +34,8 @@ mod prompt_history_store;
 pub mod runtime_bridge;
 mod server_columns;
 mod store;
+#[cfg(any(test, feature = "test-support"))]
+mod test_exit_guard;
 /// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
 /// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
 /// `test-support`, wie `SqliteProfileStore::connect_plaintext`.
