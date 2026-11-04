@@ -22,20 +22,85 @@ macro_rules! decls {
 }
 
 fn generate() -> String {
+    use crate::auto_reconnect::{AutoReconnectChangedPayload, AutoReconnectPhase};
+    use crate::confirmation_settled::{
+        ActionConfirmationSettledPayload, ConfirmationSettledReason,
+    };
     use crate::dto::*;
+    use crate::events::*;
     use crate::status::ConnectionStatus;
     use crate::version::BuildType;
     use ssh_manager_core::ai::{ExtensionMedia, ProviderId, ProviderType};
+    use ssh_manager_core::data_change::DataKind;
     use ssh_manager_core::entitlements::{Entitlements, Feature, FeatureLocked, TierId};
     use ssh_manager_core::filter::{Decision, RuleAction, RuleId, Scope, TraceKind};
+    use ssh_manager_core::profiles::{AiAction, AskUserOption, NoteTargetSelector};
     use ssh_manager_core::profiles::{GroupId, PostIngestPolicy};
+    use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
     use ssh_manager_core::shared::ServerId;
+    use ssh_manager_core::ssh::connect_log::StepDetail;
     use ssh_manager_core::ssh::connect_log::{
         AuthMethodKind as ConnectAuthMethodKind, ConnectStep, ConnectStepRecord,
         HostKeyCheckResult, StepStatus,
     };
+    use ssh_manager_core::ssh::ConnectStepSnapshot;
     let decls = decls![
+        ActionConfirmationSettledPayload,
         ActionOrigin,
+        AiAction,
+        AskUserOption,
+        ConnectStepSnapshot,
+        DataKind,
+        NoteTargetSelector,
+        RiskAssessment,
+        RiskLevel,
+        StepDetail,
+        AutoReconnectChangedPayload,
+        AutoReconnectPhase,
+        ConfirmationSettledReason,
+        DataChangedPayload,
+        ConnectionStatusChangedPayload,
+        ChatSessionChangedPayload,
+        HostKeyKind,
+        HostKeyVerificationNeededPayload,
+        HostKeyPromptEndReason,
+        HostKeyVerificationEndedPayload,
+        ConnectProgressPayload,
+        TerminalOutputPayload,
+        ChatTextDeltaPayload,
+        ChatAutoContinuationStartedPayload,
+        AiBudgetWaitingPayload,
+        ChatActionProposedPayload,
+        RiskAssessmentUpdatedPayload,
+        ActionDecisionEscalatedPayload,
+        NoteUpdateSuggestedPayload,
+        NoteUpdateExpiredPayload,
+        NoteShrinkSuggestedPayload,
+        NoteShrinkFailedPayload,
+        NoteShrinkSucceededPayload,
+        ChatDocumentGeneratedPayload,
+        ChatQuestionAskedPayload,
+        ActionResultPayload,
+        ChatActionResultPayload,
+        ChatActionOutputPayload,
+        ChatActionWaitingInputPayload,
+        SessionOnlyPayload,
+        ChatErrorPayload,
+        ChatErrorDetails,
+        ChatAiRequestStartedPayload,
+        ChatAiRetryingPayload,
+        ChatWebActivityPayload,
+        InjectionCheckState,
+        ChatInjectionCheckPayload,
+        ChatAutoContinuationLimitReachedPayload,
+        SftpTransferKind,
+        SftpTransferStartedPayload,
+        SftpTransferFinishedPayload,
+        SftpEntriesProgress,
+        SftpTransferProgressPayload,
+        SftpFolderProgress,
+        McpActionTabRequestedPayload,
+        ChatContextUsagePayload,
         ActionUserDecision,
         AiProviderConfigDto,
         AiProviderConfigInput,
@@ -130,7 +195,103 @@ fn generate() -> String {
     let body = docs
         .replace_all(&decls.join("\n\n"), "")
         .replace(", \n", ", ");
-    format!("{HEADER}{body}\n")
+    format!("{HEADER}{body}\n{}\n", event_payloads())
+}
+
+/// `EventPayloads`: event name -> payload type, for every event whose payload
+/// struct lives in `app-logic` (Issue #920). Events emitted by `app-shell`
+/// directly are listed by hand in the frontend (`eventPayloads.ts`).
+fn event_payloads() -> String {
+    use crate::event_names as names;
+    let pairs: &[(&str, &str)] = &[
+        (names::DATA_CHANGED, "DataChangedPayload"),
+        (
+            names::CONNECTION_STATUS_CHANGED,
+            "ConnectionStatusChangedPayload",
+        ),
+        (names::CHAT_SESSION_CHANGED, "ChatSessionChangedPayload"),
+        (
+            names::HOST_KEY_VERIFICATION_NEEDED,
+            "HostKeyVerificationNeededPayload",
+        ),
+        (
+            names::HOST_KEY_VERIFICATION_ENDED,
+            "HostKeyVerificationEndedPayload",
+        ),
+        (names::CONNECT_PROGRESS, "ConnectProgressPayload"),
+        (names::TERMINAL_OUTPUT, "TerminalOutputPayload"),
+        (names::CHAT_TEXT_DELTA, "ChatTextDeltaPayload"),
+        (
+            names::CHAT_AUTO_CONTINUATION_STARTED,
+            "ChatAutoContinuationStartedPayload",
+        ),
+        (names::AI_BUDGET_WAITING, "AiBudgetWaitingPayload"),
+        (
+            names::RISK_ASSESSMENT_UPDATED,
+            "RiskAssessmentUpdatedPayload",
+        ),
+        (
+            names::ACTION_DECISION_ESCALATED,
+            "ActionDecisionEscalatedPayload",
+        ),
+        (names::NOTE_UPDATE_SUGGESTED, "NoteUpdateSuggestedPayload"),
+        (names::NOTE_UPDATE_EXPIRED, "NoteUpdateExpiredPayload"),
+        (names::NOTE_SHRINK_SUGGESTED, "NoteShrinkSuggestedPayload"),
+        (names::NOTE_SHRINK_FAILED, "NoteShrinkFailedPayload"),
+        (names::NOTE_SHRINK_SUCCEEDED, "NoteShrinkSucceededPayload"),
+        (
+            names::CHAT_DOCUMENT_GENERATED,
+            "ChatDocumentGeneratedPayload",
+        ),
+        (names::CHAT_QUESTION_ASKED, "ChatQuestionAskedPayload"),
+        (names::CHAT_ACTION_RESULT, "ChatActionResultPayload"),
+        (names::CHAT_ACTION_OUTPUT, "ChatActionOutputPayload"),
+        (
+            names::CHAT_ACTION_WAITING_INPUT,
+            "ChatActionWaitingInputPayload",
+        ),
+        (names::CHAT_ERROR, "ChatErrorPayload"),
+        (names::CHAT_RESPONSE_TRUNCATED, "SessionOnlyPayload"),
+        (
+            names::CHAT_AI_REQUEST_STARTED,
+            "ChatAiRequestStartedPayload",
+        ),
+        (names::CHAT_AI_RETRYING, "ChatAiRetryingPayload"),
+        (names::CHAT_WEB_ACTIVITY, "ChatWebActivityPayload"),
+        (names::CHAT_INJECTION_CHECK, "ChatInjectionCheckPayload"),
+        (names::CHAT_WEB_RESEARCH_UNAVAILABLE, "SessionOnlyPayload"),
+        (names::CHAT_RESPONSE_EMPTY, "SessionOnlyPayload"),
+        (names::CHAT_RESPONSE_REFUSED, "SessionOnlyPayload"),
+        (names::CHAT_RESPONSE_CANCELLED, "SessionOnlyPayload"),
+        (names::CHAT_QUEUED_MESSAGES_SENT, "SessionOnlyPayload"),
+        (
+            names::CHAT_AUTO_CONTINUATION_LIMIT_REACHED,
+            "ChatAutoContinuationLimitReachedPayload",
+        ),
+        (names::SFTP_TRANSFER_STARTED, "SftpTransferStartedPayload"),
+        (names::SFTP_TRANSFER_FINISHED, "SftpTransferFinishedPayload"),
+        (names::SFTP_TRANSFER_PROGRESS, "SftpTransferProgressPayload"),
+        (
+            names::MCP_ACTION_TAB_REQUESTED,
+            "McpActionTabRequestedPayload",
+        ),
+        (names::CHAT_CONTEXT_USAGE, "ChatContextUsagePayload"),
+        (names::CHAT_CONTEXT_COMPACTED, "SessionOnlyPayload"),
+        (names::CHAT_ACTION_PROPOSED, "ChatActionProposedPayload"),
+        (names::AUTO_RECONNECT_CHANGED, "AutoReconnectChangedPayload"),
+        (
+            names::ACTION_CONFIRMATION_SETTLED,
+            "ActionConfirmationSettledPayload",
+        ),
+        (names::ENTITLEMENTS_CHANGED, "Entitlements"),
+    ];
+    let mut pairs = pairs.to_vec();
+    pairs.sort();
+    let lines: Vec<String> = pairs
+        .iter()
+        .map(|(name, ty)| format!("  \"{name}\": {ty},"))
+        .collect();
+    format!("export type EventPayloads = {{\n{}\n}};", lines.join("\n"))
 }
 
 fn target() -> PathBuf {

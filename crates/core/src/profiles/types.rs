@@ -240,6 +240,7 @@ pub enum NoteTarget {
 /// **selbst** aus dem Session-Kontext auf (nie eine von der KI gelieferte
 /// ID, s. `app-shell::orchestration::resolve_note_target`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum NoteTargetSelector {
     CurrentServer,
     CurrentServerGroup,
@@ -264,6 +265,7 @@ pub enum NoteTargetSelector {
 /// (reguläres Shell-Kommando durch dieselbe Filter-Engine samt
 /// Hard-Blacklist) der einzige Weg.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AiAction {
     SuggestCommand {
         command: String,
@@ -301,6 +303,7 @@ pub enum AiAction {
 
 /// One answer option of an [`AiAction::AskUser`] question.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AskUserOption {
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

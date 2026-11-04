@@ -434,6 +434,7 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
       decision: "AutoExec",
       previousNoteContent: null,
       usesStoredSudoPassword: false,
+      autoExecRules: [],
       previousFileContent: null,
       previousFileSize: null,
       targetName: null,
@@ -565,6 +566,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       deltaHandler!({ sessionId: "session-1", delta: "Antwort vorher" });
       webHandler!({
         sessionId: "session-1",
+        activityId: "web-1",
         activity: {
           kind: "search",
           input: "openssh 10 changelog",
@@ -587,6 +589,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       // Eine Recherche für eine andere Sitzung erscheint nicht.
       webHandler!({
         sessionId: "other-session",
+        activityId: "web-2",
         activity: {
           kind: "search",
           input: "fremde Suche",
@@ -665,6 +668,7 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

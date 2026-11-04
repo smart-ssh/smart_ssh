@@ -5,13 +5,17 @@
 //   2. Frontend — `export const EVENT = { X: "…", … } as const` in
 //                 `apps/smart-ssh-community/frontend/src/eventNames.ts`: the
 //                 events the core UI listens to.
-//   3. Listeners — `listen(` / `once(` / `payloadListener(` in non-test
+//   3. Listeners — `listen(` / `once(` / `listenTyped(` / `typedListener(` in non-test
 //                 frontend files must take a constant, not a string literal.
 //
 // Fails when (a) a frontend constant has no Rust constant of the same name and
 // value, (b) a listener uses a string literal, (c) a Rust constant is missing
 // from the frontend list and not in NOT_CONSUMED_BY_CORE_UI (below).
-// Payload types are not checked. Text based, no dependencies, like
+//   4. Payloads — every frontend constant has a payload entry (`"name": Type`) in
+//                 `src/generated/ipc.ts` (`EventPayloads`, from the Rust
+//                 payload structs) or in `src/eventPayloads.ts` (events that
+//                 `app-shell` emits directly), Issue #920.
+// The payload types themselves are checked by the TypeScript compiler. Text based, no dependencies, like
 // `check-tauri-commands.mjs`.
 //
 // Usage: `npm run check-events` in the frontend (part of `npm run lint`).
@@ -27,6 +31,10 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 const RUST_FILE = "crates/app-logic/src/event_names.rs";
 const EVENT_NAMES_FILE = "apps/smart-ssh-community/frontend/src/eventNames.ts";
+const PAYLOAD_FILES = [
+  "apps/smart-ssh-community/frontend/src/generated/ipc.ts",
+  "apps/smart-ssh-community/frontend/src/eventPayloads.ts",
+];
 const FRONTEND_SRC = "apps/smart-ssh-community/frontend/src";
 
 /** Rust constants the core UI does not listen to. Each needs a reason. */
@@ -86,7 +94,7 @@ export function parseFrontendNames(src, file = EVENT_NAMES_FILE) {
 /** `listen("x")`, `once("x")`, `payloadListener("x")` with a string literal. @returns {{ call: string, line: number }[]} */
 export function parseLiteralListeners(src) {
   const code = stripJsComments(src);
-  const re = /(?<![A-Za-z0-9_$.])(listen|once|payloadListener)\s*(?:<[^()]*>)?\s*\(\s*["'`]/g;
+  const re = /(?<![A-Za-z0-9_$.])(listen|once|payloadListener|listenTyped|typedListener)\s*(?:<[^()]*>)?\s*\(\s*["'`]/g;
   const result = [];
   let m;
   while ((m = re.exec(code)) !== null) result.push({ call: m[1], line: lineOf(code, m.index) });
@@ -98,11 +106,12 @@ export function parseLiteralListeners(src) {
  *   rust: { key: string, value: string, line: number }[],
  *   frontend: { key: string, value: string, line: number }[],
  *   literals: { call: string, file: string, line: number }[],
+ *   payloadKeys?: Set<string>,   // quoted keys found in the payload files; omit to skip the check
  *   notConsumed?: Record<string, string>,
  * }} input
  * @returns {{ kind: string, name: string, where: string }[]}
  */
-export function findMismatches({ rust, frontend, literals, notConsumed = NOT_CONSUMED_BY_CORE_UI }) {
+export function findMismatches({ rust, frontend, literals, payloadKeys, notConsumed = NOT_CONSUMED_BY_CORE_UI }) {
   const problems = [];
   const rustByKey = new Map();
   for (const r of rust) {
@@ -121,6 +130,9 @@ export function findMismatches({ rust, frontend, literals, notConsumed = NOT_CON
     const at = `${EVENT_NAMES_FILE}:${f.line}`;
     if (frontendKeys.has(f.key)) problems.push({ kind: "defined twice in the frontend", name: f.key, where: at });
     frontendKeys.add(f.key);
+    if (payloadKeys && !payloadKeys.has(f.value)) {
+      problems.push({ kind: "event has no payload type entry in EventPayloads", name: f.key, where: at });
+    }
     const r = rustByKey.get(f.key);
     if (!r) problems.push({ kind: "frontend constant has no Rust counterpart", name: f.key, where: at });
     else if (r.value !== f.value) {
@@ -156,6 +168,15 @@ function walk(dir) {
   return out.sort();
 }
 
+/** Quoted keys (`"name": Type`) of the payload files. @returns {Set<string>} */
+export function parsePayloadKeys(src) {
+  const keys = new Set();
+  const re = /^\s*"([^"\\]+)"\s*:/gm;
+  let m;
+  while ((m = re.exec(src)) !== null) keys.add(m[1]);
+  return keys;
+}
+
 /** Reads the repo under `root` and returns all problems. */
 export function checkRepo(root = REPO_ROOT) {
   const rust = parseRustNames(fs.readFileSync(path.join(root, RUST_FILE), "utf8"));
@@ -166,7 +187,11 @@ export function checkRepo(root = REPO_ROOT) {
     if (isFrontendTestFile(file)) continue;
     for (const l of parseLiteralListeners(fs.readFileSync(full, "utf8"))) literals.push({ ...l, file });
   }
-  return { problems: findMismatches({ rust, frontend, literals }), counts: { rust: rust.length, frontend: frontend.length } };
+  const payloadKeys = new Set();
+  for (const f of PAYLOAD_FILES) {
+    for (const k of parsePayloadKeys(fs.readFileSync(path.join(root, f), "utf8"))) payloadKeys.add(k);
+  }
+  return { problems: findMismatches({ rust, frontend, literals, payloadKeys }), counts: { rust: rust.length, frontend: frontend.length } };
 }
 
 function main() {

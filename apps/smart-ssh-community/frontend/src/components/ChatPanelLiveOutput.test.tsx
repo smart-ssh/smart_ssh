@@ -48,6 +48,7 @@ function proposed(sessionId = "session-1"): ChatActionProposedEvent {
     decision: "AutoExec",
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,
