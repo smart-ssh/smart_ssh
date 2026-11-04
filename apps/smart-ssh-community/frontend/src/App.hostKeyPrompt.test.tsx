@@ -110,7 +110,7 @@ const rejectLabelFor = (event: HostKeyVerificationNeededEvent) =>
   event.kind === "mismatch" ? "Verbindung abbrechen" : "Ablehnen";
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",

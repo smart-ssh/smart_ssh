@@ -5,7 +5,7 @@ import { folderForNewItem } from "./newItemFolder";
 import type { ServerDto } from "./types";
 
 function server(id: string, groupId: string | null, isLocal = false): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id,
     name: id,
     host: "example.invalid",

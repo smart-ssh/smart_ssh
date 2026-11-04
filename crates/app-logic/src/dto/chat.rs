@@ -22,6 +22,7 @@ use crate::status::ConnectionStatus;
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum HostKeyUserDecision {
     Trust,
     Reject,
@@ -36,6 +37,7 @@ pub enum HostKeyUserDecision {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ActionUserDecision {
     Approve,
     Deny,
@@ -44,6 +46,7 @@ pub enum ActionUserDecision {
     },
     /// Issue #1019: internal deny after a reconnect; never sent by the frontend.
     #[serde(skip_deserializing)]
+    #[cfg_attr(feature = "ts-export", ts(skip))]
     DenyReconnect,
 }
 
@@ -60,6 +63,7 @@ pub enum ActionUserDecision {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ActionOrigin {
     /// Vorschlag aus dem eigenen Chat-Flow (Spec 0007/0021).
     Internal,
@@ -77,6 +81,7 @@ pub enum ActionOrigin {
 /// eine leere `require`-Prüfung reduziert.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum DocumentFormat {
     Markdown,
 }
@@ -92,6 +97,7 @@ pub enum DocumentFormat {
 /// Dialog tatsächlich zeigt.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct SessionSummaryDto {
     pub session_id: SessionId,
     pub server_id: ServerId,
@@ -110,6 +116,7 @@ pub struct SessionSummaryDto {
 /// Spec 0104: Kennzeichnung einer MCP-Sitzung in [`SessionSummaryDto`].
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct McpSessionDto {
     /// `clientInfo.name` aus dem MCP-Handshake, `None` ohne Namen.
     pub client_name: Option<String>,
@@ -121,6 +128,7 @@ pub struct McpSessionDto {
 /// Zeitpunkt, Nachrichtenanzahl je vergangener Sitzung.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ChatSessionSummaryDto {
     pub session_id: String,
     pub title: Option<String>,
@@ -158,6 +166,7 @@ impl From<ChatSessionSummary> for ChatSessionSummaryDto {
     rename_all_fields = "camelCase",
     tag = "type"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ChatHistoryEntryDto {
     Text {
         role: ChatHistoryRoleDto,
@@ -203,6 +212,7 @@ pub enum ChatHistoryEntryDto {
 /// Issue #545: one answer option of a question (event and history).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct QuestionOptionDto {
     pub label: String,
     pub description: Option<String>,
@@ -220,6 +230,7 @@ impl From<&ssh_manager_core::profiles::AskUserOption> for QuestionOptionDto {
 /// Issue #504: one extension part in the history (label and media class).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ChatHistoryExtensionPartDto {
     pub label: String,
     pub media: ssh_manager_core::ai::ExtensionMedia,
@@ -232,6 +243,7 @@ pub struct ChatHistoryExtensionPartDto {
 /// Quellen, s. Spec 0105).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct WebActivityDto {
     pub kind: WebActivityKindDto,
     pub input: String,
@@ -243,6 +255,7 @@ pub struct WebActivityDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum WebActivityKindDto {
     Search,
     Fetch,
@@ -250,6 +263,7 @@ pub enum WebActivityKindDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct WebSourceDto {
     pub title: String,
     pub url: String,
@@ -281,6 +295,7 @@ impl From<&ssh_manager_core::ai::WebActivity> for WebActivityDto {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ChatHistoryRoleDto {
     User,
     Assistant,

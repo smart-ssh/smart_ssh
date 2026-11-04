@@ -20,14 +20,14 @@
 //! verbietet dort eine Impl für den fremden Typ `tauri::AppHandle`.
 
 use serde::Serialize;
-use uuid::Uuid;
-
 use ssh_manager_core::filter::Decision;
 use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 use ssh_manager_core::shared::ServerId;
+use uuid::Uuid;
 
 use crate::dto::{ActionOrigin, AutoExecRuleDto};
+use crate::event_names as names;
 use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
@@ -56,7 +56,7 @@ pub fn emit_data_changed(
     emitter: &dyn EventEmitter,
     kinds: &std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
 ) {
-    emit(emitter, "data-changed", &DataChangedPayload { kinds });
+    emit(emitter, names::DATA_CHANGED, &DataChangedPayload { kinds });
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,7 +75,7 @@ pub fn emit_connection_status_changed(
 ) {
     emit(
         emitter,
-        "connection-status-changed",
+        names::CONNECTION_STATUS_CHANGED,
         &ConnectionStatusChangedPayload {
             session_id,
             status,
@@ -101,7 +101,7 @@ pub fn emit_chat_session_changed(
 ) {
     emit(
         emitter,
-        "chat-session-changed",
+        names::CHAT_SESSION_CHANGED,
         &ChatSessionChangedPayload {
             session_id,
             chat_session_id: chat_session_id.map(|id| id.to_string()),
@@ -154,7 +154,7 @@ pub fn emit_host_key_verification_needed(
 ) {
     emit(
         emitter,
-        "host-key-verification-needed",
+        names::HOST_KEY_VERIFICATION_NEEDED,
         &HostKeyVerificationNeededPayload {
             session_id,
             prompt_id,
@@ -200,7 +200,7 @@ pub fn emit_host_key_verification_ended(
 ) {
     emit(
         emitter,
-        "host-key-verification-ended",
+        names::HOST_KEY_VERIFICATION_ENDED,
         &HostKeyVerificationEndedPayload {
             session_id,
             prompt_id,
@@ -232,7 +232,7 @@ pub fn emit_connect_progress(
 ) {
     emit(
         emitter,
-        "connect-progress",
+        names::CONNECT_PROGRESS,
         &ConnectProgressPayload {
             attempt_id: attempt_id.to_string(),
             server_id,
@@ -259,7 +259,7 @@ pub fn emit_terminal_output(emitter: &dyn EventEmitter, session_id: SessionId, d
     use base64::Engine;
     emit(
         emitter,
-        "terminal-output",
+        names::TERMINAL_OUTPUT,
         &TerminalOutputPayload {
             session_id,
             data: base64::engine::general_purpose::STANDARD.encode(data),
@@ -277,7 +277,7 @@ struct ChatTextDeltaPayload {
 pub fn emit_chat_text_delta(emitter: &dyn EventEmitter, session_id: SessionId, delta: String) {
     emit(
         emitter,
-        "chat-text-delta",
+        names::CHAT_TEXT_DELTA,
         &ChatTextDeltaPayload { session_id, delta },
     );
 }
@@ -302,7 +302,7 @@ pub fn emit_chat_auto_continuation_started(
 ) {
     emit(
         emitter,
-        "chat-auto-continuation-started",
+        names::CHAT_AUTO_CONTINUATION_STARTED,
         &ChatAutoContinuationStartedPayload { session_id, round },
     );
 }
@@ -332,7 +332,7 @@ pub fn emit_ai_budget_waiting(
 ) {
     emit(
         emitter,
-        "ai-budget-waiting",
+        names::AI_BUDGET_WAITING,
         &AiBudgetWaitingPayload {
             session_id,
             wait_seconds,
@@ -427,7 +427,7 @@ pub fn emit_chat_action_proposed(
     };
     // Returned so the caller can keep it for a chat re-sync (issue #1020).
     let value = serde_json::to_value(&payload).ok();
-    emit(emitter, "chat-action-proposed", &payload);
+    emit(emitter, names::CHAT_ACTION_PROPOSED, &payload);
     value
 }
 
@@ -463,7 +463,7 @@ pub fn emit_risk_assessment_updated(
 ) {
     emit(
         emitter,
-        "risk-assessment-updated",
+        names::RISK_ASSESSMENT_UPDATED,
         &RiskAssessmentUpdatedPayload {
             session_id,
             action_id,
@@ -507,7 +507,7 @@ pub fn emit_action_decision_escalated(
 ) {
     emit(
         emitter,
-        "action-decision-escalated",
+        names::ACTION_DECISION_ESCALATED,
         &ActionDecisionEscalatedPayload {
             session_id,
             action_id,
@@ -567,7 +567,7 @@ pub fn emit_note_update_suggested(
 ) {
     emit(
         emitter,
-        "note-update-suggested",
+        names::NOTE_UPDATE_SUGGESTED,
         &NoteUpdateSuggestedPayload {
             session_id,
             action_id,
@@ -591,7 +591,7 @@ struct NoteUpdateExpiredPayload {
 pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId) {
     emit(
         emitter,
-        "note-update-expired",
+        names::NOTE_UPDATE_EXPIRED,
         &NoteUpdateExpiredPayload { action_id },
     );
 }
@@ -622,7 +622,7 @@ pub fn emit_note_shrink_suggested(
 ) {
     emit(
         emitter,
-        "note-shrink-suggested",
+        names::NOTE_SHRINK_SUGGESTED,
         &NoteShrinkSuggestedPayload {
             server_id,
             server_name,
@@ -645,7 +645,7 @@ struct NoteShrinkFailedPayload {
 pub fn emit_note_shrink_failed(emitter: &dyn EventEmitter, server_id: ServerId, message: String) {
     emit(
         emitter,
-        "note-shrink-failed",
+        names::NOTE_SHRINK_FAILED,
         &NoteShrinkFailedPayload { server_id, message },
     );
 }
@@ -670,7 +670,7 @@ struct NoteShrinkSucceededPayload {
 pub fn emit_note_shrink_succeeded(emitter: &dyn EventEmitter, server_id: ServerId) {
     emit(
         emitter,
-        "note-shrink-succeeded",
+        names::NOTE_SHRINK_SUCCEEDED,
         &NoteShrinkSucceededPayload { server_id },
     );
 }
@@ -698,7 +698,7 @@ pub fn emit_chat_document_generated(
 ) {
     emit(
         emitter,
-        "chat-document-generated",
+        names::CHAT_DOCUMENT_GENERATED,
         &ChatDocumentGeneratedPayload {
             session_id,
             action_id,
@@ -731,7 +731,7 @@ pub fn emit_chat_question_asked(
 ) {
     emit(
         emitter,
-        "chat-question-asked",
+        names::CHAT_QUESTION_ASKED,
         &ChatQuestionAskedPayload {
             session_id,
             question_id,
@@ -804,7 +804,7 @@ pub fn emit_chat_action_result(
 ) {
     emit(
         emitter,
-        "chat-action-result",
+        names::CHAT_ACTION_RESULT,
         &ChatActionResultPayload {
             session_id,
             action_id,
@@ -839,7 +839,7 @@ pub fn emit_chat_action_output(
 ) {
     emit(
         emitter,
-        "chat-action-output",
+        names::CHAT_ACTION_OUTPUT,
         &ChatActionOutputPayload {
             session_id,
             action_id,
@@ -869,7 +869,7 @@ pub fn emit_chat_action_waiting_input(
 ) {
     emit(
         emitter,
-        "chat-action-waiting-input",
+        names::CHAT_ACTION_WAITING_INPUT,
         &ChatActionWaitingInputPayload {
             session_id,
             action_id,
@@ -959,7 +959,7 @@ pub fn emit_chat_error_with_details(
 ) {
     emit(
         emitter,
-        "chat-error",
+        names::CHAT_ERROR,
         &ChatErrorPayload {
             session_id,
             message,
@@ -984,7 +984,7 @@ pub fn emit_chat_error_with_details(
 pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-truncated",
+        names::CHAT_RESPONSE_TRUNCATED,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1006,7 +1006,7 @@ pub fn emit_chat_ai_request_started(
 ) {
     emit(
         emitter,
-        "chat-ai-request-started",
+        names::CHAT_AI_REQUEST_STARTED,
         &ChatAiRequestStartedPayload {
             session_id,
             provider_name: provider_name.to_string(),
@@ -1035,7 +1035,7 @@ pub fn emit_chat_ai_retrying(
 ) {
     emit(
         emitter,
-        "chat-ai-retrying",
+        names::CHAT_AI_RETRYING,
         &ChatAiRetryingPayload {
             session_id,
             attempt,
@@ -1067,7 +1067,7 @@ pub fn emit_chat_web_activity(
 ) {
     emit(
         emitter,
-        "chat-web-activity",
+        names::CHAT_WEB_ACTIVITY,
         &ChatWebActivityPayload {
             session_id,
             activity_id,
@@ -1115,7 +1115,7 @@ pub fn emit_chat_injection_check(
 ) {
     emit(
         emitter,
-        "chat-injection-check",
+        names::CHAT_INJECTION_CHECK,
         &ChatInjectionCheckPayload {
             session_id,
             item_id,
@@ -1134,7 +1134,7 @@ pub fn emit_chat_injection_check(
 pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-web-research-unavailable",
+        names::CHAT_WEB_RESEARCH_UNAVAILABLE,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1160,7 +1160,7 @@ pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id
 pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-empty",
+        names::CHAT_RESPONSE_EMPTY,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1171,7 +1171,7 @@ pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionI
 pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-refused",
+        names::CHAT_RESPONSE_REFUSED,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1183,7 +1183,7 @@ pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: Sessio
 pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-response-cancelled",
+        names::CHAT_RESPONSE_CANCELLED,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1195,7 +1195,7 @@ pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: Sess
 pub fn emit_chat_queued_messages_sent(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-queued-messages-sent",
+        names::CHAT_QUEUED_MESSAGES_SENT,
         &SessionOnlyPayload { session_id },
     );
 }
@@ -1226,7 +1226,7 @@ pub fn emit_chat_auto_continuation_limit_reached(
 ) {
     emit(
         emitter,
-        "chat-auto-continuation-limit-reached",
+        names::CHAT_AUTO_CONTINUATION_LIMIT_REACHED,
         &ChatAutoContinuationLimitReachedPayload { session_id, limit },
     );
 }
@@ -1271,7 +1271,7 @@ pub fn emit_sftp_transfer_started(
 ) {
     emit(
         emitter,
-        "sftp-transfer-started",
+        names::SFTP_TRANSFER_STARTED,
         &SftpTransferStartedPayload {
             session_id,
             transfer_id,
@@ -1311,7 +1311,7 @@ pub fn emit_sftp_transfer_finished(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1334,7 +1334,7 @@ pub fn emit_sftp_transfer_stopped(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1358,7 +1358,7 @@ pub fn emit_sftp_entries_finished(
 ) {
     emit(
         emitter,
-        "sftp-transfer-finished",
+        names::SFTP_TRANSFER_FINISHED,
         &SftpTransferFinishedPayload {
             session_id,
             transfer_id,
@@ -1387,7 +1387,7 @@ pub fn emit_sftp_entries_progress(
 ) {
     emit(
         emitter,
-        "sftp-transfer-progress",
+        names::SFTP_TRANSFER_PROGRESS,
         &SftpTransferProgressPayload {
             session_id,
             transfer_id,
@@ -1437,7 +1437,7 @@ pub fn emit_sftp_transfer_progress(
 ) {
     emit(
         emitter,
-        "sftp-transfer-progress",
+        names::SFTP_TRANSFER_PROGRESS,
         &SftpTransferProgressPayload {
             session_id,
             transfer_id,
@@ -1478,7 +1478,7 @@ pub fn emit_mcp_action_tab_requested(
 ) {
     emit(
         emitter,
-        "mcp-action-tab-requested",
+        names::MCP_ACTION_TAB_REQUESTED,
         &McpActionTabRequestedPayload {
             session_id,
             server_id,
@@ -1657,7 +1657,7 @@ pub fn emit_chat_context_usage(
 ) {
     emit(
         emitter,
-        "chat-context-usage",
+        names::CHAT_CONTEXT_USAGE,
         &ChatContextUsagePayload {
             session_id,
             input_tokens,
@@ -1671,7 +1671,7 @@ pub fn emit_chat_context_usage(
 pub fn emit_chat_context_compacted(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
-        "chat-context-compacted",
+        names::CHAT_CONTEXT_COMPACTED,
         &SessionOnlyPayload { session_id },
     );
 }

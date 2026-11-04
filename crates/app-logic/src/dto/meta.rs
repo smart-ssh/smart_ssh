@@ -11,6 +11,7 @@ use serde::Serialize;
 /// selbst aus `version`/`commitHash` neu zusammenzusetzen.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AppInfoDto {
     /// Aus `tauri.conf.json` (Spec 0048), z. B. `"0.4.1"`.
     pub version: String,

@@ -13,6 +13,7 @@ use ssh_manager_core::profiles::{NoteEditor, NoteRevision};
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum NoteEditorDto {
     User,
     Ai { provider: String, model: String },
@@ -32,6 +33,7 @@ impl From<&NoteEditor> for NoteEditorDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct NoteRevisionDto {
     pub id: String,
     pub content: String,

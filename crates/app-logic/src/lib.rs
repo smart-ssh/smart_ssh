@@ -19,6 +19,9 @@
 //! (`app-logic`) enthält keinen Typ, keine Funktion und kein Feld, über das
 //! er erreichbar ist (A1).
 
+#[cfg(all(test, feature = "ts-export"))]
+mod ts_export;
+
 pub mod ai_provider_factory;
 pub mod ai_usage;
 pub mod auto_reconnect;
@@ -44,6 +47,7 @@ pub mod document_export;
 pub mod dto;
 pub mod ephemeral_credentials;
 pub mod error;
+pub mod event_names;
 pub mod events;
 /// Extension API: the documented, supported surface for extension crates.
 pub mod ext;
