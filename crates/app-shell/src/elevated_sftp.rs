@@ -342,6 +342,8 @@ impl ElevatedSftpRegistry {
     }
 }
 
+mod probe;
+pub(crate) use probe::run_probe;
 use ssh_manager_core::ssh::elevated::{
     classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
     is_valid_target_user, parse_sftp_server_probe, parse_sftp_server_safety_probe,
@@ -364,10 +366,6 @@ pub(crate) struct ElevationContext<'a> {
     pub session_id: SessionId,
     pub session: &'a Session,
 }
-
-/// Obergrenze je Probe-Kommando (Pfad-Erkennung, `sudo -n -l`) — `-n` lässt
-/// sudo nie auf ein Passwort warten, das hier ist nur das Sicherheitsnetz.
-const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// Liefert bewusst `Ok`: ein gescheiterter Aktivierungsversuch ist ein
 /// strukturiertes Ergebnis für die Oberfläche (Spec 0067, A1–A3), kein
@@ -394,18 +392,6 @@ fn failure(
     })
 }
 
-async fn run_probe(
-    session: &Session,
-    command: &str,
-) -> Result<ssh_manager_core::ssh::CommandOutput, String> {
-    let mut transport = session.transport.lock().await;
-    match tokio::time::timeout(PROBE_TIMEOUT, transport.execute(command)).await {
-        Ok(Ok(output)) => Ok(output),
-        Ok(Err(err)) => Err(err.to_string()),
-        Err(_) => Err("Zeitüberschreitung".to_string()),
-    }
-}
-
 /// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein. Nie
 /// ein Passwort (`sudo -n`), nie hängen (Timeouts), bei jedem Fehler eine
 /// strukturierte Meldung statt eines kryptischen Fehlers. Die Probe-Ausgaben
@@ -415,7 +401,8 @@ async fn run_probe(
 /// Sitzung noch steht — sonst `Err("session not found")` und der Kanal
 /// wird verworfen.
 ///
-/// **Sperr-Reihenfolge:** Der Widerruf des verdrängten Vorgängers steht
+/// **Sperr-Reihenfolge** (docs/architecture.md, "Lock hierarchy of a
+/// session"): Der Widerruf des verdrängten Vorgängers steht
 /// bewusst außerhalb des Blocks, der `session.transport` sperrt. Läge er
 /// darin, entstünde mit `commands::disconnect` (das die Kanal-Sperre
 /// freigibt und dann den Transport nimmt) ein Sperrzyklus
