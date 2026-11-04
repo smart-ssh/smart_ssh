@@ -19,16 +19,17 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn(),
 }));
 
-vi.mock("./api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  sftpOpenForEditing: vi.fn(),
-  localFileMtime: vi.fn(),
-  closeEditSession: vi.fn(() => Promise.resolve()),
-  readLocalTextPreview: vi.fn(),
-  sftpStat: vi.fn(),
-  sftpReadText: vi.fn(),
-  sftpUpload: vi.fn(),
-}));
+vi.mock("./api", async () =>
+  (await import("./test/apiMock")).createApiMock({
+    sftpOpenForEditing: vi.fn(),
+    localFileMtime: vi.fn(),
+    closeEditSession: vi.fn(() => Promise.resolve()),
+    readLocalTextPreview: vi.fn(),
+    sftpStat: vi.fn(),
+    sftpReadText: vi.fn(),
+    sftpUpload: vi.fn(),
+  }),
+);
 
 vi.mock("./fileTypeSettings", () => ({
   loadFileTypeApps: vi.fn(() => Promise.resolve({})),

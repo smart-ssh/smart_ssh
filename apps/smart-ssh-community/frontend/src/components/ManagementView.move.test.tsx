@@ -52,44 +52,43 @@ const backend = vi.hoisted(() => ({
   servers: [] as ServerDto[],
 }));
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: (err: unknown) =>
-    err && typeof err === "object" && "code" in err ? (err as { code: string }).code : null,
-  listUnusableServers: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve(backend.groups.map((g) => ({ ...g })))),
-  listServers: vi.fn(() => Promise.resolve(backend.servers.map((s) => ({ ...s })))),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  getServer: vi.fn((id: string) => {
-    const found = backend.servers.find((s) => s.id === id);
-    return found ? Promise.resolve({ ...found }) : Promise.reject(new Error("not found"));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve(backend.groups.map((g) => ({ ...g })))),
+    listServers: vi.fn(() => Promise.resolve(backend.servers.map((s) => ({ ...s })))),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    getServer: vi.fn((id: string) => {
+      const found = backend.servers.find((s) => s.id === id);
+      return found ? Promise.resolve({ ...found }) : Promise.reject(new Error("not found"));
+    }),
+    moveServerToGroup: vi.fn((id: string, groupId: string | null) => {
+      backend.servers = backend.servers.map((s) => (s.id === id ? { ...s, groupId } : s));
+      return Promise.resolve();
+    }),
+    moveGroup: vi.fn((id: string, parentId: string | null) => {
+      backend.groups = backend.groups.map((g) => (g.id === id ? { ...g, parentId } : g));
+      return Promise.resolve();
+    }),
+    createServer: vi.fn(),
+    updateServer: vi.fn(() => Promise.resolve()),
+    deleteServer: vi.fn(),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(() => Promise.resolve()),
+    deleteGroup: vi.fn(),
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    inspectKeyFile: vi.fn(() => new Promise<never>(() => {})),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    listNoteRevisions: vi.fn(() => Promise.resolve([])),
   }),
-  moveServerToGroup: vi.fn((id: string, groupId: string | null) => {
-    backend.servers = backend.servers.map((s) => (s.id === id ? { ...s, groupId } : s));
-    return Promise.resolve();
-  }),
-  moveGroup: vi.fn((id: string, parentId: string | null) => {
-    backend.groups = backend.groups.map((g) => (g.id === id ? { ...g, parentId } : g));
-    return Promise.resolve();
-  }),
-  createServer: vi.fn(),
-  updateServer: vi.fn(() => Promise.resolve()),
-  deleteServer: vi.fn(),
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(() => Promise.resolve()),
-  deleteGroup: vi.fn(),
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  inspectKeyFile: vi.fn(() => new Promise(() => {})),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  listNoteRevisions: vi.fn(() => Promise.resolve([])),
-}));
+);
 
 vi.mock("../events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),

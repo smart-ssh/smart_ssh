@@ -23,13 +23,14 @@ import { getChatSessionId, resetChatSessionIdsForTests } from "./chatSessionIds"
 import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "./types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
-vi.mock("./api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  disconnect: vi.fn(() => Promise.resolve()),
-  getServer: vi.fn(() => Promise.resolve({ id: "server-1", name: "prod-db" })),
-  listSessions: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("./api", async () =>
+  (await import("./test/apiMock")).createApiMock({
+    disconnect: vi.fn(() => Promise.resolve()),
+    getServer: vi.fn(() => Promise.resolve({ id: "server-1", name: "prod-db" } as never)),
+    listSessions: vi.fn(() => Promise.resolve([])),
+    respondToAction: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 vi.mock("./events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),

@@ -48,15 +48,16 @@ const revisions: NoteRevisionDto[] = [
 const mockLargeNoteDialogThresholdChars = vi.fn(() => Promise.resolve(1_000_000));
 const mockRequestNoteShrink = vi.fn((_serverId: string) => Promise.resolve());
 
-vi.mock("../api", () => ({
-  listNoteRevisions: vi.fn(() => Promise.resolve(revisions)),
-  rollbackNote: vi.fn(() => Promise.resolve()),
-  updateServerNotes: vi.fn(() => Promise.resolve()),
-  updateGroupNotes: vi.fn(() => Promise.resolve()),
-  largeNoteDialogThresholdChars: () => mockLargeNoteDialogThresholdChars(),
-  requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
-  commandErrorMessage: (err: unknown) => String(err),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listNoteRevisions: vi.fn(() => Promise.resolve(revisions)),
+    rollbackNote: vi.fn(() => Promise.resolve()),
+    updateServerNotes: vi.fn(() => Promise.resolve()),
+    updateGroupNotes: vi.fn(() => Promise.resolve()),
+    largeNoteDialogThresholdChars: () => mockLargeNoteDialogThresholdChars(),
+    requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
+  }),
+);
 
 async function renderWithHistoryOpen() {
   render(

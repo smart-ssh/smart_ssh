@@ -4,18 +4,18 @@
 //! Fehler-Mapping bei der Auth-Auflösung. Echter Verbindungsaufbau
 //! (Integrationstests) ist Sache von `crates/ssh-transport`.
 
+use crate::testing::ServerBuilder;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use chrono::Utc;
 use secrecy::{ExposeSecret, SecretString};
 
 use super::mock::MockKeyFileReader;
 use super::*;
 use crate::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore, Group, GroupId,
-    NoteRevision, PostIngestPolicy, ProfileError, ProfileResult, ProfileStore, Server,
+    NoteRevision, ProfileError, ProfileResult, ProfileStore, Server,
 };
 use crate::shared::ServerId;
 
@@ -217,35 +217,25 @@ impl SshTransport for MockSshTransport {
 
 // --- Fixtures --------------------------------------------------------
 
-fn make_server(name: &str, jump_host: Option<ServerId>) -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: format!("{name}.example.invalid"),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
 // --- Jump-Host-Ketten-Auflösung ---------------------------------------
 
 #[tokio::test]
 async fn test_jump_host_chain_resolves_multiple_hops_correctly() {
-    let bastion = make_server("bastion", None);
-    let middle = make_server("middle", Some(bastion.id));
-    let target = make_server("target", Some(middle.id));
+    let bastion = ServerBuilder::new()
+        .name("bastion")
+        .host(&format!("{}.example.invalid", "bastion"))
+        .jump_host(None)
+        .build();
+    let middle = ServerBuilder::new()
+        .name("middle")
+        .host(&format!("{}.example.invalid", "middle"))
+        .jump_host(Some(bastion.id))
+        .build();
+    let target = ServerBuilder::new()
+        .name("target")
+        .host(&format!("{}.example.invalid", "target"))
+        .jump_host(Some(middle.id))
+        .build();
 
     let store = MockProfileStore::new()
         .with_server(bastion.clone())
@@ -272,7 +262,11 @@ async fn test_jump_host_chain_resolves_multiple_hops_correctly() {
 
 #[tokio::test]
 async fn test_jump_host_chain_without_jump_host_is_single_hop() {
-    let target = make_server("standalone", None);
+    let target = ServerBuilder::new()
+        .name("standalone")
+        .host(&format!("{}.example.invalid", "standalone"))
+        .jump_host(None)
+        .build();
     let store = MockProfileStore::new().with_server(target.clone());
 
     let resolved = resolve_connection_target(&target, &store).await.unwrap();
@@ -283,8 +277,16 @@ async fn test_jump_host_chain_without_jump_host_is_single_hop() {
 
 #[tokio::test]
 async fn test_jump_host_cycle_detection_returns_error_not_infinite_loop() {
-    let mut a = make_server("a", None);
-    let mut b = make_server("b", None);
+    let mut a = ServerBuilder::new()
+        .name("a")
+        .host(&format!("{}.example.invalid", "a"))
+        .jump_host(None)
+        .build();
+    let mut b = ServerBuilder::new()
+        .name("b")
+        .host(&format!("{}.example.invalid", "b"))
+        .jump_host(None)
+        .build();
     // Simuliert einen Store-Fehler: a -> b -> a.
     a.jump_host = Some(b.id);
     b.jump_host = Some(a.id);

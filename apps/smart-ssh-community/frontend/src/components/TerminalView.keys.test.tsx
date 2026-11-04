@@ -37,12 +37,13 @@ vi.mock("../events", () => ({
   onTerminalOutput: () => Promise.resolve(() => {}),
 }));
 const terminalInput = vi.fn((..._a: unknown[]) => Promise.resolve());
-vi.mock("../api", () => ({
-  commandErrorMessage: String,
-  openTerminal: () => Promise.resolve(null),
-  terminalInput: (...a: unknown[]) => terminalInput(...a),
-  terminalResize: () => Promise.resolve(),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    openTerminal: () => Promise.resolve(null as never),
+    terminalInput: (...a: unknown[]) => terminalInput(...a),
+    terminalResize: () => Promise.resolve(),
+  }),
+);
 vi.mock("../startDirectory", () => ({ notifyMissingStartDirectory: () => {} }));
 
 import { TerminalView } from "./TerminalView";

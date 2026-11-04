@@ -14,10 +14,11 @@ import {
   resetSnoozedNoteShrinkServersForTests,
 } from "./NoteShrinkSuggestionToast";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  requestNoteShrink: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    requestNoteShrink: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 vi.mock("../events", () => ({
   onNoteShrinkSuggested: vi.fn(() => Promise.resolve(() => {})),

@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { respondToAction } from "../../api";
 import { useActionDecisions } from "./useActionDecisions";
 
-vi.mock("../../api", () => ({
-  respondToAction: vi.fn(),
-  acceptAndCreateRule: vi.fn(),
-  commandErrorCode: () => null,
-  commandErrorMessage: (e: unknown) => String(e),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    respondToAction: vi.fn(),
+    acceptAndCreateRule: vi.fn(),
+  }),
+);
 
 describe("useActionDecisions", () => {
   beforeEach(() => {

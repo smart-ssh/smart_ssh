@@ -22,11 +22,7 @@ import type {
 } from "./types";
 
 vi.mock("./api", async () => {
-  const actual = await vi.importActual<typeof import("./api")>("./api");
-  return {
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
+  return (await import("./test/apiMock")).createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listServers: vi.fn(() => Promise.resolve([])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
@@ -39,7 +35,7 @@ vi.mock("./api", async () => {
     disconnect: vi.fn(),
     getServer: vi.fn(),
     respondToAction: vi.fn(),
-  };
+  });
 });
 
 // Jeder Event-Listener ist ein No-op — außer `host-key-verification-needed`,

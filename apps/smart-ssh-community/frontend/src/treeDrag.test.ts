@@ -11,10 +11,12 @@ import type { GroupDto, ServerDto } from "./types";
 
 // Issue #48 / Spec 0103: Regeln für das Verschieben per Drag-and-drop.
 
-vi.mock("./api", () => ({
-  moveGroup: vi.fn(() => Promise.resolve()),
-  moveServerToGroup: vi.fn(() => Promise.resolve()),
-}));
+vi.mock("./api", async () =>
+  (await import("./test/apiMock")).createApiMock({
+    moveGroup: vi.fn(() => Promise.resolve()),
+    moveServerToGroup: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 function group(id: string, parentId: string | null): GroupDto {
   return { id, name: id, parentId, notes: "" };

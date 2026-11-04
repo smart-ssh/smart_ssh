@@ -16,24 +16,15 @@ import type { StartupPromptRequest, StartupStateDto } from "../types";
 import { testI18n } from "../testI18n";
 import { StartupGate } from "./StartupGate";
 
-vi.mock("../api", () => ({
-  getStartupState: vi.fn(),
-  unlockWithMasterPassword: vi.fn(),
-  startOverFromUnlockScreen: vi.fn(),
-  answerStartupPrompt: vi.fn(() => Promise.resolve()),
-  quitApplication: vi.fn(() => Promise.resolve()),
-  // Die echten Extraktionen: Der Test prüft unter anderem, dass ein
-  // `code` übersetzt wird (A20) — mit einer vereinfachten Attrappe prüfte
-  // er nur die Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-}));
+vi.mock("../api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getStartupState: vi.fn(),
+    unlockWithMasterPassword: vi.fn(),
+    startOverFromUnlockScreen: vi.fn(),
+    answerStartupPrompt: vi.fn(() => Promise.resolve()),
+    quitApplication: vi.fn(() => Promise.resolve()),
+  }),
+);
 
 vi.mock("../events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
