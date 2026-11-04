@@ -89,6 +89,12 @@ jobs:
       # perl cannot build the vendored OpenSSL (missing
       # Locale::Maketext::Simple). Keep the Windows commands identical to
       # the `rust` stage of `scripts/gate.sh`.
+      # Issue #901: pinned cargo-nextest (prebuilt binaries via cargo-binstall
+      # are not used; the cache keeps the compiled binary between runs).
+      - name: Install cargo-nextest
+        shell: bash
+        run: cargo install --locked cargo-nextest --version 0.9.151
+
       - name: Rust gate (fmt, clippy, test, build)
         if: runner.os != 'Windows'
         shell: bash
@@ -109,15 +115,35 @@ jobs:
         if: runner.os == 'Windows'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: cargo test
+      - name: cargo nextest
         if: runner.os == 'Windows'
         env:
           SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
-        run: cargo test --workspace --locked --no-fail-fast
+        run: cargo nextest run --workspace --locked --profile ci
+
+      - name: cargo test --doc
+        if: runner.os == 'Windows'
+        env:
+          SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
+        run: cargo test --workspace --locked --doc
 
       - name: cargo build
         if: runner.os == 'Windows'
         run: cargo build --workspace --locked
+
+      # Issue #901: a test that failed and then passed on retry fails the job.
+      - name: Flaky test check
+        if: always()
+        shell: bash
+        run: node scripts/check-nextest-flaky.mjs
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
 
       # Spec 0084, A3/T4 (details in `scripts/gate.sh`, stage `boundary`).
       - name: Grenzprüfung app-logic ist Tauri-frei (Spec 0084, A3)

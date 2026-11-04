@@ -32,8 +32,14 @@ scripts/gate.sh                  # all stages, in order
 scripts/gate.sh rust             # fmt --check, clippy, test, build
 scripts/gate.sh boundary         # app-logic stays free of Tauri (Spec 0084, A3)
 scripts/gate.sh frontend         # tsc -b, npm run lint, vitest, npm run build
-scripts/gate.sh --ci rust        # as CI: clipboard test required, under xvfb-run on Linux
+scripts/gate.sh --ci rust        # as CI: cargo-nextest (profile ci), clipboard test required, under xvfb-run on Linux
 ```
+
+CI runs the Rust tests with `cargo nextest run --profile ci` (retries,
+JUnit report, a step that fails the job on tests that pass only on retry,
+Spec 0090 A9) plus `cargo test --doc`; locally `scripts/gate.sh` uses
+nextest if installed and otherwise falls back to `cargo test`, and
+developers may keep using `cargo test`.
 
 `scripts/gate.sh` is the single definition of the gate; CI calls it too
 (Windows keeps its Cargo steps inline with the same commands, see the

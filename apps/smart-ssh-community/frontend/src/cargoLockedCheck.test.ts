@@ -8,7 +8,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
-const CARGO_CALL = /\bcargo\s+(build|test|clippy|tree)\b/;
+const CARGO_CALL = /\bcargo\s+(build|test|clippy|tree|nextest\s+run)\b/;
 
 /**
  * Returns the offending lines (1-based number + text): a Cargo call without
@@ -54,6 +54,8 @@ describe("cargo --locked guard", () => {
     expect(findUnlockedCargoCalls("        run: cargo test --workspace\n")).toHaveLength(1);
     expect(findUnlockedCargoCalls("  tree_output=$(cargo tree -p x)")).toHaveLength(1);
     expect(findUnlockedCargoCalls("        run: cargo clippy --locked -- -D warnings")).toEqual([]);
+    expect(findUnlockedCargoCalls("        run: cargo nextest run --workspace")).toHaveLength(1);
+    expect(findUnlockedCargoCalls("        run: cargo nextest run --locked --profile ci")).toEqual([]);
     expect(findUnlockedCargoCalls("# cargo build is mentioned here")).toEqual([]);
   });
 });
