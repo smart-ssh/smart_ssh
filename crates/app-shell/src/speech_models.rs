@@ -29,7 +29,7 @@ pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<Model
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| CommandError::from(e.to_string()))?
+        .map_err(|e| CommandError::with_code(e.to_string(), "SPEECH_MODELS_DIR_UNAVAILABLE"))?
         .join(MODELS_SUBDIR);
     Ok(Arc::clone(
         state.0.get_or_init(|| Arc::new(ModelManager::new(dir))),
@@ -126,6 +126,18 @@ pub fn delete_speech_model(app: AppHandle, model: String) -> CommandResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #887: speech-model failures reach the frontend with a code.
+    #[test]
+    fn test_every_model_manager_error_carries_a_code() {
+        for err in [
+            ModelManagerError::AlreadyDownloading,
+            ModelManagerError::Downloading,
+            ModelManagerError::Io,
+        ] {
+            assert!(manager_error(err).code.is_some());
+        }
+    }
     use crate::first_run_notice::test_support::{lock, test_app};
 
     #[test]

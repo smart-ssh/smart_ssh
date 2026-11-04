@@ -1,6 +1,6 @@
 //! Tests of `map_connect_result`.
-//! Spec 0047, Fund D2: der blanket `impl<E: Display> From<E> for
-//! CommandError` (s. `error.rs`) setzt immer `code: None` — vor der
+//! Spec 0047, Fund D2: die frühere Pauschal-Umwandlung (jeder `Display`-Fehler nach
+//! `CommandError`) setzte immer `code: None` — vor der
 //! Extraktion von `map_connect_result` verwarf `connect_session` damit
 //! stillschweigend `SshError::code()`, obwohl der Code existiert und im
 //! Frontend registriert ist (`errorCodes.ts`s `KNOWN_ERROR_CODES`). Ohne

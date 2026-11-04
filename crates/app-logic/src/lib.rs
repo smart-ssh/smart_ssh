@@ -86,6 +86,7 @@ pub mod second_opinion;
 /// Schlüsselbund in die verschlüsselte Datenbank.
 pub mod secret_migration;
 pub mod server_credentials;
+pub mod server_guards;
 pub mod server_paths;
 /// Issue #18: Session-Redactor eines Servers und redigierte, gefencte
 /// Notizen für das MCP-Tool `get_server_notes`.

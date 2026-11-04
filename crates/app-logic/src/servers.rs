@@ -32,29 +32,8 @@ use crate::server_credentials::{
     delete_sudo_password_on_server_delete, resolve_auth_method, resolve_sudo_password,
     roll_back_failed_edit, RecordingCredentialStore,
 };
-use crate::server_paths::{normalize_sftp_server_path, normalize_start_directory_input};
-
-/// Spec 0032, Abschnitt 6: der lokale Pseudo-Server ist explizit als
-/// Jump-Host ausgeschlossen — vor dieser Prüfung fiel das erst implizit,
-/// tief in `resolve_connection_target`, mit einer generischen "nicht
-/// auflösbar"-Meldung auf (unabhängiger Review-Pass, s. docs/adr/0026).
-///
-/// Spec 0082, A6/A7: lag bis dahin als private Funktion im
-/// `app-shell`-Command-Modul. Sie zieht hierher, weil [`update_server`]
-/// sie **innerhalb** der Tauri-freien Fassung aufrufen muss — die
-/// Ablehnung gehört vor jedes Lesen und Schreiben im Schlüsselbund und
-/// darf deshalb nicht in einer Schicht sitzen, die kein Unit-Test
-/// erreicht. `commands::create_server` ruft unverändert dieselbe Prüfung,
-/// nur über diesen Pfad.
-pub fn reject_local_jump_host(jump_host: Option<ServerId>) -> CommandResult<()> {
-    if jump_host.is_some_and(crate::dto::is_local) {
-        return Err(CommandError::with_code(
-            "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-            "SERVER_JUMP_HOST_LOCAL",
-        ));
-    }
-    Ok(())
-}
+pub use crate::server_guards::reject_local_jump_host;
+use crate::server_paths::{checked_sftp_server_path, checked_start_directory};
 
 /// Der volle `create_server`-Ablauf (Spec 0047, Fund A2), losgelöst von
 /// `tauri::State` — analog zu [`delete_server`] unten (das schon dem
@@ -78,8 +57,8 @@ pub async fn create_server(
 ) -> CommandResult<ServerId> {
     // Vor jedem Schlüsselbund-Zugriff prüfen — ein ungültiger Pfad soll
     // keine Secrets anlegen, die danach wieder abgeräumt werden müssten.
-    let sftp_server_path = normalize_sftp_server_path(input.sftp_server_path.clone())?;
-    let start_directory = normalize_start_directory_input(input.start_directory.clone())?;
+    let sftp_server_path = checked_sftp_server_path(input.sftp_server_path.clone())?;
+    let start_directory = checked_start_directory(input.start_directory.clone())?;
     let id = ServerId::new();
 
     let auth = match resolve_auth_method(credential_store, id, input.auth, None) {
@@ -116,7 +95,7 @@ pub async fn create_server(
 
     if let Err(err) = store.create_server(&server).await {
         delete_all_possible_server_secrets(credential_store, id);
-        return Err(crate::error::store_command_error(err));
+        return Err(crate::error::CommandError::from(err));
     }
     Ok(id)
 }
@@ -158,17 +137,20 @@ pub async fn update_server(
         // Spec 0032, Abschnitt 3: existiert nicht als `servers`-Zeile — nur
         // Notizen/Tags sind editierbar, über die dedizierten
         // `update_local_server_notes`/`update_local_server_tags`-Befehle.
-        return Err("Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden".into());
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann nicht auf diesem Weg bearbeitet werden",
+            "SERVER_LOCAL_NOT_EDITABLE",
+        ));
     }
     reject_local_jump_host(input.jump_host)?;
     // Bis hierher hat der Aufruf nichts geschrieben, ein `?` ist also
     // gefahrlos: Es gibt noch nichts zurückzunehmen. Ab der Hülle unten
     // gilt das nicht mehr — deshalb hört das `?` hier auf.
-    let sftp_server_path = normalize_sftp_server_path(input.sftp_server_path.clone())?;
+    let sftp_server_path = checked_sftp_server_path(input.sftp_server_path.clone())?;
     // Spec 0102: bereinigt zurück in die Eingabe, damit `write_edited_server`
     // nur noch den geprüften Wert sieht.
     let mut input = input;
-    input.start_directory = normalize_start_directory_input(input.start_directory)?;
+    input.start_directory = checked_start_directory(input.start_directory)?;
     let existing = store.get_server(&id).await.store_err()?;
     let previous_auth = existing.auth.clone();
 
@@ -357,8 +339,9 @@ pub async fn delete_unusable_server(
     let listing = store.list_server_entries().await.store_err()?;
     let Some(unusable) = listing.unusable.iter().find(|s| s.id == id) else {
         if listing.servers.iter().any(|s| s.id == id) {
-            return Err(CommandError::from(
-                "Der Server ist nutzbar und wird über das normale Löschen entfernt".to_string(),
+            return Err(CommandError::with_code(
+                "Der Server ist nutzbar und wird über das normale Löschen entfernt",
+                "SERVER_USABLE_NOT_UNUSABLE",
             ));
         }
         return Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(id).into());
@@ -410,7 +393,10 @@ pub async fn move_server_to_group(
     group_id: Option<ssh_manager_core::profiles::GroupId>,
 ) -> CommandResult<()> {
     if crate::dto::is_local(id) {
-        return Err("Der lokale Pseudo-Server kann keiner Gruppe zugeordnet werden".into());
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann keiner Gruppe zugeordnet werden",
+            "SERVER_LOCAL_NO_GROUP",
+        ));
     }
     if let Some(group_id) = group_id {
         store.get_group(&group_id).await.store_err()?;

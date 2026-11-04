@@ -187,3 +187,34 @@ async fn test_invalid_registrations_and_edited_history() {
         ExtensionMigrationError::HistoryMismatch { version: 1 }
     );
 }
+
+#[tokio::test]
+async fn test_failed_authorizer_uninstall_removes_it_and_rolls_back() {
+    let (store, _dir) = store().await;
+    crate::extension_db::test_hook::fail_uninstall_for("ext_guard_");
+    let r = reg(
+        "ext_guard_",
+        vec![mig(1, "CREATE TABLE ext_guard_a (id INTEGER PRIMARY KEY);")],
+    );
+    let err = store.run_extension_migrations(&r).await.unwrap_err();
+    assert!(
+        matches!(&err, ExtensionMigrationError::Database { code, .. } if code == "test-uninstall"),
+        "{err}"
+    );
+    // the guard removed the authorizer on the early return
+    assert!(crate::extension_db::test_hook::authorizer_removed(
+        "ext_guard_"
+    ));
+    // and the migration was rolled back
+    let n: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('ext_guard_a')")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    assert_eq!(n, 0);
+    let h: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ext_guard_schema_migrations")
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+    assert_eq!(h, 0);
+}
