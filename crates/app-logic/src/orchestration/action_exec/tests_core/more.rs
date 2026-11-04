@@ -1,5 +1,6 @@
 use super::*;
 use ssh_manager_core::sync::lock_tolerating_poison;
+use ssh_manager_core::testing::ServerBuilder;
 
 #[tokio::test]
 async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
@@ -111,7 +112,8 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
     let expected_server_id = session.server_id;
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
 

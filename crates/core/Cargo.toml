@@ -71,5 +71,9 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # Fassung und dasselbe Muster wie in `ai-providers`/`app-shell`.
 tracing-subscriber = { workspace = true, features = ["json"] }
 
+[[example]]
+name = "profiles_demo"
+required-features = ["test-support"]
+
 [lints]
 workspace = true
