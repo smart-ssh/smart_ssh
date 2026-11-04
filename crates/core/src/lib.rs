@@ -22,3 +22,5 @@ pub mod session;
 pub mod shared;
 pub mod ssh;
 pub mod sync;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;

@@ -93,7 +93,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | DTOs sent to the frontend | `crates/app-logic/src/dto/` (`ServerDto` in `crates/app-logic/src/dto/server.rs`); TS side `apps/smart-ssh-community/frontend/src/types.ts` |
 | Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session/mod.rs` — `Session` |
-| In-memory stores for tests | `crates/app-logic/src/test_support.rs` — `InMemoryProfileStore`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
+| In-memory stores and `ServerBuilder` for tests | `crates/core/src/testing.rs` (feature `test-support`) — `InMemoryProfileStore`, `InMemoryCredentialStore`, `ServerBuilder`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
 | Real SSH tests | `crates/ssh-transport/tests/integration.rs` |
 | Elevated SFTP channel | `crates/app-shell/src/elevated_sftp.rs` — `ElevatedSftp`, `ElevatedSftpSlot`; sudo/sftp-server logic `crates/core/src/ssh/elevated.rs` — `is_safe_absolute_path`; commands `crates/app-shell/src/commands/elevation.rs` |

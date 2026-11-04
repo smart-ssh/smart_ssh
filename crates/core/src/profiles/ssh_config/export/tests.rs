@@ -5,37 +5,17 @@
 //! (`crates/app-shell/src/ssh_config_export/tests.rs`) — dort steht auch,
 //! warum.
 
+use crate::testing::ServerBuilder;
 use chrono::Utc;
 use uuid::Uuid;
 
 use super::*;
 use crate::profiles::ssh_config::plan::{build_plan, ImportSource, Inventory};
 use crate::profiles::ssh_config::{parse_source, FileParse};
-use crate::profiles::types::{AuthMethod, CredentialRef, Group, GroupId, PostIngestPolicy, Server};
+use crate::profiles::types::{AuthMethod, CredentialRef, Group, GroupId};
 use crate::shared::ServerId;
 
 const LOCAL: ServerId = ServerId(Uuid::nil());
-
-fn server(name: &str, host: &str, port: u16, user: &str) -> Server {
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: host.to_string(),
-        port,
-        username: user.to_string(),
-        group_id: None,
-        tags: vec![],
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    }
-}
 
 /// Parst den exportierten Text wieder ein und baut daraus einen Plan gegen
 /// einen leeren Bestand — die Grundlage jedes Rundlauf-Vergleichs (§6.3.3).
@@ -73,9 +53,19 @@ fn reparse(text: &str) -> crate::profiles::ssh_config::ImportPlan {
 // angewandtes Ergebnis beide verfügbar sind.
 #[test]
 fn t_3_2_1_pflichtfelder_und_bedingte_felder() {
-    let mut a = server("web1", "10.0.0.1", 22, "");
+    let mut a = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     a.id = ServerId::new();
-    let mut b = server("web2", "10.0.0.2", 2222, "max");
+    let mut b = ServerBuilder::new()
+        .name("web2")
+        .host("10.0.0.2")
+        .port(2222)
+        .username("max")
+        .build();
     b.id = ServerId::new();
 
     let plan = build_export(&[a, b], &[], LOCAL);
@@ -100,9 +90,19 @@ fn t_3_2_1_pflichtfelder_und_bedingte_felder() {
 
 #[test]
 fn t_6_3_3_rundlauf_weg_a_identity_file() {
-    let mut bastion = server("bastion", "10.0.0.1", 22, "root");
+    let mut bastion = ServerBuilder::new()
+        .name("bastion")
+        .host("10.0.0.1")
+        .port(22)
+        .username("root")
+        .build();
     bastion.id = ServerId::new();
-    let mut target = server("target", "10.0.0.2", 2200, "deploy");
+    let mut target = ServerBuilder::new()
+        .name("target")
+        .host("10.0.0.2")
+        .port(2200)
+        .username("deploy")
+        .build();
     target.id = ServerId::new();
     target.jump_host = Some(bastion.id);
     target.auth = AuthMethod::IdentityFile {
@@ -153,7 +153,12 @@ fn t_6_3_3_rundlauf_weg_a_identity_file() {
 
 #[test]
 fn t_6_3_3a_privatekey_erzeugt_kein_identityfile_und_keinen_schluessel() {
-    let mut s = server("vault", "10.0.0.9", 22, "ops");
+    let mut s = ServerBuilder::new()
+        .name("vault")
+        .host("10.0.0.9")
+        .port(22)
+        .username("ops")
+        .build();
     s.auth = AuthMethod::PrivateKey {
         credential_ref: CredentialRef::new("server:vault:private_key"),
         passphrase_ref: None,
@@ -173,9 +178,19 @@ fn t_6_3_3a_privatekey_erzeugt_kein_identityfile_und_keinen_schluessel() {
 
 #[test]
 fn t_6_3_10_lokaler_pseudo_server_wird_nicht_exportiert() {
-    let mut local = server("Lokales Terminal", "localhost", 22, "");
+    let mut local = ServerBuilder::new()
+        .name("Lokales Terminal")
+        .host("localhost")
+        .port(22)
+        .username("")
+        .build();
     local.id = LOCAL;
-    let mut real = server("web1", "10.0.0.1", 22, "");
+    let mut real = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     real.id = ServerId::new();
 
     let plan = build_export(&[local, real], &[], LOCAL);
@@ -189,7 +204,12 @@ fn t_6_3_10_lokaler_pseudo_server_wird_nicht_exportiert() {
 
 #[test]
 fn t_6_3_11_name_mit_leerzeichen_und_raute_wird_gueltiger_alias() {
-    let s = server("prod web #1", "10.0.0.1", 22, "");
+    let s = ServerBuilder::new()
+        .name("prod web #1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
 
     let exported = &plan.exported[0];
@@ -208,9 +228,24 @@ fn t_6_3_11_name_mit_leerzeichen_und_raute_wird_gueltiger_alias() {
 #[test]
 fn t_6_3_12_kollidierende_aliase_und_umbenannter_jump_host() {
     // Beide bilden nach `4.3` auf denselben Rumpf ab.
-    let a = server("prod web", "10.0.0.1", 22, "");
-    let b = server("prod-web", "10.0.0.2", 22, "");
-    let mut target = server("target", "10.0.0.3", 22, "");
+    let a = ServerBuilder::new()
+        .name("prod web")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
+    let b = ServerBuilder::new()
+        .name("prod-web")
+        .host("10.0.0.2")
+        .port(22)
+        .username("")
+        .build();
+    let mut target = ServerBuilder::new()
+        .name("target")
+        .host("10.0.0.3")
+        .port(22)
+        .username("")
+        .build();
     target.jump_host = Some(b.id);
 
     let plan = build_export(&[a.clone(), b.clone(), target], &[], LOCAL);
@@ -230,7 +265,12 @@ fn t_6_3_12_kollidierende_aliase_und_umbenannter_jump_host() {
 
 #[test]
 fn t_6_3_13_username_mit_leerzeichen_wird_gequotet() {
-    let s = server("web1", "10.0.0.1", 22, "max mustermann");
+    let s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("max mustermann")
+        .build();
     let plan = build_export(&[s], &[], LOCAL);
 
     assert!(plan.text.contains("User \"max mustermann\"\n"));
@@ -247,11 +287,21 @@ fn t_6_3_13_username_mit_leerzeichen_wird_gequotet() {
 
 #[test]
 fn t_6_4_2_kein_geheimnis_im_export() {
-    let mut pw = server("pw-server", "10.0.0.5", 22, "root");
+    let mut pw = ServerBuilder::new()
+        .name("pw-server")
+        .host("10.0.0.5")
+        .port(22)
+        .username("root")
+        .build();
     pw.auth = AuthMethod::Password {
         credential_ref: CredentialRef::new("server:pw-server:password"),
     };
-    let mut key = server("key-server", "10.0.0.6", 22, "root");
+    let mut key = ServerBuilder::new()
+        .name("key-server")
+        .host("10.0.0.6")
+        .port(22)
+        .username("root")
+        .build();
     key.auth = AuthMethod::PrivateKey {
         credential_ref: CredentialRef::new("server:key-server:private_key"),
         passphrase_ref: Some(CredentialRef::new("server:key-server:passphrase")),
@@ -284,7 +334,12 @@ fn t_6_4_2_kein_geheimnis_im_export() {
 
 #[test]
 fn t_6_4_6a_name_mit_newline_raute_anfuehrungszeichen() {
-    let s = server("evil\n#\"name", "10.0.0.1", 22, "");
+    let s = ServerBuilder::new()
+        .name("evil\n#\"name")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
 
     let exported = &plan.exported[0];
@@ -309,7 +364,12 @@ fn t_6_4_6a_name_mit_newline_raute_anfuehrungszeichen() {
 /// führen, dass aus dem Rest des Werts eine eigene, wirksame Zeile wird.
 #[test]
 fn t_review1_username_mit_newline_bricht_nicht_aus_dem_wert_aus() {
-    let s = server("web1", "10.0.0.1", 22, "max\nProxyJump evil.example.com");
+    let s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("max\nProxyJump evil.example.com")
+        .build();
     let plan = build_export(std::slice::from_ref(&s), &[], LOCAL);
 
     assert!(
@@ -323,7 +383,12 @@ fn t_review1_username_mit_newline_bricht_nicht_aus_dem_wert_aus() {
 
 #[test]
 fn leerer_name_ergibt_server_n() {
-    let s = server("***", "10.0.0.1", 22, "");
+    let s = ServerBuilder::new()
+        .name("***")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     let plan = build_export(&[s], &[], LOCAL);
     assert!(plan.exported[0].alias.starts_with("server-"));
 }
@@ -339,7 +404,12 @@ fn gruppenname_erscheint_als_kommentar_nicht_als_direktive() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.group_id = Some(group_id);
 
     let plan = build_export(&[s], std::slice::from_ref(&group), LOCAL);
@@ -367,7 +437,12 @@ fn t_review1_gruppenname_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.group_id = Some(group_id);
 
     let plan = build_export(&[s], std::slice::from_ref(&group), LOCAL);
@@ -395,7 +470,12 @@ fn t_review1_gruppenname_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
 /// (§3.1.3).
 #[test]
 fn t_review1_schlagwort_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.tags = vec!["x\nUser root\n#".to_string()];
 
     let plan = build_export(&[s], &[], LOCAL);
@@ -412,7 +492,12 @@ fn t_review1_schlagwort_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
 /// saniert, aber ungeprüft.
 #[test]
 fn t_review2_sftp_server_path_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.sftp_server_path = Some("/usr/lib/sftp\nProxyJump evil.example.com\n#".to_string());
 
     let plan = build_export(&[s], &[], LOCAL);
@@ -429,7 +514,12 @@ fn t_review2_sftp_server_path_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
 /// Import bringt es nicht zurück.
 #[test]
 fn startverzeichnis_wird_nur_als_kommentar_benannt() {
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.start_directory = Some("/srv/my app".to_string());
 
     let plan = build_export(&[s], &[], LOCAL);
@@ -453,7 +543,16 @@ fn startverzeichnis_wird_nur_als_kommentar_benannt() {
 /// Ohne Startverzeichnis bleibt der Export wie bisher.
 #[test]
 fn ohne_startverzeichnis_kein_kommentar() {
-    let plan = build_export(&[server("web1", "10.0.0.1", 22, "")], &[], LOCAL);
+    let plan = build_export(
+        &[ServerBuilder::new()
+            .name("web1")
+            .host("10.0.0.1")
+            .port(22)
+            .username("")
+            .build()],
+        &[],
+        LOCAL,
+    );
     assert!(!plan.text.contains("Startverzeichnis"));
 }
 
@@ -461,7 +560,12 @@ fn ohne_startverzeichnis_kein_kommentar() {
 /// Zeilenumbruch bricht nicht aus dem Kommentar aus.
 #[test]
 fn startverzeichnis_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
-    let mut s = server("web1", "10.0.0.1", 22, "");
+    let mut s = ServerBuilder::new()
+        .name("web1")
+        .host("10.0.0.1")
+        .port(22)
+        .username("")
+        .build();
     s.start_directory = Some("/srv\nProxyJump evil.example.com\n#".to_string());
 
     let plan = build_export(&[s], &[], LOCAL);
@@ -479,7 +583,12 @@ fn startverzeichnis_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
 /// einen nicht-leeren Wert voraus, s. Moduldoc).
 #[test]
 fn leerer_host_erzeugt_keine_hostname_zeile() {
-    let s = server("web1", "", 22, "");
+    let s = ServerBuilder::new()
+        .name("web1")
+        .host("")
+        .port(22)
+        .username("")
+        .build();
     let plan = build_export(&[s], &[], LOCAL);
     assert!(!plan.text.contains("HostName"));
 }

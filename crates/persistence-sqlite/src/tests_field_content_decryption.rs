@@ -6,6 +6,7 @@
 //! Blob in der Spalte. Gelesen wird danach über die echten Stores — „content
 //! read through the app is identical to before".
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::path::Path;
 
 use chrono::Utc;
@@ -15,7 +16,7 @@ use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::legacy_field_content::encrypt_for_tests;
 use ssh_manager_core::crypto::DatabaseKey;
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
+use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
 
 use crate::test_support::FIELD_ENCRYPTED_COLUMNS;
@@ -35,28 +36,6 @@ struct Expected {
     ledger: Vec<LedgerEntryContent>,
     prompts: Vec<String>,
     summary: (String, i64),
-}
-
-fn test_server() -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: "Test-Server".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: vec![],
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
 }
 
 async fn insert_message(store: &SqliteProfileStore, session_id: Uuid, seq: i64, blob: Vec<u8>) {
@@ -124,7 +103,7 @@ async fn set_summary(store: &SqliteProfileStore, session_id: Uuid, blob: Vec<u8>
 /// Legt einen Server und eine Sitzung an und schreibt Altzeilen unter `K` in
 /// alle vier Spalten.
 async fn plant_legacy_rows(store: &SqliteProfileStore) -> Expected {
-    let server = test_server();
+    let server = ServerBuilder::new().name("Test-Server").build();
     let server_id = server.id;
     store.create_server(&server).await.unwrap();
     let session_id = store
@@ -353,7 +332,7 @@ async fn test_a_fresh_database_completes_with_nothing_to_do() {
 async fn test_pre_0040_plaintext_prompt_rows_are_kept_as_they_are() {
     let dir = tempfile::tempdir().unwrap();
     let store = open_encrypted(&dir.path().join("smart-ssh.db")).await;
-    let server = test_server();
+    let server = ServerBuilder::new().name("Test-Server").build();
     store.create_server(&server).await.unwrap();
     sqlx::query(
         "INSERT INTO prompt_history (id, server_id, content, created_at) VALUES (?, ?, ?, ?)",
@@ -562,7 +541,7 @@ async fn test_decrypted_content_never_appears_in_any_database_file() {
         "Marker-113-prompt",
         "Marker-113-summary",
     ];
-    let server = test_server();
+    let server = ServerBuilder::new().name("Test-Server").build();
     store.create_server(&server).await.unwrap();
     let session_id = store
         .chat_session_store()
