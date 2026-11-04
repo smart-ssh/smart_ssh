@@ -24,6 +24,11 @@ non-test `src/**/*.{ts,tsx}`. There is no allowlist: every component is migrated
 | Misc | `on-accent` (text on a solid accent fill), `on-solid` (white text on a solid accent/danger button in every theme), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` (read by the terminal as CSS variables; not Tailwind utilities) |
 
+Focus ring: use the utilities defined once in `src/index.css`, never a literal
+`focus-visible:ring-2` chain (guarded by `colourGuard.test.ts`): `focus-ring`
+(2 px `focus` ring with a 1 px surface offset — the default), `focus-ring-flush`
+(no offset) and `focus-ring-inset` (drawn inside the element).
+
 Preferences when migrating: focus rings/outlines → `ring-focus`/`outline-focus`
 (not `accent-fg`); text on a solid accent button → `text-on-accent`; hover on a
 raised surface → `bg-surface-hover`.

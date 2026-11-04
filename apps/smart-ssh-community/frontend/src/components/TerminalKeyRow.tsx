@@ -13,7 +13,7 @@ interface TerminalKeyRowProps {
 export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: TerminalKeyRowProps) {
   const { t } = useTranslation();
   const base =
-    "min-h-11 min-w-11 shrink-0 rounded border border-border bg-surface-raised px-3 font-mono text-sm text-fg-soft active:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg";
+    "min-h-11 min-w-11 shrink-0 rounded border border-border bg-surface-raised px-3 font-mono text-sm text-fg-soft active:bg-border focus-ring-flush";
   // Keep focus (and the soft keyboard) in the terminal when a key is tapped.
   const keepFocus = (e: React.MouseEvent | React.PointerEvent) => e.preventDefault();
   const keys: { id: TerminalKeyId; label: string; aria?: string }[] = [

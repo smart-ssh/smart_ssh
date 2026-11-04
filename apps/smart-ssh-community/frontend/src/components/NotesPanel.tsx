@@ -230,7 +230,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     type="button"
                     onClick={() => toggleExpanded(r.id)}
                     aria-expanded={expanded}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-fg-subtle hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-fg-subtle hover:text-fg-soft focus-ring-flush"
                   >
                     <span className="select-none">{expanded ? "▾" : "▸"}</span>
                     {formatDateTime(r.createdAt, i18n.language)} ·{" "}

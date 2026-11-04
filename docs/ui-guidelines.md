@@ -77,7 +77,9 @@ Use `Field`. Layout, top to bottom: label, control, help text, error text.
 
 Every interactive element shows a 2 px indigo ring (`indigo-400`) on
 `:focus-visible`; never remove an outline without replacing it. The ring has at
-least 3:1 contrast against the surface it sits on.
+least 3:1 contrast against the surface it sits on. Use the `focus-ring`,
+`focus-ring-flush` or `focus-ring-inset` utilities (`index.css`), not a literal
+ring chain; the ring is changed in one place.
 
 ## Text size and contrast
 
@@ -158,3 +160,18 @@ edges, shifts as a last resort and scrolls when the window is smaller than the
 menu. Do not hand-position menus with `absolute`/`top-full` or raw click
 coordinates. In the narrow layout menus remain bottom sheets (the hook returns
 no style).
+
+## Menus: use `Menu` (issue #914)
+
+Context and dropdown menus use `Menu`, `MenuItem` and `MenuSeparator` from
+`components/ui` (role `menu`/`menuitem`; arrow up/down, Home, End move focus
+over the enabled items, Escape closes and returns focus to the opener, Tab and
+a click outside close; placement via `useMenuPlacement`). `MenuItem` takes an
+optional `icon`, `shortcut` hint, `disabled` and `danger`; use
+`checked` for toggles (`menuitemcheckbox`). Do not hand-build menus.
+
+Two ratchets keep the UI kit used (`apps/smart-ssh-community/frontend/src/uiKitGuards.test.ts`): raw `<button`
+in production TSX outside `components/ui/` may only decrease per file
+(`src/uiKitRawButtons.json`; use `Button` or `MenuItem`), and `<dialog` /
+`fixed inset-0` may appear only in `components/ui/`, `components/ModalBackdrop.tsx` and
+the shrinking allowlist `src/uiKitDialogAllowlist.json` (use `DialogFrame`).

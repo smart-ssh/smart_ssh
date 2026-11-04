@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { pickAndReadTextFile, pickFilePath } from "../../fileDialog";
 import { TECHNICAL_INPUT_PROPS } from "../../technicalInputProps";
-import { detectFallbackPlatform, platformCapabilities } from "../../titlebarLayout";
+import { detectFallbackPlatform, platformCapabilities } from "../../platform";
 import { Button } from "../ui";
 import { Field, FIELD_CONTROL_CLASS } from "../ui/Field";
 import type { IdentityFileState, ServerModel } from "./formTypes";

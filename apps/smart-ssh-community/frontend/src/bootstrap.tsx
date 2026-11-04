@@ -8,7 +8,7 @@ import { ErrorBoundary } from './components/ui'
 import { initI18n } from './i18n.ts'
 import { installContextMenuSuppression } from './contextMenu.ts'
 import type { StartupStateDto } from './types.ts'
-import { detectFallbackPlatform } from './titlebarLayout.ts'
+import { detectFallbackPlatform } from './platform.ts'
 import { applyStoredTheme, initTheme } from './theme.ts'
 
 export interface BootstrapOptions {

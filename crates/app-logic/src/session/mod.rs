@@ -50,6 +50,7 @@ use crate::state::{ActionId, SessionId};
 
 mod ai_config;
 mod chat_persistence;
+mod locks;
 mod manager;
 mod require;
 mod safety_state;
@@ -58,6 +59,7 @@ mod transport_state;
 
 pub use ai_config::AiConfig;
 pub use chat_persistence::ChatPersistence;
+pub use locks::SessionLocks;
 pub use manager::*;
 pub use require::{require_session, session_not_found};
 pub use safety_state::SafetyState;

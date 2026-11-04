@@ -49,7 +49,7 @@ export function FileTable({
       type="button"
       onClick={() => onSort(column)}
       data-testid={`column-sort-${column}`}
-      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-fg-soft focus-ring-flush"
     >
       <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
       {fileSort.column === column && (
@@ -151,7 +151,7 @@ export function FileTable({
                 <button
                   type="button"
                   onClick={() => load(entry.path)}
-                  className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                  className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-ring-flush"
                   title={entry.name}
                 >
                   📁 {entry.name}
@@ -211,7 +211,7 @@ export function FileTable({
                 aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
                 aria-haspopup="true"
                 aria-expanded={openMenu?.anchor === "row" && openMenu.entry.path === entry.path}
-                className="rounded px-1.5 text-fg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                className="rounded px-1.5 text-fg-subtle hover:text-fg focus-ring-flush"
               >
                 ⋮
               </button>

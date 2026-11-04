@@ -1,6 +1,6 @@
-import type { TranslationKey } from "./i18nTypes";
+import type { TranslationKey } from "../i18nTypes";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { commandErrorCode } from "./api";
+import { commandErrorCode } from "../api";
 import {
   cancelSpeechModelDownload,
   cancelVoiceRecording,
@@ -13,8 +13,8 @@ import {
   startVoiceRecording,
   stopVoiceRecording,
   type SpeechModelId,
-} from "./voiceApi";
-import { voiceErrorKey } from "./voiceInputSettings";
+} from "../voiceApi";
+import { voiceErrorKey } from "../voiceInputSettings";
 
 export type VoicePhase = "idle" | "recording" | "transcribing";
 
