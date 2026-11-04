@@ -41,7 +41,7 @@ jobs:
             orchestration::chat_turn::tests_continuation::test_auto_title_generation_skipped_without_user_message; do
             crashes=0; fails=0
             for i in $(seq 1 3000); do
-              "$BIN" --exact "$t" >/tmp/out.txt 2>&1; rc=$?
+              rc=0; "$BIN" --exact "$t" >/tmp/out.txt 2>&1 || rc=$?
               if [ $rc -ge 128 ]; then crashes=$((crashes+1)); elif [ $rc -ne 0 ]; then fails=$((fails+1)); fi
             done
             echo "RESULT ref='${{ matrix.ref }}' test=$t runs=3000 crashes=$crashes other_failures=$fails"
