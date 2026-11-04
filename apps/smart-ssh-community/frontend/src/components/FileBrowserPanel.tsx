@@ -23,7 +23,6 @@ import { COPY_PROGRESS_FROM_BYTES, useFileClipboard } from "./fileBrowser/useFil
 import { useFileDownloads } from "./fileBrowser/useFileDownloads";
 import { useLocalEditFlow } from "./fileBrowser/useLocalEditFlow";
 import { useConnectionLoss } from "./fileBrowser/useConnectionLoss";
-import { useDismissMenus } from "./fileBrowser/useDismissMenus";
 import { FileBrowserDialogs } from "./fileBrowser/FileBrowserDialogs";
 import { useToolbarMenus } from "./fileBrowser/useToolbarMenus";
 import { TransferList } from "./fileBrowser/TransferList";
@@ -191,7 +190,6 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
     editUploadingNameRef,
   });
 
-  useDismissMenus(openMenu, setOpenMenu, dirMenu, setDirMenu);
 
   const handleRefresh = () => {
     setOpenMenu(null);
@@ -204,6 +202,7 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
       narrow={narrow}
       className={className}
       point={point}
+      onClose={closeMenu}
       onOpenLocally={edit.handleOpenLocally}
       onDownloadDefault={handleDownloadDefault}
       onDownloadChoose={handleDownloadChoose}
@@ -387,6 +386,7 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
       {dirMenu && (
         <DirectoryMenu
           narrow={narrow}
+          onClose={() => setDirMenu(null)}
           x={dirMenu.x}
           y={dirMenu.y}
           pasteName={cutEntry?.name ?? null}

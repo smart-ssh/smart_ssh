@@ -17,8 +17,10 @@ describe("no fixed tier list in the core", () => {
   });
 
   it("TypeScript: Tier is a plain string, not a union", () => {
+    const gen = read("apps/smart-ssh-community/frontend/src/generated/ipc.ts");
+    expect(gen).toMatch(/export type TierId = string;/);
     const ts = read("apps/smart-ssh-community/frontend/src/extensions/entitlements.ts");
-    expect(ts).toMatch(/export type Tier = string;/);
+    expect(ts).toMatch(/export type Tier = TierId;/);
     expect(ts).not.toMatch(/type\s+Tier\s*=\s*"/);
   });
 });

@@ -33,7 +33,7 @@ vi.mock("../fileDialog", () => ({
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-const SERVER: ServerDto = {
+const SERVER: ServerDto = { isCopy: false, startDirectory: null,
   id: "00000000-0000-0000-0000-000000000217",
   name: "web-01",
   host: "db01.example.lan",

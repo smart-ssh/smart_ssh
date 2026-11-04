@@ -11,6 +11,14 @@ interface StopPromptDialogProps {
 }
 
 /** Issue #622: asked before ending elevated rights while elevated operations still run. */
+const OPERATION_LABELS: Record<string, TranslationKey | undefined> = {
+  download: "fileElevation.opDownload",
+  upload: "fileElevation.opUpload",
+  delete: "fileElevation.opDelete",
+  chmod: "fileElevation.opChmod",
+  chown: "fileElevation.opChown",
+};
+
 export function StopPromptDialog({ operations, onCancel, onConfirm }: StopPromptDialogProps) {
   const { t } = useTranslation();
   return (
@@ -33,15 +41,14 @@ export function StopPromptDialog({ operations, onCancel, onConfirm }: StopPrompt
           {operations.map((op) => (
             <li key={op.id} className="break-all">
               <span className="font-semibold">
-                {t(
-                  ({
-                    download: "fileElevation.opDownload",
-                    upload: "fileElevation.opUpload",
-                    delete: "fileElevation.opDelete",
-                    chmod: "fileElevation.opChmod",
-                    chown: "fileElevation.opChown",
-                  } satisfies Record<typeof op.kind, TranslationKey>)[op.kind],
-                )}
+                {
+                  // `kind` is a plain string on the wire (generated type); an
+                  // unknown value is shown as is.
+                  (() => {
+                    const key = OPERATION_LABELS[op.kind];
+                    return key ? t(key) : op.kind;
+                  })()
+                }
               </span>{" "}
               <span className="font-mono">{op.path}</span>
               {op.bytesTotal !== null && op.bytesDone !== null ? (

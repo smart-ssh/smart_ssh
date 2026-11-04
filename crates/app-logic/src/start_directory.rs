@@ -157,6 +157,7 @@ pub async fn open_shell_in_start_directory(
         let mut transport = session.transport.lock().await;
         transport.open_shell(size).await?
     };
+    // Sperrreihenfolge: docs/architecture.md, "Lock hierarchy of a session".
     // Erst nach dem Öffnen: die Prüfung braucht den Transport-Lock für den
     // SFTP-Kanal selbst, und der Hinweis soll nur verbraucht werden, wenn es
     // überhaupt ein Terminal gibt, das ihn auslöst.

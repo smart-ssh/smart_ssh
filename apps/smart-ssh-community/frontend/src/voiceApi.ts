@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { EVENT } from "./eventNames";
 
 // Spec 0108: Wrapper um die Befehle und Ereignisse der Spracheingabe. Eigene
 // Datei, damit die Chat-Oberfläche sie nur bei einer Nutzeraktion ruft.
@@ -38,12 +39,12 @@ export const cancelVoiceRecording = () => invoke<void>("cancel_voice_recording")
 export const onSpeechModelStatus = (
   handler: (event: SpeechModelStatusEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<SpeechModelStatusEvent>("speech-model-status", (e) => handler(e.payload));
+  listen<SpeechModelStatusEvent>(EVENT.SPEECH_MODEL_STATUS, (e) => handler(e.payload));
 
 export const onSpeechRecordingState = (
   handler: (state: RecordingState) => void,
 ): Promise<UnlistenFn> =>
-  listen<{ state: RecordingState }>("speech-recording-state", (e) => handler(e.payload.state));
+  listen<{ state: RecordingState }>(EVENT.SPEECH_RECORDING_STATE, (e) => handler(e.payload.state));
 
 /** Provisional text of the running recording (Spec 0108 §5.7); revisions only grow. */
 export interface SpeechPartialEvent {
@@ -54,7 +55,7 @@ export interface SpeechPartialEvent {
 export const onSpeechPartialText = (
   handler: (event: SpeechPartialEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<SpeechPartialEvent>("speech-partial-text", (e) => handler(e.payload));
+  listen<SpeechPartialEvent>(EVENT.SPEECH_PARTIAL_TEXT, (e) => handler(e.payload));
 
 /** Approximate download sizes (Spec 0108 §2.1), for the consent dialog and settings. */
 export const SPEECH_MODEL_SIZE_MIB: Record<SpeechModelId, number> = { base: 142, small: 466 };

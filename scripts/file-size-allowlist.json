@@ -1,6 +1,5 @@
 {
   "apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.test.tsx": 3349,
-  "apps/smart-ssh-community/frontend/src/types.ts": 1648,
   "crates/ai-providers/src/request_logging.rs": 1308,
   "crates/app-logic/src/compaction.rs": 1249,
   "crates/app-logic/src/database_startup/tests.rs": 2309,
@@ -14,7 +13,7 @@
   "crates/app-logic/src/server_credentials.rs": 1752,
   "crates/app-logic/src/servers.rs": 2093,
   "crates/app-logic/src/startup_error_messages.rs": 1541,
-  "crates/app-shell/src/commands/elevation.rs": 1635,
+  "crates/app-shell/src/commands/elevation.rs": 1491,
   "crates/app-shell/src/commands/master_password.rs": 1413,
   "crates/app-shell/src/commands/sftp/revocation_tests.rs": 2180,
   "crates/app-shell/src/lib.rs": 1222,

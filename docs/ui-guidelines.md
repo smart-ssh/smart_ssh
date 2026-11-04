@@ -53,6 +53,14 @@ Tailwind's 4 px scale, with these steps: `1` (4 px) inside compact controls,
 form fields and between paragraphs, `4` between a dialog body and its action
 row, `6` as dialog padding. Prefer `gap-*` and `space-y-*` over single margins.
 
+## Tag input
+
+Use `TagInput` (`components/ui/TagInput.tsx`) for every free-form tag editor.
+Enter or comma adds the trimmed draft (empty and duplicate drafts are
+dropped), blur adds too, Backspace on an empty draft removes the last tag, and
+every chip has a remove button labelled with the tag. `readOnlyTags` are shown
+first and cannot be removed; give the input an `aria-label` (or `labelledBy`).
+
 ## Form fields
 
 Use `Field`. Layout, top to bottom: label, control, help text, error text.
@@ -150,3 +158,18 @@ edges, shifts as a last resort and scrolls when the window is smaller than the
 menu. Do not hand-position menus with `absolute`/`top-full` or raw click
 coordinates. In the narrow layout menus remain bottom sheets (the hook returns
 no style).
+
+## Menus: use `Menu` (issue #914)
+
+Context and dropdown menus use `Menu`, `MenuItem` and `MenuSeparator` from
+`components/ui` (role `menu`/`menuitem`; arrow up/down, Home, End move focus
+over the enabled items, Escape closes and returns focus to the opener, Tab and
+a click outside close; placement via `useMenuPlacement`). `MenuItem` takes an
+optional `icon`, `shortcut` hint, `disabled` and `danger`; use
+`checked` for toggles (`menuitemcheckbox`). Do not hand-build menus.
+
+Two ratchets keep the UI kit used (`apps/smart-ssh-community/frontend/src/uiKitGuards.test.ts`): raw `<button`
+in production TSX outside `components/ui/` may only decrease per file
+(`src/uiKitRawButtons.json`; use `Button` or `MenuItem`), and `<dialog` /
+`fixed inset-0` may appear only in `components/ui/`, `components/ModalBackdrop.tsx` and
+the shrinking allowlist `src/uiKitDialogAllowlist.json` (use `DialogFrame`).

@@ -45,11 +45,13 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -122,6 +124,7 @@ function group(overrides: Partial<GroupDto> = {}): GroupDto {
     name: "Prod",
     parentId: null,
     notes: "",
+    isCopy: false,
     ...overrides,
   };
 }
@@ -597,7 +600,7 @@ describe("ServerList new session (issue #657)", () => {
     renderWithTab();
     const row = (await screen.findByText("prod-1")).closest("button")!;
     fireEvent.contextMenu(row);
-    fireEvent.click(await screen.findByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Neue Sitzung" }));
     await waitFor(() =>
       expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }),
     );
