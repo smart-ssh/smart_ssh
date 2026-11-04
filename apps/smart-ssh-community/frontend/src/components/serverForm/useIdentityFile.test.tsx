@@ -7,14 +7,12 @@ import { testI18n } from "../../testI18n";
 import type { KeyFileFactsDto, ServerDto } from "../../types";
 import { useIdentityFile } from "./useIdentityFile";
 
-vi.mock("../../api", () => ({
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? ((err as { code: string }).code ?? null) : null,
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : String(err),
-  convertIdentityFileToKeychain: vi.fn(),
-  inspectKeyFile: vi.fn(),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    convertIdentityFileToKeychain: vi.fn(),
+    inspectKeyFile: vi.fn(),
+  }),
+);
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <I18nextProvider i18n={testI18n}>{children}</I18nextProvider>

@@ -4,11 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sftpElevationDisable, sftpElevationEnable } from "../../api";
 import { useElevation } from "./useElevation";
 
-vi.mock("../../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  sftpElevationDisable: vi.fn(),
-  sftpElevationEnable: vi.fn(),
-}));
+vi.mock("../../api", async () =>
+  (await import("../../test/apiMock")).createApiMock({
+    sftpElevationDisable: vi.fn(),
+    sftpElevationEnable: vi.fn(),
+  }),
+);
 
 const reload = vi.fn();
 const onElevationChange = vi.fn();

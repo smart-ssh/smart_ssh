@@ -8,7 +8,9 @@ import { initI18n } from "./i18n";
 import type { StartupStateDto } from "./types";
 import { bootstrap } from "./bootstrap";
 
-vi.mock("./api", () => ({ getStartupState: vi.fn() }));
+vi.mock("./api", async () =>
+  (await import("./test/apiMock")).createApiMock({ getStartupState: vi.fn() }),
+);
 vi.mock("./i18n", () => ({ initI18n: vi.fn(() => Promise.resolve()) }));
 vi.mock("./contextMenu", () => ({ installContextMenuSuppression: vi.fn() }));
 vi.mock("./theme", () => ({
