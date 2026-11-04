@@ -35,7 +35,7 @@ interface Props {
  * and notes are saved through their own dedicated commands. */
 export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved, autoFocusNotes }: Props) {
   const { t } = useTranslation();
-  const { tags, tagDraft, setTagDraft, addTag, removeTag, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
+  const { tags, setTags, localNotes, setLocalNotes, dirty, markDirty, markSaved } = model;
   const { tabsIdBase, activeTab, tabItems, setActiveTab } = tabs;
   const [savingLocal, setSavingLocal] = useState({ notes: false, tags: false });
   const localNotesRef = useRef<HTMLTextAreaElement>(null);
@@ -122,12 +122,9 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
       <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
         <TagsField
           tags={tags}
-          tagDraft={tagDraft}
-          setTagDraft={setTagDraft}
-          addTag={addTag}
-          removeTag={(tag) => {
-            markDirty();
-            removeTag(tag);
+          setTags={(next) => {
+            if (next.length < tags.length) markDirty();
+            setTags(next);
           }}
         >
           <Button variant="primary" size="sm"
