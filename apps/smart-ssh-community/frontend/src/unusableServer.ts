@@ -3,9 +3,10 @@
 // `UnusableServerPanel`.
 
 import type { UnusableReason } from "./types";
+import type { TranslateFn } from "./i18nTypes";
 
 export function unusableReasonText(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   reason: UnusableReason,
 ): string {
   return reason === "unknown_auth_method"

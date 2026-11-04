@@ -1,3 +1,4 @@
+import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api";
@@ -27,7 +28,7 @@ export function DataPathsSection() {
   const labelFor = (entry: DataPathEntryDto) => {
     if (entry.label) return entry.label;
     const key = `diagnostics.dataPaths.${entry.id}`;
-    const text = t(key);
+    const text = t(dynamicKey(key)); // built-in ids have a key; unknown ids fall back to the id
     return text === key ? entry.id : text;
   };
 

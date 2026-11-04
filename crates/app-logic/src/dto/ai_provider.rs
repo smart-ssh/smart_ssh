@@ -13,6 +13,7 @@ use ssh_manager_core::profiles::{trim_credential_value, CredentialRef};
 /// das das Frontend für nichts in Teil 1 braucht.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AiProviderConfigDto {
     pub id: ProviderId,
     pub provider_type: ProviderType,
@@ -56,6 +57,7 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
 /// lassen (s. `app_shell::commands::update_ai_provider`-Doc-Kommentar).
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AiProviderConfigInput {
     pub provider_type: ProviderType,
     pub display_name: String,

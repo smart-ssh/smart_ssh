@@ -38,6 +38,7 @@ pub fn is_local(id: ServerId) -> bool {
 /// enthält keine Secret-Felder").
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ServerDto {
     pub id: String,
     pub name: String,
@@ -148,6 +149,7 @@ impl ServerDto {
 /// geschickt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct StoredHostKeyDto {
     /// SSH algorithm name, or `unknown`.
     pub algorithm: String,
@@ -157,6 +159,7 @@ pub struct StoredHostKeyDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct KeyFileFactsDto {
     pub exists: bool,
     /// Nur Unix; auf Windows immer `false`, wie bei OpenSSH selbst (A-4).
@@ -174,6 +177,7 @@ pub struct KeyFileFactsDto {
 /// genau das zusichert (§5.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct KeyFileProblemDto {
     pub code: String,
     pub message: String,
@@ -201,6 +205,7 @@ impl From<ssh_manager_core::ssh::KeyFileFacts> for KeyFileFactsDto {
 /// Frontend-Übersetzungskatalog, nicht hier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct KeychainStatusDto {
     pub available: bool,
     /// `None`, wenn `available` — sonst der klassifizierte Grund.
@@ -213,6 +218,7 @@ pub struct KeychainStatusDto {
 /// kennen müssen (dieselbe Trennung wie bei allen anderen DTOs hier).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum KeychainUnavailableReasonDto {
     NoSessionBus,
     NoSecretServiceProvider,
@@ -252,6 +258,7 @@ impl From<KeychainAvailability> for KeychainStatusDto {
 /// Abschnitt 4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AuthMethodKind {
     Password,
     /// Issue #632: Passwortmethode ohne gespeichertes Passwort.
@@ -287,6 +294,7 @@ impl From<&AuthMethod> for AuthMethodKind {
 /// beim tatsächlichen Löschen still auf `NULL` gesetzt würde.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct DeleteServerResult {
     pub server: ServerDto,
     pub servers_losing_jump_host: Vec<ServerDto>,
@@ -313,6 +321,7 @@ pub struct DeleteServerResult {
 /// das Frontend übersetzt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum UnusableReasonDto {
     /// Von einer neueren Version gespeichert; diese kennt die Anmeldeart
     /// nicht.
@@ -337,6 +346,7 @@ impl From<ssh_manager_core::profiles::UnusableReason> for UnusableReasonDto {
 /// behandeln kann.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct UnusableServerDto {
     pub id: ServerId,
     pub name: String,
@@ -364,6 +374,7 @@ impl From<&ssh_manager_core::profiles::UnusableServer> for UnusableServerDto {
 /// `server:<id>:<slot>`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct DeleteUnusableServerResult {
     pub server: UnusableServerDto,
     pub servers_losing_jump_host: Vec<ServerDto>,
@@ -378,6 +389,7 @@ pub struct DeleteUnusableServerResult {
 /// `ServerId` statt `String` (beides `Uuid`-Newtypes, kein Parsen nötig).
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ServerInput {
     pub name: String,
     pub host: String,
@@ -425,6 +437,7 @@ pub struct ServerInput {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AuthMethodInput {
     /// Leeres/`None`-Feld heißt hier: bei einem bestehenden Passwort
     /// unverändert, sonst (Neuanlage, Methodenwechsel) "kein Passwort"
@@ -478,6 +491,7 @@ pub enum AuthMethodInput {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum TestConnectionResult {
     Success,
     AuthenticationFailed,
@@ -519,6 +533,7 @@ pub enum TestConnectionResult {
 /// geloggt oder exportiert.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct TestConnectionReport {
     #[serde(flatten)]
     pub result: TestConnectionResult,

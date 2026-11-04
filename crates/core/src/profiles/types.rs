@@ -10,6 +10,7 @@ use crate::shared::ServerId;
 /// Konzept "Gruppe" nicht, es gibt daher keinen Grund, den Typ nach
 /// `crate::shared` auszulagern (s. dortiger Modul-Kommentar).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct GroupId(pub Uuid);
 
 impl GroupId {
@@ -134,6 +135,7 @@ pub struct ServerListing {
 /// implizieren, die anderen seien unsicher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum PostIngestPolicy {
     /// Sobald Serverinhalt gelesen wurde, wird JEDE weitere Aktion
     /// bestätigt.

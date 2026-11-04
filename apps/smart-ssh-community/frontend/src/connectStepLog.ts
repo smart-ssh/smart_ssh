@@ -6,8 +6,9 @@
 // Das Protokoll ist flüchtig: Es lebt nur im Zustand der Komponente und
 // wird nirgends gespeichert oder geloggt.
 import type { ConnectStep, ConnectStepRecord } from "./types";
+import { dynamicKey, type TranslateFn } from "./i18nTypes";
 
-type T = (key: string, options?: Record<string, unknown>) => string;
+type T = TranslateFn;
 
 export interface HopGroup {
   hopIndex: number;
@@ -87,7 +88,7 @@ function formatHost(address: string): string {
 
 /** Translated reason for a failure code; unknown codes show the code itself. */
 export function failureReason(t: T, code: string): string {
-  return t(`connectLog.reason.${code}`, { defaultValue: code });
+  return t(dynamicKey(`connectLog.reason.${code}`), { defaultValue: code });
 }
 
 /** Details line of a record: the step parameters plus, for a failed step,

@@ -57,7 +57,7 @@ export function FileEntryMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const getAnchor = useCallback(
     () => point ?? findMenuTrigger(entry.path),
-    [point?.x, point?.y, entry.path], // eslint-disable-line react-hooks/exhaustive-deps
+    [point?.x, point?.y, entry.path], // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the primitive coordinates; the point object is recreated each render
   );
   const style = useMenuPlacement(menuRef, getAnchor, true, { align: point ? "start" : "end", gap: point ? 0 : 4 });
   // The menu unmounts when an action runs. Focus the ⋮ button first, so a
