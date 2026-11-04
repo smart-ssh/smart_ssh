@@ -1,5 +1,6 @@
 import { type ComposerAttachment } from "../../extensions/registry";
 import type { ActionOrigin, ActionResultPayload, AiAction, AutoExecRule, Decision, RiskAssessment, WebActivityDto, QuestionOption } from "../../types";
+import type { TranslateFn } from "../../i18nTypes";
 
 export type ChatItem =
   | {
@@ -176,7 +177,7 @@ export type ChatItem =
  * anderen Aktionstypen bleibt der Parameter ungenutzt.
  */
 export function describeAction(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TranslateFn,
   action: AiAction,
   targetName: string | null,
 ): { label: string; command?: string } {
@@ -247,7 +248,7 @@ export function truncateMcpClientName(name: string): string {
 }
 
 export function decisionBadge(
-  t: (key: string) => string,
+  t: TranslateFn,
   decision: Decision,
 ): { text: string; className: string } {
   if (decision === "AutoExec") {

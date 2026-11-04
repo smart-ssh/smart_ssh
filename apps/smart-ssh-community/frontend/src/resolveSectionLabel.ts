@@ -1,3 +1,4 @@
+import { dynamicKey, type TranslateFn } from "./i18nTypes";
 /**
  * Spec 0055, Teil 4: löst `SettingsSectionContribution.label` auf —
  * entweder ein Übersetzungsschlüssel (z. B. `"settings.categories.
@@ -33,8 +34,8 @@ export function resolveSectionLabel(
   label: string | undefined,
   id: string,
   i18n: { exists: (key: string) => boolean },
-  t: (key: string) => string,
+  t: TranslateFn,
 ): string {
   if (label === undefined) return id;
-  return i18n.exists(label) ? t(label) : label;
+  return i18n.exists(label) ? t(dynamicKey(label)) : label;
 }

@@ -12,6 +12,7 @@ import { DocumentCard } from "./DocumentCard";
 import { WebActivityCard } from "../WebActivityCard";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
 import { QuestionCard, type QuestionState } from "../QuestionCard";
+import type { TranslateFn } from "../../i18nTypes";
 
 export const ChatItemView = memo(function ChatItemView({
   item,
@@ -246,7 +247,7 @@ export const ChatItemView = memo(function ChatItemView({
 
 /** "name (Art), …" — nur Namen und Art, nie Inhalt (Spec 0110, §5). */
 export function attachmentLine(
-  t: (key: string) => string,
+  t: TranslateFn,
   items: { name: string; kind: ComposerAttachment["kind"] }[],
 ): string {
   const kindLabel = (k: ComposerAttachment["kind"]) =>

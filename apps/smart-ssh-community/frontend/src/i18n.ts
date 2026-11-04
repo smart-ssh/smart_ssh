@@ -20,6 +20,15 @@ export { SUPPORTED_LANGUAGES, type SupportedLanguage };
 // der nicht zu unübersichtlich wird (Spec nennt `servers.json` etc. als
 // spätere Option, aktuell nicht nötig).
 
+// Issue #911: translation keys are type-checked. `src/i18next.d.ts` declares
+// the English `common` bundle as the key set, so `t("unknown.key")` fails
+// `tsc`. Keys assembled at run time go through `dynamicKey()` from
+// `i18nTypes.ts` (a documented cast to `TranslationKey`); helpers that take
+// `t` as a parameter use `TranslateFn`. An extension namespace is added to the
+// types by merging into `ExtensionNamespaces` (`i18nTypes.ts`) and is then
+// used with `useTranslation("ns")` or `t(key, { ns: "ns" })`. In development
+// builds a key that is missing at run time is logged once (see `initI18n`).
+
 /** Spec 0024, Abschnitt 4: eigene Store-Datei statt der SQLite-Datenbank —
  * eine einzelne, nicht sicherheitsrelevante UI-Einstellung braucht keine
  * eigene Migration. Auch künftige weitere reine UI-Einstellungen (Theme
@@ -93,6 +102,15 @@ async function resolveInitialLanguage(): Promise<SupportedLanguage> {
   return detectedSystemLanguage();
 }
 
+const warnedMissingKeys = new Set<string>();
+/** Development builds only: logs each missing key once per run. */
+function warnMissingKeyOnce(languages: readonly string[], ns: string, key: string): void {
+  const id = `${ns}:${key}`;
+  if (warnedMissingKeys.has(id)) return;
+  warnedMissingKeys.add(id);
+  console.warn(`[i18n] missing translation key "${key}" (namespace "${ns}", languages ${languages.join(", ")})`);
+}
+
 /** Muss vor dem ersten Render abgeschlossen sein (s. `main.tsx`, awaitet
  * dies vor `createRoot(...).render(...)`) — vermeidet ein sichtbares
  * Umschalten der Sprache kurz nach dem Start.
@@ -114,6 +132,7 @@ export async function initI18n(forced?: SupportedLanguage): Promise<void> {
     lng: language,
     fallbackLng: DEFAULT_LANGUAGE,
     defaultNS: "common",
+    ...(import.meta.env.DEV ? { saveMissing: true, missingKeyHandler: warnMissingKeyOnce } : {}),
     interpolation: { escapeValue: false }, // React escaped bereits selbst
   });
   // `lang` am Wurzelelement: wählt die passende CJK-Glyphenvariante und

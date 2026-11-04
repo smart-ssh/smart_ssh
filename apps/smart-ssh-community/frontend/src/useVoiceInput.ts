@@ -1,3 +1,4 @@
+import type { TranslationKey } from "./i18nTypes";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { commandErrorCode } from "./api";
 import {
@@ -43,7 +44,7 @@ export interface VoiceHandlers {
 export function useVoiceInput(handlers: VoiceHandlers) {
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [elapsed, setElapsed] = useState(0);
-  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const phaseRef = useRef<VoicePhase>("idle");
   const consentRef = useRef<ConsentState | null>(null);

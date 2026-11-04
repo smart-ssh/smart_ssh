@@ -16,6 +16,7 @@ import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import type { TranslateFn } from "../i18nTypes";
 
 interface StartupGateProps {
   /** Der Zustand, den `main.tsx` schon geholt hat, damit die Maske ohne
@@ -407,7 +408,7 @@ function StartOver({
 }: {
   busy: boolean;
   onClick: () => void;
-  t: (key: string) => string;
+  t: TranslateFn;
 }) {
   return (
     <Button variant="danger" onClick={onClick} disabled={busy}>

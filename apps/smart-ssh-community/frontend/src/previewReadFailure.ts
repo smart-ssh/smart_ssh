@@ -1,3 +1,4 @@
+import { dynamicKey, type TranslationKey } from "./i18nTypes";
 import { commandErrorCode, commandErrorMessage } from "./api";
 
 /** Issue #655: why the remote side of a text diff could not be read. */
@@ -23,10 +24,10 @@ export function classifyPreviewReadFailure(err: unknown): PreviewReadFailure {
 
 /** `t` key and options of the hint for a failure. */
 export function previewReadFailureHint(failure: PreviewReadFailure): {
-  key: string;
+  key: TranslationKey;
   options?: { message: string };
 } {
   return failure.kind === "other"
     ? { key: "fileBrowser.readFailure.other", options: { message: failure.message } }
-    : { key: `fileBrowser.readFailure.${failure.kind}` };
+    : { key: dynamicKey(`fileBrowser.readFailure.${failure.kind}`) };
 }

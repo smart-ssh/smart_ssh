@@ -1,3 +1,4 @@
+import type { TranslateFn } from "../i18nTypes";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { applySshConfigImport, commandErrorCode, commandErrorMessage, previewSshConfigImport } from "../api";
@@ -58,7 +59,7 @@ function groupDepth(groups: SshConfigImportPreviewDto["groups"], index: number):
 }
 
 function originLabel(
-  t: ReturnType<typeof useTranslation>["t"],
+  t: TranslateFn,
   origin: { file: string; line: number; block: string } | null,
 ): string {
   if (!origin) return t("sshConfigImport.origin.default");
