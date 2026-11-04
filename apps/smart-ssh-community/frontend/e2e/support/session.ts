@@ -37,6 +37,7 @@ export function redCommandProposal(
     decision: { Confirm: { reason: "Command needs confirmation", code: "CONFIRM_REQUIRED" } },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

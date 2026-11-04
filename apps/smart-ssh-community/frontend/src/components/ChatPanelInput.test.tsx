@@ -46,34 +46,9 @@ vi.mock("../api", async () => {
   });
 });
 
-vi.mock("../events", () => ({
-  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
-  onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
-  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
-  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
-  onChatError: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextUsage: () => Promise.resolve(() => {}),
-  onChatContextCompacted: () => Promise.resolve(() => {}),
-  onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
-  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
-  onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
-}));
+vi.mock("../events", async () =>
+  (await import("../test/eventsMock")).createEventsMock(),
+);
 
 vi.mock("../riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
@@ -459,6 +434,7 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
       decision: "AutoExec",
       previousNoteContent: null,
       usesStoredSudoPassword: false,
+      autoExecRules: [],
       previousFileContent: null,
       previousFileSize: null,
       targetName: null,
@@ -590,6 +566,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       deltaHandler!({ sessionId: "session-1", delta: "Antwort vorher" });
       webHandler!({
         sessionId: "session-1",
+        activityId: "web-1",
         activity: {
           kind: "search",
           input: "openssh 10 changelog",
@@ -612,6 +589,7 @@ describe("ChatPanel web activity (Spec 0105)", () => {
       // Eine Recherche für eine andere Sitzung erscheint nicht.
       webHandler!({
         sessionId: "other-session",
+        activityId: "web-2",
         activity: {
           kind: "search",
           input: "fremde Suche",
@@ -690,6 +668,7 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
+    autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
     targetName: null,

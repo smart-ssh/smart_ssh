@@ -19,6 +19,7 @@ pub const COALESCE_WINDOW: Duration = Duration::from_millis(500);
 /// The kinds of user data a notification can refer to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum DataKind {
     Servers,
     Groups,
