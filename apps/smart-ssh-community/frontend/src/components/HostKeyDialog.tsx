@@ -153,14 +153,14 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
-                  className="font-heading bg-danger-border-strong px-3 py-2 text-sm font-bold tracking-wide text-danger-fg-faintest hover:bg-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-danger-subtle"
+                  className="font-heading bg-danger-border-strong px-3 py-2 text-sm font-bold tracking-wide text-danger-fg-faintest hover:bg-danger focus-ring focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
                   onClick={() => decide("trust")}
-                  className="font-heading border border-fg-bright/15 px-3 py-2 text-sm font-semibold tracking-wide text-danger-fg-softer hover:bg-fg-bright/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-danger-subtle"
+                  className="font-heading border border-fg-bright/15 px-3 py-2 text-sm font-semibold tracking-wide text-danger-fg-softer hover:bg-fg-bright/6 focus-ring focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.trustAnyway")}
                 </button>

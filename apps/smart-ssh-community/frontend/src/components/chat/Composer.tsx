@@ -74,7 +74,7 @@ export function Composer({
                     type="button"
                     aria-label={t("chat.attachmentRemove", { name: a.name })}
                     onClick={() => composerCtx.removeAttachment(a.id)}
-                    className="text-fg-muted hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
+                    className="text-fg-muted hover:text-fg-bright focus-ring-flush"
                   >
                     ×
                   </button>
@@ -104,7 +104,7 @@ export function Composer({
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg`}
+            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-ring-flush`}
           />
           {narrow ? (
             composerActions.length > 0 && (
@@ -145,7 +145,7 @@ export function Composer({
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
                 disabled={action.disabled}
                 onClick={() => invokeComposerAction(action)}
-                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-50"
+                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-ring-flush disabled:opacity-50"
               >
                 {action.icon}
               </button></ErrorBoundary>

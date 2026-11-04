@@ -172,7 +172,7 @@ export function MenuItem({
       disabled={disabled}
       title={title}
       onClick={onClick}
-      className={`flex w-full items-center gap-2 px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left ${tone} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`flex w-full items-center gap-2 px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left ${tone} focus-ring-inset disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {icon !== undefined && <span aria-hidden="true" className="w-3">{icon}</span>}
       <span className="flex-1">{children}</span>

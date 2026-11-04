@@ -37,3 +37,31 @@ describe("colour guard", () => {
     expect(offenders, "use semantic tokens (THEMING.md)").toEqual([]);
   });
 });
+
+// Guard (issue #917): the focus ring is the `focus-ring*` utilities in
+// index.css, not a literal `focus-visible:ring-2` chain. Exceptions need a reason.
+const FOCUS_RING_ALLOWLIST: Record<string, string> = {
+  "App.tsx": "ring colour chosen for contrast on the warning banner",
+  "components/fileBrowser/ElevationBanner.tsx": "ring colour chosen for contrast on the warning banner",
+  "components/ChatPanel.tsx": "accent-coloured outline on the floating scroll-to-bottom button",
+  "components/FirstRunNoticeScreen.tsx": "accent-coloured outline on an inline link",
+  "components/StartupPromptDialog.tsx": "accent-coloured outline on an inline link",
+  "components/QuestionCard.tsx": "ring colour chosen for contrast on the solid accent button",
+};
+const LITERAL_FOCUS_RING = /focus-visible:ring-2|focus-visible:outline-2|FOCUS_RING\b/;
+
+describe("focus ring guard", () => {
+  it("detects the literal chain in fixtures", () => {
+    expect(LITERAL_FOCUS_RING.test('"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"')).toBe(true);
+    expect(LITERAL_FOCUS_RING.test('"focus-visible:outline focus-visible:outline-2"')).toBe(true);
+    expect(LITERAL_FOCUS_RING.test('"focus-ring rounded"')).toBe(false);
+  });
+
+  it("has no literal focus ring chain outside the allowlist", () => {
+    const offenders = sourceFiles(SRC)
+      .map((p) => relative(SRC, p).split("\\").join("/"))
+      .filter((f) => !f.startsWith("test/") && !(f in FOCUS_RING_ALLOWLIST))
+      .filter((f) => LITERAL_FOCUS_RING.test(readFileSync(join(SRC, f), "utf8")));
+    expect(offenders, "use focus-ring / focus-ring-flush / focus-ring-inset (THEMING.md)").toEqual([]);
+  });
+});

@@ -77,7 +77,9 @@ Use `Field`. Layout, top to bottom: label, control, help text, error text.
 
 Every interactive element shows a 2 px indigo ring (`indigo-400`) on
 `:focus-visible`; never remove an outline without replacing it. The ring has at
-least 3:1 contrast against the surface it sits on.
+least 3:1 contrast against the surface it sits on. Use the `focus-ring`,
+`focus-ring-flush` or `focus-ring-inset` utilities (`index.css`), not a literal
+ring chain; the ring is changed in one place.
 
 ## Text size and contrast
 

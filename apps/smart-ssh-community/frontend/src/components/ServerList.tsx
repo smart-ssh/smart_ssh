@@ -453,7 +453,7 @@ export function ServerList({
         }}
        
         style={{ paddingLeft: `${indent(depth)}px` }}
-        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg aria-disabled:opacity-60"
+        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-ring-inset aria-disabled:opacity-60"
       >
         <div className="min-w-0">
           <p className="font-medium break-words text-fg">{server.name}</p>
@@ -552,7 +552,7 @@ export function ServerList({
                 : undefined
             }
             style={{ paddingLeft: `${indent(depth)}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg"
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-ring-inset"
           >
             <svg
               data-testid="group-chevron"
