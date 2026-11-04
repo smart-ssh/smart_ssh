@@ -23,7 +23,7 @@ function group(id: string, parentId: string | null): GroupDto {
 }
 
 function server(id: string, groupId: string | null, isLocal = false): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id,
     name: id,
     host: "example.invalid",

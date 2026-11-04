@@ -35,7 +35,7 @@ function localServer(): ServerDto {
 }
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -102,7 +102,7 @@ function renderList(
 
 
 function folder(id: string, name: string, parentId: string | null): GroupDto {
-  return { id, name, parentId, notes: "" };
+  return { isCopy: false, id, name, parentId, notes: "" };
 }
 
 const pad = (el: HTMLElement) => parseFloat(el.style.paddingLeft);

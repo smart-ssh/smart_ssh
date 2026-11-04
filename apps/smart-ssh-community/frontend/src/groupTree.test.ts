@@ -6,7 +6,7 @@ import type { GroupDto, ServerDto, UnusableServerDto } from "./types";
 // Sidebar (Verwalten-Tab) und der gruppierten Hauptübersicht.
 
 function group(id: string, name: string, parentId: string | null): GroupDto {
-  return { id, name, parentId, notes: "" };
+  return { isCopy: false, id, name, parentId, notes: "" };
 }
 
 function server(
@@ -99,7 +99,7 @@ describe("buildGroupTree", () => {
 });
 
 describe("flattenGroupOptions (issue #49)", () => {
-  const g = (id: string, name: string, parentId: string | null): GroupDto => ({
+  const g = (id: string, name: string, parentId: string | null): GroupDto => ({ isCopy: false,
     id,
     name,
     parentId,

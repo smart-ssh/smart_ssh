@@ -17,7 +17,7 @@ function group(id: string, name: string, parentId: string | null): GroupDto {
 }
 
 function server(id: string, name: string, groupId: string | null): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id,
     name,
     host: "example.invalid",
