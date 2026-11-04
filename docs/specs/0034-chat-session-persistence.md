@@ -21,6 +21,10 @@ Je Chat-Sitzung: Server, Titel (leer bis automatisch erzeugt), Start- und
 Endzeit (leer, solange aktiv) und der Anbieter, mit dem sie begann.
 Je Nachricht: Rolle (Nutzer, Assistent, Aktionsergebnis), Inhaltsart (Text,
 Kommando-Ergebnis, abgelehnte Aktion, Verweise auf Erweiterungsinhalt nach Spec 0110), Inhalt, Reihenfolge, Zeitpunkt.
+Die Reihenfolge ist je Sitzung eindeutig: Zwei Nachrichten, die gleichzeitig
+angehängt werden, bekommen immer verschiedene, fortlaufende Nummern. Älteren
+Datenbanken, in denen eine Sitzung doppelte Nummern hatte, nummeriert das
+Update diese Sitzung unter Beibehaltung der Reihenfolge ab 0 neu.
 Löscht man den Server, verschwinden seine Sitzungen und Nachrichten mit.
 
 Der Anbieter einer Sitzung ist rein informativ: Beim Fortsetzen ist

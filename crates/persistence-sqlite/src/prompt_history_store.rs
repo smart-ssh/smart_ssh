@@ -83,12 +83,18 @@ impl SqlitePromptHistoryStore {
         let server_id_str = server_id.0.to_string();
         let now = Utc::now().to_rfc3339();
 
+        // Issue #903: SELECT/UPDATE|INSERT/trim in one `BEGIN IMMEDIATE` transaction.
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend_err)?;
         let latest = sqlx::query(
             "SELECT id, content FROM prompt_history WHERE server_id = ? \
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(&server_id_str)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(backend_err)?;
 
@@ -99,9 +105,10 @@ impl SqlitePromptHistoryStore {
                 sqlx::query("UPDATE prompt_history SET created_at = ? WHERE id = ?")
                     .bind(&now)
                     .bind(&existing_id)
-                    .execute(&self.pool)
+                    .execute(&mut *tx)
                     .await
                     .map_err(backend_err)?;
+                tx.commit().await.map_err(backend_err)?;
                 return Ok(());
             }
         }
@@ -113,7 +120,7 @@ impl SqlitePromptHistoryStore {
         .bind(&server_id_str)
         .bind(content)
         .bind(&now)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(backend_err)?;
 
@@ -125,9 +132,11 @@ impl SqlitePromptHistoryStore {
         .bind(&server_id_str)
         .bind(&server_id_str)
         .bind(MAX_ENTRIES_PER_SERVER)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(backend_err)?;
+
+        tx.commit().await.map_err(backend_err)?;
 
         Ok(())
     }

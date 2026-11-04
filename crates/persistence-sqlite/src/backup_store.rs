@@ -640,36 +640,12 @@ async fn write_difference(
         write_group(conn, g, true).await?;
     }
     for s in changed(&current.servers, &target.servers, |s| s.id) {
-        sqlx::query(
-            "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory, is_copy) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, host = excluded.host, \
-             port = excluded.port, username = excluded.username, group_id = excluded.group_id, \
-             auth_method = excluded.auth_method, notes = excluded.notes, \
-             jump_host_id = excluded.jump_host_id, created_at = excluded.created_at, \
-             updated_at = excluded.updated_at, post_ingest_policy = excluded.post_ingest_policy, \
-             ai_injection_check_enabled = excluded.ai_injection_check_enabled, \
-             sftp_server_path = excluded.sftp_server_path, \
-             start_directory = excluded.start_directory, is_copy = excluded.is_copy",
+        crate::server_columns::bind_all(
+            sqlx::query(sqlx::AssertSqlSafe(
+                crate::server_columns::UPSERT_ALL.as_str(),
+            )),
+            s,
         )
-        .bind(s.id.to_string())
-        .bind(&s.name)
-        .bind(&s.host)
-        .bind(i64::from(s.port))
-        .bind(&s.username)
-        .bind(s.group_id.map(|p| p.to_string()))
-        .bind(&s.auth_method)
-        .bind(&s.notes)
-        .bind(s.jump_host_id.map(|p| p.to_string()))
-        .bind(&s.created_at)
-        .bind(&s.updated_at)
-        .bind(&s.post_ingest_policy)
-        .bind(s.ai_injection_check_enabled)
-        .bind(&s.sftp_server_path)
-        .bind(&s.start_directory)
-        .bind(s.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
@@ -1226,28 +1202,12 @@ async fn insert_all(
         write_group(conn, g, false).await?;
     }
     for s in &d.servers {
-        sqlx::query(
-            "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory, is_copy) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        crate::server_columns::bind_all(
+            sqlx::query(sqlx::AssertSqlSafe(
+                crate::server_columns::INSERT_ALL.as_str(),
+            )),
+            s,
         )
-        .bind(s.id.to_string())
-        .bind(&s.name)
-        .bind(&s.host)
-        .bind(i64::from(s.port))
-        .bind(&s.username)
-        .bind(s.group_id.map(|p| p.to_string()))
-        .bind(&s.auth_method)
-        .bind(&s.notes)
-        .bind(s.jump_host_id.map(|p| p.to_string()))
-        .bind(&s.created_at)
-        .bind(&s.updated_at)
-        .bind(&s.post_ingest_policy)
-        .bind(s.ai_injection_check_enabled)
-        .bind(&s.sftp_server_path)
-        .bind(&s.start_directory)
-        .bind(s.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;

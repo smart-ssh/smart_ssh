@@ -32,6 +32,7 @@ mod paths;
 mod policy_store;
 mod prompt_history_store;
 pub mod runtime_bridge;
+mod server_columns;
 mod store;
 /// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
 /// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
@@ -45,6 +46,8 @@ mod tests;
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
+#[cfg(test)]
+mod tests_concurrent_writes;
 #[cfg(test)]
 mod tests_credential_store;
 #[cfg(test)]
@@ -75,6 +78,8 @@ mod tests_raw_file;
 mod tests_release_chain;
 #[cfg(test)]
 mod tests_runtime_bridge_guard;
+#[cfg(test)]
+mod tests_server_columns;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,

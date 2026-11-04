@@ -8,6 +8,7 @@
 //! ```
 #![expect(clippy::unwrap_used, reason = "integration test")]
 mod fixtures;
+use fixtures::freezable_proxy::FreezableProxy;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -990,6 +991,21 @@ async fn test_changed_host_key_still_yields_mismatch_not_a_connection_error() {
     }
 }
 
+/// Accepts one connection and keeps it open without ever sending a banner,
+/// until the returned sender is dropped (at the end of the test). Replaces a
+/// timed sleep so no thread outlives its test.
+fn hold_first_connection_open(listener: std::net::TcpListener) -> std::sync::mpsc::Sender<()> {
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            // Returns `Err` as soon as the sender is dropped.
+            let _ = wait.recv();
+            drop(stream);
+        }
+    });
+    release
+}
+
 /// Test 13: ein hängender Handshake (Gegenstelle nimmt an, schickt aber nie
 /// ein SSH-Banner) endet nach dem (verkürzten) Timeout mit `SshError::Timeout`
 /// statt für immer zu hängen — und akzeptiert dabei keinen Host-Key (0
@@ -1003,12 +1019,9 @@ async fn test_hanging_handshake_times_out_and_never_trusts_a_host_key() {
     // Nimmt die Verbindung an, hält sie aber offen, ohne je ein
     // SSH-Identifikations-Banner zu schicken — genau der Fall, den
     // `SSH_CONNECT_TIMEOUT` abfangen soll.
-    std::thread::spawn(move || {
-        if let Ok((stream, _)) = listener.accept() {
-            std::thread::sleep(std::time::Duration::from_secs(30));
-            drop(stream);
-        }
-    });
+    // The server holds the connection open until the test ends and drops
+    // `_release` (no timed sleep).
+    let _release = hold_first_connection_open(listener);
 
     let target = ConnectionTarget {
         hops: vec![password_hop("127.0.0.1", port)],
@@ -1339,19 +1352,23 @@ async fn test_sftp_stat() {
 /// reguläre Kanal-Ende zu warten, und dabei die bereits eingetroffene
 /// erste Ausgabezeile mitliefern.
 ///
-/// Der Abbruch wartet erst auf das Signal des Testservers, dass die erste
-/// Zeile gesendet ist (ADR 0122, R6: ein `tokio::select!` ohne `biased`
-/// entscheidet sonst zufällig zwischen Abbruch und Kanaldaten, wenn beide
-/// gleichzeitig anliegen) und danach fest 1s, bevor er abbricht — die
-/// Zustellung über localhost liegt weit darunter, die 5s-Obergrenze
-/// darüber (Richtwert aus ADR 0122, R6).
+/// Der Abbruch wartet, bis der Client die erste Zeile tatsächlich erhalten
+/// hat (ADR 0122, R6: ein `tokio::select!` ohne `biased` entscheidet sonst
+/// zufällig zwischen Abbruch und Kanaldaten, wenn beide gleichzeitig
+/// anliegen). Beobachtet wird das über den Streaming-Sink derselben
+/// Drain-Schleife wie bei `execute_cancellable`; die 5s-Obergrenze ist nur
+/// ein Schutz gegen Hängen (ADR 0122, R6).
 #[tokio::test]
 async fn test_execute_cancellable_returns_partial_output_on_cancel() {
     let server = RunningTestServer::start().await;
     let mut transport = connect_trusted(&server).await;
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    let first_line_sent = server.first_line_sent.clone();
+    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
 
+    // Cancel only once the client has actually received the first line
+    // (observed through the streaming sink of the same drain loop), so
+    // the unbiased `select!` cannot pick the cancel over pending data.
+    let first_line_sent = server.first_line_sent.clone();
     tokio::spawn(async move {
         assert!(
             first_line_sent
@@ -1359,17 +1376,25 @@ async fn test_execute_cancellable_returns_partial_output_on_cancel() {
                 .await,
             "Testserver hat die erste Zeile nicht innerhalb von 5s gesendet"
         );
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let mut seen = Vec::new();
+        while seen != b"first line\n" {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), chunks.recv()).await {
+                Ok(Some(ssh_manager_core::ssh::ExecOutputChunk::Data { bytes, .. })) => {
+                    seen.extend(bytes)
+                }
+                other => panic!("first line not received: {other:?}"),
+            }
+        }
         let _ = cancel_tx.send(());
     });
 
     let outcome = tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        transport.execute_cancellable("never-ending", cancel_rx),
+        transport.execute_streaming("never-ending", None, cancel_rx, sink),
     )
     .await
-    .expect("execute_cancellable() darf nicht hängen bleiben, wenn cancel auflöst")
-    .expect("execute_cancellable() sollte trotz Abbruch Ok liefern");
+    .expect("execute_streaming() darf nicht hängen bleiben, wenn cancel auflöst")
+    .expect("execute_streaming() sollte trotz Abbruch Ok liefern");
 
     assert!(outcome.cancelled);
     assert_eq!(outcome.output.stdout, b"first line\n");
@@ -1954,12 +1979,9 @@ async fn test_issue_634_hostname_gets_a_real_dns_step() {
 async fn test_issue_51_timeout_marks_the_step_that_was_running() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    std::thread::spawn(move || {
-        if let Ok((stream, _)) = listener.accept() {
-            std::thread::sleep(std::time::Duration::from_secs(30));
-            drop(stream);
-        }
-    });
+    // The server holds the connection open until the test ends and drops
+    // `_release` (no timed sleep).
+    let _release = hold_first_connection_open(listener);
 
     let target = ConnectionTarget {
         hops: vec![password_hop("127.0.0.1", port)],
@@ -2003,12 +2025,9 @@ async fn test_issue_51_timeout_marks_the_step_that_was_running() {
 async fn test_issue_97_hanging_handshake_hits_the_handshake_phase_limit() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    std::thread::spawn(move || {
-        if let Ok((stream, _)) = listener.accept() {
-            std::thread::sleep(std::time::Duration::from_secs(30));
-            drop(stream);
-        }
-    });
+    // The server holds the connection open until the test ends and drops
+    // `_release` (no timed sleep).
+    let _release = hold_first_connection_open(listener);
 
     let target = ConnectionTarget {
         hops: vec![password_hop("127.0.0.1", port)],
@@ -2434,67 +2453,6 @@ async fn test_sftp_folder_upload_mirrors_nested_tree_with_identical_contents() {
     );
 }
 
-/// TCP forwarder for one connection that can go silent: once frozen it
-/// keeps the sockets open but forwards nothing in either direction, like a
-/// network that drops packets without a reset (issue #353).
-struct FreezableProxy {
-    port: u16,
-    frozen: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    task: tokio::task::JoinHandle<()>,
-}
-
-impl FreezableProxy {
-    async fn start(target: std::net::SocketAddr) -> Self {
-        use std::sync::atomic::Ordering;
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let frozen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let flag = frozen.clone();
-        let task = tokio::spawn(async move {
-            let (inbound, _) = listener.accept().await.unwrap();
-            let outbound = tokio::net::TcpStream::connect(target).await.unwrap();
-            let (mut in_r, mut in_w) = inbound.into_split();
-            let (mut out_r, mut out_w) = outbound.into_split();
-            let f1 = flag.clone();
-            let up = tokio::spawn(async move {
-                let mut buf = [0u8; 4096];
-                while let Ok(n) = in_r.read(&mut buf).await {
-                    if n == 0 {
-                        break;
-                    }
-                    if !f1.load(Ordering::SeqCst) && out_w.write_all(&buf[..n]).await.is_err() {
-                        break;
-                    }
-                }
-            });
-            let mut buf = [0u8; 4096];
-            while let Ok(n) = out_r.read(&mut buf).await {
-                if n == 0 {
-                    break;
-                }
-                if !flag.load(Ordering::SeqCst) && in_w.write_all(&buf[..n]).await.is_err() {
-                    break;
-                }
-            }
-            up.abort();
-        });
-        Self { port, frozen, task }
-    }
-
-    fn freeze(&self) {
-        self.frozen.store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-impl Drop for FreezableProxy {
-    fn drop(&mut self) {
-        self.task.abort();
-    }
-}
-
 /// Connects through `port` with a shortened keepalive (interval 200 ms,
 /// max 2) and returns the transport.
 async fn connect_fast_keepalive(
@@ -2561,11 +2519,22 @@ async fn test_silent_drop_is_detected_by_keepalive_without_open_channel() {
 #[tokio::test]
 async fn test_idle_healthy_session_stays_connected_across_many_keepalives() {
     let server = RunningTestServer::start().await;
-    let mut transport = connect_fast_keepalive(&server, server.addr.port()).await;
+    let proxy = FreezableProxy::start(server.addr).await;
+    let mut transport = connect_fast_keepalive(&server, proxy.port).await;
     let watch = transport.connection_loss_watch().expect("loss watch");
 
-    // ~15 keepalive intervals, far beyond the 2 unanswered ones allowed.
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // Wait for the event, not for a duration: 10 further answered
+    // keepalives after the session is up, far beyond the 2 unanswered
+    // ones allowed. The 20 s bound only keeps a regression from hanging.
+    let mut reads = proxy.downstream_reads.clone();
+    let baseline = *reads.borrow();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        reads.wait_for(|n| *n >= baseline + 10),
+    )
+    .await
+    .expect("keepalives should keep being answered")
+    .expect("proxy alive");
 
     assert!(
         watch.borrow().is_none(),
