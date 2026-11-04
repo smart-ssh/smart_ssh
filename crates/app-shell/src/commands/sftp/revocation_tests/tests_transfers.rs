@@ -957,6 +957,7 @@ fn test_921_no_blocking_std_fs_outside_spawn_blocking() {
     for (name, source) in [
         ("transfer.rs", include_str!("../transfer.rs")),
         ("folder_upload.rs", include_str!("../folder_upload.rs")),
+        ("download.rs", include_str!("../download.rs")),
     ] {
         let lines: Vec<&str> = source.lines().collect();
         let end = lines

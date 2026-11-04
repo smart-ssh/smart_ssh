@@ -116,7 +116,8 @@ pub(super) async fn download_impl(
         }
     };
     if let Some(dir) = &staging {
-        std::fs::create_dir_all(dir)?;
+        let dir = dir.clone();
+        super::transfer::blocking_io(move || std::fs::create_dir_all(dir)).await?;
     }
 
     let downloaded = download_one_file(
@@ -142,7 +143,8 @@ pub(super) async fn download_impl(
         _ => Ok(()),
     };
     if let Some(dir) = &staging {
-        if let Err(err) = std::fs::remove_dir_all(dir) {
+        let dir = dir.clone();
+        if let Err(err) = super::transfer::blocking_io(move || std::fs::remove_dir_all(dir)).await {
             tracing::warn!(error = %err, "could not remove the staged download");
         }
     }
