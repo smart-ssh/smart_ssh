@@ -30,7 +30,7 @@ function sourceFiles(dir: string): string[] {
 describe("platform detection is in one module (issue #915)", () => {
   it("only platform.ts reads navigator.platform / navigator.userAgent", () => {
     const offenders = sourceFiles(SRC)
-      .filter((f) => path.relative(SRC, f) !== ALLOWED)
+      .filter((f) => path.relative(SRC, f).split(path.sep).join("/") !== ALLOWED)
       .flatMap((f) =>
         findPlatformSniffing(fs.readFileSync(f, "utf8")).map((b) => `${path.relative(SRC, f)}:${b}`),
       );
