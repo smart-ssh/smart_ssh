@@ -19,7 +19,7 @@ export function ColumnsMenu({
 }) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
-  const getAnchor = useCallback(() => point, [point.x, point.y]); // eslint-disable-line react-hooks/exhaustive-deps
+  const getAnchor = useCallback(() => point, [point.x, point.y]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the primitive coordinates; the point object is recreated each render
   const style = useMenuPlacement(menuRef, getAnchor, true, { align: "start", gap: 0 });
   useEffect(() => {
     const close = (e: MouseEvent) => {

@@ -103,7 +103,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the preview once on mount
   }, []);
 
   const effectiveMode = (index: number): SshConfigIdentityMode =>
@@ -121,7 +121,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
       if (effectiveMode(e.index) === "intoKeychain") paths.add(e.identityFile.path);
     }
     return [...paths].sort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effectiveMode derives from entryState and globalIdentityMode, both listed
   }, [preview, entryState, globalIdentityMode]);
 
   const setEntry = (index: number, patch: Partial<EntryUiState>) =>

@@ -145,7 +145,7 @@ export function useFileOperations(
     };
     // Spec-Reviewer-Fund: die Vorschau muss im selben Modus zählen, in dem
     // danach gelöscht wird.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the preview counts in the same mode as the later delete (spec-reviewer finding)
   }, [sessionId, deleteTarget, channelUser]);
 
   const open = (next: Exclude<OperationDialog, { kind: "none" }>) => {
