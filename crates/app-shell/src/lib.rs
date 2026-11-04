@@ -397,7 +397,6 @@ pub(crate) async fn open_and_assemble(
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: app_logic::state::McpState::default(),
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
-        // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
