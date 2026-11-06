@@ -85,6 +85,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_CONNECTION_ABANDONED",
   // Issue #546: the user cancelled a running connect.
   "SSH_CONNECT_CANCELLED",
+  // Issue #1173: no algorithm in common with the server.
+  "SSH_NO_COMMON_ALGORITHM",
   // AiError (crates/core/src/ai/types.rs)
   "AI_AUTH_FAILED",
   "AI_RATE_LIMITED",
@@ -305,6 +307,11 @@ export function translateErrorCode(
   // Issue #631: the usage-limit text names the date access returns on.
   if (code === "AI_PROVIDER_USAGE_LIMIT" && typeof params?.date === "string" && params.date) {
     return t(dynamicKey(`errors.${code}_DATE`), params);
+  }
+  // Issue #1173: the backend message names the hop, the algorithm kind and
+  // what the server offered; a static translation cannot, so it follows.
+  if (code === "SSH_NO_COMMON_ALGORITHM" && fallback) {
+    return `${t(dynamicKey(`errors.${code}`), params)} (${fallback})`;
   }
   return t(dynamicKey(`errors.${code}`), params) // code is in KNOWN_ERROR_CODES;
 }

@@ -24,12 +24,14 @@ import {
   resumeChatSession,
 } from "../api/api";
 import { translateErrorCode } from "../api/errorCodes";
+import { showOutdatedAlgorithmsToast } from "../lib/outdatedAlgorithmsToast";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
   onChatSessionChanged,
   onChatActionResult,
   onConnectProgress,
+  onConnectWarnings,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "../api/events";
@@ -262,6 +264,8 @@ export function useSessionTabs() {
           ),
         );
       }),
+      // Issue #1173: the server negotiated outdated algorithms.
+      onConnectWarnings((event) => showOutdatedAlgorithmsToast(event.warnings, event.hopCount)),
       onChatActionProposed((event) => {
         if (typeof event.decision !== "object" || !("Confirm" in event.decision)) return;
         setTabs((prev) =>

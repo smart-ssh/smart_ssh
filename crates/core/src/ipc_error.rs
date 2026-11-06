@@ -133,6 +133,15 @@ mod tests {
             }),
             "connect_log": CommandError::with_code("Connection failed", "SSH_CONNECT_FAILED")
                 .with_connect_log(vec![rec]),
+            "no_common_algorithm": CommandError::from(crate::ssh::SshError::NoCommonAlgorithm {
+                hop: crate::ssh::HopLabel {
+                    username: "alice".into(),
+                    host: "example.org".into(),
+                    port: 22,
+                },
+                kind: crate::ssh::AlgorithmKind::Cipher,
+                server_offers: vec!["aes128-gcm@openssh.com".into()],
+            }),
         });
         let fixture: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/command_error_shapes.json"))
