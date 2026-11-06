@@ -185,14 +185,7 @@ pub(crate) fn bridge(
         let _ = wr.shutdown().await;
         let _ = channel.close().await;
     };
-    match spawner {
-        Some(spawner) => {
-            spawner.spawn("sudo-sftp-bridge", fut);
-        }
-        None => {
-            tokio::spawn(fut);
-        }
-    }
+    crate::sftp_tap::spawn_pump(spawner, "sudo-sftp-bridge", fut);
     (ours, BridgeHandle(state))
 }
 
