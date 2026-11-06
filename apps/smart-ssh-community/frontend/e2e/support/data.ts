@@ -97,7 +97,7 @@ export function failingStepLog(hops: number): ConnectStepRecord[] {
       {
         hopIndex,
         hop,
-        step: { kind: "authentication", method: "password", remainingMethods: ["publickey"], partialSuccess: false },
+        step: { kind: "authentication", method: "password", remainingMethods: ["publickey"], partialSuccess: false, round: null, prompts: [] },
         status: last ? { state: "failed", code: "AUTH_FAILED" } : ok,
         durationMs: 210,
       },

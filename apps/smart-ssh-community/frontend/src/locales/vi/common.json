@@ -1014,7 +1014,8 @@
       "privateKey": "Khóa riêng tư",
       "agent": "Tác nhân SSH",
       "certificate": "Chứng chỉ",
-      "identityFile": "Tệp khóa"
+      "identityFile": "Tệp khóa",
+      "keyboardInteractive": "Tương tác bàn phím"
     },
     "detail": {
       "addresses": "Địa chỉ: {{addresses}}",
@@ -1023,7 +1024,9 @@
       "cipher": "Mã hóa: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "được chấp nhận một phần, cần xác thực thêm",
-      "remainingMethods": "Máy chủ còn cung cấp: {{methods}} (chưa thử)"
+      "remainingMethods": "Máy chủ còn cung cấp: {{methods}} (chưa thử)",
+      "round": "Vòng {{round}}",
+      "prompts": "Lời nhắc từ máy chủ: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Kết nối TCP đã hết thời gian chờ",

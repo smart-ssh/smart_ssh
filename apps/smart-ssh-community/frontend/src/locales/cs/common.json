@@ -1029,7 +1029,8 @@
       "privateKey": "Soukromý klíč",
       "agent": "Agent SSH",
       "certificate": "Certifikát",
-      "identityFile": "Soubor klíče"
+      "identityFile": "Soubor klíče",
+      "keyboardInteractive": "Interaktivní z klávesnice"
     },
     "detail": {
       "addresses": "Adresy: {{addresses}}",
@@ -1038,7 +1039,9 @@
       "cipher": "Šifra: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "částečně přijato, vyžadováno další ověření",
-      "remainingMethods": "Server nabízí také: {{methods}} (nevyzkoušeno)"
+      "remainingMethods": "Server nabízí také: {{methods}} (nevyzkoušeno)",
+      "round": "Kolo {{round}}",
+      "prompts": "Výzvy serveru: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Časový limit připojení TCP vypršel",

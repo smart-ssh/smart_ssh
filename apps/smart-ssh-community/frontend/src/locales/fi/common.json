@@ -1019,7 +1019,8 @@
       "privateKey": "Yksityinen avain",
       "agent": "SSH-agentti",
       "certificate": "Varmenne",
-      "identityFile": "Avaintiedosto"
+      "identityFile": "Avaintiedosto",
+      "keyboardInteractive": "Näppäimistövuorovaikutteinen"
     },
     "detail": {
       "addresses": "Osoitteet: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Salaus: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "hyväksytty osittain, lisätodennus vaaditaan",
-      "remainingMethods": "Palvelin tarjoaa myös: {{methods}} (ei kokeiltu)"
+      "remainingMethods": "Palvelin tarjoaa myös: {{methods}} (ei kokeiltu)",
+      "round": "Kierros {{round}}",
+      "prompts": "Palvelimen kehotteet: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-yhteys aikakatkaistiin",

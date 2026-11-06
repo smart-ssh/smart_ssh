@@ -1029,7 +1029,8 @@
       "privateKey": "Приватний ключ",
       "agent": "Агент SSH",
       "certificate": "Сертифікат",
-      "identityFile": "Файл ключа"
+      "identityFile": "Файл ключа",
+      "keyboardInteractive": "Інтерактивне введення з клавіатури"
     },
     "detail": {
       "addresses": "Адреси: {{addresses}}",
@@ -1038,7 +1039,9 @@
       "cipher": "Шифр: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "прийнято частково, потрібна подальша автентифікація",
-      "remainingMethods": "Сервер також пропонує: {{methods}} (не пробувалося)"
+      "remainingMethods": "Сервер також пропонує: {{methods}} (не пробувалося)",
+      "round": "Раунд {{round}}",
+      "prompts": "Запити сервера: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Час очікування TCP-з'єднання минув",

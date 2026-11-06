@@ -1014,7 +1014,8 @@
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",
       "certificate": "Sertifikat",
-      "identityFile": "Berkas kunci"
+      "identityFile": "Berkas kunci",
+      "keyboardInteractive": "Interaktif papan ketik"
     },
     "detail": {
       "addresses": "Alamat: {{addresses}}",
@@ -1023,7 +1024,9 @@
       "cipher": "Sandi enkripsi: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "diterima sebagian, autentikasi lebih lanjut diperlukan",
-      "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)"
+      "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)",
+      "round": "Putaran {{round}}",
+      "prompts": "Prompt server: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Koneksi TCP habis waktu",

@@ -8,6 +8,7 @@
 //! Mock-Implementierungen testbar.
 
 mod auth;
+mod auth_prompt;
 pub mod connect_log;
 pub mod elevated;
 mod error;
@@ -26,6 +27,11 @@ mod tests;
 pub use auth::{
     resolve_auth, KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader, ResolvedAuth,
     MAX_KEY_FILE_BYTES,
+};
+pub use auth_prompt::{
+    sanitize_server_text, AuthPromptItem, AuthPromptKind, AuthPromptRequest, AuthPrompter,
+    NoPrompter, PromptCancelled, AUTH_PROMPT_TIMEOUT, MAX_PROMPTS_PER_REQUEST,
+    MAX_PROMPT_TEXT_BYTES,
 };
 pub use connect_log::{
     AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, ConnectStepSnapshot,

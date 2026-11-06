@@ -29,6 +29,8 @@ const steps: ConnectStepRecord[] = [
       method: "identityFile",
       remainingMethods: ["publickey"],
       partialSuccess: false,
+      round: null,
+      prompts: [],
     },
     status: { state: "failed", code: "SSH_AUTH_FAILED" },
     durationMs: 12,
