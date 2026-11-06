@@ -148,7 +148,11 @@ gilt (Tabelle 4.2):
   - Die Gesamtdauer wächst linear mit der Zahl der Hops. Als reines
     Sicherheitsnetz begrenzt zusätzlich die Summe aller Phasengrenzen plus eine
     weitere Handshake-Grenze den ganzen Versuch (ein Hop 80 s, zwei Hops
-    150 s); im normalen Ablauf greift sie nie vor einer Phasengrenze.
+    150 s); im normalen Ablauf greift sie nie vor einer Phasengrenze. Die
+    Zeit, in der eine Anmeldung auf die Antwort des Nutzers auf eine Abfrage
+    wartet, zählt auch hier nicht mit (an jedem Hop gleich); eine
+    unbeantwortete Abfrage wird nach der Abfragegrenze (Spec 0005) abgebrochen.
+    Ein Server, der ohne Abfrage hängt, endet weiter an dieser Grenze.
   - Läuft eine Grenze ab, endet der Versuch immer mit `SSH_TIMEOUT`: nie
     verbunden, nie mit einer Host-Key-Rückfrage, ohne weitere Phase. Das
     Schritt-Protokoll markiert den laufenden Schritt mit `SSH_TIMEOUT`.

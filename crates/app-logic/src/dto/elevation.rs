@@ -93,6 +93,8 @@ pub enum ElevationFailureKind {
     /// bzw. ist für Gruppe/andere beschreibbar; `detail` ist der Pfad.
     SftpServerUnsafe,
     PasswordRequired,
+    /// Issue #1191: the stored sudo password was rejected by sudo.
+    WrongSudoPassword,
     NotAllowed,
     RequireTty,
     SudoMissing,

@@ -803,7 +803,8 @@
     "close": "Chiudi",
     "detail": "Dettagli: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo richiede una password per sftp-server su questo server. L'app non chiede mai una password sudo.",
+      "passwordRequired": "sudo richiede una password per sftp-server su questo server. Aggiungi la regola sudoers qui sotto oppure salva una password sudo nel profilo del server per attivare i diritti elevati.",
+      "wrongSudoPassword": "sudo ha rifiutato la password sudo salvata. Controlla la password sudo nel profilo del server.",
       "notAllowed": "Questo accesso SSH non può avviare sftp-server tramite sudo senza password.",
       "requireTty": "sudo rifiuta di essere eseguito senza un terminale (“requiretty” in sudoers). Disattivi requiretty per questo accesso, ad es. con “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server non è stato trovato sul server. Ne inserisca il percorso nel profilo del server in “Avanzate”.",

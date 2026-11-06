@@ -104,7 +104,7 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             // eine Host-Key-Entscheidung weiter unten.
             let attempt = or_cancelled(
                 progress,
-                ssh_transport::connect_with_timeout(
+                ssh_transport::timeout_unless_paused(
                     // Issue #259: über den `Connector` im `AppState` —
                     // Produktion verdrahtet `RealConnector` (derselbe Aufruf
                     // `connect_with_limits` wie zuvor), Tests einen Mock.
@@ -120,6 +120,8 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         SSH_CONNECT_LIMITS,
                     ),
                     SSH_CONNECT_LIMITS.overall(target.hops.len()),
+                    // Issue #1187: stands still while a login prompt is open.
+                    &attempt_log.prompt_pause(),
                 ),
             )
             .await;

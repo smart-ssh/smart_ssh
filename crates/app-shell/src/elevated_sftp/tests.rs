@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::test_support::elevation::{access, fixture, output, transport, working_probes, PATH};
+use crate::test_support::elevation::{
+    access, fixture, fixture_with_sudo_password, output, transport, working_probes, PATH,
+};
 // Issue #149: Die Verschränkungstests T8/T8b warten auf Ereignisse, nicht
 // auf ein festes Zeitbudget. `HANG_GUARD` greift nur, wenn das Ereignis
 // nie kommt, und die Meldung nennt dann, worauf der Test wartete.
@@ -576,6 +578,7 @@ async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slo
         f.session_id,
         ElevatedSftp {
             target_user: "root".to_string(),
+            sudo_auth: Default::default(),
             sftp: Box::new(DropReportingSftp(dropped.clone())),
         },
     );
@@ -632,4 +635,145 @@ async fn test_t9_disabling_an_inactive_or_unknown_session_channel_is_harmless() 
     assert_eq!(err.message, "session not found");
     assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
     assert!(!f.is_active().await);
+}
+
+// ---- Issue #1191: the sudo password path ----
+
+const STORED: &str = "hunter2-very-secret";
+
+fn password_required_transport() -> (
+    crate::test_support::elevation::ProbeTransport,
+    Arc<std::sync::Mutex<Vec<String>>>,
+) {
+    transport(
+        output(0, "/usr/lib/openssh/sftp-server\n", ""),
+        output(1, "", "sudo: a password is required\n"),
+    )
+}
+
+#[tokio::test]
+async fn test_password_path_is_used_and_password_never_leaks() {
+    let (logs, _capture) = crate::test_support::log_capture::capture_logs();
+    let (t, log) = password_required_transport();
+    let received = t.received_passwords.clone();
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(
+        &f.ctx(),
+        "deploy",
+        None,
+        Some("auditprobe"),
+        false,
+        &access(),
+    )
+    .await
+    .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert_eq!(received.lock().unwrap().as_slice(), [STORED.to_string()]);
+    let log = log.lock().unwrap().clone();
+    let cmd = log.last().unwrap();
+    assert!(
+        cmd.starts_with("sftp-exec-pw:sudo -S -k -p 'smart-ssh-sudo-"),
+        "{cmd}"
+    );
+    assert!(cmd.ends_with(&format!(" {PATH}")), "{cmd}");
+    assert!(!log.iter().any(|c| c.contains(STORED)), "{log:?}");
+    let audit: Vec<String> = logs
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|f| f.get("target_user").map(String::as_str) == Some("auditprobe"))
+        .map(|f| format!("{f:?}"))
+        .collect();
+    assert_eq!(audit.len(), 1, "{audit:?}");
+    let audit = audit.concat();
+    assert!(audit.contains("\"password\""), "{audit}");
+    assert!(!audit.contains(STORED));
+    assert!(!format!("{result:?}").contains(STORED));
+    assert!(f.is_active().await);
+}
+
+#[tokio::test]
+async fn test_nopasswd_path_is_unchanged_even_with_a_stored_password() {
+    let (probe, check) = working_probes();
+    let (t, log) = transport(probe, check);
+    let received = t.received_passwords.clone();
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active);
+    assert_eq!(
+        log.lock().unwrap().last().unwrap(),
+        &format!("sftp-exec:sudo -n {PATH}")
+    );
+    assert!(received.lock().unwrap().is_empty());
+}
+
+async fn password_failure(
+    make: fn() -> ssh_manager_core::ssh::SudoPromptError,
+) -> (ElevationResultDto, bool) {
+    let (mut t, _log) = password_required_transport();
+    t.password_failure = Some(make);
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    let active = f.is_active().await;
+    (result, active)
+}
+
+#[tokio::test]
+async fn test_password_path_wrong_password_and_no_prompt_and_not_allowed() {
+    use ssh_manager_core::ssh::SudoPromptError as E;
+    let (r, active) = password_failure(|| E::WrongPassword).await;
+    assert!(!r.active && !active);
+    assert_eq!(
+        r.failure.unwrap().kind,
+        ElevationFailureKind::WrongSudoPassword
+    );
+
+    let (r, active) = password_failure(|| E::NoPrompt).await;
+    assert!(!r.active && !active);
+    assert_eq!(r.failure.unwrap().kind, ElevationFailureKind::StartFailed);
+
+    let (r, active) = password_failure(|| E::NotAllowed("sudo: not allowed".into())).await;
+    assert!(!r.active && !active);
+    assert_eq!(r.failure.unwrap().kind, ElevationFailureKind::NotAllowed);
+}
+
+#[tokio::test]
+async fn test_password_required_without_stored_password_keeps_todays_failure() {
+    let (t, log) = password_required_transport();
+    let f = fixture(Box::new(t));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    let failure = result.failure.unwrap();
+    assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
+    assert!(failure.sudoers_line.is_some());
+    assert!(!log
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|c| c.starts_with("sftp-exec")));
+}
+
+#[tokio::test]
+async fn test_unsafe_binary_in_the_password_path_starts_with_warning() {
+    let (mut t, _log) = password_required_transport();
+    t.safety = output(0, &format!("UNSAFE {PATH}\n"), "");
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    assert!(result.active, "{result:?}");
+    assert_eq!(
+        result.warning.unwrap().kind,
+        ElevationWarningKind::SftpServerUnsafe
+    );
 }

@@ -4,6 +4,20 @@ use tokio::sync::{oneshot, watch};
 use super::error::SshError;
 use super::types::{CommandOutput, ExecOutcome, ExecOutputSink, PtySize, RemoteEntry};
 
+/// Issue #1191: why the sudo password path of
+/// [`SshTransport::open_sftp_via_exec_with_sudo_password`] failed. No variant
+/// carries the password.
+#[derive(Debug)]
+pub enum SudoPromptError {
+    /// The prompt marker did not appear in time (sudo did not ask).
+    NoPrompt,
+    /// The marker appeared a second time: sudo rejected the password.
+    WrongPassword,
+    /// sudo reported that the command is not allowed (first stderr line).
+    NotAllowed(String),
+    Failed(SshError),
+}
+
 /// Offene Verbindung zu einem SSH-Server (Spec 0005, Abschnitt 1/4). Exec-
 /// und interaktiver Modus laufen über **denselben** Transport (SSH-
 /// Multiplexing über Channels), nicht über separate Neuverbindungen.
@@ -131,6 +145,23 @@ pub trait SshTransport: Send + Sync {
         Err(SshError::ChannelError(
             "Erhöhter Dateizugriff wird von diesem Transport nicht unterstützt".to_string(),
         ))
+    }
+    /// Issue #1191: like [`open_sftp_via_exec`](Self::open_sftp_via_exec) for
+    /// `sudo -S -k -p '<marker>' …`. The transport reads stderr until
+    /// `marker` appears and only then writes `password` plus `\n` to the
+    /// channel, exactly once; if the marker does not appear in time the
+    /// channel is closed without a single password byte written. Default:
+    /// not supported.
+    async fn open_sftp_via_exec_with_sudo_password(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        let _ = (command, marker, password);
+        Err(SudoPromptError::Failed(SshError::ChannelError(
+            "Erhöhter Dateizugriff wird von diesem Transport nicht unterstützt".to_string(),
+        )))
     }
     async fn disconnect(&mut self) -> Result<(), SshError>;
 

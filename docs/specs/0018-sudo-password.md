@@ -28,6 +28,9 @@ dem Zielserver abgelegt.
 - KI-Kanal und interaktives Terminal werden nicht zusammengelegt. Im Terminal
   gibt der Nutzer das Passwort weiterhin selbst ein; es wird dort nie
   automatisch eingespeist.
+- Das gespeicherte Sudo-Passwort dient zusätzlich dem Dateibrowser mit
+  erhöhten Rechten (Spec 0067, A1): nur wenn sudo für `sftp-server` ein
+  Passwort verlangt, nur nach einem Prompt-Marker und ohne Passwort-Dialog.
 - Der lokale Pseudo-Server unterstützt die Übergabe über die Standardeingabe nicht.
 
 ## 4. Speicherung

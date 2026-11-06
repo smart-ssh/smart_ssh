@@ -35,7 +35,7 @@ pub use auth_prompt::{
 };
 pub use connect_log::{
     AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, ConnectStepSnapshot,
-    ConnectWarning, HostKeyCheckResult, ProgressSink, StepDetail, StepId, StepStatus,
+    ConnectWarning, HostKeyCheckResult, ProgressSink, PromptPause, StepDetail, StepId, StepStatus,
     HOST_KEY_CHANGED, HOST_KEY_UNKNOWN, OUTDATED_ALGORITHMS_CODE, STRICT_KEX_MISSING,
 };
 pub use error::{AlgorithmKind, HopLabel, SecretKind, SshError};
@@ -44,7 +44,7 @@ pub use jump_host::resolve_connection_target;
 pub use task_spawner::{BoxedTask, TaskSpawner};
 pub use transport::{
     ChunkControl, ChunkSource, ConnectionLoss, ConnectionLossWatch, InteractiveShell, RunningExec,
-    SftpSession, SshTransport, TransferEnd,
+    SftpSession, SshTransport, SudoPromptError, TransferEnd,
 };
 pub use types::{
     exec_output_channel, CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk,
