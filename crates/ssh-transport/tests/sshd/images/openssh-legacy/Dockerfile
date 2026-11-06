@@ -14,7 +14,7 @@ RUN curl -fsSLO https://www.openssl.org/source/old/1.0.2/openssl-1.0.2u.tar.gz \
 RUN curl -fsSLO https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.4p1.tar.gz \
  && echo '1b1fc4a14e2024293181924ed24872e6f2e06293f3e8926a376b8aec481f19d1  openssh-7.4p1.tar.gz' | sha256sum -c - \
  && tar xzf openssh-7.4p1.tar.gz && cd openssh-7.4p1 \
- && ./configure --prefix=/usr/local --sysconfdir=/etc/ssh --with-ssl-dir=/opt/openssl \
+ && CFLAGS="-O2 -D_FORTIFY_SOURCE=0" ./configure --prefix=/usr/local --sysconfdir=/etc/ssh --with-ssl-dir=/opt/openssl \
       --with-privsep-path=/var/empty --without-pam \
  && make -j"$(nproc)" && make DESTDIR=/out install-nokeys
 
