@@ -31,6 +31,7 @@ rand = { workspace = true, optional = true }
 russh = { workspace = true }
 russh-sftp = { workspace = true }
 secrecy = { workspace = true }
+zeroize = { workspace = true }
 ssh-manager-core = { workspace = true }
 # `process`/`fs`: Spec 0032 (lokaler Pseudo-Server) — `LocalTransport`
 # ruft die Plattform-Shell als Kindprozess auf, `LocalFileSession` (Spec

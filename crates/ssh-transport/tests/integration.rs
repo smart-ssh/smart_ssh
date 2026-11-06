@@ -20,7 +20,7 @@ use ssh_manager_core::profiles::{
 };
 use ssh_manager_core::ssh::{
     ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileContent, KeyFileError,
-    KeyFileFacts, KeyFileReader, NoPrompter, PtySize, SecretKind, SshError,
+    KeyFileFacts, KeyFileReader, NoPrompter, PtySize, SecretKind, SshError, SudoPromptError,
 };
 use ssh_transport::ConnectOutcome;
 
@@ -1689,6 +1689,100 @@ async fn test_sftp_via_exec_refused_by_sudo_stays_channel_error() {
         .await
         .expect("die Sitzung muss nach dem abgelehnten Start weiter stehen");
     assert_eq!(output.stdout, b"echo:noch da\n");
+}
+
+fn sudo_password(value: &str) -> secrecy::SecretString {
+    secrecy::SecretString::from(value.to_string())
+}
+
+const MARKER: &str = "smart-ssh-sudo-0123456789abcdef:";
+
+fn pw_command(dir: &str) -> String {
+    format!("sudo -S -k -p '{MARKER}' /{dir}/sftp-server")
+}
+
+/// Issue #1191: the password is written after the marker, exactly once, and
+/// SFTP then runs on the same channel.
+#[tokio::test]
+async fn test_sudo_password_path_writes_password_once_after_marker() {
+    let server = RunningTestServer::start().await;
+    std::fs::create_dir(sftp_local_path(&server, "/elevated")).unwrap();
+    std::fs::write(
+        sftp_local_path(&server, "/elevated/nur-erhoeht.txt"),
+        b"root",
+    )
+    .unwrap();
+    let mut transport = connect_trusted(&server).await;
+
+    let mut sftp = transport
+        .open_sftp_via_exec_with_sudo_password(&pw_command("pw"), MARKER, &sudo_password("secret"))
+        .await
+        .map_err(|e| format!("{e:?}"))
+        .expect("the correct password opens the channel");
+    let names: Vec<String> = sftp
+        .list_dir("/")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert_eq!(names, vec!["nur-erhoeht.txt".to_string()]);
+    assert_eq!(server.sudo_stdin.lock().unwrap().as_slice(), b"secret\n");
+}
+
+/// Issue #1191: no marker → the channel is closed and not one password byte
+/// reaches the server.
+#[tokio::test]
+async fn test_sudo_password_path_without_marker_writes_nothing() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+
+    let err = transport
+        .open_sftp_via_exec_with_sudo_password(
+            &pw_command("noprompt"),
+            MARKER,
+            &sudo_password("secret"),
+        )
+        .await
+        .err()
+        .expect("no prompt means failure");
+    assert!(matches!(err, SudoPromptError::NoPrompt), "{err:?}");
+    assert!(server.sudo_stdin.lock().unwrap().is_empty());
+}
+
+/// Issue #1191: a second marker means the password was rejected.
+#[tokio::test]
+async fn test_sudo_password_path_second_marker_is_wrong_password() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+
+    let err = transport
+        .open_sftp_via_exec_with_sudo_password(&pw_command("pw"), MARKER, &sudo_password("nope"))
+        .await
+        .err()
+        .expect("wrong password means failure");
+    assert!(matches!(err, SudoPromptError::WrongPassword), "{err:?}");
+    // No retry with the same password.
+    assert_eq!(server.sudo_stdin.lock().unwrap().as_slice(), b"nope\n");
+}
+
+/// Issue #1191: "not allowed" on stderr before any prompt.
+#[tokio::test]
+async fn test_sudo_password_path_not_allowed() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+
+    let err = transport
+        .open_sftp_via_exec_with_sudo_password(
+            &pw_command("notallowed"),
+            MARKER,
+            &sudo_password("secret"),
+        )
+        .await
+        .err()
+        .expect("not allowed means failure");
+    assert!(matches!(err, SudoPromptError::NotAllowed(_)), "{err:?}");
+    assert!(server.sudo_stdin.lock().unwrap().is_empty());
 }
 
 /// TCP-Weiterleitung für genau eine Verbindung, die ein Test jederzeit

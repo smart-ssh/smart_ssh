@@ -282,6 +282,8 @@ pub struct RunningTestServer {
     pub sftp_root: TempDir,
     /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
     pub exec_channel: Arc<ExecChannelWatch>,
+    /// Issue #1191: every byte a simulated `sudo -S` received on stdin.
+    pub sudo_stdin: Arc<std::sync::Mutex<Vec<u8>>>,
     /// ADR 0122, R4 — s. [`SetstatModeWatch`].
     pub setstat_mode: Arc<SetstatModeWatch>,
     /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
@@ -358,6 +360,8 @@ impl RunningTestServer {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
         let exec_channel = Arc::new(ExecChannelWatch::default());
         let exec_channel_for_loop = exec_channel.clone();
+        let sudo_stdin = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sudo_stdin_for_loop = sudo_stdin.clone();
         let setstat_mode = Arc::new(SetstatModeWatch::default());
         let setstat_mode_for_loop = setstat_mode.clone();
         let first_line_sent = Arc::new(FirstLineSentWatch::default());
@@ -379,6 +383,7 @@ impl RunningTestServer {
                         let config = config.clone();
                         let sftp_root = sftp_root_path.clone();
                         let exec_channel = exec_channel_for_loop.clone();
+                        let sudo_stdin = sudo_stdin_for_loop.clone();
                         let setstat_mode = setstat_mode_for_loop.clone();
                         let first_line_sent = first_line_sent_for_loop.clone();
                         let auth_attempts = auth_attempts_for_loop.clone();
@@ -388,6 +393,7 @@ impl RunningTestServer {
                                 no_echo: HashSet::new(),
                                 sftp_root,
                                 exec_channel,
+                                sudo_stdin,
                                 setstat_mode,
                                 first_line_sent,
                                 auth_attempts,
@@ -408,6 +414,7 @@ impl RunningTestServer {
             host_public_key,
             sftp_root,
             exec_channel,
+            sudo_stdin,
             setstat_mode,
             first_line_sent,
             auth_attempts,
@@ -444,6 +451,7 @@ struct TestHandler {
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
     /// nicht mitbewegen.
     exec_channel: Arc<ExecChannelWatch>,
+    sudo_stdin: Arc<std::sync::Mutex<Vec<u8>>>,
     /// ADR 0122, R4 — beide SFTP-Subsysteme (normal und über `exec`)
     /// bewegen hier denselben Beobachter, s. `SftpTestHandler::setstat`.
     setstat_mode: Arc<SetstatModeWatch>,
@@ -622,6 +630,79 @@ impl Handler for TestHandler {
                 setstat_mode: self.setstat_mode.clone(),
             };
             russh_sftp::server::run(chan.into_stream(), handler).await;
+            return Ok(());
+        }
+        // Issue #1191: simulated `sudo -S -k -p '<marker>' … <path>`. The
+        // sftp-server path selects the behaviour: `/pw/` asks for the
+        // password "secret" (marker on stderr) and serves SFTP after it,
+        // answering a wrong one with a second marker; `/noprompt/` never
+        // asks; `/notallowed/` refuses. Every stdin byte is logged.
+        if command.starts_with("sudo -S -k -p '") {
+            let marker = command["sudo -S -k -p '".len()..]
+                .split('\'')
+                .next()
+                .unwrap_or("")
+                .to_string();
+            let Some(mut chan) = self.channels.remove(&channel) else {
+                session.channel_failure(channel)?;
+                return Ok(());
+            };
+            session.channel_success(channel)?;
+            self.no_echo.insert(channel);
+            let log = self.sudo_stdin.clone();
+            let root = self.sftp_root.join("elevated");
+            let (closed, setstat_mode) = (self.exec_channel.clone(), self.setstat_mode.clone());
+            let mode = if command.contains("/noprompt/") {
+                1
+            } else if command.contains("/notallowed/") {
+                2
+            } else {
+                0
+            };
+            tokio::spawn(async move {
+                let mut err = chan.make_writer_ext(Some(1));
+                match mode {
+                    2 => {
+                        let _ = err
+                            .write_all(b"sudo: deploy is not allowed to run sudo on host.\n")
+                            .await;
+                        let _ = chan.exit_status(1).await;
+                        let _ = chan.close().await;
+                        return;
+                    }
+                    0 => {
+                        let _ = err.write_all(marker.as_bytes()).await;
+                    }
+                    _ => {}
+                }
+                let mut line = Vec::new();
+                while !line.ends_with(b"\n") {
+                    match chan.wait().await {
+                        Some(russh::ChannelMsg::Data { data }) => {
+                            log.lock().unwrap().extend_from_slice(&data);
+                            line.extend_from_slice(&data);
+                        }
+                        Some(russh::ChannelMsg::Eof | russh::ChannelMsg::Close) | None => return,
+                        Some(_) => {}
+                    }
+                }
+                if mode == 0 && line == b"secret\n" {
+                    let handler = SftpTestHandler {
+                        root,
+                        open_files: HashMap::new(),
+                        open_dirs: HashMap::new(),
+                        next_handle: 0,
+                        closed: Some(closed),
+                        setstat_mode,
+                    };
+                    russh_sftp::server::run(chan.into_stream(), handler).await;
+                } else {
+                    let _ = err.write_all(b"Sorry, try again.\n").await;
+                    let _ = err.write_all(marker.as_bytes()).await;
+                    // Keep the channel open until the client closes it.
+                    while chan.wait().await.is_some() {}
+                }
+            });
             return Ok(());
         }
         // Spec 0067, Teil A: sudo verweigert ohne Passwort — Meldung nur auf
