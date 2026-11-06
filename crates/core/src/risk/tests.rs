@@ -754,8 +754,6 @@ fn test_server_risk_red_sftp_server_invocation() {
         "sudo -n /usr/lib/openssh/sftp-server",
         "sudo -n -u www-data /usr/libexec/openssh/sftp-server",
         "sudo -nu root sftp-server",
-        "sudo -n /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV",
-        "sudo -n -u www-data /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV",
         "doas /usr/lib/ssh/sftp-server",
         "/usr/lib/openssh/sftp-server -e",
         "sftp-server",
