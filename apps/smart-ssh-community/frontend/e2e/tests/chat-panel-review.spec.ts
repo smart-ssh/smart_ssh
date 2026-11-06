@@ -58,8 +58,10 @@ async function tabStops(page: Page, count: number) {
  * relative to earlier ones; ADR 0122 requires waiting for the end state. */
 async function waitForSettledColumn(page: Page) {
   await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
+    async () => {
+      await document.fonts.ready;
+      return new Promise<void>((resolve, reject) => {
+        let frames = 0;
         const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
         let last = -1;
         let stable = 0;
@@ -68,10 +70,12 @@ async function waitForSettledColumn(page: Page) {
           stable = pinned && el.scrollHeight === last ? stable + 1 : 0;
           last = el.scrollHeight;
           if (stable >= 10) resolve();
+          else if (++frames > 600) reject(new Error("chat column did not settle within 600 frames"));
           else requestAnimationFrame(step);
         };
         step();
-      }),
+      });
+    },
   );
 }
 
