@@ -820,7 +820,8 @@
     "targetUserHelp": "Dosya tarayıcısını sudo ile bu kullanıcı olarak çalıştırır. Varsayılan: root.",
     "confirm": "Yükselt",
     "opChown": "Sahibi değiştirme",
-    "chownNote": "Sahip {{user}} olarak değiştirilecek."
+    "chownNote": "Sahip {{user}} olarak değiştirilecek.",
+    "idleSwitchedOff": "Yükseltilmiş haklar {{minutes}} dakika etkinlik olmadığı için kapatıldı"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Bu sunucu eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse sunucunun SSH yazılımını güncelleyin.",
     "outdatedAlgorithmsHop": "{{hop}} eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse SSH yazılımını güncelleyin."
+  },
+  "elevatedIdle": {
+    "label": "Etkinlik olmazsa yükseltilmiş hakları kapat",
+    "minutes5": "5 dakika",
+    "minutes15": "15 dakika",
+    "minutes30": "30 dakika",
+    "minutes60": "60 dakika",
+    "never": "Asla",
+    "hint": "Dosya tarayıcısı, bu süre boyunca yükseltilmiş etkinlik olmazsa yükseltilmiş moddan kendiliğinden çıkar. Devam eden bir işlem etkinlik sayılır."
   }
 }

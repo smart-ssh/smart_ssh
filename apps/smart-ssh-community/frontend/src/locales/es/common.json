@@ -825,7 +825,8 @@
     "targetUserHelp": "Ejecuta el explorador de archivos como este usuario mediante sudo. Predeterminado: root.",
     "confirm": "Elevar",
     "opChown": "Cambio de propietario",
-    "chownNote": "El propietario se cambiará como {{user}}."
+    "chownNote": "El propietario se cambiará como {{user}}.",
+    "idleSwitchedOff": "Derechos elevados desactivados tras {{minutes}} minutos sin actividad"
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1524,5 +1525,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Este servidor usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza el software SSH del servidor si puedes.",
     "outdatedAlgorithmsHop": "{{hop}} usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza su software SSH si puedes."
+  },
+  "elevatedIdle": {
+    "label": "Desactivar los derechos elevados tras inactividad",
+    "minutes5": "5 minutos",
+    "minutes15": "15 minutos",
+    "minutes30": "30 minutos",
+    "minutes60": "60 minutos",
+    "never": "Nunca",
+    "hint": "El explorador de archivos sale solo del modo elevado tras este tiempo sin actividad elevada. Una operación en curso cuenta como actividad."
   }
 }

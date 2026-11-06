@@ -825,7 +825,8 @@
     "targetUserHelp": "Exécute le navigateur de fichiers sous cet utilisateur via sudo. Par défaut : root.",
     "confirm": "Élever",
     "opChown": "Changement du propriétaire",
-    "chownNote": "Le propriétaire sera modifié en tant que {{user}}."
+    "chownNote": "Le propriétaire sera modifié en tant que {{user}}.",
+    "idleSwitchedOff": "Droits élevés désactivés après {{minutes}} minutes d’inactivité"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1524,5 +1525,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Ce serveur utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour le logiciel SSH du serveur si possible.",
     "outdatedAlgorithmsHop": "{{hop}} utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour son logiciel SSH si possible."
+  },
+  "elevatedIdle": {
+    "label": "Désactiver les droits élevés après inactivité",
+    "minutes5": "5 minutes",
+    "minutes15": "15 minutes",
+    "minutes30": "30 minutes",
+    "minutes60": "60 minutes",
+    "never": "Jamais",
+    "hint": "Le navigateur de fichiers quitte le mode élevé de lui-même après cette durée sans activité élevée. Une opération en cours compte comme activité."
   }
 }

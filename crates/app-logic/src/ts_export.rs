@@ -103,6 +103,7 @@ fn generate() -> String {
         ChatAutoContinuationLimitReachedPayload,
         SftpTransferKind,
         SftpTransferStartedPayload,
+        ElevationAutoDisabledPayload,
         SftpTransferFinishedPayload,
         SftpEntriesProgress,
         SftpTransferProgressPayload,
@@ -280,6 +281,10 @@ fn event_payloads() -> String {
             "ChatAutoContinuationLimitReachedPayload",
         ),
         (names::SFTP_TRANSFER_STARTED, "SftpTransferStartedPayload"),
+        (
+            names::ELEVATION_AUTO_DISABLED,
+            "ElevationAutoDisabledPayload",
+        ),
         (names::SFTP_TRANSFER_FINISHED, "SftpTransferFinishedPayload"),
         (names::SFTP_TRANSFER_PROGRESS, "SftpTransferProgressPayload"),
         (

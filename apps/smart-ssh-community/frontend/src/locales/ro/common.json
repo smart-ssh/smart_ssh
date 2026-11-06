@@ -825,7 +825,8 @@
     "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
     "confirm": "Ridică",
     "opChown": "Schimbarea proprietarului",
-    "chownNote": "Proprietarul va fi schimbat ca {{user}}."
+    "chownNote": "Proprietarul va fi schimbat ca {{user}}.",
+    "idleSwitchedOff": "Drepturile ridicate au fost dezactivate după {{minutes}} minute fără activitate"
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -1524,5 +1525,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Acest server folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul SSH al serverului, dacă poți.",
     "outdatedAlgorithmsHop": "{{hop}} folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul lui SSH, dacă poți."
+  },
+  "elevatedIdle": {
+    "label": "Dezactivează drepturile ridicate după inactivitate",
+    "minutes5": "5 minute",
+    "minutes15": "15 minute",
+    "minutes30": "30 minute",
+    "minutes60": "60 minute",
+    "never": "Niciodată",
+    "hint": "Browserul de fișiere iese singur din modul ridicat după acest timp fără activitate ridicată. O operațiune în curs contează ca activitate."
   }
 }

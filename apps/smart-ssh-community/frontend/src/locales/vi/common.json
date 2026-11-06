@@ -815,7 +815,8 @@
     "targetUserHelp": "Chạy trình duyệt tệp với tư cách người dùng này qua sudo. Mặc định: root.",
     "confirm": "Nâng quyền",
     "opChown": "Đổi chủ sở hữu",
-    "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}."
+    "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}.",
+    "idleSwitchedOff": "Đã tắt quyền nâng cao sau {{minutes}} phút không hoạt động"
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",
@@ -1508,5 +1509,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Máy chủ này dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của máy chủ nếu có thể.",
     "outdatedAlgorithmsHop": "{{hop}} dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của nó nếu có thể."
+  },
+  "elevatedIdle": {
+    "label": "Tắt quyền nâng cao sau khi không hoạt động",
+    "minutes5": "5 phút",
+    "minutes15": "15 phút",
+    "minutes30": "30 phút",
+    "minutes60": "60 phút",
+    "never": "Không bao giờ",
+    "hint": "Trình duyệt tệp tự thoát chế độ nâng cao sau khoảng thời gian này không có hoạt động nâng cao. Một thao tác đang chạy được tính là hoạt động."
   }
 }

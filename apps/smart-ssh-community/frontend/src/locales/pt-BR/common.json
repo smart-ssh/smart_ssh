@@ -825,7 +825,8 @@
     "targetUserHelp": "Executa o navegador de arquivos como este usuário via sudo. Padrão: root.",
     "confirm": "Elevar",
     "opChown": "Alteração de proprietário",
-    "chownNote": "O proprietário será alterado como {{user}}."
+    "chownNote": "O proprietário será alterado como {{user}}.",
+    "idleSwitchedOff": "Direitos elevados desativados após {{minutes}} minutos sem atividade"
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1524,5 +1525,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Este servidor usa algoritmos SSH obsoletos ({{algorithms}}). A conexão é menos segura. Atualize o software SSH do servidor, se possível.",
     "outdatedAlgorithmsHop": "{{hop}} usa algoritmos SSH obsoletos ({{algorithms}}). A conexão é menos segura. Atualize o software SSH dele, se possível."
+  },
+  "elevatedIdle": {
+    "label": "Desativar direitos elevados após inatividade",
+    "minutes5": "5 minutos",
+    "minutes15": "15 minutos",
+    "minutes30": "30 minutos",
+    "minutes60": "60 minutos",
+    "never": "Nunca",
+    "hint": "O navegador de arquivos sai sozinho do modo elevado após esse tempo sem atividade elevada. Uma operação em andamento conta como atividade."
   }
 }

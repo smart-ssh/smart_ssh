@@ -815,7 +815,8 @@
     "targetUserHelp": "通过 sudo 以该用户身份运行文件浏览器。默认：root。",
     "confirm": "提权",
     "opChown": "更改所有者",
-    "chownNote": "所有者将以 {{user}} 身份更改。"
+    "chownNote": "所有者将以 {{user}} 身份更改。",
+    "idleSwitchedOff": "已在 {{minutes}} 分钟无活动后关闭提升的权限"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -1508,5 +1509,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "此服务器使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新服务器的 SSH 软件。",
     "outdatedAlgorithmsHop": "{{hop}} 使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新其 SSH 软件。"
+  },
+  "elevatedIdle": {
+    "label": "无操作后关闭提升的权限",
+    "minutes5": "5 分钟",
+    "minutes15": "15 分钟",
+    "minutes30": "30 分钟",
+    "minutes60": "60 分钟",
+    "never": "从不",
+    "hint": "在此时间内没有提升操作时，文件浏览器会自动退出提升模式。正在运行的操作视为活动。"
   }
 }

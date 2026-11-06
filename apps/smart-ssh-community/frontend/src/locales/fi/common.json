@@ -820,7 +820,8 @@
     "targetUserHelp": "Suorittaa tiedostoselaimen tänä käyttäjänä sudon kautta. Oletus: root.",
     "confirm": "Korota",
     "opChown": "Omistajan vaihto",
-    "chownNote": "Omistaja vaihdetaan käyttäjänä {{user}}."
+    "chownNote": "Omistaja vaihdetaan käyttäjänä {{user}}.",
+    "idleSwitchedOff": "Korotetut oikeudet poistettu käytöstä {{minutes}} minuutin toimettomuuden jälkeen"
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Tämä palvelin käyttää vanhentuneita SSH-algoritmeja ({{algorithms}}). Yhteys on vähemmän turvallinen. Päivitä palvelimen SSH-ohjelmisto, jos voit.",
     "outdatedAlgorithmsHop": "{{hop}} käyttää vanhentuneita SSH-algoritmeja ({{algorithms}}). Yhteys on vähemmän turvallinen. Päivitä sen SSH-ohjelmisto, jos voit."
+  },
+  "elevatedIdle": {
+    "label": "Poista korotetut oikeudet käytöstä toimettomuuden jälkeen",
+    "minutes5": "5 minuuttia",
+    "minutes15": "15 minuuttia",
+    "minutes30": "30 minuuttia",
+    "minutes60": "60 minuuttia",
+    "never": "Ei koskaan",
+    "hint": "Tiedostoselain poistuu korotetusta tilasta itse, kun korotettua toimintaa ei ole ollut näin pitkään. Käynnissä oleva toiminto lasketaan toiminnaksi."
   }
 }

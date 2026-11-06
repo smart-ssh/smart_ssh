@@ -205,6 +205,14 @@ export const renameChatSession = (sessionId: string, newTitle: string) =>
 export const deleteChatSession = (sessionId: string) =>
   invoke<void>("delete_chat_session", { sessionId });
 
+/** Issue #1193: minutes of elevated inactivity before the backend switches the
+ * file browser's elevated rights off (5, 15, 30, 60; 0 = never). Written by
+ * its own backend command, never through `set_ui_preference`. */
+export const getElevatedIdleTimeout = () => invoke<number>("get_elevated_idle_timeout");
+
+export const setElevatedIdleTimeout = (minutes: number) =>
+  invoke<void>("set_elevated_idle_timeout", { minutes });
+
 export const getChatSessionRetentionDays = () =>
   invoke<number | null>("get_chat_session_retention_days");
 

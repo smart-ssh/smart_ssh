@@ -820,7 +820,8 @@
     "targetUserHelp": "Voert de bestandsbrowser via sudo uit als deze gebruiker. Standaard: root.",
     "confirm": "Verhogen",
     "opChown": "Eigenaar wijzigen",
-    "chownNote": "De eigenaar wordt gewijzigd als {{user}}."
+    "chownNote": "De eigenaar wordt gewijzigd als {{user}}.",
+    "idleSwitchedOff": "Verhoogde rechten uitgeschakeld na {{minutes}} minuten zonder activiteit"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Deze server gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software van de server bij als dat kan.",
     "outdatedAlgorithmsHop": "{{hop}} gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software ervan bij als dat kan."
+  },
+  "elevatedIdle": {
+    "label": "Verhoogde rechten uitschakelen na inactiviteit",
+    "minutes5": "5 minuten",
+    "minutes15": "15 minuten",
+    "minutes30": "30 minuten",
+    "minutes60": "60 minuten",
+    "never": "Nooit",
+    "hint": "De bestandsbrowser verlaat de verhoogde modus vanzelf na zo lang zonder verhoogde activiteit. Een lopende bewerking telt als activiteit."
   }
 }

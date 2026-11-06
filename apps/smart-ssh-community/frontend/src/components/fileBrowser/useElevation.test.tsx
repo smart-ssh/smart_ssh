@@ -2,6 +2,9 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sftpElevationDisable, sftpElevationEnable } from "../../api/api";
+import { onElevationAutoDisabled } from "../../api/events";
+import { showToast } from "../../buses/toastBus";
+import type { ElevationAutoDisabledEvent as ElevationAutoDisabledPayload } from "../../api/types";
 import { useElevation } from "./useElevation";
 
 vi.mock("../../api/api", async () =>
@@ -10,6 +13,11 @@ vi.mock("../../api/api", async () =>
     sftpElevationEnable: vi.fn(),
   }),
 );
+
+vi.mock("../../api/events", () => ({ onElevationAutoDisabled: vi.fn() }));
+vi.mock("../../buses/toastBus", () => ({ showToast: vi.fn() }));
+
+let autoDisabled: (event: ElevationAutoDisabledPayload) => void = () => {};
 
 const reload = vi.fn();
 const onElevationChange = vi.fn();
@@ -28,6 +36,10 @@ describe("useElevation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(sftpElevationDisable).mockResolvedValue({ disabled: true, runningOperations: [] });
+    vi.mocked(onElevationAutoDisabled).mockImplementation((handler) => {
+      autoDisabled = handler;
+      return Promise.resolve(() => {});
+    });
   });
 
   const setup = () => renderHook(() => useElevation("s1", { onElevationChange, reload }));
@@ -112,5 +124,38 @@ describe("useElevation", () => {
     });
     expect(result.current.elevated).toBe(false);
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  // Issue #1193: the backend switched the channel off after inactivity.
+  it("leaves elevated mode and shows the persistent toast with the minutes", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue(active());
+    const { result } = setup();
+    await act(() => result.current.handleToggleElevation());
+    expect(result.current.elevated).toBe(true);
+    vi.mocked(sftpElevationDisable).mockClear();
+    reload.mockClear();
+
+    act(() => autoDisabled({ sessionId: "s1", minutes: 15 }));
+
+    await waitFor(() => expect(result.current.elevated).toBe(false));
+    expect(onElevationChange).toHaveBeenLastCalledWith(null);
+    expect(reload).toHaveBeenCalledWith(null);
+    // The channel is already gone: no extra disable call.
+    expect(sftpElevationDisable).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith({
+      kind: "info",
+      message: expect.stringContaining("15"),
+    });
+  });
+
+  it("ignores the event of another session or when not elevated", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue(active());
+    const { result } = setup();
+    act(() => autoDisabled({ sessionId: "s1", minutes: 15 }));
+    expect(showToast).not.toHaveBeenCalled();
+    await act(() => result.current.handleToggleElevation());
+    act(() => autoDisabled({ sessionId: "other", minutes: 15 }));
+    expect(result.current.elevated).toBe(true);
+    expect(showToast).not.toHaveBeenCalled();
   });
 });

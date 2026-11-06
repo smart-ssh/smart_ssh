@@ -719,6 +719,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
+            // Issue #1193: idle timeout of the elevated file browser.
+            crate::elevated_sftp::install_idle_timer(
+                app.handle(),
+                &app.state::<crate::elevated_sftp::ElevatedSftpRegistry>(),
+            );
+
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
 
@@ -839,6 +845,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             risk_second_opinion::set_risk_second_opinion_settings,
             risk_second_opinion::set_red_risk_always_confirm,
             ui_preferences::set_ui_preference,
+            elevated_sftp::idle::get_elevated_idle_timeout,
+            elevated_sftp::idle::set_elevated_idle_timeout,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::get_speech_model_status,

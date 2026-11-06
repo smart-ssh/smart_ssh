@@ -43,6 +43,7 @@ pub const CHAT_AUTO_CONTINUATION_LIMIT_REACHED: &str = "chat-auto-continuation-l
 pub const SFTP_TRANSFER_STARTED: &str = "sftp-transfer-started";
 pub const SFTP_TRANSFER_FINISHED: &str = "sftp-transfer-finished";
 pub const SFTP_TRANSFER_PROGRESS: &str = "sftp-transfer-progress";
+pub const ELEVATION_AUTO_DISABLED: &str = "elevation-auto-disabled";
 pub const MCP_ACTION_TAB_REQUESTED: &str = "mcp-action-tab-requested";
 pub const CHAT_CONTEXT_USAGE: &str = "chat-context-usage";
 pub const CHAT_CONTEXT_COMPACTED: &str = "chat-context-compacted";

@@ -815,7 +815,8 @@
     "targetUserHelp": "Menjalankan peramban berkas sebagai pengguna ini melalui sudo. Bawaan: root.",
     "confirm": "Tingkatkan",
     "opChown": "Perubahan pemilik",
-    "chownNote": "Pemilik akan diubah sebagai {{user}}."
+    "chownNote": "Pemilik akan diubah sebagai {{user}}.",
+    "idleSwitchedOff": "Hak istimewa dimatikan setelah {{minutes}} menit tanpa aktivitas"
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",
@@ -1508,5 +1509,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Server ini memakai algoritma SSH usang ({{algorithms}}). Koneksi kurang aman. Perbarui perangkat lunak SSH server jika bisa.",
     "outdatedAlgorithmsHop": "{{hop}} memakai algoritma SSH usang ({{algorithms}}). Koneksi kurang aman. Perbarui perangkat lunak SSH-nya jika bisa."
+  },
+  "elevatedIdle": {
+    "label": "Matikan hak istimewa setelah tidak aktif",
+    "minutes5": "5 menit",
+    "minutes15": "15 menit",
+    "minutes30": "30 menit",
+    "minutes60": "60 menit",
+    "never": "Tidak pernah",
+    "hint": "Peramban berkas keluar sendiri dari mode istimewa setelah selama ini tanpa aktivitas istimewa. Operasi yang sedang berjalan dihitung sebagai aktivitas."
   }
 }

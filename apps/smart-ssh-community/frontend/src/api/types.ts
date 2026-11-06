@@ -189,6 +189,7 @@ export type {
   SftpTransferFinishedPayload,
   SftpTransferKind,
   SftpTransferProgressPayload,
+  ElevationAutoDisabledPayload,
   SftpTransferStartedPayload,
   StepDetail,
   TerminalOutputPayload,
@@ -229,6 +230,7 @@ import type {
   SessionOnlyPayload,
   SftpTransferFinishedPayload,
   SftpTransferProgressPayload,
+  ElevationAutoDisabledPayload,
   SftpTransferStartedPayload,
   StepDetail,
   TerminalOutputPayload,
@@ -272,6 +274,7 @@ export type ChatQueuedMessagesSentEvent = SessionOnlyPayload;
 export type ChatDocumentGeneratedEvent = ChatDocumentGeneratedPayload;
 export type ChatQuestionAskedEvent = ChatQuestionAskedPayload;
 export type SftpTransferStartedEvent = SftpTransferStartedPayload;
+export type ElevationAutoDisabledEvent = ElevationAutoDisabledPayload;
 export type SftpTransferFinishedEvent = SftpTransferFinishedPayload;
 export type SftpTransferProgressEvent = SftpTransferProgressPayload;
 export type McpActionTabRequestedEvent = McpActionTabRequestedPayload;

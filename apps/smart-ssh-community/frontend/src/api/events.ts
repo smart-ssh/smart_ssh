@@ -164,6 +164,11 @@ export const onChatQuestionAsked =
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
+/** Issue #1193: the backend switched the elevated file browser off after
+ * a period without activity. */
+export const onElevationAutoDisabled =
+  typedListener(EVENT.ELEVATION_AUTO_DISABLED);
+
 export const onSftpTransferStarted =
   typedListener(EVENT.SFTP_TRANSFER_STARTED);
 

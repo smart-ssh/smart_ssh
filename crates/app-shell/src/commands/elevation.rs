@@ -129,8 +129,17 @@ impl BrowserChannel {
         kind: crate::file_ops::OpKind,
         path: &str,
     ) -> crate::file_ops::OpGuard {
-        self.ops
-            .register(self.session_id, id, kind, path, self.is_elevated())
+        let guard = self
+            .ops
+            .register(self.session_id, id, kind, path, self.is_elevated());
+        match &self.kind {
+            // Issue #1193: an elevated operation is activity while it runs
+            // and when it ends.
+            BrowserChannelKind::Elevated {
+                slot: Some(slot), ..
+            } => guard.with_activity(slot.activity_handle()),
+            _ => guard,
+        }
     }
 
     /// Issue #622: Ein Transfer wurde gestoppt, weil der erhöhte Kanal
@@ -355,6 +364,8 @@ async fn elevated_access(
     if slot.is_revoked() {
         return Err(ElevatedAccessError::Revoked);
     }
+    // Issue #1193: any elevated access (listing included) is activity.
+    slot.touch();
     match guard.as_ref() {
         // Kanalwert herausgenommen (`ElevatedSftpSlot::revoke`) — dasselbe
         // wie widerrufen, nur ist der Merker hier schon gesetzt gewesen.
