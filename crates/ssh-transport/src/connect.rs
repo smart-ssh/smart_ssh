@@ -304,16 +304,15 @@ async fn connect_inner(
     let config = Arc::new(config);
     let (loss_tx, loss_rx) = tokio::sync::watch::channel(None);
 
-    let mut hops = RusshHops {
+    let mut hops = RusshHops::new(
         config,
-        loss: Arc::new(loss_tx),
+        Arc::new(loss_tx),
         host_keys,
         credentials,
         key_files,
         prompter,
-        pause: log.prompt_pause(),
         log,
-    };
+    );
     let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {
         Chain::Ready(sessions) => sessions,
         Chain::HostKeyPending(outcome) => return Ok(outcome),
@@ -453,8 +452,33 @@ struct RusshHops<'a> {
     key_files: &'a (dyn KeyFileReader + Send + Sync),
     prompter: &'a dyn AuthPrompter,
     /// Issue #1184: stops the authentication limit while the user is asked.
+    /// Issue #1187: always the attempt log's pause, so the app's outer
+    /// connect limit stands still too.
     pause: Arc<AuthPause>,
     log: &'a ConnectLog,
+}
+
+impl<'a> RusshHops<'a> {
+    fn new(
+        config: Arc<client::Config>,
+        loss: Arc<tokio::sync::watch::Sender<Option<ssh_manager_core::ssh::ConnectionLoss>>>,
+        host_keys: Arc<dyn HostKeyStore>,
+        credentials: &'a (dyn CredentialStore + Send + Sync),
+        key_files: &'a (dyn KeyFileReader + Send + Sync),
+        prompter: &'a dyn AuthPrompter,
+        log: &'a ConnectLog,
+    ) -> Self {
+        Self {
+            config,
+            loss,
+            host_keys,
+            credentials,
+            key_files,
+            prompter,
+            pause: log.prompt_pause(),
+            log,
+        }
+    }
 }
 
 #[async_trait]
@@ -1158,5 +1182,71 @@ mod ip_literal_tests {
         assert!(parse_ip_literal("example.com").is_none());
         assert!(parse_ip_literal("1.2.3").is_none());
         assert!(parse_ip_literal("").is_none());
+    }
+}
+
+#[cfg(test)]
+mod prompt_pause_wiring_tests {
+    use super::*;
+    use ssh_manager_core::profiles::{CredentialRef, CredentialResult};
+    use ssh_manager_core::ssh::{KeyFileContent, KeyFileError, KeyFileFacts, NoPrompter};
+
+    struct Unused;
+    impl CredentialStore for Unused {
+        fn get(&self, _: &CredentialRef) -> CredentialResult<secrecy::SecretString> {
+            unreachable!("not used")
+        }
+        fn set(&self, _: &CredentialRef, _: secrecy::SecretString) -> CredentialResult<()> {
+            unreachable!("not used")
+        }
+        fn delete(&self, _: &CredentialRef) -> CredentialResult<()> {
+            unreachable!("not used")
+        }
+    }
+    impl KeyFileReader for Unused {
+        fn read(&self, _: &str, _: bool) -> Result<KeyFileContent, KeyFileError> {
+            unreachable!("not used")
+        }
+        fn inspect(&self, _: &str) -> KeyFileFacts {
+            unreachable!("not used")
+        }
+    }
+    impl HostKeyStore for Unused {
+        fn check(&self, _: &str, _: u16, _: &[u8]) -> HostKeyDecision {
+            unreachable!("not used")
+        }
+        fn trust(&self, _: &str, _: u16, _: &[u8]) -> Result<(), SshError> {
+            unreachable!("not used")
+        }
+    }
+
+    /// Issue #1187: the pause the transport holds while a login prompt is
+    /// open is the attempt log's pause, the one the app's outer connect
+    /// limit watches. Red if `RusshHops::new` uses a private pause.
+    #[tokio::test(start_paused = true)]
+    async fn test_transport_pause_is_the_attempt_logs_pause() {
+        let log = ConnectLog::new();
+        let (tx, _rx) = tokio::sync::watch::channel(None);
+        let unused = Unused;
+        let hops = RusshHops::new(
+            Arc::new(client_config()),
+            Arc::new(tx),
+            Arc::new(Unused),
+            &unused,
+            &unused,
+            &NoPrompter,
+            &log,
+        );
+        // A prompt wait through the transport's pause stops the outer limit.
+        let pause = hops.auth_pause();
+        let work = async {
+            let _held = pause.pause();
+            tokio::time::sleep(Duration::from_secs(1000)).await;
+            Ok::<_, SshError>(())
+        };
+        assert_eq!(
+            timeout_unless_paused(work, Duration::from_secs(100), &log.prompt_pause()).await,
+            Ok(())
+        );
     }
 }
