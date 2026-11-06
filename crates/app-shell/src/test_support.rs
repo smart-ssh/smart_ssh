@@ -48,6 +48,7 @@ impl ssh_manager_core::ai::AiProvider for MockAiProvider {
 /// `crate::elevated_sftp` (Ein-/Ausschalten, A2) als auch
 /// `crate::commands::elevation` (Kanalwahl, Widerruf beim Zugriff) denselben
 /// Aufbau brauchen — dieselbe Begründung wie beim Moduldoc oben.
+#[path = "test_support/tests_log_capture.rs"]
 pub(crate) mod log_capture;
 
 pub(crate) mod elevation {
