@@ -266,7 +266,7 @@ mod tests {
         let opts = SqliteConnectOptions::new()
             .filename(&path)
             .create_if_missing(true)
-            .busy_timeout(Duration::from_millis(50));
+            .busy_timeout(Duration::from_secs(30));
         let a = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(opts.clone())
@@ -279,6 +279,14 @@ mod tests {
             .unwrap();
         sqlx::query("CREATE TABLE t (id INTEGER)")
             .execute(&a)
+            .await
+            .unwrap();
+        // Only the contended statement gets the short timeout. Connecting and
+        // setting up the schema are uncontended in theory, but with a short
+        // timeout on the whole connection a slow runner (e.g. macOS CI) could
+        // hit a spurious busy error there instead of at the assertion.
+        sqlx::query("PRAGMA busy_timeout = 50")
+            .execute(&b)
             .await
             .unwrap();
         let mut tx = a.begin().await.unwrap();
