@@ -78,6 +78,7 @@ rfd = { version = "0.16.0", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 # Spec 0101 (spec-reviewer Runde 1): Die Tests dieser Crate legen
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie

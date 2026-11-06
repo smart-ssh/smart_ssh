@@ -44,7 +44,7 @@ pub use jump_host::resolve_connection_target;
 pub use task_spawner::{BoxedTask, TaskSpawner};
 pub use transport::{
     ChunkControl, ChunkSource, ConnectionLoss, ConnectionLossWatch, InteractiveShell, RunningExec,
-    SftpSession, SshTransport, TransferEnd,
+    SftpSession, SshTransport, SudoPromptError, TransferEnd,
 };
 pub use types::{
     exec_output_channel, CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk,

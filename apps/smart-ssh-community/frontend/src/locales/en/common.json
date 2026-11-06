@@ -798,7 +798,8 @@
     "close": "Close",
     "detail": "Details: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo requires a password for sftp-server on this server. The app never asks for a sudo password.",
+      "passwordRequired": "sudo requires a password for sftp-server on this server. Add the sudoers rule below, or store a sudo password in the server profile to enable elevated rights.",
+      "wrongSudoPassword": "sudo rejected the stored sudo password. Check the sudo password in the server profile.",
       "notAllowed": "This SSH login may not start sftp-server via sudo without a password.",
       "requireTty": "sudo refuses to run without a terminal (“requiretty” in sudoers). Disable requiretty for this login, e.g. with “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server was not found on the server. Please enter its path in the server profile under “Advanced”.",

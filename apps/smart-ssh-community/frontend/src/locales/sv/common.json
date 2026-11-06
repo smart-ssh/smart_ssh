@@ -798,7 +798,8 @@
     "close": "Stäng",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo kräver ett lösenord för sftp-server på den här servern. Appen frågar aldrig efter ett sudo-lösenord.",
+      "passwordRequired": "sudo kräver lösenord för sftp-server på den här servern. Lägg till sudoers-raden nedan eller spara ett sudo-lösenord i serverprofilen för att aktivera förhöjda rättigheter.",
+      "wrongSudoPassword": "sudo avvisade det sparade sudo-lösenordet. Kontrollera sudo-lösenordet i serverprofilen.",
       "notAllowed": "Den här SSH-inloggningen får inte starta sftp-server via sudo utan lösenord.",
       "requireTty": "sudo vägrar köra utan terminal (“requiretty” i sudoers). Stäng av requiretty för inloggningen, t.ex. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server hittades inte på servern. Ange dess sökväg i serverprofilen under “Avancerat”.",

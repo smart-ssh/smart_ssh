@@ -28,9 +28,40 @@ use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::SessionId;
 
+/// How sudo authenticated when the elevated channel was opened (audit only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SudoAuth {
+    #[default]
+    Nopasswd,
+    Password,
+}
+
+#[cfg(test)]
+impl ElevatedSftp {
+    /// Channel opened with a passwordless sudo rule.
+    pub fn new(target_user: String, sftp: Box<dyn SftpSession>) -> Self {
+        Self {
+            target_user,
+            sudo_auth: SudoAuth::Nopasswd,
+            sftp,
+        }
+    }
+}
+
+impl SudoAuth {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Nopasswd => "nopasswd",
+            Self::Password => "password",
+        }
+    }
+}
+
 pub struct ElevatedSftp {
     /// Ziel-Nutzer der Rechteerhöhung (Default `root`).
     pub target_user: String,
+    /// How sudo authenticated for this channel (audit line of each change).
+    pub sudo_auth: SudoAuth,
     pub sftp: Box<dyn SftpSession>,
 }
 
@@ -49,6 +80,8 @@ pub struct ElevatedSftp {
 #[derive(Clone, Default)]
 pub struct ElevatedSftpSlot {
     channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
+    /// Copy of the channel's `sudo_auth`, readable without the channel lock.
+    sudo_auth: SudoAuth,
     /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
     /// Teil des Widerrufs.
     ///
@@ -90,6 +123,7 @@ type BeforeOperationHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
+            sudo_auth: channel.sudo_auth,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             #[cfg(test)]
@@ -129,6 +163,10 @@ impl ElevatedSftpSlot {
     /// `commands::elevation::BrowserSftpGuard::sftp`) — auch dann, wenn der
     /// Kanalwert selbst noch dasteht, weil ein Halter die Sperre gerade
     /// belegt.
+    pub(crate) fn sudo_auth(&self) -> SudoAuth {
+        self.sudo_auth
+    }
+
     pub(crate) fn is_revoked(&self) -> bool {
         self.revoked.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -345,10 +383,11 @@ impl ElevatedSftpRegistry {
 mod probe;
 pub(crate) use probe::run_probe;
 use ssh_manager_core::ssh::elevated::{
-    classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
-    is_valid_target_user, parse_sftp_server_probe, parse_sftp_server_safety_probe,
-    sftp_server_probe_command, sftp_server_safety_probe_command, sudo_check_command, sudoers_line,
-    SftpServerSafety, SudoCheck, DEFAULT_ELEVATION_USER,
+    classify_sudo_check, elevated_sftp_command, elevated_sftp_password_command,
+    is_plausible_sftp_server_path, is_valid_target_user, new_sudo_prompt_marker,
+    parse_sftp_server_probe, parse_sftp_server_safety_probe, sftp_server_probe_command,
+    sftp_server_safety_probe_command, sudo_check_command, sudoers_line, SftpServerSafety,
+    SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
 use app_logic::dto::{
@@ -392,8 +431,8 @@ fn failure(
     })
 }
 
-/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein. Nie
-/// ein Passwort (`sudo -n`), nie hängen (Timeouts), bei jedem Fehler eine
+/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein.
+/// `sudo -n`, oder (Issue #1191) mit dem gespeicherten sudo-Passwort; nie hängen (Timeouts), bei jedem Fehler eine
 /// strukturierte Meldung statt eines kryptischen Fehlers. Die Probe-Ausgaben
 /// (inkl. sudo-stderr) gehen nur in diese Meldung, nie in Chat/KI-Kontext.
 ///
@@ -525,8 +564,15 @@ pub(crate) async fn enable_after_confirmation(
         Err(detail) => SudoCheck::Failed(detail),
     };
     let sudoers = || sudoers_line(login, &path, &target_user);
+    // Issue #1191: password path — only when `sudo -n -l` says a password is
+    // needed and one is stored for the server. Nothing else switches to it.
+    let stored_password = session.safety.sudo_password.get();
+    let mut use_password = false;
     match check {
         SudoCheck::Allowed => {}
+        SudoCheck::PasswordRequired if stored_password.is_some() => {
+            use_password = true;
+        }
         SudoCheck::PasswordRequired | SudoCheck::NotAllowed if unsafe_path.is_some() => {
             // Keine sudoers-Zeile für ein Binary, das ein anderer Nutzer
             // austauschen könnte.
@@ -585,11 +631,16 @@ pub(crate) async fn enable_after_confirmation(
         }
     }
 
-    let command =
-        elevated_sftp_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let opened = {
+    let opened = if use_password {
+        open_with_password(session, &path, &target_user, stored_password.as_deref()).await
+    } else {
+        let command = elevated_sftp_command(&path, &target_user)
+            .expect("Pfad und Nutzer wurden oben validiert");
         let mut transport = session.transport.lock().await;
-        transport.open_sftp_via_exec(&command).await
+        transport
+            .open_sftp_via_exec(&command)
+            .await
+            .map_err(OpenFailure::Other)
     };
     match opened {
         Ok(sftp) => {
@@ -600,6 +651,11 @@ pub(crate) async fn enable_after_confirmation(
             // Sitzung stehen zu bleiben.
             let channel = ElevatedSftp {
                 target_user: target_user.clone(),
+                sudo_auth: if use_password {
+                    SudoAuth::Password
+                } else {
+                    SudoAuth::Nopasswd
+                },
                 sftp,
             };
             let previous = ctx
@@ -618,6 +674,7 @@ pub(crate) async fn enable_after_confirmation(
                 target_user = %target_user,
                 sftp_server_path = %path,
                 source = "manual",
+                sudo_auth = if use_password { "password" } else { "nopasswd" },
                 "file browser elevated rights enabled"
             );
             Ok(ElevationResultDto {
@@ -632,7 +689,21 @@ pub(crate) async fn enable_after_confirmation(
                 running_operations: Vec::new(),
             })
         }
-        Err(err) => failure(
+        Err(OpenFailure::WrongPassword) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::WrongSudoPassword,
+            None,
+            None,
+        ),
+        Err(OpenFailure::NotAllowed(line)) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::NotAllowed,
+            sudoers(),
+            Some(line),
+        ),
+        Err(OpenFailure::Other(err)) => failure(
             &target_user,
             path_for_dto,
             ElevationFailureKind::StartFailed,
@@ -640,6 +711,45 @@ pub(crate) async fn enable_after_confirmation(
             Some(err.to_string()),
         ),
     }
+}
+
+/// Why opening the elevated channel failed (Issue #1191).
+enum OpenFailure {
+    WrongPassword,
+    NotAllowed(String),
+    Other(ssh_manager_core::ssh::SshError),
+}
+
+/// Issue #1191: opens the channel with `sudo -S -k -p '<marker>'` and the
+/// stored sudo password. The transport writes the password only after the
+/// marker appeared on stderr; the password is not part of any text here.
+async fn open_with_password(
+    session: &Session,
+    path: &str,
+    target_user: &str,
+    password: Option<&secrecy::SecretString>,
+) -> Result<Box<dyn ssh_manager_core::ssh::SftpSession>, OpenFailure> {
+    use ssh_manager_core::ssh::{SshError, SudoPromptError};
+    let Some(password) = password else {
+        return Err(OpenFailure::Other(SshError::ChannelError(
+            "no sudo password stored".to_string(),
+        )));
+    };
+    let marker = new_sudo_prompt_marker();
+    let command = elevated_sftp_password_command(path, target_user, &marker)
+        .expect("Pfad, Nutzer und Marker sind gültig");
+    let mut transport = session.transport.lock().await;
+    transport
+        .open_sftp_via_exec_with_sudo_password(&command, &marker, password)
+        .await
+        .map_err(|e| match e {
+            SudoPromptError::NoPrompt => OpenFailure::Other(SshError::ChannelError(
+                "sudo did not ask for the password".to_string(),
+            )),
+            SudoPromptError::WrongPassword => OpenFailure::WrongPassword,
+            SudoPromptError::NotAllowed(line) => OpenFailure::NotAllowed(line),
+            SudoPromptError::Failed(err) => OpenFailure::Other(err),
+        })
 }
 
 /// Schaltet den erhöhten Kanal einer Sitzung aus und **widerruft** ihn.

@@ -798,7 +798,8 @@
     "close": "Lukk",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo krever passord for sftp-server på denne serveren. Appen ber aldri om et sudo-passord.",
+      "passwordRequired": "sudo krever passord for sftp-server på denne serveren. Legg til sudoers-linjen nedenfor, eller lagre et sudo-passord i serverprofilen for å aktivere utvidede rettigheter.",
+      "wrongSudoPassword": "sudo avviste det lagrede sudo-passordet. Sjekk sudo-passordet i serverprofilen.",
       "notAllowed": "Denne SSH-påloggingen har ikke lov til å starte sftp-server via sudo uten passord.",
       "requireTty": "sudo nekter å kjøre uten terminal (“requiretty” i sudoers). Slå av requiretty for denne påloggingen, f.eks. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server ble ikke funnet på serveren. Oppgi stien i serverprofilen under “Avansert”.",

@@ -7,6 +7,16 @@ Accepted
 Bezug: docs/specs/0067-sftp-elevated-and-toasts.md, Commits `7e4e262`,
 `235f9a6`, `d28e266`, `8bfc9a2`, Review-Nacharbeit `030150d`
 
+> **Update (Issue #1191):** Die Entscheidung „nur passwortloses sudo“
+> (Spec 0067 „Entscheidung“, §6 und §8 unten) ist durch den Passwortweg
+> abgelöst: Ist ein Sudo-Passwort im Server-Profil gespeichert und verlangt
+> sudo eines, öffnet die App den Kanal mit `sudo -S -k -p '<marker>'` und
+> schreibt das Passwort erst nach dem Marker, genau einmal (Spec 0067, A1).
+> Der Grund: Eine `NOPASSWD`-Regel für `sftp-server` ist passwortloses Root
+> für alles unter dem Login. Die Probe-Kommandos laufen weiter ohne
+> Filter-Engine (§6); der Passwortweg ist nur aus Browser-Commands
+> erreichbar.
+
 ## 1. Neuer, kleiner Toast-Host statt „bestehendem 0058-Mechanismus“
 
 Die Spec verweist für Teil B auf einen app-weiten Toast aus Spec 0058. Den

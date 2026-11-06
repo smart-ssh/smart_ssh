@@ -793,7 +793,8 @@
     "close": "Tutup",
     "detail": "Detail: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo memerlukan kata sandi untuk sftp-server di server ini. Aplikasi tidak pernah meminta kata sandi sudo.",
+      "passwordRequired": "sudo meminta kata sandi untuk sftp-server di server ini. Tambahkan aturan sudoers di bawah, atau simpan kata sandi sudo di profil server untuk mengaktifkan hak akses tinggi.",
+      "wrongSudoPassword": "sudo menolak kata sandi sudo yang tersimpan. Periksa kata sandi sudo di profil server.",
       "notAllowed": "Login SSH ini tidak diizinkan memulai sftp-server melalui sudo tanpa kata sandi.",
       "requireTty": "sudo menolak berjalan tanpa terminal (“requiretty” di sudoers). Nonaktifkan requiretty untuk login ini, mis. dengan “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server tidak ditemukan di server. Silakan masukkan jalurnya di profil server di bawah “Lanjutan”.",
