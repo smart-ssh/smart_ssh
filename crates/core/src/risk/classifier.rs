@@ -288,8 +288,13 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFindin
     // (a) Rot-Muster, wie der Klassifizierer es anwendet.
     let mut segments = segment_command(command);
     segments.push(command.to_string());
+    // The resolved form splits on whitespace and so cannot tell a quoted
+    // sudo option argument (`sudo -p 'sftp-server' ls`) from the command.
+    // Quoted segments are covered by the quote-aware word check (b) instead
+    // (Issue #1208).
     let resolved: Vec<String> = segments
         .iter()
+        .filter(|segment| !segment.contains(['\'', '"']))
         .map(|segment| resolve_effective_command(segment))
         .collect();
     segments.extend(resolved);
@@ -322,47 +327,142 @@ enum WordCheck {
 const COMMAND_PREFIXES: &[&str] = &[
     "sudo", "doas", "env", "nice", "nohup", "time", "command", "exec", "timeout", "setsid",
     "stdbuf", "ionice", "chroot", "flock", "busybox", "xargs", "runuser", "su", "watch", "strace",
-    "ltrace",
+    "ltrace", "script", "builtin",
 ];
+
+/// Issue #1208: how a `sudo`/`doas` word starting with `-` continues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SudoOption {
+    /// `--`: end of options.
+    EndOfOptions,
+    /// Option without an argument, or with an attached one (`-uroot`,
+    /// `--user=root`).
+    Complete,
+    /// Option whose argument is the next word (`-u root`, `--prompt 'x'`).
+    TakesNext,
+}
+
+/// Classifies one `sudo`/`doas` option word. `word` keeps its original case
+/// (`-H` takes no argument, `-h` does). Unknown options are `Complete`, so
+/// the next word still counts as the command.
+fn classify_sudo_option(program: &str, word: &str) -> SudoOption {
+    if word == "--" {
+        return SudoOption::EndOfOptions;
+    }
+    if let Some(long) = word.strip_prefix("--") {
+        if long.contains('=') {
+            return SudoOption::Complete;
+        }
+        const LONG_WITH_ARG: &[&str] = &[
+            "close-from",
+            "chdir",
+            "group",
+            "host",
+            "prompt",
+            "chroot",
+            "role",
+            "command-timeout",
+            "type",
+            "other-user",
+            "user",
+        ];
+        return if program == "sudo" && LONG_WITH_ARG.contains(&long.to_lowercase().as_str()) {
+            SudoOption::TakesNext
+        } else {
+            SudoOption::Complete
+        };
+    }
+    let with_arg: &[char] = if program == "doas" {
+        &['C', 'u']
+    } else {
+        &['C', 'D', 'g', 'h', 'p', 'R', 'r', 'T', 't', 'U', 'u']
+    };
+    // Cluster such as `-Sk`: the first option letter that takes an argument
+    // ends it; letters after it are the attached argument.
+    let letters: Vec<char> = word.chars().skip(1).collect();
+    match letters.iter().position(|c| with_arg.contains(c)) {
+        Some(pos) if pos + 1 == letters.len() => SudoOption::TakesNext,
+        _ => SudoOption::Complete,
+    }
+}
 
 fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     if depth > 3 {
         return WordCheck::TooDeep;
     }
-    let lower = command.to_lowercase();
-    let words = shell_words(&lower);
-    let name = |word: &ShellWord| word.text.rsplit('/').next().unwrap_or("").to_string();
-    let has_reshell = words
+    // Parsed in the original case (sudo options are case-sensitive); every
+    // comparison below uses the lowercased text.
+    let words = shell_words(command);
+    let lower_texts: Vec<String> = words.iter().map(|w| w.text.to_lowercase()).collect();
+    let name = |text: &str| text.rsplit('/').next().unwrap_or("").to_string();
+    let has_reshell = lower_texts
         .iter()
-        .any(|word| RESHELL_COMMANDS.contains(&name(word).as_str()));
+        .any(|text| RESHELL_COMMANDS.contains(&name(text).as_str()));
     let mut at_command_position = true;
-    for word in &words {
+    // `Some(program)` while the options of a `sudo`/`doas` at the command
+    // position are being skipped.
+    let mut in_sudo_options: Option<&'static str> = None;
+    let mut skip_argument = false;
+    for (word, text) in words.iter().zip(&lower_texts) {
         if word.stage_start {
             at_command_position = true;
+            in_sudo_options = None;
+            skip_argument = false;
         }
-        let word_name = name(word);
+        if at_command_position {
+            if let Some(program) = in_sudo_options {
+                if skip_argument {
+                    // The argument of a sudo option (`-p 'sftp-server'`) is
+                    // not a command.
+                    skip_argument = false;
+                    continue;
+                }
+                if word.text.starts_with('-') {
+                    match classify_sudo_option(program, &word.text) {
+                        SudoOption::EndOfOptions => in_sudo_options = None,
+                        SudoOption::Complete => {}
+                        SudoOption::TakesNext => skip_argument = true,
+                    }
+                    continue;
+                }
+                in_sudo_options = None;
+            }
+        }
+        let word_name = name(text);
         if word_name == "sftp-server" && (at_command_position || has_reshell) {
             return WordCheck::Found;
         }
-        if word.text.contains(char::is_whitespace) && word.text.contains("sftp-server") {
-            let nested = sftp_server_word_check(&word.text, depth + 1);
+        if text.contains(char::is_whitespace) && text.contains("sftp-server") {
+            let nested = sftp_server_word_check(text, depth + 1);
             if nested != WordCheck::Clean {
                 return nested;
             }
         }
         if at_command_position {
+            if word_name == "sudo" || word_name == "doas" {
+                in_sudo_options = Some(if word_name == "sudo" { "sudo" } else { "doas" });
+            }
             let is_prefix = COMMAND_PREFIXES.contains(&word_name.as_str())
                 || RESHELL_COMMANDS.contains(&word_name.as_str())
-                || word.text.starts_with('-')
-                || is_env_assignment(&word.text)
-                || word
-                    .text
+                || text.starts_with('-')
+                || is_env_assignment(text)
+                || text
                     .chars()
                     .all(|c| c.is_ascii_digit() || c == '.' || c == 's');
             at_command_position = is_prefix;
         }
     }
     WordCheck::Clean
+}
+
+/// Test access to the word check alone (Issue #1208).
+#[cfg(test)]
+pub(super) fn sftp_server_word_check_for_tests(command: &str) -> &'static str {
+    match sftp_server_word_check(command, 0) {
+        WordCheck::Found => "found",
+        WordCheck::TooDeep => "too deep",
+        WordCheck::Clean => "clean",
+    }
 }
 
 /// `NAME=wert` vor einem Kommando.
