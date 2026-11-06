@@ -12,6 +12,8 @@ use crate::state::SessionId;
 pub struct ConnectWarningsPayload {
     session_id: SessionId,
     warnings: Vec<ssh_manager_core::ssh::ConnectWarning>,
+    /// Number of hops of the connection; the UI names the hop in a chain.
+    hop_count: usize,
 }
 
 /// Issue #1173: the connection of `session_id` is established, but some hop
@@ -22,6 +24,7 @@ pub fn emit_connect_warnings(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
     warnings: Vec<ssh_manager_core::ssh::ConnectWarning>,
+    hop_count: usize,
 ) {
     if warnings.is_empty() {
         return;
@@ -32,6 +35,7 @@ pub fn emit_connect_warnings(
         &ConnectWarningsPayload {
             session_id,
             warnings,
+            hop_count,
         },
     );
 }

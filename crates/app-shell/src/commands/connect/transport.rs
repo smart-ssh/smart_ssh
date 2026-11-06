@@ -158,6 +158,7 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         &crate::event_emitter::TauriEventEmitter(app.clone()),
                         session_id,
                         attempt_log.warnings(),
+                        target.hops.len(),
                     );
                     break transport;
                 }

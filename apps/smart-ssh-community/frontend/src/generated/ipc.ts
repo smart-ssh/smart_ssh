@@ -94,7 +94,7 @@ export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunn
 
 export type ConnectWarning = { hop: string, algorithms: Array<string>, };
 
-export type ConnectWarningsPayload = { sessionId: string, warnings: Array<ConnectWarning>, };
+export type ConnectWarningsPayload = { sessionId: string, warnings: Array<ConnectWarning>, hopCount: number, };
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting" | "awaiting_host_key";
 

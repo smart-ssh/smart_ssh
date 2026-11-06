@@ -308,6 +308,11 @@ export function translateErrorCode(
   if (code === "AI_PROVIDER_USAGE_LIMIT" && typeof params?.date === "string" && params.date) {
     return t(dynamicKey(`errors.${code}_DATE`), params);
   }
+  // Issue #1173: the backend message names the hop, the algorithm kind and
+  // what the server offered; a static translation cannot, so it follows.
+  if (code === "SSH_NO_COMMON_ALGORITHM" && fallback) {
+    return `${t(dynamicKey(`errors.${code}`), params)} (${fallback})`;
+  }
   return t(dynamicKey(`errors.${code}`), params) // code is in KNOWN_ERROR_CODES;
 }
 

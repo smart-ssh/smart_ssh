@@ -5,8 +5,9 @@ import type { ConnectWarning } from "../generated/ipc";
 import { showToast } from "../buses/toastBus";
 import type { TranslateFn } from "../i18nTypes";
 
-export function outdatedAlgorithmsMessage(t: TranslateFn, warnings: ConnectWarning[]): string {
-  if (warnings.length === 1) {
+export function outdatedAlgorithmsMessage(t: TranslateFn, warnings: ConnectWarning[], hopCount = 1): string {
+  // A chain always names the hop, also when only one hop is affected.
+  if (warnings.length === 1 && hopCount <= 1) {
     return t("connectWarnings.outdatedAlgorithms", { algorithms: warnings[0].algorithms.join(", ") });
   }
   return warnings
@@ -16,10 +17,10 @@ export function outdatedAlgorithmsMessage(t: TranslateFn, warnings: ConnectWarni
     .join("\n");
 }
 
-export function showOutdatedAlgorithmsToast(warnings: ConnectWarning[]): void {
+export function showOutdatedAlgorithmsToast(warnings: ConnectWarning[], hopCount = 1): void {
   if (warnings.length === 0) return;
   showToast({
     kind: "info",
-    message: outdatedAlgorithmsMessage((key, options) => i18next.t(key, options), warnings),
+    message: outdatedAlgorithmsMessage((key, options) => i18next.t(key, options), warnings, hopCount),
   });
 }

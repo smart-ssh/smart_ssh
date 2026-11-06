@@ -265,7 +265,7 @@ export function useSessionTabs() {
         );
       }),
       // Issue #1173: the server negotiated outdated algorithms.
-      onConnectWarnings((event) => showOutdatedAlgorithmsToast(event.warnings)),
+      onConnectWarnings((event) => showOutdatedAlgorithmsToast(event.warnings, event.hopCount)),
       onChatActionProposed((event) => {
         if (typeof event.decision !== "object" || !("Confirm" in event.decision)) return;
         setTabs((prev) =>
