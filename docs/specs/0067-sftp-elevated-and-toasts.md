@@ -154,8 +154,9 @@ Prüfungen aus A1–A3 bleiben unverändert.
   durch Filter-Engine und Bestätigung, auch während der erhöhte Browser offen
   ist. Der erhöhte Kanal ist ausschließlich von den Browser-Befehlen
   erreichbar.
-- **Protokolliert** mit Kennzeichnung „erhöht“ und Zielnutzer (Spec 0054,
-  Sicherheitsmodell).
+- **Protokolliert** mit Kennzeichnung „erhöht“, Zielnutzer und der Art, wie
+  sudo authentifiziert hat (`nopasswd` oder `password`, nie das Passwort;
+  Spec 0054, Sicherheitsmodell).
 - **Widerruf wirkt sofort:** Wird der Modus ausgeschaltet, die Sitzung
   getrennt oder für einen anderen Nutzer neu aktiviert, wird der Kanal
   verworfen und kein weiterer Befehl läuft mit den alten Rechten

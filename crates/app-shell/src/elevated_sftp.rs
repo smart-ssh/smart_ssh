@@ -28,9 +28,28 @@ use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::SessionId;
 
+/// How sudo authenticated when the elevated channel was opened (audit only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SudoAuth {
+    #[default]
+    Nopasswd,
+    Password,
+}
+
+impl SudoAuth {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Nopasswd => "nopasswd",
+            Self::Password => "password",
+        }
+    }
+}
+
 pub struct ElevatedSftp {
     /// Ziel-Nutzer der Rechteerhöhung (Default `root`).
     pub target_user: String,
+    /// How sudo authenticated for this channel (audit line of each change).
+    pub sudo_auth: SudoAuth,
     pub sftp: Box<dyn SftpSession>,
 }
 
@@ -49,6 +68,8 @@ pub struct ElevatedSftp {
 #[derive(Clone, Default)]
 pub struct ElevatedSftpSlot {
     channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
+    /// Copy of the channel's `sudo_auth`, readable without the channel lock.
+    sudo_auth: SudoAuth,
     /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
     /// Teil des Widerrufs.
     ///
@@ -90,6 +111,7 @@ type BeforeOperationHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
+            sudo_auth: channel.sudo_auth,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             #[cfg(test)]
@@ -129,6 +151,10 @@ impl ElevatedSftpSlot {
     /// `commands::elevation::BrowserSftpGuard::sftp`) — auch dann, wenn der
     /// Kanalwert selbst noch dasteht, weil ein Halter die Sperre gerade
     /// belegt.
+    pub(crate) fn sudo_auth(&self) -> SudoAuth {
+        self.sudo_auth
+    }
+
     pub(crate) fn is_revoked(&self) -> bool {
         self.revoked.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -613,6 +639,11 @@ pub(crate) async fn enable_after_confirmation(
             // Sitzung stehen zu bleiben.
             let channel = ElevatedSftp {
                 target_user: target_user.clone(),
+                sudo_auth: if use_password {
+                    SudoAuth::Password
+                } else {
+                    SudoAuth::Nopasswd
+                },
                 sftp,
             };
             let previous = ctx

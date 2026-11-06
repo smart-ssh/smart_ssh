@@ -578,6 +578,7 @@ async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slo
         f.session_id,
         ElevatedSftp {
             target_user: "root".to_string(),
+            sudo_auth: Default::default(),
             sftp: Box::new(DropReportingSftp(dropped.clone())),
         },
     );
@@ -671,22 +672,14 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuf {
 
 #[tokio::test]
 async fn test_password_path_is_used_and_password_never_leaks() {
-    // Process-wide subscriber (a thread-local one races with the global
-    // callsite cache of parallel tests); lines are told apart by the unique
-    // target user.
-    static LOG: std::sync::OnceLock<LogBuf> = std::sync::OnceLock::new();
-    let logbuf = LOG
-        .get_or_init(|| {
-            let buf = LogBuf::default();
-            let _ = tracing::subscriber::set_global_default(
-                tracing_subscriber::fmt()
-                    .with_writer(buf.clone())
-                    .with_ansi(false)
-                    .finish(),
-            );
-            buf
-        })
-        .clone();
+    // Thread-local subscriber: the test runs on a current-thread runtime.
+    let logbuf = LogBuf::default();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(logbuf.clone())
+            .with_ansi(false)
+            .finish(),
+    );
     let (t, log) = password_required_transport();
     let received = t.received_passwords.clone();
     let f = fixture_with_sudo_password(Box::new(t), Some(STORED));

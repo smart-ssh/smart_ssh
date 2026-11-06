@@ -96,7 +96,7 @@ pub(super) async fn chmod_impl_reporting(
             .map_err(|e| e.to_string()),
     );
     audit_elevated_change(
-        elevated_user.as_deref(),
+        elevated_user.as_ref(),
         "chmod",
         path,
         matches!(result, Ok(Some(_))),
@@ -189,7 +189,7 @@ pub(super) async fn chown_impl_reporting(
             .map_err(|e| e.to_string()),
     );
     audit_elevated_change(
-        elevated_user.as_deref(),
+        elevated_user.as_ref(),
         "chown",
         path,
         matches!(result, Ok(Some(_))),
