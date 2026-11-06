@@ -815,7 +815,8 @@
     "targetUserHelp": "sudo を使って、このユーザーとしてファイルブラウザを実行します。既定値: root。",
     "confirm": "昇格",
     "opChown": "所有者の変更",
-    "chownNote": "所有者は {{user}} として変更されます。"
+    "chownNote": "所有者は {{user}} として変更されます。",
+    "idleSwitchedOff": "操作がないまま{{minutes}}分が経過したため、昇格した権限をオフにしました"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -1508,5 +1509,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "このサーバーは古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、サーバーの SSH ソフトウェアを更新してください。",
     "outdatedAlgorithmsHop": "{{hop}} は古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、その SSH ソフトウェアを更新してください。"
+  },
+  "elevatedIdle": {
+    "label": "操作がない場合に昇格した権限をオフにする",
+    "minutes5": "5分",
+    "minutes15": "15分",
+    "minutes30": "30分",
+    "minutes60": "60分",
+    "never": "しない",
+    "hint": "昇格した操作がこの時間なかった場合、ファイルブラウザーは自動的に昇格モードを終了します。実行中の操作はアクティビティとして扱われます。"
   }
 }

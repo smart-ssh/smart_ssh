@@ -130,6 +130,8 @@ export type DownloadResultDto = { localPath: string, isDir: boolean, fileCount: 
 
 export type EditSessionDto = { localPath: string, remoteModified: string | null, };
 
+export type ElevationAutoDisabledPayload = { sessionId: string, minutes: number, };
+
 export type ElevationDisableDto = { disabled: boolean, runningOperations: Array<RunningOperationDto>, };
 
 export type ElevationFailureDto = { kind: ElevationFailureKind, sudoersLine: string | null, detail: string | null, };
@@ -333,6 +335,7 @@ export type EventPayloads = {
   "connect-warnings": ConnectWarningsPayload,
   "connection-status-changed": ConnectionStatusChangedPayload,
   "data-changed": DataChangedPayload,
+  "elevation-auto-disabled": ElevationAutoDisabledPayload,
   "entitlements:changed": Entitlements,
   "host-key-verification-ended": HostKeyVerificationEndedPayload,
   "host-key-verification-needed": HostKeyVerificationNeededPayload,

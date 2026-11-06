@@ -820,7 +820,8 @@
     "targetUserHelp": "Kör filläsaren som denna användare via sudo. Standard: root.",
     "confirm": "Utöka",
     "opChown": "Ändring av ägare",
-    "chownNote": "Ägaren ändras som {{user}}."
+    "chownNote": "Ägaren ändras som {{user}}.",
+    "idleSwitchedOff": "Förhöjda rättigheter har stängts av efter {{minutes}} minuter utan aktivitet"
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Den här servern använder föråldrade SSH-algoritmer ({{algorithms}}). Anslutningen är mindre säker. Uppdatera serverns SSH-programvara om du kan.",
     "outdatedAlgorithmsHop": "{{hop}} använder föråldrade SSH-algoritmer ({{algorithms}}). Anslutningen är mindre säker. Uppdatera dess SSH-programvara om du kan."
+  },
+  "elevatedIdle": {
+    "label": "Stäng av förhöjda rättigheter efter inaktivitet",
+    "minutes5": "5 minuter",
+    "minutes15": "15 minuter",
+    "minutes30": "30 minuter",
+    "minutes60": "60 minuter",
+    "never": "Aldrig",
+    "hint": "Filläsaren lämnar det förhöjda läget av sig själv efter så här lång tid utan förhöjd aktivitet. En pågående åtgärd räknas som aktivitet."
   }
 }

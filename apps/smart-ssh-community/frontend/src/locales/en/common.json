@@ -820,7 +820,8 @@
     "targetUserHelp": "Runs the file browser as this user via sudo. Default: root.",
     "confirm": "Elevate",
     "opChown": "Change owner",
-    "chownNote": "The owner will be changed as {{user}}."
+    "chownNote": "The owner will be changed as {{user}}.",
+    "idleSwitchedOff": "Elevated rights switched off after {{minutes}} minutes without activity"
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "This server uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update the server's SSH software if you can.",
     "outdatedAlgorithmsHop": "{{hop}} uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update its SSH software if you can."
+  },
+  "elevatedIdle": {
+    "label": "Switch off elevated rights after inactivity",
+    "minutes5": "5 minutes",
+    "minutes15": "15 minutes",
+    "minutes30": "30 minutes",
+    "minutes60": "60 minutes",
+    "never": "Never",
+    "hint": "The file browser leaves elevated mode on its own after this long without elevated activity. A running operation counts as activity."
   }
 }

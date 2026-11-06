@@ -830,7 +830,8 @@
     "targetUserHelp": "Spustí správce souborů jako tento uživatel přes sudo. Výchozí: root.",
     "confirm": "Zvýšit",
     "opChown": "Změna vlastníka",
-    "chownNote": "Vlastník bude změněn jako {{user}}."
+    "chownNote": "Vlastník bude změněn jako {{user}}.",
+    "idleSwitchedOff": "Zvýšená oprávnění vypnuta po {{minutes}} min nečinnosti"
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",
@@ -1532,5 +1533,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Tento server používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte software SSH serveru.",
     "outdatedAlgorithmsHop": "{{hop}} používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte jeho software SSH."
+  },
+  "elevatedIdle": {
+    "label": "Vypnout zvýšená oprávnění po nečinnosti",
+    "minutes5": "5 minut",
+    "minutes15": "15 minut",
+    "minutes30": "30 minut",
+    "minutes60": "60 minut",
+    "never": "Nikdy",
+    "hint": "Prohlížeč souborů sám opustí zvýšený režim po této době bez zvýšené aktivity. Probíhající operace se počítá jako aktivita."
   }
 }

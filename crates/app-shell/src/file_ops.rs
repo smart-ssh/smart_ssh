@@ -269,9 +269,18 @@ pub(crate) struct OpGuard {
     registry: Arc<FileOps>,
     session_id: SessionId,
     handle: OpHandle,
+    /// Issue #1193: touched when an elevated operation ends, so the idle
+    /// timer starts again from the end of the operation.
+    activity: Option<crate::elevated_sftp::IdleActivity>,
 }
 
 impl OpGuard {
+    pub(crate) fn with_activity(mut self, activity: crate::elevated_sftp::IdleActivity) -> Self {
+        activity.touch();
+        self.activity = Some(activity);
+        self
+    }
+
     pub(crate) fn handle(&self) -> &OpHandle {
         &self.handle
     }
@@ -287,6 +296,9 @@ impl Drop for OpGuard {
             }
         }
         drop(ops);
+        if let Some(activity) = &self.activity {
+            activity.touch();
+        }
         self.registry.ended.notify_waiters();
     }
 }
@@ -321,6 +333,7 @@ impl FileOps {
             registry: self.clone(),
             session_id,
             handle,
+            activity: None,
         }
     }
 
@@ -372,7 +385,7 @@ impl FileOps {
             .is_some_and(|l| l.iter().any(|h| h.0.elevated && h.is_stopped()))
     }
 
-    fn has_elevated(&self, session_id: SessionId) -> bool {
+    pub(crate) fn has_elevated(&self, session_id: SessionId) -> bool {
         lock_tolerating_poison(&self.ops)
             .get(&session_id)
             .is_some_and(|l| l.iter().any(|h| h.0.elevated))
@@ -385,18 +398,22 @@ impl FileOps {
         session_id: SessionId,
         timeout: Duration,
     ) -> bool {
-        let wait = async {
-            loop {
-                let notified = self.ended.notified();
-                tokio::pin!(notified);
-                notified.as_mut().enable();
-                if !self.has_elevated(session_id) {
-                    return;
-                }
-                notified.await;
+        tokio::time::timeout(timeout, self.wait_until_elevated_idle(session_id))
+            .await
+            .is_ok()
+    }
+
+    /// Waits, without limit, until no elevated operation of this session runs.
+    pub(crate) async fn wait_until_elevated_idle(&self, session_id: SessionId) {
+        loop {
+            let notified = self.ended.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !self.has_elevated(session_id) {
+                return;
             }
-        };
-        tokio::time::timeout(timeout, wait).await.is_ok()
+            notified.await;
+        }
     }
 }
 

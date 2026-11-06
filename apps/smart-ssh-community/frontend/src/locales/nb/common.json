@@ -820,7 +820,8 @@
     "targetUserHelp": "Kjører filleseren som denne brukeren via sudo. Standard: root.",
     "confirm": "Utvid",
     "opChown": "Endring av eier",
-    "chownNote": "Eieren endres som {{user}}."
+    "chownNote": "Eieren endres som {{user}}.",
+    "idleSwitchedOff": "Forhøyede rettigheter slått av etter {{minutes}} minutter uten aktivitet"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Denne serveren bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater serverens SSH-programvare hvis du kan.",
     "outdatedAlgorithmsHop": "{{hop}} bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater dens SSH-programvare hvis du kan."
+  },
+  "elevatedIdle": {
+    "label": "Slå av forhøyede rettigheter etter inaktivitet",
+    "minutes5": "5 minutter",
+    "minutes15": "15 minutter",
+    "minutes30": "30 minutter",
+    "minutes60": "60 minutter",
+    "never": "Aldri",
+    "hint": "Filleseren forlater den forhøyde modusen av seg selv etter så lang tid uten forhøyet aktivitet. En pågående operasjon teller som aktivitet."
   }
 }

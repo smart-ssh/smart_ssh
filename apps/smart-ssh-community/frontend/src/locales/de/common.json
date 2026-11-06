@@ -820,7 +820,8 @@
     "targetUserHelp": "Führt den Dateibrowser über sudo als dieser Nutzer aus. Standard: root.",
     "confirm": "Erhöhen",
     "opChown": "Besitzer ändern",
-    "chownNote": "Der Besitzer wird als {{user}} geändert."
+    "chownNote": "Der Besitzer wird als {{user}} geändert.",
+    "idleSwitchedOff": "Erhöhte Rechte nach {{minutes}} Minuten ohne Aktivität ausgeschaltet"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Dieser Server nutzt veraltete SSH-Algorithmen ({{algorithms}}). Die Verbindung ist weniger sicher. Aktualisiere nach Möglichkeit die SSH-Software des Servers.",
     "outdatedAlgorithmsHop": "{{hop}} nutzt veraltete SSH-Algorithmen ({{algorithms}}). Die Verbindung ist weniger sicher. Aktualisiere nach Möglichkeit dessen SSH-Software."
+  },
+  "elevatedIdle": {
+    "label": "Erhöhte Rechte nach Inaktivität ausschalten",
+    "minutes5": "5 Minuten",
+    "minutes15": "15 Minuten",
+    "minutes30": "30 Minuten",
+    "minutes60": "60 Minuten",
+    "never": "Nie",
+    "hint": "Der Dateibrowser verlässt den erhöhten Modus selbst, wenn so lange keine erhöhte Aktivität stattfand. Ein laufender Vorgang zählt als Aktivität."
   }
 }

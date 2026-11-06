@@ -820,7 +820,8 @@
     "targetUserHelp": "Kører filbrowseren som denne bruger via sudo. Standard: root.",
     "confirm": "Udvid",
     "opChown": "Skift af ejer",
-    "chownNote": "Ejeren skiftes som {{user}}."
+    "chownNote": "Ejeren skiftes som {{user}}.",
+    "idleSwitchedOff": "Forhøjede rettigheder slået fra efter {{minutes}} minutter uden aktivitet"
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Denne server bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater serverens SSH-software, hvis du kan.",
     "outdatedAlgorithmsHop": "{{hop}} bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater dens SSH-software, hvis du kan."
+  },
+  "elevatedIdle": {
+    "label": "Slå forhøjede rettigheder fra efter inaktivitet",
+    "minutes5": "5 minutter",
+    "minutes15": "15 minutter",
+    "minutes30": "30 minutter",
+    "minutes60": "60 minutter",
+    "never": "Aldrig",
+    "hint": "Filbrowseren forlader selv den forhøjede tilstand efter så lang tid uden forhøjet aktivitet. En igangværende handling tæller som aktivitet."
   }
 }

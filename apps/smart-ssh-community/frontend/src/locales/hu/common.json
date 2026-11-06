@@ -820,7 +820,8 @@
     "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
     "confirm": "Emelés",
     "opChown": "Tulajdonos módosítása",
-    "chownNote": "A tulajdonos {{user}} néven lesz módosítva."
+    "chownNote": "A tulajdonos {{user}} néven lesz módosítva.",
+    "idleSwitchedOff": "Az emelt jogok kikapcsolva {{minutes}} perc tevékenység nélkül"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -1516,5 +1517,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Ez a szerver elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse a szerver SSH-szoftverét.",
     "outdatedAlgorithmsHop": "{{hop}} elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse az SSH-szoftverét."
+  },
+  "elevatedIdle": {
+    "label": "Emelt jogok kikapcsolása inaktivitás után",
+    "minutes5": "5 perc",
+    "minutes15": "15 perc",
+    "minutes30": "30 perc",
+    "minutes60": "60 perc",
+    "never": "Soha",
+    "hint": "A fájlböngésző ennyi emelt tevékenység nélküli idő után magától kilép az emelt módból. A folyamatban lévő művelet tevékenységnek számít."
   }
 }

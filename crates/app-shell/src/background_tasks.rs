@@ -53,6 +53,27 @@ pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
     }
 }
 
+/// Activates the custom window decoration of the main window (desktop only).
+pub(crate) fn activate_window_decoration<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri::Manager;
+        use tauri_plugin_decoration::WebviewWindowExt;
+        if let Some(window) = app.get_webview_window("main") {
+            app_scope(app).spawn("window-decoration", async move {
+                let _ = window.activate_decoration().await;
+                #[cfg(target_os = "macos")]
+                {
+                    // Spec 0014 Abschnitt 3 & 6: macOS Ampel-Inset (Startwert 12.0, 16.0)
+                    let _ = window.set_traffic_lights_inset(12.0, 16.0).await;
+                }
+            });
+        }
+    }
+    #[cfg(target_os = "android")]
+    let _ = app;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

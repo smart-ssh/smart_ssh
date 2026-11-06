@@ -815,7 +815,8 @@
     "targetUserHelp": "sudo를 통해 이 사용자로 파일 브라우저를 실행합니다. 기본값: root.",
     "confirm": "상승",
     "opChown": "소유자 변경",
-    "chownNote": "소유자는 {{user}} 권한으로 변경됩니다."
+    "chownNote": "소유자는 {{user}} 권한으로 변경됩니다.",
+    "idleSwitchedOff": "{{minutes}}분 동안 활동이 없어 상승된 권한을 껐습니다"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config 가져오기",
@@ -1508,5 +1509,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "이 서버는 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 서버의 SSH 소프트웨어를 업데이트하세요.",
     "outdatedAlgorithmsHop": "{{hop}}은(는) 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 해당 SSH 소프트웨어를 업데이트하세요."
+  },
+  "elevatedIdle": {
+    "label": "비활동 시 상승된 권한 끄기",
+    "minutes5": "5분",
+    "minutes15": "15분",
+    "minutes30": "30분",
+    "minutes60": "60분",
+    "never": "안 함",
+    "hint": "이 시간 동안 상승된 작업이 없으면 파일 브라우저가 스스로 상승 모드를 종료합니다. 진행 중인 작업은 활동으로 간주됩니다."
   }
 }

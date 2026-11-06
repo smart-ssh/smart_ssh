@@ -178,6 +178,20 @@ Prüfungen aus A1–A3 bleiben unverändert.
   getrennt oder für einen anderen Nutzer neu aktiviert, wird der Kanal
   verworfen und kein weiterer Befehl läuft mit den alten Rechten
   (Spec 0085).
+- **Automatisches Ausschalten bei Inaktivität** (Issue #1193): Findet im
+  erhöhten Modus eine Zeit lang keine erhöhte Aktivität statt, schaltet die
+  App ihn selbst aus, genau wie der Umschalter (Kanal verworfen, Banner und
+  Rahmen weg, Ansicht lädt im normalen Modus neu). Als Aktivität zählt jeder
+  Zugriff über den erhöhten Kanal (auch Auflisten) sowie das Laufen und das
+  Ende einer erhöhten Operation; solange eine Operation läuft, wird nie
+  ausgeschaltet, und die Frist beginnt danach neu. Die Frist stellt man in
+  den Einstellungen (Sicherheit) ein: 5, 15, 30 oder 60 Minuten oder
+  „Nie“; Standard 15 Minuten. Ein fehlender oder ungültiger gespeicherter
+  Wert gilt als 15 Minuten, nie als „Nie“. Nach dem automatischen Ausschalten
+  erscheint ein Hinweis, der stehen bleibt, bis man ihn schließt („Erhöhte
+  Rechte nach N Minuten ohne Aktivität ausgeschaltet“). „Lokal öffnen“ und
+  Uploads verhalten sich danach wie nach dem manuellen Ausschalten. Das
+  Protokoll nennt als Grund „inactivity“ (manuell: „manual“).
 - **„Lokal öffnen“** (Spec 0054): Wird eine Datei im erhöhten Modus
   geöffnet, läuft der spätere Upload **über denselben erhöhten Kanal**; die
   Bearbeitung merkt sich den Modus. Ist der Kanal inzwischen geschlossen,

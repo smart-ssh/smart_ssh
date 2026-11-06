@@ -29,7 +29,11 @@
     "fileBrowser.properties.type": "same word in this language",
     "session.terminalTab": "same word in this language",
     "actionCard.autoRanScopeTag": "same word in this language",
-    "backup.counts.notes": "same word in this language"
+    "backup.counts.notes": "same word in this language",
+    "elevatedIdle.minutes5": "same word in this language (number plus \"minutes\")",
+    "elevatedIdle.minutes15": "same word in this language (number plus \"minutes\")",
+    "elevatedIdle.minutes30": "same word in this language (number plus \"minutes\")",
+    "elevatedIdle.minutes60": "same word in this language (number plus \"minutes\")"
   },
   "es": {
     "common.ok": "same word in this language",

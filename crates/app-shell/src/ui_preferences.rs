@@ -23,6 +23,7 @@ const SECURITY_KEYS: &[&str] = &[
     "riskClassifierEnabled",
     "riskClassifierProviderId",
     "localServerTags",
+    "elevatedIdleTimeoutMinutes",
 ];
 
 /// Every key starting with one of these belongs to a security feature.

@@ -825,7 +825,8 @@
     "targetUserHelp": "Esegue il browser di file come questo utente tramite sudo. Predefinito: root.",
     "confirm": "Eleva",
     "opChown": "Cambio del proprietario",
-    "chownNote": "Il proprietario verrà cambiato come {{user}}."
+    "chownNote": "Il proprietario verrà cambiato come {{user}}.",
+    "idleSwitchedOff": "Diritti elevati disattivati dopo {{minutes}} minuti senza attività"
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",
@@ -1524,5 +1525,14 @@
   "connectWarnings": {
     "outdatedAlgorithms": "Questo server usa algoritmi SSH obsoleti ({{algorithms}}). La connessione è meno sicura. Se possibile, aggiorna il software SSH del server.",
     "outdatedAlgorithmsHop": "{{hop}} usa algoritmi SSH obsoleti ({{algorithms}}). La connessione è meno sicura. Se possibile, aggiorna il suo software SSH."
+  },
+  "elevatedIdle": {
+    "label": "Disattiva i diritti elevati dopo inattività",
+    "minutes5": "5 minuti",
+    "minutes15": "15 minuti",
+    "minutes30": "30 minuti",
+    "minutes60": "60 minuti",
+    "never": "Mai",
+    "hint": "Il browser di file esce da solo dalla modalità elevata dopo questo tempo senza attività elevata. Un’operazione in corso conta come attività."
   }
 }

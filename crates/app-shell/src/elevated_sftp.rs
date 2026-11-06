@@ -100,6 +100,10 @@ pub struct ElevatedSftpSlot {
     /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
     /// dem der Nutzer ausschaltet, umschaltet oder trennt.
     revoked: Arc<std::sync::atomic::AtomicBool>,
+    /// Issue #1193: time of the last elevated activity (idle timer).
+    activity: idle::Activity,
+    /// Issue #1193: wakes the idle timer task when the channel is revoked.
+    revoked_wake: Arc<tokio::sync::Notify>,
     /// Nur für Tests (Spec 0085, §6): ein Haltepunkt **hinter** dem
     /// Schnellabbruch einer Operation und **vor** dem Anfordern der
     /// Kanal-Sperre — s. `commands::elevation::elevated_operation`.
@@ -132,6 +136,8 @@ impl ElevatedSftpSlot {
             server_logging: channel.server_logging,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            activity: idle::Activity::default(),
+            revoked_wake: Arc::new(tokio::sync::Notify::new()),
             #[cfg(test)]
             before_operation_hook: Arc::new(StdMutex::new(None)),
         }
@@ -195,6 +201,28 @@ impl ElevatedSftpSlot {
     fn mark_revoked(&self) {
         self.revoked
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.revoked_wake.notify_one();
+    }
+
+    /// Issue #1193: records elevated activity for the idle timer.
+    pub(crate) fn touch(&self) {
+        self.activity.touch();
+    }
+
+    pub(crate) fn activity_handle(&self) -> idle::Activity {
+        self.activity.clone()
+    }
+
+    fn activity(&self) -> &idle::Activity {
+        &self.activity
+    }
+
+    fn revoked_wake(&self) -> &tokio::sync::Notify {
+        &self.revoked_wake
+    }
+
+    fn same_channel(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.channel, &other.channel)
     }
 
     /// Widerruft (sofort, s. [`Self::mark_revoked`]) und nimmt den Kanal
@@ -240,7 +268,9 @@ impl ElevatedSftpSlot {
 /// `test_t8b_activation_between_the_two_removal_steps_leaves_no_entry`.
 #[derive(Default)]
 pub struct ElevatedSftpRegistry {
-    slots: StdMutex<HashMap<SessionId, ElevatedSftpSlot>>,
+    slots: Arc<StdMutex<HashMap<SessionId, ElevatedSftpSlot>>>,
+    /// Issue #1193: idle timeout setting and switch-off notification.
+    idle: Arc<idle::IdleShared>,
     /// Issue #622: laufende Datei-Operationen aller Sitzungen. Jede Stelle
     /// unten, die einen Kanal widerruft, stoppt auch dessen Operationen.
     ops: Arc<FileOps>,
@@ -260,6 +290,37 @@ type InterleaveHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpRegistry {
     pub(crate) fn ops(&self) -> &Arc<FileOps> {
         &self.ops
+    }
+
+    pub(crate) fn idle(&self) -> &Arc<idle::IdleShared> {
+        &self.idle
+    }
+
+    /// Issue #1193: one timer task per channel; it ends when the channel is
+    /// revoked (any path) or replaced.
+    fn start_idle_timer(&self, session_id: SessionId, slot: ElevatedSftpSlot) {
+        let timer = idle::IdleTimer {
+            slots: self.slots.clone(),
+            ops: self.ops.clone(),
+            shared: self.idle.clone(),
+            session_id,
+            slot,
+        };
+        match self.idle.spawner() {
+            Some(spawn) => spawn(session_id, Box::pin(timer.run())),
+            None => tracing::error!("no task scope for the elevated idle timer"),
+        }
+    }
+
+    /// Only for tests of the idle timer: starts the timer of an inserted channel.
+    #[cfg(test)]
+    pub(crate) fn start_idle_timer_for_tests(&self, session_id: SessionId) {
+        let slot = lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned();
+        if let Some(slot) = slot {
+            self.start_idle_timer(session_id, slot);
+        }
     }
 
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
@@ -295,7 +356,9 @@ impl ElevatedSftpRegistry {
         if sessions.get(session_id).is_none() {
             return Err(());
         }
-        let previous = slots.insert(session_id, ElevatedSftpSlot::with_channel(channel));
+        let new_slot = ElevatedSftpSlot::with_channel(channel);
+        let previous = slots.insert(session_id, new_slot.clone());
+        self.start_idle_timer(session_id, new_slot);
         // Sofort, noch unter der Zuordnungs-Sperre: ab hier kann kein
         // Befehl den alten Kanal mehr benutzen — auch keiner, der schon auf
         // dessen Sperre wartet.
@@ -390,6 +453,9 @@ impl ElevatedSftpRegistry {
     }
 }
 
+pub(crate) mod idle;
+pub(crate) use idle::install as install_idle_timer;
+pub(crate) use idle::Activity as IdleActivity;
 mod probe;
 pub(crate) use probe::run_probe;
 use ssh_manager_core::ssh::elevated::{
@@ -827,7 +893,11 @@ pub(crate) async fn disable(
     }
     if let Some(slot) = registry.take(session_id, access) {
         if slot.revoke().await {
-            tracing::info!(source = "manual", "file browser elevated rights disabled");
+            tracing::info!(
+                source = "manual",
+                reason = "manual",
+                "file browser elevated rights disabled"
+            );
         }
     }
     Ok(ElevationDisableDto {
