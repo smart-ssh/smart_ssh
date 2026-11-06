@@ -21,7 +21,7 @@ RUN curl -fsSLO https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.4
 FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 RUN apk add --no-cache zlib \
  && adduser -D -s /bin/sh testuser && echo 'testuser:testpass' | chpasswd \
- && adduser -S -D -H -h /var/empty -s /sbin/nologin sshd \
+ && adduser -S -H -h /var/empty -s /sbin/nologin sshd \
  && mkdir -p /var/empty /etc/ssh \
  && printf 'PasswordAuthentication yes\nChallengeResponseAuthentication no\nAllowTcpForwarding yes\nSubsystem sftp internal-sftp\nPermitRootLogin no\n' > /etc/ssh/sshd_config
 COPY --from=build /out/usr/local /usr/local
