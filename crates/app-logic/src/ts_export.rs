@@ -28,6 +28,7 @@ fn generate() -> String {
         ActionConfirmationSettledPayload, ConfirmationSettledReason,
     };
     use crate::dto::*;
+    use crate::elevation_events::ElevationAutoDisabledPayload;
     use crate::events::connect_warnings::ConnectWarningsPayload;
     use crate::events::*;
     use crate::status::ConnectionStatus;

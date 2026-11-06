@@ -5,7 +5,9 @@ import { getElevatedIdleTimeout, setElevatedIdleTimeout } from "../api/api";
 import { testI18n } from "../testI18n";
 import { ElevatedIdleSettings } from "./ElevatedIdleSettings";
 
-vi.mock("../api/api", async () => (await import("../test/apiMock")).createApiMock());
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock(),
+);
 
 function renderSettings() {
   return render(
@@ -26,17 +28,19 @@ describe("ElevatedIdleSettings (issue #1193)", () => {
     renderSettings();
     const select = await screen.findByRole("combobox");
     await waitFor(() => expect(select).toHaveValue("15"));
-    const values = Array.from(select.querySelectorAll("option")).map((o) => o.getAttribute("value"));
+    const values = Array.from(select.querySelectorAll("option")).map((o) =>
+      o.getAttribute("value"),
+    );
     expect(values).toEqual(["5", "15", "30", "60", "0"]);
   });
 
   it("saves a change through its own command", async () => {
     renderSettings();
     const select = await screen.findByRole("combobox");
-    await waitFor(() => expect(getElevatedIdleTimeout).toHaveBeenCalled());
+    await waitFor(() => expect(select).toHaveValue("15"));
     fireEvent.change(select, { target: { value: "0" } });
-    await waitFor(() => expect(setElevatedIdleTimeout).toHaveBeenCalledWith(0));
-    expect(select).toHaveValue("0");
+    await waitFor(() => expect(select).toHaveValue("0"));
+    expect(setElevatedIdleTimeout).toHaveBeenCalledWith(0);
   });
 
   it("restores the previous value and shows the error when saving fails", async () => {

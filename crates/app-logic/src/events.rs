@@ -1320,31 +1320,6 @@ pub fn emit_sftp_transfer_started(
     );
 }
 
-/// Issue #1193: the elevated file-browser channel was switched off by the
-/// backend after `minutes` without elevated activity.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
-pub(crate) struct ElevationAutoDisabledPayload {
-    session_id: SessionId,
-    minutes: u32,
-}
-
-pub fn emit_elevation_auto_disabled(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    minutes: u32,
-) {
-    emit(
-        emitter,
-        names::ELEVATION_AUTO_DISABLED,
-        &ElevationAutoDisabledPayload {
-            session_id,
-            minutes,
-        },
-    );
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]

@@ -219,17 +219,18 @@ pub(crate) fn write_timeout<R: tauri::Runtime>(
 
 /// Wires the registry to the app at startup: the stored value and the event
 /// that tells the webview about an automatic switch-off.
-pub(crate) fn install<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    registry: &super::ElevatedSftpRegistry,
-) {
+pub(crate) fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use tauri::Manager;
+    let registry = app.state::<super::ElevatedSftpRegistry>();
     registry.idle().set_minutes(read_stored(app));
     let handle = app.clone();
     registry
         .idle()
         .set_notifier(Arc::new(move |session_id, minutes| {
             let emitter = crate::event_emitter::TauriEventEmitter(handle.clone());
-            app_logic::events::emit_elevation_auto_disabled(&emitter, session_id, minutes);
+            app_logic::elevation_events::emit_elevation_auto_disabled(
+                &emitter, session_id, minutes,
+            );
         }));
 }
 

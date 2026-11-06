@@ -5,6 +5,8 @@ import { sftpElevationDisable, sftpElevationEnable } from "../../api/api";
 import { onElevationAutoDisabled } from "../../api/events";
 import { showToast } from "../../buses/toastBus";
 import type { ElevationAutoDisabledEvent as ElevationAutoDisabledPayload } from "../../api/types";
+import { I18nextProvider } from "react-i18next";
+import { testI18n } from "../../testI18n";
 import { useElevation } from "./useElevation";
 
 vi.mock("../../api/api", async () =>
@@ -35,20 +37,30 @@ const active = (targetUser = "root") => ({
 describe("useElevation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(sftpElevationDisable).mockResolvedValue({ disabled: true, runningOperations: [] });
+    vi.mocked(sftpElevationDisable).mockResolvedValue({
+      disabled: true,
+      runningOperations: [],
+    });
     vi.mocked(onElevationAutoDisabled).mockImplementation((handler) => {
       autoDisabled = handler;
       return Promise.resolve(() => {});
     });
   });
 
-  const setup = () => renderHook(() => useElevation("s1", { onElevationChange, reload }));
+  const setup = () =>
+    renderHook(() => useElevation("s1", { onElevationChange, reload }), {
+      wrapper: ({ children }) => (
+        <I18nextProvider i18n={testI18n}>{children}</I18nextProvider>
+      ),
+    });
 
   it("starts in normal mode and closes a leftover channel on mount", async () => {
     const { result } = setup();
     expect(result.current.elevated).toBe(false);
     expect(result.current.channelUser).toBeNull();
-    await waitFor(() => expect(sftpElevationDisable).toHaveBeenCalledWith("s1"));
+    await waitFor(() =>
+      expect(sftpElevationDisable).toHaveBeenCalledWith("s1"),
+    );
   });
 
   it("enable success switches the mode, reports it and reloads", async () => {
@@ -71,7 +83,9 @@ describe("useElevation", () => {
     } as never);
     const { result } = setup();
     await act(() => result.current.handleToggleElevation());
-    expect(result.current.elevationFailure?.failure?.kind).toBe("sudoNotAllowed");
+    expect(result.current.elevationFailure?.failure?.kind).toBe(
+      "sudoNotAllowed",
+    );
     expect(result.current.elevated).toBe(false);
     expect(onElevationChange).not.toHaveBeenCalled();
   });
@@ -97,7 +111,10 @@ describe("useElevation", () => {
     expect(result.current.elevated).toBe(true);
     expect(onElevationChange).not.toHaveBeenCalledWith(null);
 
-    vi.mocked(sftpElevationDisable).mockResolvedValue({ disabled: true, runningOperations: [] });
+    vi.mocked(sftpElevationDisable).mockResolvedValue({
+      disabled: true,
+      runningOperations: [],
+    });
     await act(() => result.current.confirmStopPrompt());
     expect(sftpElevationDisable).toHaveBeenLastCalledWith("s1", true);
     expect(result.current.stopPrompt).toBeNull();

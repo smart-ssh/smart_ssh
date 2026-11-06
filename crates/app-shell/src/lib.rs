@@ -719,28 +719,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
-            // Issue #1193: idle timeout of the elevated file browser.
-            crate::elevated_sftp::install_idle_timer(
-                app.handle(),
-                &app.state::<crate::elevated_sftp::ElevatedSftpRegistry>(),
-            );
+            crate::elevated_sftp::install_idle_timer(app.handle());
 
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
 
-            #[cfg(not(target_os = "android"))]
-            if let Some(window) = app.get_webview_window("main") {
-                use tauri_plugin_decoration::WebviewWindowExt;
-                let window_clone = window.clone();
-                background_tasks::app_scope(app.handle()).spawn("window-decoration", async move {
-                    let _ = window_clone.activate_decoration().await;
-                    #[cfg(target_os = "macos")]
-                    {
-                        // Spec 0014 Abschnitt 3 & 6: macOS Ampel-Inset (Startwert 12.0, 16.0)
-                        let _ = window_clone.set_traffic_lights_inset(12.0, 16.0).await;
-                    }
-                });
-            }
+            background_tasks::activate_window_decoration(app.handle());
 
             // Spec 0101, A16: **Nichts davon im gesperrten Zustand.** Alle
             // Aufgaben unten brauchen den `AppState`, und A16 verlangt

@@ -47,6 +47,7 @@ pub mod database_startup;
 pub mod diagnostics;
 pub mod document_export;
 pub mod dto;
+pub mod elevation_events;
 pub mod ephemeral_credentials;
 pub mod error;
 pub mod event_names;
