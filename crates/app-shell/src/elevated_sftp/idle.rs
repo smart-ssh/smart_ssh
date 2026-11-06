@@ -46,11 +46,18 @@ pub(crate) fn from_stored(value: Option<Value>) -> u32 {
 }
 
 type Notifier = Arc<dyn Fn(SessionId, u32) + Send + Sync>;
+/// Starts a timer future in the task scope of its session.
+pub(crate) type Spawner = Arc<
+    dyn Fn(SessionId, std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>)
+        + Send
+        + Sync,
+>;
 
 /// Shared by the registry and all channel timers.
 pub(crate) struct IdleShared {
     minutes: watch::Sender<u32>,
     notifier: StdMutex<Option<Notifier>>,
+    spawner: StdMutex<Option<Spawner>>,
 }
 
 impl Default for IdleShared {
@@ -58,6 +65,7 @@ impl Default for IdleShared {
         Self {
             minutes: watch::channel(DEFAULT_IDLE_MINUTES).0,
             notifier: StdMutex::new(None),
+            spawner: StdMutex::new(None),
         }
     }
 }
@@ -69,6 +77,14 @@ impl IdleShared {
 
     pub(crate) fn set_notifier(&self, notifier: Notifier) {
         *lock_tolerating_poison(&self.notifier) = Some(notifier);
+    }
+
+    pub(crate) fn set_spawner(&self, spawner: Spawner) {
+        *lock_tolerating_poison(&self.spawner) = Some(spawner);
+    }
+
+    pub(crate) fn spawner(&self) -> Option<Spawner> {
+        lock_tolerating_poison(&self.spawner).clone()
     }
 
     fn notify(&self, session_id: SessionId, minutes: u32) {
@@ -235,6 +251,13 @@ pub(crate) fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if !pending.is_some_and(|slot| slot.0) {
         registry.idle().set_minutes(read_stored(app));
     }
+    let scopes = app.clone();
+    registry
+        .idle()
+        .set_spawner(Arc::new(move |session_id, fut| {
+            crate::background_tasks::session_scope(&scopes, session_id)
+                .spawn("elevated-idle-timer", fut);
+        }));
     let handle = app.clone();
     registry
         .idle()

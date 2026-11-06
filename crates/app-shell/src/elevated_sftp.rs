@@ -306,7 +306,10 @@ impl ElevatedSftpRegistry {
             session_id,
             slot,
         };
-        tokio::spawn(timer.run());
+        match self.idle.spawner() {
+            Some(spawn) => spawn(session_id, Box::pin(timer.run())),
+            None => tracing::error!("no task scope for the elevated idle timer"),
+        }
     }
 
     /// Only for tests of the idle timer: starts the timer of an inserted channel.

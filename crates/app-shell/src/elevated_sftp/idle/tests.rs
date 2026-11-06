@@ -21,6 +21,9 @@ struct Setup {
 fn setup(minutes: u32) -> Setup {
     let registry = ElevatedSftpRegistry::default();
     registry.idle().set_minutes(minutes);
+    registry.idle().set_spawner(Arc::new(|_, fut| {
+        tokio::spawn(fut);
+    }));
     let (tx, notified) = tokio::sync::mpsc::unbounded_channel();
     registry
         .idle()
