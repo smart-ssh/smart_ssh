@@ -283,6 +283,7 @@ pub struct RunningTestServer {
     /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
     pub exec_channel: Arc<ExecChannelWatch>,
     /// Issue #1191: every byte a simulated `sudo -S` received on stdin.
+    #[allow(dead_code, reason = "read by tests/sudo_password.rs only")]
     pub sudo_stdin: Arc<std::sync::Mutex<Vec<u8>>>,
     /// ADR 0122, R4 — s. [`SetstatModeWatch`].
     pub setstat_mode: Arc<SetstatModeWatch>,
@@ -637,12 +638,8 @@ impl Handler for TestHandler {
         // password "secret" (marker on stderr) and serves SFTP after it,
         // answering a wrong one with a second marker; `/noprompt/` never
         // asks; `/notallowed/` refuses. Every stdin byte is logged.
-        if command.starts_with("sudo -S -k -p '") {
-            let marker = command["sudo -S -k -p '".len()..]
-                .split('\'')
-                .next()
-                .unwrap_or("")
-                .to_string();
+        if let Some(rest) = command.strip_prefix("sudo -S -k -p '") {
+            let marker = rest.split('\'').next().unwrap_or("").to_string();
             let Some(mut chan) = self.channels.remove(&channel) else {
                 session.channel_failure(channel)?;
                 return Ok(());
