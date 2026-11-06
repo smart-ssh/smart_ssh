@@ -2,6 +2,7 @@
 //! 0005). Konkrete, austauschbare SSH-Bibliotheks-Anbindung — `core` selbst
 //! kennt nur die Traits (`SshTransport`, `HostKeyStore`, ...).
 
+mod algorithms;
 mod auth;
 mod auth_pause;
 mod connect;

@@ -28,6 +28,14 @@ export type AuthMethodInput = { "kind": "password", value: string | null, } | { 
 
 export type AuthMethodKind = "password" | "no_password" | "private_key" | "agent" | "certificate" | "identity_file";
 
+export type AuthPromptEndReason = "answered" | "cancelled" | "timed_out" | "abandoned";
+
+export type AuthPromptEndedPayload = { promptId: string, reason: AuthPromptEndReason, };
+
+export type AuthPromptItemPayload = { text: string, echo: boolean, };
+
+export type AuthPromptNeededPayload = { promptId: string, hop: string, kind: string, name: string, instructions: string, prompts: Array<AuthPromptItemPayload>, };
+
 export type AutoExecRuleDto = { ruleId: RuleId, patternType: PatternType, patternValue: string, scope: Scope, segmentIndices: Array<number>, };
 
 export type AutoReconnectChangedPayload = { sessionId: string, phase: AutoReconnectPhase, attempt: number, };
@@ -86,11 +94,15 @@ export type ConnectAuthMethodKind = "none" | "password" | "privateKey" | "agent"
 
 export type ConnectProgressPayload = { attemptId: string, serverId: ServerId, attempt: number, steps: Array<ConnectStepSnapshot>, };
 
-export type ConnectStep = { "kind": "dnsResolution", host: string, port: number, addresses: Array<string>, } | { "kind": "tcpConnect", address: string | null, port: number, } | { "kind": "tunnelOpen", host: string, port: number, } | { "kind": "handshake", serverVersion: string | null, kex: string | null, hostKeyAlgorithm: string | null, cipher: string | null, mac: string | null, } | { "kind": "hostKeyCheck", keyType: string | null, fingerprint: string | null, result: HostKeyCheckResult | null, } | { "kind": "authentication", method: ConnectAuthMethodKind, remainingMethods: Array<string>, partialSuccess: boolean, round: number | null, prompts: Array<string>, } | { "kind": "sessionReady" };
+export type ConnectStep = { "kind": "dnsResolution", host: string, port: number, addresses: Array<string>, } | { "kind": "tcpConnect", address: string | null, port: number, } | { "kind": "tunnelOpen", host: string, port: number, } | { "kind": "handshake", serverVersion: string | null, kex: string | null, hostKeyAlgorithm: string | null, cipher: string | null, mac: string | null, } | { "kind": "hostKeyCheck", keyType: string | null, fingerprint: string | null, result: HostKeyCheckResult | null, } | { "kind": "authentication", method: ConnectAuthMethodKind, remainingMethods: Array<string>, partialSuccess: boolean, round: number | null, prompts: Array<string>, } | { "kind": "sessionReady" } | { "kind": "outdatedAlgorithms", algorithms: Array<string>, };
 
 export type ConnectStepRecord = { hopIndex: number, hop: string, step: ConnectStep, status: StepStatus, durationMs: number | null, };
 
-export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "failed", errorCode: string | null, detail: StepDetail | null, };
+export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady" | "outdatedAlgorithms", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "warning" | "failed", errorCode: string | null, detail: StepDetail | null, };
+
+export type ConnectWarning = { hop: string, algorithms: Array<string>, };
+
+export type ConnectWarningsPayload = { sessionId: string, warnings: Array<ConnectWarning>, hopCount: number, };
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting" | "awaiting_host_key";
 
@@ -256,7 +268,7 @@ export type SftpTransferStartedPayload = { sessionId: string, transferId: string
 
 export type StepDetail = { "code": "contacting", target: string, } | { "code": "tunnel", hop: string, } | { "code": "waitingForResponse" } | { "code": "waitingForDecision" } | { "code": "authMethod", method: string, };
 
-export type StepStatus = { "state": "running" } | { "state": "ok" } | { "state": "skipped" } | { "state": "failed", code: string, };
+export type StepStatus = { "state": "running" } | { "state": "ok" } | { "state": "skipped" } | { "state": "warning", code: string, } | { "state": "failed", code: string, };
 
 export type StoredHostKeyDto = { algorithm: string, fingerprint: string, };
 
@@ -291,6 +303,8 @@ export type EventPayloads = {
   "action-confirmation-settled": ActionConfirmationSettledPayload,
   "action-decision-escalated": ActionDecisionEscalatedPayload,
   "ai-budget-waiting": AiBudgetWaitingPayload,
+  "auth-prompt-ended": AuthPromptEndedPayload,
+  "auth-prompt-needed": AuthPromptNeededPayload,
   "auto-reconnect-changed": AutoReconnectChangedPayload,
   "chat-action-output": ChatActionOutputPayload,
   "chat-action-proposed": ChatActionProposedPayload,
@@ -316,6 +330,7 @@ export type EventPayloads = {
   "chat-web-activity": ChatWebActivityPayload,
   "chat-web-research-unavailable": SessionOnlyPayload,
   "connect-progress": ConnectProgressPayload,
+  "connect-warnings": ConnectWarningsPayload,
   "connection-status-changed": ConnectionStatusChangedPayload,
   "data-changed": DataChangedPayload,
   "entitlements:changed": Entitlements,

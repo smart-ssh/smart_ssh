@@ -436,6 +436,13 @@
       "loadFailed": "Regeldekking kon niet worden geladen"
     }
   },
+  "authPrompt": {
+    "title": "Aanmelden bij {{hop}}",
+    "password": "Wachtwoord",
+    "submit": "Aanmelden",
+    "notStored": "De server vraagt deze gegevens om u aan te melden. Ze worden niet opgeslagen.",
+    "expired": "De aanmeldvraag is verlopen. De verbinding is niet tot stand gebracht."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",
     "mismatchHeading": "De sleutel van deze server is niet meer dezelfde.",
@@ -662,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Kies een AI-provider voordat je de tweede mening over risico inschakelt.",
     "SESSION_NOT_FOUND": "Deze sessie is niet meer geopend. Open haar opnieuw vanuit de serverlijst.",
     "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat",
+    "SSH_NO_COMMON_ALGORITHM": "Geen SSH-algoritme gemeenschappelijk met de server. De SSH-software is te oud of te streng. Werk deze bij of schakel moderne algoritmen in."
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -999,14 +1007,16 @@
       "hostKeyCheck": "Hostsleutelcontrole",
       "authentication": "Authenticatie",
       "sessionReady": "Sessie tot stand gebracht",
-      "dnsSkipped": "IP-adres – geen opzoeking nodig"
+      "dnsSkipped": "IP-adres – geen opzoeking nodig",
+      "outdatedAlgorithms": "Verouderde algoritmen"
     },
     "status": {
       "ok": "OK",
       "running": "bezig",
       "failed": "mislukt ({{code}})",
       "skipped": "overgeslagen",
-      "failedReason": "mislukt: {{reason}}"
+      "failedReason": "mislukt: {{reason}}",
+      "warning": "waarschuwing"
     },
     "hostKeyResult": {
       "known": "bekend",
@@ -1500,5 +1510,9 @@
     "title": "Er is iets misgegaan",
     "body": "Smart SSH heeft een onverwachte fout in de interface gevonden. Laad opnieuw om door te gaan. Gebeurt het weer, maak dan na het herladen een diagnosepakket onder Instellingen → Diagnose.",
     "reload": "Opnieuw laden"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Deze server gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software van de server bij als dat kan.",
+    "outdatedAlgorithmsHop": "{{hop}} gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software ervan bij als dat kan."
   }
 }

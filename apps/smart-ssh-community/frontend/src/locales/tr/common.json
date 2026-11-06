@@ -436,6 +436,13 @@
       "loadFailed": "Kural kapsamı yüklenemedi"
     }
   },
+  "authPrompt": {
+    "title": "{{hop}} sunucusunda oturum açma",
+    "password": "Parola",
+    "submit": "Oturum aç",
+    "notStored": "Sunucu oturum açmak için bu bilgileri istiyor. Kaydedilmez.",
+    "expired": "Oturum açma isteği zaman aşımına uğradı. Bağlantı kurulmadı."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",
     "mismatchHeading": "Bu sunucunun anahtarı artık aynı değil.",
@@ -662,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Risk için ikinci görüşü açmadan önce bir yapay zekâ sağlayıcısı seçin.",
     "SESSION_NOT_FOUND": "Bu oturum artık açık değil. Sunucu listesinden yeniden açın.",
     "SSH_SFTP_ALREADY_EXISTS": "Bu adda bir dosya veya klasör zaten var",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı",
+    "SSH_NO_COMMON_ALGORITHM": "Sunucuyla ortak bir SSH algoritması yok. SSH yazılımı çok eski veya çok kısıtlayıcı. Güncelleyin ya da modern algoritmaları etkinleştirin."
   },
   "mcpServer": {
     "hint": "Harici MCP istemcileri bununla izin listesindeki sunucularda komut, dosya okuma/yazma ve not güncellemesi önerebilir — mevcut izin kurallarından bağımsız olarak her istek uygulamada her zaman onay gerektirir.",
@@ -999,14 +1007,16 @@
       "hostKeyCheck": "Ana makine anahtarı denetimi",
       "authentication": "Kimlik doğrulama",
       "sessionReady": "Oturum kuruldu",
-      "dnsSkipped": "IP adresi – ad çözümleme gerekmez"
+      "dnsSkipped": "IP adresi – ad çözümleme gerekmez",
+      "outdatedAlgorithms": "Eski algoritmalar"
     },
     "status": {
       "ok": "Tamam",
       "running": "devam ediyor",
       "failed": "başarısız ({{code}})",
       "skipped": "atlandı",
-      "failedReason": "başarısız: {{reason}}"
+      "failedReason": "başarısız: {{reason}}",
+      "warning": "uyarı"
     },
     "hostKeyResult": {
       "known": "bilinen",
@@ -1500,5 +1510,9 @@
     "title": "Bir şeyler ters gitti",
     "body": "Smart SSH arayüzde beklenmeyen bir hatayla karşılaştı. Devam etmek için yeniden yükleyin. Tekrar olursa, yeniden yükledikten sonra Ayarlar → Tanılama altında bir tanılama paketi oluşturun.",
     "reload": "Yeniden yükle"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Bu sunucu eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse sunucunun SSH yazılımını güncelleyin.",
+    "outdatedAlgorithmsHop": "{{hop}} eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse SSH yazılımını güncelleyin."
   }
 }

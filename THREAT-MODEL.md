@@ -391,6 +391,16 @@ again, but not the red-risk check
 
 Risks we know about and accept, with the reason.
 
+- **Outdated SSH algorithms are negotiable
+  ([Spec 0005](docs/specs/0005-ssh-module.md), issue #1173).** After all
+  current algorithms the client also offers legacy ones (SHA-1 key
+  exchange and MAC, CBC ciphers, `ssh-rsa`) so old servers stay reachable.
+  A downgrade needs a server that offers nothing better: current algorithms
+  are listed first, and the key exchange hash covers both algorithm lists, so
+  a man in the middle cannot strip modern ones unnoticed. Every negotiated
+  legacy algorithm, and a missing strict key exchange (Terrapin), is shown
+  to the user as a warning; the connection is not refused. Accepted so
+  that legacy devices work; mitigation: update the server.
 - **Redaction is pattern-based.** Unknown secret formats reach the AI
   provider (section 2). Accepted because a generic entropy fallback would
   break the copilot's usefulness without closing the gap
@@ -407,6 +417,13 @@ Risks we know about and accept, with the reason.
   (3 per hop) are capped so a hostile server cannot keep a login going forever;
   the login time limit pauses only while the user is asked and a 5-minute
   answer limit applies.
+  The login dialog (issue #1185) shows those texts as plain text only. The
+  answers are secrets: they travel from the dialog to the backend only in the
+  one `answer_auth_prompt` command (never in an event, a log line or the
+  connect step log), are read from uncontrolled fields that are cleared on
+  submit, and are dropped by the transport right after sending. Answers whose
+  count does not match the questions are not sent. Automatic reconnects and
+  the connection test cannot be asked and fail instead of prompting.
 - **RSA timing side channel (RUSTSEC-2023-0071, "Marvin attack").** The
   `rsa` crate, pulled in by the SSH library, has a known timing side channel
   with no fixed release. Accepted because Smart SSH is a local client: RSA

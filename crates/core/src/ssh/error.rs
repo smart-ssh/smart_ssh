@@ -57,6 +57,26 @@ impl fmt::Display for HopLabel {
     }
 }
 
+/// Which negotiation list had no common algorithm (Issue #1173).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlgorithmKind {
+    KeyExchange,
+    HostKey,
+    Cipher,
+    Mac,
+}
+
+impl fmt::Display for AlgorithmKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            AlgorithmKind::KeyExchange => "key exchange",
+            AlgorithmKind::HostKey => "host key",
+            AlgorithmKind::Cipher => "cipher",
+            AlgorithmKind::Mac => "MAC",
+        })
+    }
+}
+
 /// Fehler rund um Aufbau und Nutzung einer SSH-Verbindung (Spec 0005,
 /// Abschnitt 7).
 #[derive(Debug, Clone, PartialEq)]
@@ -150,6 +170,15 @@ pub enum SshError {
         path: String,
         hop: Option<HopLabel>,
     },
+    /// Issue #1173: client and server share no algorithm of one kind (for
+    /// example a server that only offers `ssh-dss`). Raised during key
+    /// exchange, so no credential has been sent.
+    NoCommonAlgorithm {
+        hop: HopLabel,
+        kind: AlgorithmKind,
+        /// What the server offered for `kind`; empty if unknown.
+        server_offers: Vec<String>,
+    },
 }
 
 impl fmt::Display for SshError {
@@ -206,6 +235,21 @@ impl fmt::Display for SshError {
                 }
                 write!(f, "Schlüsseldatei auf diesem Gerät nicht gefunden: {path}")
             }
+            SshError::NoCommonAlgorithm {
+                hop,
+                kind,
+                server_offers,
+            } => {
+                write!(
+                    f,
+                    "{hop}: no common SSH {kind} algorithm; the server offers: {}",
+                    if server_offers.is_empty() {
+                        "(unknown)".to_string()
+                    } else {
+                        server_offers.join(", ")
+                    }
+                )
+            }
         }
     }
 }
@@ -234,6 +278,7 @@ impl SshError {
         "SSH_CONNECTION_CLOSED",
         "SSH_SESSION_CLOSED",
         "KEY_FILE_NOT_FOUND_ON_DEVICE",
+        "SSH_NO_COMMON_ALGORITHM",
         SECRET_STORE_FAILED,
     ];
 
@@ -276,6 +321,7 @@ impl SshError {
             // Schicht darüber kann ihn noch verändern.
             SshError::CredentialStoreFailed { .. } => SECRET_STORE_FAILED,
             SshError::KeyFileNotFound { .. } => "KEY_FILE_NOT_FOUND_ON_DEVICE",
+            SshError::NoCommonAlgorithm { .. } => "SSH_NO_COMMON_ALGORITHM",
         }
     }
 
@@ -370,6 +416,16 @@ mod code_tests {
             SshError::KeyFileNotFound {
                 path: "/x".to_string(),
                 hop: None,
+            },
+            // Issue #1173.
+            SshError::NoCommonAlgorithm {
+                hop: HopLabel {
+                    username: "u".to_string(),
+                    host: "h".to_string(),
+                    port: 22,
+                },
+                kind: AlgorithmKind::Cipher,
+                server_offers: vec!["x".to_string()],
             },
         ];
         let codes: Vec<&'static str> = samples.iter().map(SshError::code).collect();

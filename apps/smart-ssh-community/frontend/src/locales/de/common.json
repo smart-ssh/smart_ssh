@@ -436,6 +436,13 @@
       "loadFailed": "Regelabdeckung konnte nicht geladen werden"
     }
   },
+  "authPrompt": {
+    "title": "Anmeldung bei {{hop}}",
+    "password": "Passwort",
+    "submit": "Anmelden",
+    "notStored": "Der Server verlangt diese Angaben für die Anmeldung. Sie werden nicht gespeichert.",
+    "expired": "Die Anmeldeabfrage ist abgelaufen. Die Verbindung wurde nicht hergestellt."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Sicherheitswarnung · Host-Schlüssel geändert",
     "mismatchHeading": "Der Schlüssel dieses Servers ist nicht mehr derselbe.",
@@ -662,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wähle einen KI-Anbieter, bevor du die Zweitmeinung zum Risiko einschaltest.",
     "SESSION_NOT_FOUND": "Diese Sitzung ist nicht mehr geöffnet. Öffne sie erneut über die Serverliste.",
     "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden",
+    "SSH_NO_COMMON_ALGORITHM": "Kein gemeinsamer SSH-Algorithmus mit dem Server. Dessen SSH-Software ist zu alt oder zu streng konfiguriert. Aktualisiere sie oder aktiviere moderne Algorithmen."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -999,14 +1007,16 @@
       "hostKeyCheck": "Host-Key-Prüfung",
       "authentication": "Anmeldung",
       "sessionReady": "Sitzung aufgebaut",
-      "dnsSkipped": "IP-Adresse – keine Auflösung nötig"
+      "dnsSkipped": "IP-Adresse – keine Auflösung nötig",
+      "outdatedAlgorithms": "Veraltete Algorithmen"
     },
     "status": {
       "ok": "OK",
       "running": "läuft",
       "failed": "fehlgeschlagen ({{code}})",
       "skipped": "übersprungen",
-      "failedReason": "fehlgeschlagen: {{reason}}"
+      "failedReason": "fehlgeschlagen: {{reason}}",
+      "warning": "Warnung"
     },
     "hostKeyResult": {
       "known": "bekannt",
@@ -1500,5 +1510,9 @@
     "title": "Etwas ist schiefgelaufen",
     "body": "Smart SSH ist in der Oberfläche auf einen unerwarteten Fehler gestoßen. Lade neu, um fortzufahren. Tritt er erneut auf, erzeuge nach dem Neuladen ein Diagnosepaket unter Einstellungen → Diagnose.",
     "reload": "Neu laden"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Dieser Server nutzt veraltete SSH-Algorithmen ({{algorithms}}). Die Verbindung ist weniger sicher. Aktualisiere nach Möglichkeit die SSH-Software des Servers.",
+    "outdatedAlgorithmsHop": "{{hop}} nutzt veraltete SSH-Algorithmen ({{algorithms}}). Die Verbindung ist weniger sicher. Aktualisiere nach Möglichkeit dessen SSH-Software."
   }
 }

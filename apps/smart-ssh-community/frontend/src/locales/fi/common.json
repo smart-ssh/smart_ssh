@@ -436,6 +436,13 @@
       "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
     }
   },
+  "authPrompt": {
+    "title": "Kirjautuminen: {{hop}}",
+    "password": "Salasana",
+    "submit": "Kirjaudu",
+    "notStored": "Palvelin pyytää näitä tietoja kirjautumista varten. Niitä ei tallenneta.",
+    "expired": "Kirjautumispyyntö vanheni. Yhteyttä ei muodostettu."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Turvavaroitus · Isäntäavain muuttunut",
     "mismatchHeading": "Tämän palvelimen avain ei ole enää sama.",
@@ -662,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Valitse tekoälypalvelu ennen riskin toisen mielipiteen käyttöönottoa.",
     "SESSION_NOT_FOUND": "Tämä istunto ei ole enää auki. Avaa se uudelleen palvelinluettelosta.",
     "SSH_SFTP_ALREADY_EXISTS": "Tämänniminen tiedosto tai kansio on jo olemassa",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Avaintiedostoa ei löytynyt tältä laitteelta"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Avaintiedostoa ei löytynyt tältä laitteelta",
+    "SSH_NO_COMMON_ALGORITHM": "Palvelimen kanssa ei ole yhteistä SSH-algoritmia. Sen SSH-ohjelmisto on liian vanha tai liian tiukka. Päivitä se tai ota nykyaikaiset algoritmit käyttöön."
   },
   "mcpServer": {
     "hint": "Ulkoiset MCP-asiakkaat voivat ehdottaa sen kautta komentoja, tiedostojen lukua ja kirjoitusta sekä muistiinpanojen päivityksiä sallituilla palvelimilla – jokainen pyyntö vaatii aina vahvistuksen sovelluksessa, voimassa olevista sallimissäännöistä riippumatta.",
@@ -999,14 +1007,16 @@
       "hostKeyCheck": "Isäntäavaimen tarkistus",
       "authentication": "Todennus",
       "sessionReady": "Istunto muodostettu",
-      "dnsSkipped": "IP-osoite – hakua ei tarvita"
+      "dnsSkipped": "IP-osoite – hakua ei tarvita",
+      "outdatedAlgorithms": "Vanhentuneet algoritmit"
     },
     "status": {
       "ok": "OK",
       "running": "käynnissä",
       "failed": "epäonnistui ({{code}})",
       "skipped": "ohitettu",
-      "failedReason": "epäonnistui: {{reason}}"
+      "failedReason": "epäonnistui: {{reason}}",
+      "warning": "varoitus"
     },
     "hostKeyResult": {
       "known": "tunnettu",
@@ -1500,5 +1510,9 @@
     "title": "Jokin meni pieleen",
     "body": "Smart SSH kohtasi käyttöliittymässä odottamattoman virheen. Jatka lataamalla uudelleen. Jos virhe toistuu, luo uudelleenlatauksen jälkeen diagnostiikkapaketti kohdassa Asetukset → Diagnostiikka.",
     "reload": "Lataa uudelleen"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Tämä palvelin käyttää vanhentuneita SSH-algoritmeja ({{algorithms}}). Yhteys on vähemmän turvallinen. Päivitä palvelimen SSH-ohjelmisto, jos voit.",
+    "outdatedAlgorithmsHop": "{{hop}} käyttää vanhentuneita SSH-algoritmeja ({{algorithms}}). Yhteys on vähemmän turvallinen. Päivitä sen SSH-ohjelmisto, jos voit."
   }
 }

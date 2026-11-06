@@ -33,8 +33,16 @@ export const onHostKeyVerificationNeeded =
 export const onHostKeyVerificationEnded =
   typedListener(EVENT.HOST_KEY_VERIFICATION_ENDED);
 
+/** Issue #1185: the server asks for login input (password, code, …). */
+export const onAuthPromptNeeded = typedListener(EVENT.AUTH_PROMPT_NEEDED);
+
+export const onAuthPromptEnded = typedListener(EVENT.AUTH_PROMPT_ENDED);
+
 /** Issue #546: live step list of a running `connect`. */
 export const onConnectProgress = typedListener(EVENT.CONNECT_PROGRESS);
+
+/** Issue #1173: an established connection uses outdated SSH algorithms. */
+export const onConnectWarnings = typedListener(EVENT.CONNECT_WARNINGS);
 
 export const onTerminalOutput = typedListener(EVENT.TERMINAL_OUTPUT);
 

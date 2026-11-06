@@ -347,6 +347,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       waiter((decision as { decision: string }).decision === "trust");
       return null;
     },
+    answer_auth_prompt: () => null,
+    cancel_auth_prompt: () => null,
     // An open session: empty history, a terminal that echoes nothing, an
     // empty home directory in the file browser.
     send_chat_message: () => null,

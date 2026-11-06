@@ -15,7 +15,7 @@
     reason = "some helpers of the shared SSH test server are unused here; expect in test code"
 )]
 #[path = "../../../../ssh-transport/tests/fixtures/test_server.rs"]
-mod two_hop_fixture;
+pub(super) mod two_hop_fixture;
 
 use ssh_manager_core::testing::ServerBuilder;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -112,6 +112,7 @@ impl Connector for ScriptedConnector {
         _credentials: &(dyn CredentialStore + Send + Sync),
         _key_files: &(dyn KeyFileReader + Send + Sync),
         _host_keys: Arc<dyn HostKeyStore>,
+        _prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
         log: &ConnectLog,
         _limits: ssh_transport::ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
@@ -229,6 +230,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
             ssh_manager_core::entitlements::Entitlements::free(),
         )),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -1230,6 +1232,7 @@ impl Connector for StepConnector {
         _credentials: &(dyn CredentialStore + Send + Sync),
         _key_files: &(dyn KeyFileReader + Send + Sync),
         _host_keys: Arc<dyn HostKeyStore>,
+        _prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
         log: &ConnectLog,
         _limits: ssh_transport::ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {

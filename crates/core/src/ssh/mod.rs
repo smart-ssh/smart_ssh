@@ -35,10 +35,10 @@ pub use auth_prompt::{
 };
 pub use connect_log::{
     AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, ConnectStepSnapshot,
-    HostKeyCheckResult, ProgressSink, PromptPause, StepDetail, StepId, StepStatus,
-    HOST_KEY_CHANGED, HOST_KEY_UNKNOWN,
+    ConnectWarning, HostKeyCheckResult, ProgressSink, PromptPause, StepDetail, StepId, StepStatus,
+    HOST_KEY_CHANGED, HOST_KEY_UNKNOWN, OUTDATED_ALGORITHMS_CODE, STRICT_KEX_MISSING,
 };
-pub use error::{HopLabel, SecretKind, SshError};
+pub use error::{AlgorithmKind, HopLabel, SecretKind, SshError};
 pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
 pub use task_spawner::{BoxedTask, TaskSpawner};

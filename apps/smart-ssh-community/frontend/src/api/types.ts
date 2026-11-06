@@ -163,6 +163,10 @@ export type {
   ChatSessionChangedPayload,
   ChatTextDeltaPayload,
   ChatWebActivityPayload,
+  AuthPromptEndReason,
+  AuthPromptEndedPayload,
+  AuthPromptItemPayload,
+  AuthPromptNeededPayload,
   ConnectProgressPayload,
   ConnectStepSnapshot,
   ConnectionStatusChangedPayload,
@@ -209,6 +213,8 @@ import type {
   ChatSessionChangedPayload,
   ChatTextDeltaPayload,
   ChatWebActivityPayload,
+  AuthPromptEndedPayload,
+  AuthPromptNeededPayload,
   ConnectProgressPayload,
   ConnectionStatusChangedPayload,
   HostKeyVerificationEndedPayload,
@@ -230,6 +236,8 @@ import type {
 export type ChatSessionChangedEvent = ChatSessionChangedPayload;
 export type ConnectionStatusChangedEvent = ConnectionStatusChangedPayload;
 export type AutoReconnectChangedEvent = AutoReconnectChangedPayload;
+export type AuthPromptNeededEvent = AuthPromptNeededPayload;
+export type AuthPromptEndedEvent = AuthPromptEndedPayload;
 export type HostKeyVerificationNeededEvent = HostKeyVerificationNeededPayload;
 export type HostKeyVerificationEndedEvent = HostKeyVerificationEndedPayload;
 export type ConnectProgressEvent = ConnectProgressPayload;
@@ -324,6 +332,7 @@ export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
   | { state: "skipped" }
+  | { state: "warning"; code: string }
   | { state: "failed"; code: string };
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
