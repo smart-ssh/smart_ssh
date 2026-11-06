@@ -82,13 +82,19 @@ pub enum ConnectStep {
         fingerprint: Option<String>,
         result: Option<HostKeyCheckResult>,
     },
-    /// Eine Anmeldung mit der konfigurierten Methode. `remaining_methods`
-    /// nennt, was der Server nach einem Fehlschlag noch anbietet — **nur zur
-    /// Anzeige**, es wird keine weitere Methode versucht.
+    /// Ein Anmeldeversuch (bzw. bei `keyboard-interactive` eine Runde).
+    /// `remaining_methods` nennt, was der Server nach einem Fehlschlag noch
+    /// anbietet; weitere Schritte folgen nur nach Teilerfolg (Issue #1184).
     Authentication {
         method: AuthMethodKind,
         remaining_methods: Vec<String>,
         partial_success: bool,
+        /// Issue #1184: `keyboard-interactive` only — number of the info
+        /// request round (1-based).
+        round: Option<u32>,
+        /// Issue #1184: the prompt texts of that round (server-supplied,
+        /// capped). The answers are never recorded.
+        prompts: Vec<String>,
     },
     /// Die SSH-Sitzung zum Ziel steht (letzter Hop angemeldet).
     SessionReady,
@@ -146,6 +152,8 @@ pub enum AuthMethodKind {
     Agent,
     Certificate,
     IdentityFile,
+    /// Issue #1184: SSH method `keyboard-interactive`.
+    KeyboardInteractive,
 }
 
 impl From<&AuthMethod> for AuthMethodKind {
@@ -565,6 +573,7 @@ fn auth_method_label(kind: AuthMethodKind) -> &'static str {
     match kind {
         AuthMethodKind::None => "none",
         AuthMethodKind::Password => "password",
+        AuthMethodKind::KeyboardInteractive => "keyboard-interactive",
         AuthMethodKind::Agent => "publickey (agent)",
         AuthMethodKind::PrivateKey | AuthMethodKind::Certificate | AuthMethodKind::IdentityFile => {
             "publickey (key file)"
@@ -849,6 +858,8 @@ mod tests {
                 method: AuthMethodKind::IdentityFile,
                 remaining_methods: vec![],
                 partial_success: false,
+                round: None,
+                prompts: vec![],
             },
         );
         log.succeed(a);

@@ -173,7 +173,7 @@ verständliche Meldung zeigen kann (Texte und Codes: Spec 0069, Spec 0024):
 | Host-Key abgelehnt | siehe Abschnitt 6 |
 | Zeitüberschreitung | eine Zeitgrenze (unten) ist abgelaufen |
 | Jump-Host-Zyklus | siehe Abschnitt 5 |
-| Kein gemeinsamer Algorithmus | siehe Abschnitt 7a |
+| Kein gemeinsamer Algorithmus | siehe Abschnitt 7b |
 | Zugangsdaten nicht auflösbar | Eintrag fehlt oder ist ungültig |
 | Secret-Speicher nicht erreichbar | der Speicher der Zugangsdaten hat nicht geantwortet (Spec 0098, Spec 0101) |
 | Kanalfehler | Fehler bei einem Kommando, einer Shell oder einem Dateizugriff |
@@ -194,7 +194,40 @@ zugeklappt unter der Meldung steht (ADR 0110). Es enthält keine
 Zugangsdaten, nur die Art der Anmeldung, und geht nie in die Log-Datei oder den
 Diagnose-Export.
 
-## 7a. Veraltete Algorithmen
+## 7a. Interaktive und mehrstufige Anmeldung
+
+Die Anmeldung an einem Hop kennt neben Schlüssel, Agent und Passwort das
+Verfahren `keyboard-interactive` (Zwei-Faktor-Codes, PAM-Abfragen) und
+mehrstufige Anmeldungen, bei denen der Server eine Methode nur als Teilerfolg
+annimmt und weitere verlangt (etwa `publickey` und danach
+`keyboard-interactive`, oder die umgekehrte Reihenfolge).
+
+- **Ablauf.** Die zuerst verwendete Methode ergibt sich aus dem Profil. Meldet
+  der Server einen Teilerfolg, werden die danach angebotenen Methoden der Reihe
+  nach versucht. Jeder Versuch und jede Abfragerunde steht im Schritt-Protokoll
+  (Methode, Nummer der Runde, Texte der Abfrage, Teilerfolg, noch angebotene
+  Methoden).
+- **Abfragen.** Bei `keyboard-interactive` schickt der Server beliebig viele
+  Runden mit je null oder mehr Eingabefeldern (mit oder ohne Anzeige der
+  Eingabe). Die Antworten kommen vom Nutzer; die Texte der Abfrage stammen vom
+  Server und werden nur als Text angezeigt, nie als Anweisung gedeutet.
+- **Gespeichertes Passwort.** Hat das Profil ein gespeichertes Passwort und
+  bietet der Server `password` nicht an, wohl aber `keyboard-interactive`,
+  beantwortet das gespeicherte Passwort einmal ein einzelnes Eingabefeld ohne
+  Anzeige. Alles andere wird dem Nutzer vorgelegt. Das Passwort wird nie an
+  eine Abfrage mit sichtbarer Eingabe oder mit mehreren Feldern gesendet.
+- **Keine Antwortmöglichkeit.** Gibt es keinen Weg, eine Abfrage zu
+  beantworten, oder bricht der Nutzer ab, endet der Versuch als „Anmeldung
+  fehlgeschlagen"; die Meldung nennt die vom Server noch angebotenen Methoden.
+  Antwortet der Nutzer 5 Minuten lang nicht, gilt das als Abbruch. Solange die
+  Oberfläche noch keine Abfrage anzeigt, gibt es keinen solchen Weg.
+- **Grenzen.** Höchstens 10 Abfragerunden je Methode und 3 Teilerfolge je Hop;
+  danach endet die Anmeldung als fehlgeschlagen. Die Zeitgrenze von 60 Sekunden
+  für die Anmeldung (Abschnitt 7) ruht, solange auf den Nutzer gewartet wird.
+- **Geheimnisse.** Antworten und Passwörter stehen weder im Schritt-Protokoll
+  noch in Logs oder Fehlermeldungen.
+
+## 7b. Veraltete Algorithmen
 
 Die App verbindet sich auch mit älteren Servern und Geräten, die nur
 veraltete Algorithmen sprechen.

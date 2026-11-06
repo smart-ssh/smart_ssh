@@ -236,7 +236,14 @@ async fn connect(servers: &[&Server]) -> Attempt {
     let log = ConnectLog::new();
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(60),
-        ssh_transport::connect_with_log(&target, &Creds, &NoKeyFiles, Arc::new(keys), &log),
+        ssh_transport::connect_with_log(
+            &target,
+            &Creds,
+            &NoKeyFiles,
+            Arc::new(keys),
+            &ssh_manager_core::ssh::NoPrompter,
+            &log,
+        ),
     )
     .await
     .expect("connect finished in time");

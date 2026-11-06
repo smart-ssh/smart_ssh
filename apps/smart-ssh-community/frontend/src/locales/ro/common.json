@@ -1027,7 +1027,8 @@
       "privateKey": "Cheie privată",
       "agent": "Agent SSH",
       "certificate": "Certificat",
-      "identityFile": "Fișier de cheie"
+      "identityFile": "Fișier de cheie",
+      "keyboardInteractive": "Interactiv de la tastatură"
     },
     "detail": {
       "addresses": "Adrese: {{addresses}}",
@@ -1036,7 +1037,9 @@
       "cipher": "Cifru: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "acceptată parțial, este necesară autentificare suplimentară",
-      "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)"
+      "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)",
+      "round": "Runda {{round}}",
+      "prompts": "Solicitările serverului: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Conexiunea TCP a expirat",

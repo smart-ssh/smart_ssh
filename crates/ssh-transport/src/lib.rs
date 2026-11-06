@@ -4,6 +4,7 @@
 
 mod algorithms;
 mod auth;
+mod auth_pause;
 mod connect;
 mod error;
 mod exec;

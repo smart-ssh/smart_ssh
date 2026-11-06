@@ -1017,7 +1017,8 @@
       "privateKey": "私钥",
       "agent": "SSH 代理",
       "certificate": "证书",
-      "identityFile": "密钥文件"
+      "identityFile": "密钥文件",
+      "keyboardInteractive": "键盘交互式"
     },
     "detail": {
       "addresses": "地址：{{addresses}}",
@@ -1026,7 +1027,9 @@
       "cipher": "加密算法：{{value}}",
       "mac": "MAC：{{value}}",
       "partialSuccess": "已部分接受，还需要进一步验证",
-      "remainingMethods": "服务器还提供：{{methods}}（未尝试）"
+      "remainingMethods": "服务器还提供：{{methods}}（未尝试）",
+      "round": "第 {{round}} 轮",
+      "prompts": "服务器提示：{{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP 连接超时",

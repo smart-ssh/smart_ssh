@@ -1022,7 +1022,8 @@
       "privateKey": "Özel anahtar",
       "agent": "SSH aracısı",
       "certificate": "Sertifika",
-      "identityFile": "Anahtar dosyası"
+      "identityFile": "Anahtar dosyası",
+      "keyboardInteractive": "Klavye etkileşimli"
     },
     "detail": {
       "addresses": "Adresler: {{addresses}}",
@@ -1031,7 +1032,9 @@
       "cipher": "Şifre: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "kısmen kabul edildi, ek kimlik doğrulama gerekli",
-      "remainingMethods": "Sunucu ayrıca şunları sunuyor: {{methods}} (denenmedi)"
+      "remainingMethods": "Sunucu ayrıca şunları sunuyor: {{methods}} (denenmedi)",
+      "round": "Tur {{round}}",
+      "prompts": "Sunucu istemleri: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP bağlantısı zaman aşımına uğradı",

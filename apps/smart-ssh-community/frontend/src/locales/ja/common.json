@@ -1017,7 +1017,8 @@
       "privateKey": "秘密鍵",
       "agent": "SSHエージェント",
       "certificate": "証明書",
-      "identityFile": "鍵ファイル"
+      "identityFile": "鍵ファイル",
+      "keyboardInteractive": "キーボードインタラクティブ"
     },
     "detail": {
       "addresses": "アドレス: {{addresses}}",
@@ -1026,7 +1027,9 @@
       "cipher": "暗号: {{value}}",
       "mac": "MAC：{{value}}",
       "partialSuccess": "部分的に受理されました。さらに認証が必要です",
-      "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）"
+      "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）",
+      "round": "ラウンド {{round}}",
+      "prompts": "サーバーのプロンプト: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP接続がタイムアウトしました",

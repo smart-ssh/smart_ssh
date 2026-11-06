@@ -1027,7 +1027,8 @@
       "privateKey": "Clave privada",
       "agent": "Agente SSH",
       "certificate": "Certificado",
-      "identityFile": "Archivo de clave"
+      "identityFile": "Archivo de clave",
+      "keyboardInteractive": "Interactivo por teclado"
     },
     "detail": {
       "addresses": "Direcciones: {{addresses}}",
@@ -1036,7 +1037,9 @@
       "cipher": "Cifrado: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceptada parcialmente, se requiere más autenticación",
-      "remainingMethods": "El servidor también ofrece: {{methods}} (no probados)"
+      "remainingMethods": "El servidor también ofrece: {{methods}} (no probados)",
+      "round": "Ronda {{round}}",
+      "prompts": "Solicitudes del servidor: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Se agotó el tiempo de la conexión TCP",

@@ -6,11 +6,12 @@ use async_trait::async_trait;
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
-    ConnectLog, ConnectStep, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
-    SshError, SshTransport,
+    AuthPrompter, ConnectLog, ConnectStep, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore,
+    KeyFileReader, SshError, SshTransport,
 };
 
-use crate::auth::{authenticate, AuthSteps};
+use crate::auth::{authenticate, AuthPrompting, AuthSteps};
+use crate::auth_pause::{timeout_unless_paused, AuthPause};
 use crate::error::{map_io_error, map_russh_error, map_transport_error, TransportError};
 use crate::handler::{ClientHandler, HopSteps};
 use crate::transport::RusshTransport;
@@ -75,12 +76,14 @@ pub async fn connect(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
 ) -> Result<ConnectOutcome, SshError> {
     connect_with_log(
         target,
         credentials,
         key_files,
         host_keys,
+        prompter,
         &ConnectLog::new(),
     )
     .await
@@ -154,6 +157,7 @@ pub async fn connect_with_log(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
 ) -> Result<ConnectOutcome, SshError> {
     connect_with_limits(
@@ -161,6 +165,7 @@ pub async fn connect_with_log(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         ConnectLimits::DEFAULT,
     )
@@ -181,6 +186,7 @@ pub async fn connect_with_limits(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
 ) -> Result<ConnectOutcome, SshError> {
@@ -189,6 +195,7 @@ pub async fn connect_with_limits(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         client_config(),
@@ -206,6 +213,7 @@ pub async fn connect_with_keepalive(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     keepalive_interval: Duration,
@@ -221,6 +229,7 @@ pub async fn connect_with_keepalive(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         config,
@@ -228,11 +237,13 @@ pub async fn connect_with_keepalive(
     .await
 }
 
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn connect_with_config(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     config: client::Config,
@@ -242,6 +253,7 @@ async fn connect_with_config(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         config,
@@ -274,11 +286,13 @@ pub(crate) fn client_config() -> client::Config {
     }
 }
 
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn connect_inner(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     config: client::Config,
@@ -298,6 +312,8 @@ async fn connect_inner(
         host_keys,
         credentials,
         key_files,
+        prompter,
+        pause: Arc::new(AuthPause::new()),
         log,
     };
     let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {
@@ -371,6 +387,12 @@ trait HopConnector: Send {
         hop_index: usize,
         hop: &Hop,
     ) -> Result<(), SshError>;
+
+    /// Issue #1184: the pause that stops the authentication limit while the
+    /// user is asked. Connectors that never ask keep the default.
+    fn auth_pause(&self) -> Arc<AuthPause> {
+        Arc::new(AuthPause::new())
+    }
 }
 
 /// Spec 0069, A3 (Issue #97): baut die Kette Hop für Hop auf; jede Phase
@@ -392,9 +414,11 @@ async fn drive_chain<C: HopConnector>(
             Opened::Ready(session) => session,
             Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
         };
-    connect_with_timeout(
+    let pause = connector.auth_pause();
+    timeout_unless_paused(
         connector.authenticate(&mut current, 0, first_hop),
         limits.authentication,
+        &pause,
     )
     .await?;
 
@@ -411,9 +435,10 @@ async fn drive_chain<C: HopConnector>(
             Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
         };
         sessions.push(std::mem::replace(&mut current, next));
-        connect_with_timeout(
+        timeout_unless_paused(
             connector.authenticate(&mut current, hop_index, hop),
             limits.authentication,
+            &pause,
         )
         .await?;
     }
@@ -428,12 +453,19 @@ struct RusshHops<'a> {
     host_keys: Arc<dyn HostKeyStore>,
     credentials: &'a (dyn CredentialStore + Send + Sync),
     key_files: &'a (dyn KeyFileReader + Send + Sync),
+    prompter: &'a dyn AuthPrompter,
+    /// Issue #1184: stops the authentication limit while the user is asked.
+    pause: Arc<AuthPause>,
     log: &'a ConnectLog,
 }
 
 #[async_trait]
 impl HopConnector for RusshHops<'_> {
     type Session = client::Handle<ClientHandler>;
+
+    fn auth_pause(&self) -> Arc<AuthPause> {
+        self.pause.clone()
+    }
 
     async fn open_first(&mut self, hop: &Hop) -> Result<Opened<Self::Session>, SshError> {
         let label = hop_label(hop);
@@ -514,6 +546,10 @@ impl HopConnector for RusshHops<'_> {
             self.credentials,
             self.key_files,
             &AuthSteps::new(self.log, hop_index, &hop_label(hop)),
+            &AuthPrompting {
+                prompter: self.prompter,
+                pause: &self.pause,
+            },
         )
         .await
     }

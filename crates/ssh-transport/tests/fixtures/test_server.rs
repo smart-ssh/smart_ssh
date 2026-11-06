@@ -147,6 +147,96 @@ impl SetstatModeWatch {
     }
 }
 
+/// Issue #1184: how the test server authenticates `TEST_USERNAME`.
+///
+/// `russh` 0.63's server sends `partial_success` only when a
+/// `keyboard-interactive` login ends in `Auth::Reject { partial_success:
+/// true, .. }` (its password and public key paths reset the flag), so the
+/// multi-step scenarios start with such a login. A `publickey,…` first step
+/// is covered against real OpenSSH (issue #1177).
+#[allow(dead_code, reason = "each test file uses only some scenarios")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AuthScenario {
+    /// Password (and any public key), as before.
+    #[default]
+    Standard,
+    /// Only `keyboard-interactive`: one prompt "Password: " (echo off).
+    KeyboardInteractivePassword,
+    /// Only `keyboard-interactive`: "Password: ", then "Verification code: "
+    /// (echo on, answer `TEST_CODE`).
+    KeyboardInteractiveTwoRounds,
+    /// Only `keyboard-interactive`: an info request without prompts, then
+    /// "Password: ".
+    KeyboardInteractiveEmptyRound,
+    /// Only `keyboard-interactive`: asks one more question after every answer.
+    KeyboardInteractiveEndless,
+    /// `keyboard-interactive,password`: the "Password: " round ends with
+    /// partial success; the password is then required again.
+    KeyboardInteractiveThenPassword,
+    /// `keyboard-interactive,keyboard-interactive`: "Password: " ends with
+    /// partial success, a second login asks "Verification code: ".
+    KeyboardInteractiveTwice,
+    /// Only `keyboard-interactive`: every login ends with partial success.
+    PartialForever,
+}
+
+pub const TEST_CODE: &str = "123456";
+
+type KiRound = &'static [(&'static str, bool)];
+
+const PW: KiRound = &[("Password: ", false)];
+const CODE: KiRound = &[("Verification code: ", true)];
+
+impl AuthScenario {
+    fn methods(self) -> Option<&'static [russh::MethodKind]> {
+        use russh::MethodKind as K;
+        match self {
+            Self::Standard => None,
+            Self::KeyboardInteractiveThenPassword => Some(&[K::KeyboardInteractive, K::Password]),
+            _ => Some(&[K::KeyboardInteractive]),
+        }
+    }
+
+    /// Questions per round of the given login (`stage` counts completed
+    /// partial logins).
+    fn rounds(self, stage: usize) -> &'static [KiRound] {
+        match (self, stage) {
+            (Self::KeyboardInteractiveTwoRounds, _) => &[PW, CODE],
+            (Self::KeyboardInteractiveEmptyRound, _) => &[&[], PW],
+            (Self::KeyboardInteractiveTwice, 1) => &[CODE],
+            (Self::Standard | Self::KeyboardInteractiveEndless, _) => &[],
+            _ => &[PW],
+        }
+    }
+
+    /// Expected answers of that round.
+    fn answers(self, stage: usize, round: usize) -> &'static [&'static str] {
+        match (self, stage, round) {
+            (Self::KeyboardInteractiveTwoRounds, _, 1) | (Self::KeyboardInteractiveTwice, 1, _) => {
+                &[TEST_CODE]
+            }
+            (Self::KeyboardInteractiveEmptyRound, _, 0) => &[],
+            _ => &[TEST_PASSWORD],
+        }
+    }
+
+    /// What follows when the last round of a login was answered correctly.
+    fn after_last_round(self, stage: usize) -> Auth {
+        use russh::{MethodKind as K, MethodSet};
+        match (self, stage) {
+            (Self::KeyboardInteractiveThenPassword, _) => Auth::Reject {
+                proceed_with_methods: Some(MethodSet::from(&[K::Password][..])),
+                partial_success: true,
+            },
+            (Self::KeyboardInteractiveTwice, 0) | (Self::PartialForever, _) => Auth::Reject {
+                proceed_with_methods: Some(MethodSet::from(&[K::KeyboardInteractive][..])),
+                partial_success: true,
+            },
+            _ => Auth::Accept,
+        }
+    }
+}
+
 /// Issue #632: wie der Test-Server `none` und ein leeres Passwort behandelt.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AuthBehavior {
@@ -218,6 +308,16 @@ impl RunningTestServer {
     /// Wie [`Self::start`], mit festgelegtem Verhalten für `none` und leeres
     /// Passwort (Issue #632).
     pub async fn start_with_auth(auth_behavior: AuthBehavior) -> Self {
+        Self::start_inner(auth_behavior, AuthScenario::Standard).await
+    }
+
+    /// Issue #1184: a server with a `keyboard-interactive` or multi-step login.
+    #[allow(dead_code, reason = "used by interactive_auth only")]
+    pub async fn start_with_scenario(scenario: AuthScenario) -> Self {
+        Self::start_inner(AuthBehavior::default(), scenario).await
+    }
+
+    async fn start_inner(auth_behavior: AuthBehavior, scenario: AuthScenario) -> Self {
         let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519)
             .expect("Ed25519-Testschlüssel sollte immer erzeugbar sein");
         let host_public_key = key
@@ -227,7 +327,19 @@ impl RunningTestServer {
 
         static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let instance_id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let methods = match scenario.methods() {
+            Some(list) => russh::MethodSet::from(list),
+            None => Config::default().methods,
+        };
         let config = Arc::new(Config {
+            methods,
+            // Rejections otherwise take a second each, which would eat the
+            // authentication limits the scenario tests set.
+            auth_rejection_time: if scenario == AuthScenario::Standard {
+                Config::default().auth_rejection_time
+            } else {
+                std::time::Duration::from_millis(10)
+            },
             keys: vec![key],
             server_id: russh::SshId::Standard(format!("SSH-2.0-testfixture{instance_id}").into()),
             ..Default::default()
@@ -280,6 +392,9 @@ impl RunningTestServer {
                                 first_line_sent,
                                 auth_attempts,
                                 auth_behavior,
+                                scenario,
+                                ki_round: 0,
+                                ki_stage: 0,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -336,6 +451,25 @@ struct TestHandler {
     first_line_sent: Arc<FirstLineSentWatch>,
     auth_attempts: Arc<AuthAttemptLog>,
     auth_behavior: AuthBehavior,
+    scenario: AuthScenario,
+    /// Issue #1184: index of the next `keyboard-interactive` round.
+    ki_round: usize,
+    /// Issue #1184: completed partial `keyboard-interactive` logins.
+    ki_stage: usize,
+}
+
+impl TestHandler {
+    fn ki_partial(round: KiRound) -> Auth {
+        Auth::Partial {
+            name: "test".into(),
+            instructions: "".into(),
+            prompts: round
+                .iter()
+                .map(|(t, e)| (std::borrow::Cow::Borrowed(*t), *e))
+                .collect::<Vec<_>>()
+                .into(),
+        }
+    }
 }
 
 impl Handler for TestHandler {
@@ -356,6 +490,15 @@ impl Handler for TestHandler {
         } else {
             "password:nonempty"
         });
+        let scenario = self.scenario;
+        let allowed = match scenario {
+            AuthScenario::Standard => true,
+            AuthScenario::KeyboardInteractiveThenPassword => self.ki_stage > 0,
+            _ => false,
+        };
+        if !allowed {
+            return Ok(Auth::reject());
+        }
         if user == TEST_USERNAME
             && (password == TEST_PASSWORD
                 || (password.is_empty() && self.auth_behavior.accept_empty_password))
@@ -382,11 +525,53 @@ impl Handler for TestHandler {
         user: &str,
         _key: &russh::keys::PublicKey,
     ) -> Result<Auth, Self::Error> {
-        if user == TEST_USERNAME {
+        if user == TEST_USERNAME && self.scenario == AuthScenario::Standard {
             Ok(Auth::Accept)
         } else {
             Ok(Auth::reject())
         }
+    }
+
+    async fn auth_keyboard_interactive<'a>(
+        &'a mut self,
+        user: &str,
+        _submethods: &str,
+        response: Option<russh::server::Response<'a>>,
+    ) -> Result<Auth, Self::Error> {
+        let scenario = self.scenario;
+        let rounds = scenario.rounds(self.ki_stage);
+        if user != TEST_USERNAME {
+            return Ok(Auth::reject());
+        }
+        if scenario == AuthScenario::KeyboardInteractiveEndless {
+            return Ok(Self::ki_partial(&[("More: ", true)]));
+        }
+        if rounds.is_empty() {
+            return Ok(Auth::reject());
+        }
+        let Some(response) = response else {
+            self.auth_attempts.record("keyboard-interactive");
+            self.ki_round = 0;
+            return Ok(Self::ki_partial(rounds[0]));
+        };
+        let given: Vec<String> = response
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .collect();
+        let expected = scenario.answers(self.ki_stage, self.ki_round);
+        let ok = scenario == AuthScenario::PartialForever
+            || (given.len() == expected.len() && given.iter().zip(expected).all(|(g, e)| g == e));
+        if !ok {
+            return Ok(Auth::reject());
+        }
+        self.ki_round += 1;
+        if let Some(next) = rounds.get(self.ki_round) {
+            return Ok(Self::ki_partial(next));
+        }
+        let outcome = scenario.after_last_round(self.ki_stage);
+        if matches!(outcome, Auth::Reject { .. }) {
+            self.ki_stage += 1;
+        }
+        Ok(outcome)
     }
 
     /// Muss explizit überschrieben werden: der *Default* von

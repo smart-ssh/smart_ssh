@@ -1022,7 +1022,8 @@
       "privateKey": "Privésleutel",
       "agent": "SSH-agent",
       "certificate": "Certificaat",
-      "identityFile": "Sleutelbestand"
+      "identityFile": "Sleutelbestand",
+      "keyboardInteractive": "Toetsenbord-interactief"
     },
     "detail": {
       "addresses": "Adressen: {{addresses}}",
@@ -1031,7 +1032,9 @@
       "cipher": "Cipher: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "gedeeltelijk geaccepteerd, verdere authenticatie vereist",
-      "remainingMethods": "Server biedt ook aan: {{methods}} (niet geprobeerd)"
+      "remainingMethods": "Server biedt ook aan: {{methods}} (niet geprobeerd)",
+      "round": "Ronde {{round}}",
+      "prompts": "Vragen van de server: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-verbinding is verlopen",

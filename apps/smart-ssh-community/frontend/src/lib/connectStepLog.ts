@@ -68,6 +68,11 @@ export function stepDetails(t: T, step: ConnectStep): string {
       break;
     case "authentication":
       parts.push(t(`connectLog.authMethod.${step.method}`));
+      if (step.round !== null) parts.push(t("connectLog.detail.round", { round: step.round }));
+      if (step.prompts.length > 0) {
+        // Server-supplied texts: shown as plain text only (untrusted).
+        parts.push(t("connectLog.detail.prompts", { prompts: step.prompts.join(" | ") }));
+      }
       if (step.partialSuccess) parts.push(t("connectLog.detail.partialSuccess"));
       if (step.remainingMethods.length > 0) {
         parts.push(

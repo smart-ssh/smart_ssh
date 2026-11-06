@@ -80,8 +80,18 @@ impl Connector for RealConnector {
         log: &ConnectLog,
         limits: ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
-        ssh_transport::connect_with_limits(target, credentials, key_files, host_keys, log, limits)
-            .await
+        // No user interface on this path: interactive logins fail with a clear
+        // error (Issue #1184).
+        ssh_transport::connect_with_limits(
+            target,
+            credentials,
+            key_files,
+            host_keys,
+            &ssh_manager_core::ssh::NoPrompter,
+            log,
+            limits,
+        )
+        .await
     }
 }
 

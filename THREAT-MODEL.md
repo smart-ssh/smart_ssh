@@ -406,6 +406,17 @@ Risks we know about and accept, with the reason.
   break the copilot's usefulness without closing the gap
   ([Spec 0068](docs/specs/0068-security-hardening-prelaunch.md)).
   Mitigation: use a local AI provider for sensitive servers.
+- **Keyboard-interactive and multi-step SSH login (issue #1184).** The
+  server can send arbitrary prompt texts and ask for several rounds of
+  answers. The prompt texts are untrusted input: they are only ever displayed
+  as plain text and never interpreted. A stored password is sent at most once,
+  and only to a single prompt that does not echo its input, when the server
+  does not offer `password` at all; it is never sent to a visible or
+  multi-field prompt. Answers are not logged, not put in the connect step log
+  and not in error messages. Rounds (10 per method) and partial-success steps
+  (3 per hop) are capped so a hostile server cannot keep a login going forever;
+  the login time limit pauses only while the user is asked and a 5-minute
+  answer limit applies.
 - **RSA timing side channel (RUSTSEC-2023-0071, "Marvin attack").** The
   `rsa` crate, pulled in by the SSH library, has a known timing side channel
   with no fixed release. Accepted because Smart SSH is a local client: RSA

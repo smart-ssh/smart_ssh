@@ -1022,7 +1022,8 @@
       "privateKey": "Privát kulcs",
       "agent": "SSH-ügynök",
       "certificate": "Tanúsítvány",
-      "identityFile": "Kulcsfájl"
+      "identityFile": "Kulcsfájl",
+      "keyboardInteractive": "Billentyűzet-interaktív"
     },
     "detail": {
       "addresses": "Címek: {{addresses}}",
@@ -1031,7 +1032,9 @@
       "cipher": "Titkosító: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "részben elfogadva, további hitelesítés szükséges",
-      "remainingMethods": "A szerver ezeket is kínálja: {{methods}} (nem próbálva)"
+      "remainingMethods": "A szerver ezeket is kínálja: {{methods}} (nem próbálva)",
+      "round": "{{round}}. kör",
+      "prompts": "A szerver kérdései: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "A TCP-kapcsolat időtúllépés miatt megszakadt",

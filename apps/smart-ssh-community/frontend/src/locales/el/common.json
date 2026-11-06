@@ -1022,7 +1022,8 @@
       "privateKey": "Ιδιωτικό κλειδί",
       "agent": "Πράκτορας SSH",
       "certificate": "Πιστοποιητικό",
-      "identityFile": "Αρχείο κλειδιού"
+      "identityFile": "Αρχείο κλειδιού",
+      "keyboardInteractive": "Διαδραστικό πληκτρολογίου"
     },
     "detail": {
       "addresses": "Διευθύνσεις: {{addresses}}",
@@ -1031,7 +1032,9 @@
       "cipher": "Κρυπτογράφηση: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "μερικώς αποδεκτό, απαιτείται περαιτέρω έλεγχος ταυτότητας",
-      "remainingMethods": "Ο διακομιστής προσφέρει επίσης: {{methods}} (δεν δοκιμάστηκαν)"
+      "remainingMethods": "Ο διακομιστής προσφέρει επίσης: {{methods}} (δεν δοκιμάστηκαν)",
+      "round": "Γύρος {{round}}",
+      "prompts": "Ερωτήσεις διακομιστή: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Λήξη χρόνου σύνδεσης TCP",

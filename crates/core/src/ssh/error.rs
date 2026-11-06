@@ -83,6 +83,13 @@ impl fmt::Display for AlgorithmKind {
 pub enum SshError {
     ConnectionFailed(String),
     AuthenticationFailed,
+    /// Issue #1184: login failed because the server wants a method the
+    /// client could not supply (no prompter, or the prompt was cancelled).
+    /// Same code as [`SshError::AuthenticationFailed`] (the user-facing
+    /// text is the same); the message names the server's methods.
+    AuthenticationMethodRequired {
+        methods: Vec<String>,
+    },
     HostKeyRejected,
     ChannelError(String),
     Timeout,
@@ -179,6 +186,11 @@ impl fmt::Display for SshError {
         match self {
             SshError::ConnectionFailed(msg) => write!(f, "Verbindung fehlgeschlagen: {msg}"),
             SshError::AuthenticationFailed => write!(f, "Authentifizierung fehlgeschlagen"),
+            SshError::AuthenticationMethodRequired { methods } => write!(
+                f,
+                "Authentifizierung fehlgeschlagen: The server requires {} login, which could not be completed",
+                methods.join(" or ")
+            ),
             SshError::HostKeyRejected => write!(f, "Host-Key abgelehnt"),
             SshError::ChannelError(msg) => write!(f, "Channel-Fehler: {msg}"),
             SshError::Timeout => write!(f, "Zeitüberschreitung"),
@@ -278,7 +290,9 @@ impl SshError {
     pub fn code(&self) -> &'static str {
         match self {
             SshError::ConnectionFailed(_) => "SSH_CONNECTION_FAILED",
-            SshError::AuthenticationFailed => "SSH_AUTH_FAILED",
+            SshError::AuthenticationFailed | SshError::AuthenticationMethodRequired { .. } => {
+                "SSH_AUTH_FAILED"
+            }
             SshError::HostKeyRejected => "SSH_HOST_KEY_REJECTED",
             SshError::ChannelError(_) => "SSH_CHANNEL_ERROR",
             SshError::Timeout => "SSH_TIMEOUT",

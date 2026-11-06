@@ -1032,7 +1032,8 @@
       "privateKey": "Закрытый ключ",
       "agent": "Агент SSH",
       "certificate": "Сертификат",
-      "identityFile": "Файл ключа"
+      "identityFile": "Файл ключа",
+      "keyboardInteractive": "Интерактивный ввод с клавиатуры"
     },
     "detail": {
       "addresses": "Адреса: {{addresses}}",
@@ -1041,7 +1042,9 @@
       "cipher": "Шифр: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "принято частично, нужна дополнительная аутентификация",
-      "remainingMethods": "Сервер также предлагает: {{methods}} (не пробовались)"
+      "remainingMethods": "Сервер также предлагает: {{methods}} (не пробовались)",
+      "round": "Раунд {{round}}",
+      "prompts": "Запросы сервера: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Истекло время TCP-соединения",
