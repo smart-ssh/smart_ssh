@@ -87,6 +87,13 @@ the proposed command or path text as is**, without redaction
   knows the password as an extra pattern, so if the server echoes it, it is
   masked ([`crates/app-logic/src/orchestration/action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs),
   [`crates/app-logic/src/server_redaction.rs`](crates/app-logic/src/server_redaction.rs)).
+  The elevated file browser ([Spec 0067](docs/specs/0067-sftp-elevated-and-toasts.md))
+  uses it too, but only when `sudo -n -l` says a password is required: the
+  channel runs `sudo -S -k -p '<random marker>' …`, and the password is
+  written once, and only after the marker was read from stderr. If the
+  marker does not appear, the channel is closed with nothing written, so the
+  password cannot reach `sftp-server`. The password is not in the command,
+  log, audit line or any error; the audit line records only `sudo_auth`.
 
 ### What the AI can still see
 

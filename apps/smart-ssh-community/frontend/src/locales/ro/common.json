@@ -802,7 +802,8 @@
     "close": "Închide",
     "detail": "Detalii: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo necesită o parolă pentru sftp-server pe acest server. Aplicația nu solicită niciodată o parolă sudo.",
+      "passwordRequired": "sudo cere o parolă pentru sftp-server pe acest server. Adăugați regula sudoers de mai jos sau salvați o parolă sudo în profilul serverului pentru a activa drepturile ridicate.",
+      "wrongSudoPassword": "sudo a respins parola sudo salvată. Verificați parola sudo în profilul serverului.",
       "notAllowed": "Această autentificare SSH nu poate porni sftp-server prin sudo fără parolă.",
       "requireTty": "sudo refuză să ruleze fără terminal („requiretty” în sudoers). Dezactivați requiretty pentru această autentificare, de ex. cu „Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server nu a fost găsit pe server. Introduceți calea lui în profilul serverului la „Avansat”.",

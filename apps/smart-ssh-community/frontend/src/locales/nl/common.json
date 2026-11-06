@@ -797,7 +797,8 @@
     "close": "Sluiten",
     "detail": "Details: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo vereist op deze server een wachtwoord voor sftp-server. De app vraagt nooit om een sudo-wachtwoord.",
+      "passwordRequired": "sudo vraagt op deze server een wachtwoord voor sftp-server. Voeg de sudoers-regel hieronder toe of sla een sudo-wachtwoord op in het serverprofiel om verhoogde rechten te gebruiken.",
+      "wrongSudoPassword": "sudo heeft het opgeslagen sudo-wachtwoord geweigerd. Controleer het sudo-wachtwoord in het serverprofiel.",
       "notAllowed": "Deze SSH-aanmelding mag sftp-server niet zonder wachtwoord via sudo starten.",
       "requireTty": "sudo weigert te draaien zonder terminal (“requiretty” in sudoers). Schakel requiretty voor deze aanmelding uit, bijv. met “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server is op de server niet gevonden. Voer het pad in het serverprofiel in onder “Geavanceerd”.",

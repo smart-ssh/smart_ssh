@@ -792,7 +792,8 @@
     "close": "Đóng",
     "detail": "Chi tiết: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo yêu cầu mật khẩu cho sftp-server trên máy chủ này. Ứng dụng không bao giờ hỏi mật khẩu sudo.",
+      "passwordRequired": "sudo yêu cầu mật khẩu cho sftp-server trên máy chủ này. Hãy thêm dòng sudoers bên dưới hoặc lưu mật khẩu sudo trong hồ sơ máy chủ để bật quyền nâng cao.",
+      "wrongSudoPassword": "sudo đã từ chối mật khẩu sudo đã lưu. Hãy kiểm tra mật khẩu sudo trong hồ sơ máy chủ.",
       "notAllowed": "Tài khoản SSH này không được phép khởi động sftp-server qua sudo mà không có mật khẩu.",
       "requireTty": "sudo từ chối chạy khi không có terminal (“requiretty” trong sudoers). Hãy tắt requiretty cho tài khoản này, ví dụ bằng “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "Không tìm thấy sftp-server trên máy chủ. Vui lòng nhập đường dẫn của nó trong hồ sơ máy chủ tại “Nâng cao”.",

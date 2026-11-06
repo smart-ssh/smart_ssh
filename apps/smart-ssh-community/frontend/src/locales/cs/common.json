@@ -807,7 +807,8 @@
     "close": "Zavřít",
     "detail": "Podrobnosti: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Aplikace se na heslo sudo nikdy neptá.",
+      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Přidejte níže uvedené pravidlo sudoers nebo uložte heslo sudo do profilu serveru, aby šla zapnout zvýšená oprávnění.",
+      "wrongSudoPassword": "sudo odmítlo uložené heslo sudo. Zkontrolujte heslo sudo v profilu serveru.",
       "notAllowed": "Toto přihlášení SSH nesmí spouštět sftp-server přes sudo bez hesla.",
       "requireTty": "sudo odmítá běžet bez terminálu („requiretty“ v sudoers). Pro toto přihlášení requiretty vypněte, např. pomocí „Defaults:<login> !requiretty“.",
       "sftpServerNotFound": "sftp-server nebyl na serveru nalezen. Zadejte jeho cestu v profilu serveru v části „Pokročilé“.",

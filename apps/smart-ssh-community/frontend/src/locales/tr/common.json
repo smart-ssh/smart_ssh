@@ -797,7 +797,8 @@
     "close": "Kapat",
     "detail": "Ayrıntılar: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo, bu sunucuda sftp-server için parola istiyor. Uygulama asla sudo parolası sormaz.",
+      "passwordRequired": "Bu sunucuda sudo, sftp-server için parola istiyor. Aşağıdaki sudoers satırını ekleyin veya yükseltilmiş hakları açmak için sunucu profilinde bir sudo parolası saklayın.",
+      "wrongSudoPassword": "sudo, kayıtlı sudo parolasını reddetti. Sunucu profilindeki sudo parolasını kontrol edin.",
       "notAllowed": "Bu SSH oturumu, sftp-server'ı sudo ile parolasız başlatamaz.",
       "requireTty": "sudo terminal olmadan çalışmayı reddediyor (sudoers'ta “requiretty”). Bu oturum için requiretty'yi devre dışı bırakın, örn. “Defaults:<login> !requiretty” ile.",
       "sftpServerNotFound": "sftp-server sunucuda bulunamadı. Lütfen yolunu sunucu profilinde “Gelişmiş” altına girin.",

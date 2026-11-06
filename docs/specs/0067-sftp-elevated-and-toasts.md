@@ -1,7 +1,7 @@
 # Spec 0067 — Dateibrowser mit erhöhten Rechten und Erfolgsmeldungen
 
 Status: umgesetzt
-Zweck: Teil A: Der Dateibrowser kann auf Wunsch als root (oder anderer Nutzer) arbeiten, ohne dass die App je ein Sudo-Passwort anfasst. Teil B: Jede Dateibrowser-Aktion meldet ihr Ergebnis sichtbar.
+Zweck: Teil A: Der Dateibrowser kann auf Wunsch als root (oder anderer Nutzer) arbeiten, ohne `NOPASSWD`-Regel, wenn ein Sudo-Passwort im Server-Profil gespeichert ist (Spec 0018). Teil B: Jede Dateibrowser-Aktion meldet ihr Ergebnis sichtbar.
 Bezüge: Spec 0020 (Dateibrowser), Spec 0054 (Aktionen, „Lokal öffnen“), Spec 0010 (Notiz-Karten unten rechts), Spec 0084 §9 und Spec 0085 (Widerruf), Spec 0102 (Startverzeichnis gilt nicht im erhöhten Modus), Spec 0003 (Server-Profil).
 
 Ein Root-Dateibrowser ist das mächtigste Werkzeug der App; die Regeln in
@@ -11,8 +11,13 @@ Teil A sind deshalb Leitplanken, keine Vorschläge.
 
 Der erhöhte Modus startet den SFTP-Server des Servers selbst mit
 `sudo -n <sftp-server-pfad>` (wie WinSCP). Er braucht eine
-`NOPASSWD`-Regel für `sftp-server` und verarbeitet **nie** ein
-Sudo-Passwort. Ein Weg über Sudo-Kommandos mit Passwort gibt es nicht.
+`NOPASSWD`-Regel für `sftp-server`. Fehlt sie und ist für den Server ein
+Sudo-Passwort gespeichert (Spec 0018), verwendet die App stattdessen dieses
+Passwort (Issue #1191; es löst die frühere Entscheidung „nie ein Passwort“
+ab, s. ADR 0058). Die Reihenfolge ist fest: (1) `sudo -n -l` erlaubt den
+Befehl → `NOPASSWD`-Weg wie bisher; (2) sudo verlangt ein Passwort **und**
+eins ist gespeichert → Passwortweg; (3) sonst die Meldung aus A3. Einen
+Passwort-Dialog im Dateibrowser gibt es nicht.
 
 ---
 
@@ -24,6 +29,20 @@ Sudo-Passwort. Ein Weg über Sudo-Kommandos mit Passwort gibt es nicht.
   `sudo -n <sftp-server-pfad>` und betreibt darüber denselben SFTP-Client.
 - `-n` (nicht interaktiv): Verlangt sudo ein Passwort, schlägt der Aufruf
   sofort fehl, statt zu hängen.
+- **Passwortweg (Issue #1191):** Die App öffnet den Kanal mit
+  `sudo -S -k -p '<marker>' <sftp-server-pfad>`; `<marker>` ist ein pro
+  Aktivierung zufälliges Token. Sie liest die Fehlerausgabe, bis der Marker
+  erscheint, und schreibt erst dann das gespeicherte Passwort samt
+  Zeilenumbruch, genau einmal; danach beginnt der SFTP-Handshake auf
+  demselben Kanal. Erscheint der Marker nicht rechtzeitig (z. B. weil eine
+  Regel oder ein Zeitstempel die Abfrage überspringt), wird der Kanal
+  geschlossen und die Aktivierung scheitert — es ist dann kein
+  Passwort-Byte gesendet worden. Erscheint der Marker ein zweites Mal
+  (falsches Passwort), wird der Kanal geschlossen und gemeldet, dass das
+  gespeicherte Sudo-Passwort abgelehnt wurde; ein erneuter Versuch mit
+  demselben Passwort findet nicht statt. Meldet sudo „not allowed“, gilt
+  der Fall „nicht erlaubt“ aus A3. Das Passwort steht nie im Kommando, in
+  Logs, im Audit, in Fehlermeldungen, im Chat oder im KI-Kontext.
 - Die erhöhte Sitzung ist ein **zweiter, getrennter** Kanal neben dem
   normalen; der normale Browser bleibt unverändert. Für den lokalen
   Pseudo-Server (Spec 0032) gibt es keinen erhöhten Modus.
@@ -55,6 +74,9 @@ verständliche Meldung mit konkreter Anleitung statt eines kryptischen Fehlers:
 - Ein **ehrlicher Hinweis**: Diese Regel gibt dem SSH-Login
   passwortlosen Root-Dateizugriff. Wer den SSH-Schlüssel hat, kann jede Datei
   lesen und schreiben. Das ist bewusst zu entscheiden.
+- Verlangt sudo ein Passwort und ist keins gespeichert, nennt die Meldung
+  zusätzlich: Ein im Server-Profil gespeichertes Sudo-Passwort schaltet die
+  erhöhten Rechte ebenfalls frei. sudoers-Zeile und Warnung bleiben.
 - Weitere Fälle werden erkannt und benannt: `requiretty` in sudoers, ein
   nicht gefundener `sftp-server`, nicht installiertes sudo, ein ungültiger
   Zielnutzer oder Pfad, ein fehlgeschlagener Start.
@@ -73,8 +95,11 @@ gelten als unsicher. Die Prüfung läuft nie mit sudo und nutzt nur
 POSIX-Werkzeuge. Ist ein Eintrag unsicher, oder scheitert die Prüfung oder
 liefert nichts Verwertbares (im Zweifel unsicher):
 
-- **sudo verlangt ein Passwort oder erlaubt den Befehl nicht:** Der erhöhte
-  Modus bleibt aus, es wird **keine sudoers-Zeile** gezeigt. Die Meldung nennt
+- **sudo verlangt ein Passwort und eins ist gespeichert (Passwortweg):**
+  wie „sudo erlaubt den Befehl bereits“ — der erhöhte Modus startet, im
+  Dateibrowser steht die Warnung.
+- **sudo verlangt ein Passwort (keins gespeichert) oder erlaubt den Befehl
+  nicht:** Der erhöhte Modus bleibt aus, es wird **keine sudoers-Zeile** gezeigt. Die Meldung nennt
   den auffälligen Pfad und sagt, dass er root gehören und für Gruppe und
   andere nicht beschreibbar sein muss; auf so einem Server könnte jeder, der
   das Binary ersetzen kann, mit der Regel root werden.
@@ -150,7 +175,8 @@ Prüfungen aus A1–A3 bleiben unverändert.
   Identität wird weiterhin abgelehnt, nie still umgestellt. Die
   Bearbeitungskopie ist nur für den Nutzer lesbar (0600), weil
   Root-Dateien sensibel sein können.
-- Es ist kein Passwort im Spiel, also nichts zu redigieren. Die
+- Im Passwortweg ist das gespeicherte Sudo-Passwort ein `SecretString`, wird
+  nach dem Schreiben verworfen und ist der Redaktion bekannt. Die
   Fehlerausgabe von sudo gelangt trotzdem nie ungefiltert in Chat oder
   KI-Kontext.
 
@@ -200,8 +226,12 @@ erscheint nie.
 - Der erhöhte Modus ist nie Standard, nie gespeichert und immer sichtbar
   gekennzeichnet.
 - KI und MCP erreichen den erhöhten Kanal nie.
-- Kein Sudo-Passwort wird verarbeitet (`sudo -n`); fehlende Berechtigung
-  scheitert sofort und verständlich, nie durch Hängen.
+- Ein Sudo-Passwort wird nur verwendet, wenn es im Server-Profil gespeichert
+  ist, sudo es ausdrücklich verlangt, und nur nach dem Prompt-Marker, genau
+  einmal. Sonst gilt `sudo -n`; fehlende Berechtigung scheitert sofort und
+  verständlich, nie durch Hängen.
+- Das Audit des Einschaltens nennt, wie sudo authentifiziert hat
+  (`nopasswd` oder `password`), nie das Passwort.
 - „Lokal öffnen“ lädt eine im erhöhten Modus geöffnete Datei nur erhöht
   hoch, nie still als normaler Nutzer.
 - Bestätigungen bleiben und nennen den Modus.

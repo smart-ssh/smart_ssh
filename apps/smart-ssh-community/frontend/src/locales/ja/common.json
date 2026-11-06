@@ -792,7 +792,8 @@
     "close": "閉じる",
     "detail": "詳細: {{detail}}",
     "failure": {
-      "passwordRequired": "このサーバーでは、sftp-serverに対してsudoがパスワードを要求します。このアプリがsudoパスワードを尋ねることはありません。",
+      "passwordRequired": "このサーバーでは sftp-server の実行に sudo のパスワードが必要です。下の sudoers の行を追加するか、サーバープロファイルに sudo パスワードを保存すると、昇格権限を使えます。",
+      "wrongSudoPassword": "保存されている sudo パスワードが sudo に拒否されました。サーバープロファイルの sudo パスワードを確認してください。",
       "notAllowed": "このSSHログインは、パスワードなしでsudo経由でsftp-serverを起動することが許可されていません。",
       "requireTty": "sudoはターミナルなしでの実行を拒否します（sudoersの「requiretty」）。このログインに対してrequirettyを無効にしてください。例: 「Defaults:<login> !requiretty」",
       "sftpServerNotFound": "サーバー上でsftp-serverが見つかりませんでした。サーバープロファイルの「詳細設定」でそのパスを入力してください。",

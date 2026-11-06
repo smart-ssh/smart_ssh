@@ -792,7 +792,8 @@
     "close": "关闭",
     "detail": "详情：{{detail}}",
     "failure": {
-      "passwordRequired": "sudo 要求在此服务器上为 sftp-server 输入密码。应用绝不会询问 sudo 密码。",
+      "passwordRequired": "此服务器上的 sudo 要求为 sftp-server 输入密码。请添加下方的 sudoers 规则，或在服务器配置文件中保存 sudo 密码，以启用提升权限。",
+      "wrongSudoPassword": "sudo 拒绝了已保存的 sudo 密码。请检查服务器配置文件中的 sudo 密码。",
       "notAllowed": "此 SSH 登录不允许在无密码的情况下通过 sudo 启动 sftp-server。",
       "requireTty": "sudo 拒绝在没有终端的情况下运行（sudoers 中的“requiretty”）。请为此登录禁用 requiretty，例如使用“Defaults:<login> !requiretty”。",
       "sftpServerNotFound": "在服务器上找不到 sftp-server。请在服务器配置的“高级”中填写其路径。",

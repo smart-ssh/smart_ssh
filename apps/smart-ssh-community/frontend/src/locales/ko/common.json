@@ -792,7 +792,8 @@
     "close": "닫기",
     "detail": "상세 정보: {{detail}}",
     "failure": {
-      "passwordRequired": "이 서버에서 sudo가 sftp-server에 비밀번호를 요구합니다. 앱은 sudo 비밀번호를 절대 묻지 않습니다.",
+      "passwordRequired": "이 서버에서 sudo가 sftp-server에 암호를 요구합니다. 아래 sudoers 규칙을 추가하거나 서버 프로필에 sudo 암호를 저장하면 상승된 권한을 사용할 수 있습니다.",
+      "wrongSudoPassword": "sudo가 저장된 sudo 암호를 거부했습니다. 서버 프로필의 sudo 암호를 확인하세요.",
       "notAllowed": "이 SSH 로그인은 비밀번호 없이 sudo로 sftp-server를 시작할 수 없습니다.",
       "requireTty": "sudo가 터미널 없이 실행되기를 거부합니다(sudoers의 “requiretty”). 이 로그인에 대해 requiretty를 비활성화하십시오. 예: “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "서버에서 sftp-server를 찾을 수 없습니다. 서버 프로필의 “고급”에 경로를 입력하십시오.",

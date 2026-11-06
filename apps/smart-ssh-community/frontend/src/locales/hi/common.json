@@ -797,7 +797,8 @@
     "close": "बंद करें",
     "detail": "विवरण: {{detail}}",
     "failure": {
-      "passwordRequired": "इस सर्वर पर sftp-server के लिए sudo पासवर्ड माँगता है। ऐप कभी sudo पासवर्ड नहीं माँगती।",
+      "passwordRequired": "इस सर्वर पर sudo, sftp-server के लिए पासवर्ड माँगता है। नीचे दी गई sudoers पंक्ति जोड़ें, या उन्नत अधिकार चालू करने के लिए सर्वर प्रोफ़ाइल में sudo पासवर्ड सहेजें।",
+      "wrongSudoPassword": "sudo ने सहेजा गया sudo पासवर्ड अस्वीकार कर दिया। सर्वर प्रोफ़ाइल में sudo पासवर्ड जाँचें।",
       "notAllowed": "यह SSH लॉगिन बिना पासवर्ड के sudo से sftp-server शुरू नहीं कर सकता।",
       "requireTty": "sudo बिना टर्मिनल के चलने से मना करता है (sudoers में “requiretty”)। इस लॉगिन के लिए requiretty बंद करें, जैसे “Defaults:<login> !requiretty” से।",
       "sftpServerNotFound": "सर्वर पर sftp-server नहीं मिला। कृपया सर्वर प्रोफ़ाइल में “उन्नत” के अंतर्गत उसका पथ दर्ज करें।",

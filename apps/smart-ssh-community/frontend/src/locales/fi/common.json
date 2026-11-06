@@ -797,7 +797,8 @@
     "close": "Sulje",
     "detail": "Lisätiedot: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo vaatii salasanan sftp-serverille tällä palvelimella. Sovellus ei koskaan kysy sudo-salasanaa.",
+      "passwordRequired": "sudo vaatii tällä palvelimella salasanan sftp-serverille. Lisää alla oleva sudoers-rivi tai tallenna sudo-salasana palvelinprofiiliin, jotta korotetut oikeudet voi ottaa käyttöön.",
+      "wrongSudoPassword": "sudo hylkäsi tallennetun sudo-salasanan. Tarkista sudo-salasana palvelinprofiilista.",
       "notAllowed": "Tämä SSH-kirjautuminen ei saa käynnistää sftp-serveriä sudolla ilman salasanaa.",
       "requireTty": "sudo kieltäytyy toimimasta ilman päätettä (“requiretty” sudoersissa). Poista requiretty käytöstä tältä kirjautumiselta, esim. rivillä “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-serveriä ei löytynyt palvelimelta. Anna sen polku palvelinprofiilin kohdassa “Lisäasetukset”.",

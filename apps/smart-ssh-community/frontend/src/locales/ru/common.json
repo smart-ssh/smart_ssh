@@ -807,7 +807,8 @@
     "close": "Закрыть",
     "detail": "Подробности: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo требует пароль для sftp-server на этом сервере. Приложение никогда не запрашивает пароль sudo.",
+      "passwordRequired": "sudo требует на этом сервере пароль для sftp-server. Добавьте строку sudoers ниже или сохраните пароль sudo в профиле сервера, чтобы включить повышенные права.",
+      "wrongSudoPassword": "sudo отклонил сохранённый пароль sudo. Проверьте пароль sudo в профиле сервера.",
       "notAllowed": "Этому SSH-логину нельзя запускать sftp-server через sudo без пароля.",
       "requireTty": "sudo отказывается работать без терминала («requiretty» в sudoers). Отключите requiretty для этого логина, например: «Defaults:<login> !requiretty».",
       "sftpServerNotFound": "sftp-server на сервере не найден. Укажите его путь в профиле сервера в разделе «Дополнительно».",

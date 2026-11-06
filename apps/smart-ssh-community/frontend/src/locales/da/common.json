@@ -797,7 +797,8 @@
     "close": "Luk",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo kræver en adgangskode til sftp-server på denne server. Appen spørger aldrig om en sudo-adgangskode.",
+      "passwordRequired": "sudo kræver en adgangskode til sftp-server på denne server. Tilføj sudoers-linjen nedenfor, eller gem en sudo-adgangskode i serverprofilen for at aktivere forhøjede rettigheder.",
+      "wrongSudoPassword": "sudo afviste den gemte sudo-adgangskode. Tjek sudo-adgangskoden i serverprofilen.",
       "notAllowed": "Dette SSH-login må ikke starte sftp-server via sudo uden adgangskode.",
       "requireTty": "sudo nægter at køre uden en terminal (“requiretty” i sudoers). Deaktivér requiretty for dette login, f.eks. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server blev ikke fundet på serveren. Angiv dens sti i serverprofilen under “Avanceret”.",

@@ -802,7 +802,8 @@
     "close": "Fermer",
     "detail": "Détails : {{detail}}",
     "failure": {
-      "passwordRequired": "sudo exige un mot de passe pour sftp-server sur ce serveur. L’application ne demande jamais de mot de passe sudo.",
+      "passwordRequired": "sudo exige un mot de passe pour sftp-server sur ce serveur. Ajoutez la règle sudoers ci-dessous ou enregistrez un mot de passe sudo dans le profil du serveur pour activer les droits élevés.",
+      "wrongSudoPassword": "sudo a refusé le mot de passe sudo enregistré. Vérifiez le mot de passe sudo dans le profil du serveur.",
       "notAllowed": "Cette connexion SSH n’est pas autorisée à démarrer sftp-server via sudo sans mot de passe.",
       "requireTty": "sudo refuse de s’exécuter sans terminal (« requiretty » dans sudoers). Désactivez requiretty pour cette connexion, p. ex. avec « Defaults:<login> !requiretty ».",
       "sftpServerNotFound": "sftp-server est introuvable sur le serveur. Veuillez en saisir le chemin dans le profil du serveur sous « Avancé ».",
