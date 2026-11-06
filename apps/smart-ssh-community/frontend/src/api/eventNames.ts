@@ -8,6 +8,7 @@ export const EVENT = {
   HOST_KEY_VERIFICATION_NEEDED: "host-key-verification-needed",
   HOST_KEY_VERIFICATION_ENDED: "host-key-verification-ended",
   CONNECT_PROGRESS: "connect-progress",
+  CONNECT_WARNINGS: "connect-warnings",
   TERMINAL_OUTPUT: "terminal-output",
   CHAT_TEXT_DELTA: "chat-text-delta",
   CHAT_AUTO_CONTINUATION_STARTED: "chat-auto-continuation-started",

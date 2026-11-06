@@ -8,6 +8,7 @@ pub const CHAT_SESSION_CHANGED: &str = "chat-session-changed";
 pub const HOST_KEY_VERIFICATION_NEEDED: &str = "host-key-verification-needed";
 pub const HOST_KEY_VERIFICATION_ENDED: &str = "host-key-verification-ended";
 pub const CONNECT_PROGRESS: &str = "connect-progress";
+pub const CONNECT_WARNINGS: &str = "connect-warnings";
 pub const TERMINAL_OUTPUT: &str = "terminal-output";
 pub const CHAT_TEXT_DELTA: &str = "chat-text-delta";
 pub const CHAT_AUTO_CONTINUATION_STARTED: &str = "chat-auto-continuation-started";

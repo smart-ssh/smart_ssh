@@ -458,7 +458,7 @@ pub struct ConnectStepSnapshot {
     #[cfg_attr(
         feature = "ts-export",
         ts(
-            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\""
+            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\" | \"outdatedAlgorithms\""
         )
     )]
     pub kind: String,

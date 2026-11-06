@@ -43,7 +43,7 @@ fn generate() -> String {
         AuthMethodKind as ConnectAuthMethodKind, ConnectStep, ConnectStepRecord,
         HostKeyCheckResult, StepStatus,
     };
-    use ssh_manager_core::ssh::ConnectStepSnapshot;
+    use ssh_manager_core::ssh::{ConnectStepSnapshot, ConnectWarning};
     let decls = decls![
         ActionConfirmationSettledPayload,
         ActionOrigin,
@@ -66,6 +66,8 @@ fn generate() -> String {
         HostKeyPromptEndReason,
         HostKeyVerificationEndedPayload,
         ConnectProgressPayload,
+        ConnectWarning,
+        ConnectWarningsPayload,
         TerminalOutputPayload,
         ChatTextDeltaPayload,
         ChatAutoContinuationStartedPayload,
@@ -219,6 +221,7 @@ fn event_payloads() -> String {
             "HostKeyVerificationEndedPayload",
         ),
         (names::CONNECT_PROGRESS, "ConnectProgressPayload"),
+        (names::CONNECT_WARNINGS, "ConnectWarningsPayload"),
         (names::TERMINAL_OUTPUT, "TerminalOutputPayload"),
         (names::CHAT_TEXT_DELTA, "ChatTextDeltaPayload"),
         (

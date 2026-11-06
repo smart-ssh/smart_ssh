@@ -253,6 +253,36 @@ pub fn emit_connect_progress(
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct ConnectWarningsPayload {
+    session_id: SessionId,
+    warnings: Vec<ssh_manager_core::ssh::ConnectWarning>,
+}
+
+/// Issue #1173: the connection of `session_id` is established, but some hop
+/// uses outdated SSH algorithms. Emitted once per established connection
+/// (also a reconnect), only when `warnings` is not empty. UI only: the
+/// connection is not affected.
+pub fn emit_connect_warnings(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    warnings: Vec<ssh_manager_core::ssh::ConnectWarning>,
+) {
+    if warnings.is_empty() {
+        return;
+    }
+    emit(
+        emitter,
+        names::CONNECT_WARNINGS,
+        &ConnectWarningsPayload {
+            session_id,
+            warnings,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub(crate) struct TerminalOutputPayload {
     session_id: SessionId,
     /// Base64-kodiert statt als JSON-Zahlenarray: Terminal-Output kann

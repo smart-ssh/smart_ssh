@@ -151,7 +151,16 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             };
 
             match outcome {
-                ssh_transport::ConnectOutcome::Connected(transport) => break transport,
+                ssh_transport::ConnectOutcome::Connected(transport) => {
+                    // Issue #1173: outdated algorithms are a warning, the
+                    // connection stays established.
+                    app_logic::events::emit_connect_warnings(
+                        &crate::event_emitter::TauriEventEmitter(app.clone()),
+                        session_id,
+                        attempt_log.warnings(),
+                    );
+                    break transport;
+                }
                 ssh_transport::ConnectOutcome::PendingHostKeyConfirmation {
                     host,
                     port,
