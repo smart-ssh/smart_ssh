@@ -1019,7 +1019,8 @@
       "privateKey": "Private key",
       "agent": "SSH agent",
       "certificate": "Certificate",
-      "identityFile": "Key file"
+      "identityFile": "Key file",
+      "keyboardInteractive": "Keyboard-interactive"
     },
     "detail": {
       "addresses": "Addresses: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Cipher: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "partially accepted, further authentication required",
-      "remainingMethods": "Server also offers: {{methods}} (not tried)"
+      "remainingMethods": "Server also offers: {{methods}} (not tried)",
+      "round": "Round {{round}}",
+      "prompts": "Server prompts: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP connection timed out",

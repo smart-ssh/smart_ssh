@@ -1024,7 +1024,8 @@
       "privateKey": "Chiave privata",
       "agent": "Agente SSH",
       "certificate": "Certificato",
-      "identityFile": "File della chiave"
+      "identityFile": "File della chiave",
+      "keyboardInteractive": "Interattivo da tastiera"
     },
     "detail": {
       "addresses": "Indirizzi: {{addresses}}",
@@ -1033,7 +1034,9 @@
       "cipher": "Cifrario: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "accettato parzialmente, serve ulteriore autenticazione",
-      "remainingMethods": "Il server offre anche: {{methods}} (non provati)"
+      "remainingMethods": "Il server offre anche: {{methods}} (non provati)",
+      "round": "Turno {{round}}",
+      "prompts": "Richieste del server: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Timeout della connessione TCP",

@@ -1019,7 +1019,8 @@
       "privateKey": "Privater Schlüssel",
       "agent": "SSH-Agent",
       "certificate": "Zertifikat",
-      "identityFile": "Schlüsseldatei"
+      "identityFile": "Schlüsseldatei",
+      "keyboardInteractive": "Tastatur-interaktiv"
     },
     "detail": {
       "addresses": "Adressen: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Verschlüsselung: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
-      "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
+      "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)",
+      "round": "Runde {{round}}",
+      "prompts": "Abfragen des Servers: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-Verbindung hat das Zeitlimit überschritten",

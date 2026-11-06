@@ -18,6 +18,7 @@ use secrecy::SecretString;
 use ssh_manager_core::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore,
 };
+use ssh_manager_core::ssh::NoPrompter;
 use ssh_manager_core::ssh::{
     ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileContent, KeyFileError,
     KeyFileFacts, KeyFileReader, SshError, SshTransport,
@@ -144,7 +145,7 @@ pub async fn connect_confirming(hops: Vec<Hop>) -> (Box<dyn SshTransport>, Vec<(
     for _ in 0..=expected {
         match step(
             "connect()",
-            ssh_transport::connect(&target, &Creds, &NoKeyFiles, keys.clone()),
+            ssh_transport::connect(&target, &Creds, &NoKeyFiles, keys.clone(), &NoPrompter),
         )
         .await
         .expect("connect() should succeed or pause")

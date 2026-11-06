@@ -65,8 +65,20 @@ describe("connectStepLog", () => {
         method: "password",
         remainingMethods: ["publickey", "keyboard-interactive"],
         partialSuccess: false,
+        round: null,
+        prompts: [],
       }),
     ).toBe("Password · Server also offers: publickey, keyboard-interactive (not tried)");
+    expect(
+      stepDetails(t, {
+        kind: "authentication",
+        method: "keyboardInteractive",
+        remainingMethods: [],
+        partialSuccess: false,
+        round: 2,
+        prompts: ["Password:", "Code:"],
+      }),
+    ).toBe("Keyboard-interactive · Round 2 · Server prompts: Password: | Code:");
     expect(stepDetails(t, { kind: "tcpConnect", address: "2001:db8::1", port: 22 })).toBe(
       "[2001:db8::1]:22",
     );

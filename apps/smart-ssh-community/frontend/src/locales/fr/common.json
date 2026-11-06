@@ -1024,7 +1024,8 @@
       "privateKey": "Clé privée",
       "agent": "Agent SSH",
       "certificate": "Certificat",
-      "identityFile": "Fichier de clé"
+      "identityFile": "Fichier de clé",
+      "keyboardInteractive": "Interactif au clavier"
     },
     "detail": {
       "addresses": "Adresses : {{addresses}}",
@@ -1033,7 +1034,9 @@
       "cipher": "Chiffrement : {{value}}",
       "mac": "MAC : {{value}}",
       "partialSuccess": "partiellement accepté, authentification supplémentaire requise",
-      "remainingMethods": "Le serveur propose aussi : {{methods}} (non essayé)"
+      "remainingMethods": "Le serveur propose aussi : {{methods}} (non essayé)",
+      "round": "Tour {{round}}",
+      "prompts": "Invites du serveur : {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Délai de connexion TCP dépassé",

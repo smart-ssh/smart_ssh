@@ -1029,7 +1029,8 @@
       "privateKey": "Klucz prywatny",
       "agent": "Agent SSH",
       "certificate": "Certyfikat",
-      "identityFile": "Plik klucza"
+      "identityFile": "Plik klucza",
+      "keyboardInteractive": "Interaktywne z klawiatury"
     },
     "detail": {
       "addresses": "Adresy: {{addresses}}",
@@ -1038,7 +1039,9 @@
       "cipher": "Szyfr: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "częściowo przyjęte, wymagane dalsze uwierzytelnianie",
-      "remainingMethods": "Serwer oferuje też: {{methods}} (nie próbowano)"
+      "remainingMethods": "Serwer oferuje też: {{methods}} (nie próbowano)",
+      "round": "Runda {{round}}",
+      "prompts": "Zapytania serwera: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Przekroczono czas połączenia TCP",

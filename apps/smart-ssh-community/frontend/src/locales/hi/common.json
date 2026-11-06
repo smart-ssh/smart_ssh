@@ -1019,7 +1019,8 @@
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
       "certificate": "प्रमाणपत्र",
-      "identityFile": "कुंजी फ़ाइल"
+      "identityFile": "कुंजी फ़ाइल",
+      "keyboardInteractive": "कीबोर्ड-इंटरएक्टिव"
     },
     "detail": {
       "addresses": "पते: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "सिफ़र: {{value}}",
       "mac": "MAC (संदेश प्रमाणीकरण): {{value}}",
       "partialSuccess": "आंशिक रूप से स्वीकृत, आगे प्रमाणीकरण आवश्यक",
-      "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)"
+      "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)",
+      "round": "चरण {{round}}",
+      "prompts": "सर्वर के प्रॉम्प्ट: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP कनेक्शन का समय समाप्त हो गया",
