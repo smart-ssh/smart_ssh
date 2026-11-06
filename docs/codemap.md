@@ -97,7 +97,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session/mod.rs` — `Session` |
 | In-memory stores and `ServerBuilder` for tests | `crates/core/src/testing.rs` (feature `test-support`) — `InMemoryProfileStore`, `InMemoryCredentialStore`, `ServerBuilder`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
-| Real SSH tests | `crates/ssh-transport/tests/integration.rs` |
+| Real SSH tests | `crates/ssh-transport/tests/integration.rs`, `crates/ssh-transport/tests/sshd/` (Docker, real sshd) |
 | Elevated SFTP channel | `crates/app-shell/src/elevated_sftp.rs` — `ElevatedSftp`, `ElevatedSftpSlot`; sudo/sftp-server logic `crates/core/src/ssh/elevated.rs` — `is_safe_absolute_path`; commands `crates/app-shell/src/commands/elevation.rs` |
 | SFTP commands | `crates/app-shell/src/commands/sftp/mod.rs` (shared imports, re-exports) with one file per group: `sftp/{list,download,upload_clipboard,delete,permissions,rename_mkdir,copy_content,edit_session}.rs`; transfers `crates/app-shell/src/commands/sftp/transfer.rs`; Tauri-free recursion/chmod/chown/rename logic `crates/app-logic/src/sftp_ops.rs` |
 | Browser access gate for file browsing | `crates/app-shell/src/commands/elevation.rs` — `BrowserAccess`, `BrowserChannel` |

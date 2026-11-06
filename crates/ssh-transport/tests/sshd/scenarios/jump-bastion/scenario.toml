@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "jump-bastion"
+networks = ["jump-net"]
+publish = true

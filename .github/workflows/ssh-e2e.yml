@@ -1,0 +1,66 @@
+name: SSH end-to-end
+
+# Issues #180 and #1172: end-to-end tests of the SSH transport against real
+# sshd containers (OpenSSH current and 7.x, Dropbear). The tests in
+# `crates/ssh-transport/tests/sshd_*.rs` are `#[ignore]` and do not run in
+# plain `cargo test --workspace`; `tests/sshd/run.sh` builds the images,
+# starts every scenario and runs them.
+#
+# Own workflow file because `paths:` filters per workflow. Not blocking for now
+# (`continue-on-error`): a red run is visible but does not hold up a merge.
+# No secrets, `ubuntu-latest` only (Docker is preinstalled there).
+
+on:
+  pull_request:
+    paths:
+      - "crates/ssh-transport/**"
+      - "crates/core/src/ssh/**"
+      - ".github/workflows/ssh-e2e.yml"
+  schedule:
+    # Nightly at 03:30 UTC.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+# A new push to the same PR cancels the running one; scheduled and manual
+# runs get their own group.
+concurrency:
+  group: ssh-e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ssh-e2e:
+    name: SSH end-to-end (Docker)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read pinned Rust toolchain
+        id: rust-toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
+
+      - name: Print Rust version
+        run: rustc --version
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # Builds the images, generates throw-away keys, starts every scenario,
+      # waits for the banners and runs the ignored tests; the script removes
+      # containers and networks itself and prints daemon logs on failure.
+      - name: End-to-end tests against sshd containers
+        run: crates/ssh-transport/tests/sshd/run.sh

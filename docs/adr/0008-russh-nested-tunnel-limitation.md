@@ -327,12 +327,12 @@ hängt bei großen Schreibvorgängen).
 
 ## Update — Option e) umgesetzt (Issue #180): opt-in End-to-End-Tests gegen OpenSSH
 
-Die Tests in `crates/ssh-transport/tests/openssh_jump.rs` prüfen Exec, PTY
+Die Tests in `crates/ssh-transport/tests/sshd_jump.rs` prüfen Exec, PTY
 (`open_shell`, `resize`) und SFTP (`write_file`, `list_dir`, `read_file`,
 byte-genau bis 4 MiB) über Bastion → Ziel gegen zwei echte OpenSSH-Container
-(`tests/openssh/Dockerfile`, dasselbe Image wie oben). Sie sind `#[ignore]`
+(Szenarien `jump-bastion`/`jump-target`, Image `openssh-current`). Sie sind `#[ignore]`
 und brauchen Docker; lokal startet
-`crates/ssh-transport/tests/openssh/run-jump-tests.sh` Container und Tests.
+`crates/ssh-transport/tests/sshd/run.sh` Container und Tests.
 Die Host-Keys werden je Hop über `PendingHostKeyConfirmation` bestätigt.
 
 Entschieden (Annahmen, vom Issue empfohlen): Der CI-Job läuft nur auf
@@ -340,3 +340,12 @@ Entschieden (Annahmen, vom Issue empfohlen): Der CI-Job läuft nur auf
 sowie täglich und manuell; er ist zunächst nicht blockierend. Die
 Test-Fixture ist weiterhin keine geeignete Bastion (siehe oben); die Tests
 verwenden sie deshalb nicht.
+
+### Update — szenariobasierte Suite (Issue #1172)
+
+Die Jump-Tests laufen jetzt in der allgemeinen Ende-zu-Ende-Suite
+`crates/ssh-transport/tests/sshd/` (Szenarien als Verzeichnisse, Images
+OpenSSH aktuell, OpenSSH 7.4p1, Dropbear; Workflow `ssh-e2e.yml`). Annahme zur
+offenen Frage des Issues: Das Legacy-Image baut OpenSSH 7.4p1 gegen OpenSSL
+1.0.2u aus dem Quelltext (Option a, beide Tarballs per SHA-256 geprüft), nicht
+gegen 1.1.1, weil 7.4 nur OpenSSL 1.0.x/1.1.0 unterstützt.
