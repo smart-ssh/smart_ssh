@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
     "SESSION_NOT_FOUND": "このセッションは既に閉じられています。サーバー一覧からもう一度開いてください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません",
+    "SSH_NO_COMMON_ALGORITHM": "サーバーと共通の SSH アルゴリズムがありません。サーバーの SSH ソフトウェアが古すぎるか制限が厳しすぎます。更新するか、新しいアルゴリズムを有効にしてください。"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -994,14 +995,16 @@
       "hostKeyCheck": "ホストキーの確認",
       "authentication": "認証",
       "sessionReady": "セッション確立",
-      "dnsSkipped": "IPアドレス – 名前解決は不要"
+      "dnsSkipped": "IPアドレス – 名前解決は不要",
+      "outdatedAlgorithms": "古いアルゴリズム"
     },
     "status": {
       "ok": "OK",
       "running": "進行中",
       "failed": "失敗（{{code}}）",
       "skipped": "スキップ",
-      "failedReason": "失敗: {{reason}}"
+      "failedReason": "失敗: {{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "既知",
@@ -1489,5 +1492,9 @@
     "title": "問題が発生しました",
     "body": "Smart SSH のインターフェースで予期しないエラーが発生しました。再読み込みして続行してください。再発する場合は、再読み込み後に「設定 → 診断」で診断バンドルを作成してください。",
     "reload": "再読み込み"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "このサーバーは古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、サーバーの SSH ソフトウェアを更新してください。",
+    "outdatedAlgorithmsHop": "{{hop}} は古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、その SSH ソフトウェアを更新してください。"
   }
 }

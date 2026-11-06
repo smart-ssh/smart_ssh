@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choose an AI provider before turning on the risk second opinion.",
     "SESSION_NOT_FOUND": "This session is no longer open. Open it again from the server list.",
     "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device",
+    "SSH_NO_COMMON_ALGORITHM": "No SSH algorithm in common with the server. Its SSH software is too old or too restrictive. Update it or enable modern algorithms."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -999,14 +1000,16 @@
       "hostKeyCheck": "Host key check",
       "authentication": "Authentication",
       "sessionReady": "Session established",
-      "dnsSkipped": "IP address – no lookup needed"
+      "dnsSkipped": "IP address – no lookup needed",
+      "outdatedAlgorithms": "Outdated algorithms"
     },
     "status": {
       "ok": "OK",
       "running": "in progress",
       "failed": "failed ({{code}})",
       "skipped": "skipped",
-      "failedReason": "failed: {{reason}}"
+      "failedReason": "failed: {{reason}}",
+      "warning": "warning"
     },
     "hostKeyResult": {
       "known": "known",
@@ -1497,5 +1500,9 @@
     "title": "Something went wrong",
     "body": "Smart SSH hit an unexpected error in the interface. Reload to continue. If it happens again, create a diagnostics bundle under Settings → Diagnostics after reloading.",
     "reload": "Reload"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "This server uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update the server's SSH software if you can.",
+    "outdatedAlgorithmsHop": "{{hop}} uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update its SSH software if you can."
   }
 }

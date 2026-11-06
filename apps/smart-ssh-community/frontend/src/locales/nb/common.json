@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
     "SESSION_NOT_FOUND": "Denne økten er ikke lenger åpen. Åpne den på nytt fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten",
+    "SSH_NO_COMMON_ALGORITHM": "Ingen SSH-algoritme er felles med serveren. Dens SSH-programvare er for gammel eller for streng. Oppdater den, eller aktiver moderne algoritmer."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",
@@ -999,14 +1000,16 @@
       "hostKeyCheck": "Sjekk av vertsnøkkel",
       "authentication": "Autentisering",
       "sessionReady": "Økt opprettet",
-      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig"
+      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig",
+      "outdatedAlgorithms": "Utdaterte algoritmer"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
       "failed": "mislyktes ({{code}})",
       "skipped": "hoppet over",
-      "failedReason": "mislyktes: {{reason}}"
+      "failedReason": "mislyktes: {{reason}}",
+      "warning": "advarsel"
     },
     "hostKeyResult": {
       "known": "kjent",
@@ -1497,5 +1500,9 @@
     "title": "Noe gikk galt",
     "body": "Smart SSH støtte på en uventet feil i grensesnittet. Last inn på nytt for å fortsette. Skjer det igjen, opprett en diagnostikkpakke under Innstillinger → Diagnostikk etter at du har lastet inn på nytt.",
     "reload": "Last inn på nytt"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Denne serveren bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater serverens SSH-programvare hvis du kan.",
+    "outdatedAlgorithmsHop": "{{hop}} bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater dens SSH-programvare hvis du kan."
   }
 }

@@ -75,6 +75,9 @@ export function stepDetails(t: T, step: ConnectStep): string {
         );
       }
       break;
+    case "outdatedAlgorithms":
+      if (step.algorithms.length > 0) parts.push(step.algorithms.join(", "));
+      break;
     case "sessionReady":
       break;
   }
@@ -108,13 +111,15 @@ export function stepStatusText(t: T, record: ConnectStepRecord): string {
       return t("connectLog.status.running");
     case "skipped":
       return t("connectLog.status.skipped");
+    case "warning":
+      return t("connectLog.status.warning");
     case "failed":
       return t("connectLog.status.failedReason", { reason: failureReason(t, record.status.code) });
   }
 }
 
 export function statusMarker(state: string): string {
-  return state === "failed" ? "✗" : state === "ok" ? "✓" : state === "skipped" ? "–" : "…";
+  return state === "failed" ? "✗" : state === "ok" ? "✓" : state === "skipped" ? "–" : state === "warning" ? "⚠" : "…";
 }
 
 /** Dauer in ms bzw. s. */

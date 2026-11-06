@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choisissez un fournisseur d'IA avant d'activer le second avis sur le risque.",
     "SESSION_NOT_FOUND": "Cette session n’est plus ouverte. Rouvrez-la depuis la liste des serveurs.",
     "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil",
+    "SSH_NO_COMMON_ALGORITHM": "Aucun algorithme SSH en commun avec le serveur. Son logiciel SSH est trop ancien ou trop restrictif. Mettez-le à jour ou activez des algorithmes modernes."
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -1004,14 +1005,16 @@
       "hostKeyCheck": "Vérification de la clé d’hôte",
       "authentication": "Authentification",
       "sessionReady": "Session établie",
-      "dnsSkipped": "Adresse IP – aucune résolution nécessaire"
+      "dnsSkipped": "Adresse IP – aucune résolution nécessaire",
+      "outdatedAlgorithms": "Algorithmes obsolètes"
     },
     "status": {
       "ok": "OK",
       "running": "en cours",
       "failed": "échec ({{code}})",
       "skipped": "ignoré",
-      "failedReason": "échec : {{reason}}"
+      "failedReason": "échec : {{reason}}",
+      "warning": "avertissement"
     },
     "hostKeyResult": {
       "known": "connue",
@@ -1505,5 +1508,9 @@
     "title": "Une erreur s’est produite",
     "body": "Smart SSH a rencontré une erreur inattendue dans l’interface. Rechargez pour continuer. Si cela se reproduit, créez un paquet de diagnostic sous Réglages → Diagnostic après le rechargement.",
     "reload": "Recharger"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ce serveur utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour le logiciel SSH du serveur si possible.",
+    "outdatedAlgorithmsHop": "{{hop}} utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour son logiciel SSH si possible."
   }
 }

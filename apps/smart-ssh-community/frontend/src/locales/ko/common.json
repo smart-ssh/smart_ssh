@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "위험 세컨드 오피니언을 켜기 전에 AI 제공자를 선택하세요.",
     "SESSION_NOT_FOUND": "이 세션은 더 이상 열려 있지 않습니다. 서버 목록에서 다시 여세요.",
     "SSH_SFTP_ALREADY_EXISTS": "이 이름의 파일 또는 폴더가 이미 있습니다",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다",
+    "SSH_NO_COMMON_ALGORITHM": "서버와 공통된 SSH 알고리즘이 없습니다. 서버의 SSH 소프트웨어가 너무 오래되었거나 제한이 너무 엄격합니다. 업데이트하거나 최신 알고리즘을 활성화하세요."
   },
   "mcpServer": {
     "hint": "외부 MCP 클라이언트는 이를 통해 허용 목록에 있는 서버에 명령, 파일 읽기/쓰기, 메모 업데이트를 제안할 수 있습니다. 기존 허용 규칙과 관계없이 모든 요청은 항상 앱에서 확인이 필요합니다.",
@@ -994,14 +995,16 @@
       "hostKeyCheck": "호스트 키 확인",
       "authentication": "인증",
       "sessionReady": "세션 수립됨",
-      "dnsSkipped": "IP 주소 – 조회 불필요"
+      "dnsSkipped": "IP 주소 – 조회 불필요",
+      "outdatedAlgorithms": "오래된 알고리즘"
     },
     "status": {
       "ok": "OK",
       "running": "진행 중",
       "failed": "실패 ({{code}})",
       "skipped": "건너뜀",
-      "failedReason": "실패: {{reason}}"
+      "failedReason": "실패: {{reason}}",
+      "warning": "경고"
     },
     "hostKeyResult": {
       "known": "알려짐",
@@ -1489,5 +1492,9 @@
     "title": "문제가 발생했습니다",
     "body": "Smart SSH 인터페이스에서 예기치 않은 오류가 발생했습니다. 계속하려면 새로고침하세요. 다시 발생하면 새로고침 후 설정 → 진단에서 진단 번들을 만드세요.",
     "reload": "새로고침"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "이 서버는 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 서버의 SSH 소프트웨어를 업데이트하세요.",
+    "outdatedAlgorithmsHop": "{{hop}}은(는) 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 해당 SSH 소프트웨어를 업데이트하세요."
   }
 }

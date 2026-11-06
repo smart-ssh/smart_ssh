@@ -662,7 +662,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
     "SESSION_NOT_FOUND": "Tato relace už není otevřená. Otevřete ji znovu ze seznamu serverů.",
     "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen",
+    "SSH_NO_COMMON_ALGORITHM": "Se serverem nemáte žádný společný algoritmus SSH. Jeho software SSH je příliš starý nebo příliš přísný. Aktualizujte jej nebo povolte moderní algoritmy."
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -1009,14 +1010,16 @@
       "hostKeyCheck": "Kontrola klíče hostitele",
       "authentication": "Ověření",
       "sessionReady": "Relace navázána",
-      "dnsSkipped": "IP adresa – překlad není potřeba"
+      "dnsSkipped": "IP adresa – překlad není potřeba",
+      "outdatedAlgorithms": "Zastaralé algoritmy"
     },
     "status": {
       "ok": "OK",
       "running": "probíhá",
       "failed": "selhalo ({{code}})",
       "skipped": "přeskočeno",
-      "failedReason": "selhalo: {{reason}}"
+      "failedReason": "selhalo: {{reason}}",
+      "warning": "varování"
     },
     "hostKeyResult": {
       "known": "známý",
@@ -1513,5 +1516,9 @@
     "title": "Něco se pokazilo",
     "body": "Smart SSH narazil v rozhraní na neočekávanou chybu. Pro pokračování načtěte aplikaci znovu. Pokud se to bude opakovat, vytvořte po načtení balíček diagnostiky v Nastavení → Diagnostika.",
     "reload": "Načíst znovu"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Tento server používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte software SSH serveru.",
+    "outdatedAlgorithmsHop": "{{hop}} používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte jeho software SSH."
   }
 }

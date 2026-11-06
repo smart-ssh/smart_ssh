@@ -85,6 +85,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_CONNECTION_ABANDONED",
   // Issue #546: the user cancelled a running connect.
   "SSH_CONNECT_CANCELLED",
+  // Issue #1173: no algorithm in common with the server.
+  "SSH_NO_COMMON_ALGORITHM",
   // AiError (crates/core/src/ai/types.rs)
   "AI_AUTH_FAILED",
   "AI_RATE_LIMITED",
