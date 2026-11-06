@@ -98,6 +98,13 @@ the proposed command or path text as is**, without redaction
   `-l INFO -f AUTHPRIV` (the suggested sudoers rule allows exactly these, or
   none for older rules), so the server's own auth log records every file
   request; the arguments are a constant, never user input.
+  Elevated rights end on their own as well: a per-channel idle timer
+  (default 15 minutes, `elevatedIdleTimeoutMinutes` ∈ 5/15/30/60/0 = never,
+  a security setting only changeable through its own validated command)
+  revokes the channel exactly like the manual switch-off. An invalid or
+  missing stored value falls back to 15 minutes, never to "never"; a running
+  elevated operation postpones the switch-off. The webview is told by an
+  event and shows a toast; the audit line records `reason = "inactivity"`.
 
 ### What the AI can still see
 

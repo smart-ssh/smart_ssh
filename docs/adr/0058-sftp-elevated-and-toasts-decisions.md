@@ -137,7 +137,13 @@ oder den KI-Kontext.
 - **Remote-Prozess nach dem Ausschalten:** Nicht verifiziert ist, ob das
   Verwerfen der SFTP-Session den `sftp-server`-Prozess auf dem Server sofort
   beendet oder erst beim SSH-Disconnect. Der Kanal ist aus Sicht der App in
-  jedem Fall nicht mehr erreichbar.
+  jedem Fall nicht mehr erreichbar. Issue #1193: Der Test-SSH-Server im
+  Prozess kann keinen echten `sftp-server`-Prozess zeigen. Dass der
+  Exec-Kanal beim Verwerfen geschlossen wird, belegt
+  `test_dropping_an_exec_sftp_session_closes_its_channel_while_connected`
+  (`crates/ssh-transport/tests/integration.rs`); das automatische Ausschalten
+  nutzt denselben Widerruf, ein eigenes Schließen kam nicht dazu. Der Prozess
+  auf dem Server bleibt „needs manual check on a real sshd“.
 - **KI/MCP-Regressionstest:** Er ist ein Zukunftsschutz und wäre auch vor
   der Änderung grün gewesen, weil die Orchestrierung den Kanal nie kannte.
   Sein Gegenbeweis ist deshalb ein absichtlich eingebauter Fehler
