@@ -1019,7 +1019,8 @@
       "privateKey": "Privat nøgle",
       "agent": "SSH-agent",
       "certificate": "Certifikat",
-      "identityFile": "Nøglefil"
+      "identityFile": "Nøglefil",
+      "keyboardInteractive": "Tastatur-interaktiv"
     },
     "detail": {
       "addresses": "Adresser: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Chiffer: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvist accepteret, yderligere godkendelse kræves",
-      "remainingMethods": "Serveren tilbyder også: {{methods}} (ikke prøvet)"
+      "remainingMethods": "Serveren tilbyder også: {{methods}} (ikke prøvet)",
+      "round": "Runde {{round}}",
+      "prompts": "Serverens forespørgsler: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-forbindelsen fik timeout",

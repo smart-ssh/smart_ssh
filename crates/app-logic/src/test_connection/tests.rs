@@ -1748,7 +1748,7 @@ impl Connector for RecordingConnector {
         _limits: ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
         let hop = "deploy@example.invalid:22";
-        let dns = log.start(
+        log.succeed(log.start(
             0,
             hop,
             ConnectStep::DnsResolution {
@@ -1756,9 +1756,8 @@ impl Connector for RecordingConnector {
                 port: 22,
                 addresses: vec!["192.0.2.7".into()],
             },
-        );
-        log.succeed(dns);
-        let handshake = log.start(
+        ));
+        log.succeed(log.start(
             0,
             hop,
             ConnectStep::Handshake {
@@ -1768,8 +1767,7 @@ impl Connector for RecordingConnector {
                 cipher: Some("chacha20-poly1305@openssh.com".into()),
                 mac: Some("none".into()),
             },
-        );
-        log.succeed(handshake);
+        ));
         let host_key = log.start(
             0,
             hop,

@@ -1024,7 +1024,8 @@
       "privateKey": "Chave privada",
       "agent": "Agente SSH",
       "certificate": "Certificado",
-      "identityFile": "Arquivo de chave"
+      "identityFile": "Arquivo de chave",
+      "keyboardInteractive": "Interativo por teclado"
     },
     "detail": {
       "addresses": "Endereços: {{addresses}}",
@@ -1033,7 +1034,9 @@
       "cipher": "Cifra: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceita parcialmente, autenticação adicional necessária",
-      "remainingMethods": "O servidor também oferece: {{methods}} (não tentados)"
+      "remainingMethods": "O servidor também oferece: {{methods}} (não tentados)",
+      "round": "Rodada {{round}}",
+      "prompts": "Solicitações do servidor: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "A conexão TCP expirou",

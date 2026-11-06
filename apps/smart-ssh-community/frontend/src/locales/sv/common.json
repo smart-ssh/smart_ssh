@@ -1019,7 +1019,8 @@
       "privateKey": "Privat nyckel",
       "agent": "SSH-agent",
       "certificate": "Certifikat",
-      "identityFile": "Nyckelfil"
+      "identityFile": "Nyckelfil",
+      "keyboardInteractive": "Tangentbordsinteraktiv"
     },
     "detail": {
       "addresses": "Adresser: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Chiffer: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtagen, ytterligare autentisering krävs",
-      "remainingMethods": "Servern erbjuder även: {{methods}} (ej försökt)"
+      "remainingMethods": "Servern erbjuder även: {{methods}} (ej försökt)",
+      "round": "Omgång {{round}}",
+      "prompts": "Serverns frågor: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-anslutningen översteg tidsgränsen",

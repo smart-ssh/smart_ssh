@@ -1019,7 +1019,8 @@
       "privateKey": "Privat nøkkel",
       "agent": "SSH-agent",
       "certificate": "Sertifikat",
-      "identityFile": "Nøkkelfil"
+      "identityFile": "Nøkkelfil",
+      "keyboardInteractive": "Tastaturinteraktiv"
     },
     "detail": {
       "addresses": "Adresser: {{addresses}}",
@@ -1028,7 +1029,9 @@
       "cipher": "Chiffer: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtatt, videre autentisering kreves",
-      "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)"
+      "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)",
+      "round": "Runde {{round}}",
+      "prompts": "Serverens spørsmål: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-tilkoblingen fikk tidsavbrudd",

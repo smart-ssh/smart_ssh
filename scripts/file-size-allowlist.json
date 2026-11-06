@@ -8,7 +8,7 @@
   "crates/app-logic/src/orchestration/action_exec/tests_files_and_ledger.rs": 2303,
   "crates/app-logic/src/orchestration/chat_turn/tests_compaction.rs": 2460,
   "crates/app-logic/src/orchestration/chat_turn/tests_continuation.rs": 2458,
-  "crates/app-logic/src/orchestration/notes.rs": 1597,
+  "crates/app-logic/src/orchestration/notes.rs": 1584,
   "crates/app-logic/src/orchestration/notes/tests.rs": 2582,
   "crates/app-logic/src/server_credentials.rs": 1752,
   "crates/app-logic/src/servers.rs": 2093,
@@ -27,5 +27,5 @@
   "crates/persistence-sqlite/src/backup_store.rs": 1224,
   "crates/persistence-sqlite/src/chat_session_store.rs": 1659,
   "crates/ssh-transport/src/local.rs": 1397,
-  "crates/ssh-transport/tests/integration.rs": 2664
+  "crates/ssh-transport/tests/integration.rs": 2648
 }

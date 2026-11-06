@@ -1014,7 +1014,8 @@
       "privateKey": "개인 키",
       "agent": "SSH 에이전트",
       "certificate": "인증서",
-      "identityFile": "키 파일"
+      "identityFile": "키 파일",
+      "keyboardInteractive": "키보드 대화형"
     },
     "detail": {
       "addresses": "주소: {{addresses}}",
@@ -1023,7 +1024,9 @@
       "cipher": "암호: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "부분적으로 수락됨, 추가 인증이 필요합니다",
-      "remainingMethods": "서버가 추가로 제공하는 방식: {{methods}} (시도하지 않음)"
+      "remainingMethods": "서버가 추가로 제공하는 방식: {{methods}} (시도하지 않음)",
+      "round": "{{round}}차",
+      "prompts": "서버 프롬프트: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP 연결 시간 초과",
