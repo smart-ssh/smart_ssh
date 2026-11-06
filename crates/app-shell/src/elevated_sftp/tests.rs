@@ -651,35 +651,9 @@ fn password_required_transport() -> (
     )
 }
 
-/// Captures everything the `tracing` events of the test thread write.
-#[derive(Clone, Default)]
-struct LogBuf(Arc<std::sync::Mutex<Vec<u8>>>);
-impl std::io::Write for LogBuf {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuf {
-    type Writer = LogBuf;
-    fn make_writer(&'a self) -> LogBuf {
-        self.clone()
-    }
-}
-
 #[tokio::test]
 async fn test_password_path_is_used_and_password_never_leaks() {
-    // Thread-local subscriber: the test runs on a current-thread runtime.
-    let logbuf = LogBuf::default();
-    let _guard = tracing::subscriber::set_default(
-        tracing_subscriber::fmt()
-            .with_writer(logbuf.clone())
-            .with_ansi(false)
-            .finish(),
-    );
+    let (logs, _capture) = crate::test_support::log_capture::capture_logs();
     let (t, log) = password_required_transport();
     let received = t.received_passwords.clone();
     let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
@@ -705,12 +679,17 @@ async fn test_password_path_is_used_and_password_never_leaks() {
     );
     assert!(cmd.ends_with(&format!(" {PATH}")), "{cmd}");
     assert!(!log.iter().any(|c| c.contains(STORED)), "{log:?}");
-    let audit: String = String::from_utf8(logbuf.0.lock().unwrap().clone())
+    let audit: Vec<String> = logs
+        .0
+        .lock()
         .unwrap()
-        .lines()
-        .filter(|l| l.contains("auditprobe"))
+        .iter()
+        .filter(|f| f.get("target_user").map(String::as_str) == Some("auditprobe"))
+        .map(|f| format!("{f:?}"))
         .collect();
-    assert!(audit.contains("sudo_auth=\"password\""), "{audit}");
+    assert_eq!(audit.len(), 1, "{audit:?}");
+    let audit = audit.concat();
+    assert!(audit.contains("\"password\""), "{audit}");
     assert!(!audit.contains(STORED));
     assert!(!format!("{result:?}").contains(STORED));
     assert!(f.is_active().await);
