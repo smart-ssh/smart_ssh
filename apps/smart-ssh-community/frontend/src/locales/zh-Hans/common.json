@@ -669,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
     "SESSION_NOT_FOUND": "此会话已不再打开。请从服务器列表重新打开。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件",
+    "SSH_NO_COMMON_ALGORITHM": "与服务器没有共同的 SSH 算法。其 SSH 软件过旧或限制过严。请更新，或启用现代算法。"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",
@@ -1001,14 +1002,16 @@
       "hostKeyCheck": "主机密钥检查",
       "authentication": "身份验证",
       "sessionReady": "会话已建立",
-      "dnsSkipped": "IP 地址 – 无需解析"
+      "dnsSkipped": "IP 地址 – 无需解析",
+      "outdatedAlgorithms": "过时的算法"
     },
     "status": {
       "ok": "正常",
       "running": "进行中",
       "failed": "失败（{{code}}）",
       "skipped": "已跳过",
-      "failedReason": "失败：{{reason}}"
+      "failedReason": "失败：{{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "已知",
@@ -1499,5 +1502,9 @@
     "title": "出了点问题",
     "body": "Smart SSH 的界面发生了意外错误。请重新加载后继续。如果再次发生，请在重新加载后到“设置 → 诊断”中创建诊断包。",
     "reload": "重新加载"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "此服务器使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新服务器的 SSH 软件。",
+    "outdatedAlgorithmsHop": "{{hop}} 使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新其 SSH 软件。"
   }
 }

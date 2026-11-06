@@ -42,6 +42,7 @@ fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {
 }
 
 pub use crate::status::ConnectionStatus;
+pub mod connect_warnings;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1577,7 +1578,6 @@ impl EventEmitter for TestEmitter {
 
 #[cfg(test)]
 mod payload_shape;
-
 #[cfg(test)]
 mod tests;
 

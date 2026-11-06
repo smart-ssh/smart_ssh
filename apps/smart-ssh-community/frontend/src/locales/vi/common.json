@@ -669,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Hãy chọn nhà cung cấp AI trước khi bật ý kiến thứ hai về rủi ro.",
     "SESSION_NOT_FOUND": "Phiên này không còn mở nữa. Hãy mở lại từ danh sách máy chủ.",
     "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này",
+    "SSH_NO_COMMON_ALGORITHM": "Không có thuật toán SSH chung với máy chủ. Phần mềm SSH của nó quá cũ hoặc quá hạn chế. Hãy cập nhật hoặc bật các thuật toán hiện đại."
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -1001,14 +1002,16 @@
       "hostKeyCheck": "Kiểm tra khóa máy chủ",
       "authentication": "Xác thực",
       "sessionReady": "Đã thiết lập phiên",
-      "dnsSkipped": "Địa chỉ IP – không cần phân giải"
+      "dnsSkipped": "Địa chỉ IP – không cần phân giải",
+      "outdatedAlgorithms": "Thuật toán lỗi thời"
     },
     "status": {
       "ok": "OK",
       "running": "đang tiến hành",
       "failed": "thất bại ({{code}})",
       "skipped": "đã bỏ qua",
-      "failedReason": "thất bại: {{reason}}"
+      "failedReason": "thất bại: {{reason}}",
+      "warning": "cảnh báo"
     },
     "hostKeyResult": {
       "known": "đã biết",
@@ -1499,5 +1502,9 @@
     "title": "Đã xảy ra lỗi",
     "body": "Smart SSH gặp lỗi không mong đợi trong giao diện. Hãy tải lại để tiếp tục. Nếu lỗi lặp lại, hãy tạo gói chẩn đoán trong Cài đặt → Chẩn đoán sau khi tải lại.",
     "reload": "Tải lại"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Máy chủ này dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của máy chủ nếu có thể.",
+    "outdatedAlgorithmsHop": "{{hop}} dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của nó nếu có thể."
   }
 }

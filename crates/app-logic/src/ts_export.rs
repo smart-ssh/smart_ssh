@@ -28,6 +28,7 @@ fn generate() -> String {
         ActionConfirmationSettledPayload, ConfirmationSettledReason,
     };
     use crate::dto::*;
+    use crate::events::connect_warnings::ConnectWarningsPayload;
     use crate::events::*;
     use crate::status::ConnectionStatus;
     use crate::version::BuildType;
@@ -44,7 +45,7 @@ fn generate() -> String {
         AuthMethodKind as ConnectAuthMethodKind, ConnectStep, ConnectStepRecord,
         HostKeyCheckResult, StepStatus,
     };
-    use ssh_manager_core::ssh::ConnectStepSnapshot;
+    use ssh_manager_core::ssh::{ConnectStepSnapshot, ConnectWarning};
     let decls = decls![
         ActionConfirmationSettledPayload,
         ActionOrigin,
@@ -71,6 +72,8 @@ fn generate() -> String {
         AuthPromptEndReason,
         AuthPromptEndedPayload,
         ConnectProgressPayload,
+        ConnectWarning,
+        ConnectWarningsPayload,
         TerminalOutputPayload,
         ChatTextDeltaPayload,
         ChatAutoContinuationStartedPayload,
@@ -226,6 +229,7 @@ fn event_payloads() -> String {
         (names::AUTH_PROMPT_NEEDED, "AuthPromptNeededPayload"),
         (names::AUTH_PROMPT_ENDED, "AuthPromptEndedPayload"),
         (names::CONNECT_PROGRESS, "ConnectProgressPayload"),
+        (names::CONNECT_WARNINGS, "ConnectWarningsPayload"),
         (names::TERMINAL_OUTPUT, "TerminalOutputPayload"),
         (names::CHAT_TEXT_DELTA, "ChatTextDeltaPayload"),
         (

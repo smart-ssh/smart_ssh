@@ -669,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Vælg en AI-udbyder, før du slår den anden vurdering af risiko til.",
     "SESSION_NOT_FOUND": "Denne session er ikke længere åben. Åbn den igen fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed",
+    "SSH_NO_COMMON_ALGORITHM": "Ingen SSH-algoritme er fælles med serveren. Dens SSH-software er for gammel eller for streng. Opdater den, eller aktiver moderne algoritmer."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -1006,14 +1007,16 @@
       "hostKeyCheck": "Kontrol af værtsnøgle",
       "authentication": "Godkendelse",
       "sessionReady": "Session oprettet",
-      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt"
+      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt",
+      "outdatedAlgorithms": "Forældede algoritmer"
     },
     "status": {
       "ok": "OK",
       "running": "i gang",
       "failed": "mislykkedes ({{code}})",
       "skipped": "sprunget over",
-      "failedReason": "mislykkedes: {{reason}}"
+      "failedReason": "mislykkedes: {{reason}}",
+      "warning": "advarsel"
     },
     "hostKeyResult": {
       "known": "kendt",
@@ -1507,5 +1510,9 @@
     "title": "Noget gik galt",
     "body": "Smart SSH stødte på en uventet fejl i brugerfladen. Genindlæs for at fortsætte. Sker det igen, så opret en diagnosepakke under Indstillinger → Diagnostik efter genindlæsningen.",
     "reload": "Genindlæs"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Denne server bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater serverens SSH-software, hvis du kan.",
+    "outdatedAlgorithmsHop": "{{hop}} bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater dens SSH-software, hvis du kan."
   }
 }
