@@ -65,6 +65,14 @@ pub(crate) async fn authenticate(
                 .await
                 .unwrap_or(None)
                 .flatten();
+            // Issue #1173: an RSA key signing with SHA-1 (`ssh-rsa`).
+            if private_key.algorithm().is_rsa() && hash_alg.is_none() {
+                steps.log.warn_outdated(
+                    steps.hop_index,
+                    steps.hop,
+                    vec![crate::algorithms::LEGACY_HOST_KEY.to_string()],
+                );
+            }
             let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), hash_alg);
             handle
                 .authenticate_publickey(hop.username.clone(), key_with_hash)

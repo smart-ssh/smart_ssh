@@ -144,6 +144,20 @@ impl russh::client::Handler for ClientHandler {
             }
         });
         self.steps.log.succeed(self.steps.handshake);
+        // Issue #1173: outdated algorithms are a warning, never a refusal.
+        let outdated = crate::algorithms::outdated(
+            names.kex.as_ref(),
+            names.key.as_str(),
+            names.cipher.as_ref(),
+            names.client_mac.as_ref(),
+            names.server_mac.as_ref(),
+            names.strict_kex(),
+        );
+        if !outdated.is_empty() {
+            self.steps
+                .log
+                .warn_outdated(self.steps.hop_index, &self.steps.hop, outdated);
+        }
         self.steps.host_key_step();
         Ok(())
     }

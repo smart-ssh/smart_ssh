@@ -92,7 +92,32 @@ pub enum ConnectStep {
     },
     /// Die SSH-Sitzung zum Ziel steht (letzter Hop angemeldet).
     SessionReady,
+    /// Issue #1173: this hop negotiated outdated algorithms (or no strict
+    /// key exchange). Recorded with status [`StepStatus::Warning`]; the
+    /// connection is not affected.
+    OutdatedAlgorithms { algorithms: Vec<String> },
 }
+
+/// Issue #1173: one hop of an established connection that uses outdated
+/// SSH algorithms. Algorithm names are not secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct ConnectWarning {
+    /// `user@host:port` of the affected hop.
+    pub hop: String,
+    /// Names of the outdated algorithms (the Terrapin warning is
+    /// [`STRICT_KEX_MISSING`]).
+    pub algorithms: Vec<String>,
+}
+
+/// Pseudo algorithm name for a server that does not support strict key
+/// exchange (`kex-strict-s-v00@openssh.com`, Terrapin, CVE-2023-48795).
+pub const STRICT_KEX_MISSING: &str = "kex-strict-s-v00@openssh.com (missing)";
+
+/// Stable code of the warning status of an [`ConnectStep::OutdatedAlgorithms`]
+/// step.
+pub const OUTDATED_ALGORITHMS_CODE: &str = "SSH_OUTDATED_ALGORITHMS";
 
 /// Ergebnis der Host-Key-Prüfung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -150,6 +175,11 @@ pub enum StepStatus {
     /// Der Schritt war nicht nötig (z. B. keine Namensauflösung für eine
     /// IP-Adresse).
     Skipped,
+    /// Issue #1173: the step succeeded but deserves the user's attention. It
+    /// does not count as failed. `code` is a stable code, never free text.
+    Warning {
+        code: String,
+    },
     /// Hier ist der Versuch gescheitert. `code` ist ein stabiler Code, nie
     /// freier Text.
     Failed {
@@ -282,6 +312,63 @@ impl ConnectLog {
         self.finish(id, StepStatus::Skipped);
     }
 
+    /// Issue #1173: records that `hop` negotiated outdated `algorithms`. The
+    /// step is born finished with status warning; it never fails the attempt.
+    pub fn warn_outdated(&self, hop_index: usize, hop: &str, algorithms: Vec<String>) {
+        // One warning per hop: a later finding for the same hop (for
+        // example the user key signature) extends the existing entry.
+        let existing = {
+            let mut entries = self.lock();
+            entries
+                .iter_mut()
+                .find(|e| {
+                    e.record.hop_index == hop_index
+                        && matches!(e.record.step, ConnectStep::OutdatedAlgorithms { .. })
+                })
+                .map(|e| {
+                    if let ConnectStep::OutdatedAlgorithms { algorithms: have } = &mut e.record.step
+                    {
+                        for a in &algorithms {
+                            if !have.contains(a) {
+                                have.push(a.clone());
+                            }
+                        }
+                    }
+                })
+                .is_some()
+        };
+        if existing {
+            self.notify();
+            return;
+        }
+        let id = self.start_silent(
+            hop_index,
+            hop,
+            ConnectStep::OutdatedAlgorithms { algorithms },
+        );
+        self.finish(
+            id,
+            StepStatus::Warning {
+                code: OUTDATED_ALGORITHMS_CODE.to_string(),
+            },
+        );
+    }
+
+    /// Issue #1173: the outdated-algorithm warnings recorded so far, one per
+    /// affected hop, in hop order of recording.
+    pub fn warnings(&self) -> Vec<ConnectWarning> {
+        self.lock()
+            .iter()
+            .filter_map(|e| match &e.record.step {
+                ConnectStep::OutdatedAlgorithms { algorithms } => Some(ConnectWarning {
+                    hop: e.record.hop.clone(),
+                    algorithms: algorithms.clone(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Beendet einen Schritt als gescheitert.
     pub fn fail(&self, id: StepId, code: &str) {
         self.finish(
@@ -378,10 +465,10 @@ pub struct ConnectStepSnapshot {
     pub hop_index: usize,
     /// Hop label (`user@host:port`, Spec 0076 naming).
     pub hop: String,
-    /// `running` | `ok` | `failed`.
+    /// `running` | `ok` | `skipped` | `warning` | `failed`.
     #[cfg_attr(
         feature = "ts-export",
-        ts(type = "\"running\" | \"ok\" | \"skipped\" | \"failed\"")
+        ts(type = "\"running\" | \"ok\" | \"skipped\" | \"warning\" | \"failed\"")
     )]
     pub status: String,
     /// Error code when `failed`.
@@ -414,6 +501,7 @@ impl ConnectStepSnapshot {
                     (_, true) | (StepStatus::Running, _) => ("running", None),
                     (StepStatus::Ok, _) => ("ok", None),
                     (StepStatus::Skipped, _) => ("skipped", None),
+                    (StepStatus::Warning { .. }, _) => ("warning", None),
                     (StepStatus::Failed { code }, _) => ("failed", Some(code.clone())),
                 };
                 let running = status == "running";
@@ -469,6 +557,7 @@ fn step_kind(step: &ConnectStep) -> &'static str {
         ConnectStep::HostKeyCheck { .. } => "hostKeyCheck",
         ConnectStep::Authentication { .. } => "authentication",
         ConnectStep::SessionReady => "sessionReady",
+        ConnectStep::OutdatedAlgorithms { .. } => "outdatedAlgorithms",
     }
 }
 
