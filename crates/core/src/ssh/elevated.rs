@@ -360,6 +360,44 @@ pub fn classify_sudo_check(output: &CommandOutput) -> SudoCheck {
 mod tests {
     use super::*;
 
+    #[test]
+    fn password_command_and_marker_shape() {
+        let marker = new_sudo_prompt_marker();
+        assert!(is_valid_sudo_prompt_marker(&marker), "{marker}");
+        assert_eq!(marker.len(), "smart-ssh-sudo-".len() + 16 + 1);
+        assert_ne!(marker, new_sudo_prompt_marker());
+        let cmd = elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", &marker)
+            .unwrap();
+        assert_eq!(
+            cmd,
+            format!("sudo -S -k -p '{marker}' /usr/lib/openssh/sftp-server")
+        );
+        let cmd =
+            elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "www-data", &marker)
+                .unwrap();
+        assert!(
+            cmd.contains(&format!("-p '{marker}' -u www-data /usr")),
+            "{cmd}"
+        );
+    }
+
+    #[test]
+    fn password_command_rejects_unsafe_markers() {
+        for bad in [
+            "",
+            "x:",
+            "smart-ssh-sudo-a b:",
+            "smart-ssh-sudo-%u:",
+            "smart-ssh-sudo-a';id:",
+        ] {
+            assert_eq!(
+                elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", bad),
+                Err(ElevationInputError::InvalidMarker),
+                "{bad}"
+            );
+        }
+    }
+
     /// Pins the exact bytes of the single shared quoting function.
     #[test]
     fn shell_single_quote_exact_output() {
