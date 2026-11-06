@@ -398,6 +398,16 @@ again, but not the red-risk check
 
 Risks we know about and accept, with the reason.
 
+- **Outdated SSH algorithms are negotiable
+  ([Spec 0005](docs/specs/0005-ssh-module.md), issue #1173).** After all
+  current algorithms the client also offers legacy ones (SHA-1 key
+  exchange and MAC, CBC ciphers, `ssh-rsa`) so old servers stay reachable.
+  A downgrade needs a server that offers nothing better: current algorithms
+  are listed first, and the key exchange hash covers both algorithm lists, so
+  a man in the middle cannot strip modern ones unnoticed. Every negotiated
+  legacy algorithm, and a missing strict key exchange (Terrapin), is shown
+  to the user as a warning; the connection is not refused. Accepted so
+  that legacy devices work; mitigation: update the server.
 - **Redaction is pattern-based.** Unknown secret formats reach the AI
   provider (section 2). Accepted because a generic entropy fallback would
   break the copilot's usefulness without closing the gap

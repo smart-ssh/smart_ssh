@@ -280,6 +280,8 @@ pub(crate) fn client_config() -> client::Config {
         nodelay: true,
         keepalive_interval: Some(KEEPALIVE_INTERVAL),
         keepalive_max: KEEPALIVE_MAX,
+        // Issue #1173: defaults first, legacy algorithms after them.
+        preferred: crate::algorithms::preferred(),
         ..Default::default()
     }
 }
@@ -304,16 +306,15 @@ async fn connect_inner(
     let config = Arc::new(config);
     let (loss_tx, loss_rx) = tokio::sync::watch::channel(None);
 
-    let mut hops = RusshHops {
+    let mut hops = RusshHops::new(
         config,
-        loss: Arc::new(loss_tx),
+        Arc::new(loss_tx),
         host_keys,
         credentials,
         key_files,
         prompter,
-        pause: Arc::new(AuthPause::new()),
         log,
-    };
+    );
     let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {
         Chain::Ready(sessions) => sessions,
         Chain::HostKeyPending(outcome) => return Ok(outcome),
@@ -453,8 +454,33 @@ struct RusshHops<'a> {
     key_files: &'a (dyn KeyFileReader + Send + Sync),
     prompter: &'a dyn AuthPrompter,
     /// Issue #1184: stops the authentication limit while the user is asked.
+    /// Issue #1187: always the attempt log's pause, so the app's outer
+    /// connect limit stands still too.
     pause: Arc<AuthPause>,
     log: &'a ConnectLog,
+}
+
+impl<'a> RusshHops<'a> {
+    fn new(
+        config: Arc<client::Config>,
+        loss: Arc<tokio::sync::watch::Sender<Option<ssh_manager_core::ssh::ConnectionLoss>>>,
+        host_keys: Arc<dyn HostKeyStore>,
+        credentials: &'a (dyn CredentialStore + Send + Sync),
+        key_files: &'a (dyn KeyFileReader + Send + Sync),
+        prompter: &'a dyn AuthPrompter,
+        log: &'a ConnectLog,
+    ) -> Self {
+        Self {
+            config,
+            loss,
+            host_keys,
+            credentials,
+            key_files,
+            prompter,
+            pause: log.prompt_pause(),
+            log,
+        }
+    }
 }
 
 #[async_trait]
@@ -484,7 +510,7 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), socket, handler).await;
-        match resolve_or_pending(connect_result, &hop.host, hop.port) {
+        match resolve_or_pending(connect_result, hop) {
             Ok(Ok(handle)) => Ok(Opened::Ready(handle)),
             Ok(Err(outcome)) => Ok(Opened::HostKeyPending(outcome)),
             Err(err) => Err(diagnose_connection_failed_dns(err, &hop.host, hop.port).await),
@@ -526,12 +552,10 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), stream, handler).await;
-        Ok(
-            match resolve_or_pending(connect_result, &hop.host, hop.port)? {
-                Ok(handle) => Opened::Ready(handle),
-                Err(outcome) => Opened::HostKeyPending(outcome),
-            },
-        )
+        Ok(match resolve_or_pending(connect_result, hop)? {
+            Ok(handle) => Opened::Ready(handle),
+            Err(outcome) => Opened::HostKeyPending(outcome),
+        })
     }
 
     async fn authenticate(
@@ -658,9 +682,10 @@ fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
 /// `Err(SshError)` (äußeres `Result`, propagiert per `?`).
 fn resolve_or_pending<H>(
     result: Result<H, TransportError>,
-    host: &str,
-    port: u16,
+    hop: &Hop,
 ) -> Result<Result<H, ConnectOutcome>, SshError> {
+    let (host, port) = (hop.host.as_str(), hop.port);
+    let result = crate::algorithms::typed_no_common_algorithm(result, hop)?;
     match result {
         Ok(handle) => Ok(Ok(handle)),
         Err(TransportError::HostKey { raw_key, decision }) => {
@@ -1160,3 +1185,7 @@ mod ip_literal_tests {
         assert!(parse_ip_literal("").is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "connect/tests_prompt_pause.rs"]
+mod prompt_pause_wiring_tests;

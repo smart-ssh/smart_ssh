@@ -332,6 +332,7 @@ export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
   | { state: "skipped" }
+  | { state: "warning"; code: string }
   | { state: "failed"; code: string };
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`

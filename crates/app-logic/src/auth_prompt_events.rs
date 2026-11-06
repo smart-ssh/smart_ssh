@@ -29,6 +29,8 @@ pub(crate) struct AuthPromptItemPayload {
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub(crate) struct AuthPromptNeededPayload {
     prompt_id: String,
+    /// Identifies the connect that asks; later rounds of the same login share it.
+    connect_id: String,
     /// `user@host:port` of the hop that asks.
     hop: String,
     /// `keyboard_interactive` or `password`.
@@ -41,6 +43,7 @@ pub(crate) struct AuthPromptNeededPayload {
 pub fn emit_auth_prompt_needed(
     emitter: &dyn EventEmitter,
     prompt_id: &str,
+    connect_id: &str,
     request: &ssh_manager_core::ssh::AuthPromptRequest,
 ) {
     use ssh_manager_core::ssh::AuthPromptKind;
@@ -68,6 +71,7 @@ pub fn emit_auth_prompt_needed(
         names::AUTH_PROMPT_NEEDED,
         &AuthPromptNeededPayload {
             prompt_id: prompt_id.to_string(),
+            connect_id: connect_id.to_string(),
             hop: request.hop.clone(),
             kind,
             name,

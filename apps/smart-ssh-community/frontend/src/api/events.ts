@@ -41,6 +41,9 @@ export const onAuthPromptEnded = typedListener(EVENT.AUTH_PROMPT_ENDED);
 /** Issue #546: live step list of a running `connect`. */
 export const onConnectProgress = typedListener(EVENT.CONNECT_PROGRESS);
 
+/** Issue #1173: an established connection uses outdated SSH algorithms. */
+export const onConnectWarnings = typedListener(EVENT.CONNECT_WARNINGS);
+
 export const onTerminalOutput = typedListener(EVENT.TERMINAL_OUTPUT);
 
 export const onChatTextDelta = typedListener(EVENT.CHAT_TEXT_DELTA);

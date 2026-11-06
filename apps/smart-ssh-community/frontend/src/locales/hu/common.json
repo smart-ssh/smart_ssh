@@ -669,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "A kockázati második vélemény bekapcsolása előtt válasszon AI-szolgáltatót.",
     "SESSION_NOT_FOUND": "Ez a munkamenet már nincs megnyitva. Nyisd meg újra a szerverlistából.",
     "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön",
+    "SSH_NO_COMMON_ALGORITHM": "Nincs közös SSH-algoritmus a szerverrel. Az SSH-szoftvere túl régi vagy túl szigorú. Frissítse, vagy engedélyezzen modern algoritmusokat."
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -1007,14 +1008,16 @@
       "hostKeyCheck": "Gazdakulcs ellenőrzése",
       "authentication": "Hitelesítés",
       "sessionReady": "Munkamenet létrejött",
-      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra"
+      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra",
+      "outdatedAlgorithms": "Elavult algoritmusok"
     },
     "status": {
       "ok": "OK",
       "running": "folyamatban",
       "failed": "sikertelen ({{code}})",
       "skipped": "kihagyva",
-      "failedReason": "sikertelen: {{reason}}"
+      "failedReason": "sikertelen: {{reason}}",
+      "warning": "figyelmeztetés"
     },
     "hostKeyResult": {
       "known": "ismert",
@@ -1508,5 +1511,9 @@
     "title": "Valami elromlott",
     "body": "A Smart SSH váratlan hibába ütközött a felületen. A folytatáshoz töltse újra. Ha ismét előfordul, az újratöltés után hozzon létre diagnosztikai csomagot a Beállítások → Diagnosztika alatt.",
     "reload": "Újratöltés"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ez a szerver elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse a szerver SSH-szoftverét.",
+    "outdatedAlgorithmsHop": "{{hop}} elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse az SSH-szoftverét."
   }
 }
