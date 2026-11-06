@@ -5,6 +5,8 @@
 # hmac-sha1) in their own sshd_config.
 FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS build
 RUN apk add --no-cache build-base perl linux-headers zlib-dev curl
+# alpine's fortify wrappers clash with the realpath() compat shim of OpenSSH 7.4
+RUN rm -rf /usr/include/fortify
 WORKDIR /src
 RUN curl -fsSLO https://www.openssl.org/source/old/1.0.2/openssl-1.0.2u.tar.gz \
  && echo 'ecd0c6ffb493dd06707d38b14bb4d8c2288bb7033735606569d8f90f89669d16  openssl-1.0.2u.tar.gz' | sha256sum -c - \
@@ -14,7 +16,7 @@ RUN curl -fsSLO https://www.openssl.org/source/old/1.0.2/openssl-1.0.2u.tar.gz \
 RUN curl -fsSLO https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.4p1.tar.gz \
  && echo '1b1fc4a14e2024293181924ed24872e6f2e06293f3e8926a376b8aec481f19d1  openssh-7.4p1.tar.gz' | sha256sum -c - \
  && tar xzf openssh-7.4p1.tar.gz && cd openssh-7.4p1 \
- && CFLAGS="-O2 -D_FORTIFY_SOURCE=0" ./configure --prefix=/usr/local --sysconfdir=/etc/ssh --with-ssl-dir=/opt/openssl \
+ && ./configure --prefix=/usr/local --sysconfdir=/etc/ssh --with-ssl-dir=/opt/openssl \
       --with-privsep-path=/var/empty --without-pam \
  && make -j"$(nproc)" && make DESTDIR=/out install-nokeys
 
