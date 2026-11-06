@@ -231,6 +231,49 @@ pub struct ConnectLog {
     /// Issue #546: optional live sink, called synchronously with the full
     /// snapshot after every change. Shared by clones like `entries`.
     sink: Option<ProgressSink>,
+    /// Issue #1187: shared by clones; the transport holds it while a login
+    /// prompt is open, so every time limit around the attempt stands still.
+    prompt_pause: Arc<PromptPause>,
+}
+
+/// Issue #1184/#1187: a flag that is held while the user is asked for a
+/// login answer. Time limits watch it and stop counting while it is held.
+pub struct PromptPause {
+    tx: tokio::sync::watch::Sender<bool>,
+}
+
+impl Default for PromptPause {
+    fn default() -> Self {
+        Self {
+            tx: tokio::sync::watch::channel(false).0,
+        }
+    }
+}
+
+impl PromptPause {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pauses until the returned guard is dropped (also when the waiting
+    /// future is cancelled).
+    pub fn pause(&self) -> PauseGuard<'_> {
+        self.tx.send_replace(true);
+        PauseGuard(self)
+    }
+
+    /// Watches the paused state.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.tx.subscribe()
+    }
+}
+
+pub struct PauseGuard<'a>(&'a PromptPause);
+
+impl Drop for PauseGuard<'_> {
+    fn drop(&mut self) {
+        self.0.tx.send_replace(false);
+    }
 }
 
 /// Receives the full progress snapshot of an attempt whenever a step starts,
@@ -257,7 +300,13 @@ impl ConnectLog {
         Self {
             entries: Arc::default(),
             sink: Some(sink),
+            prompt_pause: Arc::default(),
         }
+    }
+
+    /// The pause shared with the transport (Issue #1187).
+    pub fn prompt_pause(&self) -> Arc<PromptPause> {
+        self.prompt_pause.clone()
     }
 
     /// Reports the current state to the sink, if any. Called after the lock
