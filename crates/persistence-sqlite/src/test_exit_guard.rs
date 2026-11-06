@@ -110,6 +110,7 @@ fn worker_threads() -> usize {
 #[allow(unsafe_code)]
 fn worker_threads() -> usize {
     extern "C" {
+        static mach_task_self_: libc::mach_port_t;
         fn mach_port_deallocate(task: libc::mach_port_t, name: libc::mach_port_t) -> libc::c_int;
     }
 
@@ -118,7 +119,7 @@ fn worker_threads() -> usize {
     // SAFETY: `task_threads` fills `list`/`count` with a vm-allocated array of
     // send rights, which is released below (rights, then the array itself).
     unsafe {
-        let task = libc::mach_task_self();
+        let task = mach_task_self_;
         if libc::task_threads(task, &mut list, &mut count) != 0 || list.is_null() {
             return 0;
         }
@@ -126,7 +127,7 @@ fn worker_threads() -> usize {
         for i in 0..count as usize {
             let port = *list.add(i);
             let pthread = libc::pthread_from_mach_thread_np(port);
-            if !pthread.is_null() {
+            if pthread != 0 {
                 let mut name = [0 as libc::c_char; 64];
                 if libc::pthread_getname_np(pthread, name.as_mut_ptr(), name.len()) == 0 {
                     let bytes: Vec<u8> = name
