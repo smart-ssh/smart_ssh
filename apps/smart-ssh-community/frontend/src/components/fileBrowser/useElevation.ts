@@ -36,6 +36,8 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
   const [otherUserDraft, setOtherUserDraft] = useState("root");
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const [elevationWarning, setElevationWarning] = useState<string | null>(null);
+  // Issue #1192: the elevated channel logs on the server.
+  const [serverLogging, setServerLogging] = useState(false);
   const [stopPrompt, setStopPrompt] = useState<StopPrompt | null>(null);
 
   const elevated = elevation !== null;
@@ -57,7 +59,10 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
   const updateElevation = (next: { targetUser: string } | null, backendDone = false) => {
     elevationGenerationRef.current += 1;
     setElevation(next);
-    if (next === null) setElevationWarning(null);
+    if (next === null) {
+      setElevationWarning(null);
+      setServerLogging(false);
+    }
     onElevationChangeRef.current?.(next?.targetUser ?? null);
     if (next === null && !backendDone) {
       sftpElevationDisable(sessionId).catch((err) =>
@@ -95,6 +100,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
       if (result.active) {
         updateElevation({ targetUser: result.targetUser });
         setElevationWarning(result.warning?.path ?? null);
+        setServerLogging(result.serverLogging === true);
         reloadRef.current(result.targetUser);
       } else {
         setElevationFailure(result);
@@ -107,6 +113,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         failure: { kind: "checkFailed", sudoersLine: null, detail: commandErrorMessage(err) },
         warning: null,
         runningOperations: [],
+        serverLogging: false,
       });
     } finally {
       setEnablingElevation(false);
@@ -171,6 +178,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
     elevationFailure,
     setElevationFailure,
     elevationWarning,
+    serverLogging,
     stopPrompt,
     setStopPrompt,
     updateElevation,

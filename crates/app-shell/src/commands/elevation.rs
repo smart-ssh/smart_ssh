@@ -500,6 +500,7 @@ impl BrowserSftpGuard<'_> {
             } => Some(ElevatedAudit {
                 user: expected_user.clone(),
                 sudo_auth: slot.sudo_auth(),
+                server_logging: slot.server_logging(),
             }),
         }
     }
@@ -635,6 +636,7 @@ pub async fn sftp_elevation_enable(
             }),
             warning: None,
             running_operations: Vec::new(),
+            server_logging: false,
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;
@@ -775,6 +777,7 @@ mod browser_channel_tests {
             crate::elevated_sftp::ElevatedSftp {
                 target_user: target_user.to_string(),
                 sudo_auth: Default::default(),
+                server_logging: false,
                 sftp: Box::new(sftp),
             },
         );

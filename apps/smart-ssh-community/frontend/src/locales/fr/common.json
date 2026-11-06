@@ -782,6 +782,7 @@
     "opDelete": "Suppression",
     "opChmod": "Modification des droits",
     "banner": "Droits élevés actifs : toutes les actions sur les fichiers dans cet explorateur s’exécutent en tant que {{user}}.",
+    "bannerLogged": "Journalisé sur le serveur.",
     "deleteFileTitle": "Supprimer le fichier en tant que {{user}} ?",
     "deleteDirTitle": "Supprimer le dossier en tant que {{user}} ?",
     "overwriteTitle": "Écraser le fichier en tant que {{user}} ?",

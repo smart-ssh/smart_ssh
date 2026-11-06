@@ -772,6 +772,7 @@
     "opDelete": "削除",
     "opChmod": "権限の変更",
     "banner": "昇格した権限が有効です: このブラウザーでのすべてのファイル操作は {{user}} として実行されます。",
+    "bannerLogged": "サーバー上で記録されます。",
     "deleteFileTitle": "{{user}} としてファイルを削除しますか？",
     "deleteDirTitle": "{{user}} としてフォルダーを削除しますか？",
     "overwriteTitle": "{{user}} としてファイルを上書きしますか？",

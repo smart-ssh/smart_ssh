@@ -777,6 +777,7 @@
     "opDelete": "Poisto",
     "opChmod": "Oikeuksien muutos",
     "banner": "Korotetut oikeudet käytössä: kaikki tämän selaimen tiedostotoiminnot suoritetaan käyttäjänä {{user}}.",
+    "bannerLogged": "Kirjataan palvelimelle.",
     "deleteFileTitle": "Poistetaanko tiedosto käyttäjänä {{user}}?",
     "deleteDirTitle": "Poistetaanko kansio käyttäjänä {{user}}?",
     "overwriteTitle": "Korvataanko tiedosto käyttäjänä {{user}}?",

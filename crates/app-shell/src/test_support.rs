@@ -98,6 +98,12 @@ pub(crate) mod elevation {
         prepared_channels: Arc<StdMutex<std::collections::VecDeque<Box<dyn SftpSession>>>>,
         /// Issue #1191: how the password path ends; `None` = success.
         pub(crate) password_failure: Option<fn() -> ssh_manager_core::ssh::SudoPromptError>,
+        /// Issue #1192: `password_failure` only applies to a command with the
+        /// logging arguments (the plain retry then succeeds).
+        pub(crate) password_failure_only_logging: bool,
+        /// Issue #1192: answer to `sudo -l` for the logging variant, if it
+        /// differs from `sudo_check` (which then answers the plain one).
+        pub(crate) logging_check: Option<CommandOutput>,
         /// Issue #1191: every password the password path received.
         pub(crate) received_passwords: Arc<StdMutex<Vec<String>>>,
     }
@@ -118,7 +124,12 @@ pub(crate) mod elevation {
             if command.contains("-prune") {
                 Ok(self.safety.clone())
             } else if command.contains("sudo -n") && command.contains(" -l ") {
-                Ok(self.sudo_check.clone())
+                match &self.logging_check {
+                    Some(logging) if command.ends_with("-l INFO -f AUTHPRIV") => {
+                        Ok(logging.clone())
+                    }
+                    _ => Ok(self.sudo_check.clone()),
+                }
             } else {
                 Ok(self.probe.clone())
             }
@@ -168,7 +179,9 @@ pub(crate) mod elevation {
                 .lock()
                 .unwrap()
                 .push(secrecy::ExposeSecret::expose_secret(password).to_string());
-            match self.password_failure {
+            let applies =
+                !self.password_failure_only_logging || command.ends_with("-l INFO -f AUTHPRIV");
+            match self.password_failure.filter(|_| applies) {
                 Some(make) => Err(make()),
                 None => Ok(Box::new(MockSftpSession::new())),
             }
@@ -194,6 +207,8 @@ pub(crate) mod elevation {
                 open_gate: None,
                 prepared_channels: Arc::new(StdMutex::new(std::collections::VecDeque::new())),
                 password_failure: None,
+                password_failure_only_logging: false,
+                logging_check: None,
                 received_passwords: Arc::new(StdMutex::new(Vec::new())),
             },
             log,

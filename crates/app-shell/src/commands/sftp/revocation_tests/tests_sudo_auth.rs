@@ -11,6 +11,7 @@ async fn test_change_audit_line_records_password_sudo_auth() {
         ElevatedSftp {
             target_user: "root".to_string(),
             sudo_auth: crate::elevated_sftp::SudoAuth::Password,
+            server_logging: false,
             sftp: Box::new(elevated.clone()),
         },
     );

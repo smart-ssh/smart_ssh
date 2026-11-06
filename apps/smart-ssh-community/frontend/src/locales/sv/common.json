@@ -777,6 +777,7 @@
     "opDelete": "Borttagning",
     "opChmod": "Ändring av behörigheter",
     "banner": "Förhöjda rättigheter aktiva: alla filåtgärder i den här bläddraren körs som {{user}}.",
+    "bannerLogged": "Loggas på servern.",
     "deleteFileTitle": "Ta bort filen som {{user}}?",
     "deleteDirTitle": "Ta bort mappen som {{user}}?",
     "overwriteTitle": "Skriva över filen som {{user}}?",

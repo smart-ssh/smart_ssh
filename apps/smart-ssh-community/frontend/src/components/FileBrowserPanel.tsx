@@ -102,6 +102,7 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
     otherUserDraft,
     setOtherUserDraft,
     elevationWarning,
+    serverLogging,
     updateElevation,
     handleToggleElevation,
   } = elev;
@@ -248,6 +249,7 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
         <ElevationBanner
           elevatedUser={elevatedUser}
           warningPath={elevationWarning}
+          serverLogging={serverLogging}
           onToggleOff={() => handleToggleElevation()}
         />
       )}

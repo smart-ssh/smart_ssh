@@ -89,8 +89,13 @@ oder den KI-Kontext.
 - Der Override bzw. erkannte Pfad muss auf `sftp-server` enden. So lässt
   sich kein `/bin/sh` mit sudo starten und keine NOPASSWD-Regel dafür
   anzeigen.
-- Die sudoers-Zeile endet mit `""`: `sftp-server` darf nur ohne Argumente
-  laufen, genau so startet die App ihn. Bei Logins mit
+- Die sudoers-Zeile endet mit `-l INFO -f AUTHPRIV` (Issue #1192):
+  `sftp-server` darf nur mit genau diesen Argumenten laufen, damit jede
+  Anfrage im Auth-Log des Servers steht (vorher `""`: nur ohne Argumente).
+  Die Argumente sind eine Konstante, nie Eingabe. Die Probe prüft zuerst
+  die Variante mit Argumenten, dann die ohne (bestehende Regeln mit `""`
+  laufen unverändert, ohne Server-Logging). Der Passwortweg startet mit den
+  Argumenten und versucht es bei „not allowed“ einmal ohne. Bei Logins mit
   sudoers-Sonderzeichen zeigt die App keine Zeile statt einer falschen.
 - Downloads im erhöhten Modus und Temp-Dateien des Bearbeiten-Flows werden
   direkt mit 0600 angelegt.
