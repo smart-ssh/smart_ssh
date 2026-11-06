@@ -280,6 +280,8 @@ pub(crate) fn client_config() -> client::Config {
         nodelay: true,
         keepalive_interval: Some(KEEPALIVE_INTERVAL),
         keepalive_max: KEEPALIVE_MAX,
+        // Issue #1173: defaults first, legacy algorithms after them.
+        preferred: crate::algorithms::preferred(),
         ..Default::default()
     }
 }
@@ -484,7 +486,7 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), socket, handler).await;
-        match resolve_or_pending(connect_result, &hop.host, hop.port) {
+        match resolve_or_pending(connect_result, hop) {
             Ok(Ok(handle)) => Ok(Opened::Ready(handle)),
             Ok(Err(outcome)) => Ok(Opened::HostKeyPending(outcome)),
             Err(err) => Err(diagnose_connection_failed_dns(err, &hop.host, hop.port).await),
@@ -526,12 +528,10 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), stream, handler).await;
-        Ok(
-            match resolve_or_pending(connect_result, &hop.host, hop.port)? {
-                Ok(handle) => Opened::Ready(handle),
-                Err(outcome) => Opened::HostKeyPending(outcome),
-            },
-        )
+        Ok(match resolve_or_pending(connect_result, hop)? {
+            Ok(handle) => Opened::Ready(handle),
+            Err(outcome) => Opened::HostKeyPending(outcome),
+        })
     }
 
     async fn authenticate(
@@ -658,9 +658,10 @@ fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
 /// `Err(SshError)` (äußeres `Result`, propagiert per `?`).
 fn resolve_or_pending<H>(
     result: Result<H, TransportError>,
-    host: &str,
-    port: u16,
+    hop: &Hop,
 ) -> Result<Result<H, ConnectOutcome>, SshError> {
+    let (host, port) = (hop.host.as_str(), hop.port);
+    let result = crate::algorithms::typed_no_common_algorithm(result, hop)?;
     match result {
         Ok(handle) => Ok(Ok(handle)),
         Err(TransportError::HostKey { raw_key, decision }) => {

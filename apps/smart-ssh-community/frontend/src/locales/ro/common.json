@@ -669,7 +669,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Alegeți un furnizor AI înainte de a activa a doua opinie despre risc.",
     "SESSION_NOT_FOUND": "Această sesiune nu mai este deschisă. Deschide-o din nou din lista de servere.",
     "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv",
+    "SSH_NO_COMMON_ALGORITHM": "Niciun algoritm SSH în comun cu serverul. Software-ul lui SSH este prea vechi sau prea restrictiv. Actualizează-l sau activează algoritmi moderni."
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -1011,14 +1012,16 @@
       "hostKeyCheck": "Verificarea cheii de host",
       "authentication": "Autentificare",
       "sessionReady": "Sesiune stabilită",
-      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare"
+      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare",
+      "outdatedAlgorithms": "Algoritmi învechiți"
     },
     "status": {
       "ok": "OK",
       "running": "în curs",
       "failed": "eșuat ({{code}})",
       "skipped": "omis",
-      "failedReason": "eșuat: {{reason}}"
+      "failedReason": "eșuat: {{reason}}",
+      "warning": "avertisment"
     },
     "hostKeyResult": {
       "known": "cunoscută",
@@ -1515,5 +1518,9 @@
     "title": "Ceva nu a mers bine",
     "body": "Smart SSH a întâlnit o eroare neașteptată în interfață. Reîncarcă pentru a continua. Dacă se repetă, după reîncărcare creează un pachet de diagnosticare în Setări → Diagnosticare.",
     "reload": "Reîncarcă"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Acest server folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul SSH al serverului, dacă poți.",
+    "outdatedAlgorithmsHop": "{{hop}} folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul lui SSH, dacă poți."
   }
 }
