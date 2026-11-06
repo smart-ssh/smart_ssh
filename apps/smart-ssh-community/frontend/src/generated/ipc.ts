@@ -34,7 +34,7 @@ export type AuthPromptEndedPayload = { promptId: string, reason: AuthPromptEndRe
 
 export type AuthPromptItemPayload = { text: string, echo: boolean, };
 
-export type AuthPromptNeededPayload = { promptId: string, hop: string, kind: string, name: string, instructions: string, prompts: Array<AuthPromptItemPayload>, };
+export type AuthPromptNeededPayload = { promptId: string, connectId: string, hop: string, kind: string, name: string, instructions: string, prompts: Array<AuthPromptItemPayload>, };
 
 export type AutoExecRuleDto = { ruleId: RuleId, patternType: PatternType, patternValue: string, scope: Scope, segmentIndices: Array<number>, };
 

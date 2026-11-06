@@ -16,6 +16,7 @@ vi.mock("../api/events", () => ({
 
 const kbd: AuthPromptNeededEvent = {
   promptId: "p1",
+  connectId: "c1",
   hop: "root@prod-1:22",
   kind: "keyboard_interactive",
   name: "Two factor",
@@ -129,5 +130,50 @@ describe("AuthPromptHost", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     end({ promptId: "p1", reason: "abandoned" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("queues prompts of different connects and shows them one after another", async () => {
+    const { show } = renderHost();
+    show(kbd);
+    show({ ...kbd, promptId: "q2", connectId: "c2", hop: "root@prod-2:22" });
+    let dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading")).toHaveTextContent("root@prod-1:22");
+    expect(cancelAuthPrompt).not.toHaveBeenCalled();
+    expect(answerAuthPrompt).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(cancelAuthPrompt).toHaveBeenCalledWith("p1"));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveTextContent("root@prod-2:22"),
+    );
+    dialog = screen.getByRole("dialog");
+    await waitFor(() => expect(within(dialog).getByLabelText("Password:")).toHaveFocus());
+    fireEvent.submit(within(dialog).getByLabelText("Password:").closest("form")!);
+    expect(answerAuthPrompt).toHaveBeenCalledWith("q2", ["", ""]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("removes a queued prompt on auth-prompt-ended and keeps the open dialog", async () => {
+    const { show, end } = renderHost();
+    show(kbd);
+    show({ ...kbd, promptId: "q2", connectId: "c2", hop: "root@prod-2:22" });
+    await screen.findByRole("dialog");
+    end({ promptId: "q2", reason: "abandoned" });
+    expect(screen.getByRole("dialog")).toHaveTextContent("root@prod-1:22");
+    end({ promptId: "p1", reason: "cancelled" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("replaces a connect's own queued prompt with its next round", async () => {
+    const { show, end } = renderHost();
+    show(kbd);
+    show({ ...kbd, promptId: "q2", connectId: "c2", hop: "root@prod-2:22" });
+    show({ ...kbd, promptId: "q3", connectId: "c2", hop: "root@prod-2:22" });
+    await screen.findByRole("dialog");
+    end({ promptId: "p1", reason: "cancelled" });
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("prod-2"));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(cancelAuthPrompt).toHaveBeenCalledWith("q3"));
+    expect(cancelAuthPrompt).not.toHaveBeenCalledWith("q2");
   });
 });
