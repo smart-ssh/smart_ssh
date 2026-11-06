@@ -266,7 +266,7 @@ async fn ensure_remote_dir(
         )),
         None => {
             let result = sftp.create_dir(path).await;
-            audit_elevated_change(elevated_user.as_deref(), "mkdir", path, result.is_ok());
+            audit_elevated_change(elevated_user.as_ref(), "mkdir", path, result.is_ok());
             result?;
             Ok(true)
         }

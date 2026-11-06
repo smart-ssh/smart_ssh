@@ -1,7 +1,7 @@
 //! Spec 0067, Teil A: reine Logik für den Dateibrowser mit erhöhten Rechten.
 //! Der SFTP-Server wird per `sudo -n <sftp-server>` über einen Exec-Kanal
-//! gestartet (Weg A, wie WinSCP). Nur passwortloses sudo — ein Passwort wird
-//! nie verarbeitet. Hier nur Kommando-Bau, Pfad-/Nutzer-Validierung und
+//! gestartet (Weg A, wie WinSCP). Passwortloses sudo, oder (Issue #1191) mit
+//! dem gespeicherten sudo-Passwort über einen Prompt-Marker. Hier nur Kommando-Bau, Pfad-/Nutzer-Validierung und
 //! Auswertung der Probe-Ausgaben; die Kanal-Erzeugung lebt im Transport.
 
 use super::CommandOutput;
@@ -217,6 +217,7 @@ fn user_args(user: &str) -> String {
 pub enum ElevationInputError {
     InvalidPath,
     InvalidUser,
+    InvalidMarker,
 }
 
 fn validate(path: &str, user: &str) -> Result<(), ElevationInputError> {
@@ -244,6 +245,48 @@ pub fn sudo_check_command(path: &str, user: &str) -> Result<String, ElevationInp
 pub fn elevated_sftp_command(path: &str, user: &str) -> Result<String, ElevationInputError> {
     validate(path, user)?;
     Ok(format!("sudo -n{} {path}", user_args(user)))
+}
+
+/// Issue #1191: prefix of the random prompt marker of the password path.
+const SUDO_MARKER_PREFIX: &str = "smart-ssh-sudo-";
+
+/// A fresh random prompt marker, `smart-ssh-sudo-<16 hex chars>:`, one per
+/// activation. sudo prints it as its password prompt (`-p`); the password is
+/// only written once it was seen on stderr.
+pub fn new_sudo_prompt_marker() -> String {
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    format!("{SUDO_MARKER_PREFIX}{}:", &id[..16])
+}
+
+/// A marker is safe for the unquoted `-p '<marker>'` argument: only letters,
+/// digits, `-` and a trailing `:` (no `%`, which sudo expands in prompts).
+pub fn is_valid_sudo_prompt_marker(marker: &str) -> bool {
+    marker.starts_with(SUDO_MARKER_PREFIX)
+        && marker.ends_with(':')
+        && marker.len() <= 64
+        && marker[..marker.len() - 1]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+/// Issue #1191: exec command of the password path: `sudo -S -k -p '<marker>'
+/// [-u <user>] <path>`. `-S` reads the password from stdin, `-k` ignores a
+/// cached timestamp so a prompt is expected. The password is never part of
+/// the command text.
+pub fn elevated_sftp_password_command(
+    path: &str,
+    user: &str,
+    marker: &str,
+) -> Result<String, ElevationInputError> {
+    validate(path, user)?;
+    if !is_valid_sudo_prompt_marker(marker) {
+        return Err(ElevationInputError::InvalidMarker);
+    }
+    Ok(format!(
+        "sudo -S -k -p {}{} {path}",
+        shell_single_quote(marker),
+        user_args(user)
+    ))
 }
 
 /// Die zugeschnittene sudoers-Zeile zum Kopieren (Spec 0067, A3). Das
@@ -316,6 +359,44 @@ pub fn classify_sudo_check(output: &CommandOutput) -> SudoCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn password_command_and_marker_shape() {
+        let marker = new_sudo_prompt_marker();
+        assert!(is_valid_sudo_prompt_marker(&marker), "{marker}");
+        assert_eq!(marker.len(), "smart-ssh-sudo-".len() + 16 + 1);
+        assert_ne!(marker, new_sudo_prompt_marker());
+        let cmd = elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", &marker)
+            .unwrap();
+        assert_eq!(
+            cmd,
+            format!("sudo -S -k -p '{marker}' /usr/lib/openssh/sftp-server")
+        );
+        let cmd =
+            elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "www-data", &marker)
+                .unwrap();
+        assert!(
+            cmd.contains(&format!("-p '{marker}' -u www-data /usr")),
+            "{cmd}"
+        );
+    }
+
+    #[test]
+    fn password_command_rejects_unsafe_markers() {
+        for bad in [
+            "",
+            "x:",
+            "smart-ssh-sudo-a b:",
+            "smart-ssh-sudo-%u:",
+            "smart-ssh-sudo-a';id:",
+        ] {
+            assert_eq!(
+                elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", bad),
+                Err(ElevationInputError::InvalidMarker),
+                "{bad}"
+            );
+        }
+    }
 
     /// Pins the exact bytes of the single shared quoting function.
     #[test]

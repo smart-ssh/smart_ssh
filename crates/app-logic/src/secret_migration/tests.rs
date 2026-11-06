@@ -143,11 +143,15 @@ impl StartupPrompt for ScriptedPrompt {
     }
 }
 
+/// **Field order is drop order.** The stores (and with them the SQLite pool)
+/// are declared before `_dir`, so the database files are removed only after
+/// the connection is gone. With `_dir` first, the directory was deleted under
+/// a still-open connection, which behaves differently per platform.
 struct Fixture {
-    _dir: tempfile::TempDir,
-    store: SqliteProfileStore,
     database: SqliteCredentialStore,
+    store: SqliteProfileStore,
     servers: Vec<ServerId>,
+    _dir: tempfile::TempDir,
 }
 
 /// Zwei Server mit `PrivateKey`-Anmeldung, alle Slots belegt bis auf einen
@@ -201,10 +205,10 @@ async fn fixture() -> Fixture {
     }
 
     Fixture {
-        _dir: dir,
-        store,
         database,
+        store,
         servers,
+        _dir: dir,
     }
 }
 

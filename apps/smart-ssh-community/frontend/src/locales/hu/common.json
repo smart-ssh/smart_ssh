@@ -798,7 +798,8 @@
     "close": "Bezárás",
     "detail": "Részletek: {{detail}}",
     "failure": {
-      "passwordRequired": "A sudo jelszót kér az sftp-serverhez ezen a szerveren. Az alkalmazás soha nem kér sudo-jelszót.",
+      "passwordRequired": "A sudo ezen a szerveren jelszót kér az sftp-serverhez. Adja hozzá az alábbi sudoers-sort, vagy mentsen sudo-jelszót a szerverprofilba a magasabb jogosultságok használatához.",
+      "wrongSudoPassword": "A sudo elutasította a mentett sudo-jelszót. Ellenőrizze a sudo-jelszót a szerverprofilban.",
       "notAllowed": "Ez az SSH-bejelentkezés jelszó nélkül nem indíthatja el az sftp-servert sudón keresztül.",
       "requireTty": "A sudo terminál nélkül nem hajlandó futni (a sudoersben „requiretty”). Tiltsa le a requiretty-t ehhez a bejelentkezéshez, pl. „Defaults:<login> !requiretty” sorral.",
       "sftpServerNotFound": "Az sftp-server nem található a szerveren. Adja meg az útvonalát a szerverprofil „Speciális” részében.",

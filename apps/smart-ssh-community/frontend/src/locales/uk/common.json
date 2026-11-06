@@ -808,7 +808,8 @@
     "close": "Закрити",
     "detail": "Подробиці: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo вимагає пароль для sftp-server на цьому сервері. Програма ніколи не запитує пароль sudo.",
+      "passwordRequired": "sudo вимагає на цьому сервері пароль для sftp-server. Додайте рядок sudoers нижче або збережіть пароль sudo в профілі сервера, щоб увімкнути підвищені права.",
+      "wrongSudoPassword": "sudo відхилив збережений пароль sudo. Перевірте пароль sudo в профілі сервера.",
       "notAllowed": "Цьому SSH-входу не дозволено запускати sftp-server через sudo без пароля.",
       "requireTty": "sudo відмовляється працювати без термінала («requiretty» у sudoers). Вимкніть requiretty для цього входу, напр. через «Defaults:<login> !requiretty».",
       "sftpServerNotFound": "sftp-server на сервері не знайдено. Вкажіть його шлях у профілі сервера в розділі «Додатково».",

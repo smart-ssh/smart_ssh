@@ -15,6 +15,7 @@ mod local_sftp;
 mod sftp;
 mod sftp_tap;
 mod shell;
+mod sudo_prompt;
 #[cfg(feature = "test-support")]
 pub mod test_keys;
 mod transport;

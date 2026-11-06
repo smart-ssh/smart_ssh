@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
     CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, RunningExec,
-    SftpSession, SshError, SshTransport,
+    SftpSession, SshError, SshTransport, SudoPromptError,
 };
 
 use crate::error::map_session_russh_error;
@@ -22,6 +22,8 @@ use crate::shell::RusshShell;
 /// Spec 0067: Antwortfrist für den SFTP-Handshake über einen Exec-Kanal —
 /// ein von sudo abgelehnter Start meldet sich so nach wenigen Sekunden.
 const EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS: u64 = 5;
+/// Issue #1191: how long to wait for the sudo prompt marker.
+const SUDO_PROMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 /// Äußere Obergrenze als Sicherheitsnetz, falls der Handshake selbst hängt.
 const EXEC_SFTP_INIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
@@ -296,6 +298,26 @@ impl SshTransport for RusshTransport {
         })?
     }
 
+    async fn open_sftp_via_exec_with_sudo_password(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        // The timeout covers the whole sequence (channel open, prompt wait,
+        // handshake), like `open_sftp_via_exec`.
+        tokio::time::timeout(
+            EXEC_SFTP_INIT_TIMEOUT,
+            self.open_sftp_sudo_password_inner(command, marker, password),
+        )
+        .await
+        .map_err(|_| {
+            SudoPromptError::Failed(SshError::ChannelError(
+                "SFTP-Start über Exec-Kanal: Zeitüberschreitung".to_string(),
+            ))
+        })?
+    }
+
     async fn disconnect(&mut self) -> Result<(), SshError> {
         self.handle
             .disconnect(russh::Disconnect::ByApplication, "", "")
@@ -349,6 +371,65 @@ impl RusshTransport {
             channel.eof().await.map_err(map_session_russh_error)?;
         }
         Ok(channel)
+    }
+
+    /// Issue #1191, s. `open_sftp_via_exec_with_sudo_password`.
+    async fn open_sftp_sudo_password_inner(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        use crate::sudo_prompt::{wait_for_marker, StderrWatch};
+        let mut channel = self
+            .open_exec(command, None)
+            .await
+            .map_err(SudoPromptError::Failed)?;
+        let mut watch = StderrWatch::new(marker);
+        // Nothing is written before the marker was seen on stderr. If it
+        // never comes (or sudo exits) the channel is closed with no password
+        // byte sent.
+        if let Err(e) = wait_for_marker(&mut channel, &mut watch, SUDO_PROMPT_TIMEOUT).await {
+            let _ = channel.close().await;
+            return Err(e);
+        }
+        let mut line = zeroize::Zeroizing::new(Vec::with_capacity(
+            secrecy::ExposeSecret::expose_secret(password).len() + 1,
+        ));
+        line.extend_from_slice(secrecy::ExposeSecret::expose_secret(password).as_bytes());
+        line.push(b'\n');
+        let sent = channel.data_bytes(std::mem::take(&mut *line)).await;
+        drop(line);
+        if let Err(e) = sent {
+            let _ = channel.close().await;
+            return Err(SudoPromptError::Failed(map_session_russh_error(e)));
+        }
+        watch.reset();
+        let (stream, state) = crate::sudo_prompt::bridge(channel, watch, self.spawner.as_ref());
+        let config = russh_sftp::client::Config {
+            request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
+            ..Default::default()
+        };
+        let (stream, tap) = crate::sftp_tap::tap(stream, self.spawner.as_ref());
+        let client = match russh_sftp::client::SftpSession::new_with_config(stream, config).await {
+            Ok(client) => client,
+            Err(e) => {
+                if let Some(err) = state.failure() {
+                    return Err(err);
+                }
+                return Err(SudoPromptError::Failed(map_sftp_init_error(
+                    "SFTP-Init über Exec-Kanal fehlgeschlagen",
+                    e,
+                    self.handle.is_closed(),
+                )));
+            }
+        };
+        client.set_timeout(russh_sftp::client::Config::default().request_timeout_secs);
+        Ok(Box::new(RusshSftpSession::new(
+            client,
+            SessionProbe::new(&self.handle),
+            tap,
+        )))
     }
 
     /// s. `open_sftp_via_exec` (Spec 0067).

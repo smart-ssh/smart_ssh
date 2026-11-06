@@ -483,7 +483,7 @@ impl BrowserSftpGuard<'_> {
     /// erhöhter `delete`/`chmod` soll seine Audit-Zeile mit dem Nutzer
     /// bekommen, unter dem die schon ausgeführten Operationen liefen — nach
     /// dem Widerruf abgefragt, läge hier `None` und die Zeile fehlte ganz.
-    pub(super) fn elevated_user(&self) -> Option<String> {
+    pub(super) fn elevated_user(&self) -> Option<ElevatedAudit> {
         match self {
             Self::Normal(_) | Self::ElevatedInactive => None,
             // Ein widerrufener Kanal meldet keinen Ziel-Nutzer mehr: über
@@ -493,7 +493,14 @@ impl BrowserSftpGuard<'_> {
             // Der Ziel-Nutzer des Kanals, nicht bloß der angefragte: `sftp()`
             // lässt keine Operation zu, solange beide auseinanderliegen
             // (`UserChanged`), beide sind hier also gleich.
-            Self::Elevated { expected_user, .. } => Some(expected_user.clone()),
+            Self::Elevated {
+                slot,
+                expected_user,
+                ..
+            } => Some(ElevatedAudit {
+                user: expected_user.clone(),
+                sudo_auth: slot.sudo_auth(),
+            }),
         }
     }
 }
@@ -548,7 +555,9 @@ impl BrowserSftpOperation<'_> {
     }
 }
 
+mod audit;
 mod sftp_impl;
+pub(super) use audit::{audit_elevated_change, ElevatedAudit};
 
 /// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede
 /// server-verändernde Browser-Aktion im erhöhten Modus hinterlässt eine
@@ -557,25 +566,6 @@ mod sftp_impl;
 /// Auch bei einem Fehlschlag protokolliert (`ok = false`) — ein rekursives
 /// Löschen/chmod kann mittendrin scheitern, nachdem schon Einträge geändert
 /// wurden.
-pub(super) fn audit_elevated_change(
-    elevated_user: Option<&str>,
-    action: &'static str,
-    path: &str,
-    ok: bool,
-) {
-    if let Some(target_user) = elevated_user {
-        tracing::info!(
-            action,
-            path,
-            ok,
-            elevated = true,
-            target_user,
-            source = "manual",
-            "file browser change with elevated rights"
-        );
-    }
-}
-
 pub(super) async fn lock_browser_sftp<'a>(
     session: &'a Session,
     channel: &BrowserChannel,
@@ -784,6 +774,7 @@ mod browser_channel_tests {
             session_id,
             crate::elevated_sftp::ElevatedSftp {
                 target_user: target_user.to_string(),
+                sudo_auth: Default::default(),
                 sftp: Box::new(sftp),
             },
         );

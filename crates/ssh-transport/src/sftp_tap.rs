@@ -133,7 +133,7 @@ fn parse_status(body: &[u8]) -> Option<(u32, TapStatus)> {
     Some((id, (code, message)))
 }
 
-fn spawn_pump(
+pub(crate) fn spawn_pump(
     spawner: Option<&ssh_manager_core::ssh::TaskSpawner>,
     name: &'static str,
     fut: impl std::future::Future<Output = ()> + Send + 'static,
