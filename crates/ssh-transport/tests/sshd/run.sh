@@ -49,7 +49,11 @@ ssh-keygen -q -s "$keys_dir/ca" -I testuser -n testuser -V -5m:+1d "$keys_dir/us
 for img in "$here"/images/*/; do
   name="$(basename "$img")"
   log "building image $name"
-  docker build -q -t "smart-ssh-e2e-$name" "$img" >/dev/null || { log "image build failed: $name"; exit 1; }
+  build_log="$(docker build --progress=plain -t "smart-ssh-e2e-$name" "$img" 2>&1)" || {
+    echo "$build_log" | tail -n 60 >&2
+    log "image build failed: $name"
+    exit 1
+  }
 done
 
 # --- scenarios ---------------------------------------------------------------
