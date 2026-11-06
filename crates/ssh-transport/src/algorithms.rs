@@ -92,6 +92,53 @@ pub(crate) fn outdated(
     out
 }
 
+/// Issue #1173: the algorithm kinds that have a typed error. Compression
+/// (not part of the policy) keeps the generic mapping.
+fn no_common_kind(kind: &russh::AlgorithmKind) -> Option<ssh_manager_core::ssh::AlgorithmKind> {
+    use ssh_manager_core::ssh::AlgorithmKind as K;
+    match kind {
+        russh::AlgorithmKind::Kex => Some(K::KeyExchange),
+        russh::AlgorithmKind::Key => Some(K::HostKey),
+        russh::AlgorithmKind::Cipher => Some(K::Cipher),
+        russh::AlgorithmKind::Mac => Some(K::Mac),
+        russh::AlgorithmKind::Compression => None,
+    }
+}
+
+/// Issue #1173: turns russh's "no common algorithm" error into the typed
+/// `SshError::NoCommonAlgorithm`. Raised during the key exchange, before any
+/// credential is sent. Every other result passes through unchanged.
+pub(crate) fn typed_no_common_algorithm<H>(
+    result: Result<H, crate::error::TransportError>,
+    hop: &ssh_manager_core::ssh::Hop,
+) -> Result<Result<H, crate::error::TransportError>, ssh_manager_core::ssh::SshError> {
+    use crate::error::TransportError;
+    use ssh_manager_core::ssh::SshError;
+    match result {
+        Err(TransportError::Russh(russh::Error::NoCommonAlgo {
+            kind: russh_kind,
+            ours,
+            theirs,
+        })) => match no_common_kind(&russh_kind) {
+            Some(kind) => Err(SshError::NoCommonAlgorithm {
+                hop: ssh_manager_core::ssh::HopLabel {
+                    username: hop.username.clone(),
+                    host: hop.host.clone(),
+                    port: hop.port,
+                },
+                kind,
+                server_offers: theirs,
+            }),
+            None => Ok(Err(TransportError::Russh(russh::Error::NoCommonAlgo {
+                kind: russh_kind,
+                ours,
+                theirs,
+            }))),
+        },
+        other => Ok(other),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

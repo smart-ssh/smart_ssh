@@ -652,19 +652,6 @@ fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
     inner.parse().ok()
 }
 
-/// Issue #1173: the algorithm kinds that have a typed error. Compression
-/// (not part of the policy) keeps the generic mapping.
-fn no_common_kind(kind: &russh::AlgorithmKind) -> Option<ssh_manager_core::ssh::AlgorithmKind> {
-    use ssh_manager_core::ssh::AlgorithmKind as K;
-    match kind {
-        russh::AlgorithmKind::Kex => Some(K::KeyExchange),
-        russh::AlgorithmKind::Key => Some(K::HostKey),
-        russh::AlgorithmKind::Cipher => Some(K::Cipher),
-        russh::AlgorithmKind::Mac => Some(K::Mac),
-        russh::AlgorithmKind::Compression => None,
-    }
-}
-
 /// Übersetzt das Ergebnis von `client::connect`/`client::connect_stream`:
 /// `Ok` bleibt `Ok`, ein Host-Key-Fehler wird zu
 /// `Err(ConnectOutcome::PendingHostKeyConfirmation)`, jeder andere Fehler zu
@@ -674,33 +661,7 @@ fn resolve_or_pending<H>(
     hop: &Hop,
 ) -> Result<Result<H, ConnectOutcome>, SshError> {
     let (host, port) = (hop.host.as_str(), hop.port);
-    // Issue #1173: no common algorithm of one kind. Raised during the key
-    // exchange, before any credential is sent.
-    let result = match result {
-        Err(TransportError::Russh(russh::Error::NoCommonAlgo {
-            kind: russh_kind,
-            ours,
-            theirs,
-        })) => match no_common_kind(&russh_kind) {
-            Some(kind) => {
-                return Err(SshError::NoCommonAlgorithm {
-                    hop: ssh_manager_core::ssh::HopLabel {
-                        username: hop.username.clone(),
-                        host: hop.host.clone(),
-                        port: hop.port,
-                    },
-                    kind,
-                    server_offers: theirs,
-                })
-            }
-            None => Err(TransportError::Russh(russh::Error::NoCommonAlgo {
-                kind: russh_kind,
-                ours,
-                theirs,
-            })),
-        },
-        other => other,
-    };
+    let result = crate::algorithms::typed_no_common_algorithm(result, hop)?;
     match result {
         Ok(handle) => Ok(Ok(handle)),
         Err(TransportError::HostKey { raw_key, decision }) => {
