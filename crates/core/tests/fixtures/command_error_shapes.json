@@ -30,6 +30,10 @@
     },
     "message": "feature Feature(\"document_export\") is not available in tier TierId(\"free\")"
   },
+  "no_common_algorithm": {
+    "code": "SSH_NO_COMMON_ALGORITHM",
+    "message": "alice@example.org:22: no common SSH cipher algorithm; the server offers: aes128-gcm@openssh.com"
+  },
   "with_code": {
     "code": "GROUP_SELF_PARENT",
     "message": "Group cannot be its own parent"
