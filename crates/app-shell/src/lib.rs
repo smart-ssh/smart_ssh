@@ -1154,6 +1154,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         }
     }
     extension_plugins::register_pending(app); // Issue #894: after the core's own
+    elevated_sftp::idle::reload_stored(app); // Issue #1193: the store exists now
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"

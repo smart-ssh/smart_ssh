@@ -217,12 +217,24 @@ pub(crate) fn write_timeout<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Applies the stored value once the store plugin exists (after unlocking).
+pub(crate) fn reload_stored<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use tauri::Manager;
+    let registry = app.state::<super::ElevatedSftpRegistry>();
+    registry.idle().set_minutes(read_stored(app));
+}
+
 /// Wires the registry to the app at startup: the stored value and the event
 /// that tells the webview about an automatic switch-off.
 pub(crate) fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     use tauri::Manager;
     let registry = app.state::<super::ElevatedSftpRegistry>();
-    registry.idle().set_minutes(read_stored(app));
+    // With a master password the store plugin exists only after unlocking
+    // (Spec 0101, A16); `reload_stored` applies the value then.
+    let pending = app.try_state::<crate::UnlockedPluginsPendingSlot>();
+    if !pending.is_some_and(|slot| slot.0) {
+        registry.idle().set_minutes(read_stored(app));
+    }
     let handle = app.clone();
     registry
         .idle()
