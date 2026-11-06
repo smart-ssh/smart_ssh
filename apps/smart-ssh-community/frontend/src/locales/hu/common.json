@@ -777,6 +777,7 @@
     "opDelete": "Törlés",
     "opChmod": "Jogosultságok módosítása",
     "banner": "Emelt jogok aktívak: a böngésző minden fájlművelete {{user}} néven fut.",
+    "bannerLogged": "A kiszolgálón naplózva.",
     "deleteFileTitle": "Fájl törlése {{user}} néven?",
     "deleteDirTitle": "Mappa törlése {{user}} néven?",
     "overwriteTitle": "Fájl felülírása {{user}} néven?",

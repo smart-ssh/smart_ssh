@@ -782,6 +782,7 @@
     "opDelete": "Eliminazione",
     "opChmod": "Modifica dei permessi",
     "banner": "Diritti elevati attivi: tutte le azioni sui file in questo browser vengono eseguite come {{user}}.",
+    "bannerLogged": "Registrato sul server.",
     "deleteFileTitle": "Eliminare il file come {{user}}?",
     "deleteDirTitle": "Eliminare la cartella come {{user}}?",
     "overwriteTitle": "Sovrascrivere il file come {{user}}?",

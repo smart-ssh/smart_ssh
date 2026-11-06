@@ -787,6 +787,7 @@
     "opDelete": "Mazání",
     "opChmod": "Změna oprávnění",
     "banner": "Zvýšená práva aktivní: všechny akce se soubory v tomto prohlížeči běží jako {{user}}.",
+    "bannerLogged": "Zaznamenáno na serveru.",
     "deleteFileTitle": "Smazat soubor jako {{user}}?",
     "deleteDirTitle": "Smazat složku jako {{user}}?",
     "overwriteTitle": "Přepsat soubor jako {{user}}?",

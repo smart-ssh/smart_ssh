@@ -23,6 +23,10 @@ pub struct ElevationResultDto {
     /// Kanal bleibt aktiv (`active`, `target_user` beschreiben ihn).
     #[serde(default)]
     pub running_operations: Vec<RunningOperationDto>,
+    /// Issue #1192: `sftp-server` runs with `-l INFO -f AUTHPRIV`, so each
+    /// file operation shows up in the server's auth log.
+    #[serde(default)]
+    pub server_logging: bool,
 }
 
 /// Issue #622: eine laufende Operation des erhöhten Kanals — für den
@@ -73,7 +77,7 @@ pub enum ElevationWarningKind {
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationFailureDto {
     pub kind: ElevationFailureKind,
-    /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad>` —
+    /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad> -l INFO -f AUTHPRIV` —
     /// nur, wenn eine fehlende sudo-Regel die Ursache ist.
     pub sudoers_line: Option<String>,
     /// Technisches Detail (erste stderr-Zeile o. ä.), nur zur Anzeige.

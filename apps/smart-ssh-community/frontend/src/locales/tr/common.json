@@ -777,6 +777,7 @@
     "opDelete": "Silme",
     "opChmod": "İzinleri değiştirme",
     "banner": "Yükseltilmiş haklar etkin: bu tarayıcıdaki tüm dosya eylemleri {{user}} olarak çalışır.",
+    "bannerLogged": "Sunucuda günlüğe kaydedilir.",
     "deleteFileTitle": "Dosya {{user}} olarak silinsin mi?",
     "deleteDirTitle": "Klasör {{user}} olarak silinsin mi?",
     "overwriteTitle": "Dosyanın üzerine {{user}} olarak yazılsın mı?",

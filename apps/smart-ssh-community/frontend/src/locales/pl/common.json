@@ -787,6 +787,7 @@
     "opDelete": "Usuwanie",
     "opChmod": "Zmiana uprawnień",
     "banner": "Podwyższone uprawnienia aktywne: wszystkie działania na plikach w tej przeglądarce wykonywane są jako {{user}}.",
+    "bannerLogged": "Rejestrowane na serwerze.",
     "deleteFileTitle": "Usunąć plik jako {{user}}?",
     "deleteDirTitle": "Usunąć folder jako {{user}}?",
     "overwriteTitle": "Nadpisać plik jako {{user}}?",

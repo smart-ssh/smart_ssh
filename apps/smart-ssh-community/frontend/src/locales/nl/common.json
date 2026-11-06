@@ -777,6 +777,7 @@
     "opDelete": "Verwijderen",
     "opChmod": "Rechten wijzigen",
     "banner": "Verhoogde rechten actief: alle bestandsacties in dit bestandsbeheer worden uitgevoerd als {{user}}.",
+    "bannerLogged": "Gelogd op de server.",
     "deleteFileTitle": "Bestand verwijderen als {{user}}?",
     "deleteDirTitle": "Map verwijderen als {{user}}?",
     "overwriteTitle": "Bestand overschrijven als {{user}}?",

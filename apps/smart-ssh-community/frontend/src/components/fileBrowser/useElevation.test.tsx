@@ -21,6 +21,7 @@ const active = (targetUser = "root") => ({
   failure: null,
   warning: null,
   runningOperations: [],
+  serverLogging: false,
 });
 
 describe("useElevation", () => {

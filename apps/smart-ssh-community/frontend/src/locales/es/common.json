@@ -782,6 +782,7 @@
     "opDelete": "Eliminación",
     "opChmod": "Cambio de permisos",
     "banner": "Derechos elevados activos: todas las acciones de archivos en este explorador se ejecutan como {{user}}.",
+    "bannerLogged": "Registrado en el servidor.",
     "deleteFileTitle": "¿Eliminar archivo como {{user}}?",
     "deleteDirTitle": "¿Eliminar carpeta como {{user}}?",
     "overwriteTitle": "¿Sobrescribir archivo como {{user}}?",

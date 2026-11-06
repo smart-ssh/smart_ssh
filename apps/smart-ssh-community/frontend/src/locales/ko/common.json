@@ -772,6 +772,7 @@
     "opDelete": "삭제",
     "opChmod": "권한 변경",
     "banner": "상승된 권한 활성: 이 브라우저의 모든 파일 동작이 {{user}} 권한으로 실행됩니다.",
+    "bannerLogged": "서버에 기록됩니다.",
     "deleteFileTitle": "{{user}} 권한으로 파일을 삭제하시겠습니까?",
     "deleteDirTitle": "{{user}} 권한으로 폴더를 삭제하시겠습니까?",
     "overwriteTitle": "{{user}} 권한으로 파일을 덮어쓰시겠습니까?",

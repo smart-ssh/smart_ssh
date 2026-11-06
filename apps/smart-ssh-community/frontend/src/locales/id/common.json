@@ -772,6 +772,7 @@
     "opDelete": "Penghapusan",
     "opChmod": "Perubahan izin",
     "banner": "Hak tinggi aktif: semua tindakan berkas di penjelajah ini dijalankan sebagai {{user}}.",
+    "bannerLogged": "Dicatat di server.",
     "deleteFileTitle": "Hapus berkas sebagai {{user}}?",
     "deleteDirTitle": "Hapus folder sebagai {{user}}?",
     "overwriteTitle": "Timpa berkas sebagai {{user}}?",

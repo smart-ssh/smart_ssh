@@ -4,11 +4,13 @@ import { Button } from "../ui";
 interface ElevationBannerProps {
   elevatedUser: string | null;
   warningPath: string | null | undefined;
+  /** Issue #1192: `sftp-server` logs each request to the server's auth log. */
+  serverLogging?: boolean;
   onToggleOff: () => void;
 }
 
 /** Spec 0067: banner while the elevated mode is on, plus the unsafe-server warning. */
-export function ElevationBanner({ elevatedUser, warningPath, onToggleOff }: ElevationBannerProps) {
+export function ElevationBanner({ elevatedUser, warningPath, serverLogging = false, onToggleOff }: ElevationBannerProps) {
   const { t } = useTranslation();
   return (
     <>
@@ -16,7 +18,9 @@ export function ElevationBanner({ elevatedUser, warningPath, onToggleOff }: Elev
         role="alert"
         className="flex items-center gap-2 bg-warning px-2 py-1.5 text-xs font-semibold text-surface-sunken"
       >
-        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}</span>
+        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}
+          {serverLogging && ` ${t("fileElevation.bannerLogged")}`}
+        </span>
         <Button variant="bare"
           type="button"
           onClick={onToggleOff}
