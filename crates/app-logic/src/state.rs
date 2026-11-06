@@ -161,6 +161,9 @@ pub struct AppState {
     /// höchstens ein `connect()`-Versuch aktiv sein, ein flacher Schlüssel
     /// reicht daher.
     pub pending_host_key_confirmations: ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    /// Issue #1185: login prompts (password, one-time code, …) waiting for
+    /// `answer_auth_prompt` / `cancel_auth_prompt`, by prompt id.
+    pub pending_auth_prompts: Arc<crate::auth_prompter::AuthPromptRegistry>,
     /// Issue #546: running `connect` attempts by frontend-generated attempt
     /// id, so `cancel_connect` can abort them.
     pub connect_attempts: crate::connect_attempts::ConnectAttempts,

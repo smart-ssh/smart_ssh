@@ -436,6 +436,13 @@
       "loadFailed": "Kural kapsamı yüklenemedi"
     }
   },
+  "authPrompt": {
+    "title": "{{hop}} sunucusunda oturum açma",
+    "password": "Parola",
+    "submit": "Oturum aç",
+    "notStored": "Sunucu oturum açmak için bu bilgileri istiyor. Kaydedilmez.",
+    "expired": "Oturum açma isteği zaman aşımına uğradı. Bağlantı kurulmadı."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",
     "mismatchHeading": "Bu sunucunun anahtarı artık aynı değil.",

@@ -387,11 +387,10 @@ pub(crate) async fn open_and_assemble(
         prompt_history_store,
         chat_session_store,
         ledger_store,
-        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
-        // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
-        // Scope dieses Refactorings).
+        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen.
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -816,6 +815,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::connect,
             commands::cancel_connect,
             commands::confirm_host_key,
+            commands::answer_auth_prompt, commands::cancel_auth_prompt,
             commands::open_terminal,
             commands::terminal_input,
             commands::terminal_resize,

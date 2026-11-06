@@ -436,6 +436,13 @@
       "loadFailed": "Regeldækningen kunne ikke indlæses"
     }
   },
+  "authPrompt": {
+    "title": "Login på {{hop}}",
+    "password": "Adgangskode",
+    "submit": "Log ind",
+    "notStored": "Serveren beder om disse oplysninger for at logge ind. De gemmes ikke.",
+    "expired": "Loginanmodningen er udløbet. Forbindelsen blev ikke oprettet."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhedsadvarsel · Værtsnøgle ændret",
     "mismatchHeading": "Denne servers nøgle er ikke længere den samme.",

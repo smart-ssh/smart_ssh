@@ -436,6 +436,13 @@
       "loadFailed": "Impossibile caricare la copertura delle regole"
     }
   },
+  "authPrompt": {
+    "title": "Accesso a {{hop}}",
+    "password": "Password",
+    "submit": "Accedi",
+    "notStored": "Il server richiede queste informazioni per l'accesso. Non vengono salvate.",
+    "expired": "La richiesta di accesso è scaduta. La connessione non è stata stabilita."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Avviso di sicurezza · Chiave host cambiata",
     "mismatchHeading": "La chiave di questo server non è più la stessa.",

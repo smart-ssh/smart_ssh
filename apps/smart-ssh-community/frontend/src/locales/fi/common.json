@@ -436,6 +436,13 @@
       "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
     }
   },
+  "authPrompt": {
+    "title": "Kirjautuminen: {{hop}}",
+    "password": "Salasana",
+    "submit": "Kirjaudu",
+    "notStored": "Palvelin pyytää näitä tietoja kirjautumista varten. Niitä ei tallenneta.",
+    "expired": "Kirjautumispyyntö vanheni. Yhteyttä ei muodostettu."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Turvavaroitus · Isäntäavain muuttunut",
     "mismatchHeading": "Tämän palvelimen avain ei ole enää sama.",

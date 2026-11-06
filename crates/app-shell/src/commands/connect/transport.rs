@@ -70,6 +70,18 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                 return Err(ssh_command_error(&err));
             }
         };
+        // Issue #1185: an interactive connect asks the user for login
+        // answers; an automatic reconnect cannot, so it keeps `NoPrompter`.
+        let event_prompter = interactive.then(|| {
+            app_logic::auth_prompter::EventAuthPrompter::new(
+                state.pending_auth_prompts.clone(),
+                std::sync::Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+            )
+        });
+        let prompter: &dyn ssh_manager_core::ssh::AuthPrompter = match &event_prompter {
+            Some(p) => p,
+            None => &ssh_manager_core::ssh::NoPrompter,
+        };
         let mut attempt_no: u32 = 0;
         loop {
             attempt_no += 1;
@@ -103,6 +115,7 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         // Verbindungspfad.
                         state.key_file_reader.as_ref(),
                         state.host_key_store.clone(),
+                        prompter,
                         &attempt_log,
                         SSH_CONNECT_LIMITS,
                     ),

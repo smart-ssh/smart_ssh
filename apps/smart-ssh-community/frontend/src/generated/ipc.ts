@@ -28,6 +28,14 @@ export type AuthMethodInput = { "kind": "password", value: string | null, } | { 
 
 export type AuthMethodKind = "password" | "no_password" | "private_key" | "agent" | "certificate" | "identity_file";
 
+export type AuthPromptEndReason = "answered" | "cancelled" | "timed_out" | "abandoned";
+
+export type AuthPromptEndedPayload = { promptId: string, reason: AuthPromptEndReason, };
+
+export type AuthPromptItemPayload = { text: string, echo: boolean, };
+
+export type AuthPromptNeededPayload = { promptId: string, hop: string, kind: string, name: string, instructions: string, prompts: Array<AuthPromptItemPayload>, };
+
 export type AutoExecRuleDto = { ruleId: RuleId, patternType: PatternType, patternValue: string, scope: Scope, segmentIndices: Array<number>, };
 
 export type AutoReconnectChangedPayload = { sessionId: string, phase: AutoReconnectPhase, attempt: number, };
@@ -291,6 +299,8 @@ export type EventPayloads = {
   "action-confirmation-settled": ActionConfirmationSettledPayload,
   "action-decision-escalated": ActionDecisionEscalatedPayload,
   "ai-budget-waiting": AiBudgetWaitingPayload,
+  "auth-prompt-ended": AuthPromptEndedPayload,
+  "auth-prompt-needed": AuthPromptNeededPayload,
   "auto-reconnect-changed": AutoReconnectChangedPayload,
   "chat-action-output": ChatActionOutputPayload,
   "chat-action-proposed": ChatActionProposedPayload,

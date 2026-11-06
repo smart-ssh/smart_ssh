@@ -229,6 +229,14 @@ export const getChatHistory = (sessionId: string) =>
 export const confirmHostKey = (sessionId: string, decision: HostKeyUserDecision) =>
   invoke<void>("confirm_host_key", { sessionId, decision });
 
+/** Issue #1185: the answers to a login prompt. They are secrets and go
+ * only through this call; the caller keeps no copy. */
+export const answerAuthPrompt = (id: string, answers: string[]) =>
+  invoke<void>("answer_auth_prompt", { id, answers });
+
+export const cancelAuthPrompt = (id: string) =>
+  invoke<void>("cancel_auth_prompt", { id });
+
 /** Spec 0102: das Ergebnis trägt ggf. den einmaligen Hinweis auf ein
  * fehlendes Startverzeichnis. */
 export const openTerminal = (sessionId: string) =>
