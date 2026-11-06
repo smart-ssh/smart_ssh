@@ -436,6 +436,13 @@
       "loadFailed": "Không thể tải phạm vi áp dụng quy tắc"
     }
   },
+  "authPrompt": {
+    "title": "Đăng nhập vào {{hop}}",
+    "password": "Mật khẩu",
+    "submit": "Đăng nhập",
+    "notStored": "Máy chủ yêu cầu thông tin này để đăng nhập. Thông tin không được lưu.",
+    "expired": "Yêu cầu đăng nhập đã hết hạn. Kết nối chưa được thiết lập."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Cảnh báo bảo mật · Khóa máy chủ đã thay đổi",
     "mismatchHeading": "Khóa của máy chủ này không còn như trước.",

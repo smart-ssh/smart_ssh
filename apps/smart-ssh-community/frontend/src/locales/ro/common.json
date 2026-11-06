@@ -436,6 +436,13 @@
       "loadFailed": "Acoperirea regulilor nu a putut fi încărcată"
     }
   },
+  "authPrompt": {
+    "title": "Autentificare la {{hop}}",
+    "password": "Parolă",
+    "submit": "Autentificare",
+    "notStored": "Serverul cere aceste informații pentru autentificare. Nu sunt salvate.",
+    "expired": "Cererea de autentificare a expirat. Conexiunea nu a fost stabilită."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Avertisment de securitate · Cheia de host s-a schimbat",
     "mismatchHeading": "Cheia acestui server nu mai este aceeași.",

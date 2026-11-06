@@ -864,6 +864,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
             ssh_manager_core::entitlements::Entitlements::free(),
         )),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

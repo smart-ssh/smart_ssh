@@ -592,6 +592,9 @@ fn ensure_first_run_notice_acknowledged<R: tauri::Runtime>(
 }
 
 #[cfg(test)]
+mod tests_auth_prompt;
+
+#[cfg(test)]
 mod tests_session_gate;
 
 #[cfg(test)]
@@ -612,5 +615,35 @@ pub async fn confirm_host_key(
         .pending_host_key_confirmations
         .resolve(&session_id, decision)
         .or_code("CONFIRMATION_NOT_PENDING")?;
+    Ok(())
+}
+
+/// Issue #1185: the user's answers to a login prompt. The answers are
+/// secrets: they are not logged and not kept (the `Debug` of the type
+/// prints only their count).
+#[tauri::command]
+pub async fn answer_auth_prompt(
+    state: State<'_, AppState>,
+    id: String,
+    answers: app_logic::auth_prompter::AuthPromptAnswers,
+) -> CommandResult<()> {
+    app_logic::auth_prompter::resolve_auth_prompt(
+        &state.pending_auth_prompts,
+        &id,
+        app_logic::auth_prompter::AuthPromptResponse::Answers(answers),
+    )
+    .or_code(app_logic::auth_prompter::AUTH_PROMPT_NOT_PENDING)?;
+    Ok(())
+}
+
+/// Issue #1185: the user cancels a login prompt; the connect fails.
+#[tauri::command]
+pub async fn cancel_auth_prompt(state: State<'_, AppState>, id: String) -> CommandResult<()> {
+    app_logic::auth_prompter::resolve_auth_prompt(
+        &state.pending_auth_prompts,
+        &id,
+        app_logic::auth_prompter::AuthPromptResponse::Cancel,
+    )
+    .or_code(app_logic::auth_prompter::AUTH_PROMPT_NOT_PENDING)?;
     Ok(())
 }

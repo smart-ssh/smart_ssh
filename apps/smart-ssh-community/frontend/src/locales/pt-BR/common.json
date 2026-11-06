@@ -436,6 +436,13 @@
       "loadFailed": "Não foi possível carregar a cobertura de regras"
     }
   },
+  "authPrompt": {
+    "title": "Login em {{hop}}",
+    "password": "Senha",
+    "submit": "Entrar",
+    "notStored": "O servidor pede estas informações para o login. Elas não são armazenadas.",
+    "expired": "A solicitação de login expirou. A conexão não foi estabelecida."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Alerta de segurança · Chave de host alterada",
     "mismatchHeading": "A chave deste servidor não é mais a mesma.",

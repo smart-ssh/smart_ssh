@@ -436,6 +436,13 @@
       "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
     }
   },
+  "authPrompt": {
+    "title": "Bejelentkezés: {{hop}}",
+    "password": "Jelszó",
+    "submit": "Bejelentkezés",
+    "notStored": "A szerver ezeket az adatokat kéri a bejelentkezéshez. Nem kerülnek mentésre.",
+    "expired": "A bejelentkezési kérés lejárt. A kapcsolat nem jött létre."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Biztonsági figyelmeztetés · A gazdakulcs megváltozott",
     "mismatchHeading": "A szerver kulcsa már nem ugyanaz.",

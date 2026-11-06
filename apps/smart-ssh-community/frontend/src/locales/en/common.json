@@ -436,6 +436,13 @@
       "loadFailed": "Rule coverage could not be loaded"
     }
   },
+  "authPrompt": {
+    "title": "Login on {{hop}}",
+    "password": "Password",
+    "submit": "Log in",
+    "notStored": "The server asks for this information to log in. It is not stored.",
+    "expired": "The login request expired. The connection was not established."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Security Warning · Host Key Changed",
     "mismatchHeading": "This server's key is no longer the same.",

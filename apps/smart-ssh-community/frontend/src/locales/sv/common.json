@@ -436,6 +436,13 @@
       "loadFailed": "Regeltäckningen kunde inte läsas in"
     }
   },
+  "authPrompt": {
+    "title": "Inloggning på {{hop}}",
+    "password": "Lösenord",
+    "submit": "Logga in",
+    "notStored": "Servern ber om den här informationen för att logga in. Den sparas inte.",
+    "expired": "Inloggningsförfrågan har gått ut. Anslutningen upprättades inte."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Säkerhetsvarning · Värdnyckeln har ändrats",
     "mismatchHeading": "Serverns nyckel är inte längre densamma.",

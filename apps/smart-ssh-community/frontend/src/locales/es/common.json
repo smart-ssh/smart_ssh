@@ -436,6 +436,13 @@
       "loadFailed": "No se pudo cargar la cobertura de reglas"
     }
   },
+  "authPrompt": {
+    "title": "Inicio de sesión en {{hop}}",
+    "password": "Contraseña",
+    "submit": "Iniciar sesión",
+    "notStored": "El servidor pide esta información para iniciar sesión. No se guarda.",
+    "expired": "La solicitud de inicio de sesión ha caducado. No se estableció la conexión."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Advertencia de seguridad · La clave de host ha cambiado",
     "mismatchHeading": "La clave de este servidor ya no es la misma.",

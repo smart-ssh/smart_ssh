@@ -8,6 +8,7 @@ import { NoteShrinkSuggestionToast } from "./components/NoteShrinkSuggestionToas
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
+import { AuthPromptHost } from "./components/AuthPromptHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList } from "./components/ServerList";
 import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
@@ -231,6 +232,7 @@ function App() {
        * Backend ausgelöste Verbindungen (z. B. MCP) — daher hier, stets
        * gemountet, statt in `ServerList`, das nur im "Verbinden"-Tab lebt. */}
       <HostKeyPromptHost />
+      <AuthPromptHost />
 
       {/* Spec 0017, Abschnitt 4: jede offene Session bleibt gemountet
        * (eigener Chat-Verlauf, eigene xterm.js-Instanz samt Scrollback,

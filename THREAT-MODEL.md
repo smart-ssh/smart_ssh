@@ -417,6 +417,13 @@ Risks we know about and accept, with the reason.
   (3 per hop) are capped so a hostile server cannot keep a login going forever;
   the login time limit pauses only while the user is asked and a 5-minute
   answer limit applies.
+  The login dialog (issue #1185) shows those texts as plain text only. The
+  answers are secrets: they travel from the dialog to the backend only in the
+  one `answer_auth_prompt` command (never in an event, a log line or the
+  connect step log), are read from uncontrolled fields that are cleared on
+  submit, and are dropped by the transport right after sending. Answers whose
+  count does not match the questions are not sent. Automatic reconnects and
+  the connection test cannot be asked and fail instead of prompting.
 - **RSA timing side channel (RUSTSEC-2023-0071, "Marvin attack").** The
   `rsa` crate, pulled in by the SSH library, has a known timing side channel
   with no fixed release. Accepted because Smart SSH is a local client: RSA

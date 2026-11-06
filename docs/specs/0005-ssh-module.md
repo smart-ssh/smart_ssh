@@ -219,8 +219,22 @@ annimmt und weitere verlangt (etwa `publickey` und danach
 - **Keine Antwortmöglichkeit.** Gibt es keinen Weg, eine Abfrage zu
   beantworten, oder bricht der Nutzer ab, endet der Versuch als „Anmeldung
   fehlgeschlagen"; die Meldung nennt die vom Server noch angebotenen Methoden.
-  Antwortet der Nutzer 5 Minuten lang nicht, gilt das als Abbruch. Solange die
-  Oberfläche noch keine Abfrage anzeigt, gibt es keinen solchen Weg.
+  Antwortet der Nutzer 5 Minuten lang nicht, gilt das als Abbruch. Ein Aufbau
+  ohne Nutzer (automatischer Wiederaufbau, Verbindungstest) hat keinen solchen
+  Weg und fragt nie.
+- **Anmeldedialog.** Verlangt der Server bei einem vom Nutzer ausgelösten
+  Verbindungsaufbau eine Eingabe, öffnet die App einen Dialog „Anmeldung bei
+  {Hop}" (Hop als `Benutzer@Host:Port`, bei mehreren Hops der Hop, der fragt).
+  Er zeigt Name und Hinweistext des Servers als reinen Text (kein HTML, kein
+  Markdown), je Abfrage ein Feld — verdeckt, wenn der Server keine Anzeige der
+  Eingabe wünscht — und den Hinweis, dass die Angaben nur zur Anmeldung dienen
+  und nicht gespeichert werden. Der Fokus liegt im ersten Feld; Enter sendet die
+  Antworten, Escape und „Abbrechen" brechen die Anmeldung ab (Fehler wie bei
+  fehlender Antwortmöglichkeit, keine weitere Abfrage). Eine weitere Runde oder
+  ein weiterer Hop öffnet den Dialog erneut mit den neuen Abfragen. Die
+  Antworten werden einmal gesendet, nicht im Zustand der Oberfläche gehalten
+  und nach dem Senden aus den Feldern gelöscht. Wird der Aufbau abgebrochen
+  oder läuft die Frist ab, schließt sich der Dialog von selbst.
 - **Grenzen.** Höchstens 10 Abfragerunden je Methode und 3 Teilerfolge je Hop;
   danach endet die Anmeldung als fehlgeschlagen. Die Zeitgrenze von 60 Sekunden
   für die Anmeldung (Abschnitt 7) ruht, solange auf den Nutzer gewartet wird.

@@ -436,6 +436,13 @@
       "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
     }
   },
+  "authPrompt": {
+    "title": "Přihlášení k {{hop}}",
+    "password": "Heslo",
+    "submit": "Přihlásit",
+    "notStored": "Server žádá tyto údaje pro přihlášení. Neukládají se.",
+    "expired": "Požadavek na přihlášení vypršel. Spojení nebylo navázáno."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",
     "mismatchHeading": "Klíč tohoto serveru už není stejný.",

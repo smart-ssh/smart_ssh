@@ -22,6 +22,7 @@ macro_rules! decls {
 }
 
 fn generate() -> String {
+    use crate::auth_prompt_events::*;
     use crate::auto_reconnect::{AutoReconnectChangedPayload, AutoReconnectPhase};
     use crate::confirmation_settled::{
         ActionConfirmationSettledPayload, ConfirmationSettledReason,
@@ -66,6 +67,10 @@ fn generate() -> String {
         HostKeyVerificationNeededPayload,
         HostKeyPromptEndReason,
         HostKeyVerificationEndedPayload,
+        AuthPromptItemPayload,
+        AuthPromptNeededPayload,
+        AuthPromptEndReason,
+        AuthPromptEndedPayload,
         ConnectProgressPayload,
         ConnectWarning,
         ConnectWarningsPayload,
@@ -221,6 +226,8 @@ fn event_payloads() -> String {
             names::HOST_KEY_VERIFICATION_ENDED,
             "HostKeyVerificationEndedPayload",
         ),
+        (names::AUTH_PROMPT_NEEDED, "AuthPromptNeededPayload"),
+        (names::AUTH_PROMPT_ENDED, "AuthPromptEndedPayload"),
         (names::CONNECT_PROGRESS, "ConnectProgressPayload"),
         (names::CONNECT_WARNINGS, "ConnectWarningsPayload"),
         (names::TERMINAL_OUTPUT, "TerminalOutputPayload"),

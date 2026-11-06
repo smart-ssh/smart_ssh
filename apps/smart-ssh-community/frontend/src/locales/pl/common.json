@@ -436,6 +436,13 @@
       "loadFailed": "Nie udało się wczytać pokrycia reguł"
     }
   },
+  "authPrompt": {
+    "title": "Logowanie do {{hop}}",
+    "password": "Hasło",
+    "submit": "Zaloguj",
+    "notStored": "Serwer prosi o te informacje, aby się zalogować. Nie są zapisywane.",
+    "expired": "Żądanie logowania wygasło. Połączenie nie zostało nawiązane."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Ostrzeżenie bezpieczeństwa · Zmieniony klucz hosta",
     "mismatchHeading": "Klucz tego serwera już nie jest taki sam.",

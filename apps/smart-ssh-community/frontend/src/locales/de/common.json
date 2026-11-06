@@ -436,6 +436,13 @@
       "loadFailed": "Regelabdeckung konnte nicht geladen werden"
     }
   },
+  "authPrompt": {
+    "title": "Anmeldung bei {{hop}}",
+    "password": "Passwort",
+    "submit": "Anmelden",
+    "notStored": "Der Server verlangt diese Angaben für die Anmeldung. Sie werden nicht gespeichert.",
+    "expired": "Die Anmeldeabfrage ist abgelaufen. Die Verbindung wurde nicht hergestellt."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Sicherheitswarnung · Host-Schlüssel geändert",
     "mismatchHeading": "Der Schlüssel dieses Servers ist nicht mehr derselbe.",

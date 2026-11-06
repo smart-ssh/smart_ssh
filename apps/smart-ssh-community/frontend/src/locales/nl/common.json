@@ -436,6 +436,13 @@
       "loadFailed": "Regeldekking kon niet worden geladen"
     }
   },
+  "authPrompt": {
+    "title": "Aanmelden bij {{hop}}",
+    "password": "Wachtwoord",
+    "submit": "Aanmelden",
+    "notStored": "De server vraagt deze gegevens om u aan te melden. Ze worden niet opgeslagen.",
+    "expired": "De aanmeldvraag is verlopen. De verbinding is niet tot stand gebracht."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",
     "mismatchHeading": "De sleutel van deze server is niet meer dezelfde.",

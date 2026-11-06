@@ -436,6 +436,13 @@
       "loadFailed": "Cakupan aturan tidak dapat dimuat"
     }
   },
+  "authPrompt": {
+    "title": "Login di {{hop}}",
+    "password": "Kata sandi",
+    "submit": "Masuk",
+    "notStored": "Server meminta informasi ini untuk login. Informasi tidak disimpan.",
+    "expired": "Permintaan login kedaluwarsa. Koneksi tidak dibuat."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Peringatan Keamanan · Kunci Host Berubah",
     "mismatchHeading": "Kunci server ini tidak lagi sama.",
