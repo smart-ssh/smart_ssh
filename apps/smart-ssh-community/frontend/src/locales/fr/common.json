@@ -436,6 +436,13 @@
       "loadFailed": "Impossible de charger la couverture des règles"
     }
   },
+  "authPrompt": {
+    "title": "Connexion à {{hop}}",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "notStored": "Le serveur demande ces informations pour la connexion. Elles ne sont pas enregistrées.",
+    "expired": "La demande de connexion a expiré. La connexion n'a pas été établie."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Alerte de sécurité · Clé d’hôte modifiée",
     "mismatchHeading": "La clé de ce serveur n’est plus la même.",

@@ -53,6 +53,7 @@
     "actionCard.autoRanScopeGlobal": "same word in this language"
   },
   "it": {
+    "authPrompt.password": "same word in this language",
     "common.ok": "same word in this language",
     "diagnostics.dataPaths.database": "same word in this language",
     "sidebar.addServer": "same word in this language",

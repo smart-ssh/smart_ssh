@@ -436,6 +436,13 @@
       "loadFailed": "Regeldekningen kunne ikke lastes"
     }
   },
+  "authPrompt": {
+    "title": "Pålogging på {{hop}}",
+    "password": "Passord",
+    "submit": "Logg inn",
+    "notStored": "Serveren ber om denne informasjonen for å logge inn. Den lagres ikke.",
+    "expired": "Påloggingsforespørselen har utløpt. Tilkoblingen ble ikke opprettet."
+  },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhetsadvarsel · Vertsnøkkel endret",
     "mismatchHeading": "Nøkkelen til denne serveren er ikke lenger den samme.",

@@ -436,6 +436,13 @@
       "loadFailed": "无法加载规则覆盖情况"
     }
   },
+  "authPrompt": {
+    "title": "登录 {{hop}}",
+    "password": "密码",
+    "submit": "登录",
+    "notStored": "服务器需要这些信息才能登录。这些信息不会被保存。",
+    "expired": "登录请求已过期。连接未建立。"
+  },
   "hostKeyDialog": {
     "mismatchLabel": "安全警告 · 主机密钥已更改",
     "mismatchHeading": "此服务器的密钥已不再相同。",
