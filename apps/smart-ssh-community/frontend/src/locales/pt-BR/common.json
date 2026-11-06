@@ -782,6 +782,7 @@
     "opDelete": "Exclusão",
     "opChmod": "Alteração de permissões",
     "banner": "Direitos elevados ativos: todas as ações de arquivo neste navegador são executadas como {{user}}.",
+    "bannerLogged": "Registrado no servidor.",
     "deleteFileTitle": "Excluir arquivo como {{user}}?",
     "deleteDirTitle": "Excluir pasta como {{user}}?",
     "overwriteTitle": "Sobrescrever arquivo como {{user}}?",

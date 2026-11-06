@@ -23,10 +23,14 @@ async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
     assert_eq!(result.target_user, "root");
     assert_eq!(result.sftp_server_path.as_deref(), Some(PATH));
     let log = log.lock().unwrap().clone();
-    assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
+    assert_eq!(
+        log.last().unwrap(),
+        &format!("sftp-exec:sudo -n {PATH} -l INFO -f AUTHPRIV")
+    );
+    assert!(result.server_logging);
     assert!(log
         .iter()
-        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
+        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH} -l INFO -f AUTHPRIV")));
     assert!(f.is_active().await);
 }
 
@@ -47,7 +51,7 @@ async fn test_password_required_yields_tailored_sudoers_line_and_no_channel() {
     assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
     assert_eq!(
         failure.sudoers_line.as_deref(),
-        Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
+        Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV")
     );
     assert!(!log
         .lock()
@@ -201,7 +205,7 @@ async fn test_override_path_skips_probe_and_invalid_override_runs_nothing() {
     );
     assert_eq!(
         log.last().unwrap(),
-        "sftp-exec:sudo -n -u www-data /opt/ssh/sftp-server"
+        "sftp-exec:sudo -n -u www-data /opt/ssh/sftp-server -l INFO -f AUTHPRIV"
     );
 
     let (t, log) = transport(output(0, "", ""), output(0, "", ""));
@@ -579,6 +583,7 @@ async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slo
         ElevatedSftp {
             target_user: "root".to_string(),
             sudo_auth: Default::default(),
+            server_logging: false,
             sftp: Box::new(DropReportingSftp(dropped.clone())),
         },
     );
@@ -677,7 +682,11 @@ async fn test_password_path_is_used_and_password_never_leaks() {
         cmd.starts_with("sftp-exec-pw:sudo -S -k -p 'smart-ssh-sudo-"),
         "{cmd}"
     );
-    assert!(cmd.ends_with(&format!(" {PATH}")), "{cmd}");
+    assert!(
+        cmd.ends_with(&format!(" {PATH} -l INFO -f AUTHPRIV")),
+        "{cmd}"
+    );
+    assert!(result.server_logging);
     assert!(!log.iter().any(|c| c.contains(STORED)), "{log:?}");
     let audit: Vec<String> = logs
         .0
@@ -709,7 +718,7 @@ async fn test_nopasswd_path_is_unchanged_even_with_a_stored_password() {
     assert!(result.active);
     assert_eq!(
         log.lock().unwrap().last().unwrap(),
-        &format!("sftp-exec:sudo -n {PATH}")
+        &format!("sftp-exec:sudo -n {PATH} -l INFO -f AUTHPRIV")
     );
     assert!(received.lock().unwrap().is_empty());
 }
@@ -776,4 +785,59 @@ async fn test_unsafe_binary_in_the_password_path_starts_with_warning() {
         result.warning.unwrap().kind,
         ElevationWarningKind::SftpServerUnsafe
     );
+}
+
+/// Issue #1192: an existing rule that allows only the plain command keeps
+/// working: the channel opens without arguments, `server_logging` is false.
+#[tokio::test]
+async fn test_existing_plain_rule_opens_without_logging() {
+    let (probe, check) = working_probes();
+    let (mut t, log) = transport(probe, check);
+    t.logging_check = Some(output(
+        1,
+        "",
+        "Sorry, user deploy is not allowed to execute\n",
+    ));
+    let f = fixture(Box::new(t));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert!(!result.server_logging);
+    let log = log.lock().unwrap().clone();
+    assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
+    assert!(log
+        .iter()
+        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
+}
+
+/// Issue #1192: password path retries once without arguments when sudo does
+/// not allow the logging variant.
+#[tokio::test]
+async fn test_password_path_retries_without_logging_when_not_allowed() {
+    use ssh_manager_core::ssh::SudoPromptError as E;
+    let (mut t, log) = password_required_transport();
+    t.password_failure = Some(|| E::NotAllowed("not allowed to run".into()));
+    t.password_failure_only_logging = true;
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert!(!result.server_logging);
+    let log = log.lock().unwrap().clone();
+    let pw: Vec<&String> = log
+        .iter()
+        .filter(|c| c.starts_with("sftp-exec-pw:"))
+        .collect();
+    assert_eq!(pw.len(), 2, "{pw:?}");
+    assert!(pw[0].ends_with(" -l INFO -f AUTHPRIV"));
+    assert!(pw[1].ends_with(&format!(" {PATH}")));
+    // fresh marker for the retry
+    let marker = |c: &str| c.split('\'').nth(1).unwrap().to_string();
+    assert_ne!(marker(pw[0]), marker(pw[1]));
 }

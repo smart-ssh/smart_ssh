@@ -782,6 +782,7 @@
     "opDelete": "Ștergere",
     "opChmod": "Schimbarea permisiunilor",
     "banner": "Drepturi ridicate active: toate acțiunile asupra fișierelor din acest browser rulează ca {{user}}.",
+    "bannerLogged": "Înregistrat pe server.",
     "deleteFileTitle": "Ștergeți fișierul ca {{user}}?",
     "deleteDirTitle": "Ștergeți folderul ca {{user}}?",
     "overwriteTitle": "Suprascrieți fișierul ca {{user}}?",

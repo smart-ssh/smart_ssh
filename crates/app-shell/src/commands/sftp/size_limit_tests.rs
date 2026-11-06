@@ -272,6 +272,7 @@ async fn setup(normal: MismatchSftp, elevated: MismatchSftp) -> Setup {
         ElevatedSftp {
             target_user: "root".to_string(),
             sudo_auth: Default::default(),
+            server_logging: false,
             sftp: Box::new(elevated),
         },
     );

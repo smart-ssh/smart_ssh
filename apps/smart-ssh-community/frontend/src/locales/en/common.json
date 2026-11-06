@@ -777,6 +777,7 @@
     "opDelete": "Delete",
     "opChmod": "Change permissions",
     "banner": "Elevated rights active: all file actions in this browser run as {{user}}.",
+    "bannerLogged": "Logged on the server.",
     "deleteFileTitle": "Delete file as {{user}}?",
     "deleteDirTitle": "Delete folder as {{user}}?",
     "overwriteTitle": "Overwrite file as {{user}}?",

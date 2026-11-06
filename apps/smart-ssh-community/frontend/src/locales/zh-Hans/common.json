@@ -772,6 +772,7 @@
     "opDelete": "删除",
     "opChmod": "更改权限",
     "banner": "提权已启用：此浏览器中的所有文件操作均以 {{user}} 身份运行。",
+    "bannerLogged": "已在服务器上记录。",
     "deleteFileTitle": "以 {{user}} 身份删除文件？",
     "deleteDirTitle": "以 {{user}} 身份删除文件夹？",
     "overwriteTitle": "以 {{user}} 身份覆盖文件？",

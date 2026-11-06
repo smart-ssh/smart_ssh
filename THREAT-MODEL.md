@@ -93,7 +93,11 @@ the proposed command or path text as is**, without redaction
   written once, and only after the marker was read from stderr. If the
   marker does not appear, the channel is closed with nothing written, so the
   password cannot reach `sftp-server`. The password is not in the command,
-  log, audit line or any error; the audit line records only `sudo_auth`.
+  log, audit line or any error; the audit line records only `sudo_auth` and
+  `server_logging`. The elevated `sftp-server` runs with the fixed arguments
+  `-l INFO -f AUTHPRIV` (the suggested sudoers rule allows exactly these, or
+  none for older rules), so the server's own auth log records every file
+  request; the arguments are a constant, never user input.
 
 ### What the AI can still see
 

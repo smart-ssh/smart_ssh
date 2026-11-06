@@ -26,11 +26,21 @@ Passwort-Dialog im Dateibrowser gibt es nicht.
 ### A1. Mechanismus
 
 - Statt des normalen SFTP-Subsystems öffnet die App einen eigenen Kanal mit
-  `sudo -n <sftp-server-pfad>` und betreibt darüber denselben SFTP-Client.
+  `sudo -n <sftp-server-pfad> -l INFO -f AUTHPRIV` und betreibt darüber
+  denselben SFTP-Client. Die Argumente sind fest (nicht einstellbar):
+  `sftp-server` schreibt damit jede Anfrage (gelesen, geschrieben, gelöscht)
+  in das Auth-Log des Servers (Issue #1192). Erlaubt eine vorhandene
+  sudoers-Regel nur den Aufruf ohne Argumente (`""`), öffnet die App den
+  Kanal wie zuvor ohne Argumente; dann wird serverseitig nur der Start von
+  `sftp-server` protokolliert.
+- Im Dateibrowser zeigt das Banner des erhöhten Modus den Zusatz
+  „Auf dem Server protokolliert.“, wenn die Logging-Argumente aktiv sind;
+  ohne Logging steht kein Zusatz. Die lokale Audit-Zeile jeder Änderung
+  nennt `server_logging`.
 - `-n` (nicht interaktiv): Verlangt sudo ein Passwort, schlägt der Aufruf
   sofort fehl, statt zu hängen.
 - **Passwortweg (Issue #1191):** Die App öffnet den Kanal mit
-  `sudo -S -k -p '<marker>' <sftp-server-pfad>`; `<marker>` ist ein pro
+  `sudo -S -k -p '<marker>' <sftp-server-pfad> -l INFO -f AUTHPRIV`; `<marker>` ist ein pro
   Aktivierung zufälliges Token. Sie liest die Fehlerausgabe, bis der Marker
   erscheint, und schreibt erst dann das gespeicherte Passwort samt
   Zeilenumbruch, genau einmal; danach beginnt der SFTP-Handshake auf
@@ -40,7 +50,9 @@ Passwort-Dialog im Dateibrowser gibt es nicht.
   Passwort-Byte gesendet worden. Erscheint der Marker ein zweites Mal
   (falsches Passwort), wird der Kanal geschlossen und gemeldet, dass das
   gespeicherte Sudo-Passwort abgelehnt wurde; ein erneuter Versuch mit
-  demselben Passwort findet nicht statt. Meldet sudo „not allowed“, gilt
+  demselben Passwort findet nicht statt. Meldet sudo für den Aufruf mit
+  Logging-Argumenten „not allowed“, folgt genau ein weiterer Versuch ohne
+  Argumente (mit neuem Marker); meldet sudo auch dann „not allowed“, gilt
   der Fall „nicht erlaubt“ aus A3. Das Passwort steht nie im Kommando, in
   Logs, im Audit, in Fehlermeldungen, im Chat oder im KI-Kontext.
 - Die erhöhte Sitzung ist ein **zweiter, getrennter** Kanal neben dem
@@ -63,14 +75,19 @@ Passwort-Dialog im Dateibrowser gibt es nicht.
 
 ### A3. Voraussetzungsprüfung und verständliche Fehler
 
-Vor dem Umschalten prüft die App (Probe `sudo -n -l <pfad>`), ob passwortloses
-sudo für genau diesen Befehl erlaubt ist. Scheitert das, erscheint eine
+Vor dem Umschalten prüft die App, ob passwortloses sudo für genau diesen
+Befehl erlaubt ist, in dieser Reihenfolge: (1) `sudo -n -l <pfad> -l INFO -f
+AUTHPRIV` erlaubt → Kanal mit Logging-Argumenten; (2) sonst `sudo -n -l
+<pfad>` erlaubt (bestehende Regel mit `""`) → Kanal ohne Argumente;
+(3) sonst die Fehlerfälle unten bzw. der Passwortweg. Scheitert das, erscheint eine
 verständliche Meldung mit konkreter Anleitung statt eines kryptischen Fehlers:
 
 - „Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort
   für sftp-server.“ mit der **konkreten sudoers-Zeile** zum Kopieren, auf den
   ermittelten Pfad und den Login-Nutzer zugeschnitten, z. B.
-  `stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server`.
+  `stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV`.
+  Die Regel erlaubt `sftp-server` nur mit genau diesen Argumenten (oder, bei
+  einer älteren Regel mit `""`, ohne).
 - Ein **ehrlicher Hinweis**: Diese Regel gibt dem SSH-Login
   passwortlosen Root-Dateizugriff. Wer den SSH-Schlüssel hat, kann jede Datei
   lesen und schreiben. Das ist bewusst zu entscheiden.

@@ -136,7 +136,7 @@ export type ElevationFailureDto = { kind: ElevationFailureKind, sudoersLine: str
 
 export type ElevationFailureKind = "unsupported" | "invalidUser" | "invalidPath" | "sftpServerNotFound" | "sftpServerUnsafe" | "passwordRequired" | "wrongSudoPassword" | "notAllowed" | "requireTty" | "sudoMissing" | "checkFailed" | "startFailed";
 
-export type ElevationResultDto = { active: boolean, targetUser: string, sftpServerPath: string | null, failure: ElevationFailureDto | null, warning: ElevationWarningDto | null, runningOperations: Array<RunningOperationDto>, };
+export type ElevationResultDto = { active: boolean, targetUser: string, sftpServerPath: string | null, failure: ElevationFailureDto | null, warning: ElevationWarningDto | null, runningOperations: Array<RunningOperationDto>, serverLogging: boolean, };
 
 export type ElevationWarningDto = { kind: ElevationWarningKind, path: string, };
 

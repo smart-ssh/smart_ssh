@@ -4,6 +4,8 @@
 pub(crate) struct ElevatedAudit {
     pub(super) user: String,
     pub(super) sudo_auth: crate::elevated_sftp::SudoAuth,
+    /// Issue #1192: `sftp-server` logs to the server's auth log.
+    pub(super) server_logging: bool,
 }
 
 pub(crate) fn audit_elevated_change(
@@ -16,6 +18,7 @@ pub(crate) fn audit_elevated_change(
         let target_user = audit.user.as_str();
         tracing::info!(
             sudo_auth = audit.sudo_auth.as_str(),
+            server_logging = audit.server_logging,
             action,
             path,
             ok,

@@ -772,6 +772,7 @@
     "opDelete": "Xóa",
     "opChmod": "Đổi quyền",
     "banner": "Quyền nâng cao đang hoạt động: mọi thao tác tệp trong trình duyệt này chạy với tư cách {{user}}.",
+    "bannerLogged": "Được ghi nhật ký trên máy chủ.",
     "deleteFileTitle": "Xóa tệp với tư cách {{user}}?",
     "deleteDirTitle": "Xóa thư mục với tư cách {{user}}?",
     "overwriteTitle": "Ghi đè tệp với tư cách {{user}}?",

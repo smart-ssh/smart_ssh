@@ -43,6 +43,7 @@ impl ElevatedSftp {
         Self {
             target_user,
             sudo_auth: SudoAuth::Nopasswd,
+            server_logging: false,
             sftp,
         }
     }
@@ -62,6 +63,8 @@ pub struct ElevatedSftp {
     pub target_user: String,
     /// How sudo authenticated for this channel (audit line of each change).
     pub sudo_auth: SudoAuth,
+    /// Issue #1192: `sftp-server` was started with `-l INFO -f AUTHPRIV`.
+    pub server_logging: bool,
     pub sftp: Box<dyn SftpSession>,
 }
 
@@ -82,6 +85,8 @@ pub struct ElevatedSftpSlot {
     channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
     /// Copy of the channel's `sudo_auth`, readable without the channel lock.
     sudo_auth: SudoAuth,
+    /// Copy of the channel's `server_logging` (Issue #1192).
+    server_logging: bool,
     /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
     /// Teil des Widerrufs.
     ///
@@ -124,6 +129,7 @@ impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
             sudo_auth: channel.sudo_auth,
+            server_logging: channel.server_logging,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             #[cfg(test)]
@@ -165,6 +171,10 @@ impl ElevatedSftpSlot {
     /// belegt.
     pub(crate) fn sudo_auth(&self) -> SudoAuth {
         self.sudo_auth
+    }
+
+    pub(crate) fn server_logging(&self) -> bool {
+        self.server_logging
     }
 
     pub(crate) fn is_revoked(&self) -> bool {
@@ -428,6 +438,7 @@ fn failure(
         }),
         warning: None,
         running_operations: Vec::new(),
+        server_logging: false,
     })
 }
 
@@ -472,6 +483,7 @@ pub(crate) async fn enable(
                 failure: None,
                 warning: None,
                 running_operations: running,
+                server_logging: false,
             });
         }
         stop_running_and_wait(ctx.registry, ctx.session_id).await;
@@ -557,11 +569,24 @@ pub(crate) async fn enable_after_confirmation(
         SftpServerSafety::Unsafe { path } => Some(path),
     };
 
-    let check_cmd =
-        sudo_check_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let check = match run_probe(session, &check_cmd).await {
+    // Issue #1192: first the variant with the logging arguments; only when
+    // it is not allowed passwordless, the plain command (existing rules).
+    let logging_cmd = sudo_check_command(&path, &target_user, true)
+        .expect("Pfad und Nutzer wurden oben validiert");
+    let logging_check = match run_probe(session, &logging_cmd).await {
         Ok(output) => classify_sudo_check(&output),
         Err(detail) => SudoCheck::Failed(detail),
+    };
+    let nopasswd_logging = logging_check == SudoCheck::Allowed;
+    let check = if nopasswd_logging {
+        SudoCheck::Allowed
+    } else {
+        let check_cmd = sudo_check_command(&path, &target_user, false)
+            .expect("Pfad und Nutzer wurden oben validiert");
+        match run_probe(session, &check_cmd).await {
+            Ok(output) => classify_sudo_check(&output),
+            Err(detail) => SudoCheck::Failed(detail),
+        }
     };
     let sudoers = || sudoers_line(login, &path, &target_user);
     // Issue #1191: password path — only when `sudo -n -l` says a password is
@@ -634,16 +659,17 @@ pub(crate) async fn enable_after_confirmation(
     let opened = if use_password {
         open_with_password(session, &path, &target_user, stored_password.as_deref()).await
     } else {
-        let command = elevated_sftp_command(&path, &target_user)
+        let command = elevated_sftp_command(&path, &target_user, nopasswd_logging)
             .expect("Pfad und Nutzer wurden oben validiert");
         let mut transport = session.transport.lock().await;
         transport
             .open_sftp_via_exec(&command)
             .await
+            .map(|sftp| (sftp, nopasswd_logging))
             .map_err(OpenFailure::Other)
     };
     match opened {
-        Ok(sftp) => {
+        Ok((sftp, server_logging)) => {
             // Spec 0084, A2.2: Zwischen den Proben oben und diesem Eintrag
             // liegen mehrere `.await`-Punkte — die Sitzung kann inzwischen
             // getrennt worden sein. Dann wird der eben geöffnete Kanal hier
@@ -656,6 +682,7 @@ pub(crate) async fn enable_after_confirmation(
                 } else {
                     SudoAuth::Nopasswd
                 },
+                server_logging,
                 sftp,
             };
             let previous = ctx
@@ -675,6 +702,7 @@ pub(crate) async fn enable_after_confirmation(
                 sftp_server_path = %path,
                 source = "manual",
                 sudo_auth = if use_password { "password" } else { "nopasswd" },
+                server_logging,
                 "file browser elevated rights enabled"
             );
             Ok(ElevationResultDto {
@@ -687,6 +715,7 @@ pub(crate) async fn enable_after_confirmation(
                     path,
                 }),
                 running_operations: Vec::new(),
+                server_logging,
             })
         }
         Err(OpenFailure::WrongPassword) => failure(
@@ -723,33 +752,43 @@ enum OpenFailure {
 /// Issue #1191: opens the channel with `sudo -S -k -p '<marker>'` and the
 /// stored sudo password. The transport writes the password only after the
 /// marker appeared on stderr; the password is not part of any text here.
+/// Issue #1192: first with the logging arguments; when sudo says that command
+/// is not allowed, one retry without arguments (fresh marker). Returns the
+/// channel and whether it logs on the server.
 async fn open_with_password(
     session: &Session,
     path: &str,
     target_user: &str,
     password: Option<&secrecy::SecretString>,
-) -> Result<Box<dyn ssh_manager_core::ssh::SftpSession>, OpenFailure> {
+) -> Result<(Box<dyn ssh_manager_core::ssh::SftpSession>, bool), OpenFailure> {
     use ssh_manager_core::ssh::{SshError, SudoPromptError};
     let Some(password) = password else {
         return Err(OpenFailure::Other(SshError::ChannelError(
             "no sudo password stored".to_string(),
         )));
     };
-    let marker = new_sudo_prompt_marker();
-    let command = elevated_sftp_password_command(path, target_user, &marker)
-        .expect("Pfad, Nutzer und Marker sind gültig");
     let mut transport = session.transport.lock().await;
-    transport
-        .open_sftp_via_exec_with_sudo_password(&command, &marker, password)
-        .await
-        .map_err(|e| match e {
-            SudoPromptError::NoPrompt => OpenFailure::Other(SshError::ChannelError(
-                "sudo did not ask for the password".to_string(),
-            )),
-            SudoPromptError::WrongPassword => OpenFailure::WrongPassword,
-            SudoPromptError::NotAllowed(line) => OpenFailure::NotAllowed(line),
-            SudoPromptError::Failed(err) => OpenFailure::Other(err),
-        })
+    let mut logging = true;
+    loop {
+        let marker = new_sudo_prompt_marker();
+        let command = elevated_sftp_password_command(path, target_user, &marker, logging)
+            .expect("Pfad, Nutzer und Marker sind gültig");
+        match transport
+            .open_sftp_via_exec_with_sudo_password(&command, &marker, password)
+            .await
+        {
+            Ok(sftp) => return Ok((sftp, logging)),
+            Err(SudoPromptError::NotAllowed(_)) if logging => logging = false,
+            Err(SudoPromptError::NotAllowed(line)) => return Err(OpenFailure::NotAllowed(line)),
+            Err(SudoPromptError::NoPrompt) => {
+                return Err(OpenFailure::Other(SshError::ChannelError(
+                    "sudo did not ask for the password".to_string(),
+                )))
+            }
+            Err(SudoPromptError::WrongPassword) => return Err(OpenFailure::WrongPassword),
+            Err(SudoPromptError::Failed(err)) => return Err(OpenFailure::Other(err)),
+        }
+    }
 }
 
 /// Schaltet den erhöhten Kanal einer Sitzung aus und **widerruft** ihn.
