@@ -1,0 +1,4 @@
+image = "openssh-legacy"
+hostname = "smoke-openssh-legacy"
+networks = ["smoke-net"]
+publish = true
