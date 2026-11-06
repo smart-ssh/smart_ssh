@@ -3,6 +3,7 @@
 //! kennt nur die Traits (`SshTransport`, `HostKeyStore`, ...).
 
 mod auth;
+mod auth_pause;
 mod connect;
 mod error;
 mod exec;

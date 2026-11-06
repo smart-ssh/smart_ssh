@@ -1787,6 +1787,8 @@ impl Connector for RecordingConnector {
                 method: ssh_manager_core::ssh::AuthMethodKind::Password,
                 remaining_methods: vec![],
                 partial_success: false,
+                round: None,
+                prompts: vec![],
             },
         );
         if self.hang {

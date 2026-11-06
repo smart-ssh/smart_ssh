@@ -1363,6 +1363,8 @@ async fn test_auth_failure_emits_failed_auth_step_and_keeps_the_error_log() {
                 method: ssh_manager_core::ssh::AuthMethodKind::IdentityFile,
                 remaining_methods: vec![],
                 partial_success: false,
+                round: None,
+                prompts: vec![],
             },
             false,
         );
