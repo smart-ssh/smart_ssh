@@ -233,7 +233,11 @@ annimmt und weitere verlangt (etwa `publickey` und danach
   fehlender Antwortmöglichkeit, keine weitere Abfrage). Eine weitere Runde oder
   ein weiterer Hop öffnet den Dialog erneut mit den neuen Abfragen. Die
   Antworten werden einmal gesendet, nicht im Zustand der Oberfläche gehalten
-  und nach dem Senden aus den Feldern gelöscht. Wird der Aufbau abgebrochen
+  und nach dem Senden aus den Feldern gelöscht. Fragen mehrere Verbindungsaufbauten gleichzeitig, werden ihre Dialoge
+  nacheinander in der Reihenfolge des Eintreffens gezeigt; der offene Dialog wird
+  nie ersetzt, und der nächste öffnet sich erst, wenn der vorige beantwortet oder
+  abgebrochen ist (Fokus im ersten Feld). Endet eine wartende Abfrage (Frist,
+  abgebrochener Aufbau), verschwindet sie aus der Warteschlange. Wird der Aufbau abgebrochen
   oder läuft die Frist ab, schließt sich der Dialog von selbst.
 - **Grenzen.** Höchstens 10 Abfragerunden je Methode und 3 Teilerfolge je Hop;
   danach endet die Anmeldung als fehlgeschlagen. Die Zeitgrenze von 60 Sekunden

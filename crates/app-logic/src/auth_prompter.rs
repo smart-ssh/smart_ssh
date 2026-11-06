@@ -71,6 +71,8 @@ pub struct EventAuthPrompter {
     registry: Arc<AuthPromptRegistry>,
     emitter: Arc<dyn EventEmitter>,
     timeout: std::time::Duration,
+    /// One per prompter, i.e. per connect; sent with every prompt event.
+    connect_id: String,
 }
 
 impl EventAuthPrompter {
@@ -87,6 +89,7 @@ impl EventAuthPrompter {
             registry,
             emitter,
             timeout,
+            connect_id: uuid::Uuid::new_v4().to_string(),
         }
     }
 }
@@ -126,7 +129,7 @@ impl AuthPrompter for EventAuthPrompter {
         };
         // Only the id and the hop are logged — never texts or answers.
         tracing::info!(prompt_id = %id, "login prompt shown");
-        emit_auth_prompt_needed(self.emitter.as_ref(), &id, &request);
+        emit_auth_prompt_needed(self.emitter.as_ref(), &id, &self.connect_id, &request);
         let outcome = tokio::time::timeout(self.timeout, rx).await;
         match outcome {
             Err(_) => {
@@ -196,6 +199,28 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string()
+    }
+
+    #[tokio::test]
+    async fn test_connect_id_is_shared_per_prompter_and_differs_between_prompters() {
+        let (reg, em, p) = setup();
+        let other = Arc::new(EventAuthPrompter::new(reg.clone(), em.clone()));
+        for prompter in [p.clone(), p.clone(), other] {
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_millis(5),
+                prompter.prompt(request()),
+            )
+            .await;
+        }
+        let events = em.0.lock().unwrap();
+        let ids: Vec<_> = events
+            .iter()
+            .filter(|e| e.0 == "auth-prompt-needed")
+            .map(|e| e.1["connectId"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids[0], ids[1]);
+        assert_ne!(ids[0], ids[2]);
     }
 
     #[tokio::test]

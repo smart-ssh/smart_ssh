@@ -10,34 +10,40 @@ import { AuthPromptDialog } from "./AuthPromptDialog";
 /**
  * Issue #1185 (Spec 0005): the only receiver of `auth-prompt-needed`,
  * mounted at the `App` root like `HostKeyPromptHost`, so the dialog shows
- * whichever tab is active. A second round of the same login arrives as a
- * new event and replaces the dialog. `auth-prompt-ended` closes the dialog
- * for the matching prompt id only (timeout, or the connect was aborted).
+ * whichever tab is active. Issue #1190: prompts of different connects queue
+ * and are shown one after another in arrival order; a later round of the
+ * same login (same `connectId`, new prompt id) replaces that connect's own
+ * prompt in place. `auth-prompt-ended` removes the matching prompt by id,
+ * whether it is shown or waiting.
  *
  * The answers are passed straight to `answer_auth_prompt`; they are never
  * stored here, and the dialog is closed (state cleared) before the call.
  */
 export function AuthPromptHost() {
   const { t } = useTranslation();
-  const [pending, setPendingState] = useState<AuthPromptNeededEvent | null>(null);
-  const pendingRef = useRef<AuthPromptNeededEvent | null>(null);
-  const setPending = useCallback((event: AuthPromptNeededEvent | null) => {
-    pendingRef.current = event;
-    setPendingState(event);
+  const [queue, setQueueState] = useState<AuthPromptNeededEvent[]>([]);
+  const queueRef = useRef<AuthPromptNeededEvent[]>([]);
+  const setQueue = useCallback((next: AuthPromptNeededEvent[]) => {
+    queueRef.current = next;
+    setQueueState(next);
   }, []);
 
   useEffect(() => {
-    const unlisten = onAuthPromptNeeded((event) => setPending(event));
+    const unlisten = onAuthPromptNeeded((event) => {
+      const current = queueRef.current;
+      const i = current.findIndex((p) => p.connectId === event.connectId);
+      setQueue(i >= 0 ? current.map((p, j) => (j === i ? event : p)) : [...current, event]);
+    });
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [setPending]);
+  }, [setQueue]);
 
   useEffect(() => {
     const unlisten = onAuthPromptEnded((event) => {
-      const current = pendingRef.current;
-      if (!current || current.promptId !== event.promptId) return;
-      setPending(null);
+      const current = queueRef.current;
+      if (!current.some((p) => p.promptId === event.promptId)) return;
+      setQueue(current.filter((p) => p.promptId !== event.promptId));
       if (event.reason === "timed_out") {
         showToast({ kind: "info", message: t("authPrompt.expired") });
       }
@@ -45,7 +51,11 @@ export function AuthPromptHost() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [setPending, t]);
+  }, [setQueue, t]);
+
+  const pending = queue[0];
+  const dismiss = (promptId: string) =>
+    setQueue(queueRef.current.filter((p) => p.promptId !== promptId));
 
   if (!pending) return null;
   const { promptId } = pending;
@@ -58,11 +68,11 @@ export function AuthPromptHost() {
       key={promptId}
       event={pending}
       onSubmit={(answers) => {
-        setPending(null);
+        dismiss(promptId);
         answerAuthPrompt(promptId, answers).catch(report);
       }}
       onCancel={() => {
-        setPending(null);
+        dismiss(promptId);
         cancelAuthPrompt(promptId).catch(report);
       }}
     />
