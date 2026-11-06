@@ -9,7 +9,7 @@ Bezüge: Spec 0005 (SSH, Jump-Hosts), Spec 0069 (Fehlerpfad, Zeitgrenzen), Spec 
 - Jeder Verbindungsaufbau, den die Oberfläche mit einer Versuchskennung (UUID) startet, meldet seinen Fortschritt als Ereignis `connect-progress`. Alle Ereignisse eines Aufbaus tragen diese Kennung und die Server-Kennung.
 - Das Ereignis enthält die vollständige aktuelle Schrittliste. Es kommt, sobald ein Schritt beginnt, seine Angabe sich ändert, er gelingt oder scheitert.
 - Die Zählung `attempt` beginnt bei 1. Wiederholt die App den Aufbau (z. B. nach „Vertrauen“ bei einem Host-Key), steigt sie um 1 und die Schrittliste beginnt neu.
-- Je Schritt: Art (Namensauflösung, TCP-Verbindung, Tunnel je Jump-Hop, Handshake, Host-Key-Prüfung, Anmeldung, Sitzung bereit), Hop-Bezeichnung nach Spec 0076, Status (`running`, `ok`, `skipped`, `failed`), bei `failed` der stabile Fehlercode, und eine kurze Angabe.
+- Je Schritt: Art (Namensauflösung, TCP-Verbindung, Tunnel je Jump-Hop, Handshake, Host-Key-Prüfung, Anmeldung, Sitzung bereit), Hop-Bezeichnung nach Spec 0076, Status (`running`, `ok`, `skipped`, `warning`, `failed`; `warning` trägt der Schritt „Veraltete Algorithmen“, Spec 0005 Abschnitt 7a), bei `failed` der stabile Fehlercode, und eine kurze Angabe.
 - Die Angabe ist ein stabiler Code mit Parametern, kein übersetzter Text:
   - Namensauflösung und TCP: `host:port`, zu dem gerade verbunden wird;
   - Tunnel: die Hop-Bezeichnung;

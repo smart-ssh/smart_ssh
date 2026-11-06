@@ -594,6 +594,39 @@ mod tests {
     use crate::profiles::CredentialRef;
 
     #[test]
+    fn warn_outdated_merges_per_hop_without_duplicates() {
+        let log = ConnectLog::new();
+        log.warn_outdated(0, "u@a:22", vec!["ssh-rsa".into()]);
+        log.warn_outdated(0, "u@a:22", vec!["ssh-rsa".into(), "3des-cbc".into()]);
+        log.warn_outdated(1, "u@b:22", vec!["diffie-hellman-group1-sha1".into()]);
+        let w = log.warnings();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].hop, "u@a:22");
+        assert_eq!(w[0].algorithms, vec!["ssh-rsa", "3des-cbc"]);
+        assert_eq!(w[1].algorithms, vec!["diffie-hellman-group1-sha1"]);
+    }
+
+    #[test]
+    fn no_common_algorithm_error_names_hop_kind_and_offers() {
+        use crate::ssh::{AlgorithmKind, SshError};
+        let e = SshError::NoCommonAlgorithm {
+            hop: crate::ssh::HopLabel {
+                username: "u".into(),
+                host: "a".into(),
+                port: 22,
+            },
+            kind: AlgorithmKind::HostKey,
+            server_offers: vec!["ssh-dss".into()],
+        };
+        assert_eq!(e.code(), "SSH_NO_COMMON_ALGORITHM");
+        let m = e.to_string();
+        assert!(
+            m.contains("u@a:22") && m.contains("host key") && m.contains("ssh-dss"),
+            "{m}"
+        );
+    }
+
+    #[test]
     fn steps_finish_once_and_keep_their_order() {
         let log = ConnectLog::new();
         let dns = log.start(

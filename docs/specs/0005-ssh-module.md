@@ -173,6 +173,7 @@ verständliche Meldung zeigen kann (Texte und Codes: Spec 0069, Spec 0024):
 | Host-Key abgelehnt | siehe Abschnitt 6 |
 | Zeitüberschreitung | eine Zeitgrenze (unten) ist abgelaufen |
 | Jump-Host-Zyklus | siehe Abschnitt 5 |
+| Kein gemeinsamer Algorithmus | siehe Abschnitt 7a |
 | Zugangsdaten nicht auflösbar | Eintrag fehlt oder ist ungültig |
 | Secret-Speicher nicht erreichbar | der Speicher der Zugangsdaten hat nicht geantwortet (Spec 0098, Spec 0101) |
 | Kanalfehler | Fehler bei einem Kommando, einer Shell oder einem Dateizugriff |
@@ -192,6 +193,35 @@ Schritt-Protokoll geschrieben, das im Fehlerfall und beim Verbindungstest
 zugeklappt unter der Meldung steht (ADR 0110). Es enthält keine
 Zugangsdaten, nur die Art der Anmeldung, und geht nie in die Log-Datei oder den
 Diagnose-Export.
+
+## 7a. Veraltete Algorithmen
+
+Die App verbindet sich auch mit älteren Servern und Geräten, die nur
+veraltete Algorithmen sprechen.
+
+- Angeboten werden zuerst immer die aktuellen Algorithmen; veraltete stehen
+  ausschließlich dahinter. Ein moderner Server handelt deshalb nie einen
+  veralteten Algorithmus aus.
+- Als veraltet gelten: die Schlüsselaustausche `diffie-hellman-group14-sha1`,
+  `diffie-hellman-group-exchange-sha1` und `diffie-hellman-group1-sha1`, der
+  Host-Key- und Anmelde-Signaturalgorithmus `ssh-rsa` (RSA mit SHA-1), die
+  CBC-Verschlüsselungen (`aes128-cbc`, `aes192-cbc`, `aes256-cbc`,
+  `3des-cbc`) und die MACs `hmac-sha1` und `hmac-sha1-etm@openssh.com`.
+  Dasselbe gilt für jeden Hop einer Kette.
+- Wird mit dem Server ein veralteter Algorithmus ausgehandelt, oder
+  unterstützt er die strikte Schlüsselaustausch-Erweiterung nicht
+  (Schutz vor dem Terrapin-Angriff), bleibt die Verbindung bestehen. Die
+  Oberfläche zeigt einen Hinweis, der die Algorithmen nennt und rät, die
+  SSH-Software des Servers zu aktualisieren; bei einer Kette nennt er den
+  betroffenen Hop. Im Schritt-Protokoll (Spec 0112) steht je betroffenem Hop
+  ein Schritt „Veraltete Algorithmen“ mit Status `warning` und den Namen.
+  Wird ein Anmeldeschlüssel mit `ssh-rsa` signiert, zählt auch das dazu.
+- Es gibt keine Einstellung, die einen Server mit veralteten Algorithmen
+  ablehnt oder den Hinweis unterdrückt.
+- Gibt es für den Schlüsselaustausch, den Host-Key, die Verschlüsselung oder
+  den MAC keinen gemeinsamen Algorithmus, scheitert die Verbindung vor dem
+  Senden von Zugangsdaten mit dem Code `SSH_NO_COMMON_ALGORITHM`. Die Meldung
+  nennt Hop, Art und die Angebote des Servers.
 
 ## 8. Prüfbarkeit
 
@@ -217,6 +247,8 @@ Docker-Container oder ein externer Server ist dafür nicht nötig.
   nächsten nicht vertrauenswürdig.
 - Ein Fehler im Fehlerpfad (Schreibfehler der Ablage, unlesbarer Schlüssel
   des Servers) endet als Fehler der Verbindung, nie als stilles „vertraut".
+- Veraltete Algorithmen werden nur angeboten, wenn die aktuellen nicht
+  reichen, und jede Aushandlung eines veralteten wird dem Nutzer gezeigt.
 - Das Schritt-Protokoll beobachtet nur; keine Vertrauens- oder
   Anmeldeentscheidung hängt an ihm.
 
