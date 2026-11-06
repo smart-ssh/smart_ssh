@@ -311,7 +311,7 @@ async fn connect_inner(
         credentials,
         key_files,
         prompter,
-        pause: Arc::new(AuthPause::new()),
+        pause: log.prompt_pause(),
         log,
     };
     let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {

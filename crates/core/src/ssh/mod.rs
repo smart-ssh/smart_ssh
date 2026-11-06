@@ -35,8 +35,8 @@ pub use auth_prompt::{
 };
 pub use connect_log::{
     AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, ConnectStepSnapshot,
-    HostKeyCheckResult, ProgressSink, StepDetail, StepId, StepStatus, HOST_KEY_CHANGED,
-    HOST_KEY_UNKNOWN,
+    HostKeyCheckResult, ProgressSink, PromptPause, StepDetail, StepId, StepStatus,
+    HOST_KEY_CHANGED, HOST_KEY_UNKNOWN,
 };
 pub use error::{HopLabel, SecretKind, SshError};
 pub use host_key::{HostKeyStore, StoredHostKeyInfo};
