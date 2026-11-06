@@ -555,7 +555,9 @@ impl BrowserSftpOperation<'_> {
     }
 }
 
+mod audit;
 mod sftp_impl;
+pub(super) use audit::{audit_elevated_change, ElevatedAudit};
 
 /// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede
 /// server-verändernde Browser-Aktion im erhöhten Modus hinterlässt eine
@@ -564,33 +566,6 @@ mod sftp_impl;
 /// Auch bei einem Fehlschlag protokolliert (`ok = false`) — ein rekursives
 /// Löschen/chmod kann mittendrin scheitern, nachdem schon Einträge geändert
 /// wurden.
-/// Who a change was made as and how sudo authenticated (never the password).
-pub(super) struct ElevatedAudit {
-    user: String,
-    sudo_auth: crate::elevated_sftp::SudoAuth,
-}
-
-pub(super) fn audit_elevated_change(
-    elevated_user: Option<&ElevatedAudit>,
-    action: &'static str,
-    path: &str,
-    ok: bool,
-) {
-    if let Some(audit) = elevated_user {
-        let target_user = audit.user.as_str();
-        tracing::info!(
-            sudo_auth = audit.sudo_auth.as_str(),
-            action,
-            path,
-            ok,
-            elevated = true,
-            target_user,
-            source = "manual",
-            "file browser change with elevated rights"
-        );
-    }
-}
-
 pub(super) async fn lock_browser_sftp<'a>(
     session: &'a Session,
     channel: &BrowserChannel,

@@ -36,6 +36,18 @@ pub enum SudoAuth {
     Password,
 }
 
+#[cfg(test)]
+impl ElevatedSftp {
+    /// Channel opened with a passwordless sudo rule.
+    pub fn new(target_user: String, sftp: Box<dyn SftpSession>) -> Self {
+        Self {
+            target_user,
+            sudo_auth: SudoAuth::Nopasswd,
+            sftp,
+        }
+    }
+}
+
 impl SudoAuth {
     pub fn as_str(self) -> &'static str {
         match self {
