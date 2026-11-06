@@ -13,7 +13,7 @@
 //!   runtime. Such pools are parked and closed by an exit handler that is
 //!   registered after SQLCipher's own (handlers run in reverse order), when
 //!   the runtime is long gone and the pending tasks have been dropped.
-//! * [`wait_for_workers`] (Linux, issue #1168): a connection can also be dropped
+//! * [`wait_for_workers`] (Linux, issue #1168; macOS, issue #1201): a connection can also be dropped
 //!   *unclosed*, when the test's runtime is dropped with the "return connection
 //!   to pool" task still queued. The worker thread then sees its command
 //!   channel close and calls `sqlite3_close` on its own, in the background,
@@ -81,20 +81,9 @@ extern "C" fn close_parked() {
 /// Waits (bounded) until no `sqlx-sqlite-worker` thread is left. Such a thread
 /// is only alive after the handler above if its connection was dropped
 /// unclosed and it is still running `sqlite3_close`.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn wait_for_workers() {
     use std::time::{Duration, Instant};
-
-    fn worker_threads() -> usize {
-        let Ok(dir) = std::fs::read_dir("/proc/self/task") else {
-            return 0;
-        };
-        dir.flatten()
-            .filter_map(|task| std::fs::read_to_string(task.path().join("comm")).ok())
-            // `comm` is cut to 15 bytes: "sqlx-sqlite-wor".
-            .filter(|comm| comm.starts_with("sqlx-sqlite-wor"))
-            .count()
-    }
 
     let deadline = Instant::now() + Duration::from_secs(3);
     while worker_threads() > 0 && Instant::now() < deadline {
@@ -102,5 +91,65 @@ fn wait_for_workers() {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "linux")]
+fn worker_threads() -> usize {
+    let Ok(dir) = std::fs::read_dir("/proc/self/task") else {
+        return 0;
+    };
+    dir.flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("comm")).ok())
+        // `comm` is cut to 15 bytes: "sqlx-sqlite-wor".
+        .filter(|comm| comm.starts_with("sqlx-sqlite-wor"))
+        .count()
+}
+
+/// macOS (issue #1201): enumerate the Mach threads of this task and match the
+/// pthread name. A thread that is already gone yields no pthread and is not
+/// counted.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn worker_threads() -> usize {
+    extern "C" {
+        static mach_task_self_: libc::mach_port_t;
+        fn mach_port_deallocate(task: libc::mach_port_t, name: libc::mach_port_t) -> libc::c_int;
+    }
+
+    let mut list: libc::thread_act_array_t = std::ptr::null_mut();
+    let mut count: libc::mach_msg_type_number_t = 0;
+    // SAFETY: `task_threads` fills `list`/`count` with a vm-allocated array of
+    // send rights, which is released below (rights, then the array itself).
+    unsafe {
+        let task = mach_task_self_;
+        if libc::task_threads(task, &mut list, &mut count) != 0 || list.is_null() {
+            return 0;
+        }
+        let mut found = 0;
+        for i in 0..count as usize {
+            let port = *list.add(i);
+            let pthread = libc::pthread_from_mach_thread_np(port);
+            if pthread != 0 {
+                let mut name = [0 as libc::c_char; 64];
+                if libc::pthread_getname_np(pthread, name.as_mut_ptr(), name.len()) == 0 {
+                    let bytes: Vec<u8> = name
+                        .iter()
+                        .take_while(|c| **c != 0)
+                        .map(|c| *c as u8)
+                        .collect();
+                    if bytes.starts_with(b"sqlx-sqlite-worker") {
+                        found += 1;
+                    }
+                }
+            }
+            mach_port_deallocate(task, port);
+        }
+        libc::vm_deallocate(
+            task,
+            list as libc::vm_address_t,
+            count as usize * std::mem::size_of::<libc::thread_act_t>(),
+        );
+        found
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn wait_for_workers() {}
