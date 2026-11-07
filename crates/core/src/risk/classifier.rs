@@ -8,6 +8,7 @@ use super::patterns::{
     data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
+use super::sudo_options::{classify_sudo_option, SudoOption};
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
 
 /// Regelbasierte Umsetzung von [`RiskClassifier`] (Spec 0026, Abschnitt 2) —
@@ -329,62 +330,6 @@ const COMMAND_PREFIXES: &[&str] = &[
     "stdbuf", "ionice", "chroot", "flock", "busybox", "xargs", "runuser", "su", "watch", "strace",
     "ltrace", "script", "builtin",
 ];
-
-/// Issue #1208: how a `sudo`/`doas` word starting with `-` continues.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SudoOption {
-    /// `--`: end of options.
-    EndOfOptions,
-    /// Option without an argument, or with an attached one (`-uroot`,
-    /// `--user=root`).
-    Complete,
-    /// Option whose argument is the next word (`-u root`, `--prompt 'x'`).
-    TakesNext,
-}
-
-/// Classifies one `sudo`/`doas` option word. `word` keeps its original case
-/// (`-H` takes no argument, `-h` does). Unknown options are `Complete`, so
-/// the next word still counts as the command.
-fn classify_sudo_option(program: &str, word: &str) -> SudoOption {
-    if word == "--" {
-        return SudoOption::EndOfOptions;
-    }
-    if let Some(long) = word.strip_prefix("--") {
-        if long.contains('=') {
-            return SudoOption::Complete;
-        }
-        const LONG_WITH_ARG: &[&str] = &[
-            "close-from",
-            "chdir",
-            "group",
-            "host",
-            "prompt",
-            "chroot",
-            "role",
-            "command-timeout",
-            "type",
-            "other-user",
-            "user",
-        ];
-        return if program == "sudo" && LONG_WITH_ARG.contains(&long.to_lowercase().as_str()) {
-            SudoOption::TakesNext
-        } else {
-            SudoOption::Complete
-        };
-    }
-    let with_arg: &[char] = if program == "doas" {
-        &['C', 'u']
-    } else {
-        &['C', 'D', 'g', 'h', 'p', 'R', 'r', 'T', 't', 'U', 'u']
-    };
-    // Cluster such as `-Sk`: the first option letter that takes an argument
-    // ends it; letters after it are the attached argument.
-    let letters: Vec<char> = word.chars().skip(1).collect();
-    match letters.iter().position(|c| with_arg.contains(c)) {
-        Some(pos) if pos + 1 == letters.len() => SudoOption::TakesNext,
-        _ => SudoOption::Complete,
-    }
-}
 
 fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     if depth > 3 {
