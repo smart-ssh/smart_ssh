@@ -165,14 +165,19 @@ async fn current_server_with_only_rsa_sha2_signatures_accepts_rsa_key_without_wa
 async fn openssh_7_4_accepts_rsa_key_and_warns_about_ssh_rsa_exactly_when_used() {
     let a = connect("algo-legacy-default", rsa_key()).await;
     a.assert_connected();
-    // The warning is exactly the Terrapin entry plus, only if the SHA-1
-    // signature was used, `ssh-rsa`. 7.4 announces `server-sig-algs`, so the
-    // client signs with SHA-2 and no `ssh-rsa` entry is expected; if the
-    // client had fallen back to `ssh-rsa` it must be named.
-    let others = a.warned_algorithms();
+    // The daemon (LogLevel DEBUG3) names the signature algorithm it was
+    // offered; the warning must name `ssh-rsa` iff that was the one used.
     let log = daemon_log("algo-legacy-default");
     assert!(log.contains("Accepted publickey"), "{log}");
-    assert!(others.is_empty() || others == ["ssh-rsa"], "{others:?}");
+    let used_sha1 = log.contains("have ssh-rsa signature");
+    let used_sha2 = log.contains("have rsa-sha2-256 signature")
+        || log.contains("have rsa-sha2-512 signature");
+    assert!(
+        used_sha1 != used_sha2,
+        "could not tell the signature algorithm from the daemon log: {log}"
+    );
+    let expected: &[&str] = if used_sha1 { &["ssh-rsa"] } else { &[] };
+    assert_eq!(a.warned_algorithms(), expected);
 }
 
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
