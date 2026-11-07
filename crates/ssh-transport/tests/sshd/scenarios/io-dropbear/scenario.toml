@@ -1,0 +1,4 @@
+image = "dropbear"
+hostname = "io-dropbear"
+networks = ["io-net"]
+publish = true
