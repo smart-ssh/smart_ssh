@@ -1,0 +1,6 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+PermitTTY no
+Subsystem sftp internal-sftp
