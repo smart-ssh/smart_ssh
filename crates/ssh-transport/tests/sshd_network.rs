@@ -18,8 +18,8 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::{ConnectLimits, ConnectOutcome};
 use sshd_support::{
-    connect_scenario, daemon_log, hop, pause, restart, scenario_port, step, unpause, Creds, Keys,
-    NoKeyFiles,
+    connect_confirming, connect_scenario, daemon_log, hop, pause, restart, scenario_container,
+    scenario_port, step, unpause, Creds, Keys, NoKeyFiles,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -200,7 +200,7 @@ async fn sshd_restart_closes_the_session_and_a_new_connect_works() {
     // The daemon comes back; allow a few attempts while it starts listening.
     let mut last = None;
     for _ in 0..10 {
-        let port = scenario_port("net-restart");
+        let port = published_port("net-restart");
         let (result, _) = try_connect(port).await;
         // A fresh host key is generated at container start, so a connect
         // that merely pauses for confirmation also proves the daemon is up.
@@ -214,11 +214,29 @@ async fn sshd_restart_closes_the_session_and_a_new_connect_works() {
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     assert_eq!(last, None, "new connect after restart failed");
-    let mut fresh = connect_scenario("net-restart").await;
+    let port = published_port("net-restart");
+    let mut fresh = connect_confirming(vec![hop("127.0.0.1", port)]).await.0;
     let out = step("execute on new session", fresh.execute("echo ok"))
         .await
         .unwrap();
     assert_eq!(out.stdout, b"ok\n");
+}
+
+/// A container restart re-assigns an ephemeral published host port, so the
+/// port exported by the runner may be stale afterwards: ask Docker again.
+fn published_port(scenario: &str) -> u16 {
+    let out = Command::new("docker")
+        .args(["port", &scenario_container(scenario), "22/tcp"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "docker port failed");
+    String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .next()
+        .and_then(|l| l.rsplit(':').next())
+        .and_then(|p| p.trim().parse().ok())
+        .expect("published port")
 }
 
 struct Unpause(&'static str);
