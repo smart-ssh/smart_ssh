@@ -167,7 +167,7 @@ fn expect_methods(result: Result<Box<dyn SshTransport>, SshError>, wanted: &str)
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keyboard_interactive_only_rejects_key_profile_naming_method() {
-    let prompter = Scripted::new(&[&["tester@example.com"]]);
+    let prompter = Scripted::new(&[&[PASS]]);
     let t = login(
         "authpolicy-kbdint",
         USER,
@@ -206,8 +206,8 @@ async fn keyboard_interactive_only_with_password_profile_skips_prompter() {
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
-    // Two prompt rounds: the stored password answers the first, the
-    // second round can only come from the prompter.
+    // Two prompt rounds: a visible-input prompt (stored password cannot
+    // answer it) goes to the prompter, then the stored password answers.
     let prompter = Scripted::new(&[&["tester@example.com"]]);
     let t = login(
         "authpolicy-kbdint-twostep",
@@ -219,13 +219,13 @@ async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
     .await
     .unwrap();
     echo_ok(t).await;
-    assert_eq!(prompter.asked(), 1, "only the second round is asked");
+    assert_eq!(prompter.asked(), 1, "only the visible-input round is asked");
 }
 
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn publickey_then_password_with_scripted_prompter() {
-    let prompter = Scripted::new(&[&["tester@example.com"]]);
+    let prompter = Scripted::new(&[&[PASS]]);
     let t = login(
         "authpolicy-key-password",
         USER,
@@ -242,7 +242,7 @@ async fn publickey_then_password_with_scripted_prompter() {
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn publickey_then_keyboard_interactive_with_scripted_prompter() {
-    let prompter = Scripted::new(&[&["tester@example.com"]]);
+    let prompter = Scripted::new(&[&[PASS]]);
     let t = login(
         "authpolicy-key-kbdint",
         USER,
