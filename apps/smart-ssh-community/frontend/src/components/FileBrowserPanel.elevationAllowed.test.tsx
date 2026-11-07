@@ -1,6 +1,6 @@
 // Issue #1194 / Spec 0067: the elevation controls are only offered when the
 // server profile allows elevated rights (closed on every failure).
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -123,7 +123,11 @@ describe("FileBrowserPanel elevation switch of the profile (issue #1194)", () =>
   ])("hides the elevation control when the profile switch %s", async (_name, arrange) => {
     arrange();
     await renderPanel();
-    await waitFor(() => expect(sftpElevationAllowed).toHaveBeenCalledWith("session-1"));
+    // Let the profile query settle (inside act) before asserting the absence.
+    await act(async () => {
+      await vi.mocked(sftpElevationAllowed).mock.results[0].value.catch(() => undefined);
+    });
+    expect(sftpElevationAllowed).toHaveBeenCalledWith("session-1");
     expect(screen.queryByRole("button", { name: /Erhöhte Rechte/ })).not.toBeInTheDocument();
   });
 });
