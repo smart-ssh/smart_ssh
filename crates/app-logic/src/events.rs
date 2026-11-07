@@ -1174,6 +1174,11 @@ pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id
     );
 }
 
+/// Issue #1194: emits an event whose payload is only the session id.
+pub(crate) fn emit_session_only(emitter: &dyn EventEmitter, name: &str, session_id: SessionId) {
+    emit(emitter, name, &SessionOnlyPayload { session_id });
+}
+
 /// Spec 0080, A2: eine Runde endete mit `Done` (kein Fehler), aber weder
 /// Text noch eine vorgeschlagene Aktion fielen in dieser Runde an — bislang
 /// verschwand das für den Nutzer komplett spurlos (Spec 0080 §1: bei einem

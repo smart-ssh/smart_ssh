@@ -237,7 +237,11 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
     />
   );
 
-  const canElevate = !elevated && menus.sessionRoot !== undefined && menus.sessionRoot !== true;
+  const canElevate =
+    !elevated &&
+    menus.elevationAllowed === true &&
+    menus.sessionRoot !== undefined &&
+    menus.sessionRoot !== true;
 
   return (
     <div

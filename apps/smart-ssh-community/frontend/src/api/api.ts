@@ -855,6 +855,10 @@ export const sftpCancelTransfer = (sessionId: string, transferId: string) =>
   invoke<boolean>("sftp_cancel_transfer", { sessionId, transferId });
 
 /** Ziel-Nutzer des aktiven erhöhten Kanals, `null` = aus. */
+/** Issue #1194: does the server profile allow elevated rights? */
+export const sftpElevationAllowed = (sessionId: string) =>
+  invoke<boolean>("sftp_elevation_allowed", { sessionId });
+
 export const sftpElevationStatus = (sessionId: string) =>
   invoke<string | null>("sftp_elevation_status", { sessionId });
 

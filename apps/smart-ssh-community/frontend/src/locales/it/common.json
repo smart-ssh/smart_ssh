@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Percorso di sftp-server (accesso ai file con privilegi elevati)",
     "sftpServerPathPlaceholder": "Automatico",
     "sftpServerPathHint": "Necessario solo se il rilevamento automatico fallisce per il file browser con diritti elevati, ad es. /usr/lib/openssh/sftp-server. Vuoto = automatico.",
+    "elevationAllowedLabel": "Consenti i diritti elevati nel file browser",
+    "elevationAllowedHint": "Se disattivato, il file browser non offre diritti elevati per questo server.",
     "startDirectoryLabel": "Directory iniziale (terminale e file browser)",
     "startDirectoryPlaceholder": "Directory home",
     "startDirectoryHint": "Percorso assoluto (/…) o un percorso che inizia con ~/. Il terminale vi passa con un cd visibile, il file browser si apre lì. I comandi dell'IA vengono sempre eseguiti nella directory home. Vuoto = directory home.",
@@ -815,7 +817,8 @@
       "invalidUser": "Utente di destinazione non valido.",
       "unsupported": "Il server locale non ha una modalità elevata.",
       "checkFailed": "Verifica dei diritti sudo non riuscita.",
-      "startFailed": "Impossibile avviare sftp-server tramite sudo (possibile causa: “requiretty” in sudoers)."
+      "startFailed": "Impossibile avviare sftp-server tramite sudo (possibile causa: “requiretty” in sudoers).",
+      "disabledForServer": "I diritti elevati sono disattivati per questo server nel profilo del server."
     },
     "channelLost": "Diritti elevati terminati: il canale elevato non è più attivo.",
     "group": "Diritti elevati",
@@ -826,7 +829,8 @@
     "confirm": "Eleva",
     "opChown": "Cambio del proprietario",
     "chownNote": "Il proprietario verrà cambiato come {{user}}.",
-    "idleSwitchedOff": "Diritti elevati disattivati dopo {{minutes}} minuti senza attività"
+    "idleSwitchedOff": "Diritti elevati disattivati dopo {{minutes}} minuti senza attività",
+    "revokedByProfile": "Diritti elevati terminati: il profilo del server non li consente più."
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",

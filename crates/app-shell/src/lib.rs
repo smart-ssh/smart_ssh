@@ -950,6 +950,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_elevation_enable,
             commands::sftp_elevation_disable,
             commands::sftp_elevation_status,
+            commands::sftp_elevation_allowed,
             commands::read_local_text_preview,
             commands::sftp_open_for_editing,
             commands::local_file_mtime,

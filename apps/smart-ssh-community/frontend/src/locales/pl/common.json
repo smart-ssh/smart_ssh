@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Ścieżka do sftp-server (podwyższony dostęp do plików)",
     "sftpServerPathPlaceholder": "Automatycznie",
     "sftpServerPathHint": "Potrzebne tylko wtedy, gdy automatyczne wykrywanie zawodzi dla przeglądarki plików z podwyższonymi uprawnieniami, np. /usr/lib/openssh/sftp-server. Puste = automatycznie.",
+    "elevationAllowedLabel": "Zezwalaj na podwyższone uprawnienia w przeglądarce plików",
+    "elevationAllowedHint": "Gdy wyłączone, przeglądarka plików nie oferuje podwyższonych uprawnień dla tego serwera.",
     "startDirectoryLabel": "Katalog startowy (terminal i przeglądarka plików)",
     "startDirectoryPlaceholder": "Katalog domowy",
     "startDirectoryHint": "Ścieżka bezwzględna (/…) lub ścieżka zaczynająca się od ~/. Terminal przechodzi tam widocznym poleceniem cd, przeglądarka plików otwiera się tam. Polecenia AI zawsze działają w katalogu domowym. Puste = katalog domowy.",
@@ -820,7 +822,8 @@
       "invalidUser": "Nieprawidłowy użytkownik docelowy.",
       "unsupported": "Serwer lokalny nie ma trybu podwyższonego.",
       "checkFailed": "Sprawdzenie uprawnień sudo nie powiodło się.",
-      "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers)."
+      "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers).",
+      "disabledForServer": "Podwyższone uprawnienia są wyłączone dla tego serwera w profilu serwera."
     },
     "channelLost": "Podwyższone uprawnienia zakończone — kanał podwyższony nie jest już aktywny.",
     "group": "Podwyższone uprawnienia",
@@ -831,7 +834,8 @@
     "confirm": "Podnieś",
     "opChown": "Zmiana właściciela",
     "chownNote": "Właściciel zostanie zmieniony jako {{user}}.",
-    "idleSwitchedOff": "Podwyższone uprawnienia wyłączone po {{minutes}} min bez aktywności"
+    "idleSwitchedOff": "Podwyższone uprawnienia wyłączone po {{minutes}} min bez aktywności",
+    "revokedByProfile": "Podwyższone uprawnienia zakończone — profil serwera już ich nie dopuszcza."
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",

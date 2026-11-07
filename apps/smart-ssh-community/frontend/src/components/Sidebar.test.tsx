@@ -31,6 +31,7 @@ function server(id: string, name: string, groupId: string | null, isLocal = fals
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 

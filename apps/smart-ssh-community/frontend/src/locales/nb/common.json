@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Sti til sftp-server (utvidet filtilgang)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Trengs bare hvis automatisk gjenkjenning mislykkes for filutforskeren med utvidede rettigheter, f.eks. /usr/lib/openssh/sftp-server. Tomt = automatisk.",
+    "elevationAllowedLabel": "Tillat forhøyede rettigheter i filleseren",
+    "elevationAllowedHint": "Når dette er av, tilbyr filleseren ikke forhøyede rettigheter for denne serveren.",
     "startDirectoryLabel": "Startkatalog (terminal og filutforsker)",
     "startDirectoryPlaceholder": "Hjemmekatalog",
     "startDirectoryHint": "Absolutt sti (/…) eller en sti som starter med ~/. Terminalen bytter dit med en synlig cd, filutforskeren åpnes der. AI-kommandoer kjøres alltid i hjemmekatalogen. Tomt = hjemmekatalog.",
@@ -810,7 +812,8 @@
       "invalidUser": "Ugyldig målbruker.",
       "unsupported": "Den lokale serveren har ingen utvidet modus.",
       "checkFailed": "Sjekken av sudo-rettighetene mislyktes.",
-      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers).",
+      "disabledForServer": "Forhøyede rettigheter er slått av for denne serveren i serverprofilen."
     },
     "channelLost": "Utvidede rettigheter er avsluttet – den utvidede kanalen er ikke lenger aktiv.",
     "group": "Utvidede rettigheter",
@@ -821,7 +824,8 @@
     "confirm": "Utvid",
     "opChown": "Endring av eier",
     "chownNote": "Eieren endres som {{user}}.",
-    "idleSwitchedOff": "Forhøyede rettigheter slått av etter {{minutes}} minutter uten aktivitet"
+    "idleSwitchedOff": "Forhøyede rettigheter slått av etter {{minutes}} minutter uten aktivitet",
+    "revokedByProfile": "Forhøyede rettigheter ble avsluttet — serverprofilen tillater dem ikke lenger."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",

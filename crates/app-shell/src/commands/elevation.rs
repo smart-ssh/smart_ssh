@@ -644,15 +644,14 @@ pub async fn sftp_elevation_enable(
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;
-    crate::elevated_sftp::enable(
+    crate::elevated_sftp::enable_for_server(
         &ElevationContext {
             sessions: &state.sessions,
             registry: elevated.inner(),
             session_id,
             session: &session,
         },
-        &server.username,
-        server.sftp_server_path.as_deref(),
+        &server,
         target_user.as_deref(),
         confirm_stop.unwrap_or(false),
         &BrowserAccess(()),
@@ -684,6 +683,27 @@ pub async fn sftp_elevation_disable(
         &BrowserAccess(()),
     )
     .await
+}
+
+/// Issue #1194, Spec 0067 A5: whether the server profile of this session
+/// allows elevated rights (the file browser hides its controls otherwise).
+/// An unreadable profile is an `Err`; the frontend then offers nothing.
+#[tauri::command]
+pub async fn sftp_elevation_allowed(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<bool> {
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    // The local pseudo-server has no profile row; it is handled at the
+    // transport boundary (`sftp_elevation_enable` answers `Unsupported`).
+    if app_logic::dto::is_local(session.server_id) {
+        return Ok(true);
+    }
+    Ok(state
+        .profile_store
+        .get_server(&session.server_id)
+        .await?
+        .elevation_allowed)
 }
 
 /// Spec 0067, A5: Ziel-Nutzer des aktiven erhöhten Kanals, `None` = aus.

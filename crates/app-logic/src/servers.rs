@@ -89,6 +89,7 @@ pub async fn create_server(
         ai_injection_check_enabled: input.ai_injection_check_enabled,
         sftp_server_path,
         start_directory,
+        elevation_allowed: input.elevation_allowed,
         created_at: now,
         updated_at: now,
     };
@@ -216,6 +217,7 @@ async fn write_edited_server(
         ai_injection_check_enabled: input.ai_injection_check_enabled,
         sftp_server_path,
         start_directory: input.start_directory,
+        elevation_allowed: input.elevation_allowed,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -875,6 +877,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         }
     }
@@ -955,6 +958,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         }
     }
@@ -976,6 +980,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         }
     }
@@ -1094,6 +1099,7 @@ mod tests {
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         }
     }

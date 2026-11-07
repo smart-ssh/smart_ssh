@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Chemin de sftp-server (accès aux fichiers avec privilèges élevés)",
     "sftpServerPathPlaceholder": "Automatique",
     "sftpServerPathHint": "Nécessaire uniquement si la détection automatique échoue pour l’explorateur de fichiers avec privilèges élevés, p. ex. /usr/lib/openssh/sftp-server. Laisser vide = automatique.",
+    "elevationAllowedLabel": "Autoriser les droits élevés dans l’explorateur de fichiers",
+    "elevationAllowedHint": "Si désactivé, l’explorateur de fichiers ne propose pas de droits élevés pour ce serveur.",
     "startDirectoryLabel": "Répertoire de départ (terminal et explorateur de fichiers)",
     "startDirectoryPlaceholder": "Répertoire personnel",
     "startDirectoryHint": "Chemin absolu (/…) ou chemin commençant par ~/. Le terminal s’y place avec un cd visible, l’explorateur de fichiers s’y ouvre. Les commandes de l’IA s’exécutent toujours dans le répertoire personnel. Laisser vide = répertoire personnel.",
@@ -815,7 +817,8 @@
       "invalidUser": "Utilisateur cible invalide.",
       "unsupported": "Le serveur local n’a pas de mode élevé.",
       "checkFailed": "La vérification des droits sudo a échoué.",
-      "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers)."
+      "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers).",
+      "disabledForServer": "Les droits élevés sont désactivés pour ce serveur dans le profil du serveur."
     },
     "channelLost": "Droits élevés terminés — le canal élevé n’est plus actif.",
     "group": "Droits élevés",
@@ -826,7 +829,8 @@
     "confirm": "Élever",
     "opChown": "Changement du propriétaire",
     "chownNote": "Le propriétaire sera modifié en tant que {{user}}.",
-    "idleSwitchedOff": "Droits élevés désactivés après {{minutes}} minutes d’inactivité"
+    "idleSwitchedOff": "Droits élevés désactivés après {{minutes}} minutes d’inactivité",
+    "revokedByProfile": "Droits élevés terminés — le profil du serveur ne les autorise plus."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",

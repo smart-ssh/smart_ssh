@@ -841,3 +841,75 @@ async fn test_password_path_retries_without_logging_when_not_allowed() {
     let marker = |c: &str| c.split('\'').nth(1).unwrap().to_string();
     assert_ne!(marker(pw[0]), marker(pw[1]));
 }
+
+/// Issue #1194: a server profile that does not allow elevated rights is
+/// refused before any probe or sudo check reaches the transport.
+#[tokio::test]
+async fn test_disabled_for_server_refuses_without_any_probe() {
+    let (probe, check) = working_probes();
+    let (t, log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let server = ssh_manager_core::testing::ServerBuilder::new()
+        .elevation_allowed(false)
+        .build();
+
+    let result = enable_for_server(&f.ctx(), &server, None, false, &access())
+        .await
+        .expect("a refusal is a result, not an Err");
+
+    assert!(!result.active, "{result:?}");
+    assert_eq!(
+        result.failure.map(|f| f.kind),
+        Some(ElevationFailureKind::DisabledForServer)
+    );
+    assert!(
+        log.lock().unwrap().is_empty(),
+        "nothing may reach the transport"
+    );
+    assert!(!f.is_active().await);
+}
+
+/// Issue #1194: the default (allowed) path still elevates.
+#[tokio::test]
+async fn test_allowed_for_server_still_elevates() {
+    let (probe, check) = working_probes();
+    let (t, _log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let server = ssh_manager_core::testing::ServerBuilder::new().build();
+    assert!(server.elevation_allowed);
+
+    let result = enable_for_server(&f.ctx(), &server, None, false, &access())
+        .await
+        .expect("session exists");
+    assert!(result.active, "{result:?}");
+}
+
+/// Issue #1194: turning the setting off revokes the active channel; a
+/// command that still holds the slot cannot use it any more.
+#[tokio::test]
+async fn test_revoke_for_server_revokes_active_channel_and_blocks_further_use() {
+    let (probe, check) = working_probes();
+    let (t, _log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let enabled = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .expect("session exists");
+    assert!(enabled.active);
+    let held = f
+        .registry
+        .slot(f.session_id, &access())
+        .expect("precondition: channel active");
+
+    // A different server leaves the channel alone.
+    let other = ssh_manager_core::shared::ServerId::new();
+    assert!(revoke_for_server(&f.sessions, &f.registry, other).is_empty());
+    assert!(f.is_active().await);
+
+    let revoked = revoke_for_server(&f.sessions, &f.registry, f.session.server_id);
+    assert_eq!(revoked, vec![f.session_id]);
+    assert!(!f.is_active().await);
+    assert!(
+        held.is_revoked(),
+        "a further elevated command on the held slot is refused"
+    );
+}

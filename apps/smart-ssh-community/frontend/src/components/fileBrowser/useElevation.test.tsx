@@ -28,6 +28,7 @@ const active = (targetUser = "root") => ({
   active: true,
   targetUser,
   sftpServerPath: null,
+  elevationAllowed: true,
   failure: null,
   warning: null,
   runningOperations: [],
@@ -79,6 +80,7 @@ describe("useElevation", () => {
       active: false,
       targetUser: "root",
       sftpServerPath: null,
+      elevationAllowed: true,
       failure: { kind: "sudoNotAllowed", sudoersLine: "x", detail: null },
     } as never);
     const { result } = setup();

@@ -15,6 +15,12 @@ pub(crate) struct ElevationAutoDisabledPayload {
     minutes: u32,
 }
 
+/// Issue #1194: the channel was revoked because the server profile no longer
+/// allows elevated rights.
+pub fn emit_elevation_revoked_by_profile(emitter: &dyn EventEmitter, session_id: SessionId) {
+    crate::events::emit_session_only(emitter, names::ELEVATION_REVOKED_BY_PROFILE, session_id);
+}
+
 /// The channel was switched off after `minutes` without elevated activity.
 pub fn emit_elevation_auto_disabled(
     emitter: &dyn EventEmitter,

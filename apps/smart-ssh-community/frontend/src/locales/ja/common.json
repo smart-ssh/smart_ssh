@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-serverのパス（昇格したファイルアクセス）",
     "sftpServerPathPlaceholder": "自動",
     "sftpServerPathHint": "昇格した権限でのファイルブラウザーで自動検出が失敗する場合にのみ必要です（例: /usr/lib/openssh/sftp-server）。空欄 = 自動。",
+    "elevationAllowedLabel": "ファイルブラウザーで昇格した権限を許可する",
+    "elevationAllowedHint": "オフの場合、このサーバーではファイルブラウザーが昇格した権限を提供しません。",
     "startDirectoryLabel": "開始ディレクトリ（ターミナルとファイルブラウザー）",
     "startDirectoryPlaceholder": "ホームディレクトリ",
     "startDirectoryHint": "絶対パス（/…）または ~/ で始まるパス。ターミナルでは表示される cd で移動し、ファイルブラウザーではそこを開きます。AIのコマンドは常にホームディレクトリで実行されます。空欄 = ホームディレクトリ。",
@@ -805,7 +807,8 @@
       "invalidUser": "対象ユーザーが無効です。",
       "unsupported": "ローカルサーバーには昇格モードがありません。",
       "checkFailed": "sudoの権限の確認に失敗しました。",
-      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
+      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。",
+      "disabledForServer": "このサーバーでは、サーバープロファイルで昇格した権限がオフになっています。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
     "group": "昇格された権限",
@@ -816,7 +819,8 @@
     "confirm": "昇格",
     "opChown": "所有者の変更",
     "chownNote": "所有者は {{user}} として変更されます。",
-    "idleSwitchedOff": "操作がないまま{{minutes}}分が経過したため、昇格した権限をオフにしました"
+    "idleSwitchedOff": "操作がないまま{{minutes}}分が経過したため、昇格した権限をオフにしました",
+    "revokedByProfile": "昇格した権限を終了しました — サーバープロファイルで許可されなくなりました。"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",

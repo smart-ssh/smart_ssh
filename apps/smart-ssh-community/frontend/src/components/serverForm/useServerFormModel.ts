@@ -90,6 +90,7 @@ export function useServerFormModel({ serverId, defaultGroupId, onBeforeLoad, onL
     // nur bedienbar, nicht das gespeicherte Feld selbst gegated.
     aiInjectionCheckEnabled: state.aiInjectionCheckEnabled,
     sftpServerPath: state.sftpServerPath.trim() === "" ? null : state.sftpServerPath.trim(),
+    elevationAllowed: state.elevationAllowed,
     // Spec 0102: der lokale Pseudo-Server bietet das Feld nicht an.
     startDirectory: isLocal || !startDirectoryCheck.ok ? null : startDirectoryCheck.value,
   });
@@ -112,6 +113,7 @@ export function useServerFormModel({ serverId, defaultGroupId, onBeforeLoad, onL
     setSudoPassword: (v: string) => setField("sudoPassword", v),
     setPostIngestPolicy: (v: PostIngestPolicy) => setField("postIngestPolicy", v),
     setAiInjectionCheckEnabled: (v: boolean) => setField("aiInjectionCheckEnabled", v),
+    setElevationAllowed: (v: boolean) => setField("elevationAllowed", v),
     setSftpServerPath: (v: string) => setField("sftpServerPath", v),
     setStartDirectory: (v: string) => setField("startDirectory", v),
     setLocalNotes: (v: string) => setField("localNotes", v),

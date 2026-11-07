@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "A sftp-server útvonala (emelt jogú fájlhozzáférés)",
     "sftpServerPathPlaceholder": "Automatikus",
     "sftpServerPathHint": "Csak akkor szükséges, ha az automatikus felismerés nem sikerül az emelt jogú fájlböngészőnél, pl. /usr/lib/openssh/sftp-server. Üres = automatikus.",
+    "elevationAllowedLabel": "Emelt jogosultságok engedélyezése a fájlböngészőben",
+    "elevationAllowedHint": "Kikapcsolva a fájlböngésző nem kínál emelt jogosultságokat ehhez a szerverhez.",
     "startDirectoryLabel": "Kezdőkönyvtár (terminál és fájlböngésző)",
     "startDirectoryPlaceholder": "Saját könyvtár",
     "startDirectoryHint": "Abszolút útvonal (/…) vagy ~/-lel kezdődő útvonal. A terminál látható cd-vel vált oda, a fájlböngésző ott nyílik meg. Az AI-parancsok mindig a saját könyvtárban futnak. Üres = saját könyvtár.",
@@ -810,7 +812,8 @@
       "invalidUser": "Érvénytelen célfelhasználó.",
       "unsupported": "A helyi szervernek nincs emelt módja.",
       "checkFailed": "A sudo-jogosultságok ellenőrzése sikertelen.",
-      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
+      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben).",
+      "disabledForServer": "Az emelt jogosultságok ki vannak kapcsolva ennél a szervernél a szerverprofilban."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
     "group": "Emelt jogosultságok",
@@ -821,7 +824,8 @@
     "confirm": "Emelés",
     "opChown": "Tulajdonos módosítása",
     "chownNote": "A tulajdonos {{user}} néven lesz módosítva.",
-    "idleSwitchedOff": "Az emelt jogok kikapcsolva {{minutes}} perc tevékenység nélkül"
+    "idleSwitchedOff": "Az emelt jogok kikapcsolva {{minutes}} perc tevékenység nélkül",
+    "revokedByProfile": "Az emelt jogosultságok megszűntek — a szerverprofil már nem engedélyezi őket."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",

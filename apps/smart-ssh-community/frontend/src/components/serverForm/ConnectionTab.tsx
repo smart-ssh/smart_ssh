@@ -58,6 +58,8 @@ export function ConnectionTab({
     setStartDirectory,
     sftpServerPath,
     setSftpServerPath,
+    elevationAllowed,
+    setElevationAllowed,
   } = model;
   const { testing, testResult, runTest } = test;
   return (
@@ -194,6 +196,21 @@ export function ConnectionTab({
             <summary className="cursor-pointer text-sm text-fg-muted">
               {t("serverForm.advanced")}
             </summary>
+            <div className="mt-3">
+              <label className="flex items-start gap-2 text-sm text-fg-muted">
+                <input
+                  type="checkbox"
+                  checked={elevationAllowed}
+                  aria-describedby={`${idBase}-elevation-allowed-hint`}
+                  onChange={(e) => setElevationAllowed(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>{t("serverForm.elevationAllowedLabel")}</span>
+              </label>
+              <p id={`${idBase}-elevation-allowed-hint`} className="mt-1 text-xs text-fg-subtle">
+                {t("serverForm.elevationAllowedHint")}
+              </p>
+            </div>
             <Field
               label={t("serverForm.sftpServerPathLabel")}
               help={t("serverForm.sftpServerPathHint")}
@@ -204,6 +221,7 @@ export function ConnectionTab({
                   {...control}
                   {...TECHNICAL_INPUT_PROPS}
                   value={sftpServerPath}
+                  disabled={!elevationAllowed}
                   onChange={(e) => setSftpServerPath(e.target.value)}
                   placeholder={t("serverForm.sftpServerPathPlaceholder")}
                   className={`${FIELD_CONTROL_CLASS} w-full font-mono`}

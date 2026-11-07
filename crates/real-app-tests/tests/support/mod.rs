@@ -149,6 +149,7 @@ pub async fn seed_password_mode(data_dir: &Path) -> TestResult {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                elevation_allowed: true,
                 start_directory: None,
                 created_at: now,
                 updated_at: now,

@@ -30,6 +30,7 @@ pub(crate) const SERVER_COLUMNS: &[&str] = &[
     "sftp_server_path",
     "start_directory",
     "is_copy",
+    "elevation_allowed",
 ];
 
 /// Columns the profile store does not change on `UPDATE`: the key, the
@@ -126,6 +127,7 @@ fn bind_column<'q>(q: Q<'q>, column: &str, s: &'q ServerRow) -> Q<'q> {
         "sftp_server_path" => q.bind(&s.sftp_server_path),
         "start_directory" => q.bind(&s.start_directory),
         "is_copy" => q.bind(s.is_copy),
+        "elevation_allowed" => q.bind(s.elevation_allowed),
         other => panic!("servers column `{other}` has no binding in server_columns.rs"),
     }
 }

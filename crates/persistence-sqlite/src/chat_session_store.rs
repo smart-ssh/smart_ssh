@@ -608,6 +608,7 @@ mod tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: now,
             updated_at: now,
@@ -1429,7 +1430,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=27).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=28).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

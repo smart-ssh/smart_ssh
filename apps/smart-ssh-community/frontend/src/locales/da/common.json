@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Sti til sftp-server (forhøjet filadgang)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Kun nødvendig, hvis automatisk registrering mislykkes for filbrowseren med forhøjede rettigheder, f.eks. /usr/lib/openssh/sftp-server. Tom = automatisk.",
+    "elevationAllowedLabel": "Tillad forhøjede rettigheder i filbrowseren",
+    "elevationAllowedHint": "Når det er slået fra, tilbyder filbrowseren ikke forhøjede rettigheder for denne server.",
     "startDirectoryLabel": "Startmappe (terminal og filbrowser)",
     "startDirectoryPlaceholder": "Hjemmemappe",
     "startDirectoryHint": "Absolut sti (/…) eller en sti, der starter med ~/. Terminalen skifter dertil med et synligt cd, filbrowseren åbner dér. AI-kommandoer kører altid i hjemmemappen. Tom = hjemmemappe.",
@@ -810,7 +812,8 @@
       "invalidUser": "Ugyldig målbruger.",
       "unsupported": "Den lokale server har ingen forhøjet tilstand.",
       "checkFailed": "Kontrol af sudo-rettighederne mislykkedes.",
-      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers).",
+      "disabledForServer": "Forhøjede rettigheder er slået fra for denne server i serverprofilen."
     },
     "channelLost": "Forhøjede rettigheder er afsluttet – den forhøjede kanal er ikke længere aktiv.",
     "group": "Forhøjede rettigheder",
@@ -821,7 +824,8 @@
     "confirm": "Udvid",
     "opChown": "Skift af ejer",
     "chownNote": "Ejeren skiftes som {{user}}.",
-    "idleSwitchedOff": "Forhøjede rettigheder slået fra efter {{minutes}} minutter uden aktivitet"
+    "idleSwitchedOff": "Forhøjede rettigheder slået fra efter {{minutes}} minutter uden aktivitet",
+    "revokedByProfile": "Forhøjede rettigheder er afsluttet — serverprofilen tillader dem ikke længere."
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",

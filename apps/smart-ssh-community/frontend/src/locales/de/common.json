@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Pfad zu sftp-server (erhöhter Dateizugriff)",
     "sftpServerPathPlaceholder": "Automatisch",
     "sftpServerPathHint": "Nur nötig, wenn die automatische Erkennung für den Dateibrowser mit erhöhten Rechten scheitert, z. B. /usr/lib/openssh/sftp-server. Leer lassen = automatisch.",
+    "elevationAllowedLabel": "Erhöhte Rechte im Dateibrowser erlauben",
+    "elevationAllowedHint": "Wenn aus, bietet der Dateibrowser für diesen Server keine erhöhten Rechte an.",
     "startDirectoryLabel": "Startverzeichnis (Terminal und Dateibrowser)",
     "startDirectoryPlaceholder": "Home-Verzeichnis",
     "startDirectoryHint": "Absoluter Pfad (/…) oder ein Pfad, der mit ~/ beginnt. Das Terminal wechselt mit einem sichtbaren cd dorthin, der Dateibrowser öffnet dort. KI-Befehle laufen immer im Home-Verzeichnis. Leer lassen = Home-Verzeichnis.",
@@ -810,7 +812,8 @@
       "invalidUser": "Ungültiger Ziel-Nutzer.",
       "unsupported": "Für den lokalen Server gibt es keinen erhöhten Modus.",
       "checkFailed": "Die Prüfung der sudo-Rechte ist fehlgeschlagen.",
-      "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers)."
+      "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers).",
+      "disabledForServer": "Erhöhte Rechte sind für diesen Server im Serverprofil ausgeschaltet."
     },
     "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.",
     "group": "Erhöhte Rechte",
@@ -821,7 +824,8 @@
     "confirm": "Erhöhen",
     "opChown": "Besitzer ändern",
     "chownNote": "Der Besitzer wird als {{user}} geändert.",
-    "idleSwitchedOff": "Erhöhte Rechte nach {{minutes}} Minuten ohne Aktivität ausgeschaltet"
+    "idleSwitchedOff": "Erhöhte Rechte nach {{minutes}} Minuten ohne Aktivität ausgeschaltet",
+    "revokedByProfile": "Erhöhte Rechte beendet — das Serverprofil erlaubt sie nicht mehr."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",

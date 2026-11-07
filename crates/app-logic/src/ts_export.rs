@@ -286,6 +286,7 @@ fn event_payloads() -> String {
             names::ELEVATION_AUTO_DISABLED,
             "ElevationAutoDisabledPayload",
         ),
+        (names::ELEVATION_REVOKED_BY_PROFILE, "SessionOnlyPayload"),
         (names::SFTP_TRANSFER_FINISHED, "SftpTransferFinishedPayload"),
         (names::SFTP_TRANSFER_PROGRESS, "SftpTransferProgressPayload"),
         (

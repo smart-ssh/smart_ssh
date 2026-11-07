@@ -612,6 +612,7 @@ fn row_to_server(row: &sqlx::sqlite::SqliteRow, tags: Vec<String>) -> ProfileRes
         ai_injection_check_enabled: row.get("ai_injection_check_enabled"),
         sftp_server_path,
         start_directory,
+        elevation_allowed: row.get("elevation_allowed"),
         created_at: parse_timestamp(&created_at, "servers.created_at")?,
         updated_at: parse_timestamp(&updated_at, "servers.updated_at")?,
     })
@@ -637,6 +638,7 @@ fn server_to_row(server: &Server) -> ProfileResult<ServerRow> {
         sftp_server_path: server.sftp_server_path.clone(),
         start_directory: server.start_directory.clone(),
         is_copy: false,
+        elevation_allowed: server.elevation_allowed,
     })
 }
 

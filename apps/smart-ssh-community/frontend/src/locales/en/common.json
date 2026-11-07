@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Path to sftp-server (elevated file access)",
     "sftpServerPathPlaceholder": "Automatic",
     "sftpServerPathHint": "Only needed if automatic detection fails for the file browser with elevated rights, e.g. /usr/lib/openssh/sftp-server. Leave empty = automatic.",
+    "elevationAllowedLabel": "Allow elevated rights in the file browser",
+    "elevationAllowedHint": "When off, the file browser does not offer elevated rights for this server.",
     "startDirectoryLabel": "Start directory (terminal and file browser)",
     "startDirectoryPlaceholder": "Home directory",
     "startDirectoryHint": "Absolute path (/…) or a path starting with ~/. The terminal changes there with a visible cd, the file browser opens there. AI commands always run in the home directory. Leave empty = home directory.",
@@ -810,7 +812,8 @@
       "invalidUser": "Invalid target user.",
       "unsupported": "The local server has no elevated mode.",
       "checkFailed": "Checking the sudo rights failed.",
-      "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
+      "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers).",
+      "disabledForServer": "Elevated rights are turned off for this server in the server profile."
     },
     "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
     "group": "Elevated rights",
@@ -821,7 +824,8 @@
     "confirm": "Elevate",
     "opChown": "Change owner",
     "chownNote": "The owner will be changed as {{user}}.",
-    "idleSwitchedOff": "Elevated rights switched off after {{minutes}} minutes without activity"
+    "idleSwitchedOff": "Elevated rights switched off after {{minutes}} minutes without activity",
+    "revokedByProfile": "Elevated rights ended — the server profile no longer allows them."
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",

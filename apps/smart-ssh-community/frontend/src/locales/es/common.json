@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Ruta de sftp-server (acceso elevado a archivos)",
     "sftpServerPathPlaceholder": "Automático",
     "sftpServerPathHint": "Solo es necesario si la detección automática falla para el explorador de archivos con derechos elevados, p. ej. /usr/lib/openssh/sftp-server. Vacío = automático.",
+    "elevationAllowedLabel": "Permitir derechos elevados en el explorador de archivos",
+    "elevationAllowedHint": "Si está desactivado, el explorador de archivos no ofrece derechos elevados para este servidor.",
     "startDirectoryLabel": "Directorio de inicio (terminal y explorador de archivos)",
     "startDirectoryPlaceholder": "Directorio personal",
     "startDirectoryHint": "Ruta absoluta (/…) o una ruta que empiece por ~/. El terminal cambia allí con un cd visible y el explorador de archivos se abre allí. Los comandos de la IA siempre se ejecutan en el directorio personal. Vacío = directorio personal.",
@@ -815,7 +817,8 @@
       "invalidUser": "Usuario de destino no válido.",
       "unsupported": "El servidor local no tiene modo elevado.",
       "checkFailed": "Error al comprobar los derechos de sudo.",
-      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers)."
+      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers).",
+      "disabledForServer": "Los derechos elevados están desactivados para este servidor en el perfil del servidor."
     },
     "channelLost": "Derechos elevados finalizados: el canal elevado ya no está activo.",
     "group": "Derechos elevados",
@@ -826,7 +829,8 @@
     "confirm": "Elevar",
     "opChown": "Cambio de propietario",
     "chownNote": "El propietario se cambiará como {{user}}.",
-    "idleSwitchedOff": "Derechos elevados desactivados tras {{minutes}} minutos sin actividad"
+    "idleSwitchedOff": "Derechos elevados desactivados tras {{minutes}} minutos sin actividad",
+    "revokedByProfile": "Derechos elevados finalizados: el perfil del servidor ya no los permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",

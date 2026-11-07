@@ -41,6 +41,7 @@ function server(id: string, name: string, groupId: string | null): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 

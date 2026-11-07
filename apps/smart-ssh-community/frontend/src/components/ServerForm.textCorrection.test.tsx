@@ -51,6 +51,7 @@ const SERVER: ServerDto = { isCopy: false, startDirectory: null,
   postIngestPolicy: "balanced",
   aiInjectionCheckEnabled: false,
   sftpServerPath: null,
+  elevationAllowed: true,
 };
 
 function renderNew() {

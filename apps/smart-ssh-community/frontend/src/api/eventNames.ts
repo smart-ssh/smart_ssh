@@ -44,6 +44,7 @@ export const EVENT = {
   SFTP_TRANSFER_FINISHED: "sftp-transfer-finished",
   SFTP_TRANSFER_PROGRESS: "sftp-transfer-progress",
   ELEVATION_AUTO_DISABLED: "elevation-auto-disabled",
+  ELEVATION_REVOKED_BY_PROFILE: "elevation-revoked-by-profile",
   MCP_ACTION_TAB_REQUESTED: "mcp-action-tab-requested",
   CHAT_CONTEXT_USAGE: "chat-context-usage",
   CHAT_CONTEXT_COMPACTED: "chat-context-compacted",

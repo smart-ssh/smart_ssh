@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Đường dẫn đến sftp-server (truy cập tệp với quyền nâng cao)",
     "sftpServerPathPlaceholder": "Tự động",
     "sftpServerPathHint": "Chỉ cần khi tự động phát hiện thất bại đối với trình duyệt tệp với quyền nâng cao, ví dụ /usr/lib/openssh/sftp-server. Để trống = tự động.",
+    "elevationAllowedLabel": "Cho phép quyền nâng cao trong trình duyệt tệp",
+    "elevationAllowedHint": "Khi tắt, trình duyệt tệp không cung cấp quyền nâng cao cho máy chủ này.",
     "startDirectoryLabel": "Thư mục khởi đầu (terminal và trình duyệt tệp)",
     "startDirectoryPlaceholder": "Thư mục home",
     "startDirectoryHint": "Đường dẫn tuyệt đối (/…) hoặc đường dẫn bắt đầu bằng ~/. Terminal chuyển đến đó bằng một lệnh cd hiển thị rõ, trình duyệt tệp mở tại đó. Lệnh của AI luôn chạy trong thư mục home. Để trống = thư mục home.",
@@ -805,7 +807,8 @@
       "invalidUser": "Người dùng đích không hợp lệ.",
       "unsupported": "Máy chủ cục bộ không có chế độ nâng cao.",
       "checkFailed": "Kiểm tra quyền sudo thất bại.",
-      "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers)."
+      "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers).",
+      "disabledForServer": "Quyền nâng cao đã bị tắt cho máy chủ này trong hồ sơ máy chủ."
     },
     "channelLost": "Quyền nâng cao đã kết thúc — kênh nâng cao không còn hoạt động.",
     "group": "Quyền nâng cao",
@@ -816,7 +819,8 @@
     "confirm": "Nâng quyền",
     "opChown": "Đổi chủ sở hữu",
     "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}.",
-    "idleSwitchedOff": "Đã tắt quyền nâng cao sau {{minutes}} phút không hoạt động"
+    "idleSwitchedOff": "Đã tắt quyền nâng cao sau {{minutes}} phút không hoạt động",
+    "revokedByProfile": "Quyền nâng cao đã kết thúc — hồ sơ máy chủ không còn cho phép."
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",

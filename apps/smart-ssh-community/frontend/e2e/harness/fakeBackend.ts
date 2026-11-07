@@ -370,6 +370,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     sftp_elevation_disable: () => ({ disabled: true, runningOperations: [] }),
     sftp_cancel_transfer: () => true,
     sftp_elevation_status: () => null,
+    sftp_elevation_allowed: () => true,
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.

@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Calea către sftp-server (acces la fișiere cu drepturi ridicate)",
     "sftpServerPathPlaceholder": "Automat",
     "sftpServerPathHint": "Necesar doar dacă detectarea automată eșuează pentru browserul de fișiere cu drepturi ridicate, de ex. /usr/lib/openssh/sftp-server. Gol = automat.",
+    "elevationAllowedLabel": "Permite drepturi ridicate în browserul de fișiere",
+    "elevationAllowedHint": "Dacă este dezactivat, browserul de fișiere nu oferă drepturi ridicate pentru acest server.",
     "startDirectoryLabel": "Director de pornire (terminal și browser de fișiere)",
     "startDirectoryPlaceholder": "Directorul home",
     "startDirectoryHint": "Cale absolută (/…) sau o cale care începe cu ~/. Terminalul trece acolo printr-un cd vizibil, browserul de fișiere se deschide acolo. Comenzile IA rulează întotdeauna în directorul home. Gol = directorul home.",
@@ -815,7 +817,8 @@
       "invalidUser": "Utilizator țintă invalid.",
       "unsupported": "Serverul local nu are mod cu drepturi ridicate.",
       "checkFailed": "Verificarea drepturilor sudo a eșuat.",
-      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
+      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers).",
+      "disabledForServer": "Drepturile ridicate sunt dezactivate pentru acest server în profilul serverului."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
     "group": "Drepturi ridicate",
@@ -826,7 +829,8 @@
     "confirm": "Ridică",
     "opChown": "Schimbarea proprietarului",
     "chownNote": "Proprietarul va fi schimbat ca {{user}}.",
-    "idleSwitchedOff": "Drepturile ridicate au fost dezactivate după {{minutes}} minute fără activitate"
+    "idleSwitchedOff": "Drepturile ridicate au fost dezactivate după {{minutes}} minute fără activitate",
+    "revokedByProfile": "Drepturile ridicate s-au încheiat — profilul serverului nu le mai permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",

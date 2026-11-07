@@ -85,6 +85,7 @@ fn server_dto_carries_start_directory_in_camel_case() {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: Some("/srv/app".to_string()),
         created_at: Utc::now(),
         updated_at: Utc::now(),

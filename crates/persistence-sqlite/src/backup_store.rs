@@ -107,6 +107,13 @@ pub struct ServerRow {
     pub start_directory: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub is_copy: bool,
+    /// Backups made before issue #1194 lack the field: restore as allowed.
+    #[serde(default = "default_true")]
+    pub elevation_allowed: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 rows! {
@@ -303,6 +310,7 @@ where
                 sftp_server_path: r.get("sftp_server_path"),
                 start_directory: r.get("start_directory"),
                 is_copy: r.get("is_copy"),
+                elevation_allowed: r.get("elevation_allowed"),
             });
         }
         between("servers").await;

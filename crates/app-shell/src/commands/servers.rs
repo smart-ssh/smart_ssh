@@ -144,17 +144,31 @@ pub async fn create_server(
 /// `app_logic::servers::update_server`, testbar ohne `tauri::State`.
 #[tauri::command]
 pub async fn update_server(
+    app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
+    let elevation_allowed = input.elevation_allowed;
     app_logic::servers::update_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         input,
     )
-    .await
+    .await?;
+    // Issue #1194: turning the setting off revokes an active elevated channel
+    // of every session to this server (after the profile is saved).
+    if !elevation_allowed {
+        let emitter = crate::event_emitter::TauriEventEmitter(app);
+        for session_id in
+            crate::elevated_sftp::revoke_for_server(&state.sessions, elevated.inner(), id)
+        {
+            app_logic::elevation_events::emit_elevation_revoked_by_profile(&emitter, session_id);
+        }
+    }
+    Ok(())
 }
 
 /// Issue #48: Drag-and-drop in der Server-Liste — ändert nur `group_id`

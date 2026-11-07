@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server 경로(상승된 파일 접근)",
     "sftpServerPathPlaceholder": "자동",
     "sftpServerPathHint": "상승된 권한의 파일 브라우저에서 자동 감지가 실패할 때만 필요합니다. 예: /usr/lib/openssh/sftp-server. 비워 두면 자동입니다.",
+    "elevationAllowedLabel": "파일 브라우저에서 상승된 권한 허용",
+    "elevationAllowedHint": "끄면 파일 브라우저가 이 서버에 대해 상승된 권한을 제공하지 않습니다.",
     "startDirectoryLabel": "시작 디렉터리(터미널 및 파일 브라우저)",
     "startDirectoryPlaceholder": "홈 디렉터리",
     "startDirectoryHint": "절대 경로(/…) 또는 ~/로 시작하는 경로입니다. 터미널은 눈에 보이는 cd로 해당 위치로 이동하고, 파일 브라우저는 해당 위치에서 열립니다. AI 명령은 항상 홈 디렉터리에서 실행됩니다. 비워 두면 홈 디렉터리입니다.",
@@ -805,7 +807,8 @@
       "invalidUser": "대상 사용자가 올바르지 않습니다.",
       "unsupported": "로컬 서버에는 상승 모드가 없습니다.",
       "checkFailed": "sudo 권한을 확인하지 못했습니다.",
-      "startFailed": "sudo를 통해 sftp-server를 시작할 수 없습니다(가능한 원인: sudoers의 “requiretty”)."
+      "startFailed": "sudo를 통해 sftp-server를 시작할 수 없습니다(가능한 원인: sudoers의 “requiretty”).",
+      "disabledForServer": "서버 프로필에서 이 서버의 상승된 권한이 꺼져 있습니다."
     },
     "channelLost": "상승된 권한이 종료되었습니다 — 상승된 채널이 더 이상 활성 상태가 아닙니다.",
     "group": "상승된 권한",
@@ -816,7 +819,8 @@
     "confirm": "상승",
     "opChown": "소유자 변경",
     "chownNote": "소유자는 {{user}} 권한으로 변경됩니다.",
-    "idleSwitchedOff": "{{minutes}}분 동안 활동이 없어 상승된 권한을 껐습니다"
+    "idleSwitchedOff": "{{minutes}}분 동안 활동이 없어 상승된 권한을 껐습니다",
+    "revokedByProfile": "상승된 권한이 종료되었습니다 — 서버 프로필에서 더 이상 허용하지 않습니다."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config 가져오기",
