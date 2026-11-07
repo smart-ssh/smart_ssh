@@ -790,6 +790,16 @@
     "opChmod": "Změna oprávnění",
     "banner": "Zvýšená práva aktivní: všechny akce se soubory v tomto prohlížeči běží jako {{user}}.",
     "bannerLogged": "Zaznamenáno na serveru.",
+    "notice": {
+      "title": "O zvýšených právech",
+      "intro": "Soubory nyní čtete a zapisujete jako {{user}}. Změny se projeví okamžitě a aplikace je nemůže vrátit zpět.",
+      "loggedApp": "Každá změna se zaznamená do protokolu aplikace.",
+      "loggedAppAndServer": "Každá změna se zaznamená do protokolu aplikace a do autentizačního protokolu serveru.",
+      "passwordless": "Pravidlo sudo pro sftp-server dává {{user}} přístup bez hesla ke všemu, co běží pod tímto přihlášením, nejen k této aplikaci.",
+      "alternative": "Pokud tento server pravidelně spravujete jako root, samostatné přihlášení root s klíčem (PermitRootLogin prohibit-password) tento přístup vyjádří výslovně.",
+      "gotIt": "Rozumím",
+      "dontShowAgain": "Pro tento server již nezobrazovat"
+    },
     "deleteFileTitle": "Smazat soubor jako {{user}}?",
     "deleteDirTitle": "Smazat složku jako {{user}}?",
     "overwriteTitle": "Přepsat soubor jako {{user}}?",

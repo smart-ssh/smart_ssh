@@ -775,6 +775,16 @@
     "opChmod": "Đổi quyền",
     "banner": "Quyền nâng cao đang hoạt động: mọi thao tác tệp trong trình duyệt này chạy với tư cách {{user}}.",
     "bannerLogged": "Được ghi nhật ký trên máy chủ.",
+    "notice": {
+      "title": "Về quyền nâng cao",
+      "intro": "Giờ bạn đọc và ghi tệp với tư cách {{user}}. Thay đổi có hiệu lực ngay và ứng dụng không thể hoàn tác.",
+      "loggedApp": "Mọi thay đổi đều được ghi vào nhật ký của ứng dụng.",
+      "loggedAppAndServer": "Mọi thay đổi đều được ghi vào nhật ký của ứng dụng và nhật ký xác thực của máy chủ.",
+      "passwordless": "Quy tắc sudo cho sftp-server cho phép {{user}} truy cập không cần mật khẩu vào mọi thứ chạy dưới đăng nhập này, không chỉ ứng dụng này.",
+      "alternative": "Nếu bạn thường quản trị máy chủ này bằng root, một đăng nhập root riêng dùng khóa (PermitRootLogin prohibit-password) sẽ làm rõ quyền truy cập đó.",
+      "gotIt": "Đã hiểu",
+      "dontShowAgain": "Không hiện lại cho máy chủ này"
+    },
     "deleteFileTitle": "Xóa tệp với tư cách {{user}}?",
     "deleteDirTitle": "Xóa thư mục với tư cách {{user}}?",
     "overwriteTitle": "Ghi đè tệp với tư cách {{user}}?",

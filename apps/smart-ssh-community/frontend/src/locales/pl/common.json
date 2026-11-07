@@ -790,6 +790,16 @@
     "opChmod": "Zmiana uprawnień",
     "banner": "Podwyższone uprawnienia aktywne: wszystkie działania na plikach w tej przeglądarce wykonywane są jako {{user}}.",
     "bannerLogged": "Rejestrowane na serwerze.",
+    "notice": {
+      "title": "O podwyższonych uprawnieniach",
+      "intro": "Teraz odczytujesz i zapisujesz pliki jako {{user}}. Zmiany działają natychmiast, a aplikacja nie może ich cofnąć.",
+      "loggedApp": "Każda zmiana jest zapisywana w dzienniku aplikacji.",
+      "loggedAppAndServer": "Każda zmiana jest zapisywana w dzienniku aplikacji i w dzienniku uwierzytelniania serwera.",
+      "passwordless": "Reguła sudo dla sftp-server daje {{user}} dostęp bez hasła do wszystkiego, co działa w tym loginie, nie tylko do tej aplikacji.",
+      "alternative": "Jeśli często administrujesz tym serwerem jako root, osobny login root z kluczem (PermitRootLogin prohibit-password) czyni ten dostęp jawnym.",
+      "gotIt": "Rozumiem",
+      "dontShowAgain": "Nie pokazuj więcej dla tego serwera"
+    },
     "deleteFileTitle": "Usunąć plik jako {{user}}?",
     "deleteDirTitle": "Usunąć folder jako {{user}}?",
     "overwriteTitle": "Nadpisać plik jako {{user}}?",

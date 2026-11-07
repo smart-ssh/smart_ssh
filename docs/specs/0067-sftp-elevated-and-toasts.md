@@ -164,6 +164,25 @@ Prüfungen aus A1–A3 bleiben unverändert.
 - **Unübersehbare Kennzeichnung**, solange aktiv: farbiger Rahmen um den
   Browser und ein Banner „Erhöhte Rechte: root“ (bzw. Zielnutzer). Die
   Kennzeichnung bleibt auch bei verborgener Dateien-Ansicht sichtbar.
+- **Einmaliger Hinweis je Server** (Issue #1195): Wird der erhöhte Modus auf
+  einem Server aktiv, für den der Hinweis nicht ausgeblendet wurde, zeigt das
+  Banner ein aufklappbares Infofeld (standardmäßig offen, per Tastatur
+  bedienbar, für Screenreader als Statusbereich ausgezeichnet). Es hält
+  weder das Aktivieren auf noch braucht es einen Klick davor. Inhalt: Man
+  liest und schreibt jetzt als <Nutzer>; Änderungen wirken sofort und die App
+  kann sie nicht rückgängig machen. Jede Änderung steht im Protokoll der App
+  — und im Auth-Log des Servers, wenn dort protokolliert wird (siehe oben).
+  Hat sudo ohne Passwort authentifiziert, kommt dazu: Die sudo-Regel für
+  `sftp-server` gibt dem Nutzer passwortlosen Zugriff auf alles, was unter
+  diesem Login läuft, nicht nur auf die App. Außerdem der Hinweis auf die
+  Alternative: ein eigener Root-Login mit Schlüssel (`PermitRootLogin
+  prohibit-password`). „Verstanden“ blendet das Feld für diese Aktivierung
+  aus; bei der nächsten Aktivierung erscheint es wieder. „Für diesen Server
+  nicht mehr anzeigen“ merkt sich den Server dauerhaft (reine
+  Oberflächeneinstellung, ändert kein Verhalten); andere Server zeigen den
+  Hinweis weiter. Beim Löschen eines Servers wird er aus dieser Liste
+  entfernt. Bei Root-Sitzungen und bei fehlgeschlagener Aktivierung erscheint
+  der Hinweis nie.
 - **Bestätigungen bleiben** (Löschen, Überschreiben, rekursives chmod) und
   nennen den Modus („…als root löschen?“).
 - **Nur manuelle Nutzung:** KI und MCP-Agenten bekommen über diesen Kanal

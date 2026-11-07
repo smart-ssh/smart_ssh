@@ -42,6 +42,8 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
   const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   // Issue #1192: the elevated channel logs on the server.
   const [serverLogging, setServerLogging] = useState(false);
+  // Issue #1195: sudo needed no password for the active channel.
+  const [passwordless, setPasswordless] = useState(false);
   const [stopPrompt, setStopPrompt] = useState<StopPrompt | null>(null);
 
   const elevated = elevation !== null;
@@ -66,6 +68,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
     if (next === null) {
       setElevationWarning(null);
       setServerLogging(false);
+      setPasswordless(false);
     }
     onElevationChangeRef.current?.(next?.targetUser ?? null);
     if (next === null && !backendDone) {
@@ -142,6 +145,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         updateElevation({ targetUser: result.targetUser });
         setElevationWarning(result.warning?.path ?? null);
         setServerLogging(result.serverLogging === true);
+        setPasswordless(result.sudoAuth === "nopasswd");
         reloadRef.current(result.targetUser);
       } else {
         setElevationFailure(result);
@@ -155,6 +159,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         warning: null,
         runningOperations: [],
         serverLogging: false,
+        sudoAuth: null,
       });
     } finally {
       setEnablingElevation(false);
@@ -220,6 +225,7 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
     setElevationFailure,
     elevationWarning,
     serverLogging,
+    passwordless,
     stopPrompt,
     setStopPrompt,
     updateElevation,

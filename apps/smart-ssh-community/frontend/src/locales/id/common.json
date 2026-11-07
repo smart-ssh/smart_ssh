@@ -775,6 +775,16 @@
     "opChmod": "Perubahan izin",
     "banner": "Hak tinggi aktif: semua tindakan berkas di penjelajah ini dijalankan sebagai {{user}}.",
     "bannerLogged": "Dicatat di server.",
+    "notice": {
+      "title": "Tentang hak akses tinggi",
+      "intro": "Sekarang Anda membaca dan menulis berkas sebagai {{user}}. Perubahan berlaku segera dan tidak dapat dibatalkan oleh aplikasi.",
+      "loggedApp": "Setiap perubahan dicatat di log aplikasi.",
+      "loggedAppAndServer": "Setiap perubahan dicatat di log aplikasi dan di log autentikasi server.",
+      "passwordless": "Aturan sudo untuk sftp-server memberi {{user}} akses tanpa kata sandi ke semua yang berjalan di bawah login ini, bukan hanya aplikasi ini.",
+      "alternative": "Jika Anda rutin mengelola server ini sebagai root, login root terpisah dengan kunci (PermitRootLogin prohibit-password) membuat akses itu eksplisit.",
+      "gotIt": "Mengerti",
+      "dontShowAgain": "Jangan tampilkan lagi untuk server ini"
+    },
     "deleteFileTitle": "Hapus berkas sebagai {{user}}?",
     "deleteDirTitle": "Hapus folder sebagai {{user}}?",
     "overwriteTitle": "Timpa berkas sebagai {{user}}?",

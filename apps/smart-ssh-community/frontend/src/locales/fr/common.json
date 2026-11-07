@@ -785,6 +785,16 @@
     "opChmod": "Modification des droits",
     "banner": "Droits élevés actifs : toutes les actions sur les fichiers dans cet explorateur s’exécutent en tant que {{user}}.",
     "bannerLogged": "Journalisé sur le serveur.",
+    "notice": {
+      "title": "À propos des droits élevés",
+      "intro": "Vous lisez et écrivez désormais les fichiers en tant que {{user}}. Les modifications sont immédiates et l'application ne peut pas les annuler.",
+      "loggedApp": "Chaque modification est consignée dans le journal de l'application.",
+      "loggedAppAndServer": "Chaque modification est consignée dans le journal de l'application et dans le journal d'authentification du serveur.",
+      "passwordless": "La règle sudo pour sftp-server donne à {{user}} un accès sans mot de passe à tout ce qui s'exécute sous cette connexion, pas seulement à cette application.",
+      "alternative": "Si vous administrez régulièrement ce serveur en tant que root, une connexion root distincte avec clé (PermitRootLogin prohibit-password) rend cet accès explicite.",
+      "gotIt": "Compris",
+      "dontShowAgain": "Ne plus afficher pour ce serveur"
+    },
     "deleteFileTitle": "Supprimer le fichier en tant que {{user}} ?",
     "deleteDirTitle": "Supprimer le dossier en tant que {{user}} ?",
     "overwriteTitle": "Écraser le fichier en tant que {{user}} ?",

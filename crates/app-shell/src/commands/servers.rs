@@ -192,6 +192,7 @@ pub async fn move_server_to_group(
 /// dann DB-Zeile — nur eben erst nach Bestätigung.
 #[tauri::command]
 pub async fn delete_server(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: ServerId,
     confirm: bool,
@@ -203,14 +204,23 @@ pub async fn delete_server(
             "SERVER_LOCAL_NOT_DELETABLE",
         ));
     }
-    app_logic::servers::delete_server(
+    let result = app_logic::servers::delete_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         confirm,
         state.session_extension.as_deref(),
     )
-    .await
+    .await?;
+    if result.executed {
+        // Issue #1195: drop the id from the "notice dismissed" list. The
+        // server is gone either way; a failed settings write must not turn
+        // the delete into an error, but it is not silent.
+        if let Err(err) = crate::ui_preferences::forget_deleted_server(&app, &id.0.to_string()) {
+            tracing::warn!(error = %err.message, "could not clear elevation notice preference");
+        }
+    }
+    Ok(result)
 }
 
 /// Issue #100: die gespeicherten Server, deren Anmeldeart diese Version
@@ -229,18 +239,25 @@ pub async fn list_unusable_servers(
 /// `app_logic::servers::delete_unusable_server`.
 #[tauri::command]
 pub async fn delete_unusable_server(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: ServerId,
     confirm: bool,
 ) -> CommandResult<DeleteUnusableServerResult> {
-    app_logic::servers::delete_unusable_server(
+    let result = app_logic::servers::delete_unusable_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         confirm,
         state.session_extension.as_deref(),
     )
-    .await
+    .await?;
+    if result.executed {
+        if let Err(err) = crate::ui_preferences::forget_deleted_server(&app, &id.0.to_string()) {
+            tracing::warn!(error = %err.message, "could not clear elevation notice preference");
+        }
+    }
+    Ok(result)
 }
 
 /// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres

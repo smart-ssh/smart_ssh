@@ -785,6 +785,16 @@
     "opChmod": "Schimbarea permisiunilor",
     "banner": "Drepturi ridicate active: toate acțiunile asupra fișierelor din acest browser rulează ca {{user}}.",
     "bannerLogged": "Înregistrat pe server.",
+    "notice": {
+      "title": "Despre drepturile ridicate",
+      "intro": "Acum citești și scrii fișiere ca {{user}}. Modificările au efect imediat și aplicația nu le poate anula.",
+      "loggedApp": "Fiecare modificare este înregistrată în jurnalul aplicației.",
+      "loggedAppAndServer": "Fiecare modificare este înregistrată în jurnalul aplicației și în jurnalul de autentificare al serverului.",
+      "passwordless": "Regula sudo pentru sftp-server îi oferă lui {{user}} acces fără parolă la tot ce rulează sub această autentificare, nu doar la această aplicație.",
+      "alternative": "Dacă administrezi des acest server ca root, o autentificare root separată cu cheie (PermitRootLogin prohibit-password) face acel acces explicit.",
+      "gotIt": "Am înțeles",
+      "dontShowAgain": "Nu mai afișa pentru acest server"
+    },
     "deleteFileTitle": "Ștergeți fișierul ca {{user}}?",
     "deleteDirTitle": "Ștergeți folderul ca {{user}}?",
     "overwriteTitle": "Suprascrieți fișierul ca {{user}}?",

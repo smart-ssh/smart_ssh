@@ -775,6 +775,16 @@
     "opChmod": "권한 변경",
     "banner": "상승된 권한 활성: 이 브라우저의 모든 파일 동작이 {{user}} 권한으로 실행됩니다.",
     "bannerLogged": "서버에 기록됩니다.",
+    "notice": {
+      "title": "상승된 권한 안내",
+      "intro": "이제 {{user}} 권한으로 파일을 읽고 씁니다. 변경 사항은 즉시 적용되며 앱에서 되돌릴 수 없습니다.",
+      "loggedApp": "모든 변경 사항은 앱 로그에 기록됩니다.",
+      "loggedAppAndServer": "모든 변경 사항은 앱 로그와 서버의 인증 로그에 기록됩니다.",
+      "passwordless": "sftp-server용 sudo 규칙은 {{user}}에게 이 앱뿐 아니라 이 로그인으로 실행되는 모든 것에 비밀번호 없이 접근할 권한을 줍니다.",
+      "alternative": "이 서버를 자주 root로 관리한다면 키를 쓰는 별도 root 로그인(PermitRootLogin prohibit-password)이 그 접근을 명확히 해 줍니다.",
+      "gotIt": "확인",
+      "dontShowAgain": "이 서버에서는 다시 표시하지 않음"
+    },
     "deleteFileTitle": "{{user}} 권한으로 파일을 삭제하시겠습니까?",
     "deleteDirTitle": "{{user}} 권한으로 폴더를 삭제하시겠습니까?",
     "overwriteTitle": "{{user}} 권한으로 파일을 덮어쓰시겠습니까?",

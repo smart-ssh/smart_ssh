@@ -775,6 +775,16 @@
     "opChmod": "権限の変更",
     "banner": "昇格した権限が有効です: このブラウザーでのすべてのファイル操作は {{user}} として実行されます。",
     "bannerLogged": "サーバー上で記録されます。",
+    "notice": {
+      "title": "昇格権限について",
+      "intro": "これからは {{user}} としてファイルを読み書きします。変更はすぐに反映され、アプリから元に戻すことはできません。",
+      "loggedApp": "すべての変更はアプリのログに記録されます。",
+      "loggedAppAndServer": "すべての変更はアプリのログとサーバーの認証ログに記録されます。",
+      "passwordless": "sftp-server 用の sudo ルールにより、{{user}} はこのアプリだけでなく、このログインで動くすべてのものにパスワードなしでアクセスできます。",
+      "alternative": "このサーバーを普段 root で管理する場合は、鍵を使う専用の root ログイン (PermitRootLogin prohibit-password) にすると、そのアクセスが明確になります。",
+      "gotIt": "了解",
+      "dontShowAgain": "このサーバーでは今後表示しない"
+    },
     "deleteFileTitle": "{{user}} としてファイルを削除しますか？",
     "deleteDirTitle": "{{user}} としてフォルダーを削除しますか？",
     "overwriteTitle": "{{user}} としてファイルを上書きしますか？",

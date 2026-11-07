@@ -37,6 +37,7 @@ const active = (targetUser = "root") => ({
   warning: null,
   runningOperations: [],
   serverLogging: false,
+  sudoAuth: null,
 });
 
 describe("useElevation", () => {

@@ -510,6 +510,7 @@ fn failure(
         warning: None,
         running_operations: Vec::new(),
         server_logging: false,
+        sudo_auth: None,
     })
 }
 
@@ -607,6 +608,7 @@ pub(crate) async fn enable(
                 warning: None,
                 running_operations: running,
                 server_logging: false,
+                sudo_auth: None,
             });
         }
         stop_running_and_wait(ctx.registry, ctx.session_id).await;
@@ -839,6 +841,7 @@ pub(crate) async fn enable_after_confirmation(
                 }),
                 running_operations: Vec::new(),
                 server_logging,
+                sudo_auth: Some(if use_password { "password" } else { "nopasswd" }),
             })
         }
         Err(OpenFailure::WrongPassword) => failure(

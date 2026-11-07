@@ -28,6 +28,7 @@ async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
         &format!("sftp-exec:sudo -n {PATH} -l INFO -f AUTHPRIV")
     );
     assert!(result.server_logging);
+    assert_eq!(result.sudo_auth, Some("nopasswd"));
     assert!(log
         .iter()
         .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH} -l INFO -f AUTHPRIV")));
@@ -687,6 +688,7 @@ async fn test_password_path_is_used_and_password_never_leaks() {
         "{cmd}"
     );
     assert!(result.server_logging);
+    assert_eq!(result.sudo_auth, Some("password"));
     assert!(!log.iter().any(|c| c.contains(STORED)), "{log:?}");
     let audit: Vec<String> = logs
         .0

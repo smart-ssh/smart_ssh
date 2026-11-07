@@ -780,6 +780,16 @@
     "opChmod": "Change permissions",
     "banner": "Elevated rights active: all file actions in this browser run as {{user}}.",
     "bannerLogged": "Logged on the server.",
+    "notice": {
+      "title": "About elevated rights",
+      "intro": "You now read and write files as {{user}}. Changes take effect immediately and cannot be undone by the app.",
+      "loggedApp": "Every change is logged in the app's log.",
+      "loggedAppAndServer": "Every change is logged in the app's log and in the server's auth log.",
+      "passwordless": "The sudo rule for sftp-server gives passwordless {{user}} access to everything running under this login, not only to this app.",
+      "alternative": "If you administer this server regularly as root, a separate root login with a key (PermitRootLogin prohibit-password) makes that access explicit.",
+      "gotIt": "Got it",
+      "dontShowAgain": "Don't show again for this server"
+    },
     "deleteFileTitle": "Delete file as {{user}}?",
     "deleteDirTitle": "Delete folder as {{user}}?",
     "overwriteTitle": "Overwrite file as {{user}}?",
