@@ -107,14 +107,23 @@ async fn force_command_output_is_returned_for_exec() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disabled_sftp_subsystem_fails_clearly_and_exec_fallback_works() {
     let mut t = connect_scenario("io-nosftp").await;
+    let started = std::time::Instant::now();
     match step("open_sftp", t.open_sftp()).await {
         Ok(_) => panic!("open_sftp must fail without the sftp subsystem"),
         Err(e) => {
             assert!(
-                matches!(e, SshError::ChannelError(_) | SshError::SessionClosed(_)),
+                started.elapsed() < std::time::Duration::from_secs(3),
+                "open_sftp took {:?}",
+                started.elapsed()
+            );
+            assert!(
+                matches!(e, SshError::ChannelError(_)),
                 "unexpected error: {e:?}"
             );
-            assert!(!e.to_string().is_empty());
+            assert!(
+                e.to_string().contains("SFTP-Subsystem"),
+                "unexpected message: {e}"
+            );
         }
     }
     // The connection survives, and SFTP over an exec channel (the fallback)

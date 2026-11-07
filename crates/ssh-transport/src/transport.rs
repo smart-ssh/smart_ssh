@@ -279,10 +279,32 @@ impl SshTransport for RusshTransport {
             .channel_open_session()
             .await
             .map_err(map_session_russh_error)?;
+        let mut channel = channel;
         channel
             .request_subsystem(true, "sftp")
             .await
             .map_err(map_session_russh_error)?;
+        // Issue #1225: wait for the server's reply, so a server without the
+        // sftp subsystem fails right away instead of after the init timeout.
+        loop {
+            match channel.wait().await {
+                Some(russh::ChannelMsg::Success) => break,
+                Some(russh::ChannelMsg::Failure) => {
+                    // Best effort: the channel is useless either way.
+                    let _ = channel.close().await;
+                    return Err(SshError::ChannelError(
+                        "Der Server bietet das SFTP-Subsystem nicht an (SFTP subsystem not offered by the server)"
+                            .to_string(),
+                    ));
+                }
+                Some(russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => {
+                    return Err(SshError::SessionClosed(
+                        "Verbindung während der SFTP-Anfrage geschlossen".to_string(),
+                    ));
+                }
+                Some(_) => continue,
+            }
+        }
         let (stream, tap) = crate::sftp_tap::tap(channel.into_stream(), self.spawner.as_ref());
         let client = russh_sftp::client::SftpSession::new(stream)
             .await
