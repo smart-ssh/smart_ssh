@@ -11,5 +11,7 @@ install_key() {
 }
 adduser -D -s /bin/sh lockeduser
 install_key lockeduser
-# Lock the account after the key is in place.
-passwd -l lockeduser
+# No password is ever set: `adduser -D` leaves the account locked ('!').
+# Make sure of it without failing if it already is.
+passwd -l lockeduser >/dev/null 2>&1 || true
+grep -q '^lockeduser:[!*]' /etc/shadow
