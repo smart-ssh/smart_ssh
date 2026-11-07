@@ -116,10 +116,37 @@ fn expect_unknown(outcome: ConnectOutcome, port: u16) -> (Vec<u8>, String) {
 }
 
 /// Restarts the container and waits until sshd shows its banner again.
-async fn restart_and_wait(scenario: &str) {
+/// Docker assigns a new host port on restart (the scenario publishes a random
+/// one), so the new port is read back and the store entries of `old_port` are
+/// moved to it: the test then sees "the same server" under the new port.
+/// Returns the new port.
+async fn restart_and_wait(scenario: &str, store: &Store, old_port: u16) -> u16 {
     use tokio::io::AsyncReadExt;
     restart(scenario);
-    let port = scenario_port(scenario);
+    let out = Command::new("docker")
+        .args(["port", &scenario_container(scenario), "22/tcp"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "docker port failed");
+    let port: u16 = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .next()
+        .and_then(|l| l.rsplit(':').next())
+        .and_then(|p| p.trim().parse().ok())
+        .expect("published port after restart");
+    {
+        let mut known = store.known.lock().unwrap();
+        let moved: Vec<_> = known
+            .keys()
+            .filter(|(_, p, _)| *p == old_port)
+            .cloned()
+            .collect();
+        for k in moved {
+            let v = known.remove(&k).unwrap();
+            known.insert((k.0, port, k.2), v);
+        }
+    }
     step("sshd banner after restart", async {
         loop {
             if let Ok(mut s) = tokio::net::TcpStream::connect((HOST, port)).await {
@@ -132,6 +159,7 @@ async fn restart_and_wait(scenario: &str) {
         }
     })
     .await;
+    port
 }
 
 fn container_exec(scenario: &str, args: &[&str]) -> String {
@@ -216,7 +244,7 @@ async fn changed_key_stops_with_mismatch_and_no_authentication() {
     // Proves that the daemon log shows authentications at all.
     assert!(daemon_log(scenario).contains("Accepted password for testuser"));
 
-    restart_and_wait(scenario).await; // setup.sh generates new host keys on every start
+    let port = restart_and_wait(scenario, &store, port).await; // setup.sh generates new host keys on every start
     let log_start = daemon_log(scenario).len();
 
     match connect(&store, port).await {
@@ -294,7 +322,7 @@ async fn key_type_switch_is_unknown_never_silent_trust() {
         ConnectOutcome::Connected(_)
     ));
 
-    restart_and_wait(scenario).await; // now only the RSA host key is offered
+    let port = restart_and_wait(scenario, &store, port).await; // now only the RSA host key is offered
     let log_start = daemon_log(scenario).len();
 
     // Spec 0005 §6.1: an algorithm without a stored key counts as unknown.
