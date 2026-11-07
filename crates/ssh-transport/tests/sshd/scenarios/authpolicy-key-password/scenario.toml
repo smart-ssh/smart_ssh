@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "authpolicy-key-password"
+networks = ["authpolicy-net"]
+publish = true

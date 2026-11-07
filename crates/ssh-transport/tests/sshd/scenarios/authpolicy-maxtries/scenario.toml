@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "authpolicy-maxtries"
+networks = ["authpolicy-net"]
+publish = true
