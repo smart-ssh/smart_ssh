@@ -1,0 +1,5 @@
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no
+LogLevel VERBOSE
+KexAlgorithms diffie-hellman-group14-sha1
