@@ -375,6 +375,8 @@ trait HopConnector: Send {
     async fn open_next(
         &mut self,
         via: &mut Self::Session,
+        via_index: usize,
+        via_hop: &Hop,
         hop_index: usize,
         hop: &Hop,
     ) -> Result<Opened<Self::Session>, SshError>;
@@ -424,8 +426,9 @@ async fn drive_chain<C: HopConnector>(
     let mut sessions = Vec::with_capacity(hops.len());
     for (offset, hop) in remaining_hops.iter().enumerate() {
         let hop_index = offset + 1;
+        let via_hop = &hops[offset];
         let next = match connect_with_timeout(
-            connector.open_next(&mut current, hop_index, hop),
+            connector.open_next(&mut current, offset, via_hop, hop_index, hop),
             limits.handshake,
         )
         .await?
@@ -520,6 +523,8 @@ impl HopConnector for RusshHops<'_> {
     async fn open_next(
         &mut self,
         via: &mut Self::Session,
+        via_index: usize,
+        via_hop: &Hop,
         hop_index: usize,
         hop: &Hop,
     ) -> Result<Opened<Self::Session>, SshError> {
@@ -540,7 +545,25 @@ impl HopConnector for RusshHops<'_> {
                 0,
             )
             .await
-            .map_err(map_russh_error)?;
+            .map_err(|err| {
+                // Issue #1220: a refusal comes from `via`, not from the target.
+                if matches!(
+                    err,
+                    russh::Error::ChannelOpenFailure(
+                        russh::ChannelOpenFailure::AdministrativelyProhibited
+                    )
+                ) {
+                    let via_label = hop_label(via_hop);
+                    let refused = SshError::ChannelError(format!(
+                        "{via_label} refused to forward the connection to {label} ({err})"
+                    ));
+                    self.log
+                        .fail_at_hop(tunnel_step, via_index, &via_label, refused.code());
+                    refused
+                } else {
+                    map_russh_error(err)
+                }
+            })?;
         self.log.succeed(tunnel_step);
         let stream = tunnel_channel.into_stream();
 
@@ -857,6 +880,8 @@ mod phase_limit_tests {
         handshake: Option<Duration>,
         authentication: Option<Duration>,
         unknown_host_key: bool,
+        /// The previous hop refuses to open the tunnel to this hop.
+        tunnel_refused: bool,
     }
 
     fn timing(handshake_secs: u64, authentication_secs: u64) -> HopTiming {
@@ -864,6 +889,7 @@ mod phase_limit_tests {
             handshake: Some(Duration::from_secs(handshake_secs)),
             authentication: Some(Duration::from_secs(authentication_secs)),
             unknown_host_key: false,
+            tunnel_refused: false,
         }
     }
 
@@ -918,10 +944,19 @@ mod phase_limit_tests {
         async fn open_next(
             &mut self,
             via: &mut usize,
+            via_index: usize,
+            _via_hop: &Hop,
             hop_index: usize,
             _hop: &Hop,
         ) -> Result<Opened<usize>, SshError> {
             assert_eq!(*via + 1, hop_index, "Tunnel muss über den Vorgänger laufen");
+            assert_eq!(via_index + 1, hop_index);
+            if self.timings[hop_index].tunnel_refused {
+                self.calls.push(format!("refused-by:{via_index}"));
+                return Err(SshError::ChannelError(format!(
+                    "hop {via_index} refused to forward"
+                )));
+            }
             self.open(hop_index).await
         }
 
@@ -1141,6 +1176,24 @@ mod phase_limit_tests {
         assert_eq!(fake.calls, ["open:0", "auth:0", "open:1"]);
         // Simuliert die Bedenkzeit des Nutzers nach der Rückgabe.
         tokio::time::advance(Duration::from_secs(3601)).await;
+    }
+
+    /// Issue #1220: a bastion that refuses the tunnel ends the chain; the
+    /// connector is told which hop is the `via` one, and the target is
+    /// neither opened nor logged in to.
+    #[tokio::test(start_paused = true)]
+    async fn test_refused_tunnel_ends_the_chain_at_the_bastion() {
+        let mut fake = FakeHops::new(vec![
+            timing(1, 1),
+            HopTiming {
+                tunnel_refused: true,
+                ..timing(1, 1)
+            },
+            timing(1, 1),
+        ]);
+        let (result, _) = run(&mut fake).await;
+        assert!(matches!(result, Err(SshError::ChannelError(m)) if m.contains("hop 0")));
+        assert_eq!(fake.calls, ["open:0", "auth:0", "refused-by:0"]);
     }
 
     /// Ohne Hops: sofortiger Fehler, wie vor Issue #97.

@@ -364,22 +364,16 @@ fn nofwd_hops() -> Vec<Hop> {
 
 /// The bastion refuses to forward (`AllowTcpForwarding no`); the error has to
 /// point at the bastion, not at the target that was never contacted.
-#[ignore = "bug: a refused tunnel is recorded as a failed step of the target hop, not of the bastion"]
+#[ignore = "needs sshd containers, see module docs"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn forwarding_refused_names_the_bastion_hop() {
-    // The runner passes `--ignored`, which also runs this test; it stays off
-    // until the bug is fixed (set SSHD_RUN_KNOWN_BUGS=1 to see it fail).
-    if std::env::var_os("SSHD_RUN_KNOWN_BUGS").is_none() {
-        eprintln!("skipped: known bug, see the ignore reason");
-        return;
-    }
     let target_log = daemon_log("hop-nofwd-target").len();
     let a = attempt(nofwd_hops(), &Arc::new(Store::default()), None).await;
     let _ = a.error();
     let failed = a.failed_step();
     let bastion = format!("{USER}@{LOOPBACK}:{}", scenario_port("hop-nofwd-bastion"));
     assert!(
-        failed.hop == bastion || failed.hop_index == 0,
+        failed.hop == bastion && failed.hop_index == 0,
         "failure names {} (hop {}), not the bastion {bastion}",
         failed.hop,
         failed.hop_index
