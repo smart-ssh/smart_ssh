@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "authpolicy-banner-invalid"
+networks = ["authpolicy-net"]
+publish = true
