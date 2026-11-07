@@ -579,3 +579,41 @@ async fn agent_with_seven_wrong_keys_before_the_right_one_hits_max_auth_tries() 
         "MaxAuthTries not reached:\n{new}"
     );
 }
+
+/// Issue #1217: with the right key first, exactly one publickey attempt is
+/// made and accepted; no wrong identity is offered before it.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_with_right_key_first_makes_a_single_attempt() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    agent.add(&keys_dir().join("user_ed25519"));
+    agent.add(&keygen(dir.path(), "wrong0"));
+    let offset = daemon_log(KEYS).len();
+    agent_attempt().await.ok().await;
+    let new = log_since_until(KEYS, offset, |l| l.contains("Accepted publickey")).await;
+    assert_eq!(new.matches("Accepted publickey").count(), 1, "{new}");
+    assert!(!new.contains("Failed publickey"), "{new}");
+}
+
+/// Issue #1217: a certificate identity in the agent is tried like a key, also
+/// after a rejected identity (the plain key of the pair is not authorized in
+/// the certificate scenario).
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_with_certificate_identity_logs_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    agent.add(&keygen(dir.path(), "wrong0"));
+    // `ssh-add` loads `<key>-cert.pub` next to the key as its own identity.
+    agent.add(&keys_dir().join("user_ed25519"));
+    attempt(
+        scenario_port(CERT),
+        AuthMethod::Agent,
+        &MapCreds::new(&[]),
+        &FileReader,
+    )
+    .await
+    .ok()
+    .await;
+}
