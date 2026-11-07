@@ -573,25 +573,42 @@ async fn authenticate_via_agent(
     let identities = agent.request_identities().await.map_err(|e| {
         SshError::CredentialResolutionFailed(format!("Agent-Identitäten nicht abrufbar: {e}"))
     })?;
-    let identity = identities.first().cloned().ok_or_else(|| {
-        SshError::CredentialResolutionFailed("SSH-Agent hat keine Identitäten geladen".to_string())
-    })?;
+    if identities.is_empty() {
+        return Err(SshError::CredentialResolutionFailed(
+            "SSH-Agent hat keine Identitäten geladen".to_string(),
+        ));
+    }
 
-    let public_key = match &identity {
-        russh::keys::agent::AgentIdentity::PublicKey { key, .. } => key.clone(),
-        russh::keys::agent::AgentIdentity::Certificate { certificate, .. } => {
-            russh::keys::PublicKey::new(certificate.public_key().clone(), "")
+    // Issue #1217: like OpenSSH, offer the identities in the order the agent
+    // returns them until the server accepts one. A server disconnect (e.g.
+    // `MaxAuthTries`) surfaces as an error from the call and ends the loop.
+    let mut last = None;
+    for identity in identities {
+        let public_key = match &identity {
+            russh::keys::agent::AgentIdentity::PublicKey { key, .. } => key.clone(),
+            russh::keys::agent::AgentIdentity::Certificate { certificate, .. } => {
+                russh::keys::PublicKey::new(certificate.public_key().clone(), "")
+            }
+        };
+        let mut signer = AgentSigner {
+            client: &mut agent,
+            identity,
+        };
+        let result = handle
+            .authenticate_publickey_with(username.to_string(), public_key, None, &mut signer)
+            .await
+            .map_err(crate::error::map_transport_error)?;
+        match &result {
+            russh::client::AuthResult::Success => return Ok(result),
+            russh::client::AuthResult::Failure {
+                partial_success: true,
+                ..
+            } => return Ok(result),
+            russh::client::AuthResult::Failure { .. } => last = Some(result),
         }
-    };
-
-    let mut signer = AgentSigner {
-        client: agent,
-        identity,
-    };
-    handle
-        .authenticate_publickey_with(username.to_string(), public_key, None, &mut signer)
-        .await
-        .map_err(crate::error::map_transport_error)
+    }
+    // Non-empty list, so at least one failure was recorded.
+    last.ok_or(SshError::AuthenticationFailed)
 }
 
 #[cfg(not(unix))]
@@ -622,13 +639,13 @@ async fn authenticate_via_agent(
 /// bereits nahezu exakt zu `Signer::auth_sign` passt. Siehe ADR-Vorschlag in
 /// der Abschluss-Nachricht.
 #[cfg(unix)]
-struct AgentSigner {
-    client: russh::keys::agent::client::AgentClient<tokio::net::UnixStream>,
+struct AgentSigner<'a> {
+    client: &'a mut russh::keys::agent::client::AgentClient<tokio::net::UnixStream>,
     identity: russh::keys::agent::AgentIdentity,
 }
 
 #[cfg(unix)]
-impl russh::Signer for AgentSigner {
+impl russh::Signer for AgentSigner<'_> {
     type Error = crate::error::TransportError;
 
     async fn auth_sign(

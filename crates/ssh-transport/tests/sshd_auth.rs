@@ -527,13 +527,37 @@ async fn missing_agent_socket_gives_clear_error() {
     assert_agent_error(&e);
 }
 
-/// Pinned outcome: the transport offers only the agent's first identity. With
-/// seven wrong keys loaded before the right one, the login is rejected with
-/// `AuthenticationFailed`; the right key is never tried, so the server's
-/// `MaxAuthTries 6` is not reached either.
+/// Issue #1217: the right key as the agent's second identity is found.
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn agent_with_seven_wrong_keys_before_the_right_one_is_pinned() {
+async fn agent_with_right_key_second_logs_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    agent.add(&keygen(dir.path(), "wrong0"));
+    agent.add(&keys_dir().join("user_ed25519"));
+    agent_attempt().await.ok().await;
+}
+
+/// Only wrong keys (fewer than `MaxAuthTries`): `AuthenticationFailed`.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_with_only_wrong_keys_fails_authentication() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    for i in 0..3 {
+        agent.add(&keygen(dir.path(), &format!("wrong{i}")));
+    }
+    let (e, _) = agent_attempt().await.err();
+    assert!(matches!(e, SshError::AuthenticationFailed), "got {e:?}");
+}
+
+/// With seven wrong keys before the right one, every identity is tried in
+/// order until the server's `MaxAuthTries 6` ends the login: an
+/// authentication-side error (not a credential error, not a hang), and the
+/// right key is never reached.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_with_seven_wrong_keys_before_the_right_one_hits_max_auth_tries() {
     let dir = tempfile::tempdir().unwrap();
     let agent = Agent::start().await;
     for i in 0..7 {
@@ -541,11 +565,17 @@ async fn agent_with_seven_wrong_keys_before_the_right_one_is_pinned() {
     }
     agent.add(&keys_dir().join("user_ed25519"));
     let offset = daemon_log(KEYS).len();
-    let (e, _) = agent_attempt().await.err();
-    assert!(matches!(e, SshError::AuthenticationFailed), "got {e:?}");
-    let new = log_since_until(KEYS, offset, |l| l.contains("Failed publickey")).await;
+    let (e, _) = tokio::time::timeout(std::time::Duration::from_secs(60), agent_attempt())
+        .await
+        .expect("login must not hang")
+        .err();
+    assert!(!is_credential_error(&e), "got {e:?}");
+    let new = log_since_until(KEYS, offset, |l| {
+        l.contains("Too many authentication failures")
+    })
+    .await;
     assert!(
-        !new.contains("Too many authentication failures"),
-        "unexpected MaxAuthTries hit:\n{new}"
+        new.contains("Too many authentication failures"),
+        "MaxAuthTries not reached:\n{new}"
     );
 }
