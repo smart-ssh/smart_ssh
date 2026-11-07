@@ -785,6 +785,16 @@
     "opChmod": "Alteração de permissões",
     "banner": "Direitos elevados ativos: todas as ações de arquivo neste navegador são executadas como {{user}}.",
     "bannerLogged": "Registrado no servidor.",
+    "notice": {
+      "title": "Sobre os direitos elevados",
+      "intro": "Agora você lê e grava arquivos como {{user}}. As alterações têm efeito imediato e o aplicativo não pode desfazê-las.",
+      "loggedApp": "Cada alteração é registrada no log do aplicativo.",
+      "loggedAppAndServer": "Cada alteração é registrada no log do aplicativo e no log de autenticação do servidor.",
+      "passwordless": "A regra sudo para sftp-server dá a {{user}} acesso sem senha a tudo o que roda com este login, não apenas a este aplicativo.",
+      "alternative": "Se você administra este servidor regularmente como root, um login root separado com chave (PermitRootLogin prohibit-password) torna esse acesso explícito.",
+      "gotIt": "Entendi",
+      "dontShowAgain": "Não mostrar novamente para este servidor"
+    },
     "deleteFileTitle": "Excluir arquivo como {{user}}?",
     "deleteDirTitle": "Excluir pasta como {{user}}?",
     "overwriteTitle": "Sobrescrever arquivo como {{user}}?",

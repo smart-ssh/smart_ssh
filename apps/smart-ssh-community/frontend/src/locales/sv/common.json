@@ -780,6 +780,16 @@
     "opChmod": "Ändring av behörigheter",
     "banner": "Förhöjda rättigheter aktiva: alla filåtgärder i den här bläddraren körs som {{user}}.",
     "bannerLogged": "Loggas på servern.",
+    "notice": {
+      "title": "Om utökade rättigheter",
+      "intro": "Du läser och skriver nu filer som {{user}}. Ändringar gäller direkt och kan inte ångras av appen.",
+      "loggedApp": "Varje ändring loggas i appens logg.",
+      "loggedAppAndServer": "Varje ändring loggas i appens logg och i serverns autentiseringslogg.",
+      "passwordless": "Sudo-regeln för sftp-server ger {{user}} lösenordsfri åtkomst till allt som körs under den här inloggningen, inte bara till appen.",
+      "alternative": "Om du ofta administrerar servern som root gör en separat root-inloggning med nyckel (PermitRootLogin prohibit-password) den åtkomsten tydlig.",
+      "gotIt": "Uppfattat",
+      "dontShowAgain": "Visa inte igen för den här servern"
+    },
     "deleteFileTitle": "Ta bort filen som {{user}}?",
     "deleteDirTitle": "Ta bort mappen som {{user}}?",
     "overwriteTitle": "Skriva över filen som {{user}}?",

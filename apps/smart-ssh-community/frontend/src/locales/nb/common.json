@@ -780,6 +780,16 @@
     "opChmod": "Endring av tillatelser",
     "banner": "Utvidede rettigheter er aktive: alle filhandlinger i denne utforskeren kjøres som {{user}}.",
     "bannerLogged": "Logges på serveren.",
+    "notice": {
+      "title": "Om utvidede rettigheter",
+      "intro": "Du leser og skriver nå filer som {{user}}. Endringer trer i kraft umiddelbart og kan ikke angres av appen.",
+      "loggedApp": "Hver endring logges i appens logg.",
+      "loggedAppAndServer": "Hver endring logges i appens logg og i serverens autentiseringslogg.",
+      "passwordless": "Sudo-regelen for sftp-server gir {{user}} tilgang uten passord til alt som kjører under denne innloggingen, ikke bare til appen.",
+      "alternative": "Hvis du jevnlig administrerer serveren som root, gjør en egen root-innlogging med nøkkel (PermitRootLogin prohibit-password) den tilgangen eksplisitt.",
+      "gotIt": "Forstått",
+      "dontShowAgain": "Ikke vis igjen for denne serveren"
+    },
     "deleteFileTitle": "Slette filen som {{user}}?",
     "deleteDirTitle": "Slette mappen som {{user}}?",
     "overwriteTitle": "Overskrive filen som {{user}}?",

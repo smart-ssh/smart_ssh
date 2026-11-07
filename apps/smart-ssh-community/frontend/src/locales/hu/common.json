@@ -780,6 +780,16 @@
     "opChmod": "Jogosultságok módosítása",
     "banner": "Emelt jogok aktívak: a böngésző minden fájlművelete {{user}} néven fut.",
     "bannerLogged": "A kiszolgálón naplózva.",
+    "notice": {
+      "title": "A megemelt jogosultságokról",
+      "intro": "Mostantól {{user}} felhasználóként olvasol és írsz fájlokat. A módosítások azonnal érvénybe lépnek, és az alkalmazás nem tudja visszavonni őket.",
+      "loggedApp": "Minden módosítás bekerül az alkalmazás naplójába.",
+      "loggedAppAndServer": "Minden módosítás bekerül az alkalmazás naplójába és a kiszolgáló hitelesítési naplójába.",
+      "passwordless": "Az sftp-server sudo-szabálya jelszó nélküli hozzáférést ad {{user}} számára mindenhez, ami ezen a bejelentkezésen fut, nem csak ehhez az alkalmazáshoz.",
+      "alternative": "Ha rendszeresen rootként kezeled ezt a kiszolgálót, egy külön, kulcsos root-bejelentkezés (PermitRootLogin prohibit-password) egyértelművé teszi ezt a hozzáférést.",
+      "gotIt": "Értem",
+      "dontShowAgain": "Ne jelenjen meg többé ennél a kiszolgálónál"
+    },
     "deleteFileTitle": "Fájl törlése {{user}} néven?",
     "deleteDirTitle": "Mappa törlése {{user}} néven?",
     "overwriteTitle": "Fájl felülírása {{user}} néven?",

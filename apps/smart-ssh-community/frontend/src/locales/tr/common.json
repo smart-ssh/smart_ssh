@@ -780,6 +780,16 @@
     "opChmod": "İzinleri değiştirme",
     "banner": "Yükseltilmiş haklar etkin: bu tarayıcıdaki tüm dosya eylemleri {{user}} olarak çalışır.",
     "bannerLogged": "Sunucuda günlüğe kaydedilir.",
+    "notice": {
+      "title": "Yükseltilmiş haklar hakkında",
+      "intro": "Artık dosyaları {{user}} olarak okuyor ve yazıyorsunuz. Değişiklikler hemen geçerli olur ve uygulama bunları geri alamaz.",
+      "loggedApp": "Her değişiklik uygulamanın günlüğüne kaydedilir.",
+      "loggedAppAndServer": "Her değişiklik uygulamanın günlüğüne ve sunucunun kimlik doğrulama günlüğüne kaydedilir.",
+      "passwordless": "sftp-server için sudo kuralı, {{user}} kullanıcısına yalnızca bu uygulamaya değil, bu oturum altında çalışan her şeye parolasız erişim verir.",
+      "alternative": "Bu sunucuyu düzenli olarak root olarak yönetiyorsanız, anahtarlı ayrı bir root girişi (PermitRootLogin prohibit-password) bu erişimi açık hale getirir.",
+      "gotIt": "Anladım",
+      "dontShowAgain": "Bu sunucu için bir daha gösterme"
+    },
     "deleteFileTitle": "Dosya {{user}} olarak silinsin mi?",
     "deleteDirTitle": "Klasör {{user}} olarak silinsin mi?",
     "overwriteTitle": "Dosyanın üzerine {{user}} olarak yazılsın mı?",

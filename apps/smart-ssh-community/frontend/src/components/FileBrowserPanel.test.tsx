@@ -1524,7 +1524,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   const enableElevation = async (alreadyRendered = false) => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1570,7 +1570,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   it("explains a missing sudo rule with the tailored sudoers line and an honest warning", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: false,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1600,7 +1600,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   it("shows the unsafe sftp-server message and no sudoers line", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: false,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1616,7 +1616,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   it("warns in the file browser when elevated mode started with an unsafe sftp-server", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1632,7 +1632,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   it("can elevate to another user (A4) and names that user everywhere", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "www-data",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1680,7 +1680,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   });
 
   it("closes the menu with Escape and returns focus to the arrow button; remembers the user", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: false,
       targetUser: "postgres",
       sftpServerPath: null,
@@ -1725,7 +1725,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
         return Promise.resolve();
       });
     });
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1761,7 +1761,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
   it("a drop via the listener registered before switching elevated on uploads as root", async () => {
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpUpload).mockResolvedValue(undefined);
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1866,7 +1866,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
   it("reports the elevated user upward so it stays visible when the browser is hidden", async () => {
     const onElevationChange = vi.fn();
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -1923,7 +1923,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
 
     it("does not show the menu again after elevating and returning to normal rights", async () => {
-      vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+      vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
         active: true,
         targetUser: "root",
         sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -2043,7 +2043,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
   it("off -> elevated (issue #656): offers 'Upload as root' and sends root explicitly", async () => {
     arrangeEditMocks();
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -2910,7 +2910,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
   describe("transfer rows across an elevation switch (issue #621)", () => {
     type Handler<T> = (event: T) => void;
     const enableElevation = async () => {
-      vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+      vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
         active: true,
         targetUser: "root",
         sftpServerPath: "/usr/lib/openssh/sftp-server",
@@ -3156,7 +3156,7 @@ describe("FileBrowserPanel menus stay inside the window (issue #627)", () => {
   });
 
   it("shifts the target user form inside the window near the right edge", async () => {
-    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false,
+    vi.mocked(sftpElevationEnable).mockResolvedValue({ warning: null, runningOperations: [], serverLogging: false, sudoAuth: null,
       active: true,
       targetUser: "root",
       sftpServerPath: "",

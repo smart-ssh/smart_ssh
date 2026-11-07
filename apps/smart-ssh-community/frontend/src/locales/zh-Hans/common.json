@@ -775,6 +775,16 @@
     "opChmod": "更改权限",
     "banner": "提权已启用：此浏览器中的所有文件操作均以 {{user}} 身份运行。",
     "bannerLogged": "已在服务器上记录。",
+    "notice": {
+      "title": "关于提升权限",
+      "intro": "现在您以 {{user}} 身份读写文件。更改会立即生效，应用无法撤销。",
+      "loggedApp": "每项更改都会记录在应用日志中。",
+      "loggedAppAndServer": "每项更改都会记录在应用日志和服务器的认证日志中。",
+      "passwordless": "sftp-server 的 sudo 规则让 {{user}} 可无密码访问此登录下运行的一切，而不仅是此应用。",
+      "alternative": "如果您经常以 root 管理此服务器，使用密钥的独立 root 登录 (PermitRootLogin prohibit-password) 可使该访问更明确。",
+      "gotIt": "知道了",
+      "dontShowAgain": "不再为此服务器显示"
+    },
     "deleteFileTitle": "以 {{user}} 身份删除文件？",
     "deleteDirTitle": "以 {{user}} 身份删除文件夹？",
     "overwriteTitle": "以 {{user}} 身份覆盖文件？",

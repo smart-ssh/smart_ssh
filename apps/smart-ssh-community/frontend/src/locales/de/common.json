@@ -780,6 +780,16 @@
     "opChmod": "Rechte ändern",
     "banner": "Erhöhte Rechte aktiv: Alle Dateiaktionen in diesem Browser laufen als {{user}}.",
     "bannerLogged": "Auf dem Server protokolliert.",
+    "notice": {
+      "title": "Zu erhöhten Rechten",
+      "intro": "Du liest und schreibst Dateien jetzt als {{user}}. Änderungen wirken sofort und lassen sich von der App nicht rückgängig machen.",
+      "loggedApp": "Jede Änderung wird im Protokoll der App festgehalten.",
+      "loggedAppAndServer": "Jede Änderung wird im Protokoll der App und im Auth-Log des Servers festgehalten.",
+      "passwordless": "Die sudo-Regel für sftp-server gibt {{user}} ohne Passwort Zugriff auf alles, was unter diesem Login läuft – nicht nur auf diese App.",
+      "alternative": "Wenn du diesen Server regelmäßig als root verwaltest, macht ein eigener Root-Login mit Schlüssel (PermitRootLogin prohibit-password) diesen Zugriff ausdrücklich.",
+      "gotIt": "Verstanden",
+      "dontShowAgain": "Für diesen Server nicht mehr anzeigen"
+    },
     "deleteFileTitle": "Datei als {{user}} löschen?",
     "deleteDirTitle": "Ordner als {{user}} löschen?",
     "overwriteTitle": "Datei als {{user}} überschreiben?",
