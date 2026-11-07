@@ -205,6 +205,25 @@ async fn keyboard_interactive_only_with_password_profile_skips_prompter() {
 
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
+    // Two prompt rounds: the stored password answers the first, the fixed
+    // test code of the second round can only come from the prompter.
+    let prompter = Scripted::new(&[&["424242"]]);
+    let t = login(
+        "authpolicy-kbdint-twostep",
+        USER,
+        password(PASS_REF),
+        &prompter,
+        &ConnectLog::new(),
+    )
+    .await
+    .unwrap();
+    echo_ok(t).await;
+    assert_eq!(prompter.asked(), 1, "only the second round is asked");
+}
+
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn publickey_then_password_with_scripted_prompter() {
     let prompter = Scripted::new(&[&[PASS]]);
     let t = login(
