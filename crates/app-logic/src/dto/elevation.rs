@@ -27,6 +27,11 @@ pub struct ElevationResultDto {
     /// file operation shows up in the server's auth log.
     #[serde(default)]
     pub server_logging: bool,
+    /// Issue #1195: how sudo authenticated for the active channel
+    /// (`"nopasswd"` | `"password"`, never the password); `None` when not
+    /// active.
+    #[serde(default)]
+    pub sudo_auth: Option<&'static str>,
 }
 
 /// Issue #622: eine laufende Operation des erhöhten Kanals — für den

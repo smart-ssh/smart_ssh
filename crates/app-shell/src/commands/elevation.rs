@@ -641,6 +641,7 @@ pub async fn sftp_elevation_enable(
             warning: None,
             running_operations: Vec::new(),
             server_logging: false,
+            sudo_auth: None,
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;
