@@ -1,0 +1,8 @@
+# Password and public key login; only the per-run test keys are authorized.
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+MaxAuthTries 6
+LogLevel VERBOSE
+PermitRootLogin no
+Subsystem sftp internal-sftp
