@@ -44,6 +44,7 @@ pub const SFTP_TRANSFER_STARTED: &str = "sftp-transfer-started";
 pub const SFTP_TRANSFER_FINISHED: &str = "sftp-transfer-finished";
 pub const SFTP_TRANSFER_PROGRESS: &str = "sftp-transfer-progress";
 pub const ELEVATION_AUTO_DISABLED: &str = "elevation-auto-disabled";
+pub const ELEVATION_REVOKED_BY_PROFILE: &str = "elevation-revoked-by-profile";
 pub const MCP_ACTION_TAB_REQUESTED: &str = "mcp-action-tab-requested";
 pub const CHAT_CONTEXT_USAGE: &str = "chat-context-usage";
 pub const CHAT_CONTEXT_COMPACTED: &str = "chat-context-compacted";

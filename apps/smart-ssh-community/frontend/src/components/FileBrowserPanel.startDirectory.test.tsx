@@ -44,6 +44,7 @@ vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
   onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
+  onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferProgress: vi.fn(() => Promise.resolve(() => {})),
 }));

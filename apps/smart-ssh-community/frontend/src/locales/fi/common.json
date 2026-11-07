@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-serverin polku (korotettu tiedostokäyttö)",
     "sftpServerPathPlaceholder": "Automaattinen",
     "sftpServerPathHint": "Tarvitaan vain, jos automaattinen tunnistus epäonnistuu tiedostoselaimessa korotetuilla oikeuksilla, esim. /usr/lib/openssh/sftp-server. Tyhjä = automaattinen.",
+    "elevationAllowedLabel": "Salli korotetut oikeudet tiedostoselaimessa",
+    "elevationAllowedHint": "Kun asetus on pois päältä, tiedostoselain ei tarjoa korotettuja oikeuksia tälle palvelimelle.",
     "startDirectoryLabel": "Aloitushakemisto (pääte ja tiedostoselain)",
     "startDirectoryPlaceholder": "Kotihakemisto",
     "startDirectoryHint": "Absoluuttinen polku (/…) tai ~/-alkuinen polku. Pääte siirtyy sinne näkyvällä cd-komennolla, tiedostoselain avautuu sinne. Tekoälyn komennot suoritetaan aina kotihakemistossa. Tyhjä = kotihakemisto.",
@@ -810,7 +812,8 @@
       "invalidUser": "Virheellinen kohdekäyttäjä.",
       "unsupported": "Paikallisella palvelimella ei ole korotettua tilaa.",
       "checkFailed": "Sudo-oikeuksien tarkistus epäonnistui.",
-      "startFailed": "sftp-serveriä ei voitu käynnistää sudolla (mahdollinen syy: “requiretty” sudoersissa)."
+      "startFailed": "sftp-serveriä ei voitu käynnistää sudolla (mahdollinen syy: “requiretty” sudoersissa).",
+      "disabledForServer": "Korotetut oikeudet on poistettu käytöstä tälle palvelimelle palvelinprofiilissa."
     },
     "channelLost": "Korotetut oikeudet päättyivät – korotettu kanava ei ole enää aktiivinen.",
     "group": "Korotetut oikeudet",
@@ -821,7 +824,8 @@
     "confirm": "Korota",
     "opChown": "Omistajan vaihto",
     "chownNote": "Omistaja vaihdetaan käyttäjänä {{user}}.",
-    "idleSwitchedOff": "Korotetut oikeudet poistettu käytöstä {{minutes}} minuutin toimettomuuden jälkeen"
+    "idleSwitchedOff": "Korotetut oikeudet poistettu käytöstä {{minutes}} minuutin toimettomuuden jälkeen",
+    "revokedByProfile": "Korotetut oikeudet päättyivät — palvelinprofiili ei enää salli niitä."
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",

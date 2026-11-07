@@ -136,7 +136,7 @@ export type ElevationDisableDto = { disabled: boolean, runningOperations: Array<
 
 export type ElevationFailureDto = { kind: ElevationFailureKind, sudoersLine: string | null, detail: string | null, };
 
-export type ElevationFailureKind = "unsupported" | "invalidUser" | "invalidPath" | "sftpServerNotFound" | "sftpServerUnsafe" | "passwordRequired" | "wrongSudoPassword" | "notAllowed" | "requireTty" | "sudoMissing" | "checkFailed" | "startFailed";
+export type ElevationFailureKind = "unsupported" | "invalidUser" | "invalidPath" | "sftpServerNotFound" | "sftpServerUnsafe" | "passwordRequired" | "wrongSudoPassword" | "notAllowed" | "requireTty" | "sudoMissing" | "checkFailed" | "startFailed" | "disabledForServer";
 
 export type ElevationResultDto = { active: boolean, targetUser: string, sftpServerPath: string | null, failure: ElevationFailureDto | null, warning: ElevationWarningDto | null, runningOperations: Array<RunningOperationDto>, serverLogging: boolean, };
 
@@ -246,11 +246,11 @@ export type SegmentCoverageDto = { index: number, text: string, state: SegmentCo
 
 export type SegmentCoverageState = "covered" | "needsRule" | "blocked";
 
-export type ServerDto = { id: string, name: string, host: string, port: number, username: string, groupId: string | null, tags: Array<string>, authKind: AuthMethodKind, identityFilePath: string | null, jumpHost: string | null, notes: string, hasSudoPassword: boolean, sudoPasswordUnknown: boolean, isLocal: boolean, postIngestPolicy: PostIngestPolicy, aiInjectionCheckEnabled: boolean, sftpServerPath: string | null, startDirectory: string | null, isCopy: boolean, };
+export type ServerDto = { id: string, name: string, host: string, port: number, username: string, groupId: string | null, tags: Array<string>, authKind: AuthMethodKind, identityFilePath: string | null, jumpHost: string | null, notes: string, hasSudoPassword: boolean, sudoPasswordUnknown: boolean, isLocal: boolean, postIngestPolicy: PostIngestPolicy, aiInjectionCheckEnabled: boolean, sftpServerPath: string | null, startDirectory: string | null, elevationAllowed: boolean, isCopy: boolean, };
 
 export type ServerId = string;
 
-export type ServerInput = { name: string, host: string, port: number, username: string, groupId: GroupId | null, tags: Array<string>, auth: AuthMethodInput, jumpHost: ServerId | null, sudoPassword: string | null, postIngestPolicy: PostIngestPolicy, aiInjectionCheckEnabled: boolean, sftpServerPath: string | null, startDirectory: string | null, };
+export type ServerInput = { name: string, host: string, port: number, username: string, groupId: GroupId | null, tags: Array<string>, auth: AuthMethodInput, jumpHost: ServerId | null, sudoPassword: string | null, postIngestPolicy: PostIngestPolicy, aiInjectionCheckEnabled: boolean, sftpServerPath: string | null, startDirectory: string | null, elevationAllowed: boolean, };
 
 export type SessionOnlyPayload = { sessionId: string, };
 
@@ -336,6 +336,7 @@ export type EventPayloads = {
   "connection-status-changed": ConnectionStatusChangedPayload,
   "data-changed": DataChangedPayload,
   "elevation-auto-disabled": ElevationAutoDisabledPayload,
+  "elevation-revoked-by-profile": SessionOnlyPayload,
   "entitlements:changed": Entitlements,
   "host-key-verification-ended": HostKeyVerificationEndedPayload,
   "host-key-verification-needed": HostKeyVerificationNeededPayload,

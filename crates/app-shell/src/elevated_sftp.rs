@@ -427,11 +427,16 @@ impl ElevatedSftpRegistry {
     /// Issue #355: a reconnect keeps the session but never its elevated
     /// channel (it belonged to the dead connection). The channel is revoked
     /// like on disconnect; the user elevates again.
-    pub(crate) fn revoke_session(&self, session_id: SessionId) {
+    ///
+    /// Returns whether an active channel was revoked.
+    pub(crate) fn revoke_session(&self, session_id: SessionId) -> bool {
         let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
+            true
+        } else {
+            false
         }
     }
 
@@ -506,6 +511,58 @@ fn failure(
         running_operations: Vec::new(),
         server_logging: false,
     })
+}
+
+/// Issue #1194, Spec 0067 A5: the server profile no longer allows elevated
+/// rights. Revokes the elevated channel of every session to `server_id`
+/// (the same revoke as on disconnect/reconnect) and returns the sessions
+/// whose channel was active.
+pub(crate) fn revoke_for_server(
+    sessions: &SessionManager,
+    registry: &ElevatedSftpRegistry,
+    server_id: ssh_manager_core::shared::ServerId,
+) -> Vec<SessionId> {
+    sessions
+        .snapshot()
+        .into_iter()
+        .filter(|entry| entry.server_id == server_id)
+        .filter(|entry| registry.revoke_session(entry.session_id))
+        .map(|entry| entry.session_id)
+        .collect()
+}
+
+/// Issue #1194: [`enable`] for a stored server. Refuses with
+/// `DisabledForServer` — before any probe reaches the transport — when the
+/// profile does not allow elevated rights.
+pub(crate) async fn enable_for_server(
+    ctx: &ElevationContext<'_>,
+    server: &ssh_manager_core::profiles::Server,
+    requested_user: Option<&str>,
+    confirm_stop: bool,
+    access: &BrowserAccess,
+) -> CommandResult<ElevationResultDto> {
+    if !server.elevation_allowed {
+        let target_user = requested_user
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .unwrap_or(DEFAULT_ELEVATION_USER);
+        return failure(
+            target_user,
+            None,
+            ElevationFailureKind::DisabledForServer,
+            None,
+            None,
+        );
+    }
+    enable(
+        ctx,
+        &server.username,
+        server.sftp_server_path.as_deref(),
+        requested_user,
+        confirm_stop,
+        access,
+    )
+    .await
 }
 
 /// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein.

@@ -1853,28 +1853,15 @@ async fn encrypted_database(dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 async fn insert_marker_server(store: &SqliteProfileStore) {
-    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
-    use ssh_manager_core::shared::ServerId;
-    let now = chrono::Utc::now();
+    use ssh_manager_core::testing::ServerBuilder;
     store
-        .create_server(&Server {
-            id: ServerId::new(),
-            name: "T3".to_string(),
-            host: "host-0101.example".to_string(),
-            port: 22,
-            username: "user-0101".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        })
+        .create_server(
+            &ServerBuilder::new()
+                .name("T3")
+                .host("host-0101.example")
+                .username("user-0101")
+                .build(),
+        )
         .await
         .unwrap();
 }

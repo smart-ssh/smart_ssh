@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server 路径（提权文件访问）",
     "sftpServerPathPlaceholder": "自动",
     "sftpServerPathHint": "仅当文件浏览器在提权时自动检测失败才需要填写，例如 /usr/lib/openssh/sftp-server。留空 = 自动。",
+    "elevationAllowedLabel": "允许在文件浏览器中使用提升的权限",
+    "elevationAllowedHint": "关闭后，文件浏览器不会为此服务器提供提升的权限。",
     "startDirectoryLabel": "起始目录（终端和文件浏览器）",
     "startDirectoryPlaceholder": "主目录",
     "startDirectoryHint": "绝对路径（/…）或以 ~/ 开头的路径。终端会通过可见的 cd 切换到该目录，文件浏览器会在此打开。AI 命令始终在主目录中运行。留空 = 主目录。",
@@ -805,7 +807,8 @@
       "invalidUser": "目标用户无效。",
       "unsupported": "本地服务器没有提权模式。",
       "checkFailed": "检查 sudo 权限失败。",
-      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。"
+      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。",
+      "disabledForServer": "此服务器的服务器配置文件已关闭提升的权限。"
     },
     "channelLost": "提权已结束——提权通道已不再有效。",
     "group": "提升的权限",
@@ -816,7 +819,8 @@
     "confirm": "提权",
     "opChown": "更改所有者",
     "chownNote": "所有者将以 {{user}} 身份更改。",
-    "idleSwitchedOff": "已在 {{minutes}} 分钟无活动后关闭提升的权限"
+    "idleSwitchedOff": "已在 {{minutes}} 分钟无活动后关闭提升的权限",
+    "revokedByProfile": "提升的权限已结束——服务器配置文件不再允许。"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",

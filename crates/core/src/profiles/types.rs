@@ -82,8 +82,17 @@ pub struct Server {
     /// im Home.
     #[serde(default)]
     pub start_directory: Option<String>,
+    /// Issue #1194, Spec 0067 A5: whether the file browser may offer elevated
+    /// rights for this server. Default `true`; when `false` the backend
+    /// refuses `sftp_elevation_enable` without probing the server.
+    #[serde(default = "default_elevation_allowed")]
+    pub elevation_allowed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+fn default_elevation_allowed() -> bool {
+    true
 }
 
 /// Issue #100: Warum ein gespeicherter Server nicht nutzbar ist.

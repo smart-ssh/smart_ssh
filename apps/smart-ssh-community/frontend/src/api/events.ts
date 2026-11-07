@@ -169,6 +169,11 @@ export const onChatQuestionAsked =
 export const onElevationAutoDisabled =
   typedListener(EVENT.ELEVATION_AUTO_DISABLED);
 
+/** Issue #1194: saving the server profile with "allow elevated rights" off
+ * revoked the active elevated channel of this session. */
+export const onElevationRevokedByProfile =
+  typedListener(EVENT.ELEVATION_REVOKED_BY_PROFILE);
+
 export const onSftpTransferStarted =
   typedListener(EVENT.SFTP_TRANSFER_STARTED);
 

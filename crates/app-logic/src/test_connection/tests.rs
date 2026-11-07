@@ -143,6 +143,7 @@ fn password_input() -> ServerInput {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
     }
 }
@@ -212,6 +213,7 @@ fn stored_server(
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -935,6 +937,7 @@ async fn test_empty_secret_with_existing_server_falls_back_to_stored_credential(
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -1001,6 +1004,7 @@ async fn test_spec_0098_t2_failed_read_of_a_stored_secret_reports_the_access_cod
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -1114,6 +1118,7 @@ async fn test_t8_jump_host_credentials_resolved_from_real_store() {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -1138,6 +1143,7 @@ async fn test_t8_jump_host_credentials_resolved_from_real_store() {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
     };
 

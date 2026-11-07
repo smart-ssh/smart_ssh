@@ -351,6 +351,7 @@ pub async fn apply_import(
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         };
 

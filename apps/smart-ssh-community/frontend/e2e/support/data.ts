@@ -20,6 +20,7 @@ export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "n
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
     startDirectory: null,
     isCopy: false,
     ...overrides,

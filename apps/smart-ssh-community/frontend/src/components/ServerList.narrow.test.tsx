@@ -31,6 +31,7 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
     isCopy: false,
     startDirectory: null,
   };
@@ -55,6 +56,7 @@ function remoteServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 

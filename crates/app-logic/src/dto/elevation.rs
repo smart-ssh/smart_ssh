@@ -104,4 +104,6 @@ pub enum ElevationFailureKind {
     SudoMissing,
     CheckFailed,
     StartFailed,
+    /// Issue #1194: the server profile does not allow elevated rights.
+    DisabledForServer,
 }

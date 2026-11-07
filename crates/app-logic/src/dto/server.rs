@@ -94,6 +94,8 @@ pub struct ServerDto {
     pub sftp_server_path: Option<String>,
     /// Spec 0102: `None` = Home des Login-Nutzers.
     pub start_directory: Option<String>,
+    /// Issue #1194, Spec 0067 A5.
+    pub elevation_allowed: bool,
     /// Spec 0103: the server was moved into "Previous data" by a backup
     /// import. Not part of `Server` (no effect on connecting, rules or the
     /// filter engine); the list commands fill it from the marker store.
@@ -134,6 +136,7 @@ impl ServerDto {
             ai_injection_check_enabled: server.ai_injection_check_enabled,
             sftp_server_path: server.sftp_server_path.clone(),
             start_directory: server.start_directory.clone(),
+            elevation_allowed: server.elevation_allowed,
             is_copy: false,
         }
     }
@@ -423,6 +426,13 @@ pub struct ServerInput {
     /// (s. [`normalize_start_directory_input`]).
     #[serde(default)]
     pub start_directory: Option<String>,
+    /// Issue #1194, Spec 0067 A5. Missing field = allowed.
+    #[serde(default = "default_elevation_allowed")]
+    pub elevation_allowed: bool,
+}
+
+fn default_elevation_allowed() -> bool {
+    true
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =

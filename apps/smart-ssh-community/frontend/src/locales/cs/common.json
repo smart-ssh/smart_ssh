@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Cesta k sftp-server (zvýšený přístup k souborům)",
     "sftpServerPathPlaceholder": "Automaticky",
     "sftpServerPathHint": "Potřeba pouze tehdy, když automatické zjištění pro prohlížeč souborů se zvýšenými právy selže, např. /usr/lib/openssh/sftp-server. Prázdné = automaticky.",
+    "elevationAllowedLabel": "Povolit zvýšená oprávnění v prohlížeči souborů",
+    "elevationAllowedHint": "Když je vypnuto, prohlížeč souborů pro tento server nenabízí zvýšená oprávnění.",
     "startDirectoryLabel": "Úvodní adresář (terminál a prohlížeč souborů)",
     "startDirectoryPlaceholder": "Domovský adresář",
     "startDirectoryHint": "Absolutní cesta (/…) nebo cesta začínající ~/. Terminál se tam přepne viditelným cd, prohlížeč souborů se tam otevře. Příkazy AI se vždy spouštějí v domovském adresáři. Prázdné = domovský adresář.",
@@ -820,7 +822,8 @@
       "invalidUser": "Neplatný cílový uživatel.",
       "unsupported": "Lokální server nemá zvýšený režim.",
       "checkFailed": "Kontrola práv sudo selhala.",
-      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers)."
+      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers).",
+      "disabledForServer": "Zvýšená oprávnění jsou pro tento server v profilu serveru vypnutá."
     },
     "channelLost": "Zvýšená práva skončila — zvýšený kanál již není aktivní.",
     "group": "Zvýšená oprávnění",
@@ -831,7 +834,8 @@
     "confirm": "Zvýšit",
     "opChown": "Změna vlastníka",
     "chownNote": "Vlastník bude změněn jako {{user}}.",
-    "idleSwitchedOff": "Zvýšená oprávnění vypnuta po {{minutes}} min nečinnosti"
+    "idleSwitchedOff": "Zvýšená oprávnění vypnuta po {{minutes}} min nečinnosti",
+    "revokedByProfile": "Zvýšená oprávnění skončila — profil serveru je již nepovoluje."
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",

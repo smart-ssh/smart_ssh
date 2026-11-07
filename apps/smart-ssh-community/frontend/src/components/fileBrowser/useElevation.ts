@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, sftpElevationDisable, sftpElevationEnable } from "../../api/api";
-import { onElevationAutoDisabled } from "../../api/events";
+import { onElevationAutoDisabled, onElevationRevokedByProfile } from "../../api/events";
 import { showToast } from "../../buses/toastBus";
 import type { ElevationResultDto, RunningOperationDto } from "../../api/types";
 
@@ -100,6 +100,20 @@ export function useElevation(sessionId: string, { onElevationChange, reload }: U
         kind: "info",
         message: t("fileElevation.idleSwitchedOff", { minutes: event.minutes }),
       });
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [sessionId, t]);
+
+  // Issue #1194: saving the server profile with elevated rights turned off
+  // revoked the channel in the backend; leave elevated mode with a toast.
+  useEffect(() => {
+    const unlisten = onElevationRevokedByProfile((event) => {
+      if (event.sessionId !== sessionId || !elevatedRef.current) return;
+      updateElevationRef.current(null, true);
+      reloadRef.current(null);
+      showToast({ kind: "info", message: t("fileElevation.revokedByProfile") });
     });
     return () => {
       void unlisten.then((fn) => fn());

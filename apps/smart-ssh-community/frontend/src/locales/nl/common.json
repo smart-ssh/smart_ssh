@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Pad naar sftp-server (verhoogde bestandstoegang)",
     "sftpServerPathPlaceholder": "Automatisch",
     "sftpServerPathHint": "Alleen nodig als automatische detectie mislukt voor het bestandsbeheer met verhoogde rechten, bijv. /usr/lib/openssh/sftp-server. Leeg laten = automatisch.",
+    "elevationAllowedLabel": "Verhoogde rechten toestaan in de bestandsbrowser",
+    "elevationAllowedHint": "Als dit uit staat, biedt de bestandsbrowser geen verhoogde rechten aan voor deze server.",
     "startDirectoryLabel": "Startmap (terminal en bestandsbeheer)",
     "startDirectoryPlaceholder": "Thuismap",
     "startDirectoryHint": "Absoluut pad (/…) of een pad dat met ~/ begint. De terminal gaat daarheen met een zichtbare cd, het bestandsbeheer opent daar. AI-opdrachten draaien altijd in de thuismap. Leeg laten = thuismap.",
@@ -810,7 +812,8 @@
       "invalidUser": "Ongeldige doelgebruiker.",
       "unsupported": "De lokale server heeft geen verhoogde modus.",
       "checkFailed": "Het controleren van de sudo-rechten is mislukt.",
-      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers)."
+      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers).",
+      "disabledForServer": "Verhoogde rechten zijn voor deze server uitgeschakeld in het serverprofiel."
     },
     "channelLost": "Verhoogde rechten beëindigd — het verhoogde kanaal is niet meer actief.",
     "group": "Verhoogde rechten",
@@ -821,7 +824,8 @@
     "confirm": "Verhogen",
     "opChown": "Eigenaar wijzigen",
     "chownNote": "De eigenaar wordt gewijzigd als {{user}}.",
-    "idleSwitchedOff": "Verhoogde rechten uitgeschakeld na {{minutes}} minuten zonder activiteit"
+    "idleSwitchedOff": "Verhoogde rechten uitgeschakeld na {{minutes}} minuten zonder activiteit",
+    "revokedByProfile": "Verhoogde rechten beëindigd — het serverprofiel staat ze niet meer toe."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",

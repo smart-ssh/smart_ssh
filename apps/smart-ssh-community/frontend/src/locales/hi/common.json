@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server का पथ (उन्नत फ़ाइल एक्सेस)",
     "sftpServerPathPlaceholder": "स्वचालित",
     "sftpServerPathHint": "केवल तब आवश्यक जब उन्नत अधिकारों वाले फ़ाइल ब्राउज़र के लिए स्वचालित पहचान विफल हो, जैसे /usr/lib/openssh/sftp-server। खाली = स्वचालित।",
+    "elevationAllowedLabel": "फ़ाइल ब्राउज़र में उन्नत अधिकारों की अनुमति दें",
+    "elevationAllowedHint": "बंद होने पर, फ़ाइल ब्राउज़र इस सर्वर के लिए उन्नत अधिकार नहीं देता।",
     "startDirectoryLabel": "प्रारंभ डायरेक्टरी (टर्मिनल और फ़ाइल ब्राउज़र)",
     "startDirectoryPlaceholder": "होम डायरेक्टरी",
     "startDirectoryHint": "निरपेक्ष पथ (/…) या ~/ से शुरू होने वाला पथ। टर्मिनल दिखने वाले cd से वहाँ जाता है, फ़ाइल ब्राउज़र वहीं खुलता है। AI कमांड हमेशा होम डायरेक्टरी में चलते हैं। खाली = होम डायरेक्टरी।",
@@ -810,7 +812,8 @@
       "invalidUser": "अमान्य लक्ष्य उपयोगकर्ता।",
       "unsupported": "स्थानीय सर्वर में उन्नत मोड नहीं है।",
       "checkFailed": "sudo अधिकारों की जाँच विफल रही।",
-      "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।"
+      "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।",
+      "disabledForServer": "सर्वर प्रोफ़ाइल में इस सर्वर के लिए उन्नत अधिकार बंद हैं।"
     },
     "channelLost": "उन्नत अधिकार समाप्त हुए — उन्नत चैनल अब सक्रिय नहीं है।",
     "group": "उन्नत अधिकार",
@@ -821,7 +824,8 @@
     "confirm": "बढ़ाएँ",
     "opChown": "स्वामी बदलना",
     "chownNote": "स्वामी {{user}} के रूप में बदला जाएगा।",
-    "idleSwitchedOff": "{{minutes}} मिनट की निष्क्रियता के बाद उन्नत अधिकार बंद कर दिए गए"
+    "idleSwitchedOff": "{{minutes}} मिनट की निष्क्रियता के बाद उन्नत अधिकार बंद कर दिए गए",
+    "revokedByProfile": "उन्नत अधिकार समाप्त हुए — सर्वर प्रोफ़ाइल अब उन्हें अनुमति नहीं देती।"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config आयात करें",

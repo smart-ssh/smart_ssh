@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Jalur ke sftp-server (akses berkas dengan hak tinggi)",
     "sftpServerPathPlaceholder": "Otomatis",
     "sftpServerPathHint": "Hanya diperlukan jika deteksi otomatis gagal untuk penjelajah berkas dengan hak tinggi, mis. /usr/lib/openssh/sftp-server. Kosong = otomatis.",
+    "elevationAllowedLabel": "Izinkan hak akses tinggi di penjelajah berkas",
+    "elevationAllowedHint": "Jika nonaktif, penjelajah berkas tidak menawarkan hak akses tinggi untuk server ini.",
     "startDirectoryLabel": "Direktori awal (terminal dan penjelajah berkas)",
     "startDirectoryPlaceholder": "Direktori home",
     "startDirectoryHint": "Jalur absolut (/…) atau jalur yang diawali ~/. Terminal berpindah ke sana dengan cd yang terlihat, penjelajah berkas terbuka di sana. Perintah AI selalu berjalan di direktori home. Kosong = direktori home.",
@@ -805,7 +807,8 @@
       "invalidUser": "Pengguna target tidak valid.",
       "unsupported": "Server lokal tidak memiliki mode hak tinggi.",
       "checkFailed": "Pemeriksaan hak sudo gagal.",
-      "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers)."
+      "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers).",
+      "disabledForServer": "Hak akses tinggi dinonaktifkan untuk server ini di profil server."
     },
     "channelLost": "Hak tinggi berakhir — kanal dengan hak tinggi tidak lagi aktif.",
     "group": "Hak istimewa tinggi",
@@ -816,7 +819,8 @@
     "confirm": "Tingkatkan",
     "opChown": "Perubahan pemilik",
     "chownNote": "Pemilik akan diubah sebagai {{user}}.",
-    "idleSwitchedOff": "Hak istimewa dimatikan setelah {{minutes}} menit tanpa aktivitas"
+    "idleSwitchedOff": "Hak istimewa dimatikan setelah {{minutes}} menit tanpa aktivitas",
+    "revokedByProfile": "Hak akses tinggi berakhir — profil server tidak lagi mengizinkannya."
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",

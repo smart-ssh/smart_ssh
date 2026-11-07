@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Sökväg till sftp-server (förhöjd filåtkomst)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Behövs bara om den automatiska identifieringen misslyckas för filbläddraren med förhöjda rättigheter, t.ex. /usr/lib/openssh/sftp-server. Tomt = automatiskt.",
+    "elevationAllowedLabel": "Tillåt förhöjda rättigheter i filläsaren",
+    "elevationAllowedHint": "När detta är av erbjuder filläsaren inga förhöjda rättigheter för den här servern.",
     "startDirectoryLabel": "Startkatalog (terminal och filbläddrare)",
     "startDirectoryPlaceholder": "Hemkatalog",
     "startDirectoryHint": "Absolut sökväg (/…) eller en sökväg som börjar med ~/. Terminalen byter dit med ett synligt cd, filbläddraren öppnas där. AI-kommandon körs alltid i hemkatalogen. Tomt = hemkatalog.",
@@ -810,7 +812,8 @@
       "invalidUser": "Ogiltig målanvändare.",
       "unsupported": "Den lokala servern har inget förhöjt läge.",
       "checkFailed": "Kontrollen av sudo-rättigheterna misslyckades.",
-      "startFailed": "sftp-server kunde inte startas via sudo (möjlig orsak: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunde inte startas via sudo (möjlig orsak: “requiretty” i sudoers).",
+      "disabledForServer": "Förhöjda rättigheter är avstängda för den här servern i serverprofilen."
     },
     "channelLost": "Förhöjda rättigheter avslutade — den förhöjda kanalen är inte längre aktiv.",
     "group": "Förhöjda rättigheter",
@@ -821,7 +824,8 @@
     "confirm": "Utöka",
     "opChown": "Ändring av ägare",
     "chownNote": "Ägaren ändras som {{user}}.",
-    "idleSwitchedOff": "Förhöjda rättigheter har stängts av efter {{minutes}} minuter utan aktivitet"
+    "idleSwitchedOff": "Förhöjda rättigheter har stängts av efter {{minutes}} minuter utan aktivitet",
+    "revokedByProfile": "Förhöjda rättigheter avslutades — serverprofilen tillåter dem inte längre."
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",

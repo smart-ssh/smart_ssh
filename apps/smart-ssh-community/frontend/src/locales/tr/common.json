@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server yolu (yükseltilmiş dosya erişimi)",
     "sftpServerPathPlaceholder": "Otomatik",
     "sftpServerPathHint": "Yalnızca yükseltilmiş haklarla dosya tarayıcısı için otomatik algılama başarısız olursa gerekir, örn. /usr/lib/openssh/sftp-server. Boş bırakın = otomatik.",
+    "elevationAllowedLabel": "Dosya tarayıcısında yükseltilmiş haklara izin ver",
+    "elevationAllowedHint": "Kapalıyken dosya tarayıcısı bu sunucu için yükseltilmiş hak sunmaz.",
     "startDirectoryLabel": "Başlangıç dizini (terminal ve dosya tarayıcısı)",
     "startDirectoryPlaceholder": "Ana dizin",
     "startDirectoryHint": "Mutlak yol (/…) veya ~/ ile başlayan yol. Terminal görünür bir cd ile oraya geçer, dosya tarayıcısı orada açılır. Yapay zeka komutları her zaman ana dizinde çalışır. Boş bırakın = ana dizin.",
@@ -810,7 +812,8 @@
       "invalidUser": "Geçersiz hedef kullanıcı.",
       "unsupported": "Yerel sunucuda yükseltilmiş mod yok.",
       "checkFailed": "Sudo haklarının denetimi başarısız oldu.",
-      "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”)."
+      "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”).",
+      "disabledForServer": "Yükseltilmiş haklar, sunucu profilinde bu sunucu için kapatılmıştır."
     },
     "channelLost": "Yükseltilmiş haklar sona erdi — yükseltilmiş kanal artık etkin değil.",
     "group": "Yükseltilmiş haklar",
@@ -821,7 +824,8 @@
     "confirm": "Yükselt",
     "opChown": "Sahibi değiştirme",
     "chownNote": "Sahip {{user}} olarak değiştirilecek.",
-    "idleSwitchedOff": "Yükseltilmiş haklar {{minutes}} dakika etkinlik olmadığı için kapatıldı"
+    "idleSwitchedOff": "Yükseltilmiş haklar {{minutes}} dakika etkinlik olmadığı için kapatıldı",
+    "revokedByProfile": "Yükseltilmiş haklar sona erdi — sunucu profili artık buna izin vermiyor."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",

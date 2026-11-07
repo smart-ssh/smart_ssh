@@ -199,6 +199,18 @@ Prüfungen aus A1–A3 bleiben unverändert.
   Rechte nach N Minuten ohne Aktivität ausgeschaltet“). „Lokal öffnen“ und
   Uploads verhalten sich danach wie nach dem manuellen Ausschalten. Das
   Protokoll nennt als Grund „inactivity“ (manuell: „manual“).
+- **Pro Server abschaltbar** (Issue #1194): Im Server-Formular (Bereich
+  „Erweitert“) steht der Schalter „Erhöhte Rechte im Dateibrowser erlauben“;
+  Standard an, auch für bestehende Profile und ältere Sicherungen. Ist er aus,
+  zeigt der Dateibrowser dieses Servers den Umschalter, den Pfeil-Knopf und
+  die Nutzerauswahl nicht, das Feld für den Pfad zu `sftp-server` ist im
+  Formular gesperrt, und jeder Versuch, den erhöhten Modus zu starten, wird
+  abgelehnt (Fehler „Für diesen Server nicht erlaubt“), ohne dass der Server
+  befragt wird und ohne sudo. Lässt sich der Schalter nicht lesen, gilt er
+  als aus. Wird er ausgeschaltet, während eine Sitzung erhöht ist, wird der
+  Kanal sofort verworfen, die Ansicht lädt im normalen Modus neu, und ein
+  Hinweis nennt den Grund. Der Schalter schränkt nur ein: Er erlaubt nichts,
+  was A1–A3 verbieten.
 - **„Lokal öffnen“** (Spec 0054): Wird eine Datei im erhöhten Modus
   geöffnet, läuft der spätere Upload **über denselben erhöhten Kanal**; die
   Bearbeitung merkt sich den Modus. Ist der Kanal inzwischen geschlossen,
