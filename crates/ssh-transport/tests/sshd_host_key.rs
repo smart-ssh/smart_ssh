@@ -115,6 +115,25 @@ fn expect_unknown(outcome: ConnectOutcome, port: u16) -> (Vec<u8>, String) {
     }
 }
 
+/// Restarts the container and waits until sshd shows its banner again.
+async fn restart_and_wait(scenario: &str) {
+    use tokio::io::AsyncReadExt;
+    restart(scenario);
+    let port = scenario_port(scenario);
+    step("sshd banner after restart", async {
+        loop {
+            if let Ok(mut s) = tokio::net::TcpStream::connect((HOST, port)).await {
+                let mut buf = [0u8; 4];
+                if s.read_exact(&mut buf).await.is_ok() && &buf == b"SSH-" {
+                    return;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    })
+    .await;
+}
+
 fn container_exec(scenario: &str, args: &[&str]) -> String {
     let out = Command::new("docker")
         .arg("exec")
@@ -197,7 +216,7 @@ async fn changed_key_stops_with_mismatch_and_no_authentication() {
     // Proves that the daemon log shows authentications at all.
     assert!(daemon_log(scenario).contains("Accepted password for testuser"));
 
-    restart(scenario); // setup.sh generates new host keys on every start
+    restart_and_wait(scenario).await; // setup.sh generates new host keys on every start
     let log_start = daemon_log(scenario).len();
 
     match connect(&store, port).await {
@@ -275,7 +294,7 @@ async fn key_type_switch_is_unknown_never_silent_trust() {
         ConnectOutcome::Connected(_)
     ));
 
-    restart(scenario); // now only the RSA host key is offered
+    restart_and_wait(scenario).await; // now only the RSA host key is offered
     let log_start = daemon_log(scenario).len();
 
     // Spec 0005 §6.1: an algorithm without a stored key counts as unknown.
