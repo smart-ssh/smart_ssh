@@ -35,7 +35,12 @@ hängt nicht an ihrem Speicherort.
 Smart SSH bringt seinen SSH-Client mit. Ein installiertes OpenSSH oder
 `libssh` ist weder nötig noch wird es benutzt; das Verhalten ist auf Windows,
 macOS und Linux gleich. Ein SSH-Agent des Systems wird nur für die Anmeldeart
-„Agent" befragt (Spec 0003).
+„Agent" befragt (Spec 0003). Hält der Agent mehrere Identitäten, probiert
+Smart SSH sie in der Reihenfolge des Agents der Reihe nach durch, bis der Server
+eine akzeptiert; die Anmeldung endet mit dem ersten Treffer. Wird keine
+akzeptiert, schlägt die Anmeldung fehl. Trennt der Server vorher (etwa wegen
+`MaxAuthTries`), endet sie mit diesem Verbindungsfehler. Ein Zertifikat im
+Agent wird über seinen zugrunde liegenden Schlüssel angeboten.
 
 ## 4. Betriebsarten im Einzelnen
 
