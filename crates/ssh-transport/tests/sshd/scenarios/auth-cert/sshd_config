@@ -1,0 +1,10 @@
+# Certificates of the per-run user CA are trusted; no authorized_keys exist, so a
+# key alone never logs in. Password stays enabled so that a silent fallback to it
+# would show up in the daemon log.
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+TrustedUserCAKeys /keys/ca.pub
+LogLevel VERBOSE
+PermitRootLogin no
+Subsystem sftp internal-sftp
