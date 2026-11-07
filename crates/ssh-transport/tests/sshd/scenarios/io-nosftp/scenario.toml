@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "io-nosftp"
+networks = ["io-net"]
+publish = true
