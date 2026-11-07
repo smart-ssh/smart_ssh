@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "auth-cert"
+networks = ["auth-net"]
+publish = true

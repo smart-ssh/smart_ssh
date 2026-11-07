@@ -1,0 +1,6 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+ForceCommand echo forced-output
+Subsystem sftp internal-sftp
