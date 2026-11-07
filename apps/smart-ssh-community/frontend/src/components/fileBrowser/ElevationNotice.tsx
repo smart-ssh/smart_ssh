@@ -58,7 +58,7 @@ export function ElevationNotice({ serverId, elevatedUser, serverLogging, passwor
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((e) => !e)}
-        className="font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-strong"
+        className="focus-ring font-semibold"
       >
         {expanded ? "▾" : "▸"} {t("fileElevation.notice.title")}
       </Button>
