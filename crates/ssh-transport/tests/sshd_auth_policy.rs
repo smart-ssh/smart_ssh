@@ -206,9 +206,9 @@ async fn keyboard_interactive_only_with_password_profile_skips_prompter() {
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
-    // Two prompt rounds: the stored password answers the first, the fixed
-    // test code of the second round can only come from the prompter.
-    let prompter = Scripted::new(&[&["424242"]]);
+    // Two prompt rounds: the stored password answers the first, the
+    // second round can only come from the prompter.
+    let prompter = Scripted::new(&[&[PASS]]);
     let t = login(
         "authpolicy-kbdint-twostep",
         USER,
