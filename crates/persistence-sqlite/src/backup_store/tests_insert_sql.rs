@@ -53,14 +53,22 @@ fn rule_and_note_statements_match_the_former_text() {
 #[test]
 fn ai_provider_statements_match_the_former_text() {
     assert_eq!(
-        sql("ai_provider_configs", AI_PROVIDER_COLS, false),
+        sql(
+            "ai_provider_configs",
+            super::ai_provider_writer::AI_PROVIDER_COLS,
+            false
+        ),
         "INSERT INTO ai_provider_configs (id, provider_type, display_name, base_url, model, \
          supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
          extra_headers, attestation_url, max_tokens_override, web_research_enabled) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     assert_eq!(
-        sql("ai_provider_configs", AI_PROVIDER_COLS, true),
+        sql(
+            "ai_provider_configs",
+            super::ai_provider_writer::AI_PROVIDER_COLS,
+            true
+        ),
         "INSERT INTO ai_provider_configs (id, provider_type, display_name, base_url, model, \
          supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
          extra_headers, attestation_url, max_tokens_override, web_research_enabled) \

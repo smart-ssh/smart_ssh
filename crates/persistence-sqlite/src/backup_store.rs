@@ -1076,9 +1076,9 @@ const RULE_COLS: &str = "id, pattern_type, pattern_value, action, scope_type, sc
      priority, created_at, updated_at";
 const NOTE_COLS: &str = "id, target_type, target_id, content, editor_type, ai_provider, \
      ai_model, created_at";
-const AI_PROVIDER_COLS: &str = "id, provider_type, display_name, base_url, model, \
-     supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
-     extra_headers, attestation_url, max_tokens_override, web_research_enabled";
+
+mod ai_provider_writer;
+use ai_provider_writer::write_ai_provider;
 
 async fn write_group(conn: &mut Conn, g: &GroupRow, upsert: bool) -> Res {
     sqlx::query(insert_sql("groups", GROUP_COLS, upsert))
@@ -1135,28 +1135,6 @@ async fn write_note(conn: &mut Conn, n: &NoteRevisionRow, upsert: bool) -> Res {
         .bind(&n.ai_provider)
         .bind(&n.ai_model)
         .bind(&n.created_at)
-        .execute(&mut *conn)
-        .await
-        .map(drop)
-        .map_err(|e| kind(&e))
-}
-
-async fn write_ai_provider(conn: &mut Conn, a: &AiProviderRow, upsert: bool) -> Res {
-    sqlx::query(insert_sql("ai_provider_configs", AI_PROVIDER_COLS, upsert))
-        .bind(a.id.to_string())
-        .bind(&a.provider_type)
-        .bind(&a.display_name)
-        .bind(&a.base_url)
-        .bind(&a.model)
-        .bind(a.supports_native_tool_calling)
-        .bind(&a.credential_ref)
-        .bind(a.is_active)
-        .bind(&a.created_at)
-        .bind(&a.updated_at)
-        .bind(&a.extra_headers)
-        .bind(&a.attestation_url)
-        .bind(a.max_tokens_override)
-        .bind(a.web_research_enabled)
         .execute(&mut *conn)
         .await
         .map(drop)

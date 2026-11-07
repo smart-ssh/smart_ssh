@@ -26,6 +26,7 @@ export type ApiModule = typeof import("../api/api");
 function defaultImplementations(): Partial<Record<keyof ApiModule, unknown>> {
   return {
     getChatHistory: vi.fn(() => Promise.resolve([])),
+    sftpElevationAllowed: vi.fn(() => Promise.resolve(true)),
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listPromptHistory: vi.fn(() => Promise.resolve([])),
     startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),

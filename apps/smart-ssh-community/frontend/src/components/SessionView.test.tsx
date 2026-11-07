@@ -21,6 +21,7 @@ vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
   onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
+  onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("../settings/layoutSettings", () => ({

@@ -105,6 +105,10 @@ the proposed command or path text as is**, without redaction
   missing stored value falls back to 15 minutes, never to "never"; a running
   elevated operation postpones the switch-off. The webview is told by an
   event and shows a toast; the audit line records `reason = "inactivity"`.
+  A per-server switch (`elevation_allowed`, default on, issue #1194) can
+  forbid the mode altogether: enabling is refused before any probe or sudo
+  call, an unreadable profile counts as forbidden, and turning the switch off
+  revokes a running channel at once. It only restricts; it never lifts a check.
 
 ### What the AI can still see
 

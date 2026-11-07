@@ -18,7 +18,17 @@ pub(crate) struct ElevationAutoDisabledPayload {
 /// Issue #1194: the channel was revoked because the server profile no longer
 /// allows elevated rights.
 pub fn emit_elevation_revoked_by_profile(emitter: &dyn EventEmitter, session_id: SessionId) {
-    crate::events::emit_session_only(emitter, names::ELEVATION_REVOKED_BY_PROFILE, session_id);
+    // Same wire shape as `SessionOnlyPayload`: `{ "sessionId": ... }`.
+    match serde_json::to_value(session_id) {
+        Ok(id) => emitter.emit_event(
+            names::ELEVATION_REVOKED_BY_PROFILE,
+            serde_json::json!({ "sessionId": id }),
+        ),
+        Err(err) => eprintln!(
+            "Event '{}' nicht serialisierbar: {err}",
+            names::ELEVATION_REVOKED_BY_PROFILE
+        ),
+    }
 }
 
 /// The channel was switched off after `minutes` without elevated activity.

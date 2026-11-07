@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sftpElevationDisable, sftpElevationEnable } from "../../api/api";
-import { onElevationAutoDisabled } from "../../api/events";
+import { onElevationAutoDisabled, onElevationRevokedByProfile } from "../../api/events";
 import { showToast } from "../../buses/toastBus";
 import type { ElevationAutoDisabledEvent as ElevationAutoDisabledPayload } from "../../api/types";
 import { I18nextProvider } from "react-i18next";
@@ -16,9 +16,13 @@ vi.mock("../../api/api", async () =>
   }),
 );
 
-vi.mock("../../api/events", () => ({ onElevationAutoDisabled: vi.fn() }));
+vi.mock("../../api/events", () => ({
+  onElevationAutoDisabled: vi.fn(),
+  onElevationRevokedByProfile: vi.fn(),
+}));
 vi.mock("../../buses/toastBus", () => ({ showToast: vi.fn() }));
 
+let revoked: (event: { sessionId: string }) => void = () => {};
 let autoDisabled: (event: ElevationAutoDisabledPayload) => void = () => {};
 
 const reload = vi.fn();
@@ -44,6 +48,10 @@ describe("useElevation", () => {
     });
     vi.mocked(onElevationAutoDisabled).mockImplementation((handler) => {
       autoDisabled = handler;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onElevationRevokedByProfile).mockImplementation((handler) => {
+      revoked = handler as typeof revoked;
       return Promise.resolve(() => {});
     });
   });
@@ -165,6 +173,20 @@ describe("useElevation", () => {
       kind: "info",
       message: expect.stringContaining("15"),
     });
+  });
+
+  // Issue #1194: the profile switch was turned off while elevated.
+  it("leaves elevated mode when the profile revokes the permission", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue(active());
+    const { result } = setup();
+    await act(() => result.current.handleToggleElevation());
+    expect(result.current.elevated).toBe(true);
+    act(() => revoked({ sessionId: "other" }));
+    expect(result.current.elevated).toBe(true);
+    act(() => revoked({ sessionId: "s1" }));
+    await waitFor(() => expect(result.current.elevated).toBe(false));
+    expect(onElevationChange).toHaveBeenLastCalledWith(null);
+    expect(showToast).toHaveBeenCalled();
   });
 
   it("ignores the event of another session or when not elevated", async () => {

@@ -374,26 +374,11 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
         .push(command_result_message());
     let server_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let server = Server {
-        id: server_id,
-        name: "Produktions-Proxy".to_string(),
-        host: "proxy.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        elevation_allowed: true,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let server = ServerBuilder::new()
+        .id(server_id)
+        .name("Produktions-Proxy")
+        .host("proxy.example.invalid")
+        .build();
     let profile_store = crate::test_support::InMemoryProfileStore::new().with_server(server);
     let emitter = TestEmitter::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1967,28 +1952,13 @@ async fn test_propose_note_from_chat_content_appends_to_existing_note_and_persis
     let server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
-    let now = chrono::Utc::now();
     profile_store.servers.lock().unwrap().insert(
         server_id,
-        Server {
-            id: server_id,
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: ssh_manager_core::profiles::AuthMethod::Agent,
-            notes: "Bestehende Notiz".to_string(),
-            jump_host: None,
-            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            elevation_allowed: true,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        },
+        ServerBuilder::new()
+            .id(server_id)
+            .name("Test-Server")
+            .notes("Bestehende Notiz")
+            .build(),
     );
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
@@ -2043,28 +2013,12 @@ async fn test_propose_note_from_chat_content_with_empty_existing_note_uses_conte
     let server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
-    let now = chrono::Utc::now();
     profile_store.servers.lock().unwrap().insert(
         server_id,
-        Server {
-            id: server_id,
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: ssh_manager_core::profiles::AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            elevation_allowed: true,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        },
+        ServerBuilder::new()
+            .id(server_id)
+            .name("Test-Server")
+            .build(),
     );
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
