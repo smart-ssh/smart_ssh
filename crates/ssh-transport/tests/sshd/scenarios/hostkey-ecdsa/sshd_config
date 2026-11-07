@@ -1,0 +1,6 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+Subsystem sftp internal-sftp
+HostKey /etc/ssh/ssh_host_ecdsa_key
