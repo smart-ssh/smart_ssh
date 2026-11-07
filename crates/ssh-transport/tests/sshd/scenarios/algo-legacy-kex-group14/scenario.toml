@@ -1,0 +1,4 @@
+image = "openssh-legacy"
+hostname = "algo-legacy-kex-group14"
+networks = ["algo-net"]
+publish = true

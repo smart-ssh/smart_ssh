@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-pause-bastion"
+networks = ["hop-pause-net"]
+publish = true
