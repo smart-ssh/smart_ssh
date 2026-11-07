@@ -257,8 +257,14 @@ pub(super) const SECRET_PATH_HINTS: &[&str] = &[
 /// Aufruf von `sftp-server` am Anfang eines Teilkommandos, direkt oder per
 /// `sudo`/`doas` mit beliebigen Optionen (ADR 0058 §8). Gemeinsam genutzt
 /// vom Rot-Muster und von `classifier::sftp_server_invocation_reason`.
-pub(super) const SFTP_SERVER_INVOCATION: &str =
-    r"^\s*(?:(?:sudo|doas)(?:\s+-\S+(?:\s+[a-z_][a-z0-9_.-]*)?)*\s+)?(?:\S*/)?sftp-server(?:\s|$)";
+pub(super) const SFTP_SERVER_INVOCATION: &str = concat!(
+    r"^\s*(?:(?:sudo|doas)",
+    // An option (attached arguments may be quoted: `-p'x y'`, `--prompt='x'`)
+    // with an optional separate argument (word or quoted text, Issue #1208).
+    r#"(?:\s+-(?:[^\s'"]|'[^']*'|"[^"]*"|\S)+"#,
+    r#"(?:\s+(?:[a-z_][a-z0-9_.-]*|'[^']*'|"[^"]*"))?)*\s+)?"#,
+    r"(?:\S*/)?sftp-server(?:\s|$)"
+);
 
 pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static str)] {
     static PATTERNS: std::sync::OnceLock<Vec<(Pattern, RiskLevel, &'static str)>> =

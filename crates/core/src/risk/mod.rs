@@ -29,6 +29,7 @@ mod tests;
 #[cfg(test)]
 mod property_tests;
 
+mod sudo_options;
 #[cfg(test)]
 mod tests_sftp_server_args;
 

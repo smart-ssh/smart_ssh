@@ -171,6 +171,13 @@ Prüfungen aus A1–A3 bleiben unverändert.
   durch Filter-Engine und Bestätigung, auch während der erhöhte Browser offen
   ist. Der erhöhte Kanal ist ausschließlich von den Browser-Befehlen
   erreichbar.
+- **Start von `sftp-server` per Kommando:** Ein Kommando, das `sftp-server`
+  startet, gilt immer als Rot und braucht immer eine Bestätigung — auch
+  hinter `sudo`/`doas` mit Optionen und deren Argumenten, selbst wenn ein
+  Argument in Anführungszeichen mit Leerzeichen steht (`sudo -p '[sudo]
+  password:' -u root …/sftp-server`, `--prompt='x y'`, `-uroot`, `--`). Ein
+  Optionsargument, das nur den Namen enthält (`sudo -p 'sftp-server' ls`),
+  und bloße Erwähnungen (`ls`, `grep`, `cat` auf den Pfad) lösen nichts aus.
 - **Protokolliert** mit Kennzeichnung „erhöht“, Zielnutzer und der Art, wie
   sudo authentifiziert hat (`nopasswd` oder `password`, nie das Passwort;
   Spec 0054, Sicherheitsmodell).

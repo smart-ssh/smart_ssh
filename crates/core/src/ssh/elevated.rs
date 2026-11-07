@@ -393,6 +393,34 @@ pub fn classify_sudo_check(output: &CommandOutput) -> SudoCheck {
 mod tests {
     use super::*;
 
+    /// Issue #1208: the command built for the password path is rated red and
+    /// detected as an `sftp-server` start by the risk checks.
+    #[test]
+    fn password_command_is_rated_red_by_risk_checks() {
+        use crate::risk::{
+            sftp_server_invocation_reason, CommandCheckFinding, RiskClassifier, RiskLevel,
+            RuleBasedRiskClassifier,
+        };
+        let marker = new_sudo_prompt_marker();
+        for user in ["root", "www-data"] {
+            let cmd =
+                elevated_sftp_password_command("/usr/lib/openssh/sftp-server", user, &marker, true)
+                    .unwrap();
+            assert_eq!(
+                RuleBasedRiskClassifier.classify(&cmd).server_risk,
+                RiskLevel::Red,
+                "{cmd}"
+            );
+            assert!(
+                matches!(
+                    sftp_server_invocation_reason(&cmd),
+                    Some(CommandCheckFinding::Match(_))
+                ),
+                "{cmd}"
+            );
+        }
+    }
+
     #[test]
     fn password_command_and_marker_shape() {
         let marker = new_sudo_prompt_marker();
