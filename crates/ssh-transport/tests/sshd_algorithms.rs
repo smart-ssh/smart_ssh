@@ -169,9 +169,9 @@ async fn openssh_7_4_accepts_rsa_key_and_warns_about_ssh_rsa_exactly_when_used()
     // offered; the warning must name `ssh-rsa` iff that was the one used.
     let log = daemon_log("algo-legacy-default");
     assert!(log.contains("Accepted publickey"), "{log}");
-    let used_sha1 = log.contains("have ssh-rsa signature");
-    let used_sha2 = log.contains("have rsa-sha2-256 signature")
-        || log.contains("have rsa-sha2-512 signature");
+    let used_sha1 = log.contains("authenticated 1 pkalg ssh-rsa");
+    let used_sha2 = log.contains("authenticated 1 pkalg rsa-sha2-256")
+        || log.contains("authenticated 1 pkalg rsa-sha2-512");
     assert!(
         used_sha1 != used_sha2,
         "could not tell the signature algorithm from the daemon log: {log}"
