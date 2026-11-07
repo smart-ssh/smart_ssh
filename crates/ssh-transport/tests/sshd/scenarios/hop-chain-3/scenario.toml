@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-chain-3"
+networks = ["hop-chain-b"]
+publish = false
