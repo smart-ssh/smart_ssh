@@ -226,7 +226,7 @@ impl SshTransport for RusshTransport {
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
-        let channel = self
+        let mut channel = self
             .handle
             .channel_open_session()
             .await
@@ -243,6 +243,26 @@ impl SshTransport for RusshTransport {
             )
             .await
             .map_err(map_session_russh_error)?;
+        // Issue #1180: the server answers the PTY request; a refusal (e.g.
+        // `PermitTTY no`) must fail here with a clear error instead of
+        // leaving a shell channel that the server closes right away.
+        loop {
+            match channel.wait().await {
+                Some(russh::ChannelMsg::Success) => break,
+                Some(russh::ChannelMsg::Failure) => {
+                    return Err(SshError::ChannelError(
+                        "Der Server hat die Terminal-Anfrage (PTY) abgelehnt (z. B. PermitTTY no)"
+                            .to_string(),
+                    ));
+                }
+                Some(russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => {
+                    return Err(SshError::SessionClosed(
+                        "Verbindung während der Terminal-Anfrage (PTY) geschlossen".to_string(),
+                    ));
+                }
+                Some(_) => continue,
+            }
+        }
         channel
             .request_shell(true)
             .await
