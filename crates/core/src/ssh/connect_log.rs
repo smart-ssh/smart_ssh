@@ -436,6 +436,19 @@ impl ConnectLog {
         );
     }
 
+    /// Issue #1220: like [`Self::fail`], but attributes the step to another
+    /// hop. Used when a bastion refuses to open the tunnel: the step stays
+    /// the tunnel to the target, yet the hop that failed is the bastion.
+    pub fn fail_at_hop(&self, id: StepId, hop_index: usize, hop: &str, code: &str) {
+        if let Some(entry) = self.lock().get_mut(id.0) {
+            if entry.record.status == StepStatus::Running {
+                entry.record.hop_index = hop_index;
+                entry.record.hop = hop.to_string();
+            }
+        }
+        self.fail(id, code);
+    }
+
     fn finish(&self, id: StepId, status: StepStatus) {
         if let Some(entry) = self.lock().get_mut(id.0) {
             if entry.record.status == StepStatus::Running {
@@ -682,6 +695,23 @@ mod tests {
             m.contains("u@a:22") && m.contains("host key") && m.contains("ssh-dss"),
             "{m}"
         );
+    }
+
+    #[test]
+    fn fail_at_hop_reattributes_a_running_step() {
+        let log = ConnectLog::new();
+        let id = log.start(
+            1,
+            "u@target:22",
+            ConnectStep::TunnelOpen {
+                host: "target".to_string(),
+                port: 22,
+            },
+        );
+        log.fail_at_hop(id, 0, "u@bastion:22", "SSH_CHANNEL_ERROR");
+        let rec = &log.snapshot()[0];
+        assert_eq!((rec.hop_index, rec.hop.as_str()), (0, "u@bastion:22"));
+        assert!(matches!(rec.status, StepStatus::Failed { .. }));
     }
 
     #[test]

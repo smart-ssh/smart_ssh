@@ -172,6 +172,28 @@ impl CappedOutput {
     }
 }
 
+/// Shell-style exit code (128 + Linux signal number) for an SSH signal name;
+/// `None` for names without a well-known number.
+fn signal_exit_code(sig: &russh::Sig) -> Option<i32> {
+    use russh::Sig;
+    let n = match sig {
+        Sig::HUP => 1,
+        Sig::INT => 2,
+        Sig::QUIT => 3,
+        Sig::ILL => 4,
+        Sig::ABRT => 6,
+        Sig::FPE => 8,
+        Sig::KILL => 9,
+        Sig::USR1 => 10,
+        Sig::SEGV => 11,
+        Sig::PIPE => 13,
+        Sig::ALRM => 14,
+        Sig::TERM => 15,
+        Sig::Custom(_) => return None,
+    };
+    Some(128 + n)
+}
+
 /// Inkrementeller Sammler für `ChannelMsg`s eines Exec-Channels (Spec 0043,
 /// Fund A) — dünner `ChannelMsg`-spezifischer Wrapper um [`CappedOutput`],
 /// ergänzt um den Exit-Code (den der lokale Pfad anders bekommt, s.
@@ -207,6 +229,13 @@ impl ExecAccumulator {
             // nicht spezifiziert und werden ignoriert.
             ChannelMsg::ExtendedData { data, ext: 1 } => self.capped.push_stderr(&data),
             ChannelMsg::ExitStatus { exit_status } => self.exit_code = Some(exit_status as i32),
+            // A command killed by a signal ends with `exit-signal` instead of
+            // `exit-status` (RFC 4254 6.10). Report it the way a shell does
+            // (128 + signal number) instead of "no exit code"; a real
+            // exit status, if any, wins.
+            ChannelMsg::ExitSignal { signal_name, .. } if self.exit_code.is_none() => {
+                self.exit_code = signal_exit_code(&signal_name);
+            }
             _ => {}
         }
     }
@@ -240,6 +269,36 @@ pub(crate) fn accumulate_exec_output(
         acc.push(msg);
     }
     acc.into_output()
+}
+
+#[cfg(test)]
+mod exit_signal_tests {
+    use super::*;
+
+    fn signal(sig: russh::Sig) -> ChannelMsg {
+        ChannelMsg::ExitSignal {
+            signal_name: sig,
+            core_dumped: false,
+            error_message: String::new(),
+            lang_tag: String::new(),
+        }
+    }
+
+    #[test]
+    fn kill_signal_reports_137_and_exit_status_wins() {
+        let mut acc = ExecAccumulator::new();
+        acc.push(signal(russh::Sig::KILL));
+        assert_eq!(acc.into_output().exit_code, Some(137));
+
+        let mut acc = ExecAccumulator::new();
+        acc.push(ChannelMsg::ExitStatus { exit_status: 3 });
+        acc.push(signal(russh::Sig::KILL));
+        assert_eq!(acc.into_output().exit_code, Some(3));
+
+        let mut acc = ExecAccumulator::new();
+        acc.push(signal(russh::Sig::Custom("X".into())));
+        assert_eq!(acc.into_output().exit_code, None);
+    }
 }
 
 #[cfg(test)]

@@ -84,6 +84,12 @@ verbunden:
 - Eine Kette, die auf sich selbst zurückführt, endet vor jedem Netzwerkzugriff
   mit dem Fehler „Jump-Host-Zyklus". Ein Jump-Host, der nicht mehr gefunden
   wird, endet mit einem Verbindungsfehler, der ihn nennt.
+- Verweigert eine Bastion die Weiterleitung zum nächsten Hop (z. B. wegen
+  `AllowTcpForwarding no`), gilt der Schritt als gescheitert **an der
+  Bastion**: Verbindungsprotokoll und Fehlermeldung nennen die Bastion als
+  verweigernden Hop. Schlägt dagegen das Erreichen des Ziels fehl
+  (unauflösbarer Host, geschlossener Port), nennt der Fehler weiterhin den
+  Ziel-Hop.
 - Der lokale Pseudo-Server kann kein Jump-Host sein (Spec 0032).
 
 Befehle, Dateizugriffe und das Terminal laufen auf dem **letzten** Hop; die

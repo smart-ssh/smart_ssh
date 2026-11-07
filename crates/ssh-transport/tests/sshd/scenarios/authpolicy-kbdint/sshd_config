@@ -1,0 +1,6 @@
+UsePAM yes
+PasswordAuthentication no
+KbdInteractiveAuthentication yes
+PubkeyAuthentication no
+AuthenticationMethods keyboard-interactive
+PermitRootLogin no
