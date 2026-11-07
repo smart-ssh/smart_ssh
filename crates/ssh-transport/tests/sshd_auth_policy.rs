@@ -298,7 +298,11 @@ async fn banner_with_valid_text_does_not_fail_the_connection() {
     echo_ok(t).await;
 }
 
-#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+/// russh decodes the banner with a strict UTF-8 `String::decode` before the
+/// handler's `auth_banner` runs, so a banner with invalid UTF-8 aborts the
+/// login (surfaced as `AuthenticationFailed`). Not fixable locally in the SSH
+/// modules.
+#[ignore = "bug: a login banner with invalid UTF-8 fails the connection (russh decodes it strictly)"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn banner_with_invalid_utf8_does_not_fail_the_connection() {
     let t = login(
