@@ -77,6 +77,7 @@ mod fixture {
                 ssh_manager_core::entitlements::Entitlements::free(),
             )),
             pending_host_key_confirmations: ConfirmationRegistry::new(),
+            pending_auth_prompts: Default::default(),
             connect_attempts: Default::default(),
             pending_action_confirmations: ConfirmationRegistry::new(),
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

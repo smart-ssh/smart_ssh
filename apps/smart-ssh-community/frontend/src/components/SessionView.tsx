@@ -521,6 +521,7 @@ export function SessionView({
           <div {...panelAria("files")} className={showFiles ? "min-h-0 flex-1" : "hidden"}>
             <FileBrowserPanel
               sessionId={sessionId}
+              serverId={serverId}
               isVisible={isActiveTab && showFiles}
               onElevationChange={setFilesElevatedUser}
             />

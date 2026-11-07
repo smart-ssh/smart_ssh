@@ -24,6 +24,8 @@ mod ts_export;
 
 pub mod ai_provider_factory;
 pub mod ai_usage;
+pub mod auth_prompt_events;
+pub mod auth_prompter;
 pub mod auto_reconnect;
 pub mod background_keepalive;
 pub mod backup;
@@ -45,6 +47,7 @@ pub mod database_startup;
 pub mod diagnostics;
 pub mod document_export;
 pub mod dto;
+pub mod elevation_events;
 pub mod ephemeral_credentials;
 pub mod error;
 pub mod event_names;

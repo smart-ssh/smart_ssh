@@ -23,10 +23,15 @@ const SECURITY_KEYS: &[&str] = &[
     "riskClassifierEnabled",
     "riskClassifierProviderId",
     "localServerTags",
+    "elevatedIdleTimeoutMinutes",
 ];
 
 /// Every key starting with one of these belongs to a security feature.
 const SECURITY_KEY_PREFIXES: &[&str] = &["mcpServer"];
+
+/// Issue #1195: server ids for which "Don't show again" was chosen in the
+/// file browser's elevated-rights notice.
+pub(crate) const ELEVATION_NOTICE_DISMISSED_KEY: &str = "elevationNoticeDismissedServers";
 
 /// Upper bound for the length of a key, to keep error messages and the file sane.
 const MAX_KEY_LEN: usize = 64;
@@ -47,6 +52,12 @@ pub enum UiPreferenceShape {
     /// Any JSON value whose serialised form is at most `max_bytes` long.
     Json {
         max_bytes: usize,
+    },
+    /// An array of at most `max_items` strings, each of at most `max_len`
+    /// characters.
+    StringArray {
+        max_items: usize,
+        max_len: usize,
     },
 }
 
@@ -91,6 +102,19 @@ impl UiPreferenceShape {
                 Ok(bytes) if bytes.len() <= *max_bytes => Ok(()),
                 _ => Err(format!("value larger than {max_bytes} bytes")),
             },
+            Self::StringArray { max_items, max_len } => match value.as_array() {
+                Some(items)
+                    if items.len() <= *max_items
+                        && items
+                            .iter()
+                            .all(|i| i.as_str().is_some_and(|s| s.chars().count() <= *max_len)) =>
+                {
+                    Ok(())
+                }
+                _ => Err(format!(
+                    "expected an array of at most {max_items} strings of at most {max_len} characters"
+                )),
+            },
         }
     }
 }
@@ -133,6 +157,14 @@ impl UiPreferenceRegistry {
             ),
             ("fileManagerHiddenColumns", Json { max_bytes: 256 }),
             ("fileManagerSort", Json { max_bytes: 256 }),
+            // Issue #1195: servers for which the first-elevation notice was dismissed.
+            (
+                ELEVATION_NOTICE_DISMISSED_KEY,
+                StringArray {
+                    max_items: 1000,
+                    max_len: 64,
+                },
+            ),
         ];
         Self {
             entries: entries
@@ -198,6 +230,41 @@ pub(crate) fn write_ui_preference<R: Runtime>(
     crate::settings_store::update(app, |changes| changes.set(key, value))
 }
 
+/// `list` without `server_id`; `None` when nothing changes.
+fn without_server_id(list: &Value, server_id: &str) -> Option<Value> {
+    let items = list.as_array()?;
+    if !items.iter().any(|i| i.as_str() == Some(server_id)) {
+        return None;
+    }
+    Some(Value::Array(
+        items
+            .iter()
+            .filter(|i| i.as_str() != Some(server_id))
+            .cloned()
+            .collect(),
+    ))
+}
+
+/// Issue #1195: a deleted server leaves no id behind in the notice list.
+pub(crate) fn forget_deleted_server<R: Runtime>(
+    app: &AppHandle<R>,
+    server_id: &str,
+) -> CommandResult<()> {
+    use tauri_plugin_store::StoreExt;
+    let store = app
+        .store(crate::settings_store::SETTINGS_STORE_FILE)
+        .map_err(|e| CommandError::with_code(e.to_string(), "SETTINGS_STORE_FAILED"))?;
+    let Some(next) = store
+        .get(ELEVATION_NOTICE_DISMISSED_KEY)
+        .and_then(|v| without_server_id(&v, server_id))
+    else {
+        return Ok(());
+    };
+    crate::settings_store::update(app, |changes| {
+        changes.set(ELEVATION_NOTICE_DISMISSED_KEY, next)
+    })
+}
+
 #[tauri::command]
 pub fn set_ui_preference(
     app: AppHandle,
@@ -222,6 +289,7 @@ mod tests {
             UiPreferenceShape::Integer { min, .. } => json!(min),
             UiPreferenceShape::String { .. } => json!("x"),
             UiPreferenceShape::Json { .. } => json!({"a": 1}),
+            UiPreferenceShape::StringArray { .. } => json!(["a"]),
         }
     }
 
@@ -239,7 +307,7 @@ mod tests {
     fn test_builtin_registry_has_no_security_key() {
         let registry = UiPreferenceRegistry::builtin();
         assert!(registry.entries.keys().all(|k| !is_security_key(k)));
-        assert_eq!(registry.entries.len(), 10);
+        assert_eq!(registry.entries.len(), 11);
     }
 
     #[test]
@@ -272,6 +340,56 @@ mod tests {
         ] {
             assert!(registry.validate(key, &value).is_err(), "{key} {value}");
         }
+    }
+
+    #[test]
+    fn test_elevation_notice_key_takes_only_string_arrays() {
+        let registry = UiPreferenceRegistry::builtin();
+        let key = ELEVATION_NOTICE_DISMISSED_KEY;
+        assert!(registry.validate(key, &json!([])).is_ok());
+        assert!(registry.validate(key, &json!(["a", "b"])).is_ok());
+        for bad in [
+            json!("a"),
+            json!({"a": 1}),
+            json!([1]),
+            json!(["a", null]),
+            json!(["x".repeat(65)]),
+            json!(vec!["a"; 1001]),
+        ] {
+            assert!(registry.validate(key, &bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn test_without_server_id_removes_only_that_id() {
+        assert_eq!(
+            without_server_id(&json!(["a", "b", "a"]), "a"),
+            Some(json!(["b"]))
+        );
+        assert_eq!(without_server_id(&json!(["b"]), "a"), None);
+        assert_eq!(without_server_id(&json!("a"), "a"), None);
+    }
+
+    #[test]
+    fn test_forget_deleted_server_removes_id_from_stored_list() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        let original = store.get(ELEVATION_NOTICE_DISMISSED_KEY);
+        store.set(ELEVATION_NOTICE_DISMISSED_KEY, json!(["s1", "s2"]));
+        forget_deleted_server(handle, "s1").unwrap();
+        assert_eq!(
+            store.get(ELEVATION_NOTICE_DISMISSED_KEY),
+            Some(json!(["s2"]))
+        );
+        match original {
+            Some(v) => store.set(ELEVATION_NOTICE_DISMISSED_KEY, v),
+            None => {
+                store.delete(ELEVATION_NOTICE_DISMISSED_KEY);
+            }
+        }
+        store.save().unwrap();
     }
 
     #[test]

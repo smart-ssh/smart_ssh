@@ -7,6 +7,16 @@ Accepted
 Bezug: docs/specs/0067-sftp-elevated-and-toasts.md, Commits `7e4e262`,
 `235f9a6`, `d28e266`, `8bfc9a2`, Review-Nacharbeit `030150d`
 
+> **Update (Issue #1191):** Die Entscheidung „nur passwortloses sudo“
+> (Spec 0067 „Entscheidung“, §6 und §8 unten) ist durch den Passwortweg
+> abgelöst: Ist ein Sudo-Passwort im Server-Profil gespeichert und verlangt
+> sudo eines, öffnet die App den Kanal mit `sudo -S -k -p '<marker>'` und
+> schreibt das Passwort erst nach dem Marker, genau einmal (Spec 0067, A1).
+> Der Grund: Eine `NOPASSWD`-Regel für `sftp-server` ist passwortloses Root
+> für alles unter dem Login. Die Probe-Kommandos laufen weiter ohne
+> Filter-Engine (§6); der Passwortweg ist nur aus Browser-Commands
+> erreichbar.
+
 ## 1. Neuer, kleiner Toast-Host statt „bestehendem 0058-Mechanismus“
 
 Die Spec verweist für Teil B auf einen app-weiten Toast aus Spec 0058. Den
@@ -79,8 +89,13 @@ oder den KI-Kontext.
 - Der Override bzw. erkannte Pfad muss auf `sftp-server` enden. So lässt
   sich kein `/bin/sh` mit sudo starten und keine NOPASSWD-Regel dafür
   anzeigen.
-- Die sudoers-Zeile endet mit `""`: `sftp-server` darf nur ohne Argumente
-  laufen, genau so startet die App ihn. Bei Logins mit
+- Die sudoers-Zeile endet mit `-l INFO -f AUTHPRIV` (Issue #1192):
+  `sftp-server` darf nur mit genau diesen Argumenten laufen, damit jede
+  Anfrage im Auth-Log des Servers steht (vorher `""`: nur ohne Argumente).
+  Die Argumente sind eine Konstante, nie Eingabe. Die Probe prüft zuerst
+  die Variante mit Argumenten, dann die ohne (bestehende Regeln mit `""`
+  laufen unverändert, ohne Server-Logging). Der Passwortweg startet mit den
+  Argumenten und versucht es bei „not allowed“ einmal ohne. Bei Logins mit
   sudoers-Sonderzeichen zeigt die App keine Zeile statt einer falschen.
 - Downloads im erhöhten Modus und Temp-Dateien des Bearbeiten-Flows werden
   direkt mit 0600 angelegt.
@@ -122,7 +137,13 @@ oder den KI-Kontext.
 - **Remote-Prozess nach dem Ausschalten:** Nicht verifiziert ist, ob das
   Verwerfen der SFTP-Session den `sftp-server`-Prozess auf dem Server sofort
   beendet oder erst beim SSH-Disconnect. Der Kanal ist aus Sicht der App in
-  jedem Fall nicht mehr erreichbar.
+  jedem Fall nicht mehr erreichbar. Issue #1193: Der Test-SSH-Server im
+  Prozess kann keinen echten `sftp-server`-Prozess zeigen. Dass der
+  Exec-Kanal beim Verwerfen geschlossen wird, belegt
+  `test_dropping_an_exec_sftp_session_closes_its_channel_while_connected`
+  (`crates/ssh-transport/tests/integration.rs`); das automatische Ausschalten
+  nutzt denselben Widerruf, ein eigenes Schließen kam nicht dazu. Der Prozess
+  auf dem Server bleibt „needs manual check on a real sshd“.
 - **KI/MCP-Regressionstest:** Er ist ein Zukunftsschutz und wäre auch vor
   der Änderung grün gewesen, weil die Orchestrierung den Kanal nie kannte.
   Sein Gegenbeweis ist deshalb ein absichtlich eingebauter Fehler

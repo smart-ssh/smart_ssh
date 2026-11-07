@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Calea către sftp-server (acces la fișiere cu drepturi ridicate)",
     "sftpServerPathPlaceholder": "Automat",
     "sftpServerPathHint": "Necesar doar dacă detectarea automată eșuează pentru browserul de fișiere cu drepturi ridicate, de ex. /usr/lib/openssh/sftp-server. Gol = automat.",
+    "elevationAllowedLabel": "Permite drepturi ridicate în browserul de fișiere",
+    "elevationAllowedHint": "Dacă este dezactivat, browserul de fișiere nu oferă drepturi ridicate pentru acest server.",
     "startDirectoryLabel": "Director de pornire (terminal și browser de fișiere)",
     "startDirectoryPlaceholder": "Directorul home",
     "startDirectoryHint": "Cale absolută (/…) sau o cale care începe cu ~/. Terminalul trece acolo printr-un cd vizibil, browserul de fișiere se deschide acolo. Comenzile IA rulează întotdeauna în directorul home. Gol = directorul home.",
@@ -435,6 +437,13 @@
       "reasonOther": "altă verificare de securitate",
       "loadFailed": "Acoperirea regulilor nu a putut fi încărcată"
     }
+  },
+  "authPrompt": {
+    "title": "Autentificare la {{hop}}",
+    "password": "Parolă",
+    "submit": "Autentificare",
+    "notStored": "Serverul cere aceste informații pentru autentificare. Nu sunt salvate.",
+    "expired": "Cererea de autentificare a expirat. Conexiunea nu a fost stabilită."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Avertisment de securitate · Cheia de host s-a schimbat",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Alegeți un furnizor AI înainte de a activa a doua opinie despre risc.",
     "SESSION_NOT_FOUND": "Această sesiune nu mai este deschisă. Deschide-o din nou din lista de servere.",
     "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv",
+    "SSH_NO_COMMON_ALGORITHM": "Niciun algoritm SSH în comun cu serverul. Software-ul lui SSH este prea vechi sau prea restrictiv. Actualizează-l sau activează algoritmi moderni."
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -774,6 +784,17 @@
     "opDelete": "Ștergere",
     "opChmod": "Schimbarea permisiunilor",
     "banner": "Drepturi ridicate active: toate acțiunile asupra fișierelor din acest browser rulează ca {{user}}.",
+    "bannerLogged": "Înregistrat pe server.",
+    "notice": {
+      "title": "Despre drepturile ridicate",
+      "intro": "Acum citești și scrii fișiere ca {{user}}. Modificările au efect imediat și aplicația nu le poate anula.",
+      "loggedApp": "Fiecare modificare este înregistrată în jurnalul aplicației.",
+      "loggedAppAndServer": "Fiecare modificare este înregistrată în jurnalul aplicației și în jurnalul de autentificare al serverului.",
+      "passwordless": "Regula sudo pentru sftp-server îi oferă lui {{user}} acces fără parolă la tot ce rulează sub această autentificare, nu doar la această aplicație.",
+      "alternative": "Dacă administrezi des acest server ca root, o autentificare root separată cu cheie (PermitRootLogin prohibit-password) face acel acces explicit.",
+      "gotIt": "Am înțeles",
+      "dontShowAgain": "Nu mai afișa pentru acest server"
+    },
     "deleteFileTitle": "Ștergeți fișierul ca {{user}}?",
     "deleteDirTitle": "Ștergeți folderul ca {{user}}?",
     "overwriteTitle": "Suprascrieți fișierul ca {{user}}?",
@@ -795,7 +816,8 @@
     "close": "Închide",
     "detail": "Detalii: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo necesită o parolă pentru sftp-server pe acest server. Aplicația nu solicită niciodată o parolă sudo.",
+      "passwordRequired": "sudo cere o parolă pentru sftp-server pe acest server. Adăugați regula sudoers de mai jos sau salvați o parolă sudo în profilul serverului pentru a activa drepturile ridicate.",
+      "wrongSudoPassword": "sudo a respins parola sudo salvată. Verificați parola sudo în profilul serverului.",
       "notAllowed": "Această autentificare SSH nu poate porni sftp-server prin sudo fără parolă.",
       "requireTty": "sudo refuză să ruleze fără terminal („requiretty” în sudoers). Dezactivați requiretty pentru această autentificare, de ex. cu „Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server nu a fost găsit pe server. Introduceți calea lui în profilul serverului la „Avansat”.",
@@ -805,7 +827,8 @@
       "invalidUser": "Utilizator țintă invalid.",
       "unsupported": "Serverul local nu are mod cu drepturi ridicate.",
       "checkFailed": "Verificarea drepturilor sudo a eșuat.",
-      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
+      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers).",
+      "disabledForServer": "Drepturile ridicate sunt dezactivate pentru acest server în profilul serverului."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
     "group": "Drepturi ridicate",
@@ -815,7 +838,9 @@
     "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
     "confirm": "Ridică",
     "opChown": "Schimbarea proprietarului",
-    "chownNote": "Proprietarul va fi schimbat ca {{user}}."
+    "chownNote": "Proprietarul va fi schimbat ca {{user}}.",
+    "idleSwitchedOff": "Drepturile ridicate au fost dezactivate după {{minutes}} minute fără activitate",
+    "revokedByProfile": "Drepturile ridicate s-au încheiat — profilul serverului nu le mai permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -1004,14 +1029,16 @@
       "hostKeyCheck": "Verificarea cheii de host",
       "authentication": "Autentificare",
       "sessionReady": "Sesiune stabilită",
-      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare"
+      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare",
+      "outdatedAlgorithms": "Algoritmi învechiți"
     },
     "status": {
       "ok": "OK",
       "running": "în curs",
       "failed": "eșuat ({{code}})",
       "skipped": "omis",
-      "failedReason": "eșuat: {{reason}}"
+      "failedReason": "eșuat: {{reason}}",
+      "warning": "avertisment"
     },
     "hostKeyResult": {
       "known": "cunoscută",
@@ -1508,5 +1535,18 @@
     "title": "Ceva nu a mers bine",
     "body": "Smart SSH a întâlnit o eroare neașteptată în interfață. Reîncarcă pentru a continua. Dacă se repetă, după reîncărcare creează un pachet de diagnosticare în Setări → Diagnosticare.",
     "reload": "Reîncarcă"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Acest server folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul SSH al serverului, dacă poți.",
+    "outdatedAlgorithmsHop": "{{hop}} folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul lui SSH, dacă poți."
+  },
+  "elevatedIdle": {
+    "label": "Dezactivează drepturile ridicate după inactivitate",
+    "minutes5": "5 minute",
+    "minutes15": "15 minute",
+    "minutes30": "30 minute",
+    "minutes60": "60 minute",
+    "never": "Niciodată",
+    "hint": "Browserul de fișiere iese singur din modul ridicat după acest timp fără activitate ridicată. O operațiune în curs contează ca activitate."
   }
 }

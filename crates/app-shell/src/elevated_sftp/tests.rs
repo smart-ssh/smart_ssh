@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::test_support::elevation::{access, fixture, output, transport, working_probes, PATH};
+use crate::test_support::elevation::{
+    access, fixture, fixture_with_sudo_password, output, transport, working_probes, PATH,
+};
 // Issue #149: Die Verschränkungstests T8/T8b warten auf Ereignisse, nicht
 // auf ein festes Zeitbudget. `HANG_GUARD` greift nur, wenn das Ereignis
 // nie kommt, und die Meldung nennt dann, worauf der Test wartete.
@@ -21,10 +23,15 @@ async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
     assert_eq!(result.target_user, "root");
     assert_eq!(result.sftp_server_path.as_deref(), Some(PATH));
     let log = log.lock().unwrap().clone();
-    assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
+    assert_eq!(
+        log.last().unwrap(),
+        &format!("sftp-exec:sudo -n {PATH} -l INFO -f AUTHPRIV")
+    );
+    assert!(result.server_logging);
+    assert_eq!(result.sudo_auth, Some("nopasswd"));
     assert!(log
         .iter()
-        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
+        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH} -l INFO -f AUTHPRIV")));
     assert!(f.is_active().await);
 }
 
@@ -45,7 +52,7 @@ async fn test_password_required_yields_tailored_sudoers_line_and_no_channel() {
     assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
     assert_eq!(
         failure.sudoers_line.as_deref(),
-        Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
+        Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV")
     );
     assert!(!log
         .lock()
@@ -199,7 +206,7 @@ async fn test_override_path_skips_probe_and_invalid_override_runs_nothing() {
     );
     assert_eq!(
         log.last().unwrap(),
-        "sftp-exec:sudo -n -u www-data /opt/ssh/sftp-server"
+        "sftp-exec:sudo -n -u www-data /opt/ssh/sftp-server -l INFO -f AUTHPRIV"
     );
 
     let (t, log) = transport(output(0, "", ""), output(0, "", ""));
@@ -576,6 +583,8 @@ async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slo
         f.session_id,
         ElevatedSftp {
             target_user: "root".to_string(),
+            sudo_auth: Default::default(),
+            server_logging: false,
             sftp: Box::new(DropReportingSftp(dropped.clone())),
         },
     );
@@ -632,4 +641,277 @@ async fn test_t9_disabling_an_inactive_or_unknown_session_channel_is_harmless() 
     assert_eq!(err.message, "session not found");
     assert_eq!(err.code, Some(app_logic::error::SESSION_NOT_FOUND));
     assert!(!f.is_active().await);
+}
+
+// ---- Issue #1191: the sudo password path ----
+
+const STORED: &str = "hunter2-very-secret";
+
+fn password_required_transport() -> (
+    crate::test_support::elevation::ProbeTransport,
+    Arc<std::sync::Mutex<Vec<String>>>,
+) {
+    transport(
+        output(0, "/usr/lib/openssh/sftp-server\n", ""),
+        output(1, "", "sudo: a password is required\n"),
+    )
+}
+
+#[tokio::test]
+async fn test_password_path_is_used_and_password_never_leaks() {
+    let (logs, _capture) = crate::test_support::log_capture::capture_logs();
+    let (t, log) = password_required_transport();
+    let received = t.received_passwords.clone();
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(
+        &f.ctx(),
+        "deploy",
+        None,
+        Some("auditprobe"),
+        false,
+        &access(),
+    )
+    .await
+    .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert_eq!(received.lock().unwrap().as_slice(), [STORED.to_string()]);
+    let log = log.lock().unwrap().clone();
+    let cmd = log.last().unwrap();
+    assert!(
+        cmd.starts_with("sftp-exec-pw:sudo -S -k -p 'smart-ssh-sudo-"),
+        "{cmd}"
+    );
+    assert!(
+        cmd.ends_with(&format!(" {PATH} -l INFO -f AUTHPRIV")),
+        "{cmd}"
+    );
+    assert!(result.server_logging);
+    assert_eq!(result.sudo_auth, Some("password"));
+    assert!(!log.iter().any(|c| c.contains(STORED)), "{log:?}");
+    let audit: Vec<String> = logs
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|f| f.get("target_user").map(String::as_str) == Some("auditprobe"))
+        .map(|f| format!("{f:?}"))
+        .collect();
+    assert_eq!(audit.len(), 1, "{audit:?}");
+    let audit = audit.concat();
+    assert!(audit.contains("\"password\""), "{audit}");
+    assert!(!audit.contains(STORED));
+    assert!(!format!("{result:?}").contains(STORED));
+    assert!(f.is_active().await);
+}
+
+#[tokio::test]
+async fn test_nopasswd_path_is_unchanged_even_with_a_stored_password() {
+    let (probe, check) = working_probes();
+    let (t, log) = transport(probe, check);
+    let received = t.received_passwords.clone();
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active);
+    assert_eq!(
+        log.lock().unwrap().last().unwrap(),
+        &format!("sftp-exec:sudo -n {PATH} -l INFO -f AUTHPRIV")
+    );
+    assert!(received.lock().unwrap().is_empty());
+}
+
+async fn password_failure(
+    make: fn() -> ssh_manager_core::ssh::SudoPromptError,
+) -> (ElevationResultDto, bool) {
+    let (mut t, _log) = password_required_transport();
+    t.password_failure = Some(make);
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    let active = f.is_active().await;
+    (result, active)
+}
+
+#[tokio::test]
+async fn test_password_path_wrong_password_and_no_prompt_and_not_allowed() {
+    use ssh_manager_core::ssh::SudoPromptError as E;
+    let (r, active) = password_failure(|| E::WrongPassword).await;
+    assert!(!r.active && !active);
+    assert_eq!(
+        r.failure.unwrap().kind,
+        ElevationFailureKind::WrongSudoPassword
+    );
+
+    let (r, active) = password_failure(|| E::NoPrompt).await;
+    assert!(!r.active && !active);
+    assert_eq!(r.failure.unwrap().kind, ElevationFailureKind::StartFailed);
+
+    let (r, active) = password_failure(|| E::NotAllowed("sudo: not allowed".into())).await;
+    assert!(!r.active && !active);
+    assert_eq!(r.failure.unwrap().kind, ElevationFailureKind::NotAllowed);
+}
+
+#[tokio::test]
+async fn test_password_required_without_stored_password_keeps_todays_failure() {
+    let (t, log) = password_required_transport();
+    let f = fixture(Box::new(t));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    let failure = result.failure.unwrap();
+    assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
+    assert!(failure.sudoers_line.is_some());
+    assert!(!log
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|c| c.starts_with("sftp-exec")));
+}
+
+#[tokio::test]
+async fn test_unsafe_binary_in_the_password_path_starts_with_warning() {
+    let (mut t, _log) = password_required_transport();
+    t.safety = output(0, &format!("UNSAFE {PATH}\n"), "");
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+    assert!(result.active, "{result:?}");
+    assert_eq!(
+        result.warning.unwrap().kind,
+        ElevationWarningKind::SftpServerUnsafe
+    );
+}
+
+/// Issue #1192: an existing rule that allows only the plain command keeps
+/// working: the channel opens without arguments, `server_logging` is false.
+#[tokio::test]
+async fn test_existing_plain_rule_opens_without_logging() {
+    let (probe, check) = working_probes();
+    let (mut t, log) = transport(probe, check);
+    t.logging_check = Some(output(
+        1,
+        "",
+        "Sorry, user deploy is not allowed to execute\n",
+    ));
+    let f = fixture(Box::new(t));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert!(!result.server_logging);
+    let log = log.lock().unwrap().clone();
+    assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
+    assert!(log
+        .iter()
+        .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
+}
+
+/// Issue #1192: password path retries once without arguments when sudo does
+/// not allow the logging variant.
+#[tokio::test]
+async fn test_password_path_retries_without_logging_when_not_allowed() {
+    use ssh_manager_core::ssh::SudoPromptError as E;
+    let (mut t, log) = password_required_transport();
+    t.password_failure = Some(|| E::NotAllowed("not allowed to run".into()));
+    t.password_failure_only_logging = true;
+    let f = fixture_with_sudo_password(Box::new(t), Some(STORED));
+
+    let result = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .unwrap();
+
+    assert!(result.active, "{result:?}");
+    assert!(!result.server_logging);
+    let log = log.lock().unwrap().clone();
+    let pw: Vec<&String> = log
+        .iter()
+        .filter(|c| c.starts_with("sftp-exec-pw:"))
+        .collect();
+    assert_eq!(pw.len(), 2, "{pw:?}");
+    assert!(pw[0].ends_with(" -l INFO -f AUTHPRIV"));
+    assert!(pw[1].ends_with(&format!(" {PATH}")));
+    // fresh marker for the retry
+    let marker = |c: &str| c.split('\'').nth(1).unwrap().to_string();
+    assert_ne!(marker(pw[0]), marker(pw[1]));
+}
+
+/// Issue #1194: a server profile that does not allow elevated rights is
+/// refused before any probe or sudo check reaches the transport.
+#[tokio::test]
+async fn test_disabled_for_server_refuses_without_any_probe() {
+    let (probe, check) = working_probes();
+    let (t, log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let server = ssh_manager_core::testing::ServerBuilder::new()
+        .elevation_allowed(false)
+        .build();
+
+    let result = enable_for_server(&f.ctx(), &server, None, false, &access())
+        .await
+        .expect("a refusal is a result, not an Err");
+
+    assert!(!result.active, "{result:?}");
+    assert_eq!(
+        result.failure.map(|f| f.kind),
+        Some(ElevationFailureKind::DisabledForServer)
+    );
+    assert!(
+        log.lock().unwrap().is_empty(),
+        "nothing may reach the transport"
+    );
+    assert!(!f.is_active().await);
+}
+
+/// Issue #1194: the default (allowed) path still elevates.
+#[tokio::test]
+async fn test_allowed_for_server_still_elevates() {
+    let (probe, check) = working_probes();
+    let (t, _log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let server = ssh_manager_core::testing::ServerBuilder::new().build();
+    assert!(server.elevation_allowed);
+
+    let result = enable_for_server(&f.ctx(), &server, None, false, &access())
+        .await
+        .expect("session exists");
+    assert!(result.active, "{result:?}");
+}
+
+/// Issue #1194: turning the setting off revokes the active channel; a
+/// command that still holds the slot cannot use it any more.
+#[tokio::test]
+async fn test_revoke_for_server_revokes_active_channel_and_blocks_further_use() {
+    let (probe, check) = working_probes();
+    let (t, _log) = transport(probe, check);
+    let f = fixture(Box::new(t));
+    let enabled = enable(&f.ctx(), "deploy", None, None, false, &access())
+        .await
+        .expect("session exists");
+    assert!(enabled.active);
+    let held = f
+        .registry
+        .slot(f.session_id, &access())
+        .expect("precondition: channel active");
+
+    // A different server leaves the channel alone.
+    let other = ssh_manager_core::shared::ServerId::new();
+    assert!(revoke_for_server(&f.sessions, &f.registry, other).is_empty());
+    assert!(f.is_active().await);
+
+    let revoked = revoke_for_server(&f.sessions, &f.registry, f.session.server_id);
+    assert_eq!(revoked, vec![f.session_id]);
+    assert!(!f.is_active().await);
+    assert!(
+        held.is_revoked(),
+        "a further elevated command on the held slot is refused"
+    );
 }

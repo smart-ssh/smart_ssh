@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Path to sftp-server (elevated file access)",
     "sftpServerPathPlaceholder": "Automatic",
     "sftpServerPathHint": "Only needed if automatic detection fails for the file browser with elevated rights, e.g. /usr/lib/openssh/sftp-server. Leave empty = automatic.",
+    "elevationAllowedLabel": "Allow elevated rights in the file browser",
+    "elevationAllowedHint": "When off, the file browser does not offer elevated rights for this server.",
     "startDirectoryLabel": "Start directory (terminal and file browser)",
     "startDirectoryPlaceholder": "Home directory",
     "startDirectoryHint": "Absolute path (/…) or a path starting with ~/. The terminal changes there with a visible cd, the file browser opens there. AI commands always run in the home directory. Leave empty = home directory.",
@@ -435,6 +437,13 @@
       "reasonOther": "another safety check",
       "loadFailed": "Rule coverage could not be loaded"
     }
+  },
+  "authPrompt": {
+    "title": "Login on {{hop}}",
+    "password": "Password",
+    "submit": "Log in",
+    "notStored": "The server asks for this information to log in. It is not stored.",
+    "expired": "The login request expired. The connection was not established."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Security Warning · Host Key Changed",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choose an AI provider before turning on the risk second opinion.",
     "SESSION_NOT_FOUND": "This session is no longer open. Open it again from the server list.",
     "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device",
+    "SSH_NO_COMMON_ALGORITHM": "No SSH algorithm in common with the server. Its SSH software is too old or too restrictive. Update it or enable modern algorithms."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -769,6 +779,17 @@
     "opDelete": "Delete",
     "opChmod": "Change permissions",
     "banner": "Elevated rights active: all file actions in this browser run as {{user}}.",
+    "bannerLogged": "Logged on the server.",
+    "notice": {
+      "title": "About elevated rights",
+      "intro": "You now read and write files as {{user}}. Changes take effect immediately and cannot be undone by the app.",
+      "loggedApp": "Every change is logged in the app's log.",
+      "loggedAppAndServer": "Every change is logged in the app's log and in the server's auth log.",
+      "passwordless": "The sudo rule for sftp-server gives passwordless {{user}} access to everything running under this login, not only to this app.",
+      "alternative": "If you administer this server regularly as root, a separate root login with a key (PermitRootLogin prohibit-password) makes that access explicit.",
+      "gotIt": "Got it",
+      "dontShowAgain": "Don't show again for this server"
+    },
     "deleteFileTitle": "Delete file as {{user}}?",
     "deleteDirTitle": "Delete folder as {{user}}?",
     "overwriteTitle": "Overwrite file as {{user}}?",
@@ -790,7 +811,8 @@
     "close": "Close",
     "detail": "Details: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo requires a password for sftp-server on this server. The app never asks for a sudo password.",
+      "passwordRequired": "sudo requires a password for sftp-server on this server. Add the sudoers rule below, or store a sudo password in the server profile to enable elevated rights.",
+      "wrongSudoPassword": "sudo rejected the stored sudo password. Check the sudo password in the server profile.",
       "notAllowed": "This SSH login may not start sftp-server via sudo without a password.",
       "requireTty": "sudo refuses to run without a terminal (“requiretty” in sudoers). Disable requiretty for this login, e.g. with “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server was not found on the server. Please enter its path in the server profile under “Advanced”.",
@@ -800,7 +822,8 @@
       "invalidUser": "Invalid target user.",
       "unsupported": "The local server has no elevated mode.",
       "checkFailed": "Checking the sudo rights failed.",
-      "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
+      "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers).",
+      "disabledForServer": "Elevated rights are turned off for this server in the server profile."
     },
     "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
     "group": "Elevated rights",
@@ -810,7 +833,9 @@
     "targetUserHelp": "Runs the file browser as this user via sudo. Default: root.",
     "confirm": "Elevate",
     "opChown": "Change owner",
-    "chownNote": "The owner will be changed as {{user}}."
+    "chownNote": "The owner will be changed as {{user}}.",
+    "idleSwitchedOff": "Elevated rights switched off after {{minutes}} minutes without activity",
+    "revokedByProfile": "Elevated rights ended — the server profile no longer allows them."
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Host key check",
       "authentication": "Authentication",
       "sessionReady": "Session established",
-      "dnsSkipped": "IP address – no lookup needed"
+      "dnsSkipped": "IP address – no lookup needed",
+      "outdatedAlgorithms": "Outdated algorithms"
     },
     "status": {
       "ok": "OK",
       "running": "in progress",
       "failed": "failed ({{code}})",
       "skipped": "skipped",
-      "failedReason": "failed: {{reason}}"
+      "failedReason": "failed: {{reason}}",
+      "warning": "warning"
     },
     "hostKeyResult": {
       "known": "known",
@@ -1500,5 +1527,18 @@
     "title": "Something went wrong",
     "body": "Smart SSH hit an unexpected error in the interface. Reload to continue. If it happens again, create a diagnostics bundle under Settings → Diagnostics after reloading.",
     "reload": "Reload"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "This server uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update the server's SSH software if you can.",
+    "outdatedAlgorithmsHop": "{{hop}} uses outdated SSH algorithms ({{algorithms}}). The connection is less secure. Update its SSH software if you can."
+  },
+  "elevatedIdle": {
+    "label": "Switch off elevated rights after inactivity",
+    "minutes5": "5 minutes",
+    "minutes15": "15 minutes",
+    "minutes30": "30 minutes",
+    "minutes60": "60 minutes",
+    "never": "Never",
+    "hint": "The file browser leaves elevated mode on its own after this long without elevated activity. A running operation counts as activity."
   }
 }

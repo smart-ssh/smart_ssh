@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Ścieżka do sftp-server (podwyższony dostęp do plików)",
     "sftpServerPathPlaceholder": "Automatycznie",
     "sftpServerPathHint": "Potrzebne tylko wtedy, gdy automatyczne wykrywanie zawodzi dla przeglądarki plików z podwyższonymi uprawnieniami, np. /usr/lib/openssh/sftp-server. Puste = automatycznie.",
+    "elevationAllowedLabel": "Zezwalaj na podwyższone uprawnienia w przeglądarce plików",
+    "elevationAllowedHint": "Gdy wyłączone, przeglądarka plików nie oferuje podwyższonych uprawnień dla tego serwera.",
     "startDirectoryLabel": "Katalog startowy (terminal i przeglądarka plików)",
     "startDirectoryPlaceholder": "Katalog domowy",
     "startDirectoryHint": "Ścieżka bezwzględna (/…) lub ścieżka zaczynająca się od ~/. Terminal przechodzi tam widocznym poleceniem cd, przeglądarka plików otwiera się tam. Polecenia AI zawsze działają w katalogu domowym. Puste = katalog domowy.",
@@ -435,6 +437,13 @@
       "reasonOther": "inna kontrola bezpieczeństwa",
       "loadFailed": "Nie udało się wczytać pokrycia reguł"
     }
+  },
+  "authPrompt": {
+    "title": "Logowanie do {{hop}}",
+    "password": "Hasło",
+    "submit": "Zaloguj",
+    "notStored": "Serwer prosi o te informacje, aby się zalogować. Nie są zapisywane.",
+    "expired": "Żądanie logowania wygasło. Połączenie nie zostało nawiązane."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Ostrzeżenie bezpieczeństwa · Zmieniony klucz hosta",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wybierz dostawcę AI, zanim włączysz drugą opinię o ryzyku.",
     "SESSION_NOT_FOUND": "Ta sesja nie jest już otwarta. Otwórz ją ponownie z listy serwerów.",
     "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nie znaleziono pliku klucza na tym urządzeniu"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nie znaleziono pliku klucza na tym urządzeniu",
+    "SSH_NO_COMMON_ALGORITHM": "Brak wspólnego algorytmu SSH z serwerem. Jego oprogramowanie SSH jest zbyt stare lub zbyt restrykcyjne. Zaktualizuj je lub włącz nowoczesne algorytmy."
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",
@@ -779,6 +789,17 @@
     "opDelete": "Usuwanie",
     "opChmod": "Zmiana uprawnień",
     "banner": "Podwyższone uprawnienia aktywne: wszystkie działania na plikach w tej przeglądarce wykonywane są jako {{user}}.",
+    "bannerLogged": "Rejestrowane na serwerze.",
+    "notice": {
+      "title": "O podwyższonych uprawnieniach",
+      "intro": "Teraz odczytujesz i zapisujesz pliki jako {{user}}. Zmiany działają natychmiast, a aplikacja nie może ich cofnąć.",
+      "loggedApp": "Każda zmiana jest zapisywana w dzienniku aplikacji.",
+      "loggedAppAndServer": "Każda zmiana jest zapisywana w dzienniku aplikacji i w dzienniku uwierzytelniania serwera.",
+      "passwordless": "Reguła sudo dla sftp-server daje {{user}} dostęp bez hasła do wszystkiego, co działa w tym loginie, nie tylko do tej aplikacji.",
+      "alternative": "Jeśli często administrujesz tym serwerem jako root, osobny login root z kluczem (PermitRootLogin prohibit-password) czyni ten dostęp jawnym.",
+      "gotIt": "Rozumiem",
+      "dontShowAgain": "Nie pokazuj więcej dla tego serwera"
+    },
     "deleteFileTitle": "Usunąć plik jako {{user}}?",
     "deleteDirTitle": "Usunąć folder jako {{user}}?",
     "overwriteTitle": "Nadpisać plik jako {{user}}?",
@@ -800,7 +821,8 @@
     "close": "Zamknij",
     "detail": "Szczegóły: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo wymaga hasła dla sftp-server na tym serwerze. Aplikacja nigdy nie pyta o hasło sudo.",
+      "passwordRequired": "sudo wymaga na tym serwerze hasła dla sftp-server. Dodaj poniższą regułę sudoers albo zapisz hasło sudo w profilu serwera, aby włączyć podwyższone uprawnienia.",
+      "wrongSudoPassword": "sudo odrzuciło zapisane hasło sudo. Sprawdź hasło sudo w profilu serwera.",
       "notAllowed": "Ten login SSH nie może uruchamiać sftp-server przez sudo bez hasła.",
       "requireTty": "sudo odmawia działania bez terminala („requiretty” w sudoers). Wyłącz requiretty dla tego loginu, np. przez „Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "Nie znaleziono sftp-server na serwerze. Podaj jego ścieżkę w profilu serwera w sekcji „Zaawansowane”.",
@@ -810,7 +832,8 @@
       "invalidUser": "Nieprawidłowy użytkownik docelowy.",
       "unsupported": "Serwer lokalny nie ma trybu podwyższonego.",
       "checkFailed": "Sprawdzenie uprawnień sudo nie powiodło się.",
-      "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers)."
+      "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers).",
+      "disabledForServer": "Podwyższone uprawnienia są wyłączone dla tego serwera w profilu serwera."
     },
     "channelLost": "Podwyższone uprawnienia zakończone — kanał podwyższony nie jest już aktywny.",
     "group": "Podwyższone uprawnienia",
@@ -820,7 +843,9 @@
     "targetUserHelp": "Uruchamia przeglądarkę plików jako ten użytkownik przez sudo. Domyślnie: root.",
     "confirm": "Podnieś",
     "opChown": "Zmiana właściciela",
-    "chownNote": "Właściciel zostanie zmieniony jako {{user}}."
+    "chownNote": "Właściciel zostanie zmieniony jako {{user}}.",
+    "idleSwitchedOff": "Podwyższone uprawnienia wyłączone po {{minutes}} min bez aktywności",
+    "revokedByProfile": "Podwyższone uprawnienia zakończone — profil serwera już ich nie dopuszcza."
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",
@@ -1009,14 +1034,16 @@
       "hostKeyCheck": "Sprawdzenie klucza hosta",
       "authentication": "Uwierzytelnianie",
       "sessionReady": "Sesja nawiązana",
-      "dnsSkipped": "Adres IP – rozpoznawanie nazwy niepotrzebne"
+      "dnsSkipped": "Adres IP – rozpoznawanie nazwy niepotrzebne",
+      "outdatedAlgorithms": "Przestarzałe algorytmy"
     },
     "status": {
       "ok": "OK",
       "running": "w toku",
       "failed": "niepowodzenie ({{code}})",
       "skipped": "pominięto",
-      "failedReason": "niepowodzenie: {{reason}}"
+      "failedReason": "niepowodzenie: {{reason}}",
+      "warning": "ostrzeżenie"
     },
     "hostKeyResult": {
       "known": "znany",
@@ -1516,5 +1543,18 @@
     "title": "Coś poszło nie tak",
     "body": "Smart SSH napotkał nieoczekiwany błąd w interfejsie. Załaduj ponownie, aby kontynuować. Jeśli się powtórzy, po przeładowaniu utwórz pakiet diagnostyczny w Ustawienia → Diagnostyka.",
     "reload": "Załaduj ponownie"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ten serwer używa przestarzałych algorytmów SSH ({{algorithms}}). Połączenie jest mniej bezpieczne. Jeśli możesz, zaktualizuj oprogramowanie SSH serwera.",
+    "outdatedAlgorithmsHop": "{{hop}} używa przestarzałych algorytmów SSH ({{algorithms}}). Połączenie jest mniej bezpieczne. Jeśli możesz, zaktualizuj jego oprogramowanie SSH."
+  },
+  "elevatedIdle": {
+    "label": "Wyłącz podwyższone uprawnienia po bezczynności",
+    "minutes5": "5 min",
+    "minutes15": "15 min",
+    "minutes30": "30 min",
+    "minutes60": "60 min",
+    "never": "Nigdy",
+    "hint": "Przeglądarka plików sama opuszcza tryb podwyższony po tym czasie bez podwyższonej aktywności. Trwająca operacja liczy się jako aktywność."
   }
 }

@@ -22,11 +22,14 @@ macro_rules! decls {
 }
 
 fn generate() -> String {
+    use crate::auth_prompt_events::*;
     use crate::auto_reconnect::{AutoReconnectChangedPayload, AutoReconnectPhase};
     use crate::confirmation_settled::{
         ActionConfirmationSettledPayload, ConfirmationSettledReason,
     };
     use crate::dto::*;
+    use crate::elevation_events::ElevationAutoDisabledPayload;
+    use crate::events::connect_warnings::ConnectWarningsPayload;
     use crate::events::*;
     use crate::status::ConnectionStatus;
     use crate::version::BuildType;
@@ -43,7 +46,7 @@ fn generate() -> String {
         AuthMethodKind as ConnectAuthMethodKind, ConnectStep, ConnectStepRecord,
         HostKeyCheckResult, StepStatus,
     };
-    use ssh_manager_core::ssh::ConnectStepSnapshot;
+    use ssh_manager_core::ssh::{ConnectStepSnapshot, ConnectWarning};
     let decls = decls![
         ActionConfirmationSettledPayload,
         ActionOrigin,
@@ -65,7 +68,13 @@ fn generate() -> String {
         HostKeyVerificationNeededPayload,
         HostKeyPromptEndReason,
         HostKeyVerificationEndedPayload,
+        AuthPromptItemPayload,
+        AuthPromptNeededPayload,
+        AuthPromptEndReason,
+        AuthPromptEndedPayload,
         ConnectProgressPayload,
+        ConnectWarning,
+        ConnectWarningsPayload,
         TerminalOutputPayload,
         ChatTextDeltaPayload,
         ChatAutoContinuationStartedPayload,
@@ -95,6 +104,7 @@ fn generate() -> String {
         ChatAutoContinuationLimitReachedPayload,
         SftpTransferKind,
         SftpTransferStartedPayload,
+        ElevationAutoDisabledPayload,
         SftpTransferFinishedPayload,
         SftpEntriesProgress,
         SftpTransferProgressPayload,
@@ -218,7 +228,10 @@ fn event_payloads() -> String {
             names::HOST_KEY_VERIFICATION_ENDED,
             "HostKeyVerificationEndedPayload",
         ),
+        (names::AUTH_PROMPT_NEEDED, "AuthPromptNeededPayload"),
+        (names::AUTH_PROMPT_ENDED, "AuthPromptEndedPayload"),
         (names::CONNECT_PROGRESS, "ConnectProgressPayload"),
+        (names::CONNECT_WARNINGS, "ConnectWarningsPayload"),
         (names::TERMINAL_OUTPUT, "TerminalOutputPayload"),
         (names::CHAT_TEXT_DELTA, "ChatTextDeltaPayload"),
         (
@@ -269,6 +282,11 @@ fn event_payloads() -> String {
             "ChatAutoContinuationLimitReachedPayload",
         ),
         (names::SFTP_TRANSFER_STARTED, "SftpTransferStartedPayload"),
+        (
+            names::ELEVATION_AUTO_DISABLED,
+            "ElevationAutoDisabledPayload",
+        ),
+        (names::ELEVATION_REVOKED_BY_PROFILE, "SessionOnlyPayload"),
         (names::SFTP_TRANSFER_FINISHED, "SftpTransferFinishedPayload"),
         (names::SFTP_TRANSFER_PROGRESS, "SftpTransferProgressPayload"),
         (

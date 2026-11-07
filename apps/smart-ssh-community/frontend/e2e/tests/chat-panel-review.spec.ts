@@ -52,6 +52,33 @@ async function tabStops(page: Page, count: number) {
   return stops;
 }
 
+/** Waits until the chat column is pinned to the bottom and its content height
+ * has not changed for 10 consecutive animation frames. A late layout change
+ * (font load, markdown/link layout) moves the stops of later Tab presses
+ * relative to earlier ones; ADR 0122 requires waiting for the end state. */
+async function waitForSettledColumn(page: Page) {
+  await page.evaluate(
+    async () => {
+      await document.fonts.ready;
+      return new Promise<void>((resolve, reject) => {
+        let frames = 0;
+        const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
+        let last = -1;
+        let stable = 0;
+        const step = () => {
+          const pinned = el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
+          stable = pinned && el.scrollHeight === last ? stable + 1 : 0;
+          last = el.scrollHeight;
+          if (stable >= 10) resolve();
+          else if (++frames > 600) reject(new Error("chat column did not settle within 600 frames"));
+          else requestAnimationFrame(step);
+        };
+        step();
+      });
+    },
+  );
+}
+
 function expectVisualOrder(stops: { name: string; top: number; left: number }[]) {
   // Reading order: a stop never lies clearly above the previous one; within a
   // row it moves right.
@@ -124,14 +151,7 @@ test.describe("chat panel review", () => {
     await openChatWithMessages(app);
     // Settled state: column at the bottom, jump button hidden.
     await expect(app.page.getByTestId("chat-jump-to-latest")).toBeHidden();
-    await expect
-      .poll(() =>
-        app.page.evaluate(() => {
-          const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
-          return el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
-        }),
-      )
-      .toBe(true);
+    await waitForSettledColumn(app.page);
     await app.page.getByRole("button", { name: "New chat" }).focus();
     const stops = await tabStops(app.page, 6);
     expectVisualOrder(stops);

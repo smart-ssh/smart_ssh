@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Sökväg till sftp-server (förhöjd filåtkomst)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Behövs bara om den automatiska identifieringen misslyckas för filbläddraren med förhöjda rättigheter, t.ex. /usr/lib/openssh/sftp-server. Tomt = automatiskt.",
+    "elevationAllowedLabel": "Tillåt förhöjda rättigheter i filläsaren",
+    "elevationAllowedHint": "När detta är av erbjuder filläsaren inga förhöjda rättigheter för den här servern.",
     "startDirectoryLabel": "Startkatalog (terminal och filbläddrare)",
     "startDirectoryPlaceholder": "Hemkatalog",
     "startDirectoryHint": "Absolut sökväg (/…) eller en sökväg som börjar med ~/. Terminalen byter dit med ett synligt cd, filbläddraren öppnas där. AI-kommandon körs alltid i hemkatalogen. Tomt = hemkatalog.",
@@ -435,6 +437,13 @@
       "reasonOther": "en annan säkerhetskontroll",
       "loadFailed": "Regeltäckningen kunde inte läsas in"
     }
+  },
+  "authPrompt": {
+    "title": "Inloggning på {{hop}}",
+    "password": "Lösenord",
+    "submit": "Logga in",
+    "notStored": "Servern ber om den här informationen för att logga in. Den sparas inte.",
+    "expired": "Inloggningsförfrågan har gått ut. Anslutningen upprättades inte."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Säkerhetsvarning · Värdnyckeln har ändrats",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Välj en AI-leverantör innan du slår på den andra bedömningen av risk.",
     "SESSION_NOT_FOUND": "Den här sessionen är inte längre öppen. Öppna den igen från serverlistan.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten",
+    "SSH_NO_COMMON_ALGORITHM": "Ingen SSH-algoritm är gemensam med servern. Dess SSH-programvara är för gammal eller för sträng. Uppdatera den eller aktivera moderna algoritmer."
   },
   "mcpServer": {
     "hint": "Externa MCP-klienter kan använda detta för att föreslå kommandon, filläsningar/filskrivningar och anteckningsuppdateringar på tillåtlistade servrar — varje begäran kräver alltid bekräftelse i appen, oavsett befintliga tillåtregler.",
@@ -769,6 +779,17 @@
     "opDelete": "Borttagning",
     "opChmod": "Ändring av behörigheter",
     "banner": "Förhöjda rättigheter aktiva: alla filåtgärder i den här bläddraren körs som {{user}}.",
+    "bannerLogged": "Loggas på servern.",
+    "notice": {
+      "title": "Om utökade rättigheter",
+      "intro": "Du läser och skriver nu filer som {{user}}. Ändringar gäller direkt och kan inte ångras av appen.",
+      "loggedApp": "Varje ändring loggas i appens logg.",
+      "loggedAppAndServer": "Varje ändring loggas i appens logg och i serverns autentiseringslogg.",
+      "passwordless": "Sudo-regeln för sftp-server ger {{user}} lösenordsfri åtkomst till allt som körs under den här inloggningen, inte bara till appen.",
+      "alternative": "Om du ofta administrerar servern som root gör en separat root-inloggning med nyckel (PermitRootLogin prohibit-password) den åtkomsten tydlig.",
+      "gotIt": "Uppfattat",
+      "dontShowAgain": "Visa inte igen för den här servern"
+    },
     "deleteFileTitle": "Ta bort filen som {{user}}?",
     "deleteDirTitle": "Ta bort mappen som {{user}}?",
     "overwriteTitle": "Skriva över filen som {{user}}?",
@@ -790,7 +811,8 @@
     "close": "Stäng",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo kräver ett lösenord för sftp-server på den här servern. Appen frågar aldrig efter ett sudo-lösenord.",
+      "passwordRequired": "sudo kräver lösenord för sftp-server på den här servern. Lägg till sudoers-raden nedan eller spara ett sudo-lösenord i serverprofilen för att aktivera förhöjda rättigheter.",
+      "wrongSudoPassword": "sudo avvisade det sparade sudo-lösenordet. Kontrollera sudo-lösenordet i serverprofilen.",
       "notAllowed": "Den här SSH-inloggningen får inte starta sftp-server via sudo utan lösenord.",
       "requireTty": "sudo vägrar köra utan terminal (“requiretty” i sudoers). Stäng av requiretty för inloggningen, t.ex. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server hittades inte på servern. Ange dess sökväg i serverprofilen under “Avancerat”.",
@@ -800,7 +822,8 @@
       "invalidUser": "Ogiltig målanvändare.",
       "unsupported": "Den lokala servern har inget förhöjt läge.",
       "checkFailed": "Kontrollen av sudo-rättigheterna misslyckades.",
-      "startFailed": "sftp-server kunde inte startas via sudo (möjlig orsak: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunde inte startas via sudo (möjlig orsak: “requiretty” i sudoers).",
+      "disabledForServer": "Förhöjda rättigheter är avstängda för den här servern i serverprofilen."
     },
     "channelLost": "Förhöjda rättigheter avslutade — den förhöjda kanalen är inte längre aktiv.",
     "group": "Förhöjda rättigheter",
@@ -810,7 +833,9 @@
     "targetUserHelp": "Kör filläsaren som denna användare via sudo. Standard: root.",
     "confirm": "Utöka",
     "opChown": "Ändring av ägare",
-    "chownNote": "Ägaren ändras som {{user}}."
+    "chownNote": "Ägaren ändras som {{user}}.",
+    "idleSwitchedOff": "Förhöjda rättigheter har stängts av efter {{minutes}} minuter utan aktivitet",
+    "revokedByProfile": "Förhöjda rättigheter avslutades — serverprofilen tillåter dem inte längre."
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Kontroll av värdnyckel",
       "authentication": "Autentisering",
       "sessionReady": "Session upprättad",
-      "dnsSkipped": "IP-adress – ingen namnuppslagning behövs"
+      "dnsSkipped": "IP-adress – ingen namnuppslagning behövs",
+      "outdatedAlgorithms": "Föråldrade algoritmer"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
       "failed": "misslyckades ({{code}})",
       "skipped": "hoppades över",
-      "failedReason": "misslyckades: {{reason}}"
+      "failedReason": "misslyckades: {{reason}}",
+      "warning": "varning"
     },
     "hostKeyResult": {
       "known": "känd",
@@ -1500,5 +1527,18 @@
     "title": "Något gick fel",
     "body": "Smart SSH stötte på ett oväntat fel i gränssnittet. Ladda om för att fortsätta. Om det händer igen, skapa ett diagnostikpaket under Inställningar → Diagnostik efter omladdningen.",
     "reload": "Ladda om"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Den här servern använder föråldrade SSH-algoritmer ({{algorithms}}). Anslutningen är mindre säker. Uppdatera serverns SSH-programvara om du kan.",
+    "outdatedAlgorithmsHop": "{{hop}} använder föråldrade SSH-algoritmer ({{algorithms}}). Anslutningen är mindre säker. Uppdatera dess SSH-programvara om du kan."
+  },
+  "elevatedIdle": {
+    "label": "Stäng av förhöjda rättigheter efter inaktivitet",
+    "minutes5": "5 minuter",
+    "minutes15": "15 minuter",
+    "minutes30": "30 minuter",
+    "minutes60": "60 minuter",
+    "never": "Aldrig",
+    "hint": "Filläsaren lämnar det förhöjda läget av sig själv efter så här lång tid utan förhöjd aktivitet. En pågående åtgärd räknas som aktivitet."
   }
 }

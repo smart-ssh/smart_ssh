@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Sti til sftp-server (forhøjet filadgang)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Kun nødvendig, hvis automatisk registrering mislykkes for filbrowseren med forhøjede rettigheder, f.eks. /usr/lib/openssh/sftp-server. Tom = automatisk.",
+    "elevationAllowedLabel": "Tillad forhøjede rettigheder i filbrowseren",
+    "elevationAllowedHint": "Når det er slået fra, tilbyder filbrowseren ikke forhøjede rettigheder for denne server.",
     "startDirectoryLabel": "Startmappe (terminal og filbrowser)",
     "startDirectoryPlaceholder": "Hjemmemappe",
     "startDirectoryHint": "Absolut sti (/…) eller en sti, der starter med ~/. Terminalen skifter dertil med et synligt cd, filbrowseren åbner dér. AI-kommandoer kører altid i hjemmemappen. Tom = hjemmemappe.",
@@ -435,6 +437,13 @@
       "reasonOther": "endnu en sikkerhedskontrol",
       "loadFailed": "Regeldækningen kunne ikke indlæses"
     }
+  },
+  "authPrompt": {
+    "title": "Login på {{hop}}",
+    "password": "Adgangskode",
+    "submit": "Log ind",
+    "notStored": "Serveren beder om disse oplysninger for at logge ind. De gemmes ikke.",
+    "expired": "Loginanmodningen er udløbet. Forbindelsen blev ikke oprettet."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhedsadvarsel · Værtsnøgle ændret",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Vælg en AI-udbyder, før du slår den anden vurdering af risiko til.",
     "SESSION_NOT_FOUND": "Denne session er ikke længere åben. Åbn den igen fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed",
+    "SSH_NO_COMMON_ALGORITHM": "Ingen SSH-algoritme er fælles med serveren. Dens SSH-software er for gammel eller for streng. Opdater den, eller aktiver moderne algoritmer."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -769,6 +779,17 @@
     "opDelete": "Sletning",
     "opChmod": "Ændring af rettigheder",
     "banner": "Forhøjede rettigheder aktive: alle filhandlinger i denne browser kører som {{user}}.",
+    "bannerLogged": "Logget på serveren.",
+    "notice": {
+      "title": "Om forhøjede rettigheder",
+      "intro": "Du læser og skriver nu filer som {{user}}. Ændringer træder i kraft med det samme og kan ikke fortrydes af appen.",
+      "loggedApp": "Hver ændring logges i appens log.",
+      "loggedAppAndServer": "Hver ændring logges i appens log og i serverens autentificeringslog.",
+      "passwordless": "Sudo-reglen for sftp-server giver {{user}} adgang uden adgangskode til alt, der kører under dette login, ikke kun til appen.",
+      "alternative": "Hvis du jævnligt administrerer serveren som root, gør et separat root-login med nøgle (PermitRootLogin prohibit-password) den adgang eksplicit.",
+      "gotIt": "Forstået",
+      "dontShowAgain": "Vis ikke igen for denne server"
+    },
     "deleteFileTitle": "Slet fil som {{user}}?",
     "deleteDirTitle": "Slet mappe som {{user}}?",
     "overwriteTitle": "Overskriv fil som {{user}}?",
@@ -790,7 +811,8 @@
     "close": "Luk",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo kræver en adgangskode til sftp-server på denne server. Appen spørger aldrig om en sudo-adgangskode.",
+      "passwordRequired": "sudo kræver en adgangskode til sftp-server på denne server. Tilføj sudoers-linjen nedenfor, eller gem en sudo-adgangskode i serverprofilen for at aktivere forhøjede rettigheder.",
+      "wrongSudoPassword": "sudo afviste den gemte sudo-adgangskode. Tjek sudo-adgangskoden i serverprofilen.",
       "notAllowed": "Dette SSH-login må ikke starte sftp-server via sudo uden adgangskode.",
       "requireTty": "sudo nægter at køre uden en terminal (“requiretty” i sudoers). Deaktivér requiretty for dette login, f.eks. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server blev ikke fundet på serveren. Angiv dens sti i serverprofilen under “Avanceret”.",
@@ -800,7 +822,8 @@
       "invalidUser": "Ugyldig målbruger.",
       "unsupported": "Den lokale server har ingen forhøjet tilstand.",
       "checkFailed": "Kontrol af sudo-rettighederne mislykkedes.",
-      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers).",
+      "disabledForServer": "Forhøjede rettigheder er slået fra for denne server i serverprofilen."
     },
     "channelLost": "Forhøjede rettigheder er afsluttet – den forhøjede kanal er ikke længere aktiv.",
     "group": "Forhøjede rettigheder",
@@ -810,7 +833,9 @@
     "targetUserHelp": "Kører filbrowseren som denne bruger via sudo. Standard: root.",
     "confirm": "Udvid",
     "opChown": "Skift af ejer",
-    "chownNote": "Ejeren skiftes som {{user}}."
+    "chownNote": "Ejeren skiftes som {{user}}.",
+    "idleSwitchedOff": "Forhøjede rettigheder slået fra efter {{minutes}} minutter uden aktivitet",
+    "revokedByProfile": "Forhøjede rettigheder er afsluttet — serverprofilen tillader dem ikke længere."
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Kontrol af værtsnøgle",
       "authentication": "Godkendelse",
       "sessionReady": "Session oprettet",
-      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt"
+      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt",
+      "outdatedAlgorithms": "Forældede algoritmer"
     },
     "status": {
       "ok": "OK",
       "running": "i gang",
       "failed": "mislykkedes ({{code}})",
       "skipped": "sprunget over",
-      "failedReason": "mislykkedes: {{reason}}"
+      "failedReason": "mislykkedes: {{reason}}",
+      "warning": "advarsel"
     },
     "hostKeyResult": {
       "known": "kendt",
@@ -1500,5 +1527,18 @@
     "title": "Noget gik galt",
     "body": "Smart SSH stødte på en uventet fejl i brugerfladen. Genindlæs for at fortsætte. Sker det igen, så opret en diagnosepakke under Indstillinger → Diagnostik efter genindlæsningen.",
     "reload": "Genindlæs"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Denne server bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater serverens SSH-software, hvis du kan.",
+    "outdatedAlgorithmsHop": "{{hop}} bruger forældede SSH-algoritmer ({{algorithms}}). Forbindelsen er mindre sikker. Opdater dens SSH-software, hvis du kan."
+  },
+  "elevatedIdle": {
+    "label": "Slå forhøjede rettigheder fra efter inaktivitet",
+    "minutes5": "5 minutter",
+    "minutes15": "15 minutter",
+    "minutes30": "30 minutter",
+    "minutes60": "60 minutter",
+    "never": "Aldrig",
+    "hint": "Filbrowseren forlader selv den forhøjede tilstand efter så lang tid uden forhøjet aktivitet. En igangværende handling tæller som aktivitet."
   }
 }

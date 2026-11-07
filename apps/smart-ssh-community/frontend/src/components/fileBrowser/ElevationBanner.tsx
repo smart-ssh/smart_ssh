@@ -1,14 +1,21 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
+import { ElevationNotice } from "./ElevationNotice";
 
 interface ElevationBannerProps {
   elevatedUser: string | null;
   warningPath: string | null | undefined;
+  /** Issue #1192: `sftp-server` logs each request to the server's auth log. */
+  serverLogging?: boolean;
+  /** Issue #1195: for the one-time notice; without it no notice is shown. */
+  serverId?: string;
+  /** Issue #1195: sudo needed no password (`sudo_auth` = `nopasswd`). */
+  passwordless?: boolean;
   onToggleOff: () => void;
 }
 
 /** Spec 0067: banner while the elevated mode is on, plus the unsafe-server warning. */
-export function ElevationBanner({ elevatedUser, warningPath, onToggleOff }: ElevationBannerProps) {
+export function ElevationBanner({ elevatedUser, warningPath, serverLogging = false, serverId, passwordless = false, onToggleOff }: ElevationBannerProps) {
   const { t } = useTranslation();
   return (
     <>
@@ -16,7 +23,9 @@ export function ElevationBanner({ elevatedUser, warningPath, onToggleOff }: Elev
         role="alert"
         className="flex items-center gap-2 bg-warning px-2 py-1.5 text-xs font-semibold text-surface-sunken"
       >
-        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}</span>
+        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}
+          {serverLogging && ` ${t("fileElevation.bannerLogged")}`}
+        </span>
         <Button variant="bare"
           type="button"
           onClick={onToggleOff}
@@ -25,6 +34,13 @@ export function ElevationBanner({ elevatedUser, warningPath, onToggleOff }: Elev
           {t("fileElevation.toggleOff")}
         </Button>
       </div>
+      <ElevationNotice
+        key={elevatedUser ?? ""}
+        serverId={serverId}
+        elevatedUser={elevatedUser ?? ""}
+        serverLogging={serverLogging}
+        passwordless={passwordless}
+      />
       {warningPath && (
         <div role="alert" className="bg-danger-subtle px-2 py-1.5 text-xs text-danger-fg-softer">
           {t("fileElevation.failure.sftpServerUnsafe", { path: warningPath })}

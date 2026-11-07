@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-serverのパス（昇格したファイルアクセス）",
     "sftpServerPathPlaceholder": "自動",
     "sftpServerPathHint": "昇格した権限でのファイルブラウザーで自動検出が失敗する場合にのみ必要です（例: /usr/lib/openssh/sftp-server）。空欄 = 自動。",
+    "elevationAllowedLabel": "ファイルブラウザーで昇格した権限を許可する",
+    "elevationAllowedHint": "オフの場合、このサーバーではファイルブラウザーが昇格した権限を提供しません。",
     "startDirectoryLabel": "開始ディレクトリ（ターミナルとファイルブラウザー）",
     "startDirectoryPlaceholder": "ホームディレクトリ",
     "startDirectoryHint": "絶対パス（/…）または ~/ で始まるパス。ターミナルでは表示される cd で移動し、ファイルブラウザーではそこを開きます。AIのコマンドは常にホームディレクトリで実行されます。空欄 = ホームディレクトリ。",
@@ -435,6 +437,13 @@
       "reasonOther": "別の安全チェック",
       "loadFailed": "ルールの適用範囲を読み込めませんでした"
     }
+  },
+  "authPrompt": {
+    "title": "{{hop}} へのログイン",
+    "password": "パスワード",
+    "submit": "ログイン",
+    "notStored": "サーバーがログインのためにこの情報を求めています。保存されません。",
+    "expired": "ログイン要求の有効期限が切れました。接続は確立されませんでした。"
   },
   "hostKeyDialog": {
     "mismatchLabel": "セキュリティ警告 · ホストキーが変更されました",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
     "SESSION_NOT_FOUND": "このセッションは既に閉じられています。サーバー一覧からもう一度開いてください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません",
+    "SSH_NO_COMMON_ALGORITHM": "サーバーと共通の SSH アルゴリズムがありません。サーバーの SSH ソフトウェアが古すぎるか制限が厳しすぎます。更新するか、新しいアルゴリズムを有効にしてください。"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -764,6 +774,17 @@
     "opDelete": "削除",
     "opChmod": "権限の変更",
     "banner": "昇格した権限が有効です: このブラウザーでのすべてのファイル操作は {{user}} として実行されます。",
+    "bannerLogged": "サーバー上で記録されます。",
+    "notice": {
+      "title": "昇格権限について",
+      "intro": "これからは {{user}} としてファイルを読み書きします。変更はすぐに反映され、アプリから元に戻すことはできません。",
+      "loggedApp": "すべての変更はアプリのログに記録されます。",
+      "loggedAppAndServer": "すべての変更はアプリのログとサーバーの認証ログに記録されます。",
+      "passwordless": "sftp-server 用の sudo ルールにより、{{user}} はこのアプリだけでなく、このログインで動くすべてのものにパスワードなしでアクセスできます。",
+      "alternative": "このサーバーを普段 root で管理する場合は、鍵を使う専用の root ログイン (PermitRootLogin prohibit-password) にすると、そのアクセスが明確になります。",
+      "gotIt": "了解",
+      "dontShowAgain": "このサーバーでは今後表示しない"
+    },
     "deleteFileTitle": "{{user}} としてファイルを削除しますか？",
     "deleteDirTitle": "{{user}} としてフォルダーを削除しますか？",
     "overwriteTitle": "{{user}} としてファイルを上書きしますか？",
@@ -785,7 +806,8 @@
     "close": "閉じる",
     "detail": "詳細: {{detail}}",
     "failure": {
-      "passwordRequired": "このサーバーでは、sftp-serverに対してsudoがパスワードを要求します。このアプリがsudoパスワードを尋ねることはありません。",
+      "passwordRequired": "このサーバーでは sftp-server の実行に sudo のパスワードが必要です。下の sudoers の行を追加するか、サーバープロファイルに sudo パスワードを保存すると、昇格権限を使えます。",
+      "wrongSudoPassword": "保存されている sudo パスワードが sudo に拒否されました。サーバープロファイルの sudo パスワードを確認してください。",
       "notAllowed": "このSSHログインは、パスワードなしでsudo経由でsftp-serverを起動することが許可されていません。",
       "requireTty": "sudoはターミナルなしでの実行を拒否します（sudoersの「requiretty」）。このログインに対してrequirettyを無効にしてください。例: 「Defaults:<login> !requiretty」",
       "sftpServerNotFound": "サーバー上でsftp-serverが見つかりませんでした。サーバープロファイルの「詳細設定」でそのパスを入力してください。",
@@ -795,7 +817,8 @@
       "invalidUser": "対象ユーザーが無効です。",
       "unsupported": "ローカルサーバーには昇格モードがありません。",
       "checkFailed": "sudoの権限の確認に失敗しました。",
-      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
+      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。",
+      "disabledForServer": "このサーバーでは、サーバープロファイルで昇格した権限がオフになっています。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
     "group": "昇格された権限",
@@ -805,7 +828,9 @@
     "targetUserHelp": "sudo を使って、このユーザーとしてファイルブラウザを実行します。既定値: root。",
     "confirm": "昇格",
     "opChown": "所有者の変更",
-    "chownNote": "所有者は {{user}} として変更されます。"
+    "chownNote": "所有者は {{user}} として変更されます。",
+    "idleSwitchedOff": "操作がないまま{{minutes}}分が経過したため、昇格した権限をオフにしました",
+    "revokedByProfile": "昇格した権限を終了しました — サーバープロファイルで許可されなくなりました。"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -994,14 +1019,16 @@
       "hostKeyCheck": "ホストキーの確認",
       "authentication": "認証",
       "sessionReady": "セッション確立",
-      "dnsSkipped": "IPアドレス – 名前解決は不要"
+      "dnsSkipped": "IPアドレス – 名前解決は不要",
+      "outdatedAlgorithms": "古いアルゴリズム"
     },
     "status": {
       "ok": "OK",
       "running": "進行中",
       "failed": "失敗（{{code}}）",
       "skipped": "スキップ",
-      "failedReason": "失敗: {{reason}}"
+      "failedReason": "失敗: {{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "既知",
@@ -1492,5 +1519,18 @@
     "title": "問題が発生しました",
     "body": "Smart SSH のインターフェースで予期しないエラーが発生しました。再読み込みして続行してください。再発する場合は、再読み込み後に「設定 → 診断」で診断バンドルを作成してください。",
     "reload": "再読み込み"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "このサーバーは古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、サーバーの SSH ソフトウェアを更新してください。",
+    "outdatedAlgorithmsHop": "{{hop}} は古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、その SSH ソフトウェアを更新してください。"
+  },
+  "elevatedIdle": {
+    "label": "操作がない場合に昇格した権限をオフにする",
+    "minutes5": "5分",
+    "minutes15": "15分",
+    "minutes30": "30分",
+    "minutes60": "60分",
+    "never": "しない",
+    "hint": "昇格した操作がこの時間なかった場合、ファイルブラウザーは自動的に昇格モードを終了します。実行中の操作はアクティビティとして扱われます。"
   }
 }

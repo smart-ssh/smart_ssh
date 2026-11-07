@@ -15,7 +15,7 @@
     reason = "some helpers of the shared SSH test server are unused here; expect in test code"
 )]
 #[path = "../../../../ssh-transport/tests/fixtures/test_server.rs"]
-mod two_hop_fixture;
+pub(super) mod two_hop_fixture;
 
 use ssh_manager_core::testing::ServerBuilder;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -83,6 +83,9 @@ struct ScriptedConnector {
     calls: AtomicUsize,
     /// Hop count of the target of the latest connect.
     last_hops: AtomicUsize,
+    /// Issue #1187: holds the attempt log's prompt pause this long, like a
+    /// transport waiting for a login prompt.
+    prompt_wait: Mutex<Option<std::time::Duration>>,
 }
 
 impl ScriptedConnector {
@@ -96,6 +99,7 @@ impl ScriptedConnector {
             result: Mutex::new(Some(result)),
             calls: AtomicUsize::new(0),
             last_hops: AtomicUsize::new(0),
+            prompt_wait: Mutex::new(None),
         })
     }
 }
@@ -108,11 +112,22 @@ impl Connector for ScriptedConnector {
         _credentials: &(dyn CredentialStore + Send + Sync),
         _key_files: &(dyn KeyFileReader + Send + Sync),
         _host_keys: Arc<dyn HostKeyStore>,
-        _log: &ConnectLog,
+        _prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
+        log: &ConnectLog,
         _limits: ssh_transport::ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.last_hops.store(target.hops.len(), Ordering::SeqCst);
+        let wait = *self.prompt_wait.lock().unwrap();
+        if let Some(wait) = wait {
+            let pause = log.prompt_pause();
+            let _held = pause.pause();
+            // Virtual time only for the wait itself (the store's pool
+            // timeouts must not jump with it).
+            tokio::time::pause();
+            tokio::time::sleep(wait).await;
+            tokio::time::resume();
+        }
         self.result
             .lock()
             .unwrap()
@@ -215,6 +230,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
             ssh_manager_core::entitlements::Entitlements::free(),
         )),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -1216,6 +1232,7 @@ impl Connector for StepConnector {
         _credentials: &(dyn CredentialStore + Send + Sync),
         _key_files: &(dyn KeyFileReader + Send + Sync),
         _host_keys: Arc<dyn HostKeyStore>,
+        _prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
         log: &ConnectLog,
         _limits: ssh_transport::ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
@@ -1729,4 +1746,55 @@ async fn test_delete_chat_session_forgets_its_title_attempt() {
         "entry must be gone after the session is deleted"
     );
     reset(app.handle());
+}
+
+// --- Issue #1187: the outer connect limit stands still during a prompt --
+
+/// A connector that holds the attempt log's prompt pause for much longer
+/// than the overall limit still connects, for one hop and for two. Red if
+/// the outer wrapper in `connect_session` ignores the log's pause.
+#[tokio::test]
+async fn test_prompt_wait_is_not_counted_by_the_overall_connect_limit() {
+    for jump in [false, true] {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        if jump {
+            let mut bastion = ServerBuilder::new()
+                .name("bastion")
+                .username("root")
+                .build();
+            bastion.name = "bastion".to_string();
+            fx.state
+                .profile_store
+                .create_server(&bastion)
+                .await
+                .unwrap();
+            let mut target = fx
+                .state
+                .profile_store
+                .get_server(&fx.server_id)
+                .await
+                .unwrap();
+            target.jump_host = Some(bastion.id);
+            fx.state.profile_store.update_server(&target).await.unwrap();
+        }
+        let hops = if jump { 2 } else { 1 };
+        let overall = SSH_CONNECT_LIMITS.overall(hops);
+        *connector.prompt_wait.lock().unwrap() = Some(overall * 5);
+        let result = connect_session(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            uuid::Uuid::new_v4(),
+            None,
+            true,
+        )
+        .await;
+        assert!(result.is_ok(), "hops={hops}: {:?}", result.err());
+        assert_eq!(connector.last_hops.load(Ordering::SeqCst), hops);
+        reset(app.handle());
+    }
 }

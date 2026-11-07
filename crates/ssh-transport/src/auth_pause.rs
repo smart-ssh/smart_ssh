@@ -6,41 +6,13 @@ use std::future::Future;
 use std::time::Duration;
 
 use ssh_manager_core::ssh::SshError;
-use tokio::sync::watch;
 use tokio::time::Instant;
 
-/// Shared between the authentication code (which pauses) and the timeout
-/// around it (which stops counting while paused).
-pub(crate) struct AuthPause {
-    tx: watch::Sender<bool>,
-}
-
-impl AuthPause {
-    pub(crate) fn new() -> Self {
-        Self {
-            tx: watch::channel(false).0,
-        }
-    }
-
-    /// Pauses the limit until the returned guard is dropped (also when the
-    /// waiting future is cancelled).
-    pub(crate) fn pause(&self) -> PauseGuard<'_> {
-        self.tx.send_replace(true);
-        PauseGuard(self)
-    }
-}
-
-pub(crate) struct PauseGuard<'a>(&'a AuthPause);
-
-impl Drop for PauseGuard<'_> {
-    fn drop(&mut self) {
-        self.0.tx.send_replace(false);
-    }
-}
+pub(crate) use ssh_manager_core::ssh::PromptPause as AuthPause;
 
 /// Like `connect_with_timeout`, but the clock only runs while `pause` is not
 /// held. Without a pause it behaves exactly like a plain timeout.
-pub(crate) async fn timeout_unless_paused<F, T>(
+pub async fn timeout_unless_paused<F, T>(
     fut: F,
     limit: Duration,
     pause: &AuthPause,
@@ -49,7 +21,7 @@ where
     F: Future<Output = Result<T, SshError>>,
 {
     tokio::pin!(fut);
-    let mut rx = pause.tx.subscribe();
+    let mut rx = pause.subscribe();
     let mut remaining = limit;
     loop {
         if *rx.borrow_and_update() {
@@ -125,5 +97,39 @@ mod tests {
             timeout_unless_paused(work, Duration::from_secs(60), &pause).await,
             Err(SshError::Timeout)
         );
+    }
+
+    /// Issue #1187: the outer safety net uses the pause carried by the
+    /// attempt's `ConnectLog`, once per hop.
+    #[tokio::test(start_paused = true)]
+    async fn test_overall_limit_excludes_prompt_wait_at_every_hop() {
+        let log = ssh_manager_core::ssh::ConnectLog::new();
+        let overall = Duration::from_secs(100);
+        let pause = log.prompt_pause();
+        let work = async {
+            for _hop in 0..2 {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let guard = pause.pause();
+                tokio::time::sleep(Duration::from_secs(290)).await;
+                drop(guard);
+            }
+            Ok::<_, SshError>(1)
+        };
+        assert_eq!(
+            timeout_unless_paused(work, overall, &log.prompt_pause()).await,
+            Ok(1)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_hang_without_prompt_hits_overall_limit() {
+        let log = ssh_manager_core::ssh::ConnectLog::new();
+        let work = std::future::pending::<Result<(), SshError>>();
+        let started = Instant::now();
+        assert_eq!(
+            timeout_unless_paused(work, Duration::from_secs(100), &log.prompt_pause()).await,
+            Err(SshError::Timeout)
+        );
+        assert_eq!(started.elapsed(), Duration::from_secs(100));
     }
 }

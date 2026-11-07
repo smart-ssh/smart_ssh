@@ -310,6 +310,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
     cancel_backup_import: () => null,
     get_chat_session_retention_days: () => null,
+    get_elevated_idle_timeout: () => 15,
+    set_elevated_idle_timeout: () => null,
     get_mcp_server_settings: () => MCP_SETTINGS,
     // The timeout field commits on blur, so tabbing through it calls this.
     set_mcp_server_confirm_timeout_secs: () => MCP_SETTINGS,
@@ -347,6 +349,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       waiter((decision as { decision: string }).decision === "trust");
       return null;
     },
+    answer_auth_prompt: () => null,
+    cancel_auth_prompt: () => null,
     // An open session: empty history, a terminal that echoes nothing, an
     // empty home directory in the file browser.
     send_chat_message: () => null,
@@ -366,6 +370,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     sftp_elevation_disable: () => ({ disabled: true, runningOperations: [] }),
     sftp_cancel_transfer: () => true,
     sftp_elevation_status: () => null,
+    sftp_elevation_allowed: () => true,
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AutoReconnectSettings } from "./AutoReconnectSettings";
+import { ElevatedIdleSettings } from "./ElevatedIdleSettings";
 import { FIELD_CONTROL_CLASS } from "./ui";
 import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api/api";
 
@@ -98,6 +99,7 @@ export function ChatRetentionSettings() {
       )}
       <p className="mt-1 text-xs text-fg-subtle">{t("chatRetention.hint")}</p>
       <AutoReconnectSettings />
+      <ElevatedIdleSettings />
     </div>
   );
 }

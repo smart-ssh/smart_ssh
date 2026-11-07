@@ -23,6 +23,15 @@ pub struct ElevationResultDto {
     /// Kanal bleibt aktiv (`active`, `target_user` beschreiben ihn).
     #[serde(default)]
     pub running_operations: Vec<RunningOperationDto>,
+    /// Issue #1192: `sftp-server` runs with `-l INFO -f AUTHPRIV`, so each
+    /// file operation shows up in the server's auth log.
+    #[serde(default)]
+    pub server_logging: bool,
+    /// Issue #1195: how sudo authenticated for the active channel
+    /// (`"nopasswd"` | `"password"`, never the password); `None` when not
+    /// active.
+    #[serde(default)]
+    pub sudo_auth: Option<&'static str>,
 }
 
 /// Issue #622: eine laufende Operation des erhöhten Kanals — für den
@@ -73,7 +82,7 @@ pub enum ElevationWarningKind {
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ElevationFailureDto {
     pub kind: ElevationFailureKind,
-    /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad>` —
+    /// Zugeschnittene Zeile `<login> ALL=(<nutzer>) NOPASSWD: <pfad> -l INFO -f AUTHPRIV` —
     /// nur, wenn eine fehlende sudo-Regel die Ursache ist.
     pub sudoers_line: Option<String>,
     /// Technisches Detail (erste stderr-Zeile o. ä.), nur zur Anzeige.
@@ -93,9 +102,13 @@ pub enum ElevationFailureKind {
     /// bzw. ist für Gruppe/andere beschreibbar; `detail` ist der Pfad.
     SftpServerUnsafe,
     PasswordRequired,
+    /// Issue #1191: the stored sudo password was rejected by sudo.
+    WrongSudoPassword,
     NotAllowed,
     RequireTty,
     SudoMissing,
     CheckFailed,
     StartFailed,
+    /// Issue #1194: the server profile does not allow elevated rights.
+    DisabledForServer,
 }

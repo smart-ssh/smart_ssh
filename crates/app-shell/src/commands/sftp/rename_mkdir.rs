@@ -34,7 +34,7 @@ pub async fn sftp_rename(
                 sftp.rename(&from, &to).await
             };
             audit_elevated_change(
-                elevated_user.as_deref(),
+                elevated_user.as_ref(),
                 if overwrite {
                     "rename-overwrite"
                 } else {
@@ -84,7 +84,7 @@ pub(super) async fn mkdir_impl(
     } else {
         sftp.create_dir(path).await
     };
-    audit_elevated_change(elevated_user.as_deref(), "mkdir", path, result.is_ok());
+    audit_elevated_change(elevated_user.as_ref(), "mkdir", path, result.is_ok());
     // Mit Code (z. B. `SSH_SFTP_ALREADY_EXISTS`), damit die Oberfläche die
     // Fehlerart ohne Textvergleich erkennt.
     result.map_err(|err| ssh_command_error(&err))
@@ -99,12 +99,7 @@ pub(super) async fn create_file_impl(
     let elevated_user = guard.elevated_user();
     let mut sftp = guard.sftp().await?;
     let result = sftp.create_file_exclusive(path).await;
-    audit_elevated_change(
-        elevated_user.as_deref(),
-        "create_file",
-        path,
-        result.is_ok(),
-    );
+    audit_elevated_change(elevated_user.as_ref(), "create_file", path, result.is_ok());
     // Mit Code (z. B. `SSH_SFTP_ALREADY_EXISTS`), damit die Oberfläche die
     // Fehlerart ohne Textvergleich erkennt.
     result.map_err(|err| ssh_command_error(&err))

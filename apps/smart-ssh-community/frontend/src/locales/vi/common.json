@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Đường dẫn đến sftp-server (truy cập tệp với quyền nâng cao)",
     "sftpServerPathPlaceholder": "Tự động",
     "sftpServerPathHint": "Chỉ cần khi tự động phát hiện thất bại đối với trình duyệt tệp với quyền nâng cao, ví dụ /usr/lib/openssh/sftp-server. Để trống = tự động.",
+    "elevationAllowedLabel": "Cho phép quyền nâng cao trong trình duyệt tệp",
+    "elevationAllowedHint": "Khi tắt, trình duyệt tệp không cung cấp quyền nâng cao cho máy chủ này.",
     "startDirectoryLabel": "Thư mục khởi đầu (terminal và trình duyệt tệp)",
     "startDirectoryPlaceholder": "Thư mục home",
     "startDirectoryHint": "Đường dẫn tuyệt đối (/…) hoặc đường dẫn bắt đầu bằng ~/. Terminal chuyển đến đó bằng một lệnh cd hiển thị rõ, trình duyệt tệp mở tại đó. Lệnh của AI luôn chạy trong thư mục home. Để trống = thư mục home.",
@@ -435,6 +437,13 @@
       "reasonOther": "một kiểm tra an toàn khác",
       "loadFailed": "Không thể tải phạm vi áp dụng quy tắc"
     }
+  },
+  "authPrompt": {
+    "title": "Đăng nhập vào {{hop}}",
+    "password": "Mật khẩu",
+    "submit": "Đăng nhập",
+    "notStored": "Máy chủ yêu cầu thông tin này để đăng nhập. Thông tin không được lưu.",
+    "expired": "Yêu cầu đăng nhập đã hết hạn. Kết nối chưa được thiết lập."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Cảnh báo bảo mật · Khóa máy chủ đã thay đổi",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Hãy chọn nhà cung cấp AI trước khi bật ý kiến thứ hai về rủi ro.",
     "SESSION_NOT_FOUND": "Phiên này không còn mở nữa. Hãy mở lại từ danh sách máy chủ.",
     "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này",
+    "SSH_NO_COMMON_ALGORITHM": "Không có thuật toán SSH chung với máy chủ. Phần mềm SSH của nó quá cũ hoặc quá hạn chế. Hãy cập nhật hoặc bật các thuật toán hiện đại."
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -764,6 +774,17 @@
     "opDelete": "Xóa",
     "opChmod": "Đổi quyền",
     "banner": "Quyền nâng cao đang hoạt động: mọi thao tác tệp trong trình duyệt này chạy với tư cách {{user}}.",
+    "bannerLogged": "Được ghi nhật ký trên máy chủ.",
+    "notice": {
+      "title": "Về quyền nâng cao",
+      "intro": "Giờ bạn đọc và ghi tệp với tư cách {{user}}. Thay đổi có hiệu lực ngay và ứng dụng không thể hoàn tác.",
+      "loggedApp": "Mọi thay đổi đều được ghi vào nhật ký của ứng dụng.",
+      "loggedAppAndServer": "Mọi thay đổi đều được ghi vào nhật ký của ứng dụng và nhật ký xác thực của máy chủ.",
+      "passwordless": "Quy tắc sudo cho sftp-server cho phép {{user}} truy cập không cần mật khẩu vào mọi thứ chạy dưới đăng nhập này, không chỉ ứng dụng này.",
+      "alternative": "Nếu bạn thường quản trị máy chủ này bằng root, một đăng nhập root riêng dùng khóa (PermitRootLogin prohibit-password) sẽ làm rõ quyền truy cập đó.",
+      "gotIt": "Đã hiểu",
+      "dontShowAgain": "Không hiện lại cho máy chủ này"
+    },
     "deleteFileTitle": "Xóa tệp với tư cách {{user}}?",
     "deleteDirTitle": "Xóa thư mục với tư cách {{user}}?",
     "overwriteTitle": "Ghi đè tệp với tư cách {{user}}?",
@@ -785,7 +806,8 @@
     "close": "Đóng",
     "detail": "Chi tiết: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo yêu cầu mật khẩu cho sftp-server trên máy chủ này. Ứng dụng không bao giờ hỏi mật khẩu sudo.",
+      "passwordRequired": "sudo yêu cầu mật khẩu cho sftp-server trên máy chủ này. Hãy thêm dòng sudoers bên dưới hoặc lưu mật khẩu sudo trong hồ sơ máy chủ để bật quyền nâng cao.",
+      "wrongSudoPassword": "sudo đã từ chối mật khẩu sudo đã lưu. Hãy kiểm tra mật khẩu sudo trong hồ sơ máy chủ.",
       "notAllowed": "Tài khoản SSH này không được phép khởi động sftp-server qua sudo mà không có mật khẩu.",
       "requireTty": "sudo từ chối chạy khi không có terminal (“requiretty” trong sudoers). Hãy tắt requiretty cho tài khoản này, ví dụ bằng “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "Không tìm thấy sftp-server trên máy chủ. Vui lòng nhập đường dẫn của nó trong hồ sơ máy chủ tại “Nâng cao”.",
@@ -795,7 +817,8 @@
       "invalidUser": "Người dùng đích không hợp lệ.",
       "unsupported": "Máy chủ cục bộ không có chế độ nâng cao.",
       "checkFailed": "Kiểm tra quyền sudo thất bại.",
-      "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers)."
+      "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers).",
+      "disabledForServer": "Quyền nâng cao đã bị tắt cho máy chủ này trong hồ sơ máy chủ."
     },
     "channelLost": "Quyền nâng cao đã kết thúc — kênh nâng cao không còn hoạt động.",
     "group": "Quyền nâng cao",
@@ -805,7 +828,9 @@
     "targetUserHelp": "Chạy trình duyệt tệp với tư cách người dùng này qua sudo. Mặc định: root.",
     "confirm": "Nâng quyền",
     "opChown": "Đổi chủ sở hữu",
-    "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}."
+    "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}.",
+    "idleSwitchedOff": "Đã tắt quyền nâng cao sau {{minutes}} phút không hoạt động",
+    "revokedByProfile": "Quyền nâng cao đã kết thúc — hồ sơ máy chủ không còn cho phép."
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",
@@ -994,14 +1019,16 @@
       "hostKeyCheck": "Kiểm tra khóa máy chủ",
       "authentication": "Xác thực",
       "sessionReady": "Đã thiết lập phiên",
-      "dnsSkipped": "Địa chỉ IP – không cần phân giải"
+      "dnsSkipped": "Địa chỉ IP – không cần phân giải",
+      "outdatedAlgorithms": "Thuật toán lỗi thời"
     },
     "status": {
       "ok": "OK",
       "running": "đang tiến hành",
       "failed": "thất bại ({{code}})",
       "skipped": "đã bỏ qua",
-      "failedReason": "thất bại: {{reason}}"
+      "failedReason": "thất bại: {{reason}}",
+      "warning": "cảnh báo"
     },
     "hostKeyResult": {
       "known": "đã biết",
@@ -1492,5 +1519,18 @@
     "title": "Đã xảy ra lỗi",
     "body": "Smart SSH gặp lỗi không mong đợi trong giao diện. Hãy tải lại để tiếp tục. Nếu lỗi lặp lại, hãy tạo gói chẩn đoán trong Cài đặt → Chẩn đoán sau khi tải lại.",
     "reload": "Tải lại"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Máy chủ này dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của máy chủ nếu có thể.",
+    "outdatedAlgorithmsHop": "{{hop}} dùng các thuật toán SSH lỗi thời ({{algorithms}}). Kết nối kém an toàn hơn. Hãy cập nhật phần mềm SSH của nó nếu có thể."
+  },
+  "elevatedIdle": {
+    "label": "Tắt quyền nâng cao sau khi không hoạt động",
+    "minutes5": "5 phút",
+    "minutes15": "15 phút",
+    "minutes30": "30 phút",
+    "minutes60": "60 phút",
+    "never": "Không bao giờ",
+    "hint": "Trình duyệt tệp tự thoát chế độ nâng cao sau khoảng thời gian này không có hoạt động nâng cao. Một thao tác đang chạy được tính là hoạt động."
   }
 }

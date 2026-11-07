@@ -1,7 +1,7 @@
 //! Spec 0067, Teil A: reine Logik für den Dateibrowser mit erhöhten Rechten.
 //! Der SFTP-Server wird per `sudo -n <sftp-server>` über einen Exec-Kanal
-//! gestartet (Weg A, wie WinSCP). Nur passwortloses sudo — ein Passwort wird
-//! nie verarbeitet. Hier nur Kommando-Bau, Pfad-/Nutzer-Validierung und
+//! gestartet (Weg A, wie WinSCP). Passwortloses sudo, oder (Issue #1191) mit
+//! dem gespeicherten sudo-Passwort über einen Prompt-Marker. Hier nur Kommando-Bau, Pfad-/Nutzer-Validierung und
 //! Auswertung der Probe-Ausgaben; die Kanal-Erzeugung lebt im Transport.
 
 use super::CommandOutput;
@@ -217,6 +217,7 @@ fn user_args(user: &str) -> String {
 pub enum ElevationInputError {
     InvalidPath,
     InvalidUser,
+    InvalidMarker,
 }
 
 fn validate(path: &str, user: &str) -> Result<(), ElevationInputError> {
@@ -229,26 +230,101 @@ fn validate(path: &str, user: &str) -> Result<(), ElevationInputError> {
     Ok(())
 }
 
-/// `sudo -n [-u <nutzer>] -l <pfad>`: prüft ohne Passwort, ob genau dieser
-/// Befehl erlaubt ist (Spec 0067, A3). `LC_ALL=C`, damit die Fehlertexte für
+/// Issue #1192: fixed logging arguments of `sftp-server` (never user input):
+/// each request goes to the server's auth log. The sudoers rule allows
+/// `sftp-server` only with exactly these arguments or none.
+pub const SFTP_SERVER_LOG_ARGS: &str = "-l INFO -f AUTHPRIV";
+
+fn log_args(logging: bool) -> String {
+    if logging {
+        format!(" {SFTP_SERVER_LOG_ARGS}")
+    } else {
+        String::new()
+    }
+}
+
+/// `sudo -n [-u <nutzer>] -l <pfad> [-l INFO -f AUTHPRIV]`: prüft ohne
+/// Passwort, ob genau dieser Befehl (mit `logging`: samt Logging-Argumenten,
+/// Issue #1192) erlaubt ist (Spec 0067, A3). `LC_ALL=C`, damit die Fehlertexte für
 /// [`classify_sudo_check`] englisch und damit erkennbar sind.
-pub fn sudo_check_command(path: &str, user: &str) -> Result<String, ElevationInputError> {
+pub fn sudo_check_command(
+    path: &str,
+    user: &str,
+    logging: bool,
+) -> Result<String, ElevationInputError> {
     validate(path, user)?;
     // `env` statt `VAR=… cmd`: funktioniert auch, wenn die Login-Shell kein
     // POSIX-sh ist (csh/tcsh/fish).
-    Ok(format!("env LC_ALL=C sudo -n{} -l {path}", user_args(user)))
+    Ok(format!(
+        "env LC_ALL=C sudo -n{} -l {path}{}",
+        user_args(user),
+        log_args(logging)
+    ))
 }
 
 /// Das Exec-Kommando für den erhöhten SFTP-Kanal: `sudo -n [-u <nutzer>]
-/// <pfad>`. `-n`: verlangt sudo ein Passwort, scheitert es sofort.
-pub fn elevated_sftp_command(path: &str, user: &str) -> Result<String, ElevationInputError> {
+/// <pfad> [-l INFO -f AUTHPRIV]`. `-n`: verlangt sudo ein Passwort, scheitert
+/// es sofort.
+pub fn elevated_sftp_command(
+    path: &str,
+    user: &str,
+    logging: bool,
+) -> Result<String, ElevationInputError> {
     validate(path, user)?;
-    Ok(format!("sudo -n{} {path}", user_args(user)))
+    Ok(format!(
+        "sudo -n{} {path}{}",
+        user_args(user),
+        log_args(logging)
+    ))
+}
+
+/// Issue #1191: prefix of the random prompt marker of the password path.
+const SUDO_MARKER_PREFIX: &str = "smart-ssh-sudo-";
+
+/// A fresh random prompt marker, `smart-ssh-sudo-<16 hex chars>:`, one per
+/// activation. sudo prints it as its password prompt (`-p`); the password is
+/// only written once it was seen on stderr.
+pub fn new_sudo_prompt_marker() -> String {
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    format!("{SUDO_MARKER_PREFIX}{}:", &id[..16])
+}
+
+/// A marker is safe for the unquoted `-p '<marker>'` argument: only letters,
+/// digits, `-` and a trailing `:` (no `%`, which sudo expands in prompts).
+pub fn is_valid_sudo_prompt_marker(marker: &str) -> bool {
+    marker.starts_with(SUDO_MARKER_PREFIX)
+        && marker.ends_with(':')
+        && marker.len() <= 64
+        && marker[..marker.len() - 1]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+/// Issue #1191: exec command of the password path: `sudo -S -k -p '<marker>'
+/// [-u <user>] <path>`. `-S` reads the password from stdin, `-k` ignores a
+/// cached timestamp so a prompt is expected. The password is never part of
+/// the command text.
+pub fn elevated_sftp_password_command(
+    path: &str,
+    user: &str,
+    marker: &str,
+    logging: bool,
+) -> Result<String, ElevationInputError> {
+    validate(path, user)?;
+    if !is_valid_sudo_prompt_marker(marker) {
+        return Err(ElevationInputError::InvalidMarker);
+    }
+    Ok(format!(
+        "sudo -S -k -p {}{} {path}{}",
+        shell_single_quote(marker),
+        user_args(user),
+        log_args(logging)
+    ))
 }
 
 /// Die zugeschnittene sudoers-Zeile zum Kopieren (Spec 0067, A3). Das
-/// abschließende `""` erlaubt `sftp-server` nur ohne Argumente — genau so
-/// startet die App ihn. `None`, wenn der Login Zeichen enthält, die in
+/// Logging-Argumente (Issue #1192) erlauben `sftp-server` nur mit genau
+/// diesen Argumenten — so startet die App ihn. `None`, wenn der Login Zeichen enthält, die in
 /// sudoers eine Sonderbedeutung hätten (dann lieber keine Zeile als eine
 /// falsche).
 pub fn sudoers_line(login: &str, path: &str, user: &str) -> Option<String> {
@@ -256,7 +332,7 @@ pub fn sudoers_line(login: &str, path: &str, user: &str) -> Option<String> {
         && login
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
-    login_ok.then(|| format!("{login} ALL=({user}) NOPASSWD: {path} \"\""))
+    login_ok.then(|| format!("{login} ALL=({user}) NOPASSWD: {path} {SFTP_SERVER_LOG_ARGS}"))
 }
 
 /// Ergebnis der Voraussetzungs-Prüfung (`sudo -n -l <pfad>`).
@@ -317,6 +393,77 @@ pub fn classify_sudo_check(output: &CommandOutput) -> SudoCheck {
 mod tests {
     use super::*;
 
+    /// Issue #1208: the command built for the password path is rated red and
+    /// detected as an `sftp-server` start by the risk checks.
+    #[test]
+    fn password_command_is_rated_red_by_risk_checks() {
+        use crate::risk::{
+            sftp_server_invocation_reason, CommandCheckFinding, RiskClassifier, RiskLevel,
+            RuleBasedRiskClassifier,
+        };
+        let marker = new_sudo_prompt_marker();
+        for user in ["root", "www-data"] {
+            let cmd =
+                elevated_sftp_password_command("/usr/lib/openssh/sftp-server", user, &marker, true)
+                    .unwrap();
+            assert_eq!(
+                RuleBasedRiskClassifier.classify(&cmd).server_risk,
+                RiskLevel::Red,
+                "{cmd}"
+            );
+            assert!(
+                matches!(
+                    sftp_server_invocation_reason(&cmd),
+                    Some(CommandCheckFinding::Match(_))
+                ),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn password_command_and_marker_shape() {
+        let marker = new_sudo_prompt_marker();
+        assert!(is_valid_sudo_prompt_marker(&marker), "{marker}");
+        assert_eq!(marker.len(), "smart-ssh-sudo-".len() + 16 + 1);
+        assert_ne!(marker, new_sudo_prompt_marker());
+        let cmd =
+            elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", &marker, false)
+                .unwrap();
+        assert_eq!(
+            cmd,
+            format!("sudo -S -k -p '{marker}' /usr/lib/openssh/sftp-server")
+        );
+        let cmd = elevated_sftp_password_command(
+            "/usr/lib/openssh/sftp-server",
+            "www-data",
+            &marker,
+            false,
+        )
+        .unwrap();
+        assert!(
+            cmd.contains(&format!("-p '{marker}' -u www-data /usr")),
+            "{cmd}"
+        );
+    }
+
+    #[test]
+    fn password_command_rejects_unsafe_markers() {
+        for bad in [
+            "",
+            "x:",
+            "smart-ssh-sudo-a b:",
+            "smart-ssh-sudo-%u:",
+            "smart-ssh-sudo-a';id:",
+        ] {
+            assert_eq!(
+                elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", bad, false),
+                Err(ElevationInputError::InvalidMarker),
+                "{bad}"
+            );
+        }
+    }
+
     /// Pins the exact bytes of the single shared quoting function.
     #[test]
     fn shell_single_quote_exact_output() {
@@ -344,11 +491,11 @@ mod tests {
     #[test]
     fn test_elevated_command_uses_sudo_non_interactive() {
         assert_eq!(
-            elevated_sftp_command("/usr/lib/openssh/sftp-server", "root").unwrap(),
+            elevated_sftp_command("/usr/lib/openssh/sftp-server", "root", false).unwrap(),
             "sudo -n /usr/lib/openssh/sftp-server"
         );
         assert_eq!(
-            elevated_sftp_command("/usr/lib/openssh/sftp-server", "www-data").unwrap(),
+            elevated_sftp_command("/usr/lib/openssh/sftp-server", "www-data", false).unwrap(),
             "sudo -n -u www-data /usr/lib/openssh/sftp-server"
         );
     }
@@ -356,8 +503,26 @@ mod tests {
     #[test]
     fn test_sudo_check_command_lists_exactly_this_path() {
         assert_eq!(
-            sudo_check_command("/usr/libexec/openssh/sftp-server", "root").unwrap(),
+            sudo_check_command("/usr/libexec/openssh/sftp-server", "root", false).unwrap(),
             "env LC_ALL=C sudo -n -l /usr/libexec/openssh/sftp-server"
+        );
+        assert_eq!(
+            sudo_check_command("/usr/libexec/openssh/sftp-server", "www-data", true).unwrap(),
+            "env LC_ALL=C sudo -n -u www-data -l /usr/libexec/openssh/sftp-server -l INFO -f AUTHPRIV"
+        );
+    }
+
+    #[test]
+    fn test_logging_commands_append_fixed_arguments() {
+        assert_eq!(
+            elevated_sftp_command("/usr/lib/openssh/sftp-server", "www-data", true).unwrap(),
+            "sudo -n -u www-data /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV"
+        );
+        let marker = new_sudo_prompt_marker();
+        assert_eq!(
+            elevated_sftp_password_command("/usr/lib/openssh/sftp-server", "root", &marker, true)
+                .unwrap(),
+            format!("sudo -S -k -p '{marker}' /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV")
         );
     }
 
@@ -373,14 +538,14 @@ mod tests {
         ] {
             assert!(!is_safe_absolute_path(bad), "{bad:?} muss abgelehnt werden");
             assert_eq!(
-                elevated_sftp_command(bad, "root"),
+                elevated_sftp_command(bad, "root", true),
                 Err(ElevationInputError::InvalidPath)
             );
         }
         for bad in ["", "Root", "a b", "x;id", "-u", "$(id)", &"a".repeat(33)] {
             assert!(!is_valid_target_user(bad), "{bad:?} muss abgelehnt werden");
             assert_eq!(
-                elevated_sftp_command("/usr/lib/openssh/sftp-server", bad),
+                elevated_sftp_command("/usr/lib/openssh/sftp-server", bad, true),
                 Err(ElevationInputError::InvalidUser)
             );
         }
@@ -397,7 +562,7 @@ mod tests {
         ] {
             assert!(!is_plausible_sftp_server_path(bad), "{bad}");
             assert_eq!(
-                elevated_sftp_command(bad, "root"),
+                elevated_sftp_command(bad, "root", true),
                 Err(ElevationInputError::InvalidPath)
             );
         }
@@ -407,11 +572,11 @@ mod tests {
     fn test_sudoers_line_is_tailored_to_login_path_and_user() {
         assert_eq!(
             sudoers_line("stefan", "/usr/lib/openssh/sftp-server", "root").as_deref(),
-            Some("stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
+            Some("stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV")
         );
         assert_eq!(
             sudoers_line("deploy", "/usr/libexec/sftp-server", "www-data").as_deref(),
-            Some("deploy ALL=(www-data) NOPASSWD: /usr/libexec/sftp-server \"\"")
+            Some("deploy ALL=(www-data) NOPASSWD: /usr/libexec/sftp-server -l INFO -f AUTHPRIV")
         );
         // Sonderzeichen im Login → lieber keine Zeile als eine falsche.
         for login in ["ad\\user", "a b", "x,y", "#1", ""] {

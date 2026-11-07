@@ -574,8 +574,9 @@ mod tests {
     use sqlx::sqlite::SqliteConnectOptions;
 
     use super::*;
-    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
+    use ssh_manager_core::profiles::ProfileStore;
     use ssh_manager_core::ssh::CommandOutput;
+    use ssh_manager_core::testing::ServerBuilder;
 
     use crate::SqliteProfileStore;
 
@@ -593,25 +594,7 @@ mod tests {
     /// die Fremdschlüssel-Einschränkung jeden `create_session()`-Aufruf
     /// ablehnen), analog zu `prompt_history_store::tests::create_test_server`.
     async fn create_test_server(profile_store: &SqliteProfileStore) -> ServerId {
-        let now = Utc::now();
-        let server = Server {
-            id: ServerId::new(),
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: vec![],
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        };
+        let server = ServerBuilder::new().name("Test-Server").build();
         let id = server.id;
         profile_store.create_server(&server).await.unwrap();
         id
@@ -1429,7 +1412,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=27).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=28).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

@@ -30,6 +30,7 @@ function server(id: string, name: string, extra: Partial<ServerDto> = {}): Serve
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
     isCopy: false,
     startDirectory: null,
     ...extra,

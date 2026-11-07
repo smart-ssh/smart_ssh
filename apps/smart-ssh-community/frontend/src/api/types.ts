@@ -163,6 +163,10 @@ export type {
   ChatSessionChangedPayload,
   ChatTextDeltaPayload,
   ChatWebActivityPayload,
+  AuthPromptEndReason,
+  AuthPromptEndedPayload,
+  AuthPromptItemPayload,
+  AuthPromptNeededPayload,
   ConnectProgressPayload,
   ConnectStepSnapshot,
   ConnectionStatusChangedPayload,
@@ -185,6 +189,7 @@ export type {
   SftpTransferFinishedPayload,
   SftpTransferKind,
   SftpTransferProgressPayload,
+  ElevationAutoDisabledPayload,
   SftpTransferStartedPayload,
   StepDetail,
   TerminalOutputPayload,
@@ -209,6 +214,8 @@ import type {
   ChatSessionChangedPayload,
   ChatTextDeltaPayload,
   ChatWebActivityPayload,
+  AuthPromptEndedPayload,
+  AuthPromptNeededPayload,
   ConnectProgressPayload,
   ConnectionStatusChangedPayload,
   HostKeyVerificationEndedPayload,
@@ -223,6 +230,7 @@ import type {
   SessionOnlyPayload,
   SftpTransferFinishedPayload,
   SftpTransferProgressPayload,
+  ElevationAutoDisabledPayload,
   SftpTransferStartedPayload,
   StepDetail,
   TerminalOutputPayload,
@@ -230,6 +238,8 @@ import type {
 export type ChatSessionChangedEvent = ChatSessionChangedPayload;
 export type ConnectionStatusChangedEvent = ConnectionStatusChangedPayload;
 export type AutoReconnectChangedEvent = AutoReconnectChangedPayload;
+export type AuthPromptNeededEvent = AuthPromptNeededPayload;
+export type AuthPromptEndedEvent = AuthPromptEndedPayload;
 export type HostKeyVerificationNeededEvent = HostKeyVerificationNeededPayload;
 export type HostKeyVerificationEndedEvent = HostKeyVerificationEndedPayload;
 export type ConnectProgressEvent = ConnectProgressPayload;
@@ -264,6 +274,7 @@ export type ChatQueuedMessagesSentEvent = SessionOnlyPayload;
 export type ChatDocumentGeneratedEvent = ChatDocumentGeneratedPayload;
 export type ChatQuestionAskedEvent = ChatQuestionAskedPayload;
 export type SftpTransferStartedEvent = SftpTransferStartedPayload;
+export type ElevationAutoDisabledEvent = ElevationAutoDisabledPayload;
 export type SftpTransferFinishedEvent = SftpTransferFinishedPayload;
 export type SftpTransferProgressEvent = SftpTransferProgressPayload;
 export type McpActionTabRequestedEvent = McpActionTabRequestedPayload;
@@ -324,6 +335,7 @@ export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
   | { state: "skipped" }
+  | { state: "warning"; code: string }
   | { state: "failed"; code: string };
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`

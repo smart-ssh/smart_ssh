@@ -23,6 +23,7 @@ function server(id: string, groupId: string | null, isLocal = false): ServerDto 
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 

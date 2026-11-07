@@ -40,6 +40,7 @@ const METHODS: &[&str] = &[
     ".execute_cancellable(",
     ".execute_with_stdin_cancellable(",
     ".open_sftp_via_exec(",
+    ".open_sftp_via_exec_with_sudo_password(",
 ];
 
 /// Cuts the source at the first inline `#[cfg(test)] mod … {` block.

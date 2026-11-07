@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server yolu (yükseltilmiş dosya erişimi)",
     "sftpServerPathPlaceholder": "Otomatik",
     "sftpServerPathHint": "Yalnızca yükseltilmiş haklarla dosya tarayıcısı için otomatik algılama başarısız olursa gerekir, örn. /usr/lib/openssh/sftp-server. Boş bırakın = otomatik.",
+    "elevationAllowedLabel": "Dosya tarayıcısında yükseltilmiş haklara izin ver",
+    "elevationAllowedHint": "Kapalıyken dosya tarayıcısı bu sunucu için yükseltilmiş hak sunmaz.",
     "startDirectoryLabel": "Başlangıç dizini (terminal ve dosya tarayıcısı)",
     "startDirectoryPlaceholder": "Ana dizin",
     "startDirectoryHint": "Mutlak yol (/…) veya ~/ ile başlayan yol. Terminal görünür bir cd ile oraya geçer, dosya tarayıcısı orada açılır. Yapay zeka komutları her zaman ana dizinde çalışır. Boş bırakın = ana dizin.",
@@ -435,6 +437,13 @@
       "reasonOther": "başka bir güvenlik denetimi",
       "loadFailed": "Kural kapsamı yüklenemedi"
     }
+  },
+  "authPrompt": {
+    "title": "{{hop}} sunucusunda oturum açma",
+    "password": "Parola",
+    "submit": "Oturum aç",
+    "notStored": "Sunucu oturum açmak için bu bilgileri istiyor. Kaydedilmez.",
+    "expired": "Oturum açma isteği zaman aşımına uğradı. Bağlantı kurulmadı."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Risk için ikinci görüşü açmadan önce bir yapay zekâ sağlayıcısı seçin.",
     "SESSION_NOT_FOUND": "Bu oturum artık açık değil. Sunucu listesinden yeniden açın.",
     "SSH_SFTP_ALREADY_EXISTS": "Bu adda bir dosya veya klasör zaten var",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı",
+    "SSH_NO_COMMON_ALGORITHM": "Sunucuyla ortak bir SSH algoritması yok. SSH yazılımı çok eski veya çok kısıtlayıcı. Güncelleyin ya da modern algoritmaları etkinleştirin."
   },
   "mcpServer": {
     "hint": "Harici MCP istemcileri bununla izin listesindeki sunucularda komut, dosya okuma/yazma ve not güncellemesi önerebilir — mevcut izin kurallarından bağımsız olarak her istek uygulamada her zaman onay gerektirir.",
@@ -769,6 +779,17 @@
     "opDelete": "Silme",
     "opChmod": "İzinleri değiştirme",
     "banner": "Yükseltilmiş haklar etkin: bu tarayıcıdaki tüm dosya eylemleri {{user}} olarak çalışır.",
+    "bannerLogged": "Sunucuda günlüğe kaydedilir.",
+    "notice": {
+      "title": "Yükseltilmiş haklar hakkında",
+      "intro": "Artık dosyaları {{user}} olarak okuyor ve yazıyorsunuz. Değişiklikler hemen geçerli olur ve uygulama bunları geri alamaz.",
+      "loggedApp": "Her değişiklik uygulamanın günlüğüne kaydedilir.",
+      "loggedAppAndServer": "Her değişiklik uygulamanın günlüğüne ve sunucunun kimlik doğrulama günlüğüne kaydedilir.",
+      "passwordless": "sftp-server için sudo kuralı, {{user}} kullanıcısına yalnızca bu uygulamaya değil, bu oturum altında çalışan her şeye parolasız erişim verir.",
+      "alternative": "Bu sunucuyu düzenli olarak root olarak yönetiyorsanız, anahtarlı ayrı bir root girişi (PermitRootLogin prohibit-password) bu erişimi açık hale getirir.",
+      "gotIt": "Anladım",
+      "dontShowAgain": "Bu sunucu için bir daha gösterme"
+    },
     "deleteFileTitle": "Dosya {{user}} olarak silinsin mi?",
     "deleteDirTitle": "Klasör {{user}} olarak silinsin mi?",
     "overwriteTitle": "Dosyanın üzerine {{user}} olarak yazılsın mı?",
@@ -790,7 +811,8 @@
     "close": "Kapat",
     "detail": "Ayrıntılar: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo, bu sunucuda sftp-server için parola istiyor. Uygulama asla sudo parolası sormaz.",
+      "passwordRequired": "Bu sunucuda sudo, sftp-server için parola istiyor. Aşağıdaki sudoers satırını ekleyin veya yükseltilmiş hakları açmak için sunucu profilinde bir sudo parolası saklayın.",
+      "wrongSudoPassword": "sudo, kayıtlı sudo parolasını reddetti. Sunucu profilindeki sudo parolasını kontrol edin.",
       "notAllowed": "Bu SSH oturumu, sftp-server'ı sudo ile parolasız başlatamaz.",
       "requireTty": "sudo terminal olmadan çalışmayı reddediyor (sudoers'ta “requiretty”). Bu oturum için requiretty'yi devre dışı bırakın, örn. “Defaults:<login> !requiretty” ile.",
       "sftpServerNotFound": "sftp-server sunucuda bulunamadı. Lütfen yolunu sunucu profilinde “Gelişmiş” altına girin.",
@@ -800,7 +822,8 @@
       "invalidUser": "Geçersiz hedef kullanıcı.",
       "unsupported": "Yerel sunucuda yükseltilmiş mod yok.",
       "checkFailed": "Sudo haklarının denetimi başarısız oldu.",
-      "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”)."
+      "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”).",
+      "disabledForServer": "Yükseltilmiş haklar, sunucu profilinde bu sunucu için kapatılmıştır."
     },
     "channelLost": "Yükseltilmiş haklar sona erdi — yükseltilmiş kanal artık etkin değil.",
     "group": "Yükseltilmiş haklar",
@@ -810,7 +833,9 @@
     "targetUserHelp": "Dosya tarayıcısını sudo ile bu kullanıcı olarak çalıştırır. Varsayılan: root.",
     "confirm": "Yükselt",
     "opChown": "Sahibi değiştirme",
-    "chownNote": "Sahip {{user}} olarak değiştirilecek."
+    "chownNote": "Sahip {{user}} olarak değiştirilecek.",
+    "idleSwitchedOff": "Yükseltilmiş haklar {{minutes}} dakika etkinlik olmadığı için kapatıldı",
+    "revokedByProfile": "Yükseltilmiş haklar sona erdi — sunucu profili artık buna izin vermiyor."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Ana makine anahtarı denetimi",
       "authentication": "Kimlik doğrulama",
       "sessionReady": "Oturum kuruldu",
-      "dnsSkipped": "IP adresi – ad çözümleme gerekmez"
+      "dnsSkipped": "IP adresi – ad çözümleme gerekmez",
+      "outdatedAlgorithms": "Eski algoritmalar"
     },
     "status": {
       "ok": "Tamam",
       "running": "devam ediyor",
       "failed": "başarısız ({{code}})",
       "skipped": "atlandı",
-      "failedReason": "başarısız: {{reason}}"
+      "failedReason": "başarısız: {{reason}}",
+      "warning": "uyarı"
     },
     "hostKeyResult": {
       "known": "bilinen",
@@ -1500,5 +1527,18 @@
     "title": "Bir şeyler ters gitti",
     "body": "Smart SSH arayüzde beklenmeyen bir hatayla karşılaştı. Devam etmek için yeniden yükleyin. Tekrar olursa, yeniden yükledikten sonra Ayarlar → Tanılama altında bir tanılama paketi oluşturun.",
     "reload": "Yeniden yükle"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Bu sunucu eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse sunucunun SSH yazılımını güncelleyin.",
+    "outdatedAlgorithmsHop": "{{hop}} eski SSH algoritmaları kullanıyor ({{algorithms}}). Bağlantı daha az güvenli. Mümkünse SSH yazılımını güncelleyin."
+  },
+  "elevatedIdle": {
+    "label": "Etkinlik olmazsa yükseltilmiş hakları kapat",
+    "minutes5": "5 dakika",
+    "minutes15": "15 dakika",
+    "minutes30": "30 dakika",
+    "minutes60": "60 dakika",
+    "never": "Asla",
+    "hint": "Dosya tarayıcısı, bu süre boyunca yükseltilmiş etkinlik olmazsa yükseltilmiş moddan kendiliğinden çıkar. Devam eden bir işlem etkinlik sayılır."
   }
 }

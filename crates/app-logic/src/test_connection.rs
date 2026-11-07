@@ -53,12 +53,16 @@ pub const SSH_CONNECT_LIMITS: ConnectLimits = ConnectLimits::DEFAULT;
 /// nicht mocken.
 #[async_trait]
 pub trait Connector: Send + Sync {
+    #[expect(clippy::too_many_arguments, reason = "one argument per input")]
     async fn connect(
         &self,
         target: &ConnectionTarget,
         credentials: &(dyn CredentialStore + Send + Sync),
         key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
+        // Issue #1185: asks the user during `keyboard-interactive` and
+        // multi-step logins; `NoPrompter` where nobody can be asked.
+        prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
         // Issue #51: Schritt-Protokoll des Versuchs, nur für die Anzeige.
         log: &ConnectLog,
         // Issue #97: Zeitgrenzen je Phase und Hop — dieselben wie beim
@@ -77,17 +81,16 @@ impl Connector for RealConnector {
         credentials: &(dyn CredentialStore + Send + Sync),
         key_files: &(dyn KeyFileReader + Send + Sync),
         host_keys: Arc<dyn HostKeyStore>,
+        prompter: &dyn ssh_manager_core::ssh::AuthPrompter,
         log: &ConnectLog,
         limits: ConnectLimits,
     ) -> Result<ConnectOutcome, SshError> {
-        // No user interface on this path: interactive logins fail with a clear
-        // error (Issue #1184).
         ssh_transport::connect_with_limits(
             target,
             credentials,
             key_files,
             host_keys,
-            &ssh_manager_core::ssh::NoPrompter,
+            prompter,
             log,
             limits,
         )
@@ -290,7 +293,16 @@ async fn run_test_connection(
     // äußere Timeout ist nur das Sicherheitsnetz, das mit der Hop-Zahl
     // wächst — wie in `connect_session`.
     let overall = limits.overall(target.hops.len());
-    let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log, limits);
+    let attempt = connector.connect(
+        &target,
+        &tiered,
+        key_files,
+        host_key_store,
+        // "Test connection" has no user interface for login questions.
+        &ssh_manager_core::ssh::NoPrompter,
+        log,
+        limits,
+    );
     let timed = tokio::time::timeout(overall, attempt);
     let timed = match progress {
         Some(p) => tokio::select! {

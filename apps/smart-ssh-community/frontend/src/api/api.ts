@@ -205,6 +205,14 @@ export const renameChatSession = (sessionId: string, newTitle: string) =>
 export const deleteChatSession = (sessionId: string) =>
   invoke<void>("delete_chat_session", { sessionId });
 
+/** Issue #1193: minutes of elevated inactivity before the backend switches the
+ * file browser's elevated rights off (5, 15, 30, 60; 0 = never). Written by
+ * its own backend command, never through `set_ui_preference`. */
+export const getElevatedIdleTimeout = () => invoke<number>("get_elevated_idle_timeout");
+
+export const setElevatedIdleTimeout = (minutes: number) =>
+  invoke<void>("set_elevated_idle_timeout", { minutes });
+
 export const getChatSessionRetentionDays = () =>
   invoke<number | null>("get_chat_session_retention_days");
 
@@ -228,6 +236,14 @@ export const getChatHistory = (sessionId: string) =>
 
 export const confirmHostKey = (sessionId: string, decision: HostKeyUserDecision) =>
   invoke<void>("confirm_host_key", { sessionId, decision });
+
+/** Issue #1185: the answers to a login prompt. They are secrets and go
+ * only through this call; the caller keeps no copy. */
+export const answerAuthPrompt = (id: string, answers: string[]) =>
+  invoke<void>("answer_auth_prompt", { id, answers });
+
+export const cancelAuthPrompt = (id: string) =>
+  invoke<void>("cancel_auth_prompt", { id });
 
 /** Spec 0102: das Ergebnis trägt ggf. den einmaligen Hinweis auf ein
  * fehlendes Startverzeichnis. */
@@ -839,6 +855,10 @@ export const sftpCancelTransfer = (sessionId: string, transferId: string) =>
   invoke<boolean>("sftp_cancel_transfer", { sessionId, transferId });
 
 /** Ziel-Nutzer des aktiven erhöhten Kanals, `null` = aus. */
+/** Issue #1194: does the server profile allow elevated rights? */
+export const sftpElevationAllowed = (sessionId: string) =>
+  invoke<boolean>("sftp_elevation_allowed", { sessionId });
+
 export const sftpElevationStatus = (sessionId: string) =>
   invoke<string | null>("sftp_elevation_status", { sessionId });
 

@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Cesta k sftp-server (zvýšený přístup k souborům)",
     "sftpServerPathPlaceholder": "Automaticky",
     "sftpServerPathHint": "Potřeba pouze tehdy, když automatické zjištění pro prohlížeč souborů se zvýšenými právy selže, např. /usr/lib/openssh/sftp-server. Prázdné = automaticky.",
+    "elevationAllowedLabel": "Povolit zvýšená oprávnění v prohlížeči souborů",
+    "elevationAllowedHint": "Když je vypnuto, prohlížeč souborů pro tento server nenabízí zvýšená oprávnění.",
     "startDirectoryLabel": "Úvodní adresář (terminál a prohlížeč souborů)",
     "startDirectoryPlaceholder": "Domovský adresář",
     "startDirectoryHint": "Absolutní cesta (/…) nebo cesta začínající ~/. Terminál se tam přepne viditelným cd, prohlížeč souborů se tam otevře. Příkazy AI se vždy spouštějí v domovském adresáři. Prázdné = domovský adresář.",
@@ -435,6 +437,13 @@
       "reasonOther": "jiná bezpečnostní kontrola",
       "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
     }
+  },
+  "authPrompt": {
+    "title": "Přihlášení k {{hop}}",
+    "password": "Heslo",
+    "submit": "Přihlásit",
+    "notStored": "Server žádá tyto údaje pro přihlášení. Neukládají se.",
+    "expired": "Požadavek na přihlášení vypršel. Spojení nebylo navázáno."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
     "SESSION_NOT_FOUND": "Tato relace už není otevřená. Otevřete ji znovu ze seznamu serverů.",
     "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen",
+    "SSH_NO_COMMON_ALGORITHM": "Se serverem nemáte žádný společný algoritmus SSH. Jeho software SSH je příliš starý nebo příliš přísný. Aktualizujte jej nebo povolte moderní algoritmy."
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -779,6 +789,17 @@
     "opDelete": "Mazání",
     "opChmod": "Změna oprávnění",
     "banner": "Zvýšená práva aktivní: všechny akce se soubory v tomto prohlížeči běží jako {{user}}.",
+    "bannerLogged": "Zaznamenáno na serveru.",
+    "notice": {
+      "title": "O zvýšených právech",
+      "intro": "Soubory nyní čtete a zapisujete jako {{user}}. Změny se projeví okamžitě a aplikace je nemůže vrátit zpět.",
+      "loggedApp": "Každá změna se zaznamená do protokolu aplikace.",
+      "loggedAppAndServer": "Každá změna se zaznamená do protokolu aplikace a do autentizačního protokolu serveru.",
+      "passwordless": "Pravidlo sudo pro sftp-server dává {{user}} přístup bez hesla ke všemu, co běží pod tímto přihlášením, nejen k této aplikaci.",
+      "alternative": "Pokud tento server pravidelně spravujete jako root, samostatné přihlášení root s klíčem (PermitRootLogin prohibit-password) tento přístup vyjádří výslovně.",
+      "gotIt": "Rozumím",
+      "dontShowAgain": "Pro tento server již nezobrazovat"
+    },
     "deleteFileTitle": "Smazat soubor jako {{user}}?",
     "deleteDirTitle": "Smazat složku jako {{user}}?",
     "overwriteTitle": "Přepsat soubor jako {{user}}?",
@@ -800,7 +821,8 @@
     "close": "Zavřít",
     "detail": "Podrobnosti: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Aplikace se na heslo sudo nikdy neptá.",
+      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Přidejte níže uvedené pravidlo sudoers nebo uložte heslo sudo do profilu serveru, aby šla zapnout zvýšená oprávnění.",
+      "wrongSudoPassword": "sudo odmítlo uložené heslo sudo. Zkontrolujte heslo sudo v profilu serveru.",
       "notAllowed": "Toto přihlášení SSH nesmí spouštět sftp-server přes sudo bez hesla.",
       "requireTty": "sudo odmítá běžet bez terminálu („requiretty“ v sudoers). Pro toto přihlášení requiretty vypněte, např. pomocí „Defaults:<login> !requiretty“.",
       "sftpServerNotFound": "sftp-server nebyl na serveru nalezen. Zadejte jeho cestu v profilu serveru v části „Pokročilé“.",
@@ -810,7 +832,8 @@
       "invalidUser": "Neplatný cílový uživatel.",
       "unsupported": "Lokální server nemá zvýšený režim.",
       "checkFailed": "Kontrola práv sudo selhala.",
-      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers)."
+      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers).",
+      "disabledForServer": "Zvýšená oprávnění jsou pro tento server v profilu serveru vypnutá."
     },
     "channelLost": "Zvýšená práva skončila — zvýšený kanál již není aktivní.",
     "group": "Zvýšená oprávnění",
@@ -820,7 +843,9 @@
     "targetUserHelp": "Spustí správce souborů jako tento uživatel přes sudo. Výchozí: root.",
     "confirm": "Zvýšit",
     "opChown": "Změna vlastníka",
-    "chownNote": "Vlastník bude změněn jako {{user}}."
+    "chownNote": "Vlastník bude změněn jako {{user}}.",
+    "idleSwitchedOff": "Zvýšená oprávnění vypnuta po {{minutes}} min nečinnosti",
+    "revokedByProfile": "Zvýšená oprávnění skončila — profil serveru je již nepovoluje."
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",
@@ -1009,14 +1034,16 @@
       "hostKeyCheck": "Kontrola klíče hostitele",
       "authentication": "Ověření",
       "sessionReady": "Relace navázána",
-      "dnsSkipped": "IP adresa – překlad není potřeba"
+      "dnsSkipped": "IP adresa – překlad není potřeba",
+      "outdatedAlgorithms": "Zastaralé algoritmy"
     },
     "status": {
       "ok": "OK",
       "running": "probíhá",
       "failed": "selhalo ({{code}})",
       "skipped": "přeskočeno",
-      "failedReason": "selhalo: {{reason}}"
+      "failedReason": "selhalo: {{reason}}",
+      "warning": "varování"
     },
     "hostKeyResult": {
       "known": "známý",
@@ -1516,5 +1543,18 @@
     "title": "Něco se pokazilo",
     "body": "Smart SSH narazil v rozhraní na neočekávanou chybu. Pro pokračování načtěte aplikaci znovu. Pokud se to bude opakovat, vytvořte po načtení balíček diagnostiky v Nastavení → Diagnostika.",
     "reload": "Načíst znovu"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Tento server používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte software SSH serveru.",
+    "outdatedAlgorithmsHop": "{{hop}} používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte jeho software SSH."
+  },
+  "elevatedIdle": {
+    "label": "Vypnout zvýšená oprávnění po nečinnosti",
+    "minutes5": "5 minut",
+    "minutes15": "15 minut",
+    "minutes30": "30 minut",
+    "minutes60": "60 minut",
+    "never": "Nikdy",
+    "hint": "Prohlížeč souborů sám opustí zvýšený režim po této době bez zvýšené aktivity. Probíhající operace se počítá jako aktivita."
   }
 }

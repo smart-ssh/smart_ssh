@@ -212,7 +212,7 @@ pub(super) async fn delete_impl_reporting(
             .map_err(|e| e.to_string()),
     );
     audit_elevated_change(
-        elevated_user.as_deref(),
+        elevated_user.as_ref(),
         "delete",
         path,
         matches!(result, Ok(Some(()))),

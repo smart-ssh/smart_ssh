@@ -29,6 +29,10 @@ mod tests;
 #[cfg(test)]
 mod property_tests;
 
+mod sudo_options;
+#[cfg(test)]
+mod tests_sftp_server_args;
+
 pub use classifier::{
     secret_path_read_reason, sftp_server_invocation_reason, CommandCheckFinding,
     RuleBasedRiskClassifier,

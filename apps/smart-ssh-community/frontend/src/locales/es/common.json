@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Ruta de sftp-server (acceso elevado a archivos)",
     "sftpServerPathPlaceholder": "Automático",
     "sftpServerPathHint": "Solo es necesario si la detección automática falla para el explorador de archivos con derechos elevados, p. ej. /usr/lib/openssh/sftp-server. Vacío = automático.",
+    "elevationAllowedLabel": "Permitir derechos elevados en el explorador de archivos",
+    "elevationAllowedHint": "Si está desactivado, el explorador de archivos no ofrece derechos elevados para este servidor.",
     "startDirectoryLabel": "Directorio de inicio (terminal y explorador de archivos)",
     "startDirectoryPlaceholder": "Directorio personal",
     "startDirectoryHint": "Ruta absoluta (/…) o una ruta que empiece por ~/. El terminal cambia allí con un cd visible y el explorador de archivos se abre allí. Los comandos de la IA siempre se ejecutan en el directorio personal. Vacío = directorio personal.",
@@ -435,6 +437,13 @@
       "reasonOther": "otra comprobación de seguridad",
       "loadFailed": "No se pudo cargar la cobertura de reglas"
     }
+  },
+  "authPrompt": {
+    "title": "Inicio de sesión en {{hop}}",
+    "password": "Contraseña",
+    "submit": "Iniciar sesión",
+    "notStored": "El servidor pide esta información para iniciar sesión. No se guarda.",
+    "expired": "La solicitud de inicio de sesión ha caducado. No se estableció la conexión."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Advertencia de seguridad · La clave de host ha cambiado",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Elija un proveedor de IA antes de activar la segunda opinión sobre el riesgo.",
     "SESSION_NOT_FOUND": "Esta sesión ya no está abierta. Ábrela de nuevo desde la lista de servidores.",
     "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo",
+    "SSH_NO_COMMON_ALGORITHM": "No hay ningún algoritmo SSH en común con el servidor. Su software SSH es demasiado antiguo o restrictivo. Actualízalo o activa algoritmos modernos."
   },
   "mcpServer": {
     "hint": "Los clientes MCP externos pueden usarlo para proponer comandos, lecturas y escrituras de archivos y actualizaciones de notas en servidores de la lista de permitidos; cada solicitud requiere siempre confirmación en la aplicación, con independencia de las reglas de permiso existentes.",
@@ -774,6 +784,17 @@
     "opDelete": "Eliminación",
     "opChmod": "Cambio de permisos",
     "banner": "Derechos elevados activos: todas las acciones de archivos en este explorador se ejecutan como {{user}}.",
+    "bannerLogged": "Registrado en el servidor.",
+    "notice": {
+      "title": "Sobre los derechos elevados",
+      "intro": "Ahora lees y escribes archivos como {{user}}. Los cambios se aplican de inmediato y la aplicación no puede deshacerlos.",
+      "loggedApp": "Cada cambio se registra en el registro de la aplicación.",
+      "loggedAppAndServer": "Cada cambio se registra en el registro de la aplicación y en el registro de autenticación del servidor.",
+      "passwordless": "La regla sudo para sftp-server da a {{user}} acceso sin contraseña a todo lo que se ejecuta con este inicio de sesión, no solo a esta aplicación.",
+      "alternative": "Si administras este servidor a menudo como root, un inicio de sesión root aparte con clave (PermitRootLogin prohibit-password) hace explícito ese acceso.",
+      "gotIt": "Entendido",
+      "dontShowAgain": "No volver a mostrar para este servidor"
+    },
     "deleteFileTitle": "¿Eliminar archivo como {{user}}?",
     "deleteDirTitle": "¿Eliminar carpeta como {{user}}?",
     "overwriteTitle": "¿Sobrescribir archivo como {{user}}?",
@@ -795,7 +816,8 @@
     "close": "Cerrar",
     "detail": "Detalles: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo requiere una contraseña para sftp-server en este servidor. La aplicación nunca pide una contraseña de sudo.",
+      "passwordRequired": "sudo exige una contraseña para sftp-server en este servidor. Añade la regla de sudoers de abajo o guarda una contraseña de sudo en el perfil del servidor para activar los permisos elevados.",
+      "wrongSudoPassword": "sudo rechazó la contraseña de sudo guardada. Revisa la contraseña de sudo en el perfil del servidor.",
       "notAllowed": "Este inicio de sesión SSH no puede iniciar sftp-server mediante sudo sin contraseña.",
       "requireTty": "sudo se niega a ejecutarse sin terminal (“requiretty” en sudoers). Desactive requiretty para este inicio de sesión, p. ej. con “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "No se encontró sftp-server en el servidor. Introduzca su ruta en el perfil del servidor, en “Avanzado”.",
@@ -805,7 +827,8 @@
       "invalidUser": "Usuario de destino no válido.",
       "unsupported": "El servidor local no tiene modo elevado.",
       "checkFailed": "Error al comprobar los derechos de sudo.",
-      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers)."
+      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers).",
+      "disabledForServer": "Los derechos elevados están desactivados para este servidor en el perfil del servidor."
     },
     "channelLost": "Derechos elevados finalizados: el canal elevado ya no está activo.",
     "group": "Derechos elevados",
@@ -815,7 +838,9 @@
     "targetUserHelp": "Ejecuta el explorador de archivos como este usuario mediante sudo. Predeterminado: root.",
     "confirm": "Elevar",
     "opChown": "Cambio de propietario",
-    "chownNote": "El propietario se cambiará como {{user}}."
+    "chownNote": "El propietario se cambiará como {{user}}.",
+    "idleSwitchedOff": "Derechos elevados desactivados tras {{minutes}} minutos sin actividad",
+    "revokedByProfile": "Derechos elevados finalizados: el perfil del servidor ya no los permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1004,14 +1029,16 @@
       "hostKeyCheck": "Comprobación de la clave de host",
       "authentication": "Autenticación",
       "sessionReady": "Sesión establecida",
-      "dnsSkipped": "Dirección IP: no hace falta resolución"
+      "dnsSkipped": "Dirección IP: no hace falta resolución",
+      "outdatedAlgorithms": "Algoritmos obsoletos"
     },
     "status": {
       "ok": "OK",
       "running": "en curso",
       "failed": "fallido ({{code}})",
       "skipped": "omitido",
-      "failedReason": "falló: {{reason}}"
+      "failedReason": "falló: {{reason}}",
+      "warning": "advertencia"
     },
     "hostKeyResult": {
       "known": "conocida",
@@ -1508,5 +1535,18 @@
     "title": "Algo salió mal",
     "body": "Smart SSH encontró un error inesperado en la interfaz. Recarga para continuar. Si vuelve a ocurrir, crea un paquete de diagnóstico en Ajustes → Diagnóstico tras recargar.",
     "reload": "Recargar"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Este servidor usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza el software SSH del servidor si puedes.",
+    "outdatedAlgorithmsHop": "{{hop}} usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza su software SSH si puedes."
+  },
+  "elevatedIdle": {
+    "label": "Desactivar los derechos elevados tras inactividad",
+    "minutes5": "5 minutos",
+    "minutes15": "15 minutos",
+    "minutes30": "30 minutos",
+    "minutes60": "60 minutos",
+    "never": "Nunca",
+    "hint": "El explorador de archivos sale solo del modo elevado tras este tiempo sin actividad elevada. Una operación en curso cuenta como actividad."
   }
 }

@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server 路径（提权文件访问）",
     "sftpServerPathPlaceholder": "自动",
     "sftpServerPathHint": "仅当文件浏览器在提权时自动检测失败才需要填写，例如 /usr/lib/openssh/sftp-server。留空 = 自动。",
+    "elevationAllowedLabel": "允许在文件浏览器中使用提升的权限",
+    "elevationAllowedHint": "关闭后，文件浏览器不会为此服务器提供提升的权限。",
     "startDirectoryLabel": "起始目录（终端和文件浏览器）",
     "startDirectoryPlaceholder": "主目录",
     "startDirectoryHint": "绝对路径（/…）或以 ~/ 开头的路径。终端会通过可见的 cd 切换到该目录，文件浏览器会在此打开。AI 命令始终在主目录中运行。留空 = 主目录。",
@@ -435,6 +437,13 @@
       "reasonOther": "另一项安全检查",
       "loadFailed": "无法加载规则覆盖情况"
     }
+  },
+  "authPrompt": {
+    "title": "登录 {{hop}}",
+    "password": "密码",
+    "submit": "登录",
+    "notStored": "服务器需要这些信息才能登录。这些信息不会被保存。",
+    "expired": "登录请求已过期。连接未建立。"
   },
   "hostKeyDialog": {
     "mismatchLabel": "安全警告 · 主机密钥已更改",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
     "SESSION_NOT_FOUND": "此会话已不再打开。请从服务器列表重新打开。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件",
+    "SSH_NO_COMMON_ALGORITHM": "与服务器没有共同的 SSH 算法。其 SSH 软件过旧或限制过严。请更新，或启用现代算法。"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",
@@ -764,6 +774,17 @@
     "opDelete": "删除",
     "opChmod": "更改权限",
     "banner": "提权已启用：此浏览器中的所有文件操作均以 {{user}} 身份运行。",
+    "bannerLogged": "已在服务器上记录。",
+    "notice": {
+      "title": "关于提升权限",
+      "intro": "现在您以 {{user}} 身份读写文件。更改会立即生效，应用无法撤销。",
+      "loggedApp": "每项更改都会记录在应用日志中。",
+      "loggedAppAndServer": "每项更改都会记录在应用日志和服务器的认证日志中。",
+      "passwordless": "sftp-server 的 sudo 规则让 {{user}} 可无密码访问此登录下运行的一切，而不仅是此应用。",
+      "alternative": "如果您经常以 root 管理此服务器，使用密钥的独立 root 登录 (PermitRootLogin prohibit-password) 可使该访问更明确。",
+      "gotIt": "知道了",
+      "dontShowAgain": "不再为此服务器显示"
+    },
     "deleteFileTitle": "以 {{user}} 身份删除文件？",
     "deleteDirTitle": "以 {{user}} 身份删除文件夹？",
     "overwriteTitle": "以 {{user}} 身份覆盖文件？",
@@ -785,7 +806,8 @@
     "close": "关闭",
     "detail": "详情：{{detail}}",
     "failure": {
-      "passwordRequired": "sudo 要求在此服务器上为 sftp-server 输入密码。应用绝不会询问 sudo 密码。",
+      "passwordRequired": "此服务器上的 sudo 要求为 sftp-server 输入密码。请添加下方的 sudoers 规则，或在服务器配置文件中保存 sudo 密码，以启用提升权限。",
+      "wrongSudoPassword": "sudo 拒绝了已保存的 sudo 密码。请检查服务器配置文件中的 sudo 密码。",
       "notAllowed": "此 SSH 登录不允许在无密码的情况下通过 sudo 启动 sftp-server。",
       "requireTty": "sudo 拒绝在没有终端的情况下运行（sudoers 中的“requiretty”）。请为此登录禁用 requiretty，例如使用“Defaults:<login> !requiretty”。",
       "sftpServerNotFound": "在服务器上找不到 sftp-server。请在服务器配置的“高级”中填写其路径。",
@@ -795,7 +817,8 @@
       "invalidUser": "目标用户无效。",
       "unsupported": "本地服务器没有提权模式。",
       "checkFailed": "检查 sudo 权限失败。",
-      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。"
+      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。",
+      "disabledForServer": "此服务器的服务器配置文件已关闭提升的权限。"
     },
     "channelLost": "提权已结束——提权通道已不再有效。",
     "group": "提升的权限",
@@ -805,7 +828,9 @@
     "targetUserHelp": "通过 sudo 以该用户身份运行文件浏览器。默认：root。",
     "confirm": "提权",
     "opChown": "更改所有者",
-    "chownNote": "所有者将以 {{user}} 身份更改。"
+    "chownNote": "所有者将以 {{user}} 身份更改。",
+    "idleSwitchedOff": "已在 {{minutes}} 分钟无活动后关闭提升的权限",
+    "revokedByProfile": "提升的权限已结束——服务器配置文件不再允许。"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -994,14 +1019,16 @@
       "hostKeyCheck": "主机密钥检查",
       "authentication": "身份验证",
       "sessionReady": "会话已建立",
-      "dnsSkipped": "IP 地址 – 无需解析"
+      "dnsSkipped": "IP 地址 – 无需解析",
+      "outdatedAlgorithms": "过时的算法"
     },
     "status": {
       "ok": "正常",
       "running": "进行中",
       "failed": "失败（{{code}}）",
       "skipped": "已跳过",
-      "failedReason": "失败：{{reason}}"
+      "failedReason": "失败：{{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "已知",
@@ -1492,5 +1519,18 @@
     "title": "出了点问题",
     "body": "Smart SSH 的界面发生了意外错误。请重新加载后继续。如果再次发生，请在重新加载后到“设置 → 诊断”中创建诊断包。",
     "reload": "重新加载"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "此服务器使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新服务器的 SSH 软件。",
+    "outdatedAlgorithmsHop": "{{hop}} 使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新其 SSH 软件。"
+  },
+  "elevatedIdle": {
+    "label": "无操作后关闭提升的权限",
+    "minutes5": "5 分钟",
+    "minutes15": "15 分钟",
+    "minutes30": "30 分钟",
+    "minutes60": "60 分钟",
+    "never": "从不",
+    "hint": "在此时间内没有提升操作时，文件浏览器会自动退出提升模式。正在运行的操作视为活动。"
   }
 }

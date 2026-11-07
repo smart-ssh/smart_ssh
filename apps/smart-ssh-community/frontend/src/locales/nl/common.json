@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Pad naar sftp-server (verhoogde bestandstoegang)",
     "sftpServerPathPlaceholder": "Automatisch",
     "sftpServerPathHint": "Alleen nodig als automatische detectie mislukt voor het bestandsbeheer met verhoogde rechten, bijv. /usr/lib/openssh/sftp-server. Leeg laten = automatisch.",
+    "elevationAllowedLabel": "Verhoogde rechten toestaan in de bestandsbrowser",
+    "elevationAllowedHint": "Als dit uit staat, biedt de bestandsbrowser geen verhoogde rechten aan voor deze server.",
     "startDirectoryLabel": "Startmap (terminal en bestandsbeheer)",
     "startDirectoryPlaceholder": "Thuismap",
     "startDirectoryHint": "Absoluut pad (/…) of een pad dat met ~/ begint. De terminal gaat daarheen met een zichtbare cd, het bestandsbeheer opent daar. AI-opdrachten draaien altijd in de thuismap. Leeg laten = thuismap.",
@@ -435,6 +437,13 @@
       "reasonOther": "een andere veiligheidscontrole",
       "loadFailed": "Regeldekking kon niet worden geladen"
     }
+  },
+  "authPrompt": {
+    "title": "Aanmelden bij {{hop}}",
+    "password": "Wachtwoord",
+    "submit": "Aanmelden",
+    "notStored": "De server vraagt deze gegevens om u aan te melden. Ze worden niet opgeslagen.",
+    "expired": "De aanmeldvraag is verlopen. De verbinding is niet tot stand gebracht."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Kies een AI-provider voordat je de tweede mening over risico inschakelt.",
     "SESSION_NOT_FOUND": "Deze sessie is niet meer geopend. Open haar opnieuw vanuit de serverlijst.",
     "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat",
+    "SSH_NO_COMMON_ALGORITHM": "Geen SSH-algoritme gemeenschappelijk met de server. De SSH-software is te oud of te streng. Werk deze bij of schakel moderne algoritmen in."
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -769,6 +779,17 @@
     "opDelete": "Verwijderen",
     "opChmod": "Rechten wijzigen",
     "banner": "Verhoogde rechten actief: alle bestandsacties in dit bestandsbeheer worden uitgevoerd als {{user}}.",
+    "bannerLogged": "Gelogd op de server.",
+    "notice": {
+      "title": "Over verhoogde rechten",
+      "intro": "Je leest en schrijft bestanden nu als {{user}}. Wijzigingen werken direct en de app kan ze niet ongedaan maken.",
+      "loggedApp": "Elke wijziging wordt vastgelegd in het logboek van de app.",
+      "loggedAppAndServer": "Elke wijziging wordt vastgelegd in het logboek van de app en in het auth-logboek van de server.",
+      "passwordless": "De sudo-regel voor sftp-server geeft {{user}} toegang zonder wachtwoord tot alles wat onder deze login draait, niet alleen tot deze app.",
+      "alternative": "Beheer je deze server regelmatig als root, dan maakt een aparte root-login met sleutel (PermitRootLogin prohibit-password) die toegang expliciet.",
+      "gotIt": "Begrepen",
+      "dontShowAgain": "Niet meer tonen voor deze server"
+    },
     "deleteFileTitle": "Bestand verwijderen als {{user}}?",
     "deleteDirTitle": "Map verwijderen als {{user}}?",
     "overwriteTitle": "Bestand overschrijven als {{user}}?",
@@ -790,7 +811,8 @@
     "close": "Sluiten",
     "detail": "Details: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo vereist op deze server een wachtwoord voor sftp-server. De app vraagt nooit om een sudo-wachtwoord.",
+      "passwordRequired": "sudo vraagt op deze server een wachtwoord voor sftp-server. Voeg de sudoers-regel hieronder toe of sla een sudo-wachtwoord op in het serverprofiel om verhoogde rechten te gebruiken.",
+      "wrongSudoPassword": "sudo heeft het opgeslagen sudo-wachtwoord geweigerd. Controleer het sudo-wachtwoord in het serverprofiel.",
       "notAllowed": "Deze SSH-aanmelding mag sftp-server niet zonder wachtwoord via sudo starten.",
       "requireTty": "sudo weigert te draaien zonder terminal (“requiretty” in sudoers). Schakel requiretty voor deze aanmelding uit, bijv. met “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server is op de server niet gevonden. Voer het pad in het serverprofiel in onder “Geavanceerd”.",
@@ -800,7 +822,8 @@
       "invalidUser": "Ongeldige doelgebruiker.",
       "unsupported": "De lokale server heeft geen verhoogde modus.",
       "checkFailed": "Het controleren van de sudo-rechten is mislukt.",
-      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers)."
+      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers).",
+      "disabledForServer": "Verhoogde rechten zijn voor deze server uitgeschakeld in het serverprofiel."
     },
     "channelLost": "Verhoogde rechten beëindigd — het verhoogde kanaal is niet meer actief.",
     "group": "Verhoogde rechten",
@@ -810,7 +833,9 @@
     "targetUserHelp": "Voert de bestandsbrowser via sudo uit als deze gebruiker. Standaard: root.",
     "confirm": "Verhogen",
     "opChown": "Eigenaar wijzigen",
-    "chownNote": "De eigenaar wordt gewijzigd als {{user}}."
+    "chownNote": "De eigenaar wordt gewijzigd als {{user}}.",
+    "idleSwitchedOff": "Verhoogde rechten uitgeschakeld na {{minutes}} minuten zonder activiteit",
+    "revokedByProfile": "Verhoogde rechten beëindigd — het serverprofiel staat ze niet meer toe."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Hostsleutelcontrole",
       "authentication": "Authenticatie",
       "sessionReady": "Sessie tot stand gebracht",
-      "dnsSkipped": "IP-adres – geen opzoeking nodig"
+      "dnsSkipped": "IP-adres – geen opzoeking nodig",
+      "outdatedAlgorithms": "Verouderde algoritmen"
     },
     "status": {
       "ok": "OK",
       "running": "bezig",
       "failed": "mislukt ({{code}})",
       "skipped": "overgeslagen",
-      "failedReason": "mislukt: {{reason}}"
+      "failedReason": "mislukt: {{reason}}",
+      "warning": "waarschuwing"
     },
     "hostKeyResult": {
       "known": "bekend",
@@ -1500,5 +1527,18 @@
     "title": "Er is iets misgegaan",
     "body": "Smart SSH heeft een onverwachte fout in de interface gevonden. Laad opnieuw om door te gaan. Gebeurt het weer, maak dan na het herladen een diagnosepakket onder Instellingen → Diagnose.",
     "reload": "Opnieuw laden"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Deze server gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software van de server bij als dat kan.",
+    "outdatedAlgorithmsHop": "{{hop}} gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software ervan bij als dat kan."
+  },
+  "elevatedIdle": {
+    "label": "Verhoogde rechten uitschakelen na inactiviteit",
+    "minutes5": "5 minuten",
+    "minutes15": "15 minuten",
+    "minutes30": "30 minuten",
+    "minutes60": "60 minuten",
+    "never": "Nooit",
+    "hint": "De bestandsbrowser verlaat de verhoogde modus vanzelf na zo lang zonder verhoogde activiteit. Een lopende bewerking telt als activiteit."
   }
 }

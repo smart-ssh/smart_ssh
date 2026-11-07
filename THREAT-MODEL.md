@@ -87,6 +87,28 @@ the proposed command or path text as is**, without redaction
   knows the password as an extra pattern, so if the server echoes it, it is
   masked ([`crates/app-logic/src/orchestration/action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs),
   [`crates/app-logic/src/server_redaction.rs`](crates/app-logic/src/server_redaction.rs)).
+  The elevated file browser ([Spec 0067](docs/specs/0067-sftp-elevated-and-toasts.md))
+  uses it too, but only when `sudo -n -l` says a password is required: the
+  channel runs `sudo -S -k -p '<random marker>' …`, and the password is
+  written once, and only after the marker was read from stderr. If the
+  marker does not appear, the channel is closed with nothing written, so the
+  password cannot reach `sftp-server`. The password is not in the command,
+  log, audit line or any error; the audit line records only `sudo_auth` and
+  `server_logging`. The elevated `sftp-server` runs with the fixed arguments
+  `-l INFO -f AUTHPRIV` (the suggested sudoers rule allows exactly these, or
+  none for older rules), so the server's own auth log records every file
+  request; the arguments are a constant, never user input.
+  Elevated rights end on their own as well: a per-channel idle timer
+  (default 15 minutes, `elevatedIdleTimeoutMinutes` ∈ 5/15/30/60/0 = never,
+  a security setting only changeable through its own validated command)
+  revokes the channel exactly like the manual switch-off. An invalid or
+  missing stored value falls back to 15 minutes, never to "never"; a running
+  elevated operation postpones the switch-off. The webview is told by an
+  event and shows a toast; the audit line records `reason = "inactivity"`.
+  A per-server switch (`elevation_allowed`, default on, issue #1194) can
+  forbid the mode altogether: enabling is refused before any probe or sudo
+  call, an unreadable profile counts as forbidden, and turning the switch off
+  revokes a running channel at once. It only restricts; it never lifts a check.
 
 ### What the AI can still see
 
@@ -391,6 +413,16 @@ again, but not the red-risk check
 
 Risks we know about and accept, with the reason.
 
+- **Outdated SSH algorithms are negotiable
+  ([Spec 0005](docs/specs/0005-ssh-module.md), issue #1173).** After all
+  current algorithms the client also offers legacy ones (SHA-1 key
+  exchange and MAC, CBC ciphers, `ssh-rsa`) so old servers stay reachable.
+  A downgrade needs a server that offers nothing better: current algorithms
+  are listed first, and the key exchange hash covers both algorithm lists, so
+  a man in the middle cannot strip modern ones unnoticed. Every negotiated
+  legacy algorithm, and a missing strict key exchange (Terrapin), is shown
+  to the user as a warning; the connection is not refused. Accepted so
+  that legacy devices work; mitigation: update the server.
 - **Redaction is pattern-based.** Unknown secret formats reach the AI
   provider (section 2). Accepted because a generic entropy fallback would
   break the copilot's usefulness without closing the gap
@@ -407,6 +439,13 @@ Risks we know about and accept, with the reason.
   (3 per hop) are capped so a hostile server cannot keep a login going forever;
   the login time limit pauses only while the user is asked and a 5-minute
   answer limit applies.
+  The login dialog (issue #1185) shows those texts as plain text only. The
+  answers are secrets: they travel from the dialog to the backend only in the
+  one `answer_auth_prompt` command (never in an event, a log line or the
+  connect step log), are read from uncontrolled fields that are cleared on
+  submit, and are dropped by the transport right after sending. Answers whose
+  count does not match the questions are not sent. Automatic reconnects and
+  the connection test cannot be asked and fail instead of prompting.
 - **RSA timing side channel (RUSTSEC-2023-0071, "Marvin attack").** The
   `rsa` crate, pulled in by the SSH library, has a known timing side channel
   with no fixed release. Accepted because Smart SSH is a local client: RSA

@@ -387,11 +387,10 @@ pub(crate) async fn open_and_assemble(
         prompt_history_store,
         chat_session_store,
         ledger_store,
-        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
-        // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
-        // Scope dieses Refactorings).
+        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen.
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
@@ -720,22 +719,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
+            crate::elevated_sftp::install_idle_timer(app.handle());
+
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
 
-            #[cfg(not(target_os = "android"))]
-            if let Some(window) = app.get_webview_window("main") {
-                use tauri_plugin_decoration::WebviewWindowExt;
-                let window_clone = window.clone();
-                background_tasks::app_scope(app.handle()).spawn("window-decoration", async move {
-                    let _ = window_clone.activate_decoration().await;
-                    #[cfg(target_os = "macos")]
-                    {
-                        // Spec 0014 Abschnitt 3 & 6: macOS Ampel-Inset (Startwert 12.0, 16.0)
-                        let _ = window_clone.set_traffic_lights_inset(12.0, 16.0).await;
-                    }
-                });
-            }
+            background_tasks::activate_window_decoration(app.handle());
 
             // Spec 0101, A16: **Nichts davon im gesperrten Zustand.** Alle
             // Aufgaben unten brauchen den `AppState`, und A16 verlangt
@@ -816,6 +805,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::connect,
             commands::cancel_connect,
             commands::confirm_host_key,
+            commands::answer_auth_prompt, commands::cancel_auth_prompt,
             commands::open_terminal,
             commands::terminal_input,
             commands::terminal_resize,
@@ -839,6 +829,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             risk_second_opinion::set_risk_second_opinion_settings,
             risk_second_opinion::set_red_risk_always_confirm,
             ui_preferences::set_ui_preference,
+            elevated_sftp::idle::get_elevated_idle_timeout,
+            elevated_sftp::idle::set_elevated_idle_timeout,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::get_speech_model_status,
@@ -958,6 +950,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_elevation_enable,
             commands::sftp_elevation_disable,
             commands::sftp_elevation_status,
+            commands::sftp_elevation_allowed,
             commands::read_local_text_preview,
             commands::sftp_open_for_editing,
             commands::local_file_mtime,
@@ -1162,6 +1155,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         }
     }
     extension_plugins::register_pending(app); // Issue #894: after the core's own
+    elevated_sftp::idle::reload_stored(app); // Issue #1193: the store exists now
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"

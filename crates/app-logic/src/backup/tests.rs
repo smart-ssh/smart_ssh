@@ -68,6 +68,7 @@ async fn fixture() -> Fixture {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -386,6 +387,7 @@ fn build(tag: &str, servers: usize, rules: usize, notes: usize) -> Snapshot {
             post_ingest_policy: "balanced".into(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             is_copy: false,
         });

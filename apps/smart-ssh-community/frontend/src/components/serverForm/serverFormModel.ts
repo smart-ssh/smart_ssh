@@ -114,6 +114,7 @@ export interface ServerFormState {
   postIngestPolicy: PostIngestPolicy;
   aiInjectionCheckEnabled: boolean;
   sftpServerPath: string;
+  elevationAllowed: boolean;
   startDirectory: string;
   localNotes: string;
 }
@@ -148,6 +149,7 @@ export function initialServerFormState(defaultGroupId: string | null): ServerFor
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: "",
+    elevationAllowed: true,
     startDirectory: "",
     localNotes: "",
   };
@@ -191,6 +193,7 @@ export function serverFormReducer(state: ServerFormState, action: ServerFormActi
         postIngestPolicy: server.postIngestPolicy,
         aiInjectionCheckEnabled: server.aiInjectionCheckEnabled,
         sftpServerPath: server.sftpServerPath ?? "",
+        elevationAllowed: server.elevationAllowed,
         startDirectory: server.startDirectory ?? "",
       };
     }

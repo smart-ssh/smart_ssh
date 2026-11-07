@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "A sftp-server útvonala (emelt jogú fájlhozzáférés)",
     "sftpServerPathPlaceholder": "Automatikus",
     "sftpServerPathHint": "Csak akkor szükséges, ha az automatikus felismerés nem sikerül az emelt jogú fájlböngészőnél, pl. /usr/lib/openssh/sftp-server. Üres = automatikus.",
+    "elevationAllowedLabel": "Emelt jogosultságok engedélyezése a fájlböngészőben",
+    "elevationAllowedHint": "Kikapcsolva a fájlböngésző nem kínál emelt jogosultságokat ehhez a szerverhez.",
     "startDirectoryLabel": "Kezdőkönyvtár (terminál és fájlböngésző)",
     "startDirectoryPlaceholder": "Saját könyvtár",
     "startDirectoryHint": "Abszolút útvonal (/…) vagy ~/-lel kezdődő útvonal. A terminál látható cd-vel vált oda, a fájlböngésző ott nyílik meg. Az AI-parancsok mindig a saját könyvtárban futnak. Üres = saját könyvtár.",
@@ -435,6 +437,13 @@
       "reasonOther": "másik biztonsági ellenőrzés",
       "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
     }
+  },
+  "authPrompt": {
+    "title": "Bejelentkezés: {{hop}}",
+    "password": "Jelszó",
+    "submit": "Bejelentkezés",
+    "notStored": "A szerver ezeket az adatokat kéri a bejelentkezéshez. Nem kerülnek mentésre.",
+    "expired": "A bejelentkezési kérés lejárt. A kapcsolat nem jött létre."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Biztonsági figyelmeztetés · A gazdakulcs megváltozott",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "A kockázati második vélemény bekapcsolása előtt válasszon AI-szolgáltatót.",
     "SESSION_NOT_FOUND": "Ez a munkamenet már nincs megnyitva. Nyisd meg újra a szerverlistából.",
     "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön",
+    "SSH_NO_COMMON_ALGORITHM": "Nincs közös SSH-algoritmus a szerverrel. Az SSH-szoftvere túl régi vagy túl szigorú. Frissítse, vagy engedélyezzen modern algoritmusokat."
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -769,6 +779,17 @@
     "opDelete": "Törlés",
     "opChmod": "Jogosultságok módosítása",
     "banner": "Emelt jogok aktívak: a böngésző minden fájlművelete {{user}} néven fut.",
+    "bannerLogged": "A kiszolgálón naplózva.",
+    "notice": {
+      "title": "A megemelt jogosultságokról",
+      "intro": "Mostantól {{user}} felhasználóként olvasol és írsz fájlokat. A módosítások azonnal érvénybe lépnek, és az alkalmazás nem tudja visszavonni őket.",
+      "loggedApp": "Minden módosítás bekerül az alkalmazás naplójába.",
+      "loggedAppAndServer": "Minden módosítás bekerül az alkalmazás naplójába és a kiszolgáló hitelesítési naplójába.",
+      "passwordless": "Az sftp-server sudo-szabálya jelszó nélküli hozzáférést ad {{user}} számára mindenhez, ami ezen a bejelentkezésen fut, nem csak ehhez az alkalmazáshoz.",
+      "alternative": "Ha rendszeresen rootként kezeled ezt a kiszolgálót, egy külön, kulcsos root-bejelentkezés (PermitRootLogin prohibit-password) egyértelművé teszi ezt a hozzáférést.",
+      "gotIt": "Értem",
+      "dontShowAgain": "Ne jelenjen meg többé ennél a kiszolgálónál"
+    },
     "deleteFileTitle": "Fájl törlése {{user}} néven?",
     "deleteDirTitle": "Mappa törlése {{user}} néven?",
     "overwriteTitle": "Fájl felülírása {{user}} néven?",
@@ -790,7 +811,8 @@
     "close": "Bezárás",
     "detail": "Részletek: {{detail}}",
     "failure": {
-      "passwordRequired": "A sudo jelszót kér az sftp-serverhez ezen a szerveren. Az alkalmazás soha nem kér sudo-jelszót.",
+      "passwordRequired": "A sudo ezen a szerveren jelszót kér az sftp-serverhez. Adja hozzá az alábbi sudoers-sort, vagy mentsen sudo-jelszót a szerverprofilba a magasabb jogosultságok használatához.",
+      "wrongSudoPassword": "A sudo elutasította a mentett sudo-jelszót. Ellenőrizze a sudo-jelszót a szerverprofilban.",
       "notAllowed": "Ez az SSH-bejelentkezés jelszó nélkül nem indíthatja el az sftp-servert sudón keresztül.",
       "requireTty": "A sudo terminál nélkül nem hajlandó futni (a sudoersben „requiretty”). Tiltsa le a requiretty-t ehhez a bejelentkezéshez, pl. „Defaults:<login> !requiretty” sorral.",
       "sftpServerNotFound": "Az sftp-server nem található a szerveren. Adja meg az útvonalát a szerverprofil „Speciális” részében.",
@@ -800,7 +822,8 @@
       "invalidUser": "Érvénytelen célfelhasználó.",
       "unsupported": "A helyi szervernek nincs emelt módja.",
       "checkFailed": "A sudo-jogosultságok ellenőrzése sikertelen.",
-      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
+      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben).",
+      "disabledForServer": "Az emelt jogosultságok ki vannak kapcsolva ennél a szervernél a szerverprofilban."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
     "group": "Emelt jogosultságok",
@@ -810,7 +833,9 @@
     "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
     "confirm": "Emelés",
     "opChown": "Tulajdonos módosítása",
-    "chownNote": "A tulajdonos {{user}} néven lesz módosítva."
+    "chownNote": "A tulajdonos {{user}} néven lesz módosítva.",
+    "idleSwitchedOff": "Az emelt jogok kikapcsolva {{minutes}} perc tevékenység nélkül",
+    "revokedByProfile": "Az emelt jogosultságok megszűntek — a szerverprofil már nem engedélyezi őket."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -999,14 +1024,16 @@
       "hostKeyCheck": "Gazdakulcs ellenőrzése",
       "authentication": "Hitelesítés",
       "sessionReady": "Munkamenet létrejött",
-      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra"
+      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra",
+      "outdatedAlgorithms": "Elavult algoritmusok"
     },
     "status": {
       "ok": "OK",
       "running": "folyamatban",
       "failed": "sikertelen ({{code}})",
       "skipped": "kihagyva",
-      "failedReason": "sikertelen: {{reason}}"
+      "failedReason": "sikertelen: {{reason}}",
+      "warning": "figyelmeztetés"
     },
     "hostKeyResult": {
       "known": "ismert",
@@ -1500,5 +1527,18 @@
     "title": "Valami elromlott",
     "body": "A Smart SSH váratlan hibába ütközött a felületen. A folytatáshoz töltse újra. Ha ismét előfordul, az újratöltés után hozzon létre diagnosztikai csomagot a Beállítások → Diagnosztika alatt.",
     "reload": "Újratöltés"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ez a szerver elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse a szerver SSH-szoftverét.",
+    "outdatedAlgorithmsHop": "{{hop}} elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse az SSH-szoftverét."
+  },
+  "elevatedIdle": {
+    "label": "Emelt jogok kikapcsolása inaktivitás után",
+    "minutes5": "5 perc",
+    "minutes15": "15 perc",
+    "minutes30": "30 perc",
+    "minutes60": "60 perc",
+    "never": "Soha",
+    "hint": "A fájlböngésző ennyi emelt tevékenység nélküli idő után magától kilép az emelt módból. A folyamatban lévő művelet tevékenységnek számít."
   }
 }

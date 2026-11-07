@@ -25,6 +25,7 @@ const server: ServerDto = { isCopy: false,
   postIngestPolicy: "strict",
   aiInjectionCheckEnabled: true,
   sftpServerPath: "/usr/lib/sftp-server",
+  elevationAllowed: true,
   startDirectory: "~/work",
 };
 
@@ -51,6 +52,7 @@ describe("serverFormReducer", () => {
       postIngestPolicy: "strict",
       aiInjectionCheckEnabled: true,
       sftpServerPath: "/usr/lib/sftp-server",
+      elevationAllowed: true,
       startDirectory: "~/work",
       auth: { kind: "password", value: "", saved: true, remove: false },
     });

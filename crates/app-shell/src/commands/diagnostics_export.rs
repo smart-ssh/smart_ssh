@@ -441,6 +441,7 @@ mod unusable_server_tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),

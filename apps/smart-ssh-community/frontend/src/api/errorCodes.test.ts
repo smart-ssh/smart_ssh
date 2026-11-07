@@ -12,32 +12,57 @@ import { testI18n } from "../testI18n";
 /** Sprachen, für die dieser Test den Wortlaut prüft (Regex auf den
  * deutschen/englischen Text). Weitere Sprachen laufen über die generischen
  * Registry-Tests unten bzw. in `locales/localeKeyParity.test.ts`. */
-const TEXT_ASSERTION_LANGUAGES = SUPPORTED_LANGUAGES.filter((l) => l.startsWith("de") || l === "en");
+const TEXT_ASSERTION_LANGUAGES = SUPPORTED_LANGUAGES.filter(
+  (l) => l.startsWith("de") || l === "en",
+);
 
 const fakeT = (key: string) => `translated:${key}`;
 
 describe("translateErrorCode", () => {
-  it("übersetzt einen bekannten Code über den errors-Namespace", () => {
-    expect(translateErrorCode(fakeT, "SSH_AUTH_FAILED", "Auth fehlgeschlagen")).toBe(
-      "translated:errors.SSH_AUTH_FAILED",
+  // Issue #1173: hop, kind and offered algorithms come from the backend message.
+  it("appends the backend message for SSH_NO_COMMON_ALGORITHM", () => {
+    expect(
+      translateErrorCode(
+        fakeT,
+        "SSH_NO_COMMON_ALGORITHM",
+        "u@h:22: no common SSH cipher algorithm; the server offers: x",
+      ),
+    ).toBe(
+      "translated:errors.SSH_NO_COMMON_ALGORITHM (u@h:22: no common SSH cipher algorithm; the server offers: x)",
     );
+  });
+
+  it("übersetzt einen bekannten Code über den errors-Namespace", () => {
+    expect(
+      translateErrorCode(fakeT, "SSH_AUTH_FAILED", "Auth fehlgeschlagen"),
+    ).toBe("translated:errors.SSH_AUTH_FAILED");
   });
 
   // Spec 0024, Abschnitt 5: unbekannter Code -> Display-Text als Fallback,
   // nie eine leere Anzeige, kein Absturz.
   it("fällt bei unbekanntem Code auf den Display-Text zurück", () => {
-    expect(translateErrorCode(fakeT, "SOME_FUTURE_CODE_NOT_YET_MAPPED", "Ursprünglicher Text")).toBe(
+    expect(
+      translateErrorCode(
+        fakeT,
+        "SOME_FUTURE_CODE_NOT_YET_MAPPED",
+        "Ursprünglicher Text",
+      ),
+    ).toBe("Ursprünglicher Text");
+  });
+
+  it("fällt bei fehlendem Code (null/undefined) auf den Display-Text zurück", () => {
+    expect(translateErrorCode(fakeT, null, "Ursprünglicher Text")).toBe(
+      "Ursprünglicher Text",
+    );
+    expect(translateErrorCode(fakeT, undefined, "Ursprünglicher Text")).toBe(
       "Ursprünglicher Text",
     );
   });
 
-  it("fällt bei fehlendem Code (null/undefined) auf den Display-Text zurück", () => {
-    expect(translateErrorCode(fakeT, null, "Ursprünglicher Text")).toBe("Ursprünglicher Text");
-    expect(translateErrorCode(fakeT, undefined, "Ursprünglicher Text")).toBe("Ursprünglicher Text");
-  });
-
   it("fällt bei leerem Code-String auf den Display-Text zurück, kein Absturz", () => {
-    expect(translateErrorCode(fakeT, "", "Ursprünglicher Text")).toBe("Ursprünglicher Text");
+    expect(translateErrorCode(fakeT, "", "Ursprünglicher Text")).toBe(
+      "Ursprünglicher Text",
+    );
   });
 
   // Spec 0051, Teil 3: `AI_RATE_LIMITED` muss im UI ein eigener, vom
@@ -48,22 +73,38 @@ describe("translateErrorCode", () => {
   // dortiger Kommentar), nicht `fakeT` — sonst würde dieser Test nur die
   // Weiterleitungslogik prüfen, nicht den tatsächlichen Text.
   it("übersetzt AI_RATE_LIMITED (DE) in einen eigenen, handlungsanleitenden Text", () => {
-    const text = translateErrorCode(testI18n.getFixedT("de"), "AI_RATE_LIMITED", "fallback");
+    const text = translateErrorCode(
+      testI18n.getFixedT("de"),
+      "AI_RATE_LIMITED",
+      "fallback",
+    );
 
     expect(text).not.toBe("fallback");
     expect(text).not.toBe(
-      translateErrorCode(testI18n.getFixedT("de"), "AI_PROVIDER_UNAVAILABLE", "fallback"),
+      translateErrorCode(
+        testI18n.getFixedT("de"),
+        "AI_PROVIDER_UNAVAILABLE",
+        "fallback",
+      ),
     );
     expect(text).toMatch(/warten/i);
     expect(text).toMatch(/erneut/i);
   });
 
   it("übersetzt AI_RATE_LIMITED (EN) in einen eigenen, handlungsanleitenden Text", () => {
-    const text = translateErrorCode(testI18n.getFixedT("en"), "AI_RATE_LIMITED", "fallback");
+    const text = translateErrorCode(
+      testI18n.getFixedT("en"),
+      "AI_RATE_LIMITED",
+      "fallback",
+    );
 
     expect(text).not.toBe("fallback");
     expect(text).not.toBe(
-      translateErrorCode(testI18n.getFixedT("en"), "AI_PROVIDER_UNAVAILABLE", "fallback"),
+      translateErrorCode(
+        testI18n.getFixedT("en"),
+        "AI_PROVIDER_UNAVAILABLE",
+        "fallback",
+      ),
     );
     expect(text).toMatch(/wait/i);
     expect(text).toMatch(/again/i);
@@ -79,9 +120,13 @@ describe("translateErrorCode", () => {
 
       expect(text).not.toBe("fallback");
       expect(text).not.toBe("errors.SSH_SESSION_CLOSED");
-      expect(text).not.toBe(translateErrorCode(t, "SSH_CONNECTION_CLOSED", "fallback"));
+      expect(text).not.toBe(
+        translateErrorCode(t, "SSH_CONNECTION_CLOSED", "fallback"),
+      );
       expect(text).not.toMatch(/setup|aufbau/i);
-      expect(text).toMatch(language === "de" ? /erneut verbinden/i : /reconnect/i);
+      expect(text).toMatch(
+        language === "de" ? /erneut verbinden/i : /reconnect/i,
+      );
     },
   );
 
@@ -94,7 +139,11 @@ describe("translateErrorCode", () => {
     "übersetzt KEYCHAIN_UNAVAILABLE (%s) statt den rohen Bibliothekstext zu zeigen",
     (language) => {
       const raw = "Credential-Backend-Fehler: No default store has been set";
-      const text = translateErrorCode(testI18n.getFixedT(language), "KEYCHAIN_UNAVAILABLE", raw);
+      const text = translateErrorCode(
+        testI18n.getFixedT(language),
+        "KEYCHAIN_UNAVAILABLE",
+        raw,
+      );
 
       expect(text).not.toBe(raw);
       expect(text).not.toMatch(/no default store/i);
@@ -113,16 +162,24 @@ describe("translateErrorCode", () => {
     "übersetzt KEYCHAIN_ACCESS_FAILED (%s) statt den Backend-Text zu zeigen",
     (language) => {
       const raw = "Zugriff auf den Schlüsselbund fehlgeschlagen (Passphrase)";
-      const text = translateErrorCode(testI18n.getFixedT(language), "KEYCHAIN_ACCESS_FAILED", raw);
+      const text = translateErrorCode(
+        testI18n.getFixedT(language),
+        "KEYCHAIN_ACCESS_FAILED",
+        raw,
+      );
 
       expect(text).not.toBe(raw);
       // A6: sagt, was zu tun ist, und nennt die wahrscheinlichen Ursachen.
       expect(text).toMatch(language === "de" ? /erneut/i : /again/i);
-      expect(text).toMatch(language === "de" ? /gesperrt|abgelehnt/i : /locked|denied/i);
+      expect(text).toMatch(
+        language === "de" ? /gesperrt|abgelehnt/i : /locked|denied/i,
+      );
       // A6: **nicht** „nicht verfügbar" — der Schlüsselbund ist da, dieser
       // eine Zugriff ist gescheitert (A3). Und keine Paket- oder
       // Installationshinweise.
-      expect(text).not.toMatch(language === "de" ? /nicht verfügbar/i : /unavailable/i);
+      expect(text).not.toMatch(
+        language === "de" ? /nicht verfügbar/i : /unavailable/i,
+      );
       expect(text).not.toMatch(/installier|install|paket|package|apt|brew/i);
     },
   );
@@ -135,9 +192,9 @@ describe("translateErrorCode", () => {
     (language) => {
       const t = testI18n.getFixedT(language);
 
-      expect(translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback")).not.toBe(
-        translateErrorCode(t, "KEYCHAIN_UNAVAILABLE", "fallback"),
-      );
+      expect(
+        translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback"),
+      ).not.toBe(translateErrorCode(t, "KEYCHAIN_UNAVAILABLE", "fallback"));
     },
   );
 
@@ -152,26 +209,35 @@ describe("translateErrorCode", () => {
     "übersetzt SECRET_STORE_FAILED (%s) statt den rohen Backend-Text zu zeigen",
     (language) => {
       const raw = "credential store backend failure: disk I/O error";
-      const text = translateErrorCode(testI18n.getFixedT(language), "SECRET_STORE_FAILED", raw);
+      const text = translateErrorCode(
+        testI18n.getFixedT(language),
+        "SECRET_STORE_FAILED",
+        raw,
+      );
 
       expect(text).not.toBe(raw);
       // Muss sagen, dass es um ein Geheimnis in der Datenbank geht — nicht
       // um den Schlüsselbund (der trägt seit A9 nur noch den Wurzelschlüssel).
       expect(text).toMatch(language === "de" ? /Datenbank/i : /database/i);
-      expect(text).not.toMatch(language === "de" ? /Schlüsselbund/i : /keychain/i);
+      expect(text).not.toMatch(
+        language === "de" ? /Schlüsselbund/i : /keychain/i,
+      );
     },
   );
 
   // Derselbe Grund wie bei den beiden Schlüsselbund-Codes oben: Ein
   // gescheiterter Secret-Zugriff und ein gescheiterter Schlüsselbund-Zugriff
   // sind unterschiedliche Ursachen mit unterschiedlichem nächsten Schritt.
-  it.each(TEXT_ASSERTION_LANGUAGES)("unterscheidet SECRET_STORE_FAILED von KEYCHAIN_ACCESS_FAILED (%s)", (language) => {
-    const t = testI18n.getFixedT(language);
+  it.each(TEXT_ASSERTION_LANGUAGES)(
+    "unterscheidet SECRET_STORE_FAILED von KEYCHAIN_ACCESS_FAILED (%s)",
+    (language) => {
+      const t = testI18n.getFixedT(language);
 
-    expect(translateErrorCode(t, "SECRET_STORE_FAILED", "fallback")).not.toBe(
-      translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback"),
-    );
-  });
+      expect(translateErrorCode(t, "SECRET_STORE_FAILED", "fallback")).not.toBe(
+        translateErrorCode(t, "KEYCHAIN_ACCESS_FAILED", "fallback"),
+      );
+    },
+  );
 });
 
 // Spec 0069, Teil A, Test 18: jeder Code des Fünf-Minuten-Pfads ist in
@@ -184,17 +250,24 @@ describe("translateErrorCode", () => {
 describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
   const FALLBACK = "__FALLBACK_SENTINEL__";
 
-  it.each(FIVE_MINUTE_PATH_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
-    const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
-    expect(en).not.toBe(FALLBACK);
-    expect(en.trim().length).toBeGreaterThan(0);
-    for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
-      const text = translateErrorCode(testI18n.getFixedT(lng), code, FALLBACK);
-      expect(text, lng).not.toBe(FALLBACK);
-      expect(text.trim().length, lng).toBeGreaterThan(0);
-      expect(text, lng).not.toBe(en);
-    }
-  });
+  it.each(FIVE_MINUTE_PATH_ERROR_CODES)(
+    "%s ist bekannt und DE/EN unterscheiden sich",
+    (code) => {
+      const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
+      expect(en).not.toBe(FALLBACK);
+      expect(en.trim().length).toBeGreaterThan(0);
+      for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
+        const text = translateErrorCode(
+          testI18n.getFixedT(lng),
+          code,
+          FALLBACK,
+        );
+        expect(text, lng).not.toBe(FALLBACK);
+        expect(text.trim().length, lng).toBeGreaterThan(0);
+        expect(text, lng).not.toBe(en);
+      }
+    },
+  );
 
   it("enthält keine doppelten Codes", () => {
     const unique = new Set(FIVE_MINUTE_PATH_ERROR_CODES);
@@ -210,20 +283,27 @@ describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
 describe("MASTER_PASSWORD_ERROR_CODES", () => {
   const FALLBACK = "__FALLBACK_SENTINEL__";
 
-  it.each(MASTER_PASSWORD_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
-    const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
-    expect(en).not.toBe(FALLBACK);
-    expect(en).not.toBe(`errors.${code}`);
-    for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
-      const text = translateErrorCode(testI18n.getFixedT(lng), code, FALLBACK);
-      expect(text, lng).not.toBe(FALLBACK);
-      expect(text.trim().length, lng).toBeGreaterThan(0);
-      // Ein fehlender Schlüssel käme als `errors.<CODE>` durch — das ist
-      // kein Text, den ein Nutzer lesen soll.
-      expect(text, lng).not.toBe(`errors.${code}`);
-      expect(text, lng).not.toBe(en);
-    }
-  });
+  it.each(MASTER_PASSWORD_ERROR_CODES)(
+    "%s ist bekannt und DE/EN unterscheiden sich",
+    (code) => {
+      const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
+      expect(en).not.toBe(FALLBACK);
+      expect(en).not.toBe(`errors.${code}`);
+      for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
+        const text = translateErrorCode(
+          testI18n.getFixedT(lng),
+          code,
+          FALLBACK,
+        );
+        expect(text, lng).not.toBe(FALLBACK);
+        expect(text.trim().length, lng).toBeGreaterThan(0);
+        // Ein fehlender Schlüssel käme als `errors.<CODE>` durch — das ist
+        // kein Text, den ein Nutzer lesen soll.
+        expect(text, lng).not.toBe(`errors.${code}`);
+        expect(text, lng).not.toBe(en);
+      }
+    },
+  );
 
   it("MASTER_PASSWORD_FILE_ABSENT behauptet keine unlesbare Datei (review-09, Runde 2 Teil A, Fund 2 „Rest“)", () => {
     // Vorher lief „keine Datei an diesem Ort“ unter demselben Code wie „Datei
@@ -231,15 +311,31 @@ describe("MASTER_PASSWORD_ERROR_CODES", () => {
     // — der gemeinsame Text behauptete dann eine unlesbare Datei, wo keine
     // existiert. *Gegenbeweis:* Setzt man hier denselben Text wie bei
     // MASTER_PASSWORD_FILE_FAILED ein, scheitert dieser Test.
-    const de = translateErrorCode(testI18n.getFixedT("de"), "MASTER_PASSWORD_FILE_ABSENT", FALLBACK);
-    const en = translateErrorCode(testI18n.getFixedT("en"), "MASTER_PASSWORD_FILE_ABSENT", FALLBACK);
+    const de = translateErrorCode(
+      testI18n.getFixedT("de"),
+      "MASTER_PASSWORD_FILE_ABSENT",
+      FALLBACK,
+    );
+    const en = translateErrorCode(
+      testI18n.getFixedT("en"),
+      "MASTER_PASSWORD_FILE_ABSENT",
+      FALLBACK,
+    );
     expect(de).not.toMatch(/nicht (lesbar|zu lesen)/);
     expect(en).not.toMatch(/could not be read/i);
     expect(de).not.toBe(
-      translateErrorCode(testI18n.getFixedT("de"), "MASTER_PASSWORD_FILE_FAILED", FALLBACK),
+      translateErrorCode(
+        testI18n.getFixedT("de"),
+        "MASTER_PASSWORD_FILE_FAILED",
+        FALLBACK,
+      ),
     );
     expect(en).not.toBe(
-      translateErrorCode(testI18n.getFixedT("en"), "MASTER_PASSWORD_FILE_FAILED", FALLBACK),
+      translateErrorCode(
+        testI18n.getFixedT("en"),
+        "MASTER_PASSWORD_FILE_FAILED",
+        FALLBACK,
+      ),
     );
   });
 
@@ -249,13 +345,16 @@ describe("MASTER_PASSWORD_ERROR_CODES", () => {
     // Verpackungsdatei gibt. Vorher fielen sie unter
     // `MASTER_PASSWORD_FILE_FAILED`, und der Nutzer las „Die Schlüsseldatei
     // neben deiner Datenbank ließ sich nicht lesen".
-    for (const code of ["KEYCHAIN_KEY_MISMATCH", "MASTER_PASSWORD_MODE_MISMATCH"]) {
-      expect(translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK)).not.toMatch(
-        /Schlüsseldatei/,
-      );
-      expect(translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK)).not.toMatch(
-        /key file/i,
-      );
+    for (const code of [
+      "KEYCHAIN_KEY_MISMATCH",
+      "MASTER_PASSWORD_MODE_MISMATCH",
+    ]) {
+      expect(
+        translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK),
+      ).not.toMatch(/Schlüsseldatei/);
+      expect(
+        translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK),
+      ).not.toMatch(/key file/i);
     }
   });
 });
@@ -305,8 +404,16 @@ describe("FILTER_RULE_PATTERN_INVALID (Spec 0077)", () => {
   );
 
   it("DE und EN sind eigene Texte, nicht derselbe String", () => {
-    const de = translateErrorCode(testI18n.getFixedT("de"), "FILTER_RULE_PATTERN_INVALID", RAW);
-    const en = translateErrorCode(testI18n.getFixedT("en"), "FILTER_RULE_PATTERN_INVALID", RAW);
+    const de = translateErrorCode(
+      testI18n.getFixedT("de"),
+      "FILTER_RULE_PATTERN_INVALID",
+      RAW,
+    );
+    const en = translateErrorCode(
+      testI18n.getFixedT("en"),
+      "FILTER_RULE_PATTERN_INVALID",
+      RAW,
+    );
 
     expect(de).not.toBe(en);
   });
@@ -382,7 +489,9 @@ describe("FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM (Issue #109)", () => {
         "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM",
         "fallback",
       ),
-    ).toBe("Command is too long or too deeply nested to be checked – always requires confirmation");
+    ).toBe(
+      "Command is too long or too deeply nested to be checked – always requires confirmation",
+    );
   });
 });
 
@@ -399,7 +508,11 @@ describe("Prüfung nicht verfügbar (Issue #102)", () => {
   for (const code of codes) {
     for (const lng of SUPPORTED_LANGUAGES) {
       it(`${code} hat einen ${lng}-Text`, () => {
-        const text = translateErrorCode(testI18n.getFixedT(lng), code, "fallback");
+        const text = translateErrorCode(
+          testI18n.getFixedT(lng),
+          code,
+          "fallback",
+        );
         expect(text).not.toBe("fallback");
         expect(text).not.toContain("errors.");
       });
@@ -412,8 +525,16 @@ describe("SESSION_NOT_FOUND", () => {
   const FALLBACK = "__FALLBACK_SENTINEL__";
 
   it("is known and DE/EN texts differ", () => {
-    const en = translateErrorCode(testI18n.getFixedT("en"), "SESSION_NOT_FOUND", FALLBACK);
-    const de = translateErrorCode(testI18n.getFixedT("de"), "SESSION_NOT_FOUND", FALLBACK);
+    const en = translateErrorCode(
+      testI18n.getFixedT("en"),
+      "SESSION_NOT_FOUND",
+      FALLBACK,
+    );
+    const de = translateErrorCode(
+      testI18n.getFixedT("de"),
+      "SESSION_NOT_FOUND",
+      FALLBACK,
+    );
     expect(en).not.toBe(FALLBACK);
     expect(de).not.toBe(FALLBACK);
     expect(de).not.toBe(en);

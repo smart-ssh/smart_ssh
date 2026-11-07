@@ -28,9 +28,43 @@ use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::SessionId;
 
+/// How sudo authenticated when the elevated channel was opened (audit only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SudoAuth {
+    #[default]
+    Nopasswd,
+    Password,
+}
+
+#[cfg(test)]
+impl ElevatedSftp {
+    /// Channel opened with a passwordless sudo rule.
+    pub fn new(target_user: String, sftp: Box<dyn SftpSession>) -> Self {
+        Self {
+            target_user,
+            sudo_auth: SudoAuth::Nopasswd,
+            server_logging: false,
+            sftp,
+        }
+    }
+}
+
+impl SudoAuth {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Nopasswd => "nopasswd",
+            Self::Password => "password",
+        }
+    }
+}
+
 pub struct ElevatedSftp {
     /// Ziel-Nutzer der Rechteerhöhung (Default `root`).
     pub target_user: String,
+    /// How sudo authenticated for this channel (audit line of each change).
+    pub sudo_auth: SudoAuth,
+    /// Issue #1192: `sftp-server` was started with `-l INFO -f AUTHPRIV`.
+    pub server_logging: bool,
     pub sftp: Box<dyn SftpSession>,
 }
 
@@ -49,6 +83,10 @@ pub struct ElevatedSftp {
 #[derive(Clone, Default)]
 pub struct ElevatedSftpSlot {
     channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
+    /// Copy of the channel's `sudo_auth`, readable without the channel lock.
+    sudo_auth: SudoAuth,
+    /// Copy of the channel's `server_logging` (Issue #1192).
+    server_logging: bool,
     /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
     /// Teil des Widerrufs.
     ///
@@ -62,6 +100,10 @@ pub struct ElevatedSftpSlot {
     /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
     /// dem der Nutzer ausschaltet, umschaltet oder trennt.
     revoked: Arc<std::sync::atomic::AtomicBool>,
+    /// Issue #1193: time of the last elevated activity (idle timer).
+    activity: idle::Activity,
+    /// Issue #1193: wakes the idle timer task when the channel is revoked.
+    revoked_wake: Arc<tokio::sync::Notify>,
     /// Nur für Tests (Spec 0085, §6): ein Haltepunkt **hinter** dem
     /// Schnellabbruch einer Operation und **vor** dem Anfordern der
     /// Kanal-Sperre — s. `commands::elevation::elevated_operation`.
@@ -90,8 +132,12 @@ type BeforeOperationHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
+            sudo_auth: channel.sudo_auth,
+            server_logging: channel.server_logging,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            activity: idle::Activity::default(),
+            revoked_wake: Arc::new(tokio::sync::Notify::new()),
             #[cfg(test)]
             before_operation_hook: Arc::new(StdMutex::new(None)),
         }
@@ -129,6 +175,14 @@ impl ElevatedSftpSlot {
     /// `commands::elevation::BrowserSftpGuard::sftp`) — auch dann, wenn der
     /// Kanalwert selbst noch dasteht, weil ein Halter die Sperre gerade
     /// belegt.
+    pub(crate) fn sudo_auth(&self) -> SudoAuth {
+        self.sudo_auth
+    }
+
+    pub(crate) fn server_logging(&self) -> bool {
+        self.server_logging
+    }
+
     pub(crate) fn is_revoked(&self) -> bool {
         self.revoked.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -147,6 +201,28 @@ impl ElevatedSftpSlot {
     fn mark_revoked(&self) {
         self.revoked
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.revoked_wake.notify_one();
+    }
+
+    /// Issue #1193: records elevated activity for the idle timer.
+    pub(crate) fn touch(&self) {
+        self.activity.touch();
+    }
+
+    pub(crate) fn activity_handle(&self) -> idle::Activity {
+        self.activity.clone()
+    }
+
+    fn activity(&self) -> &idle::Activity {
+        &self.activity
+    }
+
+    fn revoked_wake(&self) -> &tokio::sync::Notify {
+        &self.revoked_wake
+    }
+
+    fn same_channel(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.channel, &other.channel)
     }
 
     /// Widerruft (sofort, s. [`Self::mark_revoked`]) und nimmt den Kanal
@@ -192,7 +268,9 @@ impl ElevatedSftpSlot {
 /// `test_t8b_activation_between_the_two_removal_steps_leaves_no_entry`.
 #[derive(Default)]
 pub struct ElevatedSftpRegistry {
-    slots: StdMutex<HashMap<SessionId, ElevatedSftpSlot>>,
+    slots: Arc<StdMutex<HashMap<SessionId, ElevatedSftpSlot>>>,
+    /// Issue #1193: idle timeout setting and switch-off notification.
+    idle: Arc<idle::IdleShared>,
     /// Issue #622: laufende Datei-Operationen aller Sitzungen. Jede Stelle
     /// unten, die einen Kanal widerruft, stoppt auch dessen Operationen.
     ops: Arc<FileOps>,
@@ -212,6 +290,37 @@ type InterleaveHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpRegistry {
     pub(crate) fn ops(&self) -> &Arc<FileOps> {
         &self.ops
+    }
+
+    pub(crate) fn idle(&self) -> &Arc<idle::IdleShared> {
+        &self.idle
+    }
+
+    /// Issue #1193: one timer task per channel; it ends when the channel is
+    /// revoked (any path) or replaced.
+    fn start_idle_timer(&self, session_id: SessionId, slot: ElevatedSftpSlot) {
+        let timer = idle::IdleTimer {
+            slots: self.slots.clone(),
+            ops: self.ops.clone(),
+            shared: self.idle.clone(),
+            session_id,
+            slot,
+        };
+        match self.idle.spawner() {
+            Some(spawn) => spawn(session_id, Box::pin(timer.run())),
+            None => tracing::error!("no task scope for the elevated idle timer"),
+        }
+    }
+
+    /// Only for tests of the idle timer: starts the timer of an inserted channel.
+    #[cfg(test)]
+    pub(crate) fn start_idle_timer_for_tests(&self, session_id: SessionId) {
+        let slot = lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned();
+        if let Some(slot) = slot {
+            self.start_idle_timer(session_id, slot);
+        }
     }
 
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
@@ -247,7 +356,9 @@ impl ElevatedSftpRegistry {
         if sessions.get(session_id).is_none() {
             return Err(());
         }
-        let previous = slots.insert(session_id, ElevatedSftpSlot::with_channel(channel));
+        let new_slot = ElevatedSftpSlot::with_channel(channel);
+        let previous = slots.insert(session_id, new_slot.clone());
+        self.start_idle_timer(session_id, new_slot);
         // Sofort, noch unter der Zuordnungs-Sperre: ab hier kann kein
         // Befehl den alten Kanal mehr benutzen — auch keiner, der schon auf
         // dessen Sperre wartet.
@@ -316,11 +427,16 @@ impl ElevatedSftpRegistry {
     /// Issue #355: a reconnect keeps the session but never its elevated
     /// channel (it belonged to the dead connection). The channel is revoked
     /// like on disconnect; the user elevates again.
-    pub(crate) fn revoke_session(&self, session_id: SessionId) {
+    ///
+    /// Returns whether an active channel was revoked.
+    pub(crate) fn revoke_session(&self, session_id: SessionId) -> bool {
         let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
+            true
+        } else {
+            false
         }
     }
 
@@ -342,13 +458,17 @@ impl ElevatedSftpRegistry {
     }
 }
 
+pub(crate) mod idle;
+pub(crate) use idle::install as install_idle_timer;
+pub(crate) use idle::Activity as IdleActivity;
 mod probe;
 pub(crate) use probe::run_probe;
 use ssh_manager_core::ssh::elevated::{
-    classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
-    is_valid_target_user, parse_sftp_server_probe, parse_sftp_server_safety_probe,
-    sftp_server_probe_command, sftp_server_safety_probe_command, sudo_check_command, sudoers_line,
-    SftpServerSafety, SudoCheck, DEFAULT_ELEVATION_USER,
+    classify_sudo_check, elevated_sftp_command, elevated_sftp_password_command,
+    is_plausible_sftp_server_path, is_valid_target_user, new_sudo_prompt_marker,
+    parse_sftp_server_probe, parse_sftp_server_safety_probe, sftp_server_probe_command,
+    sftp_server_safety_probe_command, sudo_check_command, sudoers_line, SftpServerSafety,
+    SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
 use app_logic::dto::{
@@ -389,11 +509,65 @@ fn failure(
         }),
         warning: None,
         running_operations: Vec::new(),
+        server_logging: false,
+        sudo_auth: None,
     })
 }
 
-/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein. Nie
-/// ein Passwort (`sudo -n`), nie hängen (Timeouts), bei jedem Fehler eine
+/// Issue #1194, Spec 0067 A5: the server profile no longer allows elevated
+/// rights. Revokes the elevated channel of every session to `server_id`
+/// (the same revoke as on disconnect/reconnect) and returns the sessions
+/// whose channel was active.
+pub(crate) fn revoke_for_server(
+    sessions: &SessionManager,
+    registry: &ElevatedSftpRegistry,
+    server_id: ssh_manager_core::shared::ServerId,
+) -> Vec<SessionId> {
+    sessions
+        .snapshot()
+        .into_iter()
+        .filter(|entry| entry.server_id == server_id)
+        .filter(|entry| registry.revoke_session(entry.session_id))
+        .map(|entry| entry.session_id)
+        .collect()
+}
+
+/// Issue #1194: [`enable`] for a stored server. Refuses with
+/// `DisabledForServer` — before any probe reaches the transport — when the
+/// profile does not allow elevated rights.
+pub(crate) async fn enable_for_server(
+    ctx: &ElevationContext<'_>,
+    server: &ssh_manager_core::profiles::Server,
+    requested_user: Option<&str>,
+    confirm_stop: bool,
+    access: &BrowserAccess,
+) -> CommandResult<ElevationResultDto> {
+    if !server.elevation_allowed {
+        let target_user = requested_user
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .unwrap_or(DEFAULT_ELEVATION_USER);
+        return failure(
+            target_user,
+            None,
+            ElevationFailureKind::DisabledForServer,
+            None,
+            None,
+        );
+    }
+    enable(
+        ctx,
+        &server.username,
+        server.sftp_server_path.as_deref(),
+        requested_user,
+        confirm_stop,
+        access,
+    )
+    .await
+}
+
+/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein.
+/// `sudo -n`, oder (Issue #1191) mit dem gespeicherten sudo-Passwort; nie hängen (Timeouts), bei jedem Fehler eine
 /// strukturierte Meldung statt eines kryptischen Fehlers. Die Probe-Ausgaben
 /// (inkl. sudo-stderr) gehen nur in diese Meldung, nie in Chat/KI-Kontext.
 ///
@@ -433,6 +607,8 @@ pub(crate) async fn enable(
                 failure: None,
                 warning: None,
                 running_operations: running,
+                server_logging: false,
+                sudo_auth: None,
             });
         }
         stop_running_and_wait(ctx.registry, ctx.session_id).await;
@@ -518,15 +694,35 @@ pub(crate) async fn enable_after_confirmation(
         SftpServerSafety::Unsafe { path } => Some(path),
     };
 
-    let check_cmd =
-        sudo_check_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let check = match run_probe(session, &check_cmd).await {
+    // Issue #1192: first the variant with the logging arguments; only when
+    // it is not allowed passwordless, the plain command (existing rules).
+    let logging_cmd = sudo_check_command(&path, &target_user, true)
+        .expect("Pfad und Nutzer wurden oben validiert");
+    let logging_check = match run_probe(session, &logging_cmd).await {
         Ok(output) => classify_sudo_check(&output),
         Err(detail) => SudoCheck::Failed(detail),
     };
+    let nopasswd_logging = logging_check == SudoCheck::Allowed;
+    let check = if nopasswd_logging {
+        SudoCheck::Allowed
+    } else {
+        let check_cmd = sudo_check_command(&path, &target_user, false)
+            .expect("Pfad und Nutzer wurden oben validiert");
+        match run_probe(session, &check_cmd).await {
+            Ok(output) => classify_sudo_check(&output),
+            Err(detail) => SudoCheck::Failed(detail),
+        }
+    };
     let sudoers = || sudoers_line(login, &path, &target_user);
+    // Issue #1191: password path — only when `sudo -n -l` says a password is
+    // needed and one is stored for the server. Nothing else switches to it.
+    let stored_password = session.safety.sudo_password.get();
+    let mut use_password = false;
     match check {
         SudoCheck::Allowed => {}
+        SudoCheck::PasswordRequired if stored_password.is_some() => {
+            use_password = true;
+        }
         SudoCheck::PasswordRequired | SudoCheck::NotAllowed if unsafe_path.is_some() => {
             // Keine sudoers-Zeile für ein Binary, das ein anderer Nutzer
             // austauschen könnte.
@@ -585,14 +781,20 @@ pub(crate) async fn enable_after_confirmation(
         }
     }
 
-    let command =
-        elevated_sftp_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let opened = {
+    let opened = if use_password {
+        open_with_password(session, &path, &target_user, stored_password.as_deref()).await
+    } else {
+        let command = elevated_sftp_command(&path, &target_user, nopasswd_logging)
+            .expect("Pfad und Nutzer wurden oben validiert");
         let mut transport = session.transport.lock().await;
-        transport.open_sftp_via_exec(&command).await
+        transport
+            .open_sftp_via_exec(&command)
+            .await
+            .map(|sftp| (sftp, nopasswd_logging))
+            .map_err(OpenFailure::Other)
     };
     match opened {
-        Ok(sftp) => {
+        Ok((sftp, server_logging)) => {
             // Spec 0084, A2.2: Zwischen den Proben oben und diesem Eintrag
             // liegen mehrere `.await`-Punkte — die Sitzung kann inzwischen
             // getrennt worden sein. Dann wird der eben geöffnete Kanal hier
@@ -600,6 +802,12 @@ pub(crate) async fn enable_after_confirmation(
             // Sitzung stehen zu bleiben.
             let channel = ElevatedSftp {
                 target_user: target_user.clone(),
+                sudo_auth: if use_password {
+                    SudoAuth::Password
+                } else {
+                    SudoAuth::Nopasswd
+                },
+                server_logging,
                 sftp,
             };
             let previous = ctx
@@ -618,6 +826,8 @@ pub(crate) async fn enable_after_confirmation(
                 target_user = %target_user,
                 sftp_server_path = %path,
                 source = "manual",
+                sudo_auth = if use_password { "password" } else { "nopasswd" },
+                server_logging,
                 "file browser elevated rights enabled"
             );
             Ok(ElevationResultDto {
@@ -630,15 +840,80 @@ pub(crate) async fn enable_after_confirmation(
                     path,
                 }),
                 running_operations: Vec::new(),
+                server_logging,
+                sudo_auth: Some(if use_password { "password" } else { "nopasswd" }),
             })
         }
-        Err(err) => failure(
+        Err(OpenFailure::WrongPassword) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::WrongSudoPassword,
+            None,
+            None,
+        ),
+        Err(OpenFailure::NotAllowed(line)) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::NotAllowed,
+            sudoers(),
+            Some(line),
+        ),
+        Err(OpenFailure::Other(err)) => failure(
             &target_user,
             path_for_dto,
             ElevationFailureKind::StartFailed,
             None,
             Some(err.to_string()),
         ),
+    }
+}
+
+/// Why opening the elevated channel failed (Issue #1191).
+enum OpenFailure {
+    WrongPassword,
+    NotAllowed(String),
+    Other(ssh_manager_core::ssh::SshError),
+}
+
+/// Issue #1191: opens the channel with `sudo -S -k -p '<marker>'` and the
+/// stored sudo password. The transport writes the password only after the
+/// marker appeared on stderr; the password is not part of any text here.
+/// Issue #1192: first with the logging arguments; when sudo says that command
+/// is not allowed, one retry without arguments (fresh marker). Returns the
+/// channel and whether it logs on the server.
+async fn open_with_password(
+    session: &Session,
+    path: &str,
+    target_user: &str,
+    password: Option<&secrecy::SecretString>,
+) -> Result<(Box<dyn ssh_manager_core::ssh::SftpSession>, bool), OpenFailure> {
+    use ssh_manager_core::ssh::{SshError, SudoPromptError};
+    let Some(password) = password else {
+        return Err(OpenFailure::Other(SshError::ChannelError(
+            "no sudo password stored".to_string(),
+        )));
+    };
+    let mut transport = session.transport.lock().await;
+    let mut logging = true;
+    loop {
+        let marker = new_sudo_prompt_marker();
+        let command = elevated_sftp_password_command(path, target_user, &marker, logging)
+            .expect("Pfad, Nutzer und Marker sind gültig");
+        match transport
+            .open_sftp_via_exec_with_sudo_password(&command, &marker, password)
+            .await
+        {
+            Ok(sftp) => return Ok((sftp, logging)),
+            Err(SudoPromptError::NotAllowed(_)) if logging => logging = false,
+            Err(SudoPromptError::NotAllowed(line)) => return Err(OpenFailure::NotAllowed(line)),
+            Err(SudoPromptError::NoPrompt) => {
+                return Err(OpenFailure::Other(SshError::ChannelError(
+                    "sudo did not ask for the password".to_string(),
+                )))
+            }
+            Err(SudoPromptError::WrongPassword) => return Err(OpenFailure::WrongPassword),
+            Err(SudoPromptError::Failed(err)) => return Err(OpenFailure::Other(err)),
+        }
     }
 }
 
@@ -678,7 +953,11 @@ pub(crate) async fn disable(
     }
     if let Some(slot) = registry.take(session_id, access) {
         if slot.revoke().await {
-            tracing::info!(source = "manual", "file browser elevated rights disabled");
+            tracing::info!(
+                source = "manual",
+                reason = "manual",
+                "file browser elevated rights disabled"
+            );
         }
     }
     Ok(ElevationDisableDto {

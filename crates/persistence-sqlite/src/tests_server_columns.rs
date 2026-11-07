@@ -62,6 +62,7 @@ fn full_server(auth: AuthMethod, group: GroupId, jump: ServerId) -> Server {
         post_ingest_policy: PostIngestPolicy::Strict,
         ai_injection_check_enabled: true,
         sftp_server_path: Some("/usr/lib/sftp-server".into()),
+        elevation_allowed: true,
         start_directory: Some("/srv/app".into()),
         created_at: now - chrono::Duration::days(3),
         updated_at: now,
@@ -173,4 +174,48 @@ fn column_list_is_unique_and_starts_with_the_key() {
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), SERVER_COLUMNS.len());
+}
+
+/// Issue #1194: a server row that predates the column (or a plain create with
+/// the default) reads as allowed; the column default is `1`.
+#[tokio::test]
+async fn elevation_allowed_defaults_to_true_for_rows_without_a_value() {
+    let store = memory_store().await;
+    let mut server = full_server(AuthMethod::Agent, GroupId::new(), ServerId::new());
+    server.group_id = None;
+    server.jump_host = None;
+    server.elevation_allowed = true;
+    store.create_server(&server).await.unwrap();
+    sqlx::query("ALTER TABLE servers DROP COLUMN elevation_allowed")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    sqlx::query("ALTER TABLE servers ADD COLUMN elevation_allowed INTEGER NOT NULL DEFAULT 1")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .get_server(&server.id)
+            .await
+            .unwrap()
+            .elevation_allowed
+    );
+}
+
+/// Issue #1194: a backup written before the field existed restores as allowed.
+#[tokio::test]
+async fn backup_row_without_elevation_allowed_deserializes_as_true() {
+    let store = memory_store().await;
+    let mut server = full_server(AuthMethod::Agent, GroupId::new(), ServerId::new());
+    server.group_id = None;
+    server.jump_host = None;
+    server.elevation_allowed = false;
+    store.create_server(&server).await.unwrap();
+    let snap = store.backup_store().read_snapshot().await.unwrap();
+    let mut value = serde_json::to_value(by_id(&snap, server.id).await).unwrap();
+    assert_eq!(value["elevation_allowed"], false);
+    value.as_object_mut().unwrap().remove("elevation_allowed");
+    let row: crate::backup_store::ServerRow = serde_json::from_value(value).unwrap();
+    assert!(row.elevation_allowed);
 }

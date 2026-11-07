@@ -70,6 +70,18 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                 return Err(ssh_command_error(&err));
             }
         };
+        // Issue #1185: an interactive connect asks the user for login
+        // answers; an automatic reconnect cannot, so it keeps `NoPrompter`.
+        let event_prompter = interactive.then(|| {
+            app_logic::auth_prompter::EventAuthPrompter::new(
+                state.pending_auth_prompts.clone(),
+                std::sync::Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+            )
+        });
+        let prompter: &dyn ssh_manager_core::ssh::AuthPrompter = match &event_prompter {
+            Some(p) => p,
+            None => &ssh_manager_core::ssh::NoPrompter,
+        };
         let mut attempt_no: u32 = 0;
         loop {
             attempt_no += 1;
@@ -92,7 +104,7 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             // eine Host-Key-Entscheidung weiter unten.
             let attempt = or_cancelled(
                 progress,
-                ssh_transport::connect_with_timeout(
+                ssh_transport::timeout_unless_paused(
                     // Issue #259: über den `Connector` im `AppState` —
                     // Produktion verdrahtet `RealConnector` (derselbe Aufruf
                     // `connect_with_limits` wie zuvor), Tests einen Mock.
@@ -103,10 +115,13 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         // Verbindungspfad.
                         state.key_file_reader.as_ref(),
                         state.host_key_store.clone(),
+                        prompter,
                         &attempt_log,
                         SSH_CONNECT_LIMITS,
                     ),
                     SSH_CONNECT_LIMITS.overall(target.hops.len()),
+                    // Issue #1187: stands still while a login prompt is open.
+                    &attempt_log.prompt_pause(),
                 ),
             )
             .await;
@@ -151,7 +166,17 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             };
 
             match outcome {
-                ssh_transport::ConnectOutcome::Connected(transport) => break transport,
+                ssh_transport::ConnectOutcome::Connected(transport) => {
+                    // Issue #1173: outdated algorithms are a warning, the
+                    // connection stays established.
+                    app_logic::events::connect_warnings::emit_connect_warnings(
+                        &crate::event_emitter::TauriEventEmitter(app.clone()),
+                        session_id,
+                        attempt_log.warnings(),
+                        target.hops.len(),
+                    );
+                    break transport;
+                }
                 ssh_transport::ConnectOutcome::PendingHostKeyConfirmation {
                     host,
                     port,

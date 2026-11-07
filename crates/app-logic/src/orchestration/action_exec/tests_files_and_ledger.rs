@@ -8,10 +8,10 @@ use async_trait::async_trait;
 use ssh_manager_core::ai::{AiEvent, DefaultOutputRedactor, OutputRedactor};
 use ssh_manager_core::filter::normalize_lexical_path as normalize;
 use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
-use ssh_manager_core::profiles::Server;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
 use ssh_manager_core::ssh::CommandOutput;
+use ssh_manager_core::testing::ServerBuilder;
 
 use crate::dto::ActionUserDecision;
 use crate::events::TestEmitter;
@@ -910,25 +910,11 @@ async fn test_chat_action_proposed_includes_previous_note_content_for_note_updat
     );
     let server_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let existing_server = Server {
-        id: server_id,
-        name: "srv".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: "Bisheriger Inhalt".to_string(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let existing_server = ServerBuilder::new()
+        .id(server_id)
+        .name("srv")
+        .notes("Bisheriger Inhalt")
+        .build();
     let profile_store =
         crate::test_support::InMemoryProfileStore::new().with_server(existing_server);
     let emitter = TestEmitter::default();
@@ -999,43 +985,15 @@ async fn test_note_target_name_matches_actual_target_not_a_different_open_server
     // auflösen, unabhängig davon, was sonst noch existiert.
     let server_a_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let server_a = Server {
-        id: server_a_id,
-        name: "Server A".to_string(),
-        host: "a.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
-    let server_b = Server {
-        id: ServerId::new(),
-        name: "Server B".to_string(),
-        host: "b.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let server_a = ServerBuilder::new()
+        .id(server_a_id)
+        .name("Server A")
+        .host("a.example.invalid")
+        .build();
+    let server_b = ServerBuilder::new()
+        .name("Server B")
+        .host("b.example.invalid")
+        .build();
     let profile_store = crate::test_support::InMemoryProfileStore::new()
         .with_server(server_a)
         .with_server(server_b);

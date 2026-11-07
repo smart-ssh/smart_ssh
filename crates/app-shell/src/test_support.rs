@@ -48,6 +48,9 @@ impl ssh_manager_core::ai::AiProvider for MockAiProvider {
 /// `crate::elevated_sftp` (Ein-/Ausschalten, A2) als auch
 /// `crate::commands::elevation` (Kanalwahl, Widerruf beim Zugriff) denselben
 /// Aufbau brauchen — dieselbe Begründung wie beim Moduldoc oben.
+#[path = "test_support/tests_log_capture.rs"]
+pub(crate) mod log_capture;
+
 pub(crate) mod elevation {
     use std::sync::{Arc, Mutex as StdMutex};
 
@@ -93,6 +96,16 @@ pub(crate) mod elevation {
         /// zweiten ebenfalls (er darf gar keine sehen). Ist die Reihe leer,
         /// kommt wie bisher ein frisches `MockSftpSession`.
         prepared_channels: Arc<StdMutex<std::collections::VecDeque<Box<dyn SftpSession>>>>,
+        /// Issue #1191: how the password path ends; `None` = success.
+        pub(crate) password_failure: Option<fn() -> ssh_manager_core::ssh::SudoPromptError>,
+        /// Issue #1192: `password_failure` only applies to a command with the
+        /// logging arguments (the plain retry then succeeds).
+        pub(crate) password_failure_only_logging: bool,
+        /// Issue #1192: answer to `sudo -l` for the logging variant, if it
+        /// differs from `sudo_check` (which then answers the plain one).
+        pub(crate) logging_check: Option<CommandOutput>,
+        /// Issue #1191: every password the password path received.
+        pub(crate) received_passwords: Arc<StdMutex<Vec<String>>>,
     }
 
     pub(crate) fn output(exit: i32, stdout: &str, stderr: &str) -> CommandOutput {
@@ -111,7 +124,12 @@ pub(crate) mod elevation {
             if command.contains("-prune") {
                 Ok(self.safety.clone())
             } else if command.contains("sudo -n") && command.contains(" -l ") {
-                Ok(self.sudo_check.clone())
+                match &self.logging_check {
+                    Some(logging) if command.ends_with("-l INFO -f AUTHPRIV") => {
+                        Ok(logging.clone())
+                    }
+                    _ => Ok(self.sudo_check.clone()),
+                }
             } else {
                 Ok(self.probe.clone())
             }
@@ -147,6 +165,27 @@ pub(crate) mod elevation {
                 }
             }
         }
+        async fn open_sftp_via_exec_with_sudo_password(
+            &mut self,
+            command: &str,
+            _marker: &str,
+            password: &secrecy::SecretString,
+        ) -> Result<Box<dyn SftpSession>, ssh_manager_core::ssh::SudoPromptError> {
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("sftp-exec-pw:{command}"));
+            self.received_passwords
+                .lock()
+                .unwrap()
+                .push(secrecy::ExposeSecret::expose_secret(password).to_string());
+            let applies =
+                !self.password_failure_only_logging || command.ends_with("-l INFO -f AUTHPRIV");
+            match self.password_failure.filter(|_| applies) {
+                Some(make) => Err(make()),
+                None => Ok(Box::new(MockSftpSession::new())),
+            }
+        }
         async fn disconnect(&mut self) -> Result<(), SshError> {
             Ok(())
         }
@@ -167,6 +206,10 @@ pub(crate) mod elevation {
                 open_reached: None,
                 open_gate: None,
                 prepared_channels: Arc::new(StdMutex::new(std::collections::VecDeque::new())),
+                password_failure: None,
+                password_failure_only_logging: false,
+                logging_check: None,
+                received_passwords: Arc::new(StdMutex::new(Vec::new())),
             },
             log,
         )
@@ -196,11 +239,25 @@ pub(crate) mod elevation {
     }
 
     pub(crate) fn fixture(transport: Box<dyn SshTransport>) -> ElevationFixture {
+        fixture_with_sudo_password(transport, None)
+    }
+
+    /// Issue #1191: like [`fixture`], with a stored sudo password.
+    pub(crate) fn fixture_with_sudo_password(
+        transport: Box<dyn SshTransport>,
+        password: Option<&str>,
+    ) -> ElevationFixture {
         let sessions = SessionManager::new();
         // Spec 0084, A5: `session_with_transport` baut den `Session`-
         // Struct-Literal drüben in `app_logic::test_support` — der eine
         // kanonische Bauplan, statt ihn hier ein zweites Mal zu pflegen.
-        let session = Arc::new(app_logic::test_support::session_with_transport(transport));
+        let mut session = app_logic::test_support::session_with_transport(transport);
+        if let Some(password) = password {
+            session.set_sudo_password_for_tests(Some(secrecy::SecretString::from(
+                password.to_string(),
+            )));
+        }
+        let session = Arc::new(session);
         let session_id = SessionId::new_v4();
         sessions.insert(session_id, session.clone());
         ElevationFixture {

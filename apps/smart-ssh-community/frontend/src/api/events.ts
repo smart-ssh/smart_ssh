@@ -33,8 +33,16 @@ export const onHostKeyVerificationNeeded =
 export const onHostKeyVerificationEnded =
   typedListener(EVENT.HOST_KEY_VERIFICATION_ENDED);
 
+/** Issue #1185: the server asks for login input (password, code, …). */
+export const onAuthPromptNeeded = typedListener(EVENT.AUTH_PROMPT_NEEDED);
+
+export const onAuthPromptEnded = typedListener(EVENT.AUTH_PROMPT_ENDED);
+
 /** Issue #546: live step list of a running `connect`. */
 export const onConnectProgress = typedListener(EVENT.CONNECT_PROGRESS);
+
+/** Issue #1173: an established connection uses outdated SSH algorithms. */
+export const onConnectWarnings = typedListener(EVENT.CONNECT_WARNINGS);
 
 export const onTerminalOutput = typedListener(EVENT.TERMINAL_OUTPUT);
 
@@ -155,6 +163,16 @@ export const onChatQuestionAsked =
   typedListener(EVENT.CHAT_QUESTION_ASKED);
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
+
+/** Issue #1193: the backend switched the elevated file browser off after
+ * a period without activity. */
+export const onElevationAutoDisabled =
+  typedListener(EVENT.ELEVATION_AUTO_DISABLED);
+
+/** Issue #1194: saving the server profile with "allow elevated rights" off
+ * revoked the active elevated channel of this session. */
+export const onElevationRevokedByProfile =
+  typedListener(EVENT.ELEVATION_REVOKED_BY_PROFILE);
 
 export const onSftpTransferStarted =
   typedListener(EVENT.SFTP_TRANSFER_STARTED);

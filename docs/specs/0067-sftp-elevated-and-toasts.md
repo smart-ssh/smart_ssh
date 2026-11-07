@@ -1,7 +1,7 @@
 # Spec 0067 — Dateibrowser mit erhöhten Rechten und Erfolgsmeldungen
 
 Status: umgesetzt
-Zweck: Teil A: Der Dateibrowser kann auf Wunsch als root (oder anderer Nutzer) arbeiten, ohne dass die App je ein Sudo-Passwort anfasst. Teil B: Jede Dateibrowser-Aktion meldet ihr Ergebnis sichtbar.
+Zweck: Teil A: Der Dateibrowser kann auf Wunsch als root (oder anderer Nutzer) arbeiten, ohne `NOPASSWD`-Regel, wenn ein Sudo-Passwort im Server-Profil gespeichert ist (Spec 0018). Teil B: Jede Dateibrowser-Aktion meldet ihr Ergebnis sichtbar.
 Bezüge: Spec 0020 (Dateibrowser), Spec 0054 (Aktionen, „Lokal öffnen“), Spec 0010 (Notiz-Karten unten rechts), Spec 0084 §9 und Spec 0085 (Widerruf), Spec 0102 (Startverzeichnis gilt nicht im erhöhten Modus), Spec 0003 (Server-Profil).
 
 Ein Root-Dateibrowser ist das mächtigste Werkzeug der App; die Regeln in
@@ -11,8 +11,13 @@ Teil A sind deshalb Leitplanken, keine Vorschläge.
 
 Der erhöhte Modus startet den SFTP-Server des Servers selbst mit
 `sudo -n <sftp-server-pfad>` (wie WinSCP). Er braucht eine
-`NOPASSWD`-Regel für `sftp-server` und verarbeitet **nie** ein
-Sudo-Passwort. Ein Weg über Sudo-Kommandos mit Passwort gibt es nicht.
+`NOPASSWD`-Regel für `sftp-server`. Fehlt sie und ist für den Server ein
+Sudo-Passwort gespeichert (Spec 0018), verwendet die App stattdessen dieses
+Passwort (Issue #1191; es löst die frühere Entscheidung „nie ein Passwort“
+ab, s. ADR 0058). Die Reihenfolge ist fest: (1) `sudo -n -l` erlaubt den
+Befehl → `NOPASSWD`-Weg wie bisher; (2) sudo verlangt ein Passwort **und**
+eins ist gespeichert → Passwortweg; (3) sonst die Meldung aus A3. Einen
+Passwort-Dialog im Dateibrowser gibt es nicht.
 
 ---
 
@@ -21,9 +26,35 @@ Sudo-Passwort. Ein Weg über Sudo-Kommandos mit Passwort gibt es nicht.
 ### A1. Mechanismus
 
 - Statt des normalen SFTP-Subsystems öffnet die App einen eigenen Kanal mit
-  `sudo -n <sftp-server-pfad>` und betreibt darüber denselben SFTP-Client.
+  `sudo -n <sftp-server-pfad> -l INFO -f AUTHPRIV` und betreibt darüber
+  denselben SFTP-Client. Die Argumente sind fest (nicht einstellbar):
+  `sftp-server` schreibt damit jede Anfrage (gelesen, geschrieben, gelöscht)
+  in das Auth-Log des Servers (Issue #1192). Erlaubt eine vorhandene
+  sudoers-Regel nur den Aufruf ohne Argumente (`""`), öffnet die App den
+  Kanal wie zuvor ohne Argumente; dann wird serverseitig nur der Start von
+  `sftp-server` protokolliert.
+- Im Dateibrowser zeigt das Banner des erhöhten Modus den Zusatz
+  „Auf dem Server protokolliert.“, wenn die Logging-Argumente aktiv sind;
+  ohne Logging steht kein Zusatz. Die lokale Audit-Zeile jeder Änderung
+  nennt `server_logging`.
 - `-n` (nicht interaktiv): Verlangt sudo ein Passwort, schlägt der Aufruf
   sofort fehl, statt zu hängen.
+- **Passwortweg (Issue #1191):** Die App öffnet den Kanal mit
+  `sudo -S -k -p '<marker>' <sftp-server-pfad> -l INFO -f AUTHPRIV`; `<marker>` ist ein pro
+  Aktivierung zufälliges Token. Sie liest die Fehlerausgabe, bis der Marker
+  erscheint, und schreibt erst dann das gespeicherte Passwort samt
+  Zeilenumbruch, genau einmal; danach beginnt der SFTP-Handshake auf
+  demselben Kanal. Erscheint der Marker nicht rechtzeitig (z. B. weil eine
+  Regel oder ein Zeitstempel die Abfrage überspringt), wird der Kanal
+  geschlossen und die Aktivierung scheitert — es ist dann kein
+  Passwort-Byte gesendet worden. Erscheint der Marker ein zweites Mal
+  (falsches Passwort), wird der Kanal geschlossen und gemeldet, dass das
+  gespeicherte Sudo-Passwort abgelehnt wurde; ein erneuter Versuch mit
+  demselben Passwort findet nicht statt. Meldet sudo für den Aufruf mit
+  Logging-Argumenten „not allowed“, folgt genau ein weiterer Versuch ohne
+  Argumente (mit neuem Marker); meldet sudo auch dann „not allowed“, gilt
+  der Fall „nicht erlaubt“ aus A3. Das Passwort steht nie im Kommando, in
+  Logs, im Audit, in Fehlermeldungen, im Chat oder im KI-Kontext.
 - Die erhöhte Sitzung ist ein **zweiter, getrennter** Kanal neben dem
   normalen; der normale Browser bleibt unverändert. Für den lokalen
   Pseudo-Server (Spec 0032) gibt es keinen erhöhten Modus.
@@ -44,17 +75,25 @@ Sudo-Passwort. Ein Weg über Sudo-Kommandos mit Passwort gibt es nicht.
 
 ### A3. Voraussetzungsprüfung und verständliche Fehler
 
-Vor dem Umschalten prüft die App (Probe `sudo -n -l <pfad>`), ob passwortloses
-sudo für genau diesen Befehl erlaubt ist. Scheitert das, erscheint eine
+Vor dem Umschalten prüft die App, ob passwortloses sudo für genau diesen
+Befehl erlaubt ist, in dieser Reihenfolge: (1) `sudo -n -l <pfad> -l INFO -f
+AUTHPRIV` erlaubt → Kanal mit Logging-Argumenten; (2) sonst `sudo -n -l
+<pfad>` erlaubt (bestehende Regel mit `""`) → Kanal ohne Argumente;
+(3) sonst die Fehlerfälle unten bzw. der Passwortweg. Scheitert das, erscheint eine
 verständliche Meldung mit konkreter Anleitung statt eines kryptischen Fehlers:
 
 - „Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort
   für sftp-server.“ mit der **konkreten sudoers-Zeile** zum Kopieren, auf den
   ermittelten Pfad und den Login-Nutzer zugeschnitten, z. B.
-  `stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server`.
+  `stefan ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server -l INFO -f AUTHPRIV`.
+  Die Regel erlaubt `sftp-server` nur mit genau diesen Argumenten (oder, bei
+  einer älteren Regel mit `""`, ohne).
 - Ein **ehrlicher Hinweis**: Diese Regel gibt dem SSH-Login
   passwortlosen Root-Dateizugriff. Wer den SSH-Schlüssel hat, kann jede Datei
   lesen und schreiben. Das ist bewusst zu entscheiden.
+- Verlangt sudo ein Passwort und ist keins gespeichert, nennt die Meldung
+  zusätzlich: Ein im Server-Profil gespeichertes Sudo-Passwort schaltet die
+  erhöhten Rechte ebenfalls frei. sudoers-Zeile und Warnung bleiben.
 - Weitere Fälle werden erkannt und benannt: `requiretty` in sudoers, ein
   nicht gefundener `sftp-server`, nicht installiertes sudo, ein ungültiger
   Zielnutzer oder Pfad, ein fehlgeschlagener Start.
@@ -73,8 +112,11 @@ gelten als unsicher. Die Prüfung läuft nie mit sudo und nutzt nur
 POSIX-Werkzeuge. Ist ein Eintrag unsicher, oder scheitert die Prüfung oder
 liefert nichts Verwertbares (im Zweifel unsicher):
 
-- **sudo verlangt ein Passwort oder erlaubt den Befehl nicht:** Der erhöhte
-  Modus bleibt aus, es wird **keine sudoers-Zeile** gezeigt. Die Meldung nennt
+- **sudo verlangt ein Passwort und eins ist gespeichert (Passwortweg):**
+  wie „sudo erlaubt den Befehl bereits“ — der erhöhte Modus startet, im
+  Dateibrowser steht die Warnung.
+- **sudo verlangt ein Passwort (keins gespeichert) oder erlaubt den Befehl
+  nicht:** Der erhöhte Modus bleibt aus, es wird **keine sudoers-Zeile** gezeigt. Die Meldung nennt
   den auffälligen Pfad und sagt, dass er root gehören und für Gruppe und
   andere nicht beschreibbar sein muss; auf so einem Server könnte jeder, der
   das Binary ersetzen kann, mit der Regel root werden.
@@ -122,6 +164,25 @@ Prüfungen aus A1–A3 bleiben unverändert.
 - **Unübersehbare Kennzeichnung**, solange aktiv: farbiger Rahmen um den
   Browser und ein Banner „Erhöhte Rechte: root“ (bzw. Zielnutzer). Die
   Kennzeichnung bleibt auch bei verborgener Dateien-Ansicht sichtbar.
+- **Einmaliger Hinweis je Server** (Issue #1195): Wird der erhöhte Modus auf
+  einem Server aktiv, für den der Hinweis nicht ausgeblendet wurde, zeigt das
+  Banner ein aufklappbares Infofeld (standardmäßig offen, per Tastatur
+  bedienbar, für Screenreader als Statusbereich ausgezeichnet). Es hält
+  weder das Aktivieren auf noch braucht es einen Klick davor. Inhalt: Man
+  liest und schreibt jetzt als <Nutzer>; Änderungen wirken sofort und die App
+  kann sie nicht rückgängig machen. Jede Änderung steht im Protokoll der App
+  — und im Auth-Log des Servers, wenn dort protokolliert wird (siehe oben).
+  Hat sudo ohne Passwort authentifiziert, kommt dazu: Die sudo-Regel für
+  `sftp-server` gibt dem Nutzer passwortlosen Zugriff auf alles, was unter
+  diesem Login läuft, nicht nur auf die App. Außerdem der Hinweis auf die
+  Alternative: ein eigener Root-Login mit Schlüssel (`PermitRootLogin
+  prohibit-password`). „Verstanden“ blendet das Feld für diese Aktivierung
+  aus; bei der nächsten Aktivierung erscheint es wieder. „Für diesen Server
+  nicht mehr anzeigen“ merkt sich den Server dauerhaft (reine
+  Oberflächeneinstellung, ändert kein Verhalten); andere Server zeigen den
+  Hinweis weiter. Beim Löschen eines Servers wird er aus dieser Liste
+  entfernt. Bei Root-Sitzungen und bei fehlgeschlagener Aktivierung erscheint
+  der Hinweis nie.
 - **Bestätigungen bleiben** (Löschen, Überschreiben, rekursives chmod) und
   nennen den Modus („…als root löschen?“).
 - **Nur manuelle Nutzung:** KI und MCP-Agenten bekommen über diesen Kanal
@@ -129,12 +190,46 @@ Prüfungen aus A1–A3 bleiben unverändert.
   durch Filter-Engine und Bestätigung, auch während der erhöhte Browser offen
   ist. Der erhöhte Kanal ist ausschließlich von den Browser-Befehlen
   erreichbar.
-- **Protokolliert** mit Kennzeichnung „erhöht“ und Zielnutzer (Spec 0054,
-  Sicherheitsmodell).
+- **Start von `sftp-server` per Kommando:** Ein Kommando, das `sftp-server`
+  startet, gilt immer als Rot und braucht immer eine Bestätigung — auch
+  hinter `sudo`/`doas` mit Optionen und deren Argumenten, selbst wenn ein
+  Argument in Anführungszeichen mit Leerzeichen steht (`sudo -p '[sudo]
+  password:' -u root …/sftp-server`, `--prompt='x y'`, `-uroot`, `--`). Ein
+  Optionsargument, das nur den Namen enthält (`sudo -p 'sftp-server' ls`),
+  und bloße Erwähnungen (`ls`, `grep`, `cat` auf den Pfad) lösen nichts aus.
+- **Protokolliert** mit Kennzeichnung „erhöht“, Zielnutzer und der Art, wie
+  sudo authentifiziert hat (`nopasswd` oder `password`, nie das Passwort;
+  Spec 0054, Sicherheitsmodell).
 - **Widerruf wirkt sofort:** Wird der Modus ausgeschaltet, die Sitzung
   getrennt oder für einen anderen Nutzer neu aktiviert, wird der Kanal
   verworfen und kein weiterer Befehl läuft mit den alten Rechten
   (Spec 0085).
+- **Automatisches Ausschalten bei Inaktivität** (Issue #1193): Findet im
+  erhöhten Modus eine Zeit lang keine erhöhte Aktivität statt, schaltet die
+  App ihn selbst aus, genau wie der Umschalter (Kanal verworfen, Banner und
+  Rahmen weg, Ansicht lädt im normalen Modus neu). Als Aktivität zählt jeder
+  Zugriff über den erhöhten Kanal (auch Auflisten) sowie das Laufen und das
+  Ende einer erhöhten Operation; solange eine Operation läuft, wird nie
+  ausgeschaltet, und die Frist beginnt danach neu. Die Frist stellt man in
+  den Einstellungen (Sicherheit) ein: 5, 15, 30 oder 60 Minuten oder
+  „Nie“; Standard 15 Minuten. Ein fehlender oder ungültiger gespeicherter
+  Wert gilt als 15 Minuten, nie als „Nie“. Nach dem automatischen Ausschalten
+  erscheint ein Hinweis, der stehen bleibt, bis man ihn schließt („Erhöhte
+  Rechte nach N Minuten ohne Aktivität ausgeschaltet“). „Lokal öffnen“ und
+  Uploads verhalten sich danach wie nach dem manuellen Ausschalten. Das
+  Protokoll nennt als Grund „inactivity“ (manuell: „manual“).
+- **Pro Server abschaltbar** (Issue #1194): Im Server-Formular (Bereich
+  „Erweitert“) steht der Schalter „Erhöhte Rechte im Dateibrowser erlauben“;
+  Standard an, auch für bestehende Profile und ältere Sicherungen. Ist er aus,
+  zeigt der Dateibrowser dieses Servers den Umschalter, den Pfeil-Knopf und
+  die Nutzerauswahl nicht, das Feld für den Pfad zu `sftp-server` ist im
+  Formular gesperrt, und jeder Versuch, den erhöhten Modus zu starten, wird
+  abgelehnt (Fehler „Für diesen Server nicht erlaubt“), ohne dass der Server
+  befragt wird und ohne sudo. Lässt sich der Schalter nicht lesen, gilt er
+  als aus. Wird er ausgeschaltet, während eine Sitzung erhöht ist, wird der
+  Kanal sofort verworfen, die Ansicht lädt im normalen Modus neu, und ein
+  Hinweis nennt den Grund. Der Schalter schränkt nur ein: Er erlaubt nichts,
+  was A1–A3 verbieten.
 - **„Lokal öffnen“** (Spec 0054): Wird eine Datei im erhöhten Modus
   geöffnet, läuft der spätere Upload **über denselben erhöhten Kanal**; die
   Bearbeitung merkt sich den Modus. Ist der Kanal inzwischen geschlossen,
@@ -150,7 +245,8 @@ Prüfungen aus A1–A3 bleiben unverändert.
   Identität wird weiterhin abgelehnt, nie still umgestellt. Die
   Bearbeitungskopie ist nur für den Nutzer lesbar (0600), weil
   Root-Dateien sensibel sein können.
-- Es ist kein Passwort im Spiel, also nichts zu redigieren. Die
+- Im Passwortweg ist das gespeicherte Sudo-Passwort ein `SecretString`, wird
+  nach dem Schreiben verworfen und ist der Redaktion bekannt. Die
   Fehlerausgabe von sudo gelangt trotzdem nie ungefiltert in Chat oder
   KI-Kontext.
 
@@ -200,8 +296,12 @@ erscheint nie.
 - Der erhöhte Modus ist nie Standard, nie gespeichert und immer sichtbar
   gekennzeichnet.
 - KI und MCP erreichen den erhöhten Kanal nie.
-- Kein Sudo-Passwort wird verarbeitet (`sudo -n`); fehlende Berechtigung
-  scheitert sofort und verständlich, nie durch Hängen.
+- Ein Sudo-Passwort wird nur verwendet, wenn es im Server-Profil gespeichert
+  ist, sudo es ausdrücklich verlangt, und nur nach dem Prompt-Marker, genau
+  einmal. Sonst gilt `sudo -n`; fehlende Berechtigung scheitert sofort und
+  verständlich, nie durch Hängen.
+- Das Audit des Einschaltens nennt, wie sudo authentifiziert hat
+  (`nopasswd` oder `password`), nie das Passwort.
 - „Lokal öffnen“ lädt eine im erhöhten Modus geöffnete Datei nur erhöht
   hoch, nie still als normaler Nutzer.
 - Bestätigungen bleiben und nennen den Modus.

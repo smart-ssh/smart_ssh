@@ -30,6 +30,8 @@ import { currentCaps } from "./fileBrowser/shared";
 
 interface FileBrowserPanelProps {
   sessionId: string;
+  /** Issue #1195: the server of this session, for the one-time elevation notice. */
+  serverId?: string;
   /** Spec 0020, Abschnitt 5.4/Spec 0017: nur sichtbar (und damit für
    * Drag-and-Drop aktiv), wenn dies der aktive Tab UND die "Dateien"-Ansicht
    * gerade gewählt ist — bleibt sonst wie `TerminalView` gemountet (eigener
@@ -49,7 +51,7 @@ interface FileBrowserPanelProps {
  * automatisch pro Tab getrennt, ohne zusätzliche Buchführung.
  */
 
-export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: FileBrowserPanelProps) {
+export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationChange }: FileBrowserPanelProps) {
   const caps = currentCaps();
   const { t } = useTranslation();
   const {
@@ -102,6 +104,8 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
     otherUserDraft,
     setOtherUserDraft,
     elevationWarning,
+    serverLogging,
+    passwordless,
     updateElevation,
     handleToggleElevation,
   } = elev;
@@ -236,7 +240,11 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
     />
   );
 
-  const canElevate = !elevated && menus.sessionRoot !== undefined && menus.sessionRoot !== true;
+  const canElevate =
+    !elevated &&
+    menus.elevationAllowed === true &&
+    menus.sessionRoot !== undefined &&
+    menus.sessionRoot !== true;
 
   return (
     <div
@@ -248,6 +256,9 @@ export function FileBrowserPanel({ sessionId, isVisible, onElevationChange }: Fi
         <ElevationBanner
           elevatedUser={elevatedUser}
           warningPath={elevationWarning}
+          serverLogging={serverLogging}
+          serverId={serverId}
+          passwordless={passwordless}
           onToggleOff={() => handleToggleElevation()}
         />
       )}

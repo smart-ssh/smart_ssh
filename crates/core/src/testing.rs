@@ -67,6 +67,7 @@ impl ServerBuilder {
                 post_ingest_policy: Default::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                elevation_allowed: true,
                 start_directory: None,
                 created_at: now,
                 updated_at: now,
@@ -136,6 +137,11 @@ impl ServerBuilder {
 
     pub fn sftp_server_path(mut self, path: Option<&str>) -> Self {
         self.server.sftp_server_path = path.map(str::to_string);
+        self
+    }
+
+    pub fn elevation_allowed(mut self, allowed: bool) -> Self {
+        self.server.elevation_allowed = allowed;
         self
     }
 

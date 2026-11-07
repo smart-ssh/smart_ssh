@@ -61,6 +61,7 @@ impl fmt::Debug for ServerInput {
             )
             .field("sftp_server_path", &self.sftp_server_path)
             .field("start_directory", &self.start_directory)
+            .field("elevation_allowed", &self.elevation_allowed)
             .finish()
     }
 }

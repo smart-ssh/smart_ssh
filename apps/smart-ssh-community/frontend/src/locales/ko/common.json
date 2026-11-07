@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "sftp-server 경로(상승된 파일 접근)",
     "sftpServerPathPlaceholder": "자동",
     "sftpServerPathHint": "상승된 권한의 파일 브라우저에서 자동 감지가 실패할 때만 필요합니다. 예: /usr/lib/openssh/sftp-server. 비워 두면 자동입니다.",
+    "elevationAllowedLabel": "파일 브라우저에서 상승된 권한 허용",
+    "elevationAllowedHint": "끄면 파일 브라우저가 이 서버에 대해 상승된 권한을 제공하지 않습니다.",
     "startDirectoryLabel": "시작 디렉터리(터미널 및 파일 브라우저)",
     "startDirectoryPlaceholder": "홈 디렉터리",
     "startDirectoryHint": "절대 경로(/…) 또는 ~/로 시작하는 경로입니다. 터미널은 눈에 보이는 cd로 해당 위치로 이동하고, 파일 브라우저는 해당 위치에서 열립니다. AI 명령은 항상 홈 디렉터리에서 실행됩니다. 비워 두면 홈 디렉터리입니다.",
@@ -435,6 +437,13 @@
       "reasonOther": "다른 보안 검사",
       "loadFailed": "규칙 적용 범위를 불러올 수 없습니다"
     }
+  },
+  "authPrompt": {
+    "title": "{{hop}} 로그인",
+    "password": "비밀번호",
+    "submit": "로그인",
+    "notStored": "서버가 로그인을 위해 이 정보를 요청합니다. 저장되지 않습니다.",
+    "expired": "로그인 요청이 만료되었습니다. 연결이 설정되지 않았습니다."
   },
   "hostKeyDialog": {
     "mismatchLabel": "보안 경고 · 호스트 키 변경됨",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "위험 세컨드 오피니언을 켜기 전에 AI 제공자를 선택하세요.",
     "SESSION_NOT_FOUND": "이 세션은 더 이상 열려 있지 않습니다. 서버 목록에서 다시 여세요.",
     "SSH_SFTP_ALREADY_EXISTS": "이 이름의 파일 또는 폴더가 이미 있습니다",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다",
+    "SSH_NO_COMMON_ALGORITHM": "서버와 공통된 SSH 알고리즘이 없습니다. 서버의 SSH 소프트웨어가 너무 오래되었거나 제한이 너무 엄격합니다. 업데이트하거나 최신 알고리즘을 활성화하세요."
   },
   "mcpServer": {
     "hint": "외부 MCP 클라이언트는 이를 통해 허용 목록에 있는 서버에 명령, 파일 읽기/쓰기, 메모 업데이트를 제안할 수 있습니다. 기존 허용 규칙과 관계없이 모든 요청은 항상 앱에서 확인이 필요합니다.",
@@ -764,6 +774,17 @@
     "opDelete": "삭제",
     "opChmod": "권한 변경",
     "banner": "상승된 권한 활성: 이 브라우저의 모든 파일 동작이 {{user}} 권한으로 실행됩니다.",
+    "bannerLogged": "서버에 기록됩니다.",
+    "notice": {
+      "title": "상승된 권한 안내",
+      "intro": "이제 {{user}} 권한으로 파일을 읽고 씁니다. 변경 사항은 즉시 적용되며 앱에서 되돌릴 수 없습니다.",
+      "loggedApp": "모든 변경 사항은 앱 로그에 기록됩니다.",
+      "loggedAppAndServer": "모든 변경 사항은 앱 로그와 서버의 인증 로그에 기록됩니다.",
+      "passwordless": "sftp-server용 sudo 규칙은 {{user}}에게 이 앱뿐 아니라 이 로그인으로 실행되는 모든 것에 비밀번호 없이 접근할 권한을 줍니다.",
+      "alternative": "이 서버를 자주 root로 관리한다면 키를 쓰는 별도 root 로그인(PermitRootLogin prohibit-password)이 그 접근을 명확히 해 줍니다.",
+      "gotIt": "확인",
+      "dontShowAgain": "이 서버에서는 다시 표시하지 않음"
+    },
     "deleteFileTitle": "{{user}} 권한으로 파일을 삭제하시겠습니까?",
     "deleteDirTitle": "{{user}} 권한으로 폴더를 삭제하시겠습니까?",
     "overwriteTitle": "{{user}} 권한으로 파일을 덮어쓰시겠습니까?",
@@ -785,7 +806,8 @@
     "close": "닫기",
     "detail": "상세 정보: {{detail}}",
     "failure": {
-      "passwordRequired": "이 서버에서 sudo가 sftp-server에 비밀번호를 요구합니다. 앱은 sudo 비밀번호를 절대 묻지 않습니다.",
+      "passwordRequired": "이 서버에서 sudo가 sftp-server에 암호를 요구합니다. 아래 sudoers 규칙을 추가하거나 서버 프로필에 sudo 암호를 저장하면 상승된 권한을 사용할 수 있습니다.",
+      "wrongSudoPassword": "sudo가 저장된 sudo 암호를 거부했습니다. 서버 프로필의 sudo 암호를 확인하세요.",
       "notAllowed": "이 SSH 로그인은 비밀번호 없이 sudo로 sftp-server를 시작할 수 없습니다.",
       "requireTty": "sudo가 터미널 없이 실행되기를 거부합니다(sudoers의 “requiretty”). 이 로그인에 대해 requiretty를 비활성화하십시오. 예: “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "서버에서 sftp-server를 찾을 수 없습니다. 서버 프로필의 “고급”에 경로를 입력하십시오.",
@@ -795,7 +817,8 @@
       "invalidUser": "대상 사용자가 올바르지 않습니다.",
       "unsupported": "로컬 서버에는 상승 모드가 없습니다.",
       "checkFailed": "sudo 권한을 확인하지 못했습니다.",
-      "startFailed": "sudo를 통해 sftp-server를 시작할 수 없습니다(가능한 원인: sudoers의 “requiretty”)."
+      "startFailed": "sudo를 통해 sftp-server를 시작할 수 없습니다(가능한 원인: sudoers의 “requiretty”).",
+      "disabledForServer": "서버 프로필에서 이 서버의 상승된 권한이 꺼져 있습니다."
     },
     "channelLost": "상승된 권한이 종료되었습니다 — 상승된 채널이 더 이상 활성 상태가 아닙니다.",
     "group": "상승된 권한",
@@ -805,7 +828,9 @@
     "targetUserHelp": "sudo를 통해 이 사용자로 파일 브라우저를 실행합니다. 기본값: root.",
     "confirm": "상승",
     "opChown": "소유자 변경",
-    "chownNote": "소유자는 {{user}} 권한으로 변경됩니다."
+    "chownNote": "소유자는 {{user}} 권한으로 변경됩니다.",
+    "idleSwitchedOff": "{{minutes}}분 동안 활동이 없어 상승된 권한을 껐습니다",
+    "revokedByProfile": "상승된 권한이 종료되었습니다 — 서버 프로필에서 더 이상 허용하지 않습니다."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config 가져오기",
@@ -994,14 +1019,16 @@
       "hostKeyCheck": "호스트 키 확인",
       "authentication": "인증",
       "sessionReady": "세션 수립됨",
-      "dnsSkipped": "IP 주소 – 조회 불필요"
+      "dnsSkipped": "IP 주소 – 조회 불필요",
+      "outdatedAlgorithms": "오래된 알고리즘"
     },
     "status": {
       "ok": "OK",
       "running": "진행 중",
       "failed": "실패 ({{code}})",
       "skipped": "건너뜀",
-      "failedReason": "실패: {{reason}}"
+      "failedReason": "실패: {{reason}}",
+      "warning": "경고"
     },
     "hostKeyResult": {
       "known": "알려짐",
@@ -1492,5 +1519,18 @@
     "title": "문제가 발생했습니다",
     "body": "Smart SSH 인터페이스에서 예기치 않은 오류가 발생했습니다. 계속하려면 새로고침하세요. 다시 발생하면 새로고침 후 설정 → 진단에서 진단 번들을 만드세요.",
     "reload": "새로고침"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "이 서버는 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 서버의 SSH 소프트웨어를 업데이트하세요.",
+    "outdatedAlgorithmsHop": "{{hop}}은(는) 오래된 SSH 알고리즘({{algorithms}})을 사용합니다. 연결의 보안이 낮아집니다. 가능하면 해당 SSH 소프트웨어를 업데이트하세요."
+  },
+  "elevatedIdle": {
+    "label": "비활동 시 상승된 권한 끄기",
+    "minutes5": "5분",
+    "minutes15": "15분",
+    "minutes30": "30분",
+    "minutes60": "60분",
+    "never": "안 함",
+    "hint": "이 시간 동안 상승된 작업이 없으면 파일 브라우저가 스스로 상승 모드를 종료합니다. 진행 중인 작업은 활동으로 간주됩니다."
   }
 }

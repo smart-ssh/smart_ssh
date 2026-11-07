@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { sessionIsRoot } from "../../api/api";
+import { sessionIsRoot, sftpElevationAllowed } from "../../api/api";
+import { onElevationRevokedByProfile } from "../../api/events";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { useMenuPlacement } from "../../hooks/useMenuPlacement";
 
@@ -30,6 +31,31 @@ export function useToolbarMenus(
   // Issue #544: `id -u` probe result of the session. `undefined` = not yet
   // answered; `null`/failure = unknown (controls shown); `true` = root (hidden).
   const [sessionRoot, setSessionRoot] = useState<boolean | null | undefined>(undefined);
+  // Issue #1194: the server profile allows elevated rights. Closed-fail:
+  // only `true` offers the controls; unknown or unreadable hides them.
+  const [elevationAllowed, setElevationAllowed] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!isVisible) return;
+    let cancelled = false;
+    sftpElevationAllowed(sessionId)
+      .then((value) => {
+        if (!cancelled) setElevationAllowed(value);
+      })
+      .catch(() => {
+        if (!cancelled) setElevationAllowed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, isVisible]);
+  useEffect(() => {
+    const unlisten = onElevationRevokedByProfile((event) => {
+      if (event.sessionId === sessionId) setElevationAllowed(false);
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [sessionId]);
   // Issue #584, Spec 0113: below 640 px the toolbar collapses into an
   // overflow menu and the list into two-line rows; functions stay the same.
   const narrow = useIsNarrow();
@@ -124,6 +150,7 @@ export function useToolbarMenus(
 
   return {
     sessionRoot,
+    elevationAllowed,
     narrow,
     overflowOpen,
     setOverflowOpen,

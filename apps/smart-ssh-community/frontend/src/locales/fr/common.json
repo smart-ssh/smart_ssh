@@ -287,6 +287,8 @@
     "sftpServerPathLabel": "Chemin de sftp-server (accès aux fichiers avec privilèges élevés)",
     "sftpServerPathPlaceholder": "Automatique",
     "sftpServerPathHint": "Nécessaire uniquement si la détection automatique échoue pour l’explorateur de fichiers avec privilèges élevés, p. ex. /usr/lib/openssh/sftp-server. Laisser vide = automatique.",
+    "elevationAllowedLabel": "Autoriser les droits élevés dans l’explorateur de fichiers",
+    "elevationAllowedHint": "Si désactivé, l’explorateur de fichiers ne propose pas de droits élevés pour ce serveur.",
     "startDirectoryLabel": "Répertoire de départ (terminal et explorateur de fichiers)",
     "startDirectoryPlaceholder": "Répertoire personnel",
     "startDirectoryHint": "Chemin absolu (/…) ou chemin commençant par ~/. Le terminal s’y place avec un cd visible, l’explorateur de fichiers s’y ouvre. Les commandes de l’IA s’exécutent toujours dans le répertoire personnel. Laisser vide = répertoire personnel.",
@@ -435,6 +437,13 @@
       "reasonOther": "un autre contrôle de sécurité",
       "loadFailed": "Impossible de charger la couverture des règles"
     }
+  },
+  "authPrompt": {
+    "title": "Connexion à {{hop}}",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "notStored": "Le serveur demande ces informations pour la connexion. Elles ne sont pas enregistrées.",
+    "expired": "La demande de connexion a expiré. La connexion n'a pas été établie."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Alerte de sécurité · Clé d’hôte modifiée",
@@ -662,7 +671,8 @@
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choisissez un fournisseur d'IA avant d'activer le second avis sur le risque.",
     "SESSION_NOT_FOUND": "Cette session n’est plus ouverte. Rouvrez-la depuis la liste des serveurs.",
     "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà",
-    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil"
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil",
+    "SSH_NO_COMMON_ALGORITHM": "Aucun algorithme SSH en commun avec le serveur. Son logiciel SSH est trop ancien ou trop restrictif. Mettez-le à jour ou activez des algorithmes modernes."
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -774,6 +784,17 @@
     "opDelete": "Suppression",
     "opChmod": "Modification des droits",
     "banner": "Droits élevés actifs : toutes les actions sur les fichiers dans cet explorateur s’exécutent en tant que {{user}}.",
+    "bannerLogged": "Journalisé sur le serveur.",
+    "notice": {
+      "title": "À propos des droits élevés",
+      "intro": "Vous lisez et écrivez désormais les fichiers en tant que {{user}}. Les modifications sont immédiates et l'application ne peut pas les annuler.",
+      "loggedApp": "Chaque modification est consignée dans le journal de l'application.",
+      "loggedAppAndServer": "Chaque modification est consignée dans le journal de l'application et dans le journal d'authentification du serveur.",
+      "passwordless": "La règle sudo pour sftp-server donne à {{user}} un accès sans mot de passe à tout ce qui s'exécute sous cette connexion, pas seulement à cette application.",
+      "alternative": "Si vous administrez régulièrement ce serveur en tant que root, une connexion root distincte avec clé (PermitRootLogin prohibit-password) rend cet accès explicite.",
+      "gotIt": "Compris",
+      "dontShowAgain": "Ne plus afficher pour ce serveur"
+    },
     "deleteFileTitle": "Supprimer le fichier en tant que {{user}} ?",
     "deleteDirTitle": "Supprimer le dossier en tant que {{user}} ?",
     "overwriteTitle": "Écraser le fichier en tant que {{user}} ?",
@@ -795,7 +816,8 @@
     "close": "Fermer",
     "detail": "Détails : {{detail}}",
     "failure": {
-      "passwordRequired": "sudo exige un mot de passe pour sftp-server sur ce serveur. L’application ne demande jamais de mot de passe sudo.",
+      "passwordRequired": "sudo exige un mot de passe pour sftp-server sur ce serveur. Ajoutez la règle sudoers ci-dessous ou enregistrez un mot de passe sudo dans le profil du serveur pour activer les droits élevés.",
+      "wrongSudoPassword": "sudo a refusé le mot de passe sudo enregistré. Vérifiez le mot de passe sudo dans le profil du serveur.",
       "notAllowed": "Cette connexion SSH n’est pas autorisée à démarrer sftp-server via sudo sans mot de passe.",
       "requireTty": "sudo refuse de s’exécuter sans terminal (« requiretty » dans sudoers). Désactivez requiretty pour cette connexion, p. ex. avec « Defaults:<login> !requiretty ».",
       "sftpServerNotFound": "sftp-server est introuvable sur le serveur. Veuillez en saisir le chemin dans le profil du serveur sous « Avancé ».",
@@ -805,7 +827,8 @@
       "invalidUser": "Utilisateur cible invalide.",
       "unsupported": "Le serveur local n’a pas de mode élevé.",
       "checkFailed": "La vérification des droits sudo a échoué.",
-      "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers)."
+      "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers).",
+      "disabledForServer": "Les droits élevés sont désactivés pour ce serveur dans le profil du serveur."
     },
     "channelLost": "Droits élevés terminés — le canal élevé n’est plus actif.",
     "group": "Droits élevés",
@@ -815,7 +838,9 @@
     "targetUserHelp": "Exécute le navigateur de fichiers sous cet utilisateur via sudo. Par défaut : root.",
     "confirm": "Élever",
     "opChown": "Changement du propriétaire",
-    "chownNote": "Le propriétaire sera modifié en tant que {{user}}."
+    "chownNote": "Le propriétaire sera modifié en tant que {{user}}.",
+    "idleSwitchedOff": "Droits élevés désactivés après {{minutes}} minutes d’inactivité",
+    "revokedByProfile": "Droits élevés terminés — le profil du serveur ne les autorise plus."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1004,14 +1029,16 @@
       "hostKeyCheck": "Vérification de la clé d’hôte",
       "authentication": "Authentification",
       "sessionReady": "Session établie",
-      "dnsSkipped": "Adresse IP – aucune résolution nécessaire"
+      "dnsSkipped": "Adresse IP – aucune résolution nécessaire",
+      "outdatedAlgorithms": "Algorithmes obsolètes"
     },
     "status": {
       "ok": "OK",
       "running": "en cours",
       "failed": "échec ({{code}})",
       "skipped": "ignoré",
-      "failedReason": "échec : {{reason}}"
+      "failedReason": "échec : {{reason}}",
+      "warning": "avertissement"
     },
     "hostKeyResult": {
       "known": "connue",
@@ -1508,5 +1535,18 @@
     "title": "Une erreur s’est produite",
     "body": "Smart SSH a rencontré une erreur inattendue dans l’interface. Rechargez pour continuer. Si cela se reproduit, créez un paquet de diagnostic sous Réglages → Diagnostic après le rechargement.",
     "reload": "Recharger"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ce serveur utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour le logiciel SSH du serveur si possible.",
+    "outdatedAlgorithmsHop": "{{hop}} utilise des algorithmes SSH obsolètes ({{algorithms}}). La connexion est moins sûre. Mettez à jour son logiciel SSH si possible."
+  },
+  "elevatedIdle": {
+    "label": "Désactiver les droits élevés après inactivité",
+    "minutes5": "5 minutes",
+    "minutes15": "15 minutes",
+    "minutes30": "30 minutes",
+    "minutes60": "60 minutes",
+    "never": "Jamais",
+    "hint": "Le navigateur de fichiers quitte le mode élevé de lui-même après cette durée sans activité élevée. Une opération en cours compte comme activité."
   }
 }

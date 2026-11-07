@@ -307,7 +307,7 @@ pub(super) async fn upload_file(
 
     let mut sent = 0u64;
     let mut partial_may_exist = false;
-    let mut elevated_user: Option<String> = None;
+    let mut elevated_user = None;
     let result: CommandResult<TransferEnd> = async {
         let local = local_path.to_path_buf();
         let mut file = blocking_io(move || std::fs::File::open(local)).await?;
@@ -372,7 +372,7 @@ pub(super) async fn upload_file(
     .await;
     if partial_may_exist {
         audit_elevated_change(
-            elevated_user.as_deref(),
+            elevated_user.as_ref(),
             "upload",
             remote_path,
             matches!(result, Ok(TransferEnd::Completed)),
