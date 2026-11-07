@@ -167,7 +167,7 @@ fn expect_methods(result: Result<Box<dyn SshTransport>, SshError>, wanted: &str)
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keyboard_interactive_only_rejects_key_profile_naming_method() {
-    let prompter = Scripted::new(&[&[PASS]]);
+    let prompter = Scripted::new(&[&["tester@example.com"]]);
     let t = login(
         "authpolicy-kbdint",
         USER,
@@ -208,7 +208,7 @@ async fn keyboard_interactive_only_with_password_profile_skips_prompter() {
 async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
     // Two prompt rounds: the stored password answers the first, the
     // second round can only come from the prompter.
-    let prompter = Scripted::new(&[&[PASS]]);
+    let prompter = Scripted::new(&[&["tester@example.com"]]);
     let t = login(
         "authpolicy-kbdint-twostep",
         USER,
@@ -225,7 +225,7 @@ async fn keyboard_interactive_only_second_prompt_goes_to_scripted_prompter() {
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn publickey_then_password_with_scripted_prompter() {
-    let prompter = Scripted::new(&[&[PASS]]);
+    let prompter = Scripted::new(&[&["tester@example.com"]]);
     let t = login(
         "authpolicy-key-password",
         USER,
@@ -242,7 +242,7 @@ async fn publickey_then_password_with_scripted_prompter() {
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn publickey_then_keyboard_interactive_with_scripted_prompter() {
-    let prompter = Scripted::new(&[&[PASS]]);
+    let prompter = Scripted::new(&[&["tester@example.com"]]);
     let t = login(
         "authpolicy-key-kbdint",
         USER,
