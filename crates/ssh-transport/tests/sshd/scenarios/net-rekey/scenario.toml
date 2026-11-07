@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "net-rekey"
+networks = ["net-net"]
+publish = true
