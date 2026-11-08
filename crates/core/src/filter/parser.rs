@@ -534,7 +534,7 @@ fn is_complex_shell_c_invocation(cmd: &str) -> bool {
 /// `flock`/`busybox`/`script` (unabhängiger Review-Pass, Spec 0013).
 const PASSTHROUGH_WRAPPERS: &[&str] = &[
     "env", "nice", "nohup", "time", "command", "timeout", "xargs", "setsid", "stdbuf", "ionice",
-    "chroot", "flock", "busybox", "script", "exec", "builtin",
+    "chroot", "flock", "busybox", "script", "exec", "builtin", "runuser",
 ];
 
 /// Wrapper, die vor dem eigentlichen Kommando genau EIN positionales (nicht
@@ -654,7 +654,7 @@ fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
         let flag = words[i];
         i += 1;
         let takes_value = (is_elevation && matches!(flag, "-u" | "--user" | "-g" | "--group"))
-            || (head == "nice" && flag == "-n");
+            || (is_wrapper && super::wrapper_option_takes_value(head, flag));
         if takes_value && i < words.len() {
             i += 1;
         }

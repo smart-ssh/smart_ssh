@@ -8,7 +8,7 @@ use super::patterns::{
     data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
-use super::sudo_options::{classify_sudo_option, SudoOption};
+use super::sudo_options::{classify_sudo_option, SudoOption, WrapperState, WrapperStep};
 use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
 
 /// Regelbasierte Umsetzung von [`RiskClassifier`] (Spec 0026, Abschnitt 2) —
@@ -335,8 +335,7 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     if depth > 3 {
         return WordCheck::TooDeep;
     }
-    // Parsed in the original case (sudo options are case-sensitive); every
-    // comparison below uses the lowercased text.
+    // Original case (sudo options are case-sensitive); comparisons lowercase.
     let words = shell_words(command);
     let lower_texts: Vec<String> = words.iter().map(|w| w.text.to_lowercase()).collect();
     let name = |text: &str| text.rsplit('/').next().unwrap_or("").to_string();
@@ -348,13 +347,22 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     // position are being skipped.
     let mut in_sudo_options: Option<&'static str> = None;
     let mut skip_argument = false;
+    // Same for other wrappers (`timeout 5m`, `nice -n 10`, Issue #1230).
+    let mut in_wrapper: Option<WrapperState> = None;
     for (word, text) in words.iter().zip(&lower_texts) {
         if word.stage_start {
             at_command_position = true;
             in_sudo_options = None;
+            in_wrapper = None;
             skip_argument = false;
         }
         if at_command_position {
+            if let Some(state) = in_wrapper.as_mut() {
+                match state.step(&word.text, &mut skip_argument) {
+                    WrapperStep::Skip => continue,
+                    WrapperStep::Command => in_wrapper = None,
+                }
+            }
             if let Some(program) = in_sudo_options {
                 if skip_argument {
                     // The argument of a sudo option (`-p 'sftp-server'`) is
@@ -394,6 +402,9 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
                 || text
                     .chars()
                     .all(|c| c.is_ascii_digit() || c == '.' || c == 's');
+            if let Some(state) = WrapperState::new(&word_name) {
+                in_wrapper = Some(state);
+            }
             at_command_position = is_prefix;
         }
     }
