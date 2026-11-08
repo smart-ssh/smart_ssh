@@ -348,13 +348,42 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
     // position are being skipped.
     let mut in_sudo_options: Option<&'static str> = None;
     let mut skip_argument = false;
+    // Same for the other wrappers (`timeout`, `nice`, `env` …, Issue #1230):
+    // their options, option arguments and positional argument (a `timeout`
+    // duration) are not the command.
+    let mut in_wrapper: Option<WrapperState> = None;
     for (word, text) in words.iter().zip(&lower_texts) {
         if word.stage_start {
             at_command_position = true;
             in_sudo_options = None;
+            in_wrapper = None;
             skip_argument = false;
         }
         if at_command_position {
+            if let Some(state) = in_wrapper.as_mut() {
+                if skip_argument {
+                    skip_argument = false;
+                    // Never swallow the program itself as an option argument.
+                    if name(text) == "sftp-server" {
+                        return WordCheck::Found;
+                    }
+                    continue;
+                }
+                if !state.options_done && word.text.starts_with('-') {
+                    if word.text == "--" {
+                        state.options_done = true;
+                    } else if crate::filter::wrapper_option_takes_value(state.program, &word.text) {
+                        skip_argument = true;
+                    }
+                    continue;
+                }
+                if state.positional_pending {
+                    state.positional_pending = false;
+                    state.options_done = true;
+                    continue;
+                }
+                in_wrapper = None;
+            }
             if let Some(program) = in_sudo_options {
                 if skip_argument {
                     // The argument of a sudo option (`-p 'sftp-server'`) is
@@ -394,10 +423,31 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
                 || text
                     .chars()
                     .all(|c| c.is_ascii_digit() || c == '.' || c == 's');
+            if let Some(program) = WRAPPERS_WITH_OPTIONS.iter().find(|p| **p == word_name) {
+                in_wrapper = Some(WrapperState {
+                    program,
+                    positional_pending: matches!(*program, "timeout" | "chroot" | "flock"),
+                    options_done: false,
+                });
+            }
             at_command_position = is_prefix;
         }
     }
     WordCheck::Clean
+}
+
+/// Wrapper whose options and arguments the word check skips (Issue #1230).
+const WRAPPERS_WITH_OPTIONS: &[&str] = &[
+    "timeout", "nice", "env", "stdbuf", "ionice", "runuser", "chroot", "flock", "xargs", "time",
+    "exec", "strace", "watch",
+];
+
+struct WrapperState {
+    program: &'static str,
+    /// `timeout DURATION`, `chroot DIR`, `flock FILE`: one positional
+    /// argument before the command.
+    positional_pending: bool,
+    options_done: bool,
 }
 
 /// Test access to the word check alone (Issue #1208).

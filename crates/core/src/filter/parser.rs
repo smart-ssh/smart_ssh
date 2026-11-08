@@ -534,7 +534,7 @@ fn is_complex_shell_c_invocation(cmd: &str) -> bool {
 /// `flock`/`busybox`/`script` (unabhängiger Review-Pass, Spec 0013).
 const PASSTHROUGH_WRAPPERS: &[&str] = &[
     "env", "nice", "nohup", "time", "command", "timeout", "xargs", "setsid", "stdbuf", "ionice",
-    "chroot", "flock", "busybox", "script", "exec", "builtin",
+    "chroot", "flock", "busybox", "script", "exec", "builtin", "runuser",
 ];
 
 /// Wrapper, die vor dem eigentlichen Kommando genau EIN positionales (nicht
@@ -625,6 +625,54 @@ pub fn is_elevation_or_passthrough_wrapper(token: &str) -> bool {
     token == "sudo" || token == "doas" || PASSTHROUGH_WRAPPERS.contains(&token)
 }
 
+/// Shared by the effective-command resolution and the `sftp-server` word
+/// check (Issue #1230), so the two cannot drift apart. `env -S` is left out on
+/// purpose: its argument is a command string that must stay visible.
+///
+/// Whether the (exact, case-sensitive) option `flag` of `program` takes its
+/// argument as the next word. Attached forms (`-oL`, `--signal=KILL`) are
+/// complete in themselves. Unknown options count as complete: the word after
+/// them stays a candidate for the command, which only escalates more.
+pub(crate) fn wrapper_option_takes_value(program: &str, flag: &str) -> bool {
+    let flags: &[&str] = match program {
+        "timeout" => &["-s", "--signal", "-k", "--kill-after"],
+        "nice" => &["-n", "--adjustment"],
+        "env" => &["-u", "--unset", "-C", "--chdir"],
+        "stdbuf" => &["-i", "-o", "-e", "--input", "--output", "--error"],
+        "ionice" => &[
+            "-c",
+            "-n",
+            "-p",
+            "-P",
+            "-u",
+            "--class",
+            "--classdata",
+            "--pid",
+            "--pgid",
+            "--uid",
+        ],
+        "runuser" => &[
+            "-u",
+            "-g",
+            "-G",
+            "-s",
+            "--user",
+            "--group",
+            "--supp-group",
+            "--shell",
+        ],
+        "chroot" => &["--userspec", "--groups"],
+        "flock" => &["-w", "-E", "--timeout", "--wait", "--conflict-exit-code"],
+        "xargs" => &["-n", "-I", "-L", "-P", "-s", "-d", "-E", "-a"],
+        "time" => &["-f", "-o", "--format", "--output"],
+        "exec" => &["-a"],
+        "strace" => &["-e", "-o", "-p", "-s", "-u", "-E", "-a", "-P", "-I"],
+        "watch" => &["-n", "--interval"],
+        _ => &[],
+    };
+    flags.contains(&flag)
+}
+
 fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
     let words: Vec<&str> = cmd.split_whitespace().collect();
     let Some(&head) = words.first() else {
@@ -654,7 +702,7 @@ fn strip_one_elevation_wrapper_or_assignment(cmd: &str) -> String {
         let flag = words[i];
         i += 1;
         let takes_value = (is_elevation && matches!(flag, "-u" | "--user" | "-g" | "--group"))
-            || (head == "nice" && flag == "-n");
+            || (is_wrapper && wrapper_option_takes_value(head, flag));
         if takes_value && i < words.len() {
             i += 1;
         }

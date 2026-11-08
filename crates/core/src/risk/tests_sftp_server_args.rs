@@ -85,3 +85,52 @@ fn test_sftp_server_mentions_stay_harmless() {
         );
     }
 }
+
+/// Issue #1230: wrapper arguments before `sftp-server` in a quoted command.
+const BEHIND_WRAPPERS_QUOTED: &[&str] = &[
+    "timeout 5m /usr/lib/openssh/sftp-server -l 'INFO'",
+    "timeout -s KILL 1h /usr/lib/openssh/sftp-server -f \"AUTHPRIV\"",
+    "timeout -k 10s 2m sftp-server -l 'INFO'",
+    "nice -n 10 timeout 5m sftp-server -l 'INFO'",
+    "env -u HOME timeout 1h \"/usr/lib/openssh/sftp-server\"",
+    "stdbuf -oL sftp-server -l 'INFO'",
+    "ionice -c 2 sftp-server -l 'INFO'",
+    "runuser -u root -- sftp-server -l 'INFO'",
+];
+
+#[test]
+fn test_sftp_server_behind_quoted_wrapper_arguments_is_red_and_detected() {
+    for command in BEHIND_WRAPPERS_QUOTED {
+        let assessment = RuleBasedRiskClassifier.classify(command);
+        assert_eq!(assessment.server_risk, RiskLevel::Red, "not red: {command}");
+        assert!(
+            matches!(
+                sftp_server_invocation_reason(command),
+                Some(CommandCheckFinding::Match(_))
+            ),
+            "not detected: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_sftp_server_wrapper_mentions_stay_harmless() {
+    for command in [
+        "timeout 5m cat '/usr/lib/openssh/sftp-server'",
+        "sudo -p 'sftp-server' ls",
+        "timeout -s KILL 1h ls 'sftp-server'",
+    ] {
+        assert!(
+            sftp_server_invocation_reason(command).is_none(),
+            "false positive: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_sftp_server_behind_su_user_command_is_detected() {
+    assert!(matches!(
+        sftp_server_invocation_reason("su root -c 'sftp-server -l INFO'"),
+        Some(CommandCheckFinding::Match(_))
+    ));
+}

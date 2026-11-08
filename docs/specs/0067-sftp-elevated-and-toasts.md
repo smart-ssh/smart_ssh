@@ -194,7 +194,11 @@ Prüfungen aus A1–A3 bleiben unverändert.
   startet, gilt immer als Rot und braucht immer eine Bestätigung — auch
   hinter `sudo`/`doas` mit Optionen und deren Argumenten, selbst wenn ein
   Argument in Anführungszeichen mit Leerzeichen steht (`sudo -p '[sudo]
-  password:' -u root …/sftp-server`, `--prompt='x y'`, `-uroot`, `--`). Ein
+  password:' -u root …/sftp-server`, `--prompt='x y'`, `-uroot`, `--`)
+  und hinter Wrappern wie `timeout`, `nice`, `env`, `stdbuf`, `ionice`,
+  `runuser` samt deren Optionen und Argumenten (`timeout -s KILL 1h …`,
+  `nice -n 10 …`, `env -u HOME …`), auch wenn ein Teil des Kommandos in
+  Anführungszeichen steht (`timeout 5m …/sftp-server -l 'INFO'`). Ein
   Optionsargument, das nur den Namen enthält (`sudo -p 'sftp-server' ls`),
   und bloße Erwähnungen (`ls`, `grep`, `cat` auf den Pfad) lösen nichts aus.
 - **Protokolliert** mit Kennzeichnung „erhöht“, Zielnutzer und der Art, wie
