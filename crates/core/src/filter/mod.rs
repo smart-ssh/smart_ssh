@@ -13,6 +13,7 @@ mod parser;
 mod pattern;
 mod policy_rules;
 mod types;
+mod wrapper_options;
 
 #[cfg(test)]
 mod tests;
@@ -53,7 +54,8 @@ pub(crate) use pattern::CompiledPattern;
 // am Anfang verankert sind (`^(?:cat|less|...)`, `shutdown*`, `kill *`
 // usw.), s. `risk::classifier`-Doc-Kommentar. Wie `segment_command`
 // bewusst `pub(crate)` — internes Detail zwischen den beiden Modulen.
-pub(crate) use parser::{resolve_effective_command, wrapper_option_takes_value};
+pub(crate) use parser::resolve_effective_command;
+pub(crate) use wrapper_options::wrapper_option_takes_value;
 // Issue #88: also reused by `crate::risk`, so the risk classifier rates the
 // code of a `bash -c '…'`/`sh -c '…'` call with the same extraction the
 // filter engine uses for its own checks (no second `-c` parser). Internal
