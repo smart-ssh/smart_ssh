@@ -175,4 +175,4 @@ Two ratchets keep the UI kit used (`apps/smart-ssh-community/frontend/src/uiKitG
 in production TSX outside `components/ui/` may only decrease per file
 (`src/uiKitRawButtons.json`; use `Button` or `MenuItem`), and `<dialog` /
 `fixed inset-0` may appear only in `components/ui/`, `components/ModalBackdrop.tsx` and
-the shrinking allowlist `src/uiKitDialogAllowlist.json` (use `DialogFrame`).
+the (now empty) allowlist `src/uiKitDialogAllowlist.json` (use `DialogFrame`; its `bare`, `layout="sheet"` and `yieldToNested` options cover full-window, drawer and custom-styled prompts).
