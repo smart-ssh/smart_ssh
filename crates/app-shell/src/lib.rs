@@ -31,6 +31,7 @@ mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
 mod local_file;
+pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
