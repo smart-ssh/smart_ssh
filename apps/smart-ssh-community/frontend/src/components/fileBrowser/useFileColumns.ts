@@ -37,6 +37,10 @@ const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
   owner: 80,
 };
 
+/** Mounted panels in this window; a sort change is pushed to all of them
+ * (Spec 0053, part 3). The stored value stays the source of truth. */
+const sortListeners = new Set<(sort: FileSort) => void>();
+
 /**
  * Sort order, hidden columns and column widths of the file table (Spec 0053,
  * issue #653). All three are app-wide settings, loaded once on mount and
@@ -79,6 +83,13 @@ export function useFileColumns() {
         if (stored) setFileSort(stored);
       })
       .catch((err) => console.warn("Konnte Sortierung nicht laden:", err));
+  }, []);
+
+  useEffect(() => {
+    sortListeners.add(setFileSort);
+    return () => {
+      sortListeners.delete(setFileSort);
+    };
   }, []);
 
   const toggleColumn = useCallback((column: HideableFileColumn) => {
@@ -138,7 +149,7 @@ export function useFileColumns() {
 
   const handleSortClick = (column: FileSortColumn) => {
     const next = nextFileSort(fileSort, column);
-    setFileSort(next);
+    for (const listener of sortListeners) listener(next);
     saveFileManagerSort(next).catch((err) =>
       console.warn("Konnte Sortierung nicht speichern:", err),
     );

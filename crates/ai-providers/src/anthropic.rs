@@ -125,7 +125,7 @@ fn anthropic_default_max_tokens_for(model_max: u32) -> u32 {
 }
 
 pub struct AnthropicProvider {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, ssh_manager_core::ai::AiError>,
     /// Ohne abschließenden Slash, z. B. `https://api.anthropic.com`. Es
     /// wird `/v1/messages` angehängt.
     base_url: String,
@@ -495,7 +495,10 @@ impl AiProvider for AnthropicProvider {
             return error_stream(err);
         }
 
-        let client = self.client.clone();
+        let client = match &self.client {
+            Ok(c) => c.clone(),
+            Err(e) => return error_stream(e.clone()),
+        };
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;
