@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use mcp_server::{
     ActionOutcome, LookupError, McpBackend, McpServerConfig, ServerSummary, SharedToken,
 };
-use rmcp::model::{CallToolRequestParams, ClientCapabilities, ClientInfo, Implementation};
+use rmcp::model::{CallToolRequestParams, ClientCapabilities, ClientConfig, Implementation};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::ServiceExt;
@@ -92,8 +92,8 @@ fn connect_transport(
     )
 }
 
-fn client_info() -> ClientInfo {
-    ClientInfo::new(
+fn client_info() -> ClientConfig {
+    ClientConfig::new(
         ClientCapabilities::default(),
         Implementation::new("smart-ssh-integration-test", "0.0.1"),
     )
