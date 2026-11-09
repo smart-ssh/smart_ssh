@@ -1490,6 +1490,9 @@
       "file": "バックアップ",
       "sessions": "閉じられる開いているセッション：{{count}}",
       "safety": "現在のデータは先に {{dir}} に保存されます。現在のサーバーは、今日の日付が付いた新しいフォルダー “Previous data” に移動します。",
+      "pickDirTitle": "安全バックアップの保存先フォルダーを選択",
+      "changeSafetyDir": "変更…",
+      "changeSafetyDirFailed": "フォルダーを選択できませんでした。既定のフォルダーのままです。",
       "replace": "データを置き換える"
     },
     "counts": {

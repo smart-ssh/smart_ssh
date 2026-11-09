@@ -1498,6 +1498,9 @@
       "file": "Yedek",
       "sessions": "Kapatılacak açık oturumlar: {{count}}",
       "safety": "Mevcut verileriniz önce {{dir}} konumuna kaydedilir. Sunucularınız bugünün tarihli yeni bir “Previous data” klasörüne taşınır.",
+      "pickDirTitle": "Güvenlik yedeği için klasör seçin",
+      "changeSafetyDir": "Değiştir…",
+      "changeSafetyDirFailed": "Klasör seçilemedi. Varsayılan klasör korunuyor.",
       "replace": "Verileri değiştir"
     },
     "counts": {

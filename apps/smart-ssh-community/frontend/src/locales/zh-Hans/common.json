@@ -1490,6 +1490,9 @@
       "file": "备份",
       "sessions": "将被关闭的打开会话：{{count}}",
       "safety": "当前数据会先保存到 {{dir}}。你的服务器会移到带今天日期的新文件夹“Previous data”中。",
+      "pickDirTitle": "选择安全备份的文件夹",
+      "changeSafetyDir": "更改…",
+      "changeSafetyDirFailed": "无法选择文件夹，仍使用默认文件夹。",
       "replace": "替换数据"
     },
     "counts": {

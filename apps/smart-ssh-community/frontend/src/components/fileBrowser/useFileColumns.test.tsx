@@ -28,6 +28,18 @@ describe("useFileColumns", () => {
     vi.mocked(saveHiddenFileColumns).mockClear();
   });
 
+  it("propagates a sort change to other mounted panels and reverses from shared state", async () => {
+    const a = renderHook(() => useFileColumns());
+    const b = renderHook(() => useFileColumns());
+    act(() => a.result.current.handleSortClick("size"));
+    expect(b.result.current.fileSort).toEqual({ column: "size", direction: "asc" });
+    act(() => b.result.current.handleSortClick("size"));
+    expect(a.result.current.fileSort).toEqual({ column: "size", direction: "desc" });
+    a.unmount();
+    act(() => b.result.current.handleSortClick("name"));
+    expect(b.result.current.fileSort).toEqual({ column: "name", direction: "asc" });
+  });
+
   it("applies the stored sort on mount", async () => {
     vi.mocked(loadFileManagerSort).mockResolvedValue({
       column: "size",

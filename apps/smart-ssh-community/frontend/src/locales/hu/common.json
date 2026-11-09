@@ -1498,6 +1498,9 @@
       "file": "Mentés",
       "sessions": "Bezárásra kerülő nyitott munkamenetek: {{count}}",
       "safety": "A jelenlegi adatok előbb ide kerülnek: {{dir}}. A szerverek egy új, “Previous data” nevű, mai dátumú mappába kerülnek.",
+      "pickDirTitle": "Mappa kiválasztása a biztonsági mentéshez",
+      "changeSafetyDir": "Módosítás…",
+      "changeSafetyDirFailed": "A mappát nem sikerült kiválasztani. Az alapértelmezett mappa marad.",
       "replace": "Adatok felülírása"
     },
     "counts": {

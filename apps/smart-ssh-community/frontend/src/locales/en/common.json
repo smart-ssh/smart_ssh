@@ -1498,6 +1498,9 @@
       "file": "Backup",
       "sessions": "Open sessions that will be closed: {{count}}",
       "safety": "Your current data is saved first to {{dir}}. Your current servers move to a new folder named “Previous data” with today’s date.",
+      "pickDirTitle": "Choose a folder for the safety backup",
+      "changeSafetyDir": "Change…",
+      "changeSafetyDirFailed": "The folder could not be chosen. The default folder stays.",
       "replace": "Replace data"
     },
     "counts": {

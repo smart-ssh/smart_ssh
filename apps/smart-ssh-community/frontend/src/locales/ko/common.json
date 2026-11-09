@@ -1490,6 +1490,9 @@
       "file": "백업",
       "sessions": "닫히는 열린 세션: {{count}}",
       "safety": "현재 데이터는 먼저 {{dir}}에 저장됩니다. 현재 서버는 오늘 날짜가 붙은 새 폴더 “Previous data”로 이동합니다.",
+      "pickDirTitle": "안전 백업 폴더 선택",
+      "changeSafetyDir": "변경…",
+      "changeSafetyDirFailed": "폴더를 선택하지 못했습니다. 기본 폴더가 유지됩니다.",
       "replace": "데이터 교체"
     },
     "counts": {

@@ -1498,6 +1498,9 @@
       "file": "Sicherung",
       "sessions": "Offene Sitzungen, die geschlossen werden: {{count}}",
       "safety": "Deine aktuellen Daten werden zuerst unter {{dir}} gesichert. Deine Server kommen in einen neuen Ordner “Previous data” mit dem heutigen Datum.",
+      "pickDirTitle": "Ordner für die Sicherheitskopie wählen",
+      "changeSafetyDir": "Ändern…",
+      "changeSafetyDirFailed": "Der Ordner konnte nicht gewählt werden. Der Standardordner bleibt.",
       "replace": "Daten ersetzen"
     },
     "counts": {

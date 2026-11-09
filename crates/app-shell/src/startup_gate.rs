@@ -116,6 +116,7 @@ mod tests {
             "new_backup_code",
             "export_encrypted_backup",
             "pick_backup_import_file",
+            "pick_backup_safety_dir",
             "start_backup_import",
             "confirm_backup_import",
             "cancel_backup_import",
