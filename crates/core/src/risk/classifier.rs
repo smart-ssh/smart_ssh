@@ -171,6 +171,18 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
         }
     }
 
+    // Issue #1232: the whitespace-based resolver above cannot see through
+    // quoted wrapper arguments; the quote-aware walk can (escalation only).
+    if depth == 0
+        && acc.server_risk < RiskLevel::Red
+        && command.contains(['\'', '"'])
+        && command.to_lowercase().contains("sftp-server")
+        && quoted_sftp_server_invocation(command)
+    {
+        acc.server_risk = RiskLevel::Red;
+        acc.server_risk_reason = Some(SFTP_SERVER_RED_REASON);
+    }
+
     if depth >= MAX_SUBSTITUTION_DEPTH {
         return;
     }
@@ -261,6 +273,9 @@ impl CommandCheckFinding {
     }
 }
 
+const SFTP_SERVER_RED_REASON: &str =
+    "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+
 /// ADR 0058 §8 (Entscheidung, 2026-09-21): liefert eine Begründung,
 /// wenn `command` `sftp-server` aufruft. Der Aufrufer
 /// (`app-shell::orchestration::handle_action_proposed`) macht aus
@@ -275,7 +290,7 @@ impl CommandCheckFinding {
 /// erkennen als das Rot-Muster. Bloße Erwähnungen (`ls`, `grep`, `which`,
 /// `cat` auf den Pfad) lösen nichts aus.
 pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFinding> {
-    const REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+    const REASON: &str = SFTP_SERVER_RED_REASON;
     if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
         return Some(CommandCheckFinding::NotAssessable(
             "Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe",
@@ -305,6 +320,11 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFindin
     {
         return Some(CommandCheckFinding::Match(REASON));
     }
+    // Quoted commands: the quote-aware walk finds the effective command
+    // (Issue #1232).
+    if command.contains(['\'', '"']) && quoted_sftp_server_invocation(command) {
+        return Some(CommandCheckFinding::Match(REASON));
+    }
     // (b) Wort-Prüfung.
     match sftp_server_word_check(command, 0) {
         WordCheck::Found => Some(CommandCheckFinding::Match(REASON)),
@@ -331,7 +351,21 @@ const COMMAND_PREFIXES: &[&str] = &[
     "ltrace", "script", "builtin",
 ];
 
+/// Quote-aware counterpart of the red pattern (Issue #1232): `true` when
+/// `command` starts `sftp-server` at the command position behind wrappers,
+/// env assignments and (quoted) option arguments, or inside the code string
+/// of a re-shell (`su root -c "…"`). Bare mentions stay `false`.
+pub(super) fn quoted_sftp_server_invocation(command: &str) -> bool {
+    sftp_server_word_check_mode(command, 0, true) == WordCheck::Found
+}
+
 fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
+    sftp_server_word_check_mode(command, depth, false)
+}
+
+/// `strict`: only a hit the red pattern would also count (command position,
+/// or nested code of a re-shell), not the broad "anywhere after a shell" hit.
+fn sftp_server_word_check_mode(command: &str, depth: usize, strict: bool) -> WordCheck {
     if depth > 3 {
         return WordCheck::TooDeep;
     }
@@ -382,11 +416,14 @@ fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
             }
         }
         let word_name = name(text);
-        if word_name == "sftp-server" && (at_command_position || has_reshell) {
+        if word_name == "sftp-server" && (at_command_position || (has_reshell && !strict)) {
             return WordCheck::Found;
         }
-        if text.contains(char::is_whitespace) && text.contains("sftp-server") {
-            let nested = sftp_server_word_check(text, depth + 1);
+        if text.contains(char::is_whitespace)
+            && text.contains("sftp-server")
+            && (!strict || has_reshell)
+        {
+            let nested = sftp_server_word_check_mode(text, depth + 1, strict);
             if nested != WordCheck::Clean {
                 return nested;
             }
