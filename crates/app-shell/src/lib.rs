@@ -10,6 +10,7 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+#[cfg(any(target_os = "android", test))]
 mod android_debug_switch;
 #[cfg(target_os = "android")]
 mod android_service;

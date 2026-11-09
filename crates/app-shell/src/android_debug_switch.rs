@@ -9,10 +9,12 @@
 use std::path::Path;
 
 /// Name of the marker file inside the data directory.
+#[cfg(any(target_os = "android", test))]
 pub(crate) const MARKER_FILE: &str = "force-keystore-unavailable";
 
 /// Whether the switch is active: only when `debug` is set and the marker exists.
 /// Kept free of `cfg` so the release behaviour is testable on the host.
+#[cfg(any(target_os = "android", test))]
 pub(crate) fn switch_active(data_dir: &Path, debug: bool) -> bool {
     debug && data_dir.join(MARKER_FILE).exists()
 }
