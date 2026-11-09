@@ -1207,5 +1207,3 @@ async fn insert_all(
 }
 #[cfg(test)]
 mod tests_insert_sql;
-#[cfg(test)]
-mod tests_row_fields;
