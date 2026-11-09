@@ -45,6 +45,14 @@ anderen nicht ab, jedes meldet sein eigenes Ergebnis.
   lässt den Job scheitern, und seine Namen werden ausgegeben. Der
   Build ohne Test-Features fängt Produktivcode, der einen nur für Tests
   gedachten Zugang aufruft.
+  `cargo-nextest` wird in der angepassten Version als fertiges Programm
+  installiert (Prüfsumme wird verifiziert), nicht aus dem Quelltext gebaut.
+  Build-Zwischenstände (Rust-Cache, Gradle-Cache) werden nur bei Läufen auf
+  einem Branch geschrieben, nicht bei Pull Requests: ein Pull Request liest
+  den Cache seines Basis-Branches, legt aber keinen eigenen an. So verdrängen
+  Pull Requests die Caches des Basis-Branches nicht, und ein Lauf findet
+  seinen Cache auch ohne vorherigen Lauf desselben Pull Requests. Ein Pull
+  Request, der `Cargo.lock` ändert, baut ohne passenden Cache von Grund auf.
 - **A10 — Grenzprüfung.** Die Tauri-freie Anwendungslogik (Spec 0084) hat
   in ihrem gesamten Abhängigkeitsbaum — direkt oder transitiv, normale,
   Build- und Dev-Abhängigkeiten, unter allen Features — weder Tauri noch
