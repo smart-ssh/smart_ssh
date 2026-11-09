@@ -1506,6 +1506,9 @@
       "file": "Copia",
       "sessions": "Sessioni aperte che verranno chiuse: {{count}}",
       "safety": "I tuoi dati attuali vengono prima salvati in {{dir}}. I tuoi server vanno in una nuova cartella “Previous data” con la data di oggi.",
+      "pickDirTitle": "Scegli una cartella per il backup di sicurezza",
+      "changeSafetyDir": "Cambia…",
+      "changeSafetyDirFailed": "Impossibile scegliere la cartella. Resta quella predefinita.",
       "replace": "Sostituisci dati"
     },
     "counts": {

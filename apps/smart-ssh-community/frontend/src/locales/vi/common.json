@@ -1490,6 +1490,9 @@
       "file": "Sao lưu",
       "sessions": "Phiên đang mở sẽ bị đóng: {{count}}",
       "safety": "Dữ liệu hiện tại được lưu trước vào {{dir}}. Máy chủ của bạn chuyển vào thư mục mới “Previous data” kèm ngày hôm nay.",
+      "pickDirTitle": "Chọn thư mục cho bản sao lưu an toàn",
+      "changeSafetyDir": "Thay đổi…",
+      "changeSafetyDirFailed": "Không thể chọn thư mục. Vẫn dùng thư mục mặc định.",
       "replace": "Thay thế dữ liệu"
     },
     "counts": {
