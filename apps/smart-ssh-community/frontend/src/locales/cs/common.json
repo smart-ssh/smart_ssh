@@ -85,6 +85,7 @@
       "no_session_bus": "nedostupná — není dosažitelná relační sběrnice D-Bus. Další krok: `sudo apt install dbus-user-session`, poté se znovu přihlaste.",
       "no_secret_service_provider": "nedostupná — neběží žádný poskytovatel Secret Service. Další krok: `sudo apt install gnome-keyring`, poté se znovu přihlaste — funguje to i v KDE. Pokud již používáte KWallet (`kwallet6`) nebo KeePassXC: jejich integrace Secret Service musí běžet nebo být zapnutá; samotná instalace nestačí.",
       "locked": "nedostupná — existuje, ale je zamčená. Další krok: odemkněte ji a restartujte Smart SSH. Žádný balíček nechybí.",
+      "no_keystore": "nedostupná — Android Keystore není k dispozici. Další krok: použijte místo něj hlavní heslo; vaše tajné údaje zůstávají v šifrované databázi.",
       "unknown": "nedostupná — příčina neznámá. Další krok: zkontrolujte, zda běží a je odemčen poskytovatel Secret Service (gnome-keyring, nebo KWallet či KeePassXC se zapnutou integrací Secret Service), poté restartujte Smart SSH."
     },
     "keychainBlocked": "Vaše tajné údaje to neovlivní — klíče API, hesla serverů, přístupové fráze a hesla sudo jsou uloženy v šifrované databázi, ne v klíčence.",
@@ -1514,6 +1515,9 @@
       "file": "Záloha",
       "sessions": "Otevřené relace, které budou zavřeny: {{count}}",
       "safety": "Aktuální data se nejprve uloží do {{dir}}. Vaše servery se přesunou do nové složky “Previous data” s dnešním datem.",
+      "pickDirTitle": "Vyberte složku pro záložní kopii",
+      "changeSafetyDir": "Změnit…",
+      "changeSafetyDirFailed": "Složku se nepodařilo vybrat. Zůstává výchozí složka.",
       "replace": "Nahradit data"
     },
     "counts": {
