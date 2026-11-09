@@ -92,6 +92,11 @@ verschoben hat (Spec 0109, I4), tragen die Markierung „Kopie".
   Markierung sofort. Bei der Gruppe fragt die App zuerst nach und nennt, wie
   viele Gruppen und Server betroffen sind; nach der Bestätigung verlieren die
   Gruppe, alle Untergruppen und alle Server darin die Markierung.
+- Im schmalen Layout gibt es kein Kontextmenü. Dort steht dieselbe Aktion im
+  „⋯"-Dialog der Verwalten-Ansicht eines markierten Servers oder einer
+  markierten Gruppe (neben „Verschieben nach…"); Zeilen ohne Markierung
+  bieten sie nicht an. In der Verbinden-Ansicht bekommen die Zeilen kein
+  zusätzliches Bedienelement.
 - Nichts außer dem Backup-Import setzt die Markierung. Sie hat keinen
   Einfluss auf Verbinden, Filterregeln, Risikoeinstufung oder Notizen und
   bleibt beim Verschieben und Bearbeiten erhalten.

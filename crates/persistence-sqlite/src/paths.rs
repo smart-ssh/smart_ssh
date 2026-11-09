@@ -72,17 +72,55 @@ fn resolve_data_dir() -> PathBuf {
 /// per Test abgesichert) — bestimmt den app-privaten Ordner auf Android.
 pub const ANDROID_APP_ID: &str = "com.smartssh.desktop";
 
-/// App-privates `files`-Verzeichnis unter Android (`/data/data/<id>/files`,
-/// entspricht `Context.getFilesDir()` / Tauris `app_data_dir`). Rein
-/// berechnet, damit es auf jedem Host testbar ist; kein Aufruf von
-/// `directories`.
-pub fn android_files_dir_for(app_id: &str) -> PathBuf {
-    PathBuf::from("/data/data").join(app_id).join("files")
+/// Android assigns each user profile a uid range of this size
+/// (`AID_USER_OFFSET`); the user id is `uid / 100000`.
+const ANDROID_AID_USER_OFFSET: u32 = 100_000;
+
+/// Android user id (0 = primary user) from a process uid. Pure, so it is
+/// testable on any host.
+pub fn android_user_id_from_uid(uid: u32) -> u32 {
+    uid / ANDROID_AID_USER_OFFSET
+}
+
+/// App-private base directory (`/data/data/<id>` for user 0, the historic
+/// location; `/data/user/<N>/<id>` for secondary users).
+fn android_app_dir_for(app_id: &str, user_id: u32) -> PathBuf {
+    if user_id == 0 {
+        PathBuf::from("/data/data").join(app_id)
+    } else {
+        PathBuf::from("/data/user")
+            .join(user_id.to_string())
+            .join(app_id)
+    }
+}
+
+/// App-privates `files`-Verzeichnis unter Android (entspricht
+/// `Context.getFilesDir()` / Tauris `app_data_dir`) für den Android-Nutzer
+/// `user_id`. Rein berechnet, damit es auf jedem Host testbar ist; kein
+/// Aufruf von `directories`.
+pub fn android_files_dir_for(app_id: &str, user_id: u32) -> PathBuf {
+    android_app_dir_for(app_id, user_id).join("files")
 }
 
 /// App-privates Cache-Verzeichnis unter Android (`Context.getCacheDir()`).
-pub fn android_cache_dir_for(app_id: &str) -> PathBuf {
-    PathBuf::from("/data/data").join(app_id).join("cache")
+pub fn android_cache_dir_for(app_id: &str, user_id: u32) -> PathBuf {
+    android_app_dir_for(app_id, user_id).join("cache")
+}
+
+/// Android user id of this process (`getuid() / 100000`); no `AppHandle` or
+/// JNI needed. Off Android there are no user profiles: 0.
+fn current_android_user_id() -> u32 {
+    #[cfg(target_os = "android")]
+    {
+        // SAFETY: `getuid` has no preconditions and cannot fail.
+        #[expect(unsafe_code, reason = "getuid(2) is infallible")]
+        let uid = unsafe { libc::getuid() };
+        android_user_id_from_uid(uid)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        0
+    }
 }
 
 /// Fehler von [`set_android_app_id`].
@@ -157,12 +195,12 @@ pub fn set_android_app_id(app_id: &str) -> Result<(), AndroidAppIdError> {
 
 /// [`android_files_dir_for`] mit der wirksamen Application-ID.
 pub fn android_files_dir() -> PathBuf {
-    android_files_dir_for(&APP_ID_STATE.resolve())
+    android_files_dir_for(&APP_ID_STATE.resolve(), current_android_user_id())
 }
 
 /// [`android_cache_dir_for`] mit der wirksamen Application-ID.
 pub fn android_cache_dir() -> PathBuf {
-    android_cache_dir_for(&APP_ID_STATE.resolve())
+    android_cache_dir_for(&APP_ID_STATE.resolve(), current_android_user_id())
 }
 
 #[cfg(not(target_os = "android"))]
@@ -229,9 +267,29 @@ mod tests {
     #[test]
     fn test_android_files_dir_is_app_private_and_needs_no_home() {
         assert_eq!(
-            android_files_dir_for("dev.example.app"),
+            android_files_dir_for("dev.example.app", 0),
             PathBuf::from("/data/data/dev.example.app/files")
         );
+        assert_eq!(
+            android_files_dir_for("dev.example.app", 10),
+            PathBuf::from("/data/user/10/dev.example.app/files")
+        );
+        assert_eq!(
+            android_cache_dir_for("dev.example.app", 10),
+            PathBuf::from("/data/user/10/dev.example.app/cache")
+        );
+    }
+
+    #[test]
+    fn test_android_user_id_from_uid() {
+        assert_eq!(android_user_id_from_uid(10_123), 0);
+        assert_eq!(android_user_id_from_uid(1_010_123), 10);
+        assert_eq!(android_user_id_from_uid(100_000), 1);
+    }
+
+    #[test]
+    fn test_current_user_resolves_to_primary_location_off_android() {
+        assert_eq!(current_android_user_id(), 0);
     }
 
     #[test]
@@ -246,11 +304,11 @@ mod tests {
         );
         let id = st.resolve();
         assert_eq!(
-            android_files_dir_for(&id),
+            android_files_dir_for(&id, 0),
             PathBuf::from("/data/data/dev.example.app/files")
         );
         assert_eq!(
-            android_cache_dir_for(&id),
+            android_cache_dir_for(&id, 0),
             PathBuf::from("/data/data/dev.example.app/cache")
         );
         assert_eq!(

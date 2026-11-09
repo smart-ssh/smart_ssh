@@ -1507,6 +1507,9 @@
       "file": "Sauvegarde",
       "sessions": "Sessions ouvertes qui seront fermées : {{count}}",
       "safety": "Vos données actuelles sont d’abord enregistrées dans {{dir}}. Vos serveurs vont dans un nouveau dossier « Previous data » portant la date du jour.",
+      "pickDirTitle": "Choisir un dossier pour la sauvegarde de sécurité",
+      "changeSafetyDir": "Modifier…",
+      "changeSafetyDirFailed": "Le dossier n’a pas pu être choisi. Le dossier par défaut est conservé.",
       "replace": "Remplacer les données"
     },
     "counts": {

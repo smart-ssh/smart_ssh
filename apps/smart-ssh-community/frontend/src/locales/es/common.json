@@ -1507,6 +1507,9 @@
       "file": "Copia",
       "sessions": "Sesiones abiertas que se cerrarán: {{count}}",
       "safety": "Tus datos actuales se guardan antes en {{dir}}. Tus servidores pasan a una carpeta nueva llamada “Previous data” con la fecha de hoy.",
+      "pickDirTitle": "Elegir una carpeta para la copia de seguridad",
+      "changeSafetyDir": "Cambiar…",
+      "changeSafetyDirFailed": "No se pudo elegir la carpeta. Se mantiene la carpeta predeterminada.",
       "replace": "Reemplazar datos"
     },
     "counts": {

@@ -58,7 +58,7 @@ fn web_tool_definition() -> Value {
 }
 
 pub struct OpenAiResponsesProvider {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, ssh_manager_core::ai::AiError>,
     base_url: String,
     model: String,
     api_key: String,
@@ -185,7 +185,10 @@ impl AiProvider for OpenAiResponsesProvider {
             .as_u64()
             .unwrap_or(u64::from(model_max_tokens)) as u32;
 
-        let client = self.client.clone();
+        let client = match &self.client {
+            Ok(c) => c.clone(),
+            Err(e) => return crate::error::error_stream(e.clone()),
+        };
         let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;

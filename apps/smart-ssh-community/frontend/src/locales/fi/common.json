@@ -1499,6 +1499,9 @@
       "file": "Varmuuskopio",
       "sessions": "Suljettavat avoimet istunnot: {{count}}",
       "safety": "Nykyiset tiedot tallennetaan ensin kohteeseen {{dir}}. Palvelimesi siirtyvät uuteen kansioon “Previous data” tämän päivän päiväyksellä.",
+      "pickDirTitle": "Valitse kansio turvavarmuuskopiolle",
+      "changeSafetyDir": "Vaihda…",
+      "changeSafetyDirFailed": "Kansiota ei voitu valita. Oletuskansio säilyy.",
       "replace": "Korvaa tiedot"
     },
     "counts": {

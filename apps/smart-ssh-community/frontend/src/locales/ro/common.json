@@ -1507,6 +1507,9 @@
       "file": "Copie",
       "sessions": "Sesiuni deschise care vor fi închise: {{count}}",
       "safety": "Datele curente se salvează mai întâi în {{dir}}. Serverele dvs. se mută într-un folder nou numit “Previous data”, cu data de azi.",
+      "pickDirTitle": "Alege un folder pentru copia de siguranță",
+      "changeSafetyDir": "Schimbă…",
+      "changeSafetyDirFailed": "Folderul nu a putut fi ales. Rămâne folderul implicit.",
       "replace": "Înlocuiește datele"
     },
     "counts": {

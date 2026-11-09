@@ -1491,6 +1491,9 @@
       "file": "Cadangan",
       "sessions": "Sesi terbuka yang akan ditutup: {{count}}",
       "safety": "Data Anda saat ini disimpan dulu ke {{dir}}. Server Anda dipindahkan ke folder baru bernama “Previous data” dengan tanggal hari ini.",
+      "pickDirTitle": "Pilih folder untuk cadangan pengaman",
+      "changeSafetyDir": "Ubah…",
+      "changeSafetyDirFailed": "Folder tidak dapat dipilih. Folder default tetap digunakan.",
       "replace": "Ganti data"
     },
     "counts": {

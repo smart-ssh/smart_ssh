@@ -1515,6 +1515,9 @@
       "file": "Záloha",
       "sessions": "Otevřené relace, které budou zavřeny: {{count}}",
       "safety": "Aktuální data se nejprve uloží do {{dir}}. Vaše servery se přesunou do nové složky “Previous data” s dnešním datem.",
+      "pickDirTitle": "Vyberte složku pro záložní kopii",
+      "changeSafetyDir": "Změnit…",
+      "changeSafetyDirFailed": "Složku se nepodařilo vybrat. Zůstává výchozí složka.",
       "replace": "Nahradit data"
     },
     "counts": {

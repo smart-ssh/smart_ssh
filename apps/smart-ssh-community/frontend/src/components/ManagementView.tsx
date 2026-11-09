@@ -189,6 +189,7 @@ export function ManagementView({
         onImportSshConfig={() => setImportOpen(true)}
         onExportSshConfig={() => setExportOpen(true)}
         onMove={(item, target) => void handleMove(item, target)}
+        onKeptAsRegular={reload}
       />
       </div>
       )}
