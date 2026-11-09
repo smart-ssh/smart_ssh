@@ -1514,6 +1514,9 @@
       "file": "Kopia",
       "sessions": "Otwarte sesje do zamknięcia: {{count}}",
       "safety": "Bieżące dane są najpierw zapisywane w {{dir}}. Serwery trafiają do nowego folderu “Previous data” z dzisiejszą datą.",
+      "pickDirTitle": "Wybierz folder na kopię zapasową",
+      "changeSafetyDir": "Zmień…",
+      "changeSafetyDirFailed": "Nie udało się wybrać folderu. Pozostaje folder domyślny.",
       "replace": "Zastąp dane"
     },
     "counts": {

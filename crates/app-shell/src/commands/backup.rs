@@ -183,6 +183,9 @@ async fn export_via_staging(
 pub struct BackupImportSlot {
     file: std::sync::Mutex<Option<ChosenFile>>,
     pending: tokio::sync::Mutex<Option<PendingImport>>,
+    /// Safety-backup folder chosen for this import only (Spec 0109, I4.1);
+    /// `None` = the default folder. Never persisted, never set by the frontend.
+    safety_dir: std::sync::Mutex<Option<std::path::PathBuf>>,
 }
 
 /// The file to import and, when it is an app-private copy of a `content://`
@@ -343,8 +346,43 @@ pub async fn pick_backup_import_file(
     };
     slot.clear_file();
     *lock_tolerating_poison(&slot.file) = Some(chosen);
+    *lock_tolerating_poison(&slot.safety_dir) = None;
     *slot.pending.lock().await = None;
     Ok(Some(name))
+}
+
+/// Opens the system folder picker for the safety backup of the pending
+/// import. Returns the chosen folder (for display) or `None` when cancelled
+/// (the previous choice / the default stays). The path is kept in the backend.
+#[tauri::command]
+pub async fn pick_backup_safety_dir(
+    app: AppHandle,
+    slot: State<'_, BackupImportSlot>,
+    title: String,
+) -> CommandResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title(&title)
+        .pick_folder(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(picked) = rx.await.ok().flatten() else {
+        return Ok(None);
+    };
+    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
+    // A `content://` tree URI has no filesystem path the safety backup could
+    // be written to; refuse instead of silently using another folder.
+    let Some(dir) = handle.as_path().map(std::path::Path::to_path_buf) else {
+        return Err(CommandError::with_code(
+            "the chosen folder is not a filesystem path",
+            "BACKUP_SAFETY_DIR_UNSUPPORTED",
+        ));
+    };
+    let shown = dir.to_string_lossy().into_owned();
+    *lock_tolerating_poison(&slot.safety_dir) = Some(dir);
+    Ok(Some(shown))
 }
 
 /// The one place the `ImportContext` of start/confirm is built.
@@ -442,7 +480,9 @@ pub async fn confirm_backup_import(
     };
     // The pending import holds the decrypted content; the staged file is done.
     slot.clear_file();
-    let safety_dir = default_safety_dir(&app);
+    let safety_dir = lock_tolerating_poison(&slot.safety_dir)
+        .take()
+        .unwrap_or_else(|| default_safety_dir(&app));
     let sessions = crate::sessions::AppOpenSessions::new(app.clone());
     let ctx = import_context(&state, &safety_dir, &sessions);
     let summary = pending.confirm(&ctx).await.map_err(command_error)?;
@@ -453,6 +493,7 @@ pub async fn confirm_backup_import(
 #[tauri::command]
 pub async fn cancel_backup_import(slot: State<'_, BackupImportSlot>) -> CommandResult<()> {
     *slot.pending.lock().await = None;
+    *lock_tolerating_poison(&slot.safety_dir) = None;
     slot.clear_file();
     Ok(())
 }

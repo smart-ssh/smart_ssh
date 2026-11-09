@@ -17,6 +17,7 @@ vi.mock("../api/api", async () =>
     setBackupPassphrase: vi.fn(() => Promise.resolve()),
     exportEncryptedBackup: vi.fn(),
     pickBackupImportFile: vi.fn(),
+    pickBackupSafetyDir: vi.fn(),
     startBackupImport: vi.fn(),
     confirmBackupImport: vi.fn(),
     cancelBackupImport: vi.fn(() => Promise.resolve()),
@@ -191,6 +192,24 @@ describe("BackupSettings", () => {
       expect(restored).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(restored).toHaveBeenCalledTimes(1);
+    });
+
+    it("Change… updates the shown safety folder; cancelling the picker keeps it", async () => {
+      vi.mocked(api.startBackupImport).mockResolvedValue({
+        imported: null,
+        preview: { local: COUNTS, file: FILE_COUNTS, openSessions: 0, safetyBackupDir: "/docs/Smart SSH backups" },
+      });
+      renderSection();
+      await open();
+      await screen.findByText(/\/docs\/Smart SSH backups/);
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce(null);
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      await waitFor(() => expect(api.pickBackupSafetyDir).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/\/docs\/Smart SSH backups/)).toBeTruthy();
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce("/mnt/safe");
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      expect(await screen.findByText(/\/mnt\/safe/)).toBeTruthy();
+      expect(screen.queryByText(/\/docs\/Smart SSH backups/)).toBeNull();
     });
 
     it("an empty device imports directly and shows the summary", async () => {

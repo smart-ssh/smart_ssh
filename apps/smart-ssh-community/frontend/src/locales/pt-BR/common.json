@@ -1506,6 +1506,9 @@
       "file": "Cópia",
       "sessions": "Sessões abertas que serão fechadas: {{count}}",
       "safety": "Seus dados atuais são salvos antes em {{dir}}. Seus servidores vão para uma nova pasta “Previous data” com a data de hoje.",
+      "pickDirTitle": "Escolher uma pasta para o backup de segurança",
+      "changeSafetyDir": "Alterar…",
+      "changeSafetyDirFailed": "Não foi possível escolher a pasta. A pasta padrão será mantida.",
       "replace": "Substituir dados"
     },
     "counts": {

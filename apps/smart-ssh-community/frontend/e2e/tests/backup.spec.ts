@@ -58,6 +58,22 @@ test.describe("encrypted backup", () => {
     await expect(summary).toContainText("smart-ssh-before-import.sshbackup");
   });
 
+  test("the safety-backup folder can be changed before confirming", async ({ app }) => {
+    await app.launch(populated());
+    const page = app.page;
+    const settings = await openBackupSection(page);
+    await settings.getByRole("button", { name: "Restore from backup…" }).click();
+    const restore = page.getByRole("dialog", { name: "Restore from backup" });
+    await restore.getByRole("textbox", { name: "Recovery code" }).fill("ABCDE-FGHJK");
+    await restore.getByRole("button", { name: "Open backup" }).click();
+    const confirm = page.getByRole("alertdialog", { name: "Replace your data?" });
+    await expect(confirm).toContainText("/home/e2e/Documents/Smart SSH backups");
+    await confirm.getByRole("button", { name: "Change…" }).click();
+    await expect(confirm).toContainText("/mnt/e2e/safety");
+    await confirm.getByRole("button", { name: "Replace data" }).click();
+    await expect(page.getByRole("dialog", { name: "Backup restored" })).toContainText("/mnt/e2e/safety/smart-ssh-before-import.sshbackup");
+  });
+
   test("cancelling the confirmation changes nothing", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
