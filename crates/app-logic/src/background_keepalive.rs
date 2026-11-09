@@ -8,6 +8,7 @@
 
 use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// The platform side of the keep-alive.
 pub trait ForegroundService: Send + Sync {
@@ -122,6 +123,72 @@ pub fn background_activity() -> ActivityGuard {
     }
 }
 
+/// Idle timeout of the interactive terminal's wake lock (issue #784,
+/// ADR 0156).
+pub const TERMINAL_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Wake lock for an interactive shell: held while input or output happened
+/// within `timeout`, released afterwards and on drop. A shell has no
+/// "command finished" signal, so activity is the only usable heuristic.
+pub struct IdleActivity {
+    controller: Option<Arc<KeepAliveController>>,
+    timeout: Duration,
+    guard: Option<ActivityGuard>,
+    deadline: Option<Instant>,
+}
+
+impl IdleActivity {
+    /// Uses the installed controller (inert when there is none).
+    pub fn new() -> Self {
+        Self::with_controller(INSTALLED.get().cloned(), TERMINAL_IDLE_TIMEOUT)
+    }
+
+    pub fn with_controller(
+        controller: Option<Arc<KeepAliveController>>,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            controller,
+            timeout,
+            guard: None,
+            deadline: None,
+        }
+    }
+
+    /// Input or output happened now.
+    pub fn touch(&mut self) {
+        self.touch_at(Instant::now());
+    }
+
+    pub fn touch_at(&mut self, now: Instant) {
+        let Some(c) = &self.controller else { return };
+        if self.guard.is_none() {
+            self.guard = Some(c.begin_activity());
+        }
+        self.deadline = Some(now + self.timeout);
+    }
+
+    /// When the lock is released unless more activity comes; `None` while
+    /// not held.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
+    /// Releases the lock if the deadline has passed.
+    pub fn release_if_idle(&mut self, now: Instant) {
+        if self.deadline.is_some_and(|d| now >= d) {
+            self.guard = None;
+            self.deadline = None;
+        }
+    }
+}
+
+impl Default for IdleActivity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +269,66 @@ mod tests {
     #[test]
     fn activity_guard_without_controller_is_inert() {
         drop(background_activity());
+    }
+
+    const T: Duration = Duration::from_secs(60);
+
+    #[test]
+    fn terminal_activity_takes_lock_and_idle_releases_it() {
+        let (rec, c) = setup();
+        c.on_session_count(1);
+        let mut idle = IdleActivity::with_controller(Some(c), T);
+        let t0 = Instant::now();
+        idle.touch_at(t0);
+        idle.touch_at(t0 + Duration::from_secs(30)); // extends, no second acquire
+        idle.release_if_idle(t0 + Duration::from_secs(70)); // 40 s after last: still held
+        assert_eq!(idle.deadline(), Some(t0 + Duration::from_secs(90)));
+        idle.release_if_idle(t0 + Duration::from_secs(90));
+        assert_eq!(idle.deadline(), None);
+        assert_eq!(log_of(&rec), ["start 1", "wake true", "wake false"]);
+        idle.touch_at(t0 + Duration::from_secs(100)); // new activity re-acquires
+        assert_eq!(log_of(&rec).last().unwrap(), "wake true");
+    }
+
+    #[test]
+    fn terminal_lock_is_released_on_drop() {
+        let (rec, c) = setup();
+        c.on_session_count(1);
+        let mut idle = IdleActivity::with_controller(Some(c), T);
+        idle.touch_at(Instant::now());
+        drop(idle);
+        assert_eq!(log_of(&rec), ["start 1", "wake true", "wake false"]);
+    }
+
+    #[test]
+    fn terminal_lock_overlaps_with_ai_command() {
+        let (rec, c) = setup();
+        c.on_session_count(1);
+        let mut idle = IdleActivity::with_controller(Some(c.clone()), T);
+        let t0 = Instant::now();
+        idle.touch_at(t0);
+        let ai = c.begin_activity();
+        idle.release_if_idle(t0 + T); // terminal idle, AI command still running
+        assert_eq!(log_of(&rec), ["start 1", "wake true"]);
+        drop(ai);
+        assert_eq!(log_of(&rec), ["start 1", "wake true", "wake false"]);
+    }
+
+    #[test]
+    fn terminal_lock_survives_session_close_without_leak() {
+        let (rec, c) = setup();
+        c.on_session_count(1);
+        let mut idle = IdleActivity::with_controller(Some(c.clone()), T);
+        idle.touch_at(Instant::now());
+        c.on_session_count(0);
+        drop(idle);
+        assert_eq!(log_of(&rec), ["start 1", "wake true", "wake false", "stop"]);
+    }
+
+    #[test]
+    fn terminal_activity_without_controller_is_inert() {
+        let mut idle = IdleActivity::with_controller(None, T);
+        idle.touch_at(Instant::now());
+        assert_eq!(idle.deadline(), None);
     }
 }

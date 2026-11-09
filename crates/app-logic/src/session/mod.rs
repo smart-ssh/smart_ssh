@@ -1053,11 +1053,15 @@ pub fn spawn_terminal_actor(
         // order is kept and nothing is dropped.
         let mut pending: Vec<u8> = Vec::new();
         let mut flush_at: Option<tokio::time::Instant> = None;
+        // Issue #784: wake lock while the terminal has recent input/output.
+        // Failures are logged inside the controller and never end the loop.
+        let mut idle = crate::background_keepalive::IdleActivity::new();
         let disconnect_reason: Option<Option<String>> = loop {
             tokio::select! {
                 read_result = shell.read() => {
                     match read_result {
                         Ok(data) if !data.is_empty() => {
+                            idle.touch();
                             if pending.is_empty() {
                                 flush_at = Some(tokio::time::Instant::now() + TERMINAL_COALESCE_INTERVAL);
                             }
@@ -1075,9 +1079,15 @@ pub fn spawn_terminal_actor(
                 {
                     terminal_output::flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
                 }
+                _ = async { tokio::time::sleep_until(idle.deadline().map(tokio::time::Instant::from_std).unwrap_or_else(tokio::time::Instant::now)).await },
+                    if idle.deadline().is_some() =>
+                {
+                    idle.release_if_idle(std::time::Instant::now());
+                }
                 cmd = commands.recv() => {
                     match cmd {
                         Some(TerminalCommand::Write(data)) => {
+                            idle.touch();
                             if let Err(err) = shell.write(&data).await {
                                 break Some(Some(err.to_string()));
                             }
