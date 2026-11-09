@@ -60,7 +60,6 @@ macro_rules! rows {
     ($($(#[$m:meta])* $name:ident { $($field:ident : $ty:ty),* $(,)? })*) => {$(
         $(#[$m])*
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-        #[serde(deny_unknown_fields)]
         pub struct $name { $(pub $field: $ty),* }
     )*};
 }
@@ -72,7 +71,6 @@ fn is_false(b: &bool) -> bool {
 /// Row of `groups`. `is_copy` is an optional field (Spec 0109, F7): absent
 /// means `false`, and it is only written when set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct GroupRow {
     pub id: Uuid,
     pub name: String,
@@ -88,7 +86,6 @@ pub struct GroupRow {
 /// a key file is exported as the path the record holds). `is_copy` as for
 /// [`GroupRow`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ServerRow {
     pub id: Uuid,
     pub name: String,
@@ -144,7 +141,6 @@ rows! {
 
 /// Row of `secrets` (`value` is cleared when dropped).
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SecretRow {
     pub owner_ref: String,
     pub value: String,
@@ -1209,3 +1205,5 @@ async fn insert_all(
 }
 #[cfg(test)]
 mod tests_insert_sql;
+#[cfg(test)]
+mod tests_row_fields;
