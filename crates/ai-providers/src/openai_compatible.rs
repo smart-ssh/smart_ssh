@@ -42,7 +42,7 @@ use crate::request_logging::log_outgoing_context;
 use crate::sse::build_http_client;
 
 pub struct OpenAiCompatibleProvider {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, ssh_manager_core::ai::AiError>,
     /// Ohne abschließenden Slash, z. B. `https://api.openai.com/v1` oder
     /// `http://localhost:11434/v1` (Ollama, OpenAI-kompatibler Modus).
     /// Es wird `/chat/completions` angehängt.
@@ -220,7 +220,10 @@ impl AiProvider for OpenAiCompatibleProvider {
             return error_stream(err);
         }
 
-        let client = self.client.clone();
+        let client = match &self.client {
+            Ok(c) => c.clone(),
+            Err(e) => return error_stream(e.clone()),
+        };
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let api_key = self.api_key.clone();
         let native_tool_calling = self.supports_native_tool_calling;

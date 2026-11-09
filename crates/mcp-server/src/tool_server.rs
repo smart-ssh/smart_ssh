@@ -10,7 +10,7 @@ use std::time::Duration;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, ContentBlock, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo,
+    CallToolResult, ContentBlock, Implementation, ProtocolVersion, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
@@ -346,8 +346,8 @@ impl SmartSshMcpServer {
 
 #[tool_handler]
 impl ServerHandler for SmartSshMcpServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             // `Implementation::from_build_env()` liest `CARGO_PKG_NAME` zur
             // Kompilierzeit von `rmcp` selbst aus (nicht von dieser Crate)
             // und zeigt MCP-Clients dadurch fälschlich "rmcp" statt eines
