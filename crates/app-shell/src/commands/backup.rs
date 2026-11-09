@@ -360,29 +360,40 @@ pub async fn pick_backup_safety_dir(
     slot: State<'_, BackupImportSlot>,
     title: String,
 ) -> CommandResult<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title(&title)
-        .pick_folder(move |path| {
-            let _ = tx.send(path);
-        });
-    let Some(picked) = rx.await.ok().flatten() else {
-        return Ok(None);
-    };
-    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
-    // A `content://` tree URI has no filesystem path the safety backup could
-    // be written to; refuse instead of silently using another folder.
-    let Some(dir) = handle.as_path().map(std::path::Path::to_path_buf) else {
-        return Err(CommandError::with_code(
-            "the chosen folder is not a filesystem path",
+    // The mobile dialog plugin has no folder picker (a `content://` tree has
+    // no path to write to): the default folder stays there.
+    #[cfg(target_os = "android")]
+    {
+        let _ = (&app, &slot, &title);
+        Err(CommandError::with_code(
+            "choosing a folder is not supported on this platform",
             "BACKUP_SAFETY_DIR_UNSUPPORTED",
-        ));
-    };
-    let shown = dir.to_string_lossy().into_owned();
-    *lock_tolerating_poison(&slot.safety_dir) = Some(dir);
-    Ok(Some(shown))
+        ))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri_plugin_dialog::DialogExt;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title(&title)
+            .pick_folder(move |path| {
+                let _ = tx.send(path);
+            });
+        let Some(picked) = rx.await.ok().flatten() else {
+            return Ok(None);
+        };
+        let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
+        let Some(dir) = handle.as_path().map(std::path::Path::to_path_buf) else {
+            return Err(CommandError::with_code(
+                "the chosen folder is not a filesystem path",
+                "BACKUP_SAFETY_DIR_UNSUPPORTED",
+            ));
+        };
+        let shown = dir.to_string_lossy().into_owned();
+        *lock_tolerating_poison(&slot.safety_dir) = Some(dir);
+        Ok(Some(shown))
+    }
 }
 
 /// The one place the `ImportContext` of start/confirm is built.
