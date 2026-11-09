@@ -1026,7 +1026,8 @@
       "authentication": "Todennus",
       "sessionReady": "Istunto muodostettu",
       "dnsSkipped": "IP-osoite – hakua ei tarvita",
-      "outdatedAlgorithms": "Vanhentuneet algoritmit"
+      "outdatedAlgorithms": "Vanhentuneet algoritmit",
+      "banner": "Palvelimen banneri"
     },
     "status": {
       "ok": "OK",

@@ -1026,7 +1026,8 @@
       "authentication": "Anmeldung",
       "sessionReady": "Sitzung aufgebaut",
       "dnsSkipped": "IP-Adresse – keine Auflösung nötig",
-      "outdatedAlgorithms": "Veraltete Algorithmen"
+      "outdatedAlgorithms": "Veraltete Algorithmen",
+      "banner": "Banner des Servers"
     },
     "status": {
       "ok": "OK",
