@@ -10,6 +10,7 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+mod android_debug_switch;
 #[cfg(target_os = "android")]
 mod android_service;
 mod auto_reconnect;
@@ -542,6 +543,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // eines abgestürzten oder beendeten Prozesses. Best effort, blockiert
     // den Start nie.
     edit_copies::sweep_at_startup(data_dir_lock.dir());
+    // Issue #782: debug-only tester switch, before the first store access.
+    #[cfg(target_os = "android")]
+    android_debug_switch::apply(data_dir_lock.dir());
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
