@@ -10,6 +10,7 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+mod android_debug_switch;
 #[cfg(target_os = "android")]
 mod android_service;
 mod auto_reconnect;
@@ -31,6 +32,7 @@ mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
 mod local_file;
+pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -71,8 +73,7 @@ mod test_support;
 mod ui_language;
 pub mod ui_preferences;
 mod voice_input;
-/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
-/// Passwort-Modus.
+/// Spec 0101, §2 Frage 3: Startdialoge im Fenster (Passwort-Modus).
 mod window_prompt;
 mod wiring;
 
@@ -536,12 +537,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         }
     };
 
-    // Issue #93: erst jetzt, mit gehaltener Sperre — kein anderer Prozess
-    // nutzt dieses Datenverzeichnis, und noch existiert keine Sitzung. Alles
-    // im Editier-Kopien-Ordner dieser Instanz ist also ein Überbleibsel
-    // eines abgestürzten oder beendeten Prozesses. Best effort, blockiert
-    // den Start nie.
+    // Issue #93: erst jetzt, mit gehaltener Sperre: alles im Editier-Kopien-
+    // Ordner ist ein Überbleibsel eines früheren Prozesses. Best effort.
     edit_copies::sweep_at_startup(data_dir_lock.dir());
+    android_debug_switch::apply(data_dir_lock.dir());
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
@@ -907,7 +906,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::set_backup_passphrase,
             commands::new_backup_code,
             commands::export_encrypted_backup,
-            commands::pick_backup_import_file,
+            commands::pick_backup_import_file, commands::pick_backup_safety_dir,
             commands::start_backup_import,
             commands::confirm_backup_import,
             commands::cancel_backup_import,

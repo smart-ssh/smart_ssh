@@ -85,6 +85,7 @@
       "no_session_bus": "사용할 수 없음 — D-Bus 세션 버스에 연결할 수 없습니다. 다음 단계: `sudo apt install dbus-user-session` 실행 후 다시 로그인하십시오.",
       "no_secret_service_provider": "사용할 수 없음 — 실행 중인 Secret Service 제공자가 없습니다. 다음 단계: `sudo apt install gnome-keyring` 실행 후 다시 로그인하십시오. KDE에서도 동작합니다. 이미 KWallet(`kwallet6`) 또는 KeePassXC를 사용 중이라면 해당 프로그램의 Secret Service 연동이 실행 중이거나 켜져 있어야 하며, 설치만으로는 충분하지 않습니다.",
       "locked": "사용할 수 없음 — 존재하지만 잠겨 있습니다. 다음 단계: 잠금을 해제하고 Smart SSH를 다시 시작하십시오. 누락된 패키지는 없습니다.",
+      "no_keystore": "사용할 수 없음 — Android Keystore를 사용할 수 없습니다. 다음 단계: 대신 마스터 비밀번호를 사용하십시오. 비밀 정보는 암호화된 데이터베이스에 그대로 남아 있습니다.",
       "unknown": "사용할 수 없음 — 원인을 알 수 없습니다. 다음 단계: Secret Service 제공자(gnome-keyring, 또는 Secret Service 연동을 켠 KWallet 또는 KeePassXC)가 실행 중이며 잠금 해제되어 있는지 확인한 후 Smart SSH를 다시 시작하십시오."
     },
     "keychainBlocked": "이 문제는 비밀 정보에 영향을 주지 않습니다. API 키, 서버 비밀번호, 암호문, sudo 비밀번호는 키체인이 아니라 암호화된 데이터베이스에 저장됩니다.",
@@ -1490,6 +1491,9 @@
       "file": "백업",
       "sessions": "닫히는 열린 세션: {{count}}",
       "safety": "현재 데이터는 먼저 {{dir}}에 저장됩니다. 현재 서버는 오늘 날짜가 붙은 새 폴더 “Previous data”로 이동합니다.",
+      "pickDirTitle": "안전 백업 폴더 선택",
+      "changeSafetyDir": "변경…",
+      "changeSafetyDirFailed": "폴더를 선택하지 못했습니다. 기본 폴더가 유지됩니다.",
       "replace": "데이터 교체"
     },
     "counts": {

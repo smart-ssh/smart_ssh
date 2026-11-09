@@ -85,6 +85,7 @@
       "no_session_bus": "indisponível — nenhum barramento de sessão D-Bus acessível. Próximo passo: `sudo apt install dbus-user-session` e, em seguida, faça login novamente.",
       "no_secret_service_provider": "indisponível — nenhum provedor de Secret Service está em execução. Próximo passo: `sudo apt install gnome-keyring` e, em seguida, faça login novamente — isso também funciona no KDE. Se o senhor já usa o KWallet (`kwallet6`) ou o KeePassXC: a integração com o Secret Service deve estar em execução ou ativada; instalá-los não basta.",
       "locked": "indisponível — presente, mas bloqueado. Próximo passo: desbloqueie-o e reinicie o Smart SSH. Nenhum pacote está faltando.",
+      "no_keystore": "indisponível — o Keystore do Android não está disponível. Próximo passo: use uma senha mestra; seus segredos continuam no banco de dados criptografado.",
       "unknown": "indisponível — causa desconhecida. Próximo passo: verifique se um provedor de Secret Service está em execução e desbloqueado (gnome-keyring, ou KWallet ou KeePassXC com a integração com o Secret Service ativada) e reinicie o Smart SSH."
     },
     "keychainBlocked": "Isso não afeta os seus segredos — chaves de API, senhas de servidores, frases secretas e senhas de sudo ficam no banco de dados criptografado, não no chaveiro.",
@@ -1506,6 +1507,9 @@
       "file": "Cópia",
       "sessions": "Sessões abertas que serão fechadas: {{count}}",
       "safety": "Seus dados atuais são salvos antes em {{dir}}. Seus servidores vão para uma nova pasta “Previous data” com a data de hoje.",
+      "pickDirTitle": "Escolher uma pasta para o backup de segurança",
+      "changeSafetyDir": "Alterar…",
+      "changeSafetyDirFailed": "Não foi possível escolher a pasta. A pasta padrão será mantida.",
       "replace": "Substituir dados"
     },
     "counts": {
