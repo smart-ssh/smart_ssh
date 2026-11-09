@@ -1173,6 +1173,7 @@ mod tests {
                 keychain: credentials_keyring::KeychainAvailability::Available,
                 outgoing_transform: None,
                 ai_usage_observers: Default::default(),
+                ai_provider_decorators: Default::default(),
             },
             Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),

@@ -99,6 +99,7 @@ pub async fn request_note_shrink(
         state.credential_store.clone(),
         &active_config,
         false,
+        &state.ai_provider_decorators,
     )
     .await
     .map_err(secret_store_error)?;

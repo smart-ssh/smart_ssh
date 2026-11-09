@@ -42,6 +42,10 @@ pub use crate::orchestration::accept_extension_content;
 // --- AI usage ------------------------------------------------------------
 pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 
+// --- AI provider decorators ----------------------------------------------
+pub use crate::ai_provider_decorator::{apply_decorators, AiProviderDecorator, AiProviderInfo};
+pub use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, ProviderType, RedactedContext};
+
 // --- Backup / snapshot ---------------------------------------------------
 pub use crate::backup::{
     apply_changes, open_backup, start_import_snapshot, BackupKey, BackupOpError, Change, ChangeSet,

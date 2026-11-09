@@ -241,6 +241,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        ai_provider_decorators: Default::default(),
     };
     Fixture {
         state,

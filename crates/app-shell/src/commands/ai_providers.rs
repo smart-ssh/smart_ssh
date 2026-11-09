@@ -12,7 +12,7 @@ use ssh_manager_core::ai::{
     AiError, AiEvent, AiProvider, ChatMessage, MessageContent, ProviderId, Role, SessionContext,
 };
 
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::{build_ai_provider, decorate_provider};
 use app_logic::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
 use app_logic::error::{secret_store_error, CommandError, CommandResult, StoreResultExt};
 use app_logic::state::AppState;
@@ -417,6 +417,13 @@ pub async fn test_ai_provider_credentials(
         config.max_tokens_override,
         // Issue #162: der Zugangsdaten-Test braucht keine Web-Werkzeuge.
         false,
+    );
+    let provider = decorate_provider(
+        &state.ai_provider_decorators,
+        config.provider_type,
+        config.base_url.as_deref(),
+        &config.model,
+        provider,
     );
 
     Ok(classify_credential_test_result(provider.as_ref()).await)

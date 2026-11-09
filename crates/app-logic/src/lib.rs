@@ -22,6 +22,7 @@
 #[cfg(all(test, feature = "ts-export"))]
 mod ts_export;
 
+pub mod ai_provider_decorator;
 pub mod ai_provider_factory;
 pub mod ai_usage;
 pub mod auth_prompt_events;

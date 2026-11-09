@@ -114,6 +114,9 @@ pub(crate) struct StartupInputs {
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Issue #610: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    /// Issue #1246: from `Wiring`, handed to the `AppState`.
+    pub(crate) ai_provider_decorators:
+        Arc<Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>>,
 }
 
 /// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
@@ -144,6 +147,9 @@ fn startup_inputs(
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    ai_provider_decorators: Arc<
+        Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
+    >,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -187,6 +193,7 @@ fn startup_inputs(
         keychain,
         outgoing_transform,
         ai_usage_observers,
+        ai_provider_decorators,
     }
 }
 
@@ -400,6 +407,7 @@ pub(crate) async fn open_and_assemble(
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
+        ai_provider_decorators: inputs.ai_provider_decorators.clone(),
         chat_content: chat_content.clone(),
         title_attempts: Default::default(),
     };
@@ -550,6 +558,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         language,
         wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
+        Arc::new(std::mem::take(&mut wiring.ai_provider_decorators)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
