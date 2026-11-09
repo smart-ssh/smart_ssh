@@ -539,3 +539,21 @@ fn test_validate_max_tokens_override_accepts_exactly_the_upper_bound() {
     config.max_tokens_override = Some(MAX_TOKENS_OVERRIDE_UPPER_BOUND);
     assert_eq!(config.validate_max_tokens_override(), Ok(()));
 }
+
+#[test]
+fn test_keychain_status_dto_serialises_each_unavailable_reason() {
+    use credentials_keyring::{KeychainAvailability, KeychainUnavailableReason as R};
+    let cases = [
+        (R::NoSessionBus, "no_session_bus"),
+        (R::NoSecretServiceProvider, "no_secret_service_provider"),
+        (R::Locked, "locked"),
+        (R::NoKeystore, "no_keystore"),
+        (R::Unknown, "unknown"),
+    ];
+    for (reason, expected) in cases {
+        let dto = KeychainStatusDto::from(KeychainAvailability::Unavailable(reason));
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["available"], false);
+        assert_eq!(json["reason"], expected);
+    }
+}

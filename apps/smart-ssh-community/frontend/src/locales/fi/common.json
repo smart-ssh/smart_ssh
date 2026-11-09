@@ -85,6 +85,7 @@
       "no_session_bus": "ei käytettävissä – D-Bus-istuntoväylää ei tavoiteta. Seuraava vaihe: `sudo apt install dbus-user-session`, sitten kirjaudu uudelleen sisään.",
       "no_secret_service_provider": "ei käytettävissä – Secret Service -palvelua ei ole käynnissä. Seuraava vaihe: `sudo apt install gnome-keyring`, sitten kirjaudu uudelleen sisään – toimii myös KDE:llä. Jos jo käytät KWalletia (`kwallet6`) tai KeePassXC:tä: niiden Secret Service -integraation on oltava käynnissä tai päällä; pelkkä asennus ei riitä.",
       "locked": "ei käytettävissä – olemassa mutta lukittu. Seuraava vaihe: avaa lukitus ja käynnistä Smart SSH uudelleen. Mitään pakettia ei puutu.",
+      "no_keystore": "ei käytettävissä – Androidin Keystore ei ole käytettävissä. Seuraava vaihe: käytä sen sijaan pääsalasanaa; salaisuutesi pysyvät salatussa tietokannassa.",
       "unknown": "ei käytettävissä – syy tuntematon. Seuraava vaihe: tarkista, onko Secret Service -palvelu käynnissä ja avattu (gnome-keyring, tai KWallet tai KeePassXC Secret Service -integraatio päällä), ja käynnistä Smart SSH uudelleen."
     },
     "keychainBlocked": "Tämä ei vaikuta salaisuuksiisi – API-avaimet, palvelinten salasanat, salalauseet ja sudo-salasanat tallennetaan salattuun tietokantaan, ei avainrenkaaseen.",
