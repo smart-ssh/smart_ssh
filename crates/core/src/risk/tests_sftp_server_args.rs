@@ -53,7 +53,7 @@ fn test_sftp_server_word_check_alone_handles_sudo_options() {
     // The word check must not depend on the red pattern.
     for command in BEHIND_OPTIONS {
         assert_eq!(
-            super::classifier::sftp_server_word_check_for_tests(command),
+            super::sftp_word_check::sftp_server_word_check_for_tests(command),
             "found",
             "word check missed: {command}"
         );
@@ -63,7 +63,7 @@ fn test_sftp_server_word_check_alone_handles_sudo_options() {
 #[test]
 fn test_sftp_server_word_check_skips_unquoted_option_argument() {
     assert_eq!(
-        super::classifier::sftp_server_word_check_for_tests("sudo -D /tmp -H sftp-server"),
+        super::sftp_word_check::sftp_server_word_check_for_tests("sudo -D /tmp -H sftp-server"),
         "found"
     );
 }
@@ -153,7 +153,7 @@ fn test_quoted_sftp_server_behind_wrappers_is_red_and_detected() {
             "not red: {command}"
         );
         assert!(
-            super::classifier::quoted_sftp_server_invocation(command),
+            super::sftp_word_check::quoted_sftp_server_invocation(command),
             "pattern walk missed: {command}"
         );
         assert!(
@@ -176,7 +176,7 @@ fn test_quoted_sftp_server_mentions_stay_harmless() {
         "timeout 5m env FOO='a b' ls 'sftp-server'",
     ] {
         assert!(
-            !super::classifier::quoted_sftp_server_invocation(command),
+            !super::sftp_word_check::quoted_sftp_server_invocation(command),
             "walk false positive: {command}"
         );
         // The broad word check (b) deliberately flags quoted code strings.
