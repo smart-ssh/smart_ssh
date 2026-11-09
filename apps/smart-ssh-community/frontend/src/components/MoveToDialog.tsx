@@ -13,6 +13,8 @@ interface Props {
   groups: GroupDto[];
   servers: ServerDto[];
   onMove: (item: DragItem, target: DropTarget) => void;
+  /** Spec 0103 §3a: set for a copy entry — offers "Keep as regular entry". */
+  onKeepAsRegular?: () => void;
   onClose: () => void;
 }
 
@@ -24,7 +26,7 @@ function flatten(nodes: GroupTreeNode[], depth: number, out: { group: GroupDto; 
   return out;
 }
 
-export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) {
+export function MoveToDialog({ item, groups, servers, onMove, onKeepAsRegular, onClose }: Props) {
   const { t } = useTranslation();
   const entries = useMemo(
     () => flatten(buildGroupTree(groups, servers, []).roots, 0, []),
@@ -44,6 +46,19 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
       onClose={onClose}
       actions={<Button onClick={onClose}>{t("common.cancel")}</Button>}
     >
+      {onKeepAsRegular && (
+        <Button
+          variant="bare"
+          type="button"
+          className={`${optionClass} mb-2 border border-border`}
+          onClick={() => {
+            onClose();
+            onKeepAsRegular();
+          }}
+        >
+          {t("copyMarker.keep")}
+        </Button>
+      )}
       <ul className="divide-y divide-surface-raised rounded border border-border">
         <li>
           <Button variant="bare" type="button" className={optionClass} disabled={disabledFor({ kind: "root" })} onClick={() => choose({ kind: "root" })}>
