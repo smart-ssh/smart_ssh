@@ -17,6 +17,7 @@ vi.mock("../api/api", async () =>
     setBackupPassphrase: vi.fn(() => Promise.resolve()),
     exportEncryptedBackup: vi.fn(),
     pickBackupImportFile: vi.fn(),
+    pickBackupSafetyDir: vi.fn(),
     startBackupImport: vi.fn(),
     confirmBackupImport: vi.fn(),
     cancelBackupImport: vi.fn(() => Promise.resolve()),
@@ -150,6 +151,18 @@ describe("BackupSettings", () => {
       expect(await screen.findByText("Wrong code or passphrase, or the file is damaged.")).toBeTruthy();
     });
 
+    it("shows the dedicated not-a-backup message for an ssh_config file (Spec 0109 T3)", async () => {
+      renderSection();
+      vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_NOT_A_BACKUP" });
+      await open();
+      expect(
+        await screen.findByText(
+          "This is not a Smart SSH backup file. Server lists in ssh_config format are imported from the server list.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText("Wrong code or passphrase, or the file is damaged.")).toBeNull();
+    });
+
     it("sends the code once and clears the field", async () => {
       renderSection();
       vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_CANNOT_OPEN" });
@@ -191,6 +204,24 @@ describe("BackupSettings", () => {
       expect(restored).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(restored).toHaveBeenCalledTimes(1);
+    });
+
+    it("Change… updates the shown safety folder; cancelling the picker keeps it", async () => {
+      vi.mocked(api.startBackupImport).mockResolvedValue({
+        imported: null,
+        preview: { local: COUNTS, file: FILE_COUNTS, openSessions: 0, safetyBackupDir: "/docs/Smart SSH backups" },
+      });
+      renderSection();
+      await open();
+      await screen.findByText(/\/docs\/Smart SSH backups/);
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce(null);
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      await waitFor(() => expect(api.pickBackupSafetyDir).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/\/docs\/Smart SSH backups/)).toBeTruthy();
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce("/mnt/safe");
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      expect(await screen.findByText(/\/mnt\/safe/)).toBeTruthy();
+      expect(screen.queryByText(/\/docs\/Smart SSH backups/)).toBeNull();
     });
 
     it("an empty device imports directly and shows the summary", async () => {

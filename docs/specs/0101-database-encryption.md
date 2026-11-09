@@ -396,7 +396,7 @@ Adversarial (ERHÖHT):
 
 ## 8. Grenzen
 
-- **Android:** Der Schlüsselbund ist der Android-Schlüsselspeicher (Keystore).
+- **Android:** Der Schlüsselbund ist der Android-Schlüsselspeicher (Keystore). Lässt sich der Schlüsselspeicher nicht nutzen, zeigt die Diagnose-Zeile zum Systemschlüsselbund einen eigenen Android-Text (Keystore nicht verfügbar, Master-Passwort als Alternative) statt des allgemeinen „Ursache unbekannt“-Texts, der auf einen Secret Service verweist.
   Der Startablauf ist derselbe wie auf dem Desktop: Beim ersten Start wird K
   dort abgelegt, danach öffnet sich die Datenbank ohne Eingabe. Fehlt der
   Eintrag (z. B. gelöscht), gilt derselbe Wiederherstellungsweg wie bei einem
