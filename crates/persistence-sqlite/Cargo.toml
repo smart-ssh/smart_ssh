@@ -49,6 +49,10 @@ tracing = { workspace = true }
 zeroize = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
+# Issue #772: user id of the process on Android (`getuid() / 100000`).
+[target.'cfg(target_os = "android")'.dependencies]
+libc = { workspace = true }
+
 [dev-dependencies]
 openssl-sys = "0.9"
 libc = { workspace = true }

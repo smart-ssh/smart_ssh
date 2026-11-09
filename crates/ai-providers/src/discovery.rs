@@ -208,7 +208,7 @@ async fn discover_models_within(
         .chain(extra_headers.iter().map(|(_, value)| value.as_str()))
         .collect();
 
-    let client = crate::sse::new_client();
+    let client = crate::sse::new_client()?;
     let base_url = base_url.trim_end_matches('/');
     // Spec-Reviewer-Fund (Review dieses Schritts): Anthropics `base_url`
     // trägt kein `/v1`-Präfix (s. Doc-Kommentar von `discover_models`) — nur
@@ -264,7 +264,7 @@ async fn fetch_attestation_info_within(
     // Kommentar oben) — nichts zu redigieren, daher eine leere `secrets`-
     // Liste statt eines eigenen, secret-losen Log-Pfads.
     let request_id = Uuid::new_v4();
-    let client = crate::sse::new_client();
+    let client = crate::sse::new_client()?;
     let response = send_get(client.get(url), request_id, &[], timeout).await?;
     read_within(response.text(), request_id, &[], timeout).await
 }

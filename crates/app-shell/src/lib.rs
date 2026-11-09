@@ -906,7 +906,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::set_backup_passphrase,
             commands::new_backup_code,
             commands::export_encrypted_backup,
-            commands::pick_backup_import_file,
+            commands::pick_backup_import_file, commands::pick_backup_safety_dir,
             commands::start_backup_import,
             commands::confirm_backup_import,
             commands::cancel_backup_import,

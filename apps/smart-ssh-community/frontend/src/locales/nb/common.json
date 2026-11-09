@@ -85,6 +85,7 @@
       "no_session_bus": "utilgjengelig – ingen D-Bus-sesjonsbuss kan nås. Neste steg: `sudo apt install dbus-user-session`, og logg deretter inn på nytt.",
       "no_secret_service_provider": "utilgjengelig – ingen Secret Service-leverandør kjører. Neste steg: `sudo apt install gnome-keyring`, og logg deretter inn på nytt – dette fungerer også på KDE. Bruker du allerede KWallet (`kwallet6`) eller KeePassXC: Secret Service-integrasjonen deres må kjøre eller være slått på; det er ikke nok å installere dem.",
       "locked": "utilgjengelig – finnes, men er låst. Neste steg: lås den opp og start Smart SSH på nytt. Ingen pakke mangler.",
+      "no_keystore": "utilgjengelig – Android Keystore er ikke tilgjengelig. Neste steg: bruk et hovedpassord i stedet; hemmelighetene dine blir værende i den krypterte databasen.",
       "unknown": "utilgjengelig – ukjent årsak. Neste steg: sjekk om en Secret Service-leverandør kjører og er låst opp (gnome-keyring, eller KWallet eller KeePassXC med Secret Service-integrasjon slått på), og start deretter Smart SSH på nytt."
     },
     "keychainBlocked": "Dette påvirker ikke hemmelighetene dine – API-nøkler, serverpassord, passfraser og sudo-passord ligger i den krypterte databasen, ikke i nøkkelringen.",
@@ -1498,6 +1499,9 @@
       "file": "Sikkerhetskopi",
       "sessions": "Åpne økter som lukkes: {{count}}",
       "safety": "Dine nåværende data lagres først i {{dir}}. Serverne dine flyttes til en ny mappe kalt “Previous data” med dagens dato.",
+      "pickDirTitle": "Velg mappe for sikkerhetskopien",
+      "changeSafetyDir": "Endre…",
+      "changeSafetyDirFailed": "Mappen kunne ikke velges. Standardmappen beholdes.",
       "replace": "Erstatt data"
     },
     "counts": {

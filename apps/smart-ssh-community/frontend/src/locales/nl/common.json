@@ -85,6 +85,7 @@
       "no_session_bus": "niet beschikbaar — geen D-Bus-sessiebus bereikbaar. Volgende stap: `sudo apt install dbus-user-session`, en meld u daarna opnieuw aan.",
       "no_secret_service_provider": "niet beschikbaar — er draait geen Secret Service-provider. Volgende stap: `sudo apt install gnome-keyring`, en meld u daarna opnieuw aan — dit werkt ook onder KDE. Gebruikt u al KWallet (`kwallet6`) of KeePassXC: hun Secret Service-integratie moet actief of ingeschakeld zijn; installeren alleen is niet voldoende.",
       "locked": "niet beschikbaar — aanwezig maar vergrendeld. Volgende stap: ontgrendel de sleutelhanger en start Smart SSH opnieuw. Er ontbreekt geen pakket.",
+      "no_keystore": "niet beschikbaar — de Android Keystore is niet beschikbaar. Volgende stap: gebruik in plaats daarvan een hoofdwachtwoord; uw geheimen blijven in de versleutelde database.",
       "unknown": "niet beschikbaar — oorzaak onbekend. Volgende stap: controleer of een Secret Service-provider draait en is ontgrendeld (gnome-keyring, of KWallet of KeePassXC met ingeschakelde Secret Service-integratie) en start Smart SSH daarna opnieuw."
     },
     "keychainBlocked": "Dit heeft geen invloed op uw geheimen — API-sleutels, serverwachtwoorden, wachtzinnen en sudo-wachtwoorden staan in de versleutelde database, niet in de sleutelhanger.",
@@ -1498,6 +1499,9 @@
       "file": "Back-up",
       "sessions": "Open sessies die worden gesloten: {{count}}",
       "safety": "Je huidige gegevens worden eerst opgeslagen in {{dir}}. Je servers gaan naar een nieuwe map “Previous data” met de datum van vandaag.",
+      "pickDirTitle": "Kies een map voor de veiligheidsback-up",
+      "changeSafetyDir": "Wijzigen…",
+      "changeSafetyDirFailed": "De map kon niet worden gekozen. De standaardmap blijft.",
       "replace": "Gegevens vervangen"
     },
     "counts": {

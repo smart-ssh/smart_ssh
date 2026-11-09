@@ -448,6 +448,7 @@ export type KeychainUnavailableReason =
   | "no_session_bus"
   | "no_secret_service_provider"
   | "locked"
+  | "no_keystore"
   | "unknown";
 
 /** Von `app_logic::data_paths::DataPathEntryDto` (Issue #16): ein

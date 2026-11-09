@@ -118,6 +118,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
   };
 
   const store = model.settings;
+  let backupSafetyDir: string | null = null;
   let backupKey = { exists: false, hasCode: false, hasPassphrase: false };
   const handlers: Record<string, Handler> = {
     // --- Tauri plumbing --------------------------------------------------
@@ -299,11 +300,17 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
         },
       };
     },
+    pick_backup_safety_dir: () => {
+      backupSafetyDir = "/mnt/e2e/safety";
+      return backupSafetyDir;
+    },
     confirm_backup_import: () => {
       if (!backupKey.exists) throw commandError("no key", "BACKUP_KEY_REQUIRED");
+      const dir = backupSafetyDir ?? "/home/e2e/Documents/Smart SSH backups";
+      backupSafetyDir = null;
       return {
         counts: { servers: 15, groups: 2, rules: 42, notes: 11, aiProviders: 1 },
-        safetyBackup: "/home/e2e/Documents/Smart SSH backups/smart-ssh-before-import.sshbackup",
+        safetyBackup: `${dir}/smart-ssh-before-import.sshbackup`,
         previousDataFolder: "Previous data 2026-01-01",
         hostKeysPending: false,
       };
