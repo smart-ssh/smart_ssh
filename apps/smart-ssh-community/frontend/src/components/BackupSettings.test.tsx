@@ -150,6 +150,18 @@ describe("BackupSettings", () => {
       expect(await screen.findByText("Wrong code or passphrase, or the file is damaged.")).toBeTruthy();
     });
 
+    it("shows the dedicated not-a-backup message for an ssh_config file (Spec 0109 T3)", async () => {
+      renderSection();
+      vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_NOT_A_BACKUP" });
+      await open();
+      expect(
+        await screen.findByText(
+          "This is not a Smart SSH backup file. Server lists in ssh_config format are imported from the server list.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText("Wrong code or passphrase, or the file is damaged.")).toBeNull();
+    });
+
     it("sends the code once and clears the field", async () => {
       renderSection();
       vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_CANNOT_OPEN" });
