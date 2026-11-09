@@ -19,31 +19,36 @@ use std::path::{Path, PathBuf};
 pub(crate) const MAX_TEXT_FILE_BYTES: u64 = 16 * 1024 * 1024;
 
 /// A local file the user picked or is saving to.
+///
+/// Invariant: a `Uri` handle is opened only through a [`UriOpener`]; its string
+/// never reaches `std::fs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum LocalFileHandle {
+pub enum LocalFileHandle {
     /// Filesystem path (desktop; a `file://` result on Android).
     Path(PathBuf),
     /// `content://` (or other non-file) URI of the Android document picker.
     Uri(String),
 }
 
-/// What a file is opened for.
+/// What a file is opened for (see [`UriOpener::open`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Access {
+pub enum Access {
     Read,
     /// Create or truncate.
     Write,
 }
 
 /// Opens a URI from the system picker as a file descriptor. This is the only
-/// way a [`LocalFileHandle::Uri`] is opened.
-pub(crate) trait UriOpener: Send + Sync {
+/// way a [`LocalFileHandle::Uri`] is opened; implementations must not map a
+/// URI to a filesystem path.
+pub trait UriOpener: Send + Sync {
     fn open(&self, uri: &str, access: Access) -> io::Result<std::fs::File>;
 }
 
-/// Desktop: dialogs return paths, so a URI means a bug; refuse it.
+/// Desktop: dialogs return paths, so a URI means a bug; refuse it (and create
+/// no file).
 #[cfg_attr(target_os = "android", allow(dead_code))]
-pub(crate) struct NoUriOpener;
+pub struct NoUriOpener;
 
 impl UriOpener for NoUriOpener {
     fn open(&self, _uri: &str, _access: Access) -> io::Result<std::fs::File> {
@@ -75,20 +80,21 @@ impl UriOpener for AndroidUriOpener {
     }
 }
 
-/// The opener of this platform.
+/// The opener of this platform: the Android descriptor lookup there,
+/// [`NoUriOpener`] elsewhere.
 #[cfg(target_os = "android")]
-pub(crate) fn platform_opener(app: &tauri::AppHandle) -> Box<dyn UriOpener> {
+pub fn platform_opener(app: &tauri::AppHandle) -> Box<dyn UriOpener> {
     Box::new(AndroidUriOpener(app.clone()))
 }
 
 #[cfg(not(target_os = "android"))]
-pub(crate) fn platform_opener(_app: &tauri::AppHandle) -> Box<dyn UriOpener> {
+pub fn platform_opener(_app: &tauri::AppHandle) -> Box<dyn UriOpener> {
     Box::new(NoUriOpener)
 }
 
 impl LocalFileHandle {
     /// Converts the result of a dialog.
-    pub(crate) fn from_dialog(picked: tauri_plugin_dialog::FilePath) -> io::Result<Self> {
+    pub fn from_dialog(picked: tauri_plugin_dialog::FilePath) -> io::Result<Self> {
         match picked {
             tauri_plugin_dialog::FilePath::Path(p) => Ok(Self::Path(p)),
             tauri_plugin_dialog::FilePath::Url(url) => {
@@ -104,7 +110,7 @@ impl LocalFileHandle {
     }
 
     /// The filesystem path, if this is one. A URI has none.
-    pub(crate) fn as_path(&self) -> Option<&Path> {
+    pub fn as_path(&self) -> Option<&Path> {
         match self {
             Self::Path(p) => Some(p),
             Self::Uri(_) => None,
@@ -112,7 +118,7 @@ impl LocalFileHandle {
     }
 
     /// Text for messages and results. For a URI it is the URI itself.
-    pub(crate) fn display(&self) -> String {
+    pub fn display(&self) -> String {
         match self {
             Self::Path(p) => p.display().to_string(),
             Self::Uri(u) => u.clone(),
@@ -122,7 +128,7 @@ impl LocalFileHandle {
     /// Best-effort file name (never empty, never contains a separator): the
     /// last path component, for a URI its percent-decoded last segment after
     /// `/` or `:` (`…/document/primary%3ADownload%2Fa.txt` → `a.txt`).
-    pub(crate) fn file_name(&self) -> String {
+    pub fn file_name(&self) -> String {
         let raw = match self {
             Self::Path(p) => p
                 .file_name()
@@ -152,7 +158,7 @@ impl LocalFileHandle {
     }
 
     /// Reads the whole file as UTF-8 text, at most `max` bytes.
-    pub(crate) fn read_to_string(&self, opener: &dyn UriOpener, max: u64) -> io::Result<String> {
+    pub fn read_to_string(&self, opener: &dyn UriOpener, max: u64) -> io::Result<String> {
         let file = self.open(opener, Access::Read)?;
         let mut buf = String::new();
         file.take(max + 1).read_to_string(&mut buf)?;
@@ -166,7 +172,7 @@ impl LocalFileHandle {
     }
 
     /// Creates or truncates the file and writes `bytes`.
-    pub(crate) fn write_all(&self, opener: &dyn UriOpener, bytes: &[u8]) -> io::Result<()> {
+    pub fn write_all(&self, opener: &dyn UriOpener, bytes: &[u8]) -> io::Result<()> {
         let mut file = self.open(opener, Access::Write)?;
         file.write_all(bytes)?;
         file.flush()
@@ -175,7 +181,7 @@ impl LocalFileHandle {
     /// Copies the picked file into `dir` (created, owner-only on Unix) under
     /// its [`file_name`](Self::file_name) and returns the copy. A path handle
     /// is not copied: it is returned as is.
-    pub(crate) fn stage_into(&self, opener: &dyn UriOpener, dir: &Path) -> io::Result<PathBuf> {
+    pub fn stage_into(&self, opener: &dyn UriOpener, dir: &Path) -> io::Result<PathBuf> {
         let Self::Uri(_) = self else {
             return self
                 .as_path()
@@ -193,7 +199,7 @@ impl LocalFileHandle {
 
     /// Copies the local file `src` (e.g. a finished download) into this
     /// handle, replacing its content. Returns the number of bytes.
-    pub(crate) fn copy_from(&self, opener: &dyn UriOpener, src: &Path) -> io::Result<u64> {
+    pub fn copy_from(&self, opener: &dyn UriOpener, src: &Path) -> io::Result<u64> {
         let mut input = std::fs::File::open(src)?;
         let mut out = self.open(opener, Access::Write)?;
         let n = io::copy(&mut input, &mut out)?;
