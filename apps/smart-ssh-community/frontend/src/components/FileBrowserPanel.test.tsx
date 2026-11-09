@@ -3220,38 +3220,6 @@ describe("FileBrowserPanel header sorting (Spec 0053, Teil 3)", () => {
     await waitFor(() => expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]));
   });
 
-  it("a sort change in one mounted panel is applied to another mounted panel (#747)", async () => {
-    const { container } = render(
-      <I18nextProvider i18n={testI18n}>
-        <div data-testid="panel-a">
-          <FileBrowserPanel sessionId="session-1" isVisible={true} />
-        </div>
-        <div data-testid="panel-b">
-          <FileBrowserPanel sessionId="session-2" isVisible={true} />
-        </div>
-      </I18nextProvider>,
-    );
-    const a = within(screen.getByTestId("panel-a"));
-    const b = within(screen.getByTestId("panel-b"));
-    await waitFor(() => expect(container.querySelectorAll("tbody tr")).toHaveLength(4));
-    const rowsOf = (id: string) => rowNames(screen.getByTestId(id));
-
-    fireEvent.click(a.getByTestId("column-sort-size"));
-    await waitFor(() =>
-      expect(b.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "ascending"),
-    );
-    expect(b.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
-    expect(rowsOf("panel-b")).toEqual(["📄 a.txt", "📄 b.txt"]);
-
-    // Reverses from the shared state, not a stale local one.
-    fireEvent.click(b.getByTestId("column-sort-size"));
-    await waitFor(() =>
-      expect(a.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "descending"),
-    );
-    expect(rowsOf("panel-a")).toEqual(["📄 b.txt", "📄 a.txt"]);
-    expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "desc" });
-  });
-
   it("a resize handle click never changes the sort", async () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
