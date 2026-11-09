@@ -11,14 +11,16 @@ import {
   type DragItem,
   type DropTarget,
 } from "../lib/treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
+import type { GroupDto, KeepGroupResult, ServerDto, UnusableServerDto } from "../api/types";
+import { keepGroupAsRegularEntry, keepServerAsRegularEntry } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
 import { useTreeDrag } from "../hooks/useTreeDrag";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../lib/unusableServer";
-import { Button } from "./ui";
+import { Button, DialogFrame } from "./ui";
 
 export type Selection =
   | { kind: "group"; id: string }
@@ -46,6 +48,8 @@ interface SidebarProps {
    * einen Zyklus bilden würde (`cycle`, wird vom Backend abgelehnt).
    * Unverändernde Ablagen (`noop`) kommen hier nie an. */
   onMove: (item: DragItem, target: DropTarget) => void;
+  /** Spec 0103 §3a: a copy entry was kept as a regular entry — reload the tree. */
+  onKeptAsRegular?: () => void;
 }
 
 /** Reihenfolge der sichtbaren Baumzeilen (Issue #425) — spiegelt die
@@ -87,6 +91,7 @@ export function Sidebar({
   onImportSshConfig,
   onExportSshConfig,
   onMove,
+  onKeptAsRegular,
 }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const manageViews = useManageViews();
@@ -97,6 +102,47 @@ export function Sidebar({
   const narrow = useIsNarrow();
   // Issue #585: row whose "Move to…" dialog is open (narrow layout).
   const [moveItem, setMoveItem] = useState<DragItem | null>(null);
+  // Spec 0103 §3a: "Keep as regular entry" for copy rows, from the "⋯" dialog.
+  const [keepError, setKeepError] = useState<string | null>(null);
+  const [keepGroup, setKeepGroup] = useState<{ group: GroupDto; scope: KeepGroupResult } | null>(
+    null,
+  );
+  const keepServer = async (id: string) => {
+    setKeepError(null);
+    try {
+      await keepServerAsRegularEntry(id);
+    } catch (err) {
+      setKeepError(commandErrorText(t, err));
+    }
+    onKeptAsRegular?.();
+  };
+  const askKeepGroup = async (group: GroupDto) => {
+    setKeepError(null);
+    try {
+      setKeepGroup({ group, scope: await keepGroupAsRegularEntry(group.id, false) });
+    } catch (err) {
+      setKeepError(commandErrorText(t, err));
+    }
+  };
+  const confirmKeepGroup = async () => {
+    if (!keepGroup) return;
+    const { group } = keepGroup;
+    setKeepGroup(null);
+    try {
+      await keepGroupAsRegularEntry(group.id, true);
+    } catch (err) {
+      setKeepError(commandErrorText(t, err));
+    }
+    onKeptAsRegular?.();
+  };
+  const keepActionFor = (item: DragItem): (() => void) | undefined => {
+    if (item.kind === "server") {
+      const server = servers.find((s) => s.id === item.id);
+      return server?.isCopy ? () => void keepServer(item.id) : undefined;
+    }
+    const group = groups.find((g) => g.id === item.id);
+    return group?.isCopy ? () => void askKeepGroup(group) : undefined;
+  };
   const { drag, handlersFor } = useTreeDrag(
     (item, target) => {
       if (classifyDrop(item, target, groups, servers) !== "noop") onMove(item, target);
@@ -362,8 +408,37 @@ export function Sidebar({
           groups={groups}
           servers={servers}
           onMove={onMove}
+          onKeepAsRegular={keepActionFor(moveItem)}
           onClose={() => setMoveItem(null)}
         />
+      )}
+      {keepError && (
+        <p role="alert" className="px-2 py-1 text-xs text-danger-fg">
+          {keepError}
+        </p>
+      )}
+      {keepGroup && (
+        <DialogFrame
+          layer="app"
+          title={<span className="break-words">{t("copyMarker.keep")}</span>}
+          onClose={() => setKeepGroup(null)}
+          actions={
+            <>
+              <Button onClick={() => setKeepGroup(null)}>{t("common.cancel")}</Button>
+              <Button variant="primary" onClick={() => void confirmKeepGroup()}>
+                {t("copyMarker.keep")}
+              </Button>
+            </>
+          }
+        >
+          <p className="break-words text-sm text-fg-soft">📁 {keepGroup.group.name}</p>
+          <p className="mt-2 text-sm text-fg-muted">
+            {t("copyMarker.groupConfirmBody", {
+              groups: keepGroup.scope.groups,
+              servers: keepGroup.scope.servers,
+            })}
+          </p>
+        </DialogFrame>
       )}
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
     </div>

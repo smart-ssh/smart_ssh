@@ -184,7 +184,7 @@ export type KeyFileProblemDto = { code: string, message: string, };
 
 export type KeychainStatusDto = { available: boolean, reason: KeychainUnavailableReasonDto | null, };
 
-export type KeychainUnavailableReasonDto = "no_session_bus" | "no_secret_service_provider" | "locked" | "unknown";
+export type KeychainUnavailableReasonDto = "no_session_bus" | "no_secret_service_provider" | "locked" | "no_keystore" | "unknown";
 
 export type LocalFilePreviewDto = { text: string | null, size: number, };
 

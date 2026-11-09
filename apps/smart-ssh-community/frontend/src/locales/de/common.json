@@ -85,6 +85,7 @@
       "no_session_bus": "nicht verfügbar — kein D-Bus-Session-Bus erreichbar. Nächster Schritt: `sudo apt install dbus-user-session`, danach neu anmelden.",
       "no_secret_service_provider": "nicht verfügbar — kein Secret-Service-Anbieter läuft. Nächster Schritt: `sudo apt install gnome-keyring`, danach neu anmelden — das genügt auch unter KDE. Nutzt du ohnehin KWallet (`kwallet6`) oder KeePassXC: Deren Secret-Service-Integration muss laufen bzw. eingeschaltet sein; Nachinstallieren allein reicht dort nicht.",
       "locked": "nicht verfügbar — vorhanden, aber gesperrt. Nächster Schritt: entsperren und Smart SSH neu starten. Es fehlt kein Paket.",
+      "no_keystore": "nicht verfügbar — der Android-Schlüsselspeicher (Keystore) ist nicht verfügbar. Nächster Schritt: Nutze stattdessen ein Master-Passwort; deine Secrets bleiben in der verschlüsselten Datenbank.",
       "unknown": "nicht verfügbar — Ursache unbekannt. Nächster Schritt: prüfen, ob ein Secret-Service-Anbieter läuft und entsperrt ist (gnome-keyring, oder KWallet bzw. KeePassXC mit eingeschalteter Secret-Service-Integration), danach Smart SSH neu starten."
     },
     "keychainBlocked": "Deine Secrets sind davon nicht betroffen — API-Keys, Server-Passwörter, Passphrasen und Sudo-Passwörter liegen in der verschlüsselten Datenbank, nicht im Schlüsselbund.",
@@ -1498,6 +1499,9 @@
       "file": "Sicherung",
       "sessions": "Offene Sitzungen, die geschlossen werden: {{count}}",
       "safety": "Deine aktuellen Daten werden zuerst unter {{dir}} gesichert. Deine Server kommen in einen neuen Ordner “Previous data” mit dem heutigen Datum.",
+      "pickDirTitle": "Ordner für die Sicherheitskopie wählen",
+      "changeSafetyDir": "Ändern…",
+      "changeSafetyDirFailed": "Der Ordner konnte nicht gewählt werden. Der Standardordner bleibt.",
       "replace": "Daten ersetzen"
     },
     "counts": {

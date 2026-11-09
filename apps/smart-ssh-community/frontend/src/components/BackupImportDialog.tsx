@@ -7,6 +7,7 @@ import {
   commandErrorCode,
   confirmBackupImport,
   pickBackupImportFile,
+  pickBackupSafetyDir,
   startBackupImport,
 } from "../api/api";
 import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
@@ -101,6 +102,22 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       setError(describe(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const changeSafetyDir = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const dir = await pickBackupSafetyDir(t("backup.confirm.pickDirTitle"));
+      if (dir !== null && mounted.current) {
+        setPreview((p) => (p ? { ...p, safetyBackupDir: dir } : p));
+      }
+    } catch {
+      if (mounted.current) setError(t("backup.confirm.changeSafetyDirFailed"));
+    } finally {
+      if (mounted.current) setBusy(false);
     }
   };
 
@@ -204,6 +221,9 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           </table>
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
+          <Button type="button" className="narrow:min-h-11" onClick={() => void changeSafetyDir()} disabled={busy}>
+            {t("backup.confirm.changeSafetyDir")}
+          </Button>
           {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
         </div>
       </DialogFrame>

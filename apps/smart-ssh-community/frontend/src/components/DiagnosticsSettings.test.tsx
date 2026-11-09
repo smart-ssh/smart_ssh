@@ -156,6 +156,18 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
     expect(rowText).not.toContain("install keepassxc");
   });
 
+  it("zeigt für Android ohne Keystore den eigenen Text ohne Secret Service", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({ available: false, reason: "no_keystore" });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("Keystore"));
+    expect(row).toHaveTextContent("Master-Passwort");
+    expect(row).not.toHaveTextContent("Secret Service");
+    expect(row).not.toHaveTextContent("apt install");
+  });
+
   // X3: ein gesperrter Schlüsselbund ist kein fehlendes Paket — auch hier
   // nicht, sonst installiert ein KDE-Nutzer `gnome-keyring` neben sein
   // laufendes KWallet.

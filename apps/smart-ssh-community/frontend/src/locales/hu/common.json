@@ -85,6 +85,7 @@
       "no_session_bus": "nem elérhető – nincs elérhető D-Bus munkamenet-busz. Teendő: `sudo apt install dbus-user-session`, majd jelentkezzen be újra.",
       "no_secret_service_provider": "nem elérhető – nem fut Secret Service szolgáltató. Teendő: `sudo apt install gnome-keyring`, majd jelentkezzen be újra – ez KDE-n is működik. Ha már használ KWalletet (`kwallet6`) vagy KeePassXC-t: a Secret Service integrációjuknak futnia kell vagy be kell kapcsolni; a telepítés önmagában nem elég.",
       "locked": "nem elérhető – létezik, de zárolt. Teendő: oldja fel, és indítsa újra a Smart SSH-t. Nem hiányzik csomag.",
+      "no_keystore": "nem elérhető – az Android Keystore nem érhető el. Teendő: használjon helyette mesterjelszót; a titkai a titkosított adatbázisban maradnak.",
       "unknown": "nem elérhető – az ok ismeretlen. Teendő: ellenőrizze, fut-e és fel van-e oldva egy Secret Service szolgáltató (gnome-keyring, vagy KWallet illetve KeePassXC bekapcsolt Secret Service integrációval), majd indítsa újra a Smart SSH-t."
     },
     "keychainBlocked": "Ez nem érinti a titkait – az API-kulcsok, szerverjelszavak, jelmondatok és sudo-jelszavak a titkosított adatbázisban vannak, nem a kulcstartóban.",
@@ -1498,6 +1499,9 @@
       "file": "Mentés",
       "sessions": "Bezárásra kerülő nyitott munkamenetek: {{count}}",
       "safety": "A jelenlegi adatok előbb ide kerülnek: {{dir}}. A szerverek egy új, “Previous data” nevű, mai dátumú mappába kerülnek.",
+      "pickDirTitle": "Mappa kiválasztása a biztonsági mentéshez",
+      "changeSafetyDir": "Módosítás…",
+      "changeSafetyDirFailed": "A mappát nem sikerült kiválasztani. Az alapértelmezett mappa marad.",
       "replace": "Adatok felülírása"
     },
     "counts": {
