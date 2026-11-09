@@ -1498,6 +1498,9 @@
       "file": "Säkerhetskopia",
       "sessions": "Öppna sessioner som stängs: {{count}}",
       "safety": "Dina nuvarande data sparas först i {{dir}}. Dina servrar flyttas till en ny mapp med namnet “Previous data” med dagens datum.",
+      "pickDirTitle": "Välj mapp för säkerhetskopian",
+      "changeSafetyDir": "Ändra…",
+      "changeSafetyDirFailed": "Mappen kunde inte väljas. Standardmappen behålls.",
       "replace": "Ersätt data"
     },
     "counts": {

@@ -1498,6 +1498,9 @@
       "file": "Back-up",
       "sessions": "Open sessies die worden gesloten: {{count}}",
       "safety": "Je huidige gegevens worden eerst opgeslagen in {{dir}}. Je servers gaan naar een nieuwe map “Previous data” met de datum van vandaag.",
+      "pickDirTitle": "Kies een map voor de veiligheidsback-up",
+      "changeSafetyDir": "Wijzigen…",
+      "changeSafetyDirFailed": "De map kon niet worden gekozen. De standaardmap blijft.",
       "replace": "Gegevens vervangen"
     },
     "counts": {

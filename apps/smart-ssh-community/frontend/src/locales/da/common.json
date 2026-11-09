@@ -1498,6 +1498,9 @@
       "file": "Sikkerhedskopi",
       "sessions": "Åbne sessioner, der lukkes: {{count}}",
       "safety": "Dine nuværende data gemmes først i {{dir}}. Dine servere flyttes til en ny mappe med navnet “Previous data” med dagens dato.",
+      "pickDirTitle": "Vælg mappe til sikkerhedskopien",
+      "changeSafetyDir": "Skift…",
+      "changeSafetyDirFailed": "Mappen kunne ikke vælges. Standardmappen bruges fortsat.",
       "replace": "Erstat data"
     },
     "counts": {
