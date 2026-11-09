@@ -105,6 +105,27 @@ ignore = [
     # BEOBACHTEN bei jedem gtk-rs-Versions-Update (glib/gtk/atk/gdk*) — s.
     # Begründung oben.
     "RUSTSEC-2024-0429", # glib::VariantStrIter 0.18.5 — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
+
+    # --- RUSTSEC-2026-0459: dokumentiertes Risk-Acceptance (2026-11-09) ---
+    #
+    # SQLite vor 3.54.0 liefert uninitialisierten Page-Cache-Speicher, wenn
+    # ein Prozess eine Datenbank zusammen mit einer präparierten `-wal`-Datei
+    # anderer Seitengröße öffnet (CVE-2026-119375, lokal, das Opfer muss die
+    # Dateien öffnen). Vom Maintainer entschieden, s. Issue #1243.
+    #
+    # Nicht behebbar: `sqlx-sqlite` 0.9.0 verlangt `libsqlite3-sys` < 0.38,
+    # der Fix ist >= 0.39; und laut Advisory bündelt selbst dessen
+    # SQLCipher-Build (unser Build, Spec 0101) noch SQLite 3.53.4.
+    #
+    # Warum vertretbar: Die App öffnet nur ihre eigene Datenbank im
+    # Datenverzeichnis. Backups sind ein eigenes verschlüsseltes Dateiformat
+    # und werden als typisierte Snapshots importiert, nicht als Datenbank
+    # geöffnet. Wer dort eine `-wal` ablegen kann, hat bereits Schreibzugriff
+    # auf die Daten des Nutzers.
+    #
+    # Überholt, wenn: ein `sqlx`-Release eine `libsqlite3-sys` erlaubt, deren
+    # SQLCipher auf SQLite >= 3.54 beruht; spätestens 2027-01-31 erneut prüfen.
+    "RUSTSEC-2026-0459",
 ]
 
 # `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist

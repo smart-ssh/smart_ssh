@@ -10,7 +10,7 @@ publish.workspace = true
 async-trait = { workspace = true }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
 secrecy = { workspace = true }
-rmcp = { version = "3.2.0", features = ["server", "macros", "transport-streamable-http-server", "schemars"] }
+rmcp = { version = "3.9.0", features = ["server", "macros", "transport-streamable-http-server", "schemars"] }
 schemars = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -23,7 +23,7 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["rustls"] }
-rmcp = { version = "3.2.0", features = ["client", "transport-streamable-http-client-reqwest"] }
+rmcp = { version = "3.9.0", features = ["client", "transport-streamable-http-client-reqwest"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5.3", features = ["util"] }
 # Spec 0094, §7: Mitschnitt der `tracing`-Ereignisse in `test_support.rs`.
