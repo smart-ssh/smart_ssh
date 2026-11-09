@@ -1067,8 +1067,7 @@ mod tests {
         );
     }
 
-    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten
-    /// gescheiterten Versuch** — und bei einer nicht erreichbaren Datei nie.
+    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten gescheiterten Versuch** — bei einer nicht erreichbaren Datei nie.
     #[test]
     fn test_starting_over_is_offered_only_after_three_failed_attempts() {
         for attempts in 0..ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED {
