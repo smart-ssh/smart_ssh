@@ -785,7 +785,7 @@ async fn test_t6_4_8_security_logic_does_not_branch_on_the_auth_method() {
         Decision, EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule,
         RuleAction, RuleId, RuleOrigin, Scope,
     };
-    use crate::risk::{RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+    use crate::risk::{RiskLevel, RuleBasedRiskClassifier};
 
     struct OneRule(Rule);
     #[async_trait]
