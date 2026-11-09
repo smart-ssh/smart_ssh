@@ -552,7 +552,7 @@ fn test_keychain_status_dto_serialises_each_unavailable_reason() {
     ];
     for (reason, expected) in cases {
         let dto = KeychainStatusDto::from(KeychainAvailability::Unavailable(reason));
-        let json = serde_json::to_value(&dto).unwrap();
+        let json = serde_json::to_value(dto).unwrap();
         assert_eq!(json["available"], false);
         assert_eq!(json["reason"], expected);
     }
