@@ -72,8 +72,7 @@ mod test_support;
 mod ui_language;
 pub mod ui_preferences;
 mod voice_input;
-/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
-/// Passwort-Modus.
+/// Spec 0101, §2 Frage 3: Startdialoge im Fenster (Passwort-Modus).
 mod window_prompt;
 mod wiring;
 
