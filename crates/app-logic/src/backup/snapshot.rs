@@ -71,7 +71,72 @@ pub struct Snapshot {
     pub host_keys: Vec<HostKeyRow>,
 }
 
+/// Opaque digest of a [`Snapshot`]'s content (SHA-256 over a canonical,
+/// order-independent encoding of every entry, including host keys). Secrets
+/// enter only as a per-entry digest. Nothing is stored; it is recomputed from
+/// the content. Its `Debug` output is the hex digest, which reveals nothing
+/// about the content.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SnapshotToken([u8; 32]);
+
+impl std::fmt::Debug for SnapshotToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SnapshotToken(")?;
+        for b in &self.0[..6] {
+            write!(f, "{b:02x}")?;
+        }
+        f.write_str("…)")
+    }
+}
+
 impl Snapshot {
+    /// The content token for optimistic-concurrency checks
+    /// (`apply_changes_expecting`). Equal content gives an equal token
+    /// regardless of row order.
+    pub fn token(&self) -> SnapshotToken {
+        use sha2::{Digest, Sha256};
+        fn digest_line(line: &[u8]) -> [u8; 32] {
+            Sha256::digest(line).into()
+        }
+        fn section<T: Serialize>(
+            h: &mut Sha256,
+            name: &str,
+            rows: &[T],
+            line: impl Fn(&T) -> Vec<u8>,
+        ) {
+            let mut lines: Vec<[u8; 32]> = rows.iter().map(|r| digest_line(&line(r))).collect();
+            lines.sort_unstable();
+            h.update((name.len() as u64).to_be_bytes());
+            h.update(name.as_bytes());
+            h.update((lines.len() as u64).to_be_bytes());
+            for l in lines {
+                h.update(l);
+            }
+        }
+        fn json<T: Serialize>(r: &T) -> Vec<u8> {
+            // Rows are plain data, so serialization does not fail; the
+            // fallback is a fixed marker rather than a panic.
+            serde_json::to_vec(r).unwrap_or_else(|_| b"\0unserializable".to_vec())
+        }
+        let mut h = Sha256::new();
+        section(&mut h, "servers", &self.servers, json);
+        section(&mut h, "groups", &self.groups, json);
+        section(&mut h, "tags", &self.tags, json);
+        section(&mut h, "rules", &self.rules, json);
+        section(&mut h, "notes", &self.notes, json);
+        section(&mut h, "ai_providers", &self.ai_providers, json);
+        section(&mut h, "secrets", &self.secrets, |s| {
+            // Own digest so the plaintext never sits in a serialized buffer.
+            let mut d = Sha256::new();
+            d.update((s.owner_ref.len() as u64).to_be_bytes());
+            d.update(s.owner_ref.as_bytes());
+            d.update(s.value.as_bytes());
+            d.finalize().to_vec()
+        });
+        section(&mut h, "host_keys", &self.host_keys, json);
+        SnapshotToken(h.finalize().into())
+    }
+
     /// Reads the database in one read transaction (X2) and the trusted host
     /// keys in the same call. The host keys are read first; both reads are
     /// part of this single call and nothing else happens in between.
