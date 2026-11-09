@@ -1032,10 +1032,32 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
 pub fn spawn_terminal_actor(
     session_id: SessionId,
     session: Arc<Session>,
+    shell: Box<dyn ssh_manager_core::ssh::InteractiveShell>,
+    commands: mpsc::Receiver<TerminalCommand>,
+    emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
+) {
+    spawn_terminal_actor_with_idle(
+        session_id,
+        session,
+        shell,
+        commands,
+        emitter,
+        tasks,
+        crate::background_keepalive::IdleActivity::new(),
+    );
+}
+
+/// Like [`spawn_terminal_actor`] with an injected wake-lock tracker (seam
+/// for tests, issue #784).
+pub fn spawn_terminal_actor_with_idle(
+    session_id: SessionId,
+    session: Arc<Session>,
     mut shell: Box<dyn ssh_manager_core::ssh::InteractiveShell>,
     mut commands: mpsc::Receiver<TerminalCommand>,
     emitter: Arc<dyn EventEmitter>,
     tasks: &crate::tasks::TaskScope,
+    mut idle: crate::background_keepalive::IdleActivity,
 ) {
     // Issue #881: runs in the session scope; closing the session cancels it
     // (no further output event, no status event — the close path emits its
@@ -1055,7 +1077,6 @@ pub fn spawn_terminal_actor(
         let mut flush_at: Option<tokio::time::Instant> = None;
         // Issue #784: wake lock while the terminal has recent input/output.
         // Failures are logged inside the controller and never end the loop.
-        let mut idle = crate::background_keepalive::IdleActivity::new();
         let disconnect_reason: Option<Option<String>> = loop {
             tokio::select! {
                 read_result = shell.read() => {
@@ -1079,10 +1100,10 @@ pub fn spawn_terminal_actor(
                 {
                     terminal_output::flush_terminal_output(emitter.as_ref(), session_id, &mut pending, &mut flush_at);
                 }
-                _ = async { tokio::time::sleep_until(idle.deadline().map(tokio::time::Instant::from_std).unwrap_or_else(tokio::time::Instant::now)).await },
+                _ = async { tokio::time::sleep_until(idle.deadline().unwrap_or_else(tokio::time::Instant::now)).await },
                     if idle.deadline().is_some() =>
                 {
-                    idle.release_if_idle(std::time::Instant::now());
+                    idle.release_if_idle(tokio::time::Instant::now());
                 }
                 cmd = commands.recv() => {
                     match cmd {

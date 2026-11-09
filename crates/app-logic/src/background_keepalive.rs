@@ -8,7 +8,8 @@
 
 use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::time::Instant;
 
 /// The platform side of the keep-alive.
 pub trait ForegroundService: Send + Sync {
