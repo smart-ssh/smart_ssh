@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
+use ssh_manager_core::ai::AiError;
 
 /// Maximale Wartezeit auf den *nächsten* SSE-Frame, bevor ein Stream als
 /// hängengeblieben gilt und mit einem Fehler statt endlos weiterzuwarten
@@ -63,11 +64,8 @@ pub(crate) fn frame_is_content(frame: &SseFrame) -> bool {
 /// zusätzliche, von der eigenen Zeitschranke unabhängige Verteidigungslinie
 /// — behebt nicht zwingend die volle Ursache, verkleinert aber das
 /// Zeitfenster für dieses Verhalten erheblich.
-pub(crate) fn build_http_client() -> reqwest::Client {
-    new_client_builder()
-        .tcp_keepalive(Duration::from_secs(15))
-        .build()
-        .unwrap_or_else(|_| new_client())
+pub(crate) fn build_http_client() -> Result<reqwest::Client, AiError> {
+    finish_client(new_client_builder().tcp_keepalive(Duration::from_secs(15)))
 }
 
 /// `reqwest::Client::builder()` with the platform's TLS roots (see
@@ -80,10 +78,27 @@ pub(crate) fn new_client_builder() -> reqwest::ClientBuilder {
 }
 
 /// Replacement for `reqwest::Client::new()` that honours [`new_client_builder`].
-pub(crate) fn new_client() -> reqwest::Client {
-    new_client_builder()
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+pub(crate) fn new_client() -> Result<reqwest::Client, AiError> {
+    finish_client(new_client_builder())
+}
+
+/// Builds the client. On Android a failure is logged and returned: falling
+/// back to `reqwest::Client::new()` there would silently use the platform
+/// verifier, which needs JNI initialisation (ADR 0148). Elsewhere the
+/// default client remains the fallback (unchanged behaviour).
+fn finish_client(builder: reqwest::ClientBuilder) -> Result<reqwest::Client, AiError> {
+    match builder.build() {
+        Ok(client) => Ok(client),
+        #[cfg(target_os = "android")]
+        Err(e) => {
+            tracing::error!(error = %e, "failed to build the HTTP client with the bundled TLS roots");
+            Err(AiError::ProviderUnavailable(format!(
+                "failed to build the HTTP client: {e}"
+            )))
+        }
+        #[cfg(not(target_os = "android"))]
+        Err(_) => Ok(reqwest::Client::new()),
+    }
 }
 
 /// Spec 0114 / ADR 0148: on Android the platform certificate verifier would
