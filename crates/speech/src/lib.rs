@@ -318,9 +318,13 @@ async fn download_inner(
     tokio::fs::create_dir_all(dir).await.map_err(io)?;
     let _ = tokio::fs::remove_file(part).await;
 
+    let client = download_client().map_err(|e| {
+        tracing::error!(error = %e, "failed to build the model download HTTP client");
+        Some(ModelErrorKey::Network)
+    })?;
     let response = tokio::select! {
         _ = cancel.changed() => return Err(None),
-        r = download_client().get(&source.url).send() => r,
+        r = client.get(&source.url).send() => r,
     }
     .map_err(|_| Some(ModelErrorKey::Network))?;
     if !response.status().is_success() {
@@ -380,9 +384,17 @@ mod tests;
 /// HTTP client for model downloads. On Android the platform certificate
 /// verifier would need JNI initialisation, so the bundled webpki roots are
 /// used there (Spec 0114, ADR 0148).
-fn download_client() -> reqwest::Client {
+fn download_client() -> Result<reqwest::Client, reqwest::Error> {
     let builder = reqwest::Client::builder();
     #[cfg(target_os = "android")]
     let builder = builder.tls_backend_preconfigured(tls_config::webpki_client_config());
-    builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    match builder.build() {
+        Ok(client) => Ok(client),
+        // Android must not fall back to `Client::new()`: that would use the
+        // platform verifier, which needs JNI initialisation (ADR 0148).
+        #[cfg(target_os = "android")]
+        Err(e) => Err(e),
+        #[cfg(not(target_os = "android"))]
+        Err(_) => Ok(reqwest::Client::new()),
+    }
 }
