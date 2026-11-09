@@ -1016,6 +1016,9 @@ export const exportEncryptedBackup = () => invoke<BackupExportDto | null>("expor
 /** Opens the system file picker in the backend; returns the file name, `null` when cancelled. */
 export const pickBackupImportFile = (title: string) =>
   invoke<string | null>("pick_backup_import_file", { title });
+/** Opens the system folder picker for this import's safety backup; returns the folder, `null` when cancelled. */
+export const pickBackupSafetyDir = (title: string) =>
+  invoke<string | null>("pick_backup_safety_dir", { title });
 export const startBackupImport = (kind: "code" | "passphrase", secret: string) =>
   invoke<BackupImportStartDto>("start_backup_import", { kind, secret });
 export const confirmBackupImport = () => invoke<BackupImportSummaryDto>("confirm_backup_import");

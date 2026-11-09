@@ -80,6 +80,10 @@ senkrechter Ziehgriff.
   und Sitzungen, bleibt beim Navigieren und über einen Neustart erhalten;
   ein fehlender oder ungültiger gespeicherter Wert wird durch den Standard
   ersetzt.
+- Ändert man die Sortierung in einem Dateimanager-Panel, übernehmen alle
+  anderen geöffneten Panels im selben Fenster sie sofort (Reihenfolge,
+  Pfeil und `aria-sort`); ein erneuter Klick kehrt von diesem gemeinsamen
+  Stand aus um.
 - Ein Klick auf einen Ziehgriff ändert die Sortierung nie.
 - Im schmalen Layout gibt es keine Spaltenköpfe; die Liste folgt dort der
   gespeicherten Sortierung.
