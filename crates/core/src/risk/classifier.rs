@@ -175,7 +175,6 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
     // quoted wrapper arguments; the quote-aware walk can (escalation only).
     if depth == 0
         && acc.server_risk < RiskLevel::Red
-        && command.contains(['\'', '"'])
         && command.to_lowercase().contains("sftp-server")
         && quoted_sftp_server_invocation(command)
     {
@@ -322,7 +321,7 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFindin
     }
     // Quoted commands: the quote-aware walk finds the effective command
     // (Issue #1232).
-    if command.contains(['\'', '"']) && quoted_sftp_server_invocation(command) {
+    if quoted_sftp_server_invocation(command) {
         return Some(CommandCheckFinding::Match(REASON));
     }
     // (b) Wort-Prüfung.
