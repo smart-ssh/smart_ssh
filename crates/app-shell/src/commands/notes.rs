@@ -64,6 +64,29 @@ pub async fn large_note_dialog_threshold_chars() -> CommandResult<u32> {
     Ok(app_logic::orchestration::LARGE_NOTE_DIALOG_THRESHOLD_CHARS as u32)
 }
 
+/// Builds the provider for the note-shrink side call (issue #1246: through
+/// the registered decorators).
+pub(crate) async fn build_note_shrink_provider(
+    state: &AppState,
+    config: &persistence_sqlite::AiProviderConfig,
+) -> Result<
+    (
+        Box<dyn ssh_manager_core::ai::AiProvider>,
+        std::sync::Arc<ai_providers::ProviderBudgetGuard>,
+    ),
+    ssh_manager_core::profiles::CredentialError,
+> {
+    // Issue #162: note side call, never web tools.
+    build_ai_provider_from_config_async(
+        &state.rate_limit_registry,
+        state.credential_store.clone(),
+        config,
+        false,
+        &state.ai_provider_decorators,
+    )
+    .await
+}
+
 /// Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — ausgelöst vom
 /// Kürzungs-Vorschlags-Dialog (`note-shrink-suggested`), potenziell lange
 /// nach dem `disconnect()`, das ihn ursprünglich zeigte. Baut deshalb einen
@@ -94,15 +117,9 @@ pub async fn request_note_shrink(
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
     // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config_async(
-        &state.rate_limit_registry,
-        state.credential_store.clone(),
-        &active_config,
-        false,
-        &state.ai_provider_decorators,
-    )
-    .await
-    .map_err(secret_store_error)?;
+    let (ai_provider, ai_provider_budget) = build_note_shrink_provider(&state, &active_config)
+        .await
+        .map_err(secret_store_error)?;
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
     // spec-reviewer-Fund (Review dieses Schritts): derselbe zusätzliche
