@@ -328,16 +328,11 @@ fn known_bug_enabled(name: &str) -> bool {
     false
 }
 
-/// russh decodes the banner with a strict UTF-8 `String::decode` before the
-/// handler's `auth_banner` runs, so a banner with invalid UTF-8 aborts the
-/// login (surfaced as `AuthenticationFailed`). Not fixable locally in the SSH
-/// modules.
-#[ignore = "bug: a login banner with invalid UTF-8 fails the connection (russh decodes it strictly)"]
+/// Upstream russh decodes the banner strictly and aborted the login on invalid
+/// UTF-8; the vendored russh (`vendor/russh`, issue #1228) decodes it lossily.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn banner_with_invalid_utf8_does_not_fail_the_connection() {
-    if !known_bug_enabled("banner_with_invalid_utf8_does_not_fail_the_connection") {
-        return;
-    }
     let t = login(
         "authpolicy-banner-invalid",
         USER,
