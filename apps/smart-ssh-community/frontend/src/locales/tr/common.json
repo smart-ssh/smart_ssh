@@ -1026,7 +1026,8 @@
       "authentication": "Kimlik doğrulama",
       "sessionReady": "Oturum kuruldu",
       "dnsSkipped": "IP adresi – ad çözümleme gerekmez",
-      "outdatedAlgorithms": "Eski algoritmalar"
+      "outdatedAlgorithms": "Eski algoritmalar",
+      "banner": "Sunucu başlığı"
     },
     "status": {
       "ok": "Tamam",

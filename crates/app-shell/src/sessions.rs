@@ -599,7 +599,12 @@ mod tests {
     /// Issue #923: a disconnect during the elevation probe returns within
     /// 2 s — the probe holds the transport lock only until its command has
     /// started (split start), so the disconnect step does not wait for it.
-    #[tokio::test]
+    ///
+    /// Runs on a paused (virtual) clock: the elapsed time is measured in
+    /// virtual time, which only advances when the runtime is idle, so
+    /// scheduler or filesystem delay on a slow runner cannot trip the bound,
+    /// while a held transport lock still shows up as the full step timeout.
+    #[tokio::test(start_paused = true)]
     async fn test_close_during_elevation_probe_is_prompt() {
         let started = Arc::new(AtomicBool::new(false));
         let rig = Rig::new(Box::new(HangingTransport {
@@ -615,7 +620,7 @@ mod tests {
         while !started.load(Ordering::SeqCst) {
             tokio::task::yield_now().await;
         }
-        let begun = std::time::Instant::now();
+        let begun = tokio::time::Instant::now();
         let closed = rig.ctx().close(rig.f.session_id).await;
         assert!(closed.is_some());
         // The disconnect step alone would take the full 2 s step timeout if

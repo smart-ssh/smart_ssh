@@ -1021,7 +1021,8 @@
       "authentication": "Xác thực",
       "sessionReady": "Đã thiết lập phiên",
       "dnsSkipped": "Địa chỉ IP – không cần phân giải",
-      "outdatedAlgorithms": "Thuật toán lỗi thời"
+      "outdatedAlgorithms": "Thuật toán lỗi thời",
+      "banner": "Biểu ngữ máy chủ"
     },
     "status": {
       "ok": "OK",

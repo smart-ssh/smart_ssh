@@ -40,7 +40,8 @@ Smart SSH sie in der Reihenfolge des Agents der Reihe nach durch, bis der Server
 eine akzeptiert; die Anmeldung endet mit dem ersten Treffer. Wird keine
 akzeptiert, schlägt die Anmeldung fehl. Trennt der Server vorher (etwa wegen
 `MaxAuthTries`), endet sie mit diesem Verbindungsfehler. Ein Zertifikat im
-Agent wird über seinen zugrunde liegenden Schlüssel angeboten.
+Agent wird als Zertifikat angeboten (der Agent signiert), sodass auch Server
+anmelden, die nur der Zertifizierungsstelle vertrauen.
 
 ## 4. Betriebsarten im Einzelnen
 
