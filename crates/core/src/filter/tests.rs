@@ -330,7 +330,7 @@ async fn test_multibyte_command_over_byte_limit_forces_confirm_despite_allow() {
 /// normal aus, ein Byte darüber geben beide auf — dieselbe Grenze für beide.
 #[tokio::test]
 async fn test_byte_limit_boundary_is_shared_by_filter_and_classifier() {
-    use crate::risk::{RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+    use crate::risk::{RiskLevel, RuleBasedRiskClassifier};
 
     let eng = engine(allow_iptables());
 

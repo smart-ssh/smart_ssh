@@ -385,12 +385,15 @@ async fn test_empty_info_request_is_answered_without_asking() {
 #[tokio::test]
 async fn test_prompter_wait_does_not_consume_the_authentication_limit() {
     let mut prompter = ScriptedPrompter::new(&[&[TEST_CODE]]);
-    prompter.delay = Duration::from_millis(2500);
+    // Well above the authentication limit below, so the test only passes while
+    // the prompter wait is excluded from that limit; the limit itself leaves
+    // ample room for the unpaused part of the login on a slow runner.
+    prompter.delay = Duration::from_secs(6);
     let server =
         RunningTestServer::start_with_scenario(AuthScenario::KeyboardInteractiveTwice).await;
     let limits = ConnectLimits {
         handshake: Duration::from_secs(10),
-        authentication: Duration::from_secs(1),
+        authentication: Duration::from_secs(5),
     };
     let log = ConnectLog::new();
     login(
