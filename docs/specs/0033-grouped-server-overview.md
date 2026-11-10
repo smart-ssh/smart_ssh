@@ -46,6 +46,10 @@ Ansichten dürfen sich in Darstellung und Interaktion unterscheiden.
 - Der Auf-/Zuklappzustand bleibt für die laufende App-Sitzung erhalten, auch
   wenn der Nutzer zwischendurch in einen anderen Bereich (Verwalten,
   Filter-Regeln) wechselt. Über einen Neustart hinweg bleibt er nicht erhalten.
+- Meldet das Backend geänderte Server oder Gruppen (auch außerhalb der Liste,
+  z. B. bei geöffnetem Einstellungsdialog), lädt die Liste sich neu. Andere
+  Änderungsarten lösen kein Neuladen aus. Schlägt das Neuladen fehl, erscheint
+  der Listenfehler und die bisherige Liste bleibt sichtbar.
 - Leere Gruppen (keine direkten Server, aber ggf. Untergruppen mit Servern)
   werden trotzdem angezeigt, damit die Hierarchie nachvollziehbar bleibt.
 

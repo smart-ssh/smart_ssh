@@ -58,6 +58,7 @@ vi.mock("../api/api", async () => {
 });
 vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
+  onDataChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
