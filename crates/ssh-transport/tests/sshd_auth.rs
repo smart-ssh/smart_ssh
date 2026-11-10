@@ -538,6 +538,52 @@ async fn agent_with_right_key_second_logs_in() {
     agent_attempt().await.ok().await;
 }
 
+/// Issue #1229: the CA-only server accepts the agent's certificate identity
+/// (the plain key is rejected first); a wrong key before it does not matter.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_certificate_identity_logs_in_on_ca_only_server() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    agent.add(&keygen(dir.path(), "wrong_before_cert"));
+    let key = keygen(dir.path(), "agentcert");
+    sign(&keys_dir().join("ca"), &key, USER, "-5m:+1d");
+    agent.add(&key); // ssh-add also loads `<key>-cert.pub`
+    attempt(
+        scenario_port(CERT),
+        AuthMethod::Agent,
+        &MapCreds::new(&[]),
+        &FileReader,
+    )
+    .await
+    .ok()
+    .await;
+}
+
+/// Issue #1229: a certificate from another CA ends in `AuthenticationFailed`.
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn agent_certificate_from_another_ca_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let agent = Agent::start().await;
+    let other_ca = keygen(dir.path(), "other_ca_agent");
+    let key = keygen(dir.path(), "agentforeign");
+    sign(&other_ca, &key, USER, "-5m:+1d");
+    agent.add(&key);
+    let (e, log) = attempt(
+        scenario_port(CERT),
+        AuthMethod::Agent,
+        &MapCreds::new(&[]),
+        &FileReader,
+    )
+    .await
+    .err();
+    assert!(matches!(e, SshError::AuthenticationFailed), "got {e:?}");
+    let fragment = key_fragment(&key);
+    assert_no_secret("error", &format!("{e} {e:?}"), &[&fragment]);
+    assert_no_secret("connect log", &log, &[&fragment]);
+}
+
 /// Only wrong keys (fewer than `MaxAuthTries`): `AuthenticationFailed`.
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
