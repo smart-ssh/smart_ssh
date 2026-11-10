@@ -1026,7 +1026,8 @@
       "authentication": "Autentisering",
       "sessionReady": "Økt opprettet",
       "dnsSkipped": "IP-adresse – ingen oppslag nødvendig",
-      "outdatedAlgorithms": "Utdaterte algoritmer"
+      "outdatedAlgorithms": "Utdaterte algoritmer",
+      "banner": "Serverbanner"
     },
     "status": {
       "ok": "OK",

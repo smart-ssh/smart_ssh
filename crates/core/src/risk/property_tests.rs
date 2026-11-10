@@ -13,7 +13,7 @@
 use proptest::prelude::*;
 
 use super::classifier::RuleBasedRiskClassifier;
-use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
+use super::types::{RiskAssessment, RiskLevel};
 use crate::filter::DEFAULT_MAX_COMMAND_LENGTH;
 
 fn classify(command: &str) -> RiskAssessment {

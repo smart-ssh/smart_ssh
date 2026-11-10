@@ -94,11 +94,11 @@ export type ConnectAuthMethodKind = "none" | "password" | "privateKey" | "agent"
 
 export type ConnectProgressPayload = { attemptId: string, serverId: ServerId, attempt: number, steps: Array<ConnectStepSnapshot>, };
 
-export type ConnectStep = { "kind": "dnsResolution", host: string, port: number, addresses: Array<string>, } | { "kind": "tcpConnect", address: string | null, port: number, } | { "kind": "tunnelOpen", host: string, port: number, } | { "kind": "handshake", serverVersion: string | null, kex: string | null, hostKeyAlgorithm: string | null, cipher: string | null, mac: string | null, } | { "kind": "hostKeyCheck", keyType: string | null, fingerprint: string | null, result: HostKeyCheckResult | null, } | { "kind": "authentication", method: ConnectAuthMethodKind, remainingMethods: Array<string>, partialSuccess: boolean, round: number | null, prompts: Array<string>, } | { "kind": "sessionReady" } | { "kind": "outdatedAlgorithms", algorithms: Array<string>, };
+export type ConnectStep = { "kind": "dnsResolution", host: string, port: number, addresses: Array<string>, } | { "kind": "tcpConnect", address: string | null, port: number, } | { "kind": "tunnelOpen", host: string, port: number, } | { "kind": "handshake", serverVersion: string | null, kex: string | null, hostKeyAlgorithm: string | null, cipher: string | null, mac: string | null, } | { "kind": "hostKeyCheck", keyType: string | null, fingerprint: string | null, result: HostKeyCheckResult | null, } | { "kind": "authentication", method: ConnectAuthMethodKind, remainingMethods: Array<string>, partialSuccess: boolean, round: number | null, prompts: Array<string>, } | { "kind": "sessionReady" } | { "kind": "outdatedAlgorithms", algorithms: Array<string>, } | { "kind": "banner", text: string, };
 
 export type ConnectStepRecord = { hopIndex: number, hop: string, step: ConnectStep, status: StepStatus, durationMs: number | null, };
 
-export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady" | "outdatedAlgorithms", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "warning" | "failed", errorCode: string | null, detail: StepDetail | null, };
+export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady" | "outdatedAlgorithms" | "banner", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "warning" | "failed", errorCode: string | null, detail: StepDetail | null, };
 
 export type ConnectWarning = { hop: string, algorithms: Array<string>, };
 
