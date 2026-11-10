@@ -26,6 +26,14 @@ interface UseDialogFocusTrapOptions {
    * Re-Render darf den Fokus nie auf der riskanten Schaltfläche oder dem
    * Hintergrund belassen (Spec 0100, A2, Testfall "rerender"). */
   resetKey: unknown;
+  /** Dialog that opens further dialogs from inside (they portal to
+   * `document.body`, outside `containerRef`): Escape that belongs to such a
+   * nested dialog is left alone, and focus is not pulled back on a
+   * `focusout` without target. (Focus inside a dialog stacked above is never pulled back.) */
+  yieldToNested?: boolean;
+  /** Element that gets the focus back on close. Default: the element focused
+   * when the dialog opened. */
+  returnFocusTo?: HTMLElement | null;
 }
 
 /**
@@ -46,6 +54,8 @@ export function useDialogFocusTrap({
   initialFocusRef,
   onEscape,
   resetKey,
+  yieldToNested = false,
+  returnFocusTo,
 }: UseDialogFocusTrapOptions) {
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   // Review-Fund Runde 2: Der `document`-Escape-Listener unten entsteht nur
@@ -82,7 +92,19 @@ export function useDialogFocusTrap({
   // A7 gäbe am Ende den Fokus nicht an den richtigen Ort zurück (gemessen:
   // mit vertauschter Reihenfolge scheitert T10 zuverlässig).
   useEffect(() => {
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previouslyFocusedRef.current =
+      returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+
+    // A dialog stacked above this one (opened from inside it, or a prompt such
+    // as the host-key dialog) lives in its own backdrop that comes later in the
+    // document and does not contain our container; its focus is not ours to pull back.
+    function inDialogAbove(target: EventTarget | null): boolean {
+      if (!(target instanceof Element)) return false;
+      const backdrop = target.closest("[data-modal-backdrop]");
+      const own = containerRef.current?.closest("[data-modal-backdrop]");
+      if (!backdrop || !own || backdrop === own) return false;
+      return (own.compareDocumentPosition(backdrop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    }
 
     function isOutside(target: EventTarget | null): boolean {
       const container = containerRef.current;
@@ -96,11 +118,12 @@ export function useDialogFocusTrap({
       return !(target instanceof Node) || !container.contains(target);
     }
     function onFocusOut(event: FocusEvent) {
+      if (yieldToNested) return; // Settings-style dialogs refocus themselves (click handler in DialogFrame)
       if (event.relatedTarget) return; // folgt ein focusin, s. onFocusIn
       initialFocusRef.current?.focus();
     }
     function onFocusIn(event: FocusEvent) {
-      if (isOutside(event.target)) {
+      if (isOutside(event.target) && !inDialogAbove(event.target)) {
         initialFocusRef.current?.focus();
       }
     }
@@ -114,6 +137,10 @@ export function useDialogFocusTrap({
     // liegt in der Bubble-Kette näher am Ursprung.
     function onDocumentKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (yieldToNested) {
+        const container = containerRef.current;
+        if (!container || !(event.target instanceof Node) || !container.contains(event.target)) return;
+      }
       event.preventDefault();
       event.stopPropagation();
       onEscapeRef.current();
@@ -143,6 +170,9 @@ export function useDialogFocusTrap({
   }, [resetKey]);
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    // Keys of a dialog portaled out of this one still bubble through the React tree.
+    const owner = containerRef.current;
+    if (owner && event.target instanceof Node && !owner.contains(event.target)) return;
     if (event.key === "Enter" && event.repeat) {
       // A5: eine aus einem vorherigen Dialog gehaltene Enter-Taste darf die
       // gerade erst fokussierte Schaltfläche nicht auslösen.
