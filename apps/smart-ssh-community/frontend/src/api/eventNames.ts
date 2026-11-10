@@ -3,6 +3,7 @@
 // `npm run check-events` fails when the two drift apart. Listen only through
 // these constants, never through a string literal.
 export const EVENT = {
+  DATA_CHANGED: "data-changed",
   CONNECTION_STATUS_CHANGED: "connection-status-changed",
   CHAT_SESSION_CHANGED: "chat-session-changed",
   HOST_KEY_VERIFICATION_NEEDED: "host-key-verification-needed",

@@ -12,6 +12,7 @@ import {
   listUnusableServers,
   inspectKeyFile,
 } from "../api/api";
+import { onDataChanged } from "../api/events";
 import { commandErrorText } from "../api/errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
@@ -201,6 +202,24 @@ export function ServerList({
     // bei einem Sprachwechsel nicht erneut aus) — hier trotzdem korrekt
     // über `loadTree` gelistet, statt des sonst nötigen
     // exhaustive-deps-Lint-Suppressors.
+  }, [loadTree]);
+
+  // Issue #1292 / Spec 0033: reload when the backend reports changed servers or
+  // groups (e.g. changes made while the settings dialog is open). Other kinds
+  // are ignored; events after unmount do nothing.
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | null = null;
+    void onDataChanged((payload) => {
+      if (active && payload.kinds.some((k) => k === "servers" || k === "groups")) void loadTree();
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
   }, [loadTree]);
 
   /** Issue #48 / Spec 0103: Ablage eines gezogenen Servers/einer Gruppe.

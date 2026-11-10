@@ -30,7 +30,12 @@ export const EVENT = {
 `;
 
 const run = (rust: string, frontend: string, literals: { call: string; file: string; line: number }[] = []) =>
-  findMismatches({ rust: parseRustNames(rust), frontend: parseFrontendNames(frontend), literals });
+  findMismatches({
+    rust: parseRustNames(rust),
+    frontend: parseFrontendNames(frontend),
+    literals,
+    notConsumed: { DATA_CHANGED: "fixture: Rust-only constant" },
+  });
 
 describe("parsers", () => {
   it("reads the Rust names module", () => {
@@ -97,11 +102,12 @@ describe("findMismatches", () => {
       frontend: parseFrontendNames(FRONTEND),
       literals: [],
       payloadKeys: keys,
+      notConsumed: { DATA_CHANGED: "fixture" },
     });
     expect(problems).toEqual([expect.objectContaining({ name: "CHAT_ERROR", kind: expect.stringMatching(/no payload type/) })]);
     const ok = parsePayloadKeys('  "chat-error": ChatErrorPayload,\n  "data-changed": X,');
     expect(
-      findMismatches({ rust: parseRustNames(RUST), frontend: parseFrontendNames(FRONTEND), literals: [], payloadKeys: ok }),
+      findMismatches({ rust: parseRustNames(RUST), frontend: parseFrontendNames(FRONTEND), literals: [], payloadKeys: ok, notConsumed: { DATA_CHANGED: "fixture" } }),
     ).toEqual([]);
   });
 
