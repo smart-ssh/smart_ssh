@@ -38,9 +38,7 @@ const PAYLOAD_FILES = [
 const FRONTEND_SRC = "apps/smart-ssh-community/frontend/src";
 
 /** Rust constants the core UI does not listen to. Each needs a reason. */
-export const NOT_CONSUMED_BY_CORE_UI = {
-  DATA_CHANGED: "consumed by UI extensions only, the core UI refreshes through its own commands",
-};
+export const NOT_CONSUMED_BY_CORE_UI = {};
 
 class ParseError extends Error {}
 const fail = (message) => {

@@ -18,7 +18,7 @@ import {
   moveServerToGroup,
   resumeChatSession,
 } from "../api/api";
-import { onHostKeyVerificationNeeded } from "../api/events";
+import { onDataChanged, onHostKeyVerificationNeeded } from "../api/events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
 import {
   registerFirstRunNoticeExtension,
@@ -92,6 +92,7 @@ vi.mock("../api/api", async () => {
 
 vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
+  onDataChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("../lib/firstRunNotice", () => ({
@@ -615,5 +616,63 @@ describe("ServerList new session (issue #657)", () => {
     fireEvent.click((await screen.findByText("prod-1")).closest("button")!);
     await waitFor(() => expect(onSwitch).toHaveBeenCalledWith("tab-1"));
     expect(startConnectMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ServerList data-changed reload (issue #1292 / Spec 0033)", () => {
+  type Handler = (p: { kinds: string[] }) => void;
+  function captureHandler() {
+    const unlisten = vi.fn();
+    let handler: Handler | null = null;
+    vi.mocked(onDataChanged).mockImplementation(((h: Handler) => {
+      handler = h;
+      return Promise.resolve(unlisten);
+    }) as never);
+    return { unlisten, fire: (kinds: string[]) => act(() => handler?.({ kinds })) };
+  }
+  afterEach(() => {
+    vi.mocked(listServers).mockImplementation(() => Promise.resolve([localServer(), remoteServer()]));
+    vi.mocked(onDataChanged).mockImplementation(() => Promise.resolve(() => {}));
+  });
+
+  it("reloads on servers/groups and shows the new data", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    vi.mocked(listServers).mockImplementation(() =>
+      Promise.resolve([localServer(), { ...remoteServer(), id: "r2", name: "added-srv" }]),
+    );
+    fire(["groups"]);
+    expect(await screen.findByText("added-srv")).toBeInTheDocument();
+  });
+
+  it("does not reload for other kinds", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    const calls = vi.mocked(listServers).mock.calls.length;
+    fire(["tags", "rules"]);
+    expect(vi.mocked(listServers).mock.calls.length).toBe(calls);
+  });
+
+  it("unregisters on unmount and ignores later events", async () => {
+    const { fire, unlisten } = captureHandler();
+    const view = renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    view.unmount();
+    await waitFor(() => expect(unlisten).toHaveBeenCalled());
+    const calls = vi.mocked(listServers).mock.calls.length;
+    fire(["servers"]);
+    expect(vi.mocked(listServers).mock.calls.length).toBe(calls);
+  });
+
+  it("keeps the previous list and shows the error when the reload fails", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    vi.mocked(listServers).mockImplementation(() => Promise.reject(new Error("boom")));
+    fire(["servers"]);
+    expect(await screen.findByText(/boom/)).toBeInTheDocument();
+    expect(screen.getByText("prod-1")).toBeInTheDocument();
   });
 });

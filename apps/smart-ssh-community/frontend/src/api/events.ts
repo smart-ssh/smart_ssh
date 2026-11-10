@@ -25,6 +25,9 @@ export const onChatSessionChanged =
 export const onAutoReconnectChanged =
   typedListener(EVENT.AUTO_RECONNECT_CHANGED);
 
+/** Issue #1292: committed backend changes (coalesced), `kinds` only. */
+export const onDataChanged = typedListener(EVENT.DATA_CHANGED);
+
 export const onHostKeyVerificationNeeded =
   typedListener(EVENT.HOST_KEY_VERIFICATION_NEEDED);
 
