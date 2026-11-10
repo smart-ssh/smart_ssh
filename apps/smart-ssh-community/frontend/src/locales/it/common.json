@@ -1031,7 +1031,8 @@
       "authentication": "Autenticazione",
       "sessionReady": "Sessione stabilita",
       "dnsSkipped": "Indirizzo IP – nessuna risoluzione necessaria",
-      "outdatedAlgorithms": "Algoritmi obsoleti"
+      "outdatedAlgorithms": "Algoritmi obsoleti",
+      "banner": "Banner del server"
     },
     "status": {
       "ok": "OK",

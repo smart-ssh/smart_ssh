@@ -137,4 +137,10 @@ describe("connectStepLog", () => {
       "  ✓ Tunnel via previous hop — OK (5 ms) — target:22",
     ]);
   });
+
+  it("shows the banner text as plain text", () => {
+    const text = "Authorized use only <b>x</b>\nSecond line";
+    expect(stepDetails(t, { kind: "banner", text })).toBe(text);
+    expect(stepLabel(t, { kind: "banner", text })).toBe("Server banner");
+  });
 });

@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { convertIdentityFileToKeychain, inspectKeyFile } from "../../api/api";
 import { testI18n } from "../../testI18n";
 import type { KeyFileFactsDto, ServerDto } from "../../api/types";
@@ -39,21 +39,37 @@ function setup(props: { draftPath: string; loaded: ServerDto | null }) {
   return { reloadServer, onSaved, ...hook };
 }
 
+// Must stay in step with the debounce in useIdentityFile.ts.
+const DEBOUNCE_MS = 400;
+
+/** Runs the debounce timer and flushes the check that follows it. */
+async function passDebounce() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+  });
+}
+
 describe("useIdentityFile", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it("checks the draft path after the debounce", async () => {
     vi.mocked(inspectKeyFile).mockResolvedValue(facts);
+    vi.useFakeTimers();
     const { result } = setup({ draftPath: "/k", loaded: null });
-    await waitFor(() => expect(result.current.identityFacts).toBe(facts));
+    expect(inspectKeyFile).not.toHaveBeenCalled();
+    await passDebounce();
+    expect(result.current.identityFacts).toBe(facts);
     expect(result.current.identityFactsLoading).toBe(false);
     expect(result.current.identityFactsError).toBe(false);
   });
 
   it("flags a failed check instead of staying silent", async () => {
     vi.mocked(inspectKeyFile).mockRejectedValue(new Error("ipc"));
+    vi.useFakeTimers();
     const { result } = setup({ draftPath: "/k", loaded: null });
-    await waitFor(() => expect(result.current.identityFactsError).toBe(true));
+    await passDebounce();
+    expect(result.current.identityFactsError).toBe(true);
     expect(result.current.identityFacts).toBeNull();
   });
 
@@ -75,6 +91,7 @@ describe("useIdentityFile", () => {
     vi.mocked(inspectKeyFile).mockResolvedValue(facts);
     vi.mocked(convertIdentityFileToKeychain).mockRejectedValue({ code: "X", message: "bad" });
     const { result, reloadServer, onSaved } = setup({ draftPath: "", loaded: loadedServer });
+    await waitFor(() => expect(result.current.convertFacts).toBe(facts));
     act(() => result.current.setConvertConfirmOpen(true));
     await act(() => result.current.handleConvertToKeychain());
     expect(result.current.convertError).toEqual(expect.any(String));

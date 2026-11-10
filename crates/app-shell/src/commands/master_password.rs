@@ -1067,8 +1067,7 @@ mod tests {
         );
     }
 
-    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten
-    /// gescheiterten Versuch** — und bei einer nicht erreichbaren Datei nie.
+    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten gescheiterten Versuch** — bei einer nicht erreichbaren Datei nie.
     #[test]
     fn test_starting_over_is_offered_only_after_three_failed_attempts() {
         for attempts in 0..ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED {
@@ -1173,6 +1172,7 @@ mod tests {
                 keychain: credentials_keyring::KeychainAvailability::Available,
                 outgoing_transform: None,
                 ai_usage_observers: Default::default(),
+                ai_provider_decorators: Default::default(),
             },
             Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),

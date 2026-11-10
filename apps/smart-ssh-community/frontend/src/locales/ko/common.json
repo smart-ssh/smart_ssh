@@ -1021,7 +1021,8 @@
       "authentication": "인증",
       "sessionReady": "세션 수립됨",
       "dnsSkipped": "IP 주소 – 조회 불필요",
-      "outdatedAlgorithms": "오래된 알고리즘"
+      "outdatedAlgorithms": "오래된 알고리즘",
+      "banner": "서버 배너"
     },
     "status": {
       "ok": "OK",

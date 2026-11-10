@@ -237,6 +237,7 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
         state.credential_store.clone(),
         &config,
         false,
+        &state.ai_provider_decorators,
     )
     .await
     else {

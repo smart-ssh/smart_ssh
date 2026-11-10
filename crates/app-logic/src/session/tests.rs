@@ -875,6 +875,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        ai_provider_decorators: Default::default(),
     };
 
     // No open session: a no-op, the extension is not asked.

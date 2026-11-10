@@ -83,6 +83,11 @@ export function stepDetails(t: T, step: ConnectStep): string {
     case "outdatedAlgorithms":
       if (step.algorithms.length > 0) parts.push(step.algorithms.join(", "));
       break;
+    case "banner":
+      // Server-supplied text (sanitized and capped by the backend): shown as
+      // plain text only, never as markup.
+      if (step.text) parts.push(step.text);
+      break;
     case "sessionReady":
       break;
   }

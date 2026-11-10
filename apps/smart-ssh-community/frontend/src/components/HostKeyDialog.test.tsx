@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
 import { HostKeyDialog } from "./HostKeyDialog";
+import { DialogFrame } from "./ui";
 
 const unknownEvent: HostKeyInfo = {
   host: "example.com",
@@ -428,5 +429,24 @@ describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
     renderDialog({ ...event, keyType });
     expect(screen.queryByTestId("host-key-type")).toBeNull();
     expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
+  });
+});
+
+describe("HostKeyDialog above other modals (issue #1150)", () => {
+  it("renders after (above) a modal that was already open, with the same z-index, and keeps the focus", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <DialogFrame layer="app" title="Other" onClose={vi.fn()}>
+          <button type="button">other action</button>
+        </DialogFrame>
+        <HostKeyDialog event={unknownEvent} onDecision={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const backdrops = Array.from(document.body.querySelectorAll<HTMLElement>("[data-modal-backdrop]"));
+    expect(backdrops).toHaveLength(2);
+    // Same z-index: the later portal child is painted on top.
+    expect(backdrops[1]).toContainElement(screen.getByRole("button", { name: "Ablehnen" }));
+    expect(backdrops[1]).toHaveClass("z-50");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ablehnen" }));
   });
 });

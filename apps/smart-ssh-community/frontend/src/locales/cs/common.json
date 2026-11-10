@@ -1036,7 +1036,8 @@
       "authentication": "Ověření",
       "sessionReady": "Relace navázána",
       "dnsSkipped": "IP adresa – překlad není potřeba",
-      "outdatedAlgorithms": "Zastaralé algoritmy"
+      "outdatedAlgorithms": "Zastaralé algoritmy",
+      "banner": "Banner serveru"
     },
     "status": {
       "ok": "OK",
