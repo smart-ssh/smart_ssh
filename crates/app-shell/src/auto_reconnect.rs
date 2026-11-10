@@ -97,7 +97,10 @@ async fn run<R: Runtime>(
 
 /// One automatic attempt: never opens the host key dialog, never accepts a
 /// key. Only errors that waiting can fix are retried.
-async fn attempt<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) -> AttemptResult {
+pub(crate) async fn attempt<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: SessionId,
+) -> AttemptResult {
     let state = app.state::<AppState>();
     let elevated = app.state::<crate::elevated_sftp::ElevatedSftpRegistry>();
     let grants = app.state::<app_logic::local_path_grants::LocalPathGrants>();
