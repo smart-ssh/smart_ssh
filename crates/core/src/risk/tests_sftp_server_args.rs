@@ -189,3 +189,46 @@ fn test_quoted_sftp_server_mentions_stay_harmless() {
         }
     }
 }
+
+/// Issue #1285: a single-word code string after a re-shell's `-c`.
+#[test]
+fn test_single_word_nested_code_string_is_red_and_detected() {
+    for command in [
+        "su root -c \"sftp-server\"",
+        "su root -c sftp-server",
+        "sh -c 'sftp-server'",
+        "bash -c \"/usr/lib/openssh/sftp-server\"",
+        "sudo sh -c sftp-server",
+    ] {
+        assert!(
+            super::sftp_word_check::quoted_sftp_server_invocation(command),
+            "walk missed: {command}"
+        );
+        let assessment = RuleBasedRiskClassifier.classify(command);
+        assert_eq!(assessment.server_risk, RiskLevel::Red, "not red: {command}");
+    }
+    for command in ["su root -c \"sftp-server\"", "su root -c sftp-server"] {
+        assert!(
+            matches!(
+                sftp_server_invocation_reason(command),
+                Some(CommandCheckFinding::Match(_))
+            ),
+            "pattern side missed: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_single_word_nested_code_string_mentions_stay_harmless() {
+    for command in [
+        "echo \"sftp-server\"",
+        "su root -c \"echo sftp-server\"",
+        "sudo -p 'sftp-server' ls",
+        "cat sftp-server",
+    ] {
+        assert!(
+            !super::sftp_word_check::quoted_sftp_server_invocation(command),
+            "walk false positive: {command}"
+        );
+    }
+}

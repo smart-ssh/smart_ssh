@@ -50,10 +50,13 @@ fn sftp_server_word_check_mode(command: &str, depth: usize, strict: bool) -> Wor
     // position are being skipped.
     let mut in_sudo_options: Option<&'static str> = None;
     let mut skip_argument = false;
+    // A re-shell seen in the current pipeline stage (Issue #1285).
+    let mut stage_reshell = false;
     // Same for other wrappers (`timeout 5m`, `nice -n 10`, Issue #1230).
     let mut in_wrapper: Option<WrapperState> = None;
-    for (word, text) in words.iter().zip(&lower_texts) {
+    for (idx, (word, text)) in words.iter().zip(&lower_texts).enumerate() {
         if word.stage_start {
+            stage_reshell = false;
             at_command_position = true;
             in_sudo_options = None;
             in_wrapper = None;
@@ -85,6 +88,19 @@ fn sftp_server_word_check_mode(command: &str, depth: usize, strict: bool) -> Wor
             }
         }
         let word_name = name(text);
+        // Issue #1285: the single word after a re-shell's `-c` is a code
+        // string even without whitespace (`su root -c "sftp-server"`).
+        let after_reshell_c = strict
+            && stage_reshell
+            && idx > 0
+            && lower_texts[idx - 1] == "-c"
+            && !words[idx].stage_start;
+        if word_name == "sftp-server" && after_reshell_c {
+            return WordCheck::Found;
+        }
+        if RESHELL_COMMANDS.contains(&word_name.as_str()) {
+            stage_reshell = true;
+        }
         if word_name == "sftp-server" && (at_command_position || (has_reshell && !strict)) {
             return WordCheck::Found;
         }
