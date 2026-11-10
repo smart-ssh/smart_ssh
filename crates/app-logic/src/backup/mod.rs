@@ -12,7 +12,8 @@ mod tests;
 mod validate;
 
 pub use changes::{
-    apply_changes, apply_changes_with, read_snapshot, ApplySummary, Change, ChangeSet,
+    apply_changes, apply_changes_expecting, apply_changes_with, read_snapshot, ApplySummary,
+    Change, ChangeSet,
 };
 pub use export::{export_backup, export_backup_with, ExportSummary};
 pub use import::{
@@ -20,7 +21,7 @@ pub use import::{
     ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
 };
 pub use key::{BackupKey, BackupKeyStatus};
-pub use snapshot::{HostKeyRow, Snapshot, SnapshotCounts, KNOWN_SECTIONS};
+pub use snapshot::{HostKeyRow, Snapshot, SnapshotCounts, SnapshotToken, KNOWN_SECTIONS};
 
 use ssh_manager_core::backup::BackupError as FormatError;
 
@@ -47,6 +48,10 @@ pub enum BackupOpError {
     Invalid(&'static str),
     /// X4: the written file did not verify; it was removed.
     VerificationFailed,
+    /// A change set carried a precondition (`SnapshotToken`) and the content
+    /// read in the apply transaction no longer matches it. Nothing was
+    /// written; read a fresh snapshot and compute the change set again.
+    Conflict,
 }
 
 impl std::fmt::Display for BackupOpError {
@@ -64,6 +69,9 @@ impl std::fmt::Display for BackupOpError {
             Self::VerificationFailed => {
                 f.write_str("the written backup did not verify and was removed")
             }
+            Self::Conflict => f.write_str(
+                "the data changed since the change set was computed; nothing was applied",
+            ),
         }
     }
 }

@@ -3,7 +3,9 @@
 //! `ssh_manager_core::sync` instead.
 //!
 //! Excluded: everything below a `#[cfg(test)] mod …`, `tests/` directories,
-//! `*_tests.rs`, `tests_*.rs`, `tests.rs` and `test_support*` files.
+//! `*_tests.rs`, `tests_*.rs`, `tests.rs`, `test_support*` and `test_exit_guard.rs`
+//! files, plus `crates/core/src/sync.rs` (the helpers themselves). Inline
+//! poison recovery (`.lock().unwrap_or_else(…into_inner…)`) is reported too.
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +32,7 @@ fn is_test_file(name: &str) -> bool {
         || name.ends_with("_tests.rs")
         || name.starts_with("tests_")
         || name.starts_with("test_support")
+        || name == "test_exit_guard.rs" // compiled for test builds only
 }
 
 /// Production part of a source file: everything before the first
@@ -55,14 +58,26 @@ fn production_part(src: &str) -> &str {
     src
 }
 
+fn floor_boundary(s: &str, mut i: usize) -> usize {
+    while !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
 /// Finds `.lock()` / `.read()` / `.write()` directly followed (whitespace
-/// allowed) by `.unwrap(` or `.expect(`; returns the 1-based line numbers.
+/// allowed) by `.unwrap(`, `.expect(` or an inline poison recovery
+/// (`.unwrap_or_else(… into_inner …)`); returns the 1-based line numbers.
 fn offenders(src: &str) -> Vec<usize> {
     let mut found = Vec::new();
     for call in [".lock()", ".read()", ".write()"] {
         for (at, _) in src.match_indices(call) {
             let rest = src[at + call.len()..].trim_start();
-            if rest.starts_with(".unwrap(") || rest.starts_with(".expect(") {
+            let inline_recovery = rest.starts_with(".unwrap_or_else(") && {
+                let end = rest.find(';').unwrap_or(rest.len()).min(200);
+                rest[..floor_boundary(rest, end)].contains("into_inner")
+            };
+            if rest.starts_with(".unwrap(") || rest.starts_with(".expect(") || inline_recovery {
                 found.push(src[..at].matches('\n').count() + 1);
             }
         }
@@ -83,7 +98,7 @@ fn test_no_lock_unwrap_or_expect_in_production_code() {
     let mut violations = Vec::new();
     for file in files {
         let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if is_test_file(name) {
+        if is_test_file(name) || file.ends_with("crates/core/src/sync.rs") {
             continue;
         }
         let src = std::fs::read_to_string(&file).expect("read source");
@@ -104,5 +119,17 @@ fn test_offender_detection_finds_split_and_plain_calls() {
         offenders("a.lock().unwrap();\nb\n    .read()\n    .expect(\"x\");"),
         [1, 3]
     );
-    assert!(offenders("a.lock().unwrap_or_else(|e| e.into_inner());").is_empty());
+    assert_eq!(
+        offenders("a.lock().unwrap_or_else(|e| e.into_inner());"),
+        [1]
+    );
+    assert_eq!(
+        offenders("x\n    .write()\n    .unwrap_or_else(PoisonError::into_inner);"),
+        [2]
+    );
+    assert_eq!(
+        offenders("a.lock().unwrap_or_else(std::sync::PoisonError::into_inner)"),
+        [1]
+    );
+    assert!(offenders("a.lock().unwrap_or_else(|e| fallback(e));").is_empty());
 }

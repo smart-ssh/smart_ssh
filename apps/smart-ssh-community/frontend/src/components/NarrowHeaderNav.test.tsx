@@ -138,7 +138,7 @@ describe("NarrowHeaderNav", () => {
     setNarrow();
     setup();
     open();
-    fireEvent.click(screen.getByTestId("narrow-menu-backdrop"));
+    fireEvent.click(screen.getByTestId("dialog-backdrop-dismiss"));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(burger()).toHaveFocus();
   });

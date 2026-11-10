@@ -2,7 +2,7 @@
 
 use super::classifier::RuleBasedRiskClassifier;
 use super::sftp_server_invocation_reason;
-use super::types::{RiskClassifier, RiskLevel};
+use super::types::RiskLevel;
 use super::CommandCheckFinding;
 
 #[test]
