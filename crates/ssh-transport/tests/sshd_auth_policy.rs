@@ -317,17 +317,6 @@ async fn banner_with_valid_text_does_not_fail_the_connection() {
     echo_ok(t).await;
 }
 
-/// Known-bug tests are `#[ignore = "bug: ..."]`, but the e2e runner passes
-/// `--ignored` and would run them. They only execute when
-/// `SSHD_E2E_KNOWN_BUGS=1` is set, so the runner stays green until fixed.
-fn known_bug_enabled(name: &str) -> bool {
-    if std::env::var_os("SSHD_E2E_KNOWN_BUGS").is_some() {
-        return true;
-    }
-    eprintln!("skipping {name}: known bug, set SSHD_E2E_KNOWN_BUGS=1 to run it");
-    false
-}
-
 /// Upstream russh decodes the banner strictly and aborted the login on invalid
 /// UTF-8; the vendored russh (`vendor/russh`, issue #1228) decodes it lossily.
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]
