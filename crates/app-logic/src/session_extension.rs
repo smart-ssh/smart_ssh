@@ -24,6 +24,55 @@ use crate::state::AppState;
 
 pub use ssh_manager_core::outgoing::ServerScope;
 
+/// Stable error code of a refused connection (`CommandError::code`).
+pub const CONNECT_REFUSED_CODE: &str = "CONNECT_REFUSED";
+
+/// A [`SessionExtension::check_connect`] refusal. The message is shown to the
+/// user as is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectRefusal {
+    pub message: String,
+}
+
+impl ConnectRefusal {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for ConnectRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl From<ConnectRefusal> for ssh_manager_core::ipc_error::CommandError {
+    fn from(r: ConnectRefusal) -> Self {
+        Self::with_code(r.message, CONNECT_REFUSED_CODE)
+    }
+}
+
+/// Runs the connect check of `extension` for a resolved scope lookup. Fails
+/// closed: a scope that is missing or incomplete (the profile store failed)
+/// is a refusal, never an approval. Without an extension the connect is
+/// allowed unchanged.
+pub async fn check_connect_allowed(
+    extension: Option<&dyn SessionExtension>,
+    lookup: &ScopeLookup,
+) -> Result<(), ConnectRefusal> {
+    let Some(extension) = extension else {
+        return Ok(());
+    };
+    match (&lookup.scope, lookup.incomplete) {
+        (Some(scope), false) => extension.check_connect(scope).await,
+        _ => Err(ConnectRefusal::new(
+            "The connection was refused because the server's settings could not be checked.",
+        )),
+    }
+}
+
 /// Registered through `Wiring`. All methods have no-op defaults so an
 /// extension only implements what it needs.
 #[async_trait::async_trait]
@@ -45,6 +94,15 @@ pub trait SessionExtension: Send + Sync {
     /// the sudo password. Matched literally, never as a regex.
     fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
         Vec::new()
+    }
+
+    /// Asked once per connection attempt, after the server is loaded and
+    /// before any transport, host-key prompt or credential read. `Err`
+    /// refuses the connect with the refusal's user-facing message. It can
+    /// only restrict; it runs outside the filter engine and cannot change a
+    /// filter, risk or confirmation result. The default allows.
+    async fn check_connect(&self, _scope: &ServerScope) -> Result<(), ConnectRefusal> {
+        Ok(())
     }
 
     /// Called after the core deleted the server.
@@ -98,6 +156,13 @@ impl SessionExtension for CompositeSessionExtension {
             }
         }
         out
+    }
+
+    async fn check_connect(&self, scope: &ServerScope) -> Result<(), ConnectRefusal> {
+        for ext in &self.extensions {
+            ext.check_connect(scope).await?;
+        }
+        Ok(())
     }
 
     fn server_removed(&self, server_id: ServerId) {
@@ -500,6 +565,9 @@ impl SessionExtension for RecordingExtension {
         ssh_manager_core::sync::lock_tolerating_poison(&self.groups).push(group_id);
     }
 }
+
+#[cfg(test)]
+mod tests_connect;
 
 #[cfg(test)]
 mod tests_sessionless;

@@ -27,8 +27,8 @@ pub use crate::state::AppState;
 
 // --- Session extension ---------------------------------------------------
 pub use crate::session_extension::{
-    rebuild_redactors_for_sessions, rebuild_server_redactors, scope_for_id, ServerScope,
-    SessionExtension,
+    check_connect_allowed, rebuild_redactors_for_sessions, rebuild_server_redactors, scope_for_id,
+    ConnectRefusal, ServerScope, SessionExtension, CONNECT_REFUSED_CODE,
 };
 pub use crate::system_prompt::PromptLanguage;
 
@@ -41,6 +41,10 @@ pub use crate::orchestration::accept_extension_content;
 
 // --- AI usage ------------------------------------------------------------
 pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
+
+// --- AI provider decorators ----------------------------------------------
+pub use crate::ai_provider_decorator::{apply_decorators, AiProviderDecorator, AiProviderInfo};
+pub use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, ProviderType, RedactedContext};
 
 // --- Backup / snapshot ---------------------------------------------------
 pub use crate::backup::{

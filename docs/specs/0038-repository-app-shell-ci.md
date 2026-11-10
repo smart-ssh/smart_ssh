@@ -240,6 +240,24 @@ Regeln:
   registrierte Erweiterung ist die Datenbank identisch zu vorher.
 - Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
 
+### Verbindungsprüfung durch Erweiterungen
+
+Eine registrierte Sitzungs-Erweiterung kann einen Verbindungsaufbau zu einem
+Server ablehnen (Issue #1281). Regeln:
+
+- Die Prüfung läuft genau einmal je Verbindungsversuch, nachdem der Server
+  geladen ist und bevor Transport, Host-Key-Abfrage oder Zugangsdaten-Zugriff
+  stattfinden. Sie gilt für jeden Aufrufer, auch den automatischen
+  Verbindungsaufbau für MCP.
+- Mehrere Erweiterungen werden in Registrierungsreihenfolge gefragt; die erste
+  Ablehnung gilt, die übrigen werden nicht mehr gefragt. Die Verbindung scheitert
+  mit der Meldung der Erweiterung und dem Fehlercode `CONNECT_REFUSED`.
+- Fail-closed: Lässt sich der Geltungsbereich des Servers nicht (vollständig)
+  bestimmen, wird die Verbindung abgelehnt.
+- Die Prüfung kann nur einschränken; sie ändert kein Filter-, Risiko- oder
+  Bestätigungsergebnis. Ohne Erweiterung oder mit der Standardimplementierung
+  bleibt der Verbindungsaufbau unverändert.
+
 ### Chat-Inhalte von Erweiterungen
 
 Eine Erweiterung kann sich über die Verdrahtung als Quelle für Inhalte
@@ -288,6 +306,26 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
 
+### Umhüllung der KI-Anbieter
+
+Eine Edition kann über die Verdrahtung beliebig viele Umhüller für KI-Anbieter
+registrieren. Regeln:
+
+- Jeder KI-Anbieter, den die App baut, läuft durch alle registrierten
+  Umhüller in der Reihenfolge der Registrierung: beim Verbinden einer
+  Chat-Sitzung, bei der Notiz-Kürzung, bei der Risiko-Zweitmeinung und beim
+  Test der Zugangsdaten. Die Budget-Verwaltung des Anbieters bleibt unverändert.
+- Ein Umhüller bekommt Anbieter-Typ, die wirksame Endpunkt-Adresse und das
+  Modell. Er bekommt nie den API-Key und nie die zusätzlichen Header
+  (Spec 0022, Abschnitt 3).
+- Eine Anfrage erreicht den Umhüller nur als bereits geschwärzter Kontext; es
+  kommt kein ungeschwärzter Inhalt dazu. Ein Umhüller muss das Abschalten der
+  Web-Recherche und die Anfrage-Kennung an den umhüllten Anbieter
+  weiterreichen, sonst greifen beide nicht mehr.
+- Ein Anbieter schlägt weiterhin nur Aktionen vor; jeder Vorschlag durchläuft
+  unverändert die Filter-Engine. Community registriert keinen Umhüller; dann
+  ändert sich nichts.
+
 ### Erweiterungs-API (`app_logic::ext`)
 
 Erweiterungs-Crates, die über `Wiring` einhängen, nutzen genau ein Modul von
@@ -301,7 +339,7 @@ Nach Themen:
 
 - **Zustand:** `AppState` als Typ (für `app.try_state::<AppState>()`); seine
   Felder gehören nicht zur Oberfläche.
-- **Sitzungs-Erweiterung:** `SessionExtension`, `ServerScope`, `scope_for_id`,
+- **Sitzungs-Erweiterung:** `SessionExtension`, `ConnectRefusal`, `ServerScope`, `scope_for_id`,
   `PromptLanguage`, `rebuild_server_redactors`, `rebuild_redactors_for_sessions`.
 - **Chat-Inhalte:** `ChatContentExtension`, `PendingContent`, `ResolvedBlock`,
   `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,
