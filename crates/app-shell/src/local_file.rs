@@ -60,10 +60,10 @@ impl UriOpener for NoUriOpener {
 }
 
 #[cfg(target_os = "android")]
-pub(crate) struct AndroidUriOpener(pub tauri::AppHandle);
+pub(crate) struct AndroidUriOpener<R: tauri::Runtime>(pub tauri::AppHandle<R>);
 
 #[cfg(target_os = "android")]
-impl UriOpener for AndroidUriOpener {
+impl<R: tauri::Runtime> UriOpener for AndroidUriOpener<R> {
     fn open(&self, uri: &str, access: Access) -> io::Result<std::fs::File> {
         use tauri_plugin_fs::{FsExt, OpenOptions};
         let url = uri
@@ -83,12 +83,12 @@ impl UriOpener for AndroidUriOpener {
 /// The opener of this platform: the Android descriptor lookup there,
 /// [`NoUriOpener`] elsewhere.
 #[cfg(target_os = "android")]
-pub fn platform_opener(app: &tauri::AppHandle) -> Box<dyn UriOpener> {
+pub fn platform_opener<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Box<dyn UriOpener> {
     Box::new(AndroidUriOpener(app.clone()))
 }
 
 #[cfg(not(target_os = "android"))]
-pub fn platform_opener(_app: &tauri::AppHandle) -> Box<dyn UriOpener> {
+pub fn platform_opener<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) -> Box<dyn UriOpener> {
     Box::new(NoUriOpener)
 }
 
@@ -418,5 +418,17 @@ mod tests {
             LocalFileHandle::from_dialog(FilePath::Path("/a".into())).unwrap(),
             LocalFileHandle::Path(PathBuf::from("/a"))
         );
+    }
+
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn platform_opener_accepts_mock_runtime_handle_and_refuses_uris() {
+        let app = tauri::test::mock_app();
+        let opener = platform_opener(app.handle());
+        let err = opener
+            .open("content://x/y", Access::Write)
+            .expect_err("desktop must refuse content URIs");
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+        assert!(!Path::new("content://x/y").exists());
     }
 }
