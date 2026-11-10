@@ -65,6 +65,8 @@ jobs:
 
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Disk usage after cache restore
         if: matrix.os == 'ubuntu-latest'
@@ -89,11 +91,12 @@ jobs:
       # perl cannot build the vendored OpenSSL (missing
       # Locale::Maketext::Simple). Keep the Windows commands identical to
       # the `rust` stage of `scripts/gate.sh`.
-      # Issue #901: pinned cargo-nextest (prebuilt binaries via cargo-binstall
-      # are not used; the cache keeps the compiled binary between runs).
+      # Issue #901: pinned cargo-nextest; issue #1256: prebuilt binary
+      # (via the action, which falls back to cargo-binstall for this version) instead of compiling from source.
       - name: Install cargo-nextest
-        shell: bash
-        run: cargo install --locked cargo-nextest --version 0.9.151
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-nextest@0.9.151
 
       - name: Rust gate (fmt, clippy, test, build)
         if: runner.os != 'Windows'
@@ -247,6 +250,8 @@ jobs:
 
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Install cargo-deny and cargo-audit
         uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
@@ -475,6 +480,8 @@ jobs:
 
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -580,6 +587,7 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: android
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Disk usage after cache restore
         shell: bash
@@ -587,8 +595,11 @@ jobs:
           df -h
           du -sh target 2>/dev/null || echo "target/: absent"
 
-      - name: Cache Gradle
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Spec 0090: pull requests restore the cache of their base branch but
+      # do not save their own; only push runs write it.
+      - name: Restore Gradle cache
+        id: gradle-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -632,6 +643,15 @@ jobs:
         working-directory: apps/smart-ssh-community
         # No `--locked`: `cargo tauri android build` does not forward it to Cargo.
         run: cargo tauri android build --debug --apk --target aarch64 --target x86_64 --ci
+
+      - name: Save Gradle cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
       - name: Disk usage after Android build
         if: always()
