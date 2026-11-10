@@ -85,6 +85,7 @@
       "no_session_bus": "indisponibil — nu este accesibil niciun D-Bus session bus. Pasul următor: `sudo apt install dbus-user-session`, apoi autentificați-vă din nou.",
       "no_secret_service_provider": "indisponibil — nu rulează niciun furnizor Secret Service. Pasul următor: `sudo apt install gnome-keyring`, apoi autentificați-vă din nou — funcționează și pe KDE. Dacă folosiți deja KWallet (`kwallet6`) sau KeePassXC: integrarea lor Secret Service trebuie să ruleze sau să fie activată; instalarea singură nu este suficientă.",
       "locked": "indisponibil — există, dar este blocat. Pasul următor: deblocați-l și reporniți Smart SSH. Nu lipsește niciun pachet.",
+      "no_keystore": "indisponibil — Android Keystore nu este disponibil. Pasul următor: folosiți în schimb o parolă principală; secretele dvs. rămân în baza de date criptată.",
       "unknown": "indisponibil — cauză necunoscută. Pasul următor: verificați dacă rulează și este deblocat un furnizor Secret Service (gnome-keyring, sau KWallet ori KeePassXC cu integrarea Secret Service activată), apoi reporniți Smart SSH."
     },
     "keychainBlocked": "Aceasta nu afectează secretele dvs. — cheile API, parolele serverelor, frazele-parolă și parolele sudo se află în baza de date criptată, nu în portchei.",

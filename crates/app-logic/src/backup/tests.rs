@@ -1616,3 +1616,100 @@ async fn snapshot_entry_over_data_asks_and_confirm_replaces() {
     assert_eq!(summary.previous_data_folder.as_deref(), Some(&*folder_name));
     assert_ne!(state(&local).await, before);
 }
+
+// ---- Issue #792: optional precondition on the apply ----------------------
+
+fn group_rename(base: &Snapshot, name: &str) -> ChangeSet {
+    let mut g = base.groups[1].clone();
+    g.name = name.into();
+    ChangeSet {
+        groups: vec![Change::Upsert(g)],
+        ..Default::default()
+    }
+}
+
+/// The token depends on content only, not on row order.
+#[test]
+fn snapshot_token_is_order_independent_and_content_sensitive() {
+    let base = build("C", 3, 3, 3);
+    let mut shuffled = base.clone();
+    shuffled.servers.reverse();
+    shuffled.secrets.reverse();
+    assert_eq!(base.token(), shuffled.token());
+    let mut edited = base.clone();
+    edited.secrets[0].value.push('x');
+    assert_ne!(base.token(), edited.token());
+    let mut edited = base.clone();
+    edited.groups[0].name.push('x');
+    assert_ne!(base.token(), edited.token());
+}
+
+/// A matching precondition applies as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_with_matching_precondition_succeeds() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let cs = group_rename(&snap, "via-token");
+    apply_changes_expecting(&f.backup, &f.host_keys, &cs, &snap.token())
+        .await
+        .unwrap();
+    assert!(state(&f).await.groups.iter().any(|g| g.name == "via-token"));
+}
+
+/// A local edit between read and apply is rejected with `Conflict`: nothing
+/// is written and no notification fires. A fresh snapshot then applies.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_after_a_concurrent_edit_conflicts_and_changes_nothing() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let stale = snap.token();
+    // The injected local edit.
+    apply_changes(&f.backup, &f.host_keys, &group_rename(&snap, "local-edit"))
+        .await
+        .unwrap();
+    let before = state(&f).await;
+
+    let notified = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let n = notified.clone();
+    f.db.data_changes().subscribe(std::sync::Arc::new(move |_| {
+        n.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }));
+    let cs = group_rename(&snap, "stale-overwrite");
+    let err = apply_changes_expecting(&f.backup, &f.host_keys, &cs, &stale)
+        .await
+        .unwrap_err();
+    assert_eq!(err, BackupOpError::Conflict);
+    assert_eq!(state(&f).await, before);
+    assert_eq!(notified.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+    let fresh = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    assert!(fresh.groups.iter().any(|g| g.name == "local-edit"));
+    let cs = group_rename(&fresh, "recomputed");
+    apply_changes_expecting(&f.backup, &f.host_keys, &cs, &fresh.token())
+        .await
+        .unwrap();
+}
+
+/// Host-key changes made before the apply starts are part of the token.
+#[tokio::test(flavor = "multi_thread")]
+async fn host_key_edit_before_apply_conflicts() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let del = ChangeSet {
+        host_keys: vec![Change::Delete((
+            snap.host_keys[0].host.clone(),
+            snap.host_keys[0].port,
+        ))],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &del).await.unwrap();
+    let err = apply_changes_expecting(
+        &f.backup,
+        &f.host_keys,
+        &group_rename(&snap, "x"),
+        &snap.token(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err, BackupOpError::Conflict);
+}

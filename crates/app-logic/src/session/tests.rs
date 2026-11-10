@@ -1110,3 +1110,119 @@ fn test_title_attempt_is_claimed_once_and_forgotten_on_delete() {
     assert_eq!(attempts.len(), 1);
     assert!(attempts.claim(a));
 }
+
+/// Issue #784: the terminal actor holds the wake lock while there is
+/// input/output, releases it after the idle timeout, and releases it when
+/// the shell ends. Uses an injected controller and paused tokio time.
+mod terminal_wake_lock {
+    use super::*;
+    use crate::background_keepalive::{ForegroundService, IdleActivity, KeepAliveController};
+    use std::sync::Mutex as StdMutex;
+    use std::time::Duration;
+
+    #[derive(Default)]
+    struct Rec(StdMutex<Vec<String>>);
+    impl ForegroundService for Rec {
+        fn start(&self, n: usize) -> Result<(), String> {
+            self.0.lock().unwrap().push(format!("start {n}"));
+            Ok(())
+        }
+        fn update(&self, n: usize) -> Result<(), String> {
+            self.0.lock().unwrap().push(format!("update {n}"));
+            Ok(())
+        }
+        fn stop(&self) -> Result<(), String> {
+            self.0.lock().unwrap().push("stop".into());
+            Ok(())
+        }
+        fn set_wake_lock(&self, held: bool) -> Result<(), String> {
+            self.0.lock().unwrap().push(format!("wake {held}"));
+            Ok(())
+        }
+    }
+
+    struct ChannelShell {
+        rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+    }
+    #[async_trait::async_trait]
+    impl InteractiveShell for ChannelShell {
+        async fn write(&mut self, _: &[u8]) -> Result<(), SshError> {
+            Ok(())
+        }
+        async fn read(&mut self) -> Result<Vec<u8>, SshError> {
+            // A closed channel yields an empty chunk, i.e. EOF.
+            Ok(self.rx.recv().await.unwrap_or_default())
+        }
+        async fn resize(&mut self, _: ssh_manager_core::ssh::PtySize) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
+
+    fn wakes(rec: &Rec) -> Vec<String> {
+        rec.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| e.starts_with("wake"))
+            .cloned()
+            .collect()
+    }
+
+    async fn settle(rec: &Rec, want: &[&str]) {
+        for _ in 0..1000 {
+            if wakes(rec) == want {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+        panic!("wake log {:?}, wanted {want:?}", wakes(rec));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn actor_holds_lock_on_activity_releases_on_idle_and_on_close() {
+        let rec = Arc::new(Rec::default());
+        let controller = KeepAliveController::new(rec.clone());
+        controller.on_session_count(1);
+        let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = mpsc::channel(8);
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let scope = test_scope();
+        spawn_terminal_actor_with_idle(
+            Uuid::new_v4(),
+            session,
+            Box::new(ChannelShell { rx: out_rx }),
+            cmd_rx,
+            Arc::new(crate::events::TestEmitter::default()),
+            &scope,
+            IdleActivity::with_controller(Some(controller), Duration::from_secs(60)),
+        );
+
+        // No activity yet: no lock.
+        settle(&rec, &[]).await;
+
+        // Output acquires it; it stays held before the timeout.
+        out_tx.send(b"x".to_vec()).unwrap();
+        settle(&rec, &["wake true"]).await;
+        tokio::time::advance(Duration::from_secs(59)).await;
+        settle(&rec, &["wake true"]).await;
+
+        // Idle timeout releases it.
+        tokio::time::advance(Duration::from_secs(2)).await;
+        settle(&rec, &["wake true", "wake false"]).await;
+
+        // Input re-acquires it.
+        cmd_tx
+            .send(TerminalCommand::Write(b"ls\n".to_vec()))
+            .await
+            .unwrap();
+        settle(&rec, &["wake true", "wake false", "wake true"]).await;
+
+        // Shell end (EOF) releases it again.
+        drop(out_tx);
+        settle(
+            &rec,
+            &["wake true", "wake false", "wake true", "wake false"],
+        )
+        .await;
+    }
+}

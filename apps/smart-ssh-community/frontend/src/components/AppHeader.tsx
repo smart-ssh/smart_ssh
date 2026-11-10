@@ -162,7 +162,7 @@ export function AppHeader({ children }: AppHeaderProps) {
         </div>
       </header>
       {/* Issue #160 / Spec 0014, Abschnitt 5: Titelleisten-Drag-Schicht.
-          Jeder modale Backdrop (`ModalBackdrop`, `fixed inset-0 z-50`) liegt
+          Jeder modale Backdrop (`ModalBackdrop`, fixed over the whole window at `z-50`) liegt
           über dem ganzen Fenster inklusive dieses Headers — ohne diese
           Schicht träfe ein Klick auf die Titelleiste den Backdrop statt der
           Drag-Region, und das Fenster ließe sich nicht mehr bewegen.
