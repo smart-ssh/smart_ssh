@@ -1026,7 +1026,8 @@
       "authentication": "प्रमाणीकरण",
       "sessionReady": "सत्र स्थापित",
       "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं",
-      "outdatedAlgorithms": "पुराने एल्गोरिदम"
+      "outdatedAlgorithms": "पुराने एल्गोरिदम",
+      "banner": "सर्वर बैनर"
     },
     "status": {
       "ok": "ठीक",

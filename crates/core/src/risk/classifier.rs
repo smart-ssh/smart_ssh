@@ -8,7 +8,7 @@ use super::patterns::{
     data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
-use super::sudo_options::{classify_sudo_option, SudoOption, WrapperState, WrapperStep};
+use super::sftp_word_check::{quoted_sftp_server_invocation, sftp_server_word_check, WordCheck};
 use super::types::{RiskAssessment, RiskLevel};
 
 /// Regelbasierter Klassifikator (Spec 0026, Abschnitt 2) —
@@ -171,6 +171,18 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
         }
     }
 
+    // Issue #1232: the whitespace-based resolver above cannot see through
+    // quoted wrapper arguments; the quote-aware walk can (escalation only).
+    if depth == 0
+        && acc.server_risk < RiskLevel::Red
+        && command.contains(['\'', '"'])
+        && command.to_lowercase().contains("sftp-server")
+        && quoted_sftp_server_invocation(command)
+    {
+        acc.server_risk = RiskLevel::Red;
+        acc.server_risk_reason = Some(SFTP_SERVER_RED_REASON);
+    }
+
     if depth >= MAX_SUBSTITUTION_DEPTH {
         return;
     }
@@ -261,6 +273,9 @@ impl CommandCheckFinding {
     }
 }
 
+const SFTP_SERVER_RED_REASON: &str =
+    "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+
 /// ADR 0058 §8 (Entscheidung, 2026-09-21): liefert eine Begründung,
 /// wenn `command` `sftp-server` aufruft. Der Aufrufer
 /// (`app-shell::orchestration::handle_action_proposed`) macht aus
@@ -275,7 +290,7 @@ impl CommandCheckFinding {
 /// erkennen als das Rot-Muster. Bloße Erwähnungen (`ls`, `grep`, `which`,
 /// `cat` auf den Pfad) lösen nichts aus.
 pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFinding> {
-    const REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+    const REASON: &str = SFTP_SERVER_RED_REASON;
     if exceeds_command_length_limit(command, DEFAULT_MAX_COMMAND_LENGTH) {
         return Some(CommandCheckFinding::NotAssessable(
             "Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe",
@@ -305,6 +320,11 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFindin
     {
         return Some(CommandCheckFinding::Match(REASON));
     }
+    // Quoted commands: the quote-aware walk finds the effective command
+    // (Issue #1232).
+    if command.contains(['\'', '"']) && quoted_sftp_server_invocation(command) {
+        return Some(CommandCheckFinding::Match(REASON));
+    }
     // (b) Wort-Prüfung.
     match sftp_server_word_check(command, 0) {
         WordCheck::Found => Some(CommandCheckFinding::Match(REASON)),
@@ -313,124 +333,6 @@ pub fn sftp_server_invocation_reason(command: &str) -> Option<CommandCheckFindin
         )),
         WordCheck::Clean => None,
     }
-}
-
-/// Ergebnis der Wort-Prüfung auf `sftp-server`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WordCheck {
-    Found,
-    /// Tiefer verschachtelt als geprüft wird — fail-safe eskalieren.
-    TooDeep,
-    Clean,
-}
-
-/// Programme, hinter denen das nächste Nicht-Options-Wort ausgeführt wird.
-const COMMAND_PREFIXES: &[&str] = &[
-    "sudo", "doas", "env", "nice", "nohup", "time", "command", "exec", "timeout", "setsid",
-    "stdbuf", "ionice", "chroot", "flock", "busybox", "xargs", "runuser", "su", "watch", "strace",
-    "ltrace", "script", "builtin",
-];
-
-fn sftp_server_word_check(command: &str, depth: usize) -> WordCheck {
-    if depth > 3 {
-        return WordCheck::TooDeep;
-    }
-    // Original case (sudo options are case-sensitive); comparisons lowercase.
-    let words = shell_words(command);
-    let lower_texts: Vec<String> = words.iter().map(|w| w.text.to_lowercase()).collect();
-    let name = |text: &str| text.rsplit('/').next().unwrap_or("").to_string();
-    let has_reshell = lower_texts
-        .iter()
-        .any(|text| RESHELL_COMMANDS.contains(&name(text).as_str()));
-    let mut at_command_position = true;
-    // `Some(program)` while the options of a `sudo`/`doas` at the command
-    // position are being skipped.
-    let mut in_sudo_options: Option<&'static str> = None;
-    let mut skip_argument = false;
-    // Same for other wrappers (`timeout 5m`, `nice -n 10`, Issue #1230).
-    let mut in_wrapper: Option<WrapperState> = None;
-    for (word, text) in words.iter().zip(&lower_texts) {
-        if word.stage_start {
-            at_command_position = true;
-            in_sudo_options = None;
-            in_wrapper = None;
-            skip_argument = false;
-        }
-        if at_command_position {
-            if let Some(state) = in_wrapper.as_mut() {
-                match state.step(&word.text, &mut skip_argument) {
-                    WrapperStep::Skip => continue,
-                    WrapperStep::Command => in_wrapper = None,
-                }
-            }
-            if let Some(program) = in_sudo_options {
-                if skip_argument {
-                    // The argument of a sudo option (`-p 'sftp-server'`) is
-                    // not a command.
-                    skip_argument = false;
-                    continue;
-                }
-                if word.text.starts_with('-') {
-                    match classify_sudo_option(program, &word.text) {
-                        SudoOption::EndOfOptions => in_sudo_options = None,
-                        SudoOption::Complete => {}
-                        SudoOption::TakesNext => skip_argument = true,
-                    }
-                    continue;
-                }
-                in_sudo_options = None;
-            }
-        }
-        let word_name = name(text);
-        if word_name == "sftp-server" && (at_command_position || has_reshell) {
-            return WordCheck::Found;
-        }
-        if text.contains(char::is_whitespace) && text.contains("sftp-server") {
-            let nested = sftp_server_word_check(text, depth + 1);
-            if nested != WordCheck::Clean {
-                return nested;
-            }
-        }
-        if at_command_position {
-            if word_name == "sudo" || word_name == "doas" {
-                in_sudo_options = Some(if word_name == "sudo" { "sudo" } else { "doas" });
-            }
-            let is_prefix = COMMAND_PREFIXES.contains(&word_name.as_str())
-                || RESHELL_COMMANDS.contains(&word_name.as_str())
-                || text.starts_with('-')
-                || is_env_assignment(text)
-                || text
-                    .chars()
-                    .all(|c| c.is_ascii_digit() || c == '.' || c == 's');
-            if let Some(state) = WrapperState::new(&word_name) {
-                in_wrapper = Some(state);
-            }
-            at_command_position = is_prefix;
-        }
-    }
-    WordCheck::Clean
-}
-
-/// Test access to the word check alone (Issue #1208).
-#[cfg(test)]
-pub(super) fn sftp_server_word_check_for_tests(command: &str) -> &'static str {
-    match sftp_server_word_check(command, 0) {
-        WordCheck::Found => "found",
-        WordCheck::TooDeep => "too deep",
-        WordCheck::Clean => "clean",
-    }
-}
-
-/// `NAME=wert` vor einem Kommando.
-fn is_env_assignment(word: &str) -> bool {
-    word.split_once('=').is_some_and(|(name, _)| {
-        !name.is_empty()
-            && name
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-    })
 }
 
 /// Spec 0068, Teil 2: liefert eine Begründung, wenn `command` den Inhalt
@@ -573,7 +475,7 @@ const MAX_NESTED_CHECKS: usize = 64;
 /// Programme, die ihre Argumente (auch gequotete) an eine weitere Shell
 /// geben — dort expandieren Platzhalter doch (dritte Review-Runde:
 /// `watch 'cat /etc/sha*'`, `ssh h cat '/etc/sha*'`).
-const RESHELL_COMMANDS: &[&str] = &[
+pub(super) const RESHELL_COMMANDS: &[&str] = &[
     "sh",
     "bash",
     "zsh",
@@ -797,14 +699,14 @@ const STDOUT_TARGETS: &[&str] = &[
 
 /// Ein Shell-Wort nach Quote-Auflösung (kleingeschrieben).
 #[derive(Default)]
-struct ShellWord {
-    text: String,
+pub(super) struct ShellWord {
+    pub(super) text: String,
     /// Ein Platzhalter außerhalb von Quotes — nur dann expandiert die Shell.
     unquoted_glob: bool,
     /// `$` außerhalb einfacher Quotes — Variable/Substitution.
     expands: bool,
     /// Erstes Wort nach `|`, `;`, `&`, `(`, `)` bzw. am Anfang.
-    stage_start: bool,
+    pub(super) stage_start: bool,
 }
 
 /// Ein ganzes Verzeichnis mit Zugangsdaten (`~/.ssh`, `.gnupg`, `.aws`,
@@ -830,7 +732,7 @@ fn start_word(current: &mut ShellWord, in_word: &mut bool, next_stage: &mut bool
 /// Zerlegt ein (kleingeschriebenes) Teilkommando in Wörter wie die Shell:
 /// Quotes und Backslashes werden aufgelöst, Trenner sind ungequotete
 /// Leerzeichen und `< > | ; & ( )`.
-fn shell_words(segment: &str) -> Vec<ShellWord> {
+pub(super) fn shell_words(segment: &str) -> Vec<ShellWord> {
     let mut words = Vec::new();
     let mut current = ShellWord::default();
     let mut in_word = false;

@@ -46,7 +46,7 @@ export function isCounted(rel) {
   if (!EXTENSIONS.some((e) => rel.endsWith(e))) return false;
   if (rel.endsWith(".d.ts") || rel.endsWith(".d.mts")) return false;
   const segs = rel.split("/");
-  if (segs.some((s) => s === "node_modules" || s === "target" || s === "dist")) return false;
+  if (segs.some((s) => s === "node_modules" || s === "vendor" || s === "target" || s === "dist")) return false;
   if (/(^|\/)gen\/android\/(.*\/)?build\//.test(rel)) return false;
   return true;
 }

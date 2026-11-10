@@ -53,7 +53,7 @@ fn test_sftp_server_word_check_alone_handles_sudo_options() {
     // The word check must not depend on the red pattern.
     for command in BEHIND_OPTIONS {
         assert_eq!(
-            super::classifier::sftp_server_word_check_for_tests(command),
+            super::sftp_word_check::sftp_server_word_check_for_tests(command),
             "found",
             "word check missed: {command}"
         );
@@ -63,7 +63,7 @@ fn test_sftp_server_word_check_alone_handles_sudo_options() {
 #[test]
 fn test_sftp_server_word_check_skips_unquoted_option_argument() {
     assert_eq!(
-        super::classifier::sftp_server_word_check_for_tests("sudo -D /tmp -H sftp-server"),
+        super::sftp_word_check::sftp_server_word_check_for_tests("sudo -D /tmp -H sftp-server"),
         "found"
     );
 }
@@ -133,4 +133,59 @@ fn test_sftp_server_behind_su_user_command_is_detected() {
         sftp_server_invocation_reason("su root -c 'sftp-server -l INFO'"),
         Some(CommandCheckFinding::Match(_))
     ));
+}
+
+/// Issue #1232: quoted segments behind wrappers are rated red too.
+const QUOTED_RED: &[&str] = &[
+    "timeout 5m env FOO='a b' sftp-server -l 'x'",
+    "su root -c \"timeout 5m sftp-server -l x\"",
+    "env A='1 2' B=\"3 4\" nice -n 5 timeout 1m /usr/lib/openssh/sftp-server -l 'x'",
+    "su root -c \"env X='a b' sh -c 'timeout 5m sftp-server -l y'\"",
+    "echo hi && timeout 5m env FOO='a b' sftp-server",
+];
+
+#[test]
+fn test_quoted_sftp_server_behind_wrappers_is_red_and_detected() {
+    for command in QUOTED_RED {
+        assert_eq!(
+            RuleBasedRiskClassifier.classify(command).server_risk,
+            RiskLevel::Red,
+            "not red: {command}"
+        );
+        assert!(
+            super::sftp_word_check::quoted_sftp_server_invocation(command),
+            "pattern walk missed: {command}"
+        );
+        assert!(
+            matches!(
+                sftp_server_invocation_reason(command),
+                Some(CommandCheckFinding::Match(_))
+            ),
+            "not detected: {command}"
+        );
+    }
+}
+
+#[test]
+fn test_quoted_sftp_server_mentions_stay_harmless() {
+    for command in [
+        "sudo -p 'sftp-server' ls",
+        "timeout 5m cat '/usr/lib/openssh/sftp-server'",
+        "env FOO='sftp-server x' ls",
+        "echo 'sftp-server -l x'",
+        "timeout 5m env FOO='a b' ls 'sftp-server'",
+    ] {
+        assert!(
+            !super::sftp_word_check::quoted_sftp_server_invocation(command),
+            "walk false positive: {command}"
+        );
+        // The broad word check (b) deliberately flags quoted code strings.
+        if !command.starts_with("echo") {
+            assert_eq!(
+                sftp_server_invocation_reason(command),
+                None,
+                "falsely detected: {command}"
+            );
+        }
+    }
 }

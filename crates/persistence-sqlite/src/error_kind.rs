@@ -243,6 +243,7 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(classify(&err), StoreErrorKind::Constraint);
+        pool.close().await;
     }
 
     #[tokio::test]
@@ -257,6 +258,7 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(classify(&err), StoreErrorKind::NotFound);
+        pool.close().await;
     }
 
     #[tokio::test]
@@ -300,7 +302,14 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(classify(&err), StoreErrorKind::Busy);
-        drop(tx);
+        // Shut everything down explicitly. Dropping the transaction and the
+        // pools only queues the rollback/close for sqlx's per-connection
+        // worker threads; when the test runtime ended first, the process
+        // sometimes aborted after the test reported `ok` ("double free or
+        // corruption", SIGABRT; issue #1273).
+        tx.rollback().await.unwrap();
+        a.close().await;
+        b.close().await;
     }
 
     #[tokio::test]
@@ -318,6 +327,7 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(classify(&err), StoreErrorKind::Corrupt);
+        pool.close().await;
     }
 
     #[test]

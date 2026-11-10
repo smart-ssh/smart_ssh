@@ -229,3 +229,25 @@ pub fn show_info(title: &str, message: &str) {
         .set_buttons(MessageButtons::Ok)
         .show();
 }
+
+/// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
+/// Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
+/// Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
+/// `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
+/// selbst bestimmen, zeigte ein englischsprachiges System bei einem
+/// DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
+///
+/// Eigene Funktion seit Issue #19: Der Dialog „läuft bereits" erscheint vor
+/// `startup_inputs` und braucht dieselbe Sprache.
+pub(crate) fn startup_language() -> app_logic::startup_error_messages::Language {
+    let lc_all = std::env::var("LC_ALL").ok();
+    let lc_messages = std::env::var("LC_MESSAGES").ok();
+    let lang = std::env::var("LANG").ok();
+    app_logic::startup_error_messages::startup_language(
+        app_logic::startup_error_messages::preferred_locale_value(
+            lc_all.as_deref(),
+            lc_messages.as_deref(),
+            lang.as_deref(),
+        ),
+    )
+}
