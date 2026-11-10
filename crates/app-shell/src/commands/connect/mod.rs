@@ -394,6 +394,15 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
                 .await
                 .store_err()?
         };
+        // Spec 0038, section 2a: the connect check also guards a reconnect,
+        // before any transport, host-key prompt or credential read. The
+        // lookup is reused below for the redactor.
+        let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
+        app_logic::session_extension::check_connect_allowed(
+            state.session_extension.as_deref(),
+            &lookup,
+        )
+        .await?;
         let mut transport = establish_transport(
             app,
             state,
@@ -405,7 +414,6 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         )
         .await?;
         transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
-        let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
         let (redactor, sudo_password) =
             redaction_for_reconnect(state, &session, server_id, &lookup).await;
         Ok::<_, CommandError>((transport, redactor, sudo_password))

@@ -249,6 +249,11 @@ Server ablehnen (Issue #1281). Regeln:
   geladen ist und bevor Transport, Host-Key-Abfrage oder Zugangsdaten-Zugriff
   stattfinden. Sie gilt für jeden Aufrufer, auch den automatischen
   Verbindungsaufbau für MCP.
+- Die Prüfung gilt ebenso für das erneute Verbinden einer bestehenden Sitzung
+  (manuell und automatisch), vor Transport, Host-Key-Abfrage oder
+  Zugangsdaten-Zugriff. Eine Ablehnung endet mit `CONNECT_REFUSED`, die
+  Sitzung bleibt getrennt (ein späteres erneutes Verbinden ist möglich), und
+  der automatische Wiederverbindungsversuch wiederholt sie nicht.
 - Mehrere Erweiterungen werden in Registrierungsreihenfolge gefragt; die erste
   Ablehnung gilt, die übrigen werden nicht mehr gefragt. Die Verbindung scheitert
   mit der Meldung der Erweiterung und dem Fehlercode `CONNECT_REFUSED`.
