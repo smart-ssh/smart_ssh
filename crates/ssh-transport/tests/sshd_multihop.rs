@@ -25,7 +25,10 @@ use ssh_manager_core::ssh::{
     HostKeyStore, NoPrompter, PtySize, SshError, SshTransport, StepStatus,
 };
 use ssh_transport::{ConnectLimits, ConnectOutcome};
-use sshd_support::{daemon_log, keys_dir, scenario_container, scenario_port, step, NoKeyFiles};
+use sshd_support::{
+    keys_dir, scenario_container, scenario_port, stable_daemon_log, stable_log_since, step,
+    NoKeyFiles,
+};
 
 const USER: &str = "testuser";
 const LOOPBACK: &str = "127.0.0.1";
@@ -316,9 +319,9 @@ async fn three_hops_sftp_writes_on_last_host() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn later_hop_credentials_never_reach_earlier_hop() {
     let _t = connected(chain_hops(password("pw"))).await;
-    let first = daemon_log("hop-chain-1");
-    let second = daemon_log("hop-chain-2");
-    let third = daemon_log("hop-chain-3");
+    let first = stable_daemon_log("hop-chain-1");
+    let second = stable_daemon_log("hop-chain-2");
+    let third = stable_daemon_log("hop-chain-3");
     assert!(first.contains("Accepted publickey"), "{first}");
     assert!(
         !first.contains("password"),
@@ -340,7 +343,7 @@ async fn later_hop_credentials_never_reach_earlier_hop() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn wrong_password_on_hop_two_names_hop_two() {
     let keys = Arc::new(Store::default());
-    let log3 = daemon_log("hop-chain-3").len();
+    let log3 = stable_daemon_log("hop-chain-3");
     let a = attempt(chain_hops(password("wrong-pw")), &keys, None).await;
     assert!(
         matches!(a.error(), SshError::AuthenticationFailed),
@@ -352,7 +355,7 @@ async fn wrong_password_on_hop_two_names_hop_two() {
     assert_eq!(failed.hop, format!("{USER}@hop-chain-2:22"));
     assert!(matches!(failed.step, ConnectStep::Authentication { .. }));
     // Hop 1 logged in, hop 3 was never contacted with credentials.
-    assert_no_auth(&daemon_log("hop-chain-3")[log3..], "hop-chain-3");
+    assert_no_auth(&stable_log_since("hop-chain-3", &log3), "hop-chain-3");
 }
 
 fn nofwd_hops() -> Vec<Hop> {
@@ -367,7 +370,7 @@ fn nofwd_hops() -> Vec<Hop> {
 #[ignore = "needs sshd containers, see module docs"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn forwarding_refused_names_the_bastion_hop() {
-    let target_log = daemon_log("hop-nofwd-target").len();
+    let target_log = stable_daemon_log("hop-nofwd-target");
     let a = attempt(nofwd_hops(), &Arc::new(Store::default()), None).await;
     let _ = a.error();
     let failed = a.failed_step();
@@ -378,7 +381,7 @@ async fn forwarding_refused_names_the_bastion_hop() {
         failed.hop,
         failed.hop_index
     );
-    assert_no_auth(&daemon_log("hop-nofwd-target")[target_log..], "target");
+    assert_no_auth(&stable_log_since("hop-nofwd-target", &target_log), "target");
 }
 
 /// Target unresolvable from the bastion, and target port closed: the failure
@@ -499,9 +502,9 @@ async fn changed_bastion_host_key_stops_before_the_next_hop() {
     let new = live_port("hop-hk-1");
     keys.rebind(LOOPBACK, old, new);
     let (log1, log2, log3) = (
-        daemon_log("hop-hk-1").len(),
-        daemon_log("hop-hk-2").len(),
-        daemon_log("hop-hk-3").len(),
+        stable_daemon_log("hop-hk-1"),
+        stable_daemon_log("hop-hk-2"),
+        stable_daemon_log("hop-hk-3"),
     );
 
     let a = attempt(hk_hops(), &keys, None).await;
@@ -513,9 +516,15 @@ async fn changed_bastion_host_key_stops_before_the_next_hop() {
         ),
     }
     // No login at the bastion, and the later hops saw nothing at all.
-    assert_no_auth(&daemon_log("hop-hk-1")[log1..], "hop-hk-1");
-    assert_eq!(daemon_log("hop-hk-2").len(), log2, "hop 2 log grew");
-    assert_eq!(daemon_log("hop-hk-3").len(), log3, "hop 3 log grew");
+    assert_no_auth(&stable_log_since("hop-hk-1", &log1), "hop-hk-1");
+    for (who, base) in [("hop-hk-2", &log2), ("hop-hk-3", &log3)] {
+        let tail = stable_log_since(who, base);
+        assert_no_auth(&tail, who);
+        assert!(
+            !tail.to_lowercase().contains("connection from"),
+            "{who}: daemon saw a connection:\n{tail}"
+        );
+    }
 }
 
 #[ignore = "needs sshd containers, see module docs"]
@@ -527,7 +536,7 @@ async fn changed_target_host_key_stops_before_login() {
     drop(first);
 
     restart_and_wait("hop-hk-3").await;
-    let log3 = daemon_log("hop-hk-3").len();
+    let log3 = stable_daemon_log("hop-hk-3");
 
     let a = attempt(hk_hops(), &keys, None).await;
     match &a.result {
@@ -538,7 +547,7 @@ async fn changed_target_host_key_stops_before_login() {
         ),
     }
     // The password was never offered to the target.
-    assert_no_auth(&daemon_log("hop-hk-3")[log3..], "hop-hk-3");
+    assert_no_auth(&stable_log_since("hop-hk-3", &log3), "hop-hk-3");
 }
 
 /// Unpauses the container on every exit path, also when an assert fails.

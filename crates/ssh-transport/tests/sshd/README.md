@@ -22,7 +22,7 @@ removes containers and networks on exit. The account in every image is
 ## Layout
 
 - `images/<image>/Dockerfile` + `entrypoint.sh`: `openssh-current`,
-  `openssh-legacy` (7.4p1 built from the SHA-256-verified tarball),
+  `openssh-legacy` (7.4p1 built from SHA-256-verified tarballs; each is fetched with retries and from a second source, and a download failure is reported as such by `run.sh`),
   `dropbear`.
 - `scenarios/<name>/scenario.toml`: `image`, `hostname`, `networks`
   (list; the hostname is a DNS alias on each), `publish` (bool; maps the port to

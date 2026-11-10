@@ -6,7 +6,7 @@ use ssh_manager_core::filter::{
     exceeds_command_length_limit, Decision, DEFAULT_MAX_COMMAND_LENGTH,
 };
 use ssh_manager_core::profiles::{AiAction, PostIngestPolicy};
-use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+use ssh_manager_core::risk::{RiskAssessment, RiskLevel, RuleBasedRiskClassifier};
 
 use crate::session::Session;
 use crate::state::SessionId;

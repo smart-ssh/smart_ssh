@@ -47,7 +47,7 @@ use ssh_manager_core::filter::{
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::profiles::{AiAction, PostIngestPolicy, ProfileStore};
 #[cfg(test)]
-use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+use ssh_manager_core::risk::{RiskAssessment, RiskLevel, RuleBasedRiskClassifier};
 #[cfg(test)]
 use ssh_manager_core::ssh::SshError;
 #[cfg(test)]
