@@ -818,11 +818,7 @@ async fn run_one_round(
             AiEvent::Usage { input_tokens } => {
                 // Issue #601: feed the real size back into compaction and
                 // show it in the chat (numbers only).
-                session
-                    .ai
-                    .context_usage
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                ssh_manager_core::sync::lock_tolerating_poison(&session.ai.context_usage)
                     .record(input_tokens, estimated_tokens);
                 crate::events::emit_chat_context_usage(
                     emitter,

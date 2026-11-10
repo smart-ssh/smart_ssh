@@ -350,28 +350,27 @@ async fn banner_with_invalid_utf8_does_not_fail_the_connection() {
     echo_ok(t).await;
 }
 
-/// The connect log has no banner step yet, so this cannot pass today.
-#[ignore = "bug: login banner text is not recorded in the connect log (no ConnectStep for it)"]
+/// Issue #1227: a valid login banner is recorded as a banner step. (The
+/// invalid-UTF-8 scenario is the separate known bug above.)
+#[ignore = "needs sshd containers, see tests/sshd/README.md"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn banner_appears_in_connect_log() {
-    if !known_bug_enabled("banner_appears_in_connect_log") {
-        return;
-    }
-    for (scenario, needle) in [
-        ("authpolicy-banner-valid", "valid banner text"),
-        ("authpolicy-banner-invalid", "invalid banner bytes"),
-    ] {
-        let log = ConnectLog::new();
-        let t = login(scenario, USER, password(PASS_REF), &NoPrompter, &log)
-            .await
-            .unwrap();
-        echo_ok(t).await;
-        let dump = format!("{:?}", log.snapshot());
-        assert!(
-            dump.contains(needle),
-            "{scenario}: banner missing in {dump}"
-        );
-    }
+    let log = ConnectLog::new();
+    let t = login(
+        "authpolicy-banner-valid",
+        USER,
+        password(PASS_REF),
+        &NoPrompter,
+        &log,
+    )
+    .await
+    .unwrap();
+    echo_ok(t).await;
+    let dump = format!("{:?}", log.snapshot());
+    assert!(
+        dump.contains("Banner") && dump.contains("valid banner text"),
+        "banner missing in {dump}"
+    );
 }
 
 #[ignore = "needs sshd containers, see tests/sshd/README.md"]

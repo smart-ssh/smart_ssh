@@ -1021,7 +1021,8 @@
       "authentication": "身份验证",
       "sessionReady": "会话已建立",
       "dnsSkipped": "IP 地址 – 无需解析",
-      "outdatedAlgorithms": "过时的算法"
+      "outdatedAlgorithms": "过时的算法",
+      "banner": "服务器横幅"
     },
     "status": {
       "ok": "正常",

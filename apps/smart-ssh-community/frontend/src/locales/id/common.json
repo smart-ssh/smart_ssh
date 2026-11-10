@@ -1021,7 +1021,8 @@
       "authentication": "Autentikasi",
       "sessionReady": "Sesi terbentuk",
       "dnsSkipped": "Alamat IP – tidak perlu pencarian",
-      "outdatedAlgorithms": "Algoritma usang"
+      "outdatedAlgorithms": "Algoritma usang",
+      "banner": "Banner server"
     },
     "status": {
       "ok": "OK",
