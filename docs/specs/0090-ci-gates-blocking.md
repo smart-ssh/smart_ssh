@@ -46,7 +46,9 @@ anderen nicht ab, jedes meldet sein eigenes Ergebnis.
   Build ohne Test-Features fängt Produktivcode, der einen nur für Tests
   gedachten Zugang aufruft.
   `cargo-nextest` wird in der angepassten Version als fertiges Programm
-  installiert (Prüfsumme wird verifiziert), nicht aus dem Quelltext gebaut.
+  installiert, nicht aus dem Quelltext gebaut. Unterstützt die eingesetzte
+  Installationsaktion die Version nicht selbst, lädt sie das Programm über
+  `cargo-binstall`; die Aktion prüft dann keine eigene Prüfsumme.
   Build-Zwischenstände (Rust-Cache, Gradle-Cache) werden nur bei Läufen auf
   einem Branch geschrieben, nicht bei Pull Requests: ein Pull Request liest
   den Cache seines Basis-Branches, legt aber keinen eigenen an. So verdrängen
