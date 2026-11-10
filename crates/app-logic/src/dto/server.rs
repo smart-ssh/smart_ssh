@@ -226,6 +226,8 @@ pub enum KeychainUnavailableReasonDto {
     NoSessionBus,
     NoSecretServiceProvider,
     Locked,
+    /// Android Keystore not usable (Spec 0101 §8, Spec 0114).
+    NoKeystore,
     Unknown,
 }
 
@@ -246,11 +248,10 @@ impl From<KeychainAvailability> for KeychainStatusDto {
                         KeychainUnavailableReasonDto::NoSecretServiceProvider
                     }
                     KeychainUnavailableReason::Locked => KeychainUnavailableReasonDto::Locked,
-                    // Android has no dedicated settings text yet; the generic
-                    // "cause unknown" line applies there.
-                    KeychainUnavailableReason::NoKeystore | KeychainUnavailableReason::Unknown => {
-                        KeychainUnavailableReasonDto::Unknown
+                    KeychainUnavailableReason::NoKeystore => {
+                        KeychainUnavailableReasonDto::NoKeystore
                     }
+                    KeychainUnavailableReason::Unknown => KeychainUnavailableReasonDto::Unknown,
                 }),
             },
         }
