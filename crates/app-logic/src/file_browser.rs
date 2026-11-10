@@ -84,9 +84,6 @@ pub(crate) fn format_unix_permissions(bits: u32) -> String {
     format!("{}{}{}", triplet(6), triplet(3), triplet(0))
 }
 
-/// Sortiert Verzeichniseinträge für die Anzeige: Verzeichnisse zuerst, dann
-/// alphabetisch nach Name (case-insensitiv) — Spec 0020 macht dazu keine
-/// Vorgabe, das ist die in Dateibrowsern übliche Konvention.
 /// Issue #1291: resolves every symbolic link in `entries` with at most one
 /// `stat` and one `read_link` per link entry (none for ordinary entries). A
 /// failing call never fails the listing: a failing `stat` marks the link
@@ -116,6 +113,9 @@ pub async fn resolve_symlinks(
     dtos
 }
 
+/// Sortiert Verzeichniseinträge für die Anzeige: Verzeichnisse zuerst, dann
+/// alphabetisch nach Name (case-insensitiv) — Spec 0020 macht dazu keine
+/// Vorgabe, das ist die in Dateibrowsern übliche Konvention.
 pub fn sort_remote_entries(entries: &mut [RemoteEntryDto]) {
     entries.sort_by(|a, b| {
         b.is_dir

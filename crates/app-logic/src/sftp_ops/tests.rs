@@ -510,6 +510,26 @@ async fn test_walk_tree_lists_parent_before_children_and_honours_stop() {
         .is_none());
 }
 
+/// Issue #1291: the folder-download walk (which only uses the lstat-like
+/// `is_dir` of the listing) reports a link to a folder as a non-folder and
+/// never lists the folder it points to.
+#[tokio::test]
+async fn test_walk_tree_does_not_descend_into_a_symlinked_directory() {
+    let sftp = TreeSftp::default()
+        .dir("/t")
+        .link("/t/link", "/other")
+        .dir("/other")
+        .file("/other/secret");
+    let mut lister = TreeLister(sftp.clone());
+    let mut v = Collect::default();
+    walk_tree(&mut lister, "/t", &Progress::default(), &mut v)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(v.seen, vec![("/t".to_string(), "/t/link".to_string())]);
+    assert!(!sftp.log().iter().any(|l| l.contains("/other")));
+}
+
 /// The visitor runs right after each listing: an entry it rejects stops the
 /// walk before any later directory is listed.
 #[tokio::test]
