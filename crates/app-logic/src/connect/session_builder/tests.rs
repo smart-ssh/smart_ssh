@@ -194,17 +194,33 @@ async fn run(
     id_u: Result<String, ()>,
     resume: Option<uuid::Uuid>,
 ) -> Run {
+    let scope = ServerScope {
+        server_id,
+        group_chain: Vec::new(),
+        tags: Vec::new(),
+    };
+    let lookup = ScopeLookup {
+        scope: Some(scope),
+        incomplete: false,
+    };
+    run_with_lookup(fx, server_id, server, uname, id_u, resume, lookup).await
+}
+
+async fn run_with_lookup(
+    fx: &Fixture,
+    server_id: ServerId,
+    server: Server,
+    uname: Result<String, ()>,
+    id_u: Result<String, ()>,
+    resume: Option<uuid::Uuid>,
+    scope_lookup: ScopeLookup,
+) -> Run {
     let commands = Arc::new(Mutex::new(Vec::new()));
     let transport = ScriptedTransport {
         uname,
         id_u,
         commands: commands.clone(),
         disconnected: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-    };
-    let scope = ServerScope {
-        server_id,
-        group_chain: Vec::new(),
-        tags: Vec::new(),
     };
     let built = build_session(
         &fx.state,
@@ -218,10 +234,7 @@ async fn run(
             active_config: fx.config.clone(),
             ai_provider: Box::new(NoopAi),
             ai_provider_budget: Arc::new(ProviderBudgetGuard::new()),
-            scope_lookup: ScopeLookup {
-                scope: Some(scope),
-                incomplete: false,
-            },
+            scope_lookup,
             prompt_language: PromptLanguage::En,
             second_opinion: None,
             second_opinion_setup_failed: false,
@@ -448,4 +461,82 @@ async fn test_local_pseudo_server_gets_no_sudo_password_and_no_root_probe() {
     assert_eq!(built.session.is_root(), None);
     assert_eq!(built.chat_session_id, None);
     assert_eq!(run.commands.lock().unwrap().as_slice(), ["uname -a"]);
+}
+
+fn redaction_notices(emitter: &crate::events::TestEmitter) -> usize {
+    emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, p)| p["code"] == "REDACTION_INCOMPLETE")
+        .count()
+}
+
+/// Connects with the given store behind `state.profile_store`; the scope
+/// lookup is taken from that store exactly as a connect does.
+async fn connect_with_store(
+    mut fx: Fixture,
+    store: ssh_manager_core::testing::InMemoryProfileStore,
+) -> crate::session::Session {
+    let server = fx.server.clone();
+    fx.state.profile_store = Arc::new(store);
+    let lookup =
+        crate::session_extension::scope_lookup(fx.state.profile_store.as_ref(), server.id, None)
+            .await;
+    let run = run_with_lookup(
+        &fx,
+        server.id,
+        server,
+        ok("Linux x 6.1"),
+        ok("1000"),
+        None,
+        lookup,
+    )
+    .await;
+    run.built.unwrap().session
+}
+
+/// Issue #1058: a failing `get_server` at connect starts the session with
+/// the flag set; the first turn announces it exactly once.
+#[tokio::test]
+async fn test_failing_scope_lookup_sets_redaction_incomplete_flag_and_one_notice() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let store =
+        ssh_manager_core::testing::InMemoryProfileStore::new().with_server(fx.server.clone());
+    store.fail_get_server.store(true, Ordering::SeqCst);
+    let session = connect_with_store(fx, store).await;
+    assert!(session
+        .safety
+        .redaction_incomplete_notice_pending
+        .load(Ordering::SeqCst));
+    let emitter = crate::events::TestEmitter::default();
+    for _ in 0..2 {
+        crate::orchestration::action_exec::announce_second_opinion_setup_failure(
+            &session,
+            uuid::Uuid::new_v4(),
+            &emitter,
+        );
+    }
+    assert_eq!(redaction_notices(&emitter), 1);
+}
+
+/// Issue #1058: healthy stores leave the flag clear and send no notice.
+#[tokio::test]
+async fn test_healthy_stores_leave_redaction_incomplete_flag_clear() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let store =
+        ssh_manager_core::testing::InMemoryProfileStore::new().with_server(fx.server.clone());
+    let session = connect_with_store(fx, store).await;
+    assert!(!session
+        .safety
+        .redaction_incomplete_notice_pending
+        .load(Ordering::SeqCst));
+    let emitter = crate::events::TestEmitter::default();
+    crate::orchestration::action_exec::announce_second_opinion_setup_failure(
+        &session,
+        uuid::Uuid::new_v4(),
+        &emitter,
+    );
+    assert_eq!(redaction_notices(&emitter), 0);
 }

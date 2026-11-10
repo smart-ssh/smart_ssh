@@ -1036,7 +1036,8 @@
       "authentication": "Автентифікація",
       "sessionReady": "Сеанс встановлено",
       "dnsSkipped": "IP-адреса – пошук не потрібен",
-      "outdatedAlgorithms": "Застарілі алгоритми"
+      "outdatedAlgorithms": "Застарілі алгоритми",
+      "banner": "Банер сервера"
     },
     "status": {
       "ok": "OK",

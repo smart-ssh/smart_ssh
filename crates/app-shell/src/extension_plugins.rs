@@ -98,10 +98,9 @@ pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) -> Vec<&'static s
     let Some(pending) = app.try_state::<PendingExtensionPlugins<R>>() else {
         return failed;
     };
-    let factories = match pending.0.lock() {
-        Ok(mut guard) => std::mem::take(&mut *guard),
-        Err(poisoned) => std::mem::take(&mut *poisoned.into_inner()),
-    };
+    let factories = std::mem::take(&mut *ssh_manager_core::sync::lock_tolerating_poison(
+        &pending.0,
+    ));
     for factory in factories {
         let plugin = (factory.0)();
         let name = plugin.name();

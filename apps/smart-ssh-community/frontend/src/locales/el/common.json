@@ -1026,7 +1026,8 @@
       "authentication": "Έλεγχος ταυτότητας",
       "sessionReady": "Η συνεδρία δημιουργήθηκε",
       "dnsSkipped": "Διεύθυνση IP – δεν χρειάζεται αναζήτηση",
-      "outdatedAlgorithms": "Παρωχημένοι αλγόριθμοι"
+      "outdatedAlgorithms": "Παρωχημένοι αλγόριθμοι",
+      "banner": "Banner διακομιστή"
     },
     "status": {
       "ok": "Εντάξει",

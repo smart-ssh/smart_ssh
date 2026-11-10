@@ -1026,7 +1026,8 @@
       "authentication": "Authenticatie",
       "sessionReady": "Sessie tot stand gebracht",
       "dnsSkipped": "IP-adres – geen opzoeking nodig",
-      "outdatedAlgorithms": "Verouderde algoritmen"
+      "outdatedAlgorithms": "Verouderde algoritmen",
+      "banner": "Serverbanner"
     },
     "status": {
       "ok": "OK",

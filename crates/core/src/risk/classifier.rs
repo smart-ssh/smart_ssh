@@ -9,21 +9,21 @@ use super::patterns::{
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
 use super::sudo_options::{classify_sudo_option, SudoOption, WrapperState, WrapperStep};
-use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
+use super::types::{RiskAssessment, RiskLevel};
 
-/// Regelbasierte Umsetzung von [`RiskClassifier`] (Spec 0026, Abschnitt 2) —
+/// Regelbasierter Klassifikator (Spec 0026, Abschnitt 2) —
 /// zustandslos, hält keine eigenen Daten (die Musterlisten sind
 /// modulweite `OnceLock`s, s. `patterns.rs`), deshalb kein Feld nötig.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RuleBasedRiskClassifier;
 
-impl RiskClassifier for RuleBasedRiskClassifier {
+impl RuleBasedRiskClassifier {
     /// Zerlegt `command` mit derselben Logik wie die Filter-Engine
     /// (`crate::filter::segment_command`, Spec 0026 Abschnitt 2: "nutzt
     /// exakt dieselbe Logik wie die Filter-Engine"), klassifiziert jedes
     /// Teilkommando einzeln gegen beide Musterlisten und behält je Achse
     /// das höchste gefundene Level.
-    fn classify(&self, command: &str) -> RiskAssessment {
+    pub fn classify(&self, command: &str) -> RiskAssessment {
         // Unabhängiger Review-Pass (Spec 0026): `segment_command` rekursiert
         // pro `$(...)`-Verschachtelungsebene ohne jede Tiefen-/Längenschranke
         // (anders als die Filter-Engine, die `DEFAULT_MAX_COMMAND_LENGTH`
