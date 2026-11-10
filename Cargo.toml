@@ -113,3 +113,11 @@ undocumented_unsafe_blocks = "deny"
 too_many_lines = "warn"
 cognitive_complexity = "warn"
 large_futures = "warn"
+
+# Temporary (issue #1228): russh decodes the USERAUTH_BANNER message with a
+# strict UTF-8 `String` decode, so a server banner with invalid UTF-8 aborts
+# the login. `vendor/russh` is russh 0.63.2 with the banner decoded lossily
+# (see vendor/russh/PATCH.md). Drop this section once a russh release contains
+# the fix (upstream change: decode the banner via `String::from_utf8_lossy`).
+[patch.crates-io]
+russh = { path = "vendor/russh" }
