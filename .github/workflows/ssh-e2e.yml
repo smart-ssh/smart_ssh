@@ -6,8 +6,9 @@ name: SSH end-to-end
 # plain `cargo test --workspace`; `tests/sshd/run.sh` builds the images,
 # starts every scenario and runs them.
 #
-# Own workflow file because `paths:` filters per workflow. Not blocking for now
-# (`continue-on-error`): a red run is visible but does not hold up a merge.
+# Own workflow file because `paths:` filters per workflow. Blocking (issue
+# #1181): a red run fails the check on pull requests touching the SSH modules
+# and shows as a failed nightly run.
 # No secrets, `ubuntu-latest` only (Docker is preinstalled there).
 
 on:
@@ -37,7 +38,6 @@ jobs:
   ssh-e2e:
     name: SSH end-to-end (Docker)
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 30
     steps:
       - name: Checkout
