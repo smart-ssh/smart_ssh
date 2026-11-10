@@ -491,6 +491,68 @@ async fn test_unacknowledged_first_run_notice_never_reaches_the_connector() {
     assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
 }
 
+struct Refuser(&'static str);
+
+#[async_trait]
+impl app_logic::session_extension::SessionExtension for Refuser {
+    async fn check_connect(
+        &self,
+        _scope: &app_logic::session_extension::ServerScope,
+    ) -> Result<(), app_logic::session_extension::ConnectRefusal> {
+        Err(app_logic::session_extension::ConnectRefusal::new(self.0))
+    }
+}
+
+#[tokio::test]
+async fn test_refusing_extension_blocks_connect_before_the_connector() {
+    let _guard = lock_async().await;
+    let app = acknowledged_app();
+    let connector = ScriptedConnector::new(connected(&Arc::new(AtomicBool::new(false))));
+    let mut fx = fixture(connector.clone()).await;
+    fx.state.session_extension = Some(Arc::new(Refuser("server setting X required")));
+
+    let err = connect_session(
+        app.handle(),
+        &fx.state,
+        fx.server_id,
+        uuid::Uuid::new_v4(),
+        None,
+        true,
+    )
+    .await
+    .expect_err("extension must refuse");
+
+    assert_eq!(err.code, Some("CONNECT_REFUSED"));
+    assert_eq!(err.message, "server setting X required");
+    assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
+    reset(app.handle());
+}
+
+#[tokio::test]
+async fn test_default_extension_leaves_connect_unchanged() {
+    let _guard = lock_async().await;
+    let app = acknowledged_app();
+    let connector = ScriptedConnector::new(connected(&Arc::new(AtomicBool::new(false))));
+    let mut fx = fixture(connector.clone()).await;
+    fx.state.session_extension = Some(Arc::new(
+        app_logic::session_extension::CompositeSessionExtension::new(vec![]),
+    ));
+
+    connect_session(
+        app.handle(),
+        &fx.state,
+        fx.server_id,
+        uuid::Uuid::new_v4(),
+        None,
+        true,
+    )
+    .await
+    .expect("default extension allows");
+
+    assert_eq!(connector.calls.load(Ordering::SeqCst), 1);
+    reset(app.handle());
+}
+
 // --- Issue #355 / Spec 0105: reconnect ---------------------------------
 
 fn registry_pair() -> (
