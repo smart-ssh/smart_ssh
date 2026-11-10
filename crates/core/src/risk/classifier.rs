@@ -9,7 +9,6 @@ use super::patterns::{
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
 };
 use super::sftp_word_check::{quoted_sftp_server_invocation, sftp_server_word_check, WordCheck};
-use super::sudo_options::{classify_sudo_option, SudoOption, WrapperState, WrapperStep};
 use super::types::{RiskAssessment, RiskLevel};
 
 /// Regelbasierter Klassifikator (Spec 0026, Abschnitt 2) —
