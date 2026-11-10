@@ -398,8 +398,7 @@ mod tests {
     #[test]
     fn password_command_is_rated_red_by_risk_checks() {
         use crate::risk::{
-            sftp_server_invocation_reason, CommandCheckFinding, RiskClassifier, RiskLevel,
-            RuleBasedRiskClassifier,
+            sftp_server_invocation_reason, CommandCheckFinding, RiskLevel, RuleBasedRiskClassifier,
         };
         let marker = new_sudo_prompt_marker();
         for user in ["root", "www-data"] {
