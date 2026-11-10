@@ -175,6 +175,12 @@ time and an action that would run automatically asks for confirmation
 ([`crates/app-logic/src/session_extension.rs`](crates/app-logic/src/session_extension.rs),
 [`crates/app-logic/src/orchestration/escalation.rs`](crates/app-logic/src/orchestration/escalation.rs)).
 
+A registered session extension can also refuse a connection before any
+transport, host-key prompt or credential read (`SessionExtension::check_connect`).
+It only restricts: it runs outside the filter engine, cannot change a filter,
+risk or confirmation result, and fails closed (an unresolved or incomplete
+server scope refuses the connect). Without an extension nothing changes.
+
 ### The explicit limit
 
 > **We redact known secret formats. Unusual formats can slip through. Do not

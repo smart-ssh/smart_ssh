@@ -240,6 +240,24 @@ Regeln:
   registrierte Erweiterung ist die Datenbank identisch zu vorher.
 - Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
 
+### Verbindungsprüfung durch Erweiterungen
+
+Eine registrierte Sitzungs-Erweiterung kann einen Verbindungsaufbau zu einem
+Server ablehnen (Issue #1281). Regeln:
+
+- Die Prüfung läuft genau einmal je Verbindungsversuch, nachdem der Server
+  geladen ist und bevor Transport, Host-Key-Abfrage oder Zugangsdaten-Zugriff
+  stattfinden. Sie gilt für jeden Aufrufer, auch den automatischen
+  Verbindungsaufbau für MCP.
+- Mehrere Erweiterungen werden in Registrierungsreihenfolge gefragt; die erste
+  Ablehnung gilt, die übrigen werden nicht mehr gefragt. Die Verbindung scheitert
+  mit der Meldung der Erweiterung und dem Fehlercode `CONNECT_REFUSED`.
+- Fail-closed: Lässt sich der Geltungsbereich des Servers nicht (vollständig)
+  bestimmen, wird die Verbindung abgelehnt.
+- Die Prüfung kann nur einschränken; sie ändert kein Filter-, Risiko- oder
+  Bestätigungsergebnis. Ohne Erweiterung oder mit der Standardimplementierung
+  bleibt der Verbindungsaufbau unverändert.
+
 ### Chat-Inhalte von Erweiterungen
 
 Eine Erweiterung kann sich über die Verdrahtung als Quelle für Inhalte
@@ -321,7 +339,7 @@ Nach Themen:
 
 - **Zustand:** `AppState` als Typ (für `app.try_state::<AppState>()`); seine
   Felder gehören nicht zur Oberfläche.
-- **Sitzungs-Erweiterung:** `SessionExtension`, `ServerScope`, `scope_for_id`,
+- **Sitzungs-Erweiterung:** `SessionExtension`, `ConnectRefusal`, `ServerScope`, `scope_for_id`,
   `PromptLanguage`, `rebuild_server_redactors`, `rebuild_redactors_for_sessions`.
 - **Chat-Inhalte:** `ChatContentExtension`, `PendingContent`, `ResolvedBlock`,
   `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,

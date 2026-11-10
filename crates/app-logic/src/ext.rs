@@ -27,8 +27,8 @@ pub use crate::state::AppState;
 
 // --- Session extension ---------------------------------------------------
 pub use crate::session_extension::{
-    rebuild_redactors_for_sessions, rebuild_server_redactors, scope_for_id, ServerScope,
-    SessionExtension,
+    check_connect_allowed, rebuild_redactors_for_sessions, rebuild_server_redactors, scope_for_id,
+    ConnectRefusal, ServerScope, SessionExtension, CONNECT_REFUSED_CODE,
 };
 pub use crate::system_prompt::PromptLanguage;
 

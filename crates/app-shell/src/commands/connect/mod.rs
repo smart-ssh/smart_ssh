@@ -232,6 +232,16 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     .await
     .map_err(secret_store_error)?;
 
+    // Spec 0038, section 2a: a registered session extension may refuse the
+    // connect before anything is opened (no transport, host-key prompt or
+    // credential read). Fail closed on an unresolved scope.
+    let scope_lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
+    app_logic::session_extension::check_connect_allowed(
+        state.session_extension.as_deref(),
+        &scope_lookup,
+    )
+    .await?;
+
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
     // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
     // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
@@ -243,7 +253,6 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
 
     // The Tauri-bound inputs of the session assembly (issue #839): resolved
     // here, handed to `app_logic::connect::session_builder` as plain values.
-    let scope_lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
     let prompt_language = crate::ui_language::session_prompt_language(app);
     // Issue #102: "on but not set up" is reported to the session, "off" is silent.
     let (second_opinion, second_opinion_setup_failed) =
