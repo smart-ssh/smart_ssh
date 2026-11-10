@@ -1026,7 +1026,8 @@
       "authentication": "Authentication",
       "sessionReady": "Session established",
       "dnsSkipped": "IP address – no lookup needed",
-      "outdatedAlgorithms": "Outdated algorithms"
+      "outdatedAlgorithms": "Outdated algorithms",
+      "banner": "Server banner"
     },
     "status": {
       "ok": "OK",

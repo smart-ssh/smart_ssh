@@ -1021,7 +1021,8 @@
       "authentication": "認証",
       "sessionReady": "セッション確立",
       "dnsSkipped": "IPアドレス – 名前解決は不要",
-      "outdatedAlgorithms": "古いアルゴリズム"
+      "outdatedAlgorithms": "古いアルゴリズム",
+      "banner": "サーバーバナー"
     },
     "status": {
       "ok": "OK",

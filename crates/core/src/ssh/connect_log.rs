@@ -41,6 +41,10 @@ pub const HOST_KEY_CHANGED: &str = "HOST_KEY_CHANGED";
 /// erlaubt 255 Zeichen einschließlich CR LF.
 const MAX_SERVER_VERSION_CHARS: usize = 255;
 
+/// Issue #1227: upper bound (in characters) of the login banner text shown
+/// in the log.
+pub const MAX_BANNER_CHARS: usize = 2000;
+
 /// Schrittcode für eine Zeitüberschreitung während der TCP-Verbindung.
 pub const TCP_TIMEOUT_CODE: &str = "SSH_TCP_TIMEOUT";
 
@@ -102,6 +106,10 @@ pub enum ConnectStep {
     /// key exchange). Recorded with status [`StepStatus::Warning`]; the
     /// connection is not affected.
     OutdatedAlgorithms { algorithms: Vec<String> },
+    /// Issue #1227: the login banner (`SSH_MSG_USERAUTH_BANNER`) the server
+    /// sent before authentication. `text` is server input, already passed
+    /// through [`sanitize_banner`]; the UI shows it as plain text only.
+    Banner { text: String },
 }
 
 /// Issue #1173: one hop of an established connection that uses outdated
@@ -411,6 +419,42 @@ impl ConnectLog {
         );
     }
 
+    /// Issue #1227: records the login banner of `hop`. The text is
+    /// sanitized here; a banner that is empty afterwards records nothing.
+    /// A second banner message of the same hop is appended to the first
+    /// (SSH allows several), the total staying within [`MAX_BANNER_CHARS`].
+    pub fn record_banner(&self, hop_index: usize, hop: &str, raw: &str) {
+        let clean = sanitize_banner(raw);
+        if clean.is_empty() {
+            return;
+        }
+        let appended = {
+            let mut entries = self.lock();
+            entries
+                .iter_mut()
+                .find(|e| {
+                    e.record.hop_index == hop_index
+                        && matches!(e.record.step, ConnectStep::Banner { .. })
+                })
+                .map(|e| {
+                    if let ConnectStep::Banner { text } = &mut e.record.step {
+                        let room = MAX_BANNER_CHARS.saturating_sub(text.chars().count() + 1);
+                        if room > 0 {
+                            text.push('\n');
+                            text.extend(clean.chars().take(room));
+                        }
+                    }
+                })
+                .is_some()
+        };
+        if appended {
+            self.notify();
+            return;
+        }
+        let id = self.start_silent(hop_index, hop, ConnectStep::Banner { text: clean });
+        self.finish(id, StepStatus::Ok);
+    }
+
     /// Issue #1173: the outdated-algorithm warnings recorded so far, one per
     /// affected hop, in hop order of recording.
     pub fn warnings(&self) -> Vec<ConnectWarning> {
@@ -528,7 +572,7 @@ pub struct ConnectStepSnapshot {
     #[cfg_attr(
         feature = "ts-export",
         ts(
-            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\" | \"outdatedAlgorithms\""
+            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\" | \"outdatedAlgorithms\" | \"banner\""
         )
     )]
     pub kind: String,
@@ -628,6 +672,7 @@ fn step_kind(step: &ConnectStep) -> &'static str {
         ConnectStep::Authentication { .. } => "authentication",
         ConnectStep::SessionReady => "sessionReady",
         ConnectStep::OutdatedAlgorithms { .. } => "outdatedAlgorithms",
+        ConnectStep::Banner { .. } => "banner",
     }
 }
 
@@ -659,10 +704,118 @@ pub fn sanitize_server_version(raw: &[u8]) -> String {
         .collect()
 }
 
+/// Issue #1227: prepares a server-controlled login banner for display.
+/// Removes whole ANSI escape sequences (CSI, OSC, other `ESC x`), all other
+/// control characters except line breaks (CR LF and CR become `\n`, tabs
+/// become a space), C1 controls and bidirectional overrides; trims blank
+/// edges and caps the result at [`MAX_BANNER_CHARS`] characters.
+pub fn sanitize_banner(raw: &str) -> String {
+    let mut out = String::new();
+    let mut count = 0usize;
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        if count >= MAX_BANNER_CHARS {
+            break;
+        }
+        let keep = match c {
+            '\u{1b}' => {
+                match chars.peek().copied() {
+                    // CSI: parameters up to a final byte 0x40..=0x7e.
+                    Some('[') => {
+                        chars.next();
+                        for n in chars.by_ref() {
+                            if ('\u{40}'..='\u{7e}').contains(&n) {
+                                break;
+                            }
+                        }
+                    }
+                    // OSC: up to BEL or ST (`ESC \`).
+                    Some(']') => {
+                        chars.next();
+                        while let Some(n) = chars.next() {
+                            if n == '\u{7}' {
+                                break;
+                            }
+                            if n == '\u{1b}' {
+                                chars.next_if_eq(&'\\');
+                                break;
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        chars.next();
+                    }
+                    None => {}
+                }
+                None
+            }
+            '\r' => {
+                chars.next_if_eq(&'\n');
+                Some('\n')
+            }
+            '\n' => Some('\n'),
+            '\t' => Some(' '),
+            c if c.is_control()
+                || ('\u{202a}'..='\u{202e}').contains(&c)
+                || ('\u{2066}'..='\u{2069}').contains(&c)
+                || c == '\u{200e}'
+                || c == '\u{200f}' =>
+            {
+                None
+            }
+            c => Some(c),
+        };
+        if let Some(k) = keep {
+            out.push(k);
+            count += 1;
+        }
+    }
+    out.trim().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::profiles::CredentialRef;
+
+    #[test]
+    fn banner_strips_escapes_and_controls() {
+        assert_eq!(sanitize_banner("Hello\r\nWorld\t!"), "Hello\nWorld !");
+        assert_eq!(sanitize_banner("\x1b[31mred\x1b[0m"), "red");
+        assert_eq!(sanitize_banner("a\x1b]0;title\x07b"), "ab");
+        assert_eq!(sanitize_banner("a\x1b]0;t\x1b\\b\x07\u{85}"), "ab");
+        assert_eq!(sanitize_banner("x\u{202e}y\0z"), "xyz");
+        assert_eq!(sanitize_banner("  \n\x1b[2J \n"), "");
+    }
+
+    #[test]
+    fn banner_is_capped() {
+        let long = "a".repeat(MAX_BANNER_CHARS * 3);
+        assert_eq!(sanitize_banner(&long).chars().count(), MAX_BANNER_CHARS);
+        // Escape bytes do not count towards the cap.
+        let mixed = format!("{}b", "\x1b[1m".repeat(MAX_BANNER_CHARS));
+        assert_eq!(sanitize_banner(&mixed), "b");
+    }
+
+    #[test]
+    fn record_banner_adds_one_step_per_hop_and_skips_empty() {
+        let log = ConnectLog::new();
+        log.record_banner(0, "u@a:22", "\x1b[2J \n");
+        assert!(log.snapshot().is_empty());
+        log.record_banner(0, "u@a:22", "first");
+        log.record_banner(0, "u@a:22", "second");
+        let snap = log.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(
+            snap[0].step,
+            ConnectStep::Banner {
+                text: "first\nsecond".into()
+            }
+        );
+        assert_eq!(snap[0].status, StepStatus::Ok);
+        let snaps = ConnectStepSnapshot::from_records(&snap, false);
+        assert_eq!(snaps[0].kind, "banner");
+    }
 
     #[test]
     fn warn_outdated_merges_per_hop_without_duplicates() {
