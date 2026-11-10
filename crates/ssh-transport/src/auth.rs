@@ -584,20 +584,37 @@ async fn authenticate_via_agent(
     // `MaxAuthTries`) surfaces as an error from the call and ends the loop.
     let mut last = None;
     for identity in identities {
-        let public_key = match &identity {
-            russh::keys::agent::AgentIdentity::PublicKey { key, .. } => key.clone(),
+        // Issue #1229: a certificate identity is offered as a certificate
+        // (certificate blob and certificate algorithm name); the agent signs
+        // with the underlying key.
+        let certificate = match &identity {
             russh::keys::agent::AgentIdentity::Certificate { certificate, .. } => {
-                russh::keys::PublicKey::new(certificate.public_key().clone(), "")
+                Some(certificate.clone())
             }
+            russh::keys::agent::AgentIdentity::PublicKey { .. } => None,
+        };
+        let public_key = match &identity {
+            russh::keys::agent::AgentIdentity::PublicKey { key, .. } => Some(key.clone()),
+            russh::keys::agent::AgentIdentity::Certificate { .. } => None,
         };
         let mut signer = AgentSigner {
             client: &mut agent,
             identity,
         };
-        let result = handle
-            .authenticate_publickey_with(username.to_string(), public_key, None, &mut signer)
-            .await
-            .map_err(crate::error::map_transport_error)?;
+        let result = match (certificate, public_key) {
+            (Some(cert), _) => {
+                handle
+                    .authenticate_certificate_with(username.to_string(), cert, None, &mut signer)
+                    .await
+            }
+            (None, Some(key)) => {
+                handle
+                    .authenticate_publickey_with(username.to_string(), key, None, &mut signer)
+                    .await
+            }
+            (None, None) => unreachable!("identity is either a key or a certificate"),
+        }
+        .map_err(crate::error::map_transport_error)?;
         match &result {
             russh::client::AuthResult::Success => return Ok(result),
             russh::client::AuthResult::Failure {

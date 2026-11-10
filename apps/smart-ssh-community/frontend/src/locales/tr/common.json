@@ -85,6 +85,7 @@
       "no_session_bus": "kullanılamıyor — erişilebilir D-Bus oturum veriyolu yok. Sonraki adım: `sudo apt install dbus-user-session`, ardından yeniden oturum açın.",
       "no_secret_service_provider": "kullanılamıyor — çalışan bir Secret Service sağlayıcısı yok. Sonraki adım: `sudo apt install gnome-keyring`, ardından yeniden oturum açın — bu KDE'de de çalışır. Zaten KWallet (`kwallet6`) veya KeePassXC kullanıyorsanız: Secret Service entegrasyonlarının çalışıyor veya açık olması gerekir; yalnızca kurmak yetmez.",
       "locked": "kullanılamıyor — mevcut ama kilitli. Sonraki adım: kilidini açın ve Smart SSH'yi yeniden başlatın. Eksik paket yok.",
+      "no_keystore": "kullanılamıyor — Android Keystore kullanılamıyor. Sonraki adım: bunun yerine bir ana parola kullanın; gizli bilgileriniz şifreli veritabanında kalır.",
       "unknown": "kullanılamıyor — neden bilinmiyor. Sonraki adım: bir Secret Service sağlayıcısının çalışıp çalışmadığını ve kilidinin açık olup olmadığını denetleyin (gnome-keyring veya Secret Service entegrasyonu açık KWallet ya da KeePassXC), ardından Smart SSH'yi yeniden başlatın."
     },
     "keychainBlocked": "Bu durum gizli verilerinizi etkilemez — API anahtarları, sunucu parolaları, parola ifadeleri ve sudo parolaları anahtarlıkta değil, şifreli veritabanında tutulur.",
@@ -1025,7 +1026,8 @@
       "authentication": "Kimlik doğrulama",
       "sessionReady": "Oturum kuruldu",
       "dnsSkipped": "IP adresi – ad çözümleme gerekmez",
-      "outdatedAlgorithms": "Eski algoritmalar"
+      "outdatedAlgorithms": "Eski algoritmalar",
+      "banner": "Sunucu başlığı"
     },
     "status": {
       "ok": "Tamam",

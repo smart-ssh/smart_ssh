@@ -85,6 +85,7 @@
       "no_session_bus": "niedostępny — brak dostępu do magistrali sesji D-Bus. Następny krok: `sudo apt install dbus-user-session`, a potem zaloguj się ponownie.",
       "no_secret_service_provider": "niedostępny — nie działa żaden dostawca Secret Service. Następny krok: `sudo apt install gnome-keyring`, a potem zaloguj się ponownie — działa to także w KDE. Jeśli używasz już KWallet (`kwallet6`) lub KeePassXC: ich integracja z Secret Service musi działać lub być włączona; sama instalacja nie wystarczy.",
       "locked": "niedostępny — istnieje, ale jest zablokowany. Następny krok: odblokuj go i uruchom ponownie Smart SSH. Żaden pakiet nie jest brakujący.",
+      "no_keystore": "niedostępny — Android Keystore jest niedostępny. Następny krok: użyj zamiast niego hasła głównego; Twoje sekrety pozostają w zaszyfrowanej bazie danych.",
       "unknown": "niedostępny — przyczyna nieznana. Następny krok: sprawdź, czy dostawca Secret Service działa i jest odblokowany (gnome-keyring albo KWallet lub KeePassXC z włączoną integracją Secret Service), a potem uruchom ponownie Smart SSH."
     },
     "keychainBlocked": "Nie wpływa to na Twoje sekrety — klucze API, hasła serwerów, hasła kluczy i hasła sudo są w zaszyfrowanej bazie danych, nie w magazynie kluczy.",
@@ -1035,7 +1036,8 @@
       "authentication": "Uwierzytelnianie",
       "sessionReady": "Sesja nawiązana",
       "dnsSkipped": "Adres IP – rozpoznawanie nazwy niepotrzebne",
-      "outdatedAlgorithms": "Przestarzałe algorytmy"
+      "outdatedAlgorithms": "Przestarzałe algorytmy",
+      "banner": "Baner serwera"
     },
     "status": {
       "ok": "OK",

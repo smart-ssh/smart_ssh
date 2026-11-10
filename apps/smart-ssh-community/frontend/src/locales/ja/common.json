@@ -85,6 +85,7 @@
       "no_session_bus": "利用できません — D-Busセッションバスに到達できません。次の手順: `sudo apt install dbus-user-session` を実行し、再度サインインしてください。",
       "no_secret_service_provider": "利用できません — Secret Serviceプロバイダーが動作していません。次の手順: `sudo apt install gnome-keyring` を実行し、再度サインインしてください。KDEでも同様に動作します。すでにKWallet（`kwallet6`）やKeePassXCを使用している場合は、それらのSecret Service連携を起動または有効にする必要があります。インストールするだけでは不十分です。",
       "locked": "利用できません — 存在しますがロックされています。次の手順: ロックを解除してSmart SSHを再起動してください。不足しているパッケージはありません。",
+      "no_keystore": "利用できません — Android Keystoreを利用できません。次の手順: 代わりにマスターパスワードを使用してください。シークレットは暗号化されたデータベースに保存されたままです。",
       "unknown": "利用できません — 原因不明です。次の手順: Secret Serviceプロバイダー（gnome-keyring、またはSecret Service連携を有効にしたKWalletやKeePassXC）が動作しロック解除されているかを確認し、Smart SSHを再起動してください。"
     },
     "keychainBlocked": "これはお客様のシークレットには影響しません。APIキー、サーバーのパスワード、パスフレーズ、sudoパスワードはキーチェーンではなく、暗号化されたデータベースに保存されています。",
@@ -1020,7 +1021,8 @@
       "authentication": "認証",
       "sessionReady": "セッション確立",
       "dnsSkipped": "IPアドレス – 名前解決は不要",
-      "outdatedAlgorithms": "古いアルゴリズム"
+      "outdatedAlgorithms": "古いアルゴリズム",
+      "banner": "サーバーバナー"
     },
     "status": {
       "ok": "OK",

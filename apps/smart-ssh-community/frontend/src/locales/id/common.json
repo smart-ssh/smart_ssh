@@ -85,6 +85,7 @@
       "no_session_bus": "tidak tersedia — tidak ada D-Bus session bus yang dapat dijangkau. Langkah berikutnya: `sudo apt install dbus-user-session`, lalu masuk kembali.",
       "no_secret_service_provider": "tidak tersedia — tidak ada penyedia Secret Service yang berjalan. Langkah berikutnya: `sudo apt install gnome-keyring`, lalu masuk kembali — ini juga berlaku di KDE. Jika Anda sudah memakai KWallet (`kwallet6`) atau KeePassXC: integrasi Secret Service-nya harus berjalan atau diaktifkan; menginstalnya saja tidak cukup.",
       "locked": "tidak tersedia — ada tetapi terkunci. Langkah berikutnya: buka kuncinya dan mulai ulang Smart SSH. Tidak ada paket yang kurang.",
+      "no_keystore": "tidak tersedia — Android Keystore tidak tersedia. Langkah berikutnya: gunakan kata sandi utama; rahasia Anda tetap berada di basis data terenkripsi.",
       "unknown": "tidak tersedia — penyebab tidak diketahui. Langkah berikutnya: periksa apakah penyedia Secret Service berjalan dan tidak terkunci (gnome-keyring, atau KWallet atau KeePassXC dengan integrasi Secret Service diaktifkan), lalu mulai ulang Smart SSH."
     },
     "keychainBlocked": "Ini tidak memengaruhi rahasia Anda — kunci API, kata sandi server, frasa sandi, dan kata sandi sudo disimpan di basis data terenkripsi, bukan di keychain.",
@@ -1020,7 +1021,8 @@
       "authentication": "Autentikasi",
       "sessionReady": "Sesi terbentuk",
       "dnsSkipped": "Alamat IP – tidak perlu pencarian",
-      "outdatedAlgorithms": "Algoritma usang"
+      "outdatedAlgorithms": "Algoritma usang",
+      "banner": "Banner server"
     },
     "status": {
       "ok": "OK",

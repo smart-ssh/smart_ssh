@@ -113,6 +113,19 @@ impl russh::client::Handler for ClientHandler {
         }
     }
 
+    /// Issue #1227: record the server's login banner in the connect log.
+    /// The text is sanitized and capped by the log; it is never interpreted.
+    async fn auth_banner(
+        &mut self,
+        banner: &str,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        self.steps
+            .log
+            .record_banner(self.steps.hop_index, &self.steps.hop, banner);
+        Ok(())
+    }
+
     /// Issue #51: nur die Namen der ausgehandelten Algorithmen und die
     /// Versionskennung des Servers werden gelesen. Das gemeinsame Geheimnis
     /// des Schlüsselaustauschs wird nicht angefasst.
