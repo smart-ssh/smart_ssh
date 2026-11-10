@@ -21,6 +21,7 @@
 
 mod classifier;
 mod patterns;
+mod sftp_word_check;
 mod types;
 
 #[cfg(test)]

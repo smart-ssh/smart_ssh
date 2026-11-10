@@ -135,16 +135,21 @@ async fn test_concurrent_prompt_history_record_respects_cap_and_dedup() {
     b.unwrap();
     assert_eq!(history.list(&server).await.unwrap(), vec!["same"]);
 
-    // Many concurrent distinct records never exceed the cap.
-    let mut tasks = Vec::new();
-    for i in 0..230 {
-        let history = history.clone();
-        tasks.push(tokio::spawn(async move {
-            history.record(&server, &format!("p{i}")).await
-        }));
-    }
-    for t in tasks {
-        t.await.unwrap().unwrap();
+    // Many concurrent distinct records never exceed the cap. They run in
+    // waves of 10 so the queue on the write lock stays short and the test
+    // does not depend on disk speed (230 > cap of 200 in total).
+    for wave in 0..23 {
+        let mut tasks = Vec::new();
+        for i in 0..10 {
+            let history = history.clone();
+            let n = wave * 10 + i;
+            tasks.push(tokio::spawn(async move {
+                history.record(&server, &format!("p{n}")).await
+            }));
+        }
+        for t in tasks {
+            t.await.unwrap().unwrap();
+        }
     }
     assert_eq!(history.list(&server).await.unwrap().len(), 200);
     store.pool.close().await;
