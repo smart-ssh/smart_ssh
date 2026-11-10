@@ -812,6 +812,35 @@ fn op_index(ops: &[String], prefix: &str) -> usize {
         .unwrap_or_else(|| panic!("no op {prefix:?} in {ops:?}"))
 }
 
+/// Spawns `fut` so that it is polled once before the returned receiver fires.
+/// When that first poll is `Pending` (the future waits on the session lock,
+/// whose waiter is registered by the first poll), the receiver resolves; if
+/// the future finishes on the first poll the sender is dropped and the
+/// receiver errors, which fails the test.
+fn spawn_queued<T: Send + 'static>(
+    fut: impl std::future::Future<Output = T> + Send + 'static,
+) -> (
+    tokio::task::JoinHandle<T>,
+    tokio::sync::oneshot::Receiver<()>,
+) {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let handle = tokio::spawn(async move {
+        let mut fut = Box::pin(fut);
+        let mut tx = Some(tx);
+        std::future::poll_fn(move |cx| {
+            let polled = fut.as_mut().poll(cx);
+            if polled.is_pending() {
+                if let Some(tx) = tx.take() {
+                    let _ = tx.send(());
+                }
+            }
+            polled
+        })
+        .await
+    });
+    (handle, rx)
+}
+
 /// A listing and an AI-style file read (same `lock_sftp` as
 /// `execute_read_remote_file`) of the same session run *between* two chunks of
 /// a running download — before the last chunk is read, not after the transfer.
@@ -831,21 +860,20 @@ async fn test_921_list_and_ai_read_complete_while_a_download_is_running() {
     // The mock holds the lock while it serves chunk 2.
     normal.wait_until_chunk_paused().await;
 
-    let list = {
+    let (list, list_queued) = spawn_queued({
         let (session, channel) = (s.session.clone(), s.normal_channel());
-        tokio::spawn(async move { list_impl(&session, &channel, "/t").await })
-    };
-    let ai_read = {
+        async move { list_impl(&session, &channel, "/t").await }
+    });
+    let (ai_read, ai_queued) = spawn_queued({
         let session = s.session.clone();
-        tokio::spawn(async move {
+        async move {
             let mut guard = session.lock_sftp().await;
             guard.sftp_or_err()?.read_file("/t/a.txt").await
-        })
-    };
-    // Let both tasks queue on the session's lock.
-    for _ in 0..5 {
-        tokio::task::yield_now().await;
-    }
+        }
+    });
+    // Both tasks have been polled up to the session lock and are waiting on it.
+    list_queued.await.expect("listing reached the lock");
+    ai_queued.await.expect("AI read reached the lock");
     assert!(!list.is_finished() && !ai_read.is_finished());
     normal.release_chunk();
 

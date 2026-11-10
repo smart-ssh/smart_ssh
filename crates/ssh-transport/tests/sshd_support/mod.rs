@@ -203,6 +203,35 @@ pub fn daemon_log(scenario: &str) -> String {
     )
 }
 
+/// Daemon log once it is stable: unchanged for `STABLE_FOR`, so late-flushed
+/// lines are included. Bounded: after `STABLE_MAX` the current log is
+/// returned anyway (no endless loop).
+pub fn stable_daemon_log(scenario: &str) -> String {
+    const STABLE_FOR: std::time::Duration = std::time::Duration::from_millis(500);
+    const STABLE_MAX: std::time::Duration = std::time::Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut last = daemon_log(scenario);
+    let mut since = std::time::Instant::now();
+    while since.elapsed() < STABLE_FOR && start.elapsed() < STABLE_MAX {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let now = daemon_log(scenario);
+        if now != last {
+            last = now;
+            since = std::time::Instant::now();
+        }
+    }
+    last
+}
+
+/// Stable log lines written after `baseline` (a former `stable_daemon_log`).
+pub fn stable_log_since(scenario: &str, baseline: &str) -> String {
+    let log = stable_daemon_log(scenario);
+    match log.strip_prefix(baseline) {
+        Some(tail) => tail.to_string(),
+        None => log,
+    }
+}
+
 pub fn pause(scenario: &str) {
     docker(&["pause", &scenario_container(scenario)]);
 }

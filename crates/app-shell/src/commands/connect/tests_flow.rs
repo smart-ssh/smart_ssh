@@ -241,6 +241,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        ai_provider_decorators: Default::default(),
     };
     Fixture {
         state,
@@ -1795,6 +1796,142 @@ async fn test_prompt_wait_is_not_counted_by_the_overall_connect_limit() {
         .await;
         assert!(result.is_ok(), "hops={hops}: {:?}", result.err());
         assert_eq!(connector.last_hops.load(Ordering::SeqCst), hops);
+        reset(app.handle());
+    }
+}
+
+// --- Issue #1246: AI provider decorators at each construction site ---------
+
+mod decorator_sites {
+    use super::*;
+    use app_logic::ai_provider_decorator::{AiProviderDecorator, AiProviderInfo};
+    use ssh_manager_core::ai::{AiEvent, AiProvider};
+    use tauri::Manager as _;
+
+    /// Replaces the provider by a stub and records what it was shown.
+    struct Marker(Arc<Mutex<Vec<AiProviderInfo>>>);
+
+    impl AiProviderDecorator for Marker {
+        fn decorate(
+            &self,
+            info: &AiProviderInfo,
+            _provider: Box<dyn AiProvider>,
+        ) -> Box<dyn AiProvider> {
+            self.0.lock().unwrap().push(info.clone());
+            Box::new(crate::test_support::MockAiProvider::new(vec![
+                AiEvent::TextDelta("ok".to_string()),
+            ]))
+        }
+    }
+
+    fn with_marker(fx: &mut Fixture) -> Arc<Mutex<Vec<AiProviderInfo>>> {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let decorator: Arc<dyn AiProviderDecorator> = Arc::new(Marker(seen.clone()));
+        fx.state.ai_provider_decorators = Arc::new(vec![decorator]);
+        seen
+    }
+
+    fn assert_seen_once(seen: &Arc<Mutex<Vec<AiProviderInfo>>>) {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1, "decorator applied exactly once");
+        assert_eq!(seen[0].model, "claude-test");
+        assert_eq!(seen[0].provider_type, ProviderType::Anthropic);
+    }
+
+    #[tokio::test]
+    async fn test_connect_site_applies_decorator() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let disconnected = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&disconnected));
+        let mut fx = fixture(connector).await;
+        let seen = with_marker(&mut fx);
+
+        connect_session(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            uuid::Uuid::new_v4(),
+            None,
+            true,
+        )
+        .await
+        .expect("connect should succeed");
+
+        assert_seen_once(&seen);
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_notes_site_applies_decorator() {
+        let connector = ScriptedConnector::new(Err(SshError::ConnectionFailed("n/a".into())));
+        let mut fx = fixture(connector).await;
+        let seen = with_marker(&mut fx);
+        let config = provider_config();
+
+        crate::commands::notes::build_note_shrink_provider(&fx.state, &config)
+            .await
+            .expect("key is stored");
+
+        assert_seen_once(&seen);
+    }
+
+    #[tokio::test]
+    async fn test_second_opinion_site_applies_decorator() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let connector = ScriptedConnector::new(Err(SshError::ConnectionFailed("n/a".into())));
+        let mut fx = fixture(connector).await;
+        let seen = with_marker(&mut fx);
+        let active = fx.state.ai_provider_store.list().await.unwrap().remove(0);
+        let store = app.handle().store("settings.json").unwrap();
+        store.set("riskClassifierEnabled", serde_json::json!(true));
+        store.set(
+            "riskClassifierProviderId",
+            serde_json::json!(active.id.0.to_string()),
+        );
+
+        let setup =
+            crate::risk_second_opinion::resolve_second_opinion_provider(app.handle(), &fx.state)
+                .await;
+
+        assert!(matches!(
+            setup,
+            crate::risk_second_opinion::SecondOpinionSetup::Ready(..)
+        ));
+        assert_seen_once(&seen);
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_credential_test_site_applies_decorator() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let connector = ScriptedConnector::new(Err(SshError::ConnectionFailed("n/a".into())));
+        let mut fx = fixture(connector).await;
+        let seen = with_marker(&mut fx);
+        app.manage(fx.state);
+        let state = app.state::<AppState>();
+        let input = app_logic::dto::AiProviderConfigInput {
+            display_name: "t".to_string(),
+            provider_type: ProviderType::Anthropic,
+            base_url: None,
+            model: "claude-test".to_string(),
+            api_key: "sk-test".to_string(),
+            supports_native_tool_calling: true,
+            extra_headers: Vec::new(),
+            max_tokens_override: None,
+            web_research_enabled: false,
+            attestation_url: None,
+        };
+
+        let result = crate::commands::test_ai_provider_credentials(state, input, None).await;
+
+        assert!(matches!(
+            result,
+            Ok(crate::commands::TestAiProviderCredentialsResult::Valid)
+        ));
+        assert_seen_once(&seen);
         reset(app.handle());
     }
 }

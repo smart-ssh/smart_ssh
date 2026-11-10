@@ -1031,7 +1031,8 @@
       "authentication": "Autentificare",
       "sessionReady": "Sesiune stabilită",
       "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare",
-      "outdatedAlgorithms": "Algoritmi învechiți"
+      "outdatedAlgorithms": "Algoritmi învechiți",
+      "banner": "Banner server"
     },
     "status": {
       "ok": "OK",

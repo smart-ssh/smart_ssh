@@ -49,13 +49,3 @@ pub struct RiskAssessment {
     /// Lade-Indikator, solange eine aktivierte Zweitmeinung noch aussteht).
     pub ai_reviewed: bool,
 }
-
-/// Klassifiziert ein Kommando (bzw. den auf ein Pseudokommando gemappten
-/// Dateipfad, s. Modul-Doc) in eine [`RiskAssessment`] (Spec 0026,
-/// Abschnitt 2). Synchron — die regelbasierte Prüfung ist rein lokal
-/// (Pattern-Matching gegen fest codierte Listen) und schnell genug, um das
-/// `chat-action-proposed`-Event nicht zu verzögern (Abschnitt 2, Punkt 5
-/// der Aufgabenstellung).
-pub trait RiskClassifier: Send + Sync {
-    fn classify(&self, command: &str) -> RiskAssessment;
-}

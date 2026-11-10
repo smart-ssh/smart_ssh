@@ -1780,7 +1780,7 @@ fn kinds(steps: &[ConnectStepRecord]) -> Vec<&'static str> {
             ConnectStep::Handshake { .. } => "handshake",
             ConnectStep::HostKeyCheck { .. } => "hostKey",
             ConnectStep::Authentication { .. } => "auth",
-            ConnectStep::SessionReady | ConnectStep::OutdatedAlgorithms { .. } => "ready",
+            _ => "ready",
         })
         .collect()
 }

@@ -42,11 +42,16 @@ pub use crate::orchestration::accept_extension_content;
 // --- AI usage ------------------------------------------------------------
 pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 
+// --- AI provider decorators ----------------------------------------------
+pub use crate::ai_provider_decorator::{apply_decorators, AiProviderDecorator, AiProviderInfo};
+pub use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, ProviderType, RedactedContext};
+
 // --- Backup / snapshot ---------------------------------------------------
 pub use crate::backup::{
-    apply_changes, open_backup, start_import_snapshot, BackupKey, BackupOpError, Change, ChangeSet,
-    HostKeyRow, ImportContext, ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions,
-    PendingImport, Snapshot, SnapshotCounts, KNOWN_SECTIONS,
+    apply_changes, apply_changes_expecting, open_backup, start_import_snapshot, BackupKey,
+    BackupOpError, Change, ChangeSet, HostKeyRow, ImportContext, ImportPreview, ImportStart,
+    ImportSummary, NoSessions, OpenSessions, PendingImport, Snapshot, SnapshotCounts,
+    SnapshotToken, KNOWN_SECTIONS,
 };
 pub use crate::host_key_store::FileHostKeyStore;
 
@@ -117,10 +122,10 @@ mod tests {
     use super::test_support::{Session, SessionManager};
     #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
     use super::{
-        apply_changes, open_backup, seal_extension_parts, start_import_snapshot, BackupKey,
-        BackupOpError, Change, ChangeSet, ChatContentRegistry, HostKeyRow, ImportContext,
-        ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
-        Snapshot, SnapshotCounts, KNOWN_SECTIONS,
+        apply_changes, apply_changes_expecting, open_backup, seal_extension_parts,
+        start_import_snapshot, BackupKey, BackupOpError, Change, ChangeSet, ChatContentRegistry,
+        HostKeyRow, ImportContext, ImportPreview, ImportStart, ImportSummary, NoSessions,
+        OpenSessions, PendingImport, Snapshot, SnapshotCounts, SnapshotToken, KNOWN_SECTIONS,
     };
 
     #[test]

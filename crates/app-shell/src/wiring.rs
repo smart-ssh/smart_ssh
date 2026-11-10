@@ -107,6 +107,12 @@ pub struct Wiring {
     /// Community registers none.
     pub ai_usage_observers: Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>,
 
+    /// Issue #1246 (Spec 0038, section 2): decorators that wrap every AI
+    /// provider the app constructs (chat connect, notes, second opinion,
+    /// credential test), applied in registration order. They see type,
+    /// endpoint and model, never the API key. Community registers none.
+    pub ai_provider_decorators: Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
+
     /// Issue #876 (Spec 0037, section 2): the edition's catalogue of the
     /// entitlement features it gates. Only these reach the frontend
     /// (`get_entitlements`, `entitlements:changed`); other ids from the
@@ -151,6 +157,7 @@ impl Wiring {
             outgoing_transform: None,
             outgoing_transforms: Vec::new(),
             ai_usage_observers: Vec::new(),
+            ai_provider_decorators: Vec::new(),
             entitlement_features: Vec::new(),
         }
     }
@@ -323,6 +330,11 @@ mod tests {
     }
 
     /// Issue #610: Community registers no AI usage observer.
+    #[test]
+    fn test_community_registers_no_ai_provider_decorators() {
+        assert!(Wiring::community().ai_provider_decorators.is_empty());
+    }
+
     #[test]
     fn test_community_registers_no_ai_usage_observers() {
         assert!(Wiring::community().ai_usage_observers.is_empty());

@@ -32,6 +32,7 @@ mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
 mod local_file;
+pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -72,8 +73,7 @@ mod test_support;
 mod ui_language;
 pub mod ui_preferences;
 mod voice_input;
-/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
-/// Passwort-Modus.
+/// Spec 0101, §2 Frage 3: Startdialoge im Fenster (Passwort-Modus).
 mod window_prompt;
 mod wiring;
 
@@ -114,28 +114,9 @@ pub(crate) struct StartupInputs {
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Issue #610: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
-}
-
-/// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
-/// Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
-/// Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
-/// `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
-/// selbst bestimmen, zeigte ein englischsprachiges System bei einem
-/// DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
-///
-/// Eigene Funktion seit Issue #19: Der Dialog „läuft bereits" erscheint vor
-/// [`startup_inputs`] und braucht dieselbe Sprache.
-fn startup_language() -> app_logic::startup_error_messages::Language {
-    let lc_all = std::env::var("LC_ALL").ok();
-    let lc_messages = std::env::var("LC_MESSAGES").ok();
-    let lang = std::env::var("LANG").ok();
-    app_logic::startup_error_messages::startup_language(
-        app_logic::startup_error_messages::preferred_locale_value(
-            lc_all.as_deref(),
-            lc_messages.as_deref(),
-            lang.as_deref(),
-        ),
-    )
+    /// Issue #1246: from `Wiring`, handed to the `AppState`.
+    pub(crate) ai_provider_decorators:
+        Arc<Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>>,
 }
 
 fn startup_inputs(
@@ -144,6 +125,9 @@ fn startup_inputs(
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    ai_provider_decorators: Arc<
+        Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
+    >,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -187,6 +171,7 @@ fn startup_inputs(
         keychain,
         outgoing_transform,
         ai_usage_observers,
+        ai_provider_decorators,
     }
 }
 
@@ -400,6 +385,7 @@ pub(crate) async fn open_and_assemble(
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
+        ai_provider_decorators: inputs.ai_provider_decorators.clone(),
         chat_content: chat_content.clone(),
         title_attempts: Default::default(),
     };
@@ -510,7 +496,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // nichts angefasst — entweder übernimmt die laufende Instanz desselben
     // Builds (sie kommt nach vorn, dieser Prozess endet mit 0), oder es
     // erscheint der Startfehler „läuft bereits".
-    let language = startup_language();
+    let language = startup_dialog::startup_language();
     let data_dir_lock = match app_logic::database_startup::lock_data_directory(&db_path) {
         Ok(lock) => {
             tracing::info!("locked the data directory for this process (issue #19)");
@@ -550,6 +536,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         language,
         wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
+        Arc::new(std::mem::take(&mut wiring.ai_provider_decorators)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
