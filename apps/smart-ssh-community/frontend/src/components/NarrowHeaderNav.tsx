@@ -4,12 +4,10 @@
 // wide layout (`navEntries.ts`, `SessionTabParts.tsx`).
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDialogFocusTrap } from "../hooks/useDialogFocusTrap";
 import { MAIN_TAB_ENTRIES, type MainTab } from "../lib/navEntries";
 import type { SessionTab } from "../hooks/useSessionTabs";
-import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
-import { Button } from "./ui";
+import { Button, DialogFrame } from "./ui";
 
 const ENTRY_BASE = `focus-ring font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
 const entryTone = (current: boolean) =>
@@ -88,9 +86,7 @@ function NarrowMenu({
   onClose,
 }: Omit<NarrowHeaderNavProps, "onOpenSettings"> & { onOpenSettings: () => void; onClose: () => void }) {
   const { t } = useTranslation();
-  const panelRef = useRef<HTMLDivElement>(null);
   const initialRef = useRef<HTMLButtonElement>(null);
-  const { onKeyDown } = useDialogFocusTrap({ containerRef: panelRef, initialFocusRef: initialRef, onEscape: onClose, resetKey: 0 });
   const overview = activeSessionId === null;
   const pick = (action: () => void) => () => {
     action();
@@ -98,21 +94,16 @@ function NarrowMenu({
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 bg-overlay/60">
-      {/* A tap on the backdrop (outside the panel) closes the menu; Escape is
-          handled by the focus trap. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- backdrop dismiss; keyboard users use Escape */}
-      <div data-testid="narrow-menu-backdrop" className="absolute inset-0" onClick={onClose} />
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Tab handling of the focus trap */}
-      <div
-        ref={panelRef}
-        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- a native <dialog> needs showModal() and would fight the shared modal layer
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("sessionTabs.menu.title")}
-        onKeyDown={onKeyDown}
-        className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col gap-4 overflow-y-auto border-r border-border bg-surface p-3 pt-12"
-      >
+    <DialogFrame
+      layer="app"
+      layout="sheet"
+      bare
+      ariaLabel={t("sessionTabs.menu.title")}
+      onClose={onClose}
+      onBackdropClick={onClose}
+      initialFocusRef={initialRef}
+      panelClassName="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col gap-4 overflow-y-auto border-r border-border bg-surface p-3 pt-12"
+    >
         <nav aria-label={t("sessionTabs.menu.title")} className="flex flex-col gap-1">
           {MAIN_TAB_ENTRIES.map((entry) => {
             const current = overview && tab === entry.id;
@@ -169,7 +160,6 @@ function NarrowMenu({
             </ul>
           </section>
         )}
-      </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }
