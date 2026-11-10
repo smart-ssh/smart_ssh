@@ -177,9 +177,12 @@ time and an action that would run automatically asks for confirmation
 
 A registered session extension can also refuse a connection before any
 transport, host-key prompt or credential read (`SessionExtension::check_connect`).
+The same check runs before the reconnect of an existing session (manual and
+automatic), so a refusal cannot be bypassed by connecting first and
+reconnecting later; a refused automatic attempt is not retried.
 It only restricts: it runs outside the filter engine, cannot change a filter,
 risk or confirmation result, and fails closed (an unresolved or incomplete
-server scope refuses the connect). Without an extension nothing changes.
+server scope refuses the connect or reconnect). Without an extension nothing changes.
 
 ### The explicit limit
 
