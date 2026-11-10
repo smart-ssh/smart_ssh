@@ -1,9 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
-import { useDialogFocusTrap } from "../hooks/useDialogFocusTrap";
-import { ModalBackdrop } from "./ModalBackdrop";
-import { Button } from "./ui";
+import { Button, DialogFrame } from "./ui";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -30,7 +28,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   const headingId = useId();
   const descriptionId = useId();
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const rejectButtonRef = useRef<HTMLButtonElement>(null);
   // A4/A5-Invariante: `onDecision` wird für dieses Ereignis höchstens
   // einmal gerufen — schützt vor doppeltem Escape (T5) und vor
@@ -48,14 +45,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
     onDecision({ decision });
   }
 
-  const { onKeyDown } = useDialogFocusTrap({
-    containerRef,
-    initialFocusRef: rejectButtonRef,
-    // A4: Escape lehnt ab, nie `trust`.
-    onEscape: () => decide("reject"),
-    resetKey: event,
-  });
-
   // Unabhängiger Review-Pass (Spec 0014/0017): dieser Dialog kann von
   // `ServerList` ausgelöst werden, während gerade ein Session-Tab aktiv ist
   // (z. B. ein MCP-initiierter `connect()` auf einen neuen Server) — der
@@ -72,31 +61,21 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
-      {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
-       * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
-       * damit kein String-Literal; die statische Analyse von
-       * `no-static-element-interactions` erkennt nur Literale und verlangt
-       * deshalb eine Rolle, die längst da ist (gemessen: ein Literal löst
-       * stattdessen `no-noninteractive-element-interactions` aus — das
-       * Zweig-Rendern über zwei fast identische Teilbäume nur für ein
-       * statisches `role`-Literal würde die Komponente ohne Nutzen
-       * duplizieren). */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div
-        ref={containerRef}
-        // A1: `alertdialog` im geänderten Zweig (höheres Dringlichkeits-
-        // signal für Screenreader), `dialog` im unbekannten Zweig.
-        role={dialogRole}
-        aria-modal="true"
-        aria-labelledby={headingId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 focus:outline-none ${
-          isMismatch ? "border-danger bg-danger-subtle/95" : "border-border-strong bg-surface-raised"
-        }`}
-      >
+    <DialogFrame
+      layer="app"
+      bare
+      // A1: `alertdialog` for a changed key (higher urgency for screen readers), `dialog` for an unknown one.
+      role={dialogRole}
+      labelledBy={headingId}
+      describedBy={descriptionId}
+      // A4: Escape rejects, never trusts. There is no backdrop click handler: a stray click decides nothing.
+      onClose={() => decide("reject")}
+      initialFocusRef={rejectButtonRef}
+      resetKey={event}
+      panelClassName={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 ${
+        isMismatch ? "border-danger bg-danger-subtle/95" : "border-border-strong bg-surface-raised"
+      }`}
+    >
         {isMismatch ? (
           <>
             {/* Gefahren-Warnstreifen — Design-Import, Abschnitt "HOST-KEY
@@ -202,7 +181,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
             </div>
           </div>
         )}
-      </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

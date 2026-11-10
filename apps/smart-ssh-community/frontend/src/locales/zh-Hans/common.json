@@ -85,6 +85,7 @@
       "no_session_bus": "不可用——无法访问 D-Bus 会话总线。下一步：执行 `sudo apt install dbus-user-session`，然后重新登录。",
       "no_secret_service_provider": "不可用——没有正在运行的 Secret Service 提供程序。下一步：执行 `sudo apt install gnome-keyring`，然后重新登录——在 KDE 上同样适用。如果您已在使用 KWallet（`kwallet6`）或 KeePassXC：必须运行或开启其 Secret Service 集成，仅安装是不够的。",
       "locked": "不可用——存在但已锁定。下一步：将其解锁并重启 Smart SSH。无需安装任何软件包。",
+      "no_keystore": "不可用——Android Keystore 不可用。下一步：请改用主密码；您的机密仍保存在加密数据库中。",
       "unknown": "不可用——原因未知。下一步：请检查 Secret Service 提供程序是否正在运行且已解锁（gnome-keyring，或已开启 Secret Service 集成的 KWallet 或 KeePassXC），然后重启 Smart SSH。"
     },
     "keychainBlocked": "这不会影响您的机密——API 密钥、服务器密码、口令短语和 sudo 密码都保存在加密数据库中，而不是密钥环里。",
