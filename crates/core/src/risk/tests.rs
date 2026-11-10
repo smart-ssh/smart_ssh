@@ -3,7 +3,7 @@
 //! Teil 1, Punkt 6).
 
 use super::classifier::RuleBasedRiskClassifier;
-use super::types::{RiskClassifier, RiskLevel};
+use super::types::RiskLevel;
 
 fn classify(command: &str) -> super::types::RiskAssessment {
     RuleBasedRiskClassifier.classify(command)

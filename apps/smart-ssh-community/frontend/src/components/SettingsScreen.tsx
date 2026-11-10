@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import {
@@ -17,8 +16,7 @@ import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { ModalBackdrop } from "./ModalBackdrop";
-import { Button, ErrorBoundary } from "./ui";
+import { Button, DialogFrame, ErrorBoundary } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -37,9 +35,6 @@ const MASTER_PASSWORD_CATEGORY_ID = "master-password";
 const DATA_BACKUP_CATEGORY_ID = "data-backup";
 const VOICE_INPUT_CATEGORY_ID = "voice-input";
 const ABOUT_CATEGORY_ID = "about";
-
-// A variable, not a literal: `<dialog>` has no modal semantics without `showModal()`, which the shared backdrop does not use (same as `DialogFrame`).
-const DIALOG_ROLE: "dialog" = "dialog";
 
 interface NavCategory {
   id: string;
@@ -137,76 +132,23 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
     (narrowView === "detail" ? backRef.current : activeNavRef.current)?.focus();
   }, [narrow, narrowView]);
 
-  // Issue #385 (docs/ui-guidelines.md, "Keyboard"): Escape closes, Tab stays
-  // inside, focus starts on the active category and returns to the trigger.
-  // Not `useDialogFocusTrap`: that hook pulls focus back from every element
-  // outside its container, which would fight the dialogs opened from inside
-  // the settings (licenses, master password), which portal to `document.body`.
-  // Keyboard events of such a nested dialog also bubble through the React
-  // tree to this handler, so they are told apart by their DOM target.
+  // Issue #385 (docs/ui-guidelines.md, "Keyboard"): `DialogFrame` handles Escape,
+  // Tab wrap and focus return; focus starts on the active category. It yields to
+  // the dialogs opened from inside the settings (licenses, master password).
   const titleId = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
   const activeNavRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const previous =
-      returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    activeNavRef.current?.focus();
-    return () => {
-      if (previous && document.contains(previous)) previous.focus();
-    };
-    // Mount-only: the return target is captured when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: the return target is captured when the dialog opens
-  }, []);
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const container = containerRef.current;
-    if (!container || !(event.target instanceof Node) || !container.contains(event.target)) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    );
-    if (focusable.length === 0) return;
-    const index = focusable.indexOf(document.activeElement as HTMLElement);
-    const atEdge = event.shiftKey ? index <= 0 : index === focusable.length - 1;
-    if (atEdge) {
-      event.preventDefault();
-      focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
-    }
-  };
-
-  // Safari/WebKit on macOS does not focus a button on click, so after a click
-  // inside the dialog `document.activeElement` is `<body>` and Escape would
-  // never reach `handleKeyDown`. Move focus into the dialog ourselves, but
-  // only for clicks whose DOM target is inside it (not a portaled nested dialog).
-  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    const container = containerRef.current;
-    if (!container || !(event.target instanceof Element) || !container.contains(event.target)) return;
-    if (container.contains(document.activeElement)) return;
-    const button = event.target.closest("button");
-    (button && container.contains(button) ? button : container).focus();
-  };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-overlay/50 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
-      {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div
-        ref={containerRef}
-        role={DIALOG_ROLE}
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={handleKeyDown}
-        onClick={handleClick}
-        tabIndex={-1}
-        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-surface-raised shadow-xl outline-none narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
-      >
+    <DialogFrame
+      layer="app"
+      bare
+      yieldToNested
+      labelledBy={titleId}
+      onClose={onClose}
+      returnFocusTo={returnFocusTo}
+      initialFocusRef={activeNavRef}
+      panelClassName="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-surface-raised shadow-xl narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
+    >
         {showList && (
         <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
           <div className="flex items-center justify-between">
@@ -305,7 +247,6 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
           </div>
         </div>
         )}
-      </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

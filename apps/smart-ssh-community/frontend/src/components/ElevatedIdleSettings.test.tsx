@@ -20,14 +20,14 @@ function renderSettings() {
 describe("ElevatedIdleSettings (issue #1193)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getElevatedIdleTimeout).mockResolvedValue(15);
+    vi.mocked(getElevatedIdleTimeout).mockResolvedValue(30);
     vi.mocked(setElevatedIdleTimeout).mockResolvedValue(undefined);
   });
 
   it("shows the stored value and offers 5, 15, 30, 60 minutes and never", async () => {
     renderSettings();
     const select = await screen.findByRole("combobox");
-    await waitFor(() => expect(select).toHaveValue("15"));
+    await waitFor(() => expect(select).toHaveValue("30"));
     const values = Array.from(select.querySelectorAll("option")).map((o) =>
       o.getAttribute("value"),
     );
@@ -37,7 +37,7 @@ describe("ElevatedIdleSettings (issue #1193)", () => {
   it("saves a change through its own command", async () => {
     renderSettings();
     const select = await screen.findByRole("combobox");
-    await waitFor(() => expect(select).toHaveValue("15"));
+    await waitFor(() => expect(select).toHaveValue("30"));
     fireEvent.change(select, { target: { value: "0" } });
     await waitFor(() => expect(select).toHaveValue("0"));
     expect(setElevatedIdleTimeout).toHaveBeenCalledWith(0);
@@ -47,9 +47,9 @@ describe("ElevatedIdleSettings (issue #1193)", () => {
     vi.mocked(setElevatedIdleTimeout).mockRejectedValue("nope");
     renderSettings();
     const select = await screen.findByRole("combobox");
-    await waitFor(() => expect(select).toHaveValue("15"));
-    fireEvent.change(select, { target: { value: "30" } });
+    await waitFor(() => expect(select).toHaveValue("30"));
+    fireEvent.change(select, { target: { value: "60" } });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await waitFor(() => expect(select).toHaveValue("15"));
+    await waitFor(() => expect(select).toHaveValue("30"));
   });
 });

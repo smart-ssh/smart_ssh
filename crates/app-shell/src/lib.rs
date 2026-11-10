@@ -32,6 +32,7 @@ mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
 mod local_file;
+pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -72,8 +73,7 @@ mod test_support;
 mod ui_language;
 pub mod ui_preferences;
 mod voice_input;
-/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
-/// Passwort-Modus.
+/// Spec 0101, §2 Frage 3: Startdialoge im Fenster (Passwort-Modus).
 mod window_prompt;
 mod wiring;
 
