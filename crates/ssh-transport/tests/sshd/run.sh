@@ -51,7 +51,11 @@ for img in "$here"/images/*/; do
   log "building image $name"
   build_log="$(docker build --progress=plain -t "smart-ssh-e2e-$name" "$img" 2>&1)" || {
     echo "$build_log" | tail -n 60 >&2
-    log "image build failed: $name"
+    if echo "$build_log" | grep -q 'DOWNLOAD-FAILED'; then
+      log "image build failed because of a DOWNLOAD (not a test failure): $name"
+    else
+      log "image build failed: $name"
+    fi
     exit 1
   }
 done

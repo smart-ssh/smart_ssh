@@ -1036,7 +1036,8 @@
       "authentication": "Uwierzytelnianie",
       "sessionReady": "Sesja nawiązana",
       "dnsSkipped": "Adres IP – rozpoznawanie nazwy niepotrzebne",
-      "outdatedAlgorithms": "Przestarzałe algorytmy"
+      "outdatedAlgorithms": "Przestarzałe algorytmy",
+      "banner": "Baner serwera"
     },
     "status": {
       "ok": "OK",

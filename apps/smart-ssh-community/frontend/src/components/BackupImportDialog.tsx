@@ -11,6 +11,7 @@ import {
   startBackupImport,
 } from "../api/api";
 import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
+import { platformCapabilities, usePlatform } from "../lib/platform";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { BackupKeySetup } from "./BackupKeySetup";
@@ -34,6 +35,7 @@ const COUNT_ROWS: (keyof BackupCountsDto)[] = ["servers", "groups", "rules", "no
  * The secret is sent once and dropped from state right after the call. */
 export function BackupImportDialog({ onClose, onRestored }: Props) {
   const { t } = useTranslation();
+  const { folderPicker } = platformCapabilities(usePlatform());
   const [fileName, setFileName] = useState<string | null>(null);
   const [kind, setKind] = useState<"code" | "passphrase">("code");
   const [secret, setSecret] = useState("");
@@ -221,9 +223,11 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           </table>
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
-          <Button type="button" className="narrow:min-h-11" onClick={() => void changeSafetyDir()} disabled={busy}>
-            {t("backup.confirm.changeSafetyDir")}
-          </Button>
+          {folderPicker && (
+            <Button type="button" className="narrow:min-h-11" onClick={() => void changeSafetyDir()} disabled={busy}>
+              {t("backup.confirm.changeSafetyDir")}
+            </Button>
+          )}
           {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
         </div>
       </DialogFrame>

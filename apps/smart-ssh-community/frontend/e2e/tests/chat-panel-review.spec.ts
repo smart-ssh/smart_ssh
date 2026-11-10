@@ -21,6 +21,7 @@ const SIZES = [
 async function tabStops(page: Page, count: number) {
   const stops: { name: string; top: number; left: number; ring: boolean }[] = [];
   for (let i = 0; i < count; i++) {
+    await waitForScrollHandled(page);
     await page.keyboard.press("Tab");
     const lost = await page.evaluate(() => document.activeElement === document.body);
     expect(lost, `focus was lost after Tab ${i + 1}`).toBe(false);
@@ -50,6 +51,36 @@ async function tabStops(page: Page, count: number) {
     );
   }
   return stops;
+}
+
+/** Waits until the effect of the previous focus change on the chat column is
+ * over: the column's scroll position is unchanged for 5 frames and the jump
+ * button's Tab-order state (aria-hidden / tabindex) matches that position.
+ * Focusing a stop scrolls it into view; the scroll event that flips the jump
+ * button between tabbable and hidden arrives later. A Tab pressed in between
+ * can land on the button just before it is hidden, which drops focus to
+ * <body> (the failure of issue #1268). Wait for the end state (ADR 0122). */
+async function waitForScrollHandled(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
+        const jump = document.querySelector('[data-testid="chat-jump-to-latest"]') as HTMLElement;
+        let frames = 0;
+        let last = NaN;
+        let stable = 0;
+        const step = () => {
+          const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
+          const jumpOutOfOrder = jump.getAttribute("tabindex") === "-1";
+          stable = el.scrollTop === last && jumpOutOfOrder === near ? stable + 1 : 0;
+          last = el.scrollTop;
+          if (stable >= 5) resolve();
+          else if (++frames > 600) reject(new Error("chat column scroll state did not settle within 600 frames"));
+          else requestAnimationFrame(step);
+        };
+        step();
+      }),
+  );
 }
 
 /** Waits until the chat column is pinned to the bottom and its content height

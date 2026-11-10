@@ -288,6 +288,26 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
 
+### Umhüllung der KI-Anbieter
+
+Eine Edition kann über die Verdrahtung beliebig viele Umhüller für KI-Anbieter
+registrieren. Regeln:
+
+- Jeder KI-Anbieter, den die App baut, läuft durch alle registrierten
+  Umhüller in der Reihenfolge der Registrierung: beim Verbinden einer
+  Chat-Sitzung, bei der Notiz-Kürzung, bei der Risiko-Zweitmeinung und beim
+  Test der Zugangsdaten. Die Budget-Verwaltung des Anbieters bleibt unverändert.
+- Ein Umhüller bekommt Anbieter-Typ, die wirksame Endpunkt-Adresse und das
+  Modell. Er bekommt nie den API-Key und nie die zusätzlichen Header
+  (Spec 0022, Abschnitt 3).
+- Eine Anfrage erreicht den Umhüller nur als bereits geschwärzter Kontext; es
+  kommt kein ungeschwärzter Inhalt dazu. Ein Umhüller muss das Abschalten der
+  Web-Recherche und die Anfrage-Kennung an den umhüllten Anbieter
+  weiterreichen, sonst greifen beide nicht mehr.
+- Ein Anbieter schlägt weiterhin nur Aktionen vor; jeder Vorschlag durchläuft
+  unverändert die Filter-Engine. Community registriert keinen Umhüller; dann
+  ändert sich nichts.
+
 ### Erweiterungs-API (`app_logic::ext`)
 
 Erweiterungs-Crates, die über `Wiring` einhängen, nutzen genau ein Modul von

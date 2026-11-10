@@ -227,6 +227,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         state.credential_store.clone(),
         &active_config,
         active_config.web_research_enabled,
+        &state.ai_provider_decorators,
     )
     .await
     .map_err(secret_store_error)?;

@@ -25,6 +25,12 @@ vi.mock("../api/api", async () =>
   }),
 );
 
+const platformState = vi.hoisted(() => ({ value: "linux" }));
+vi.mock("../lib/platform", async (orig) => ({
+  ...(await orig<typeof import("../lib/platform")>()),
+  usePlatform: () => platformState.value,
+}));
+
 const COUNTS = { servers: 12, groups: 2, rules: 30, notes: 8, aiProviders: 1 };
 const FILE_COUNTS = { servers: 15, groups: 3, rules: 42, notes: 11, aiProviders: 2 };
 const EXPORT = { path: "/tmp/b.sshbackup", servers: 12, groups: 2, rules: 30, notes: 8, aiProviders: 1, secrets: 3, hostKeys: 1 };
@@ -42,6 +48,7 @@ beforeAll(() => testI18n.changeLanguage("en"));
 afterAll(() => testI18n.changeLanguage("de"));
 beforeEach(() => {
   vi.clearAllMocks();
+  platformState.value = "linux";
   localStorage.clear();
   vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: false, hasCode: false, hasPassphrase: false });
   vi.mocked(api.createBackupKeyWithCode).mockResolvedValue("ABCDE-FGHJK-MNPQR");
@@ -204,6 +211,19 @@ describe("BackupSettings", () => {
       expect(restored).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(restored).toHaveBeenCalledTimes(1);
+    });
+
+    it("Android: no Change… button, default folder still shown, Replace data works", async () => {
+      platformState.value = "android";
+      vi.mocked(api.startBackupImport).mockResolvedValue({
+        imported: null,
+        preview: { local: COUNTS, file: FILE_COUNTS, openSessions: 0, safetyBackupDir: "/docs/Smart SSH backups" },
+      });
+      renderSection();
+      await open();
+      await screen.findByText(/\/docs\/Smart SSH backups/);
+      expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Replace data" })).toBeTruthy();
     });
 
     it("Change… updates the shown safety folder; cancelling the picker keeps it", async () => {

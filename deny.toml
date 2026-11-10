@@ -209,6 +209,9 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
+# Note (issue #1228): the temporary `[patch.crates-io] russh` points to the
+# in-repo copy `vendor/russh` (a path source). Path sources need no entry here;
+# no git or registry exception is required. Remove with the patch.
 
 [sources.allow-org]
 github = []
