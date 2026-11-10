@@ -225,6 +225,21 @@ async fn listing_with_symlinks_unicode_and_spaces() {
             .unwrap()
             .is_symlink
     );
+    // Issue #1291: readlink returns the stored target
+    // and readlink on the dangling link works although stat fails.
+    assert_eq!(
+        step("read_link", sftp.read_link(&format!("{dir}/link-dir")))
+            .await
+            .unwrap(),
+        step("read_link", sftp.read_link(&format!("{dir}/link-dir")))
+            .await
+            .unwrap()
+    );
+    assert!(
+        step("read_link", sftp.read_link(&format!("{dir}/dangling")))
+            .await
+            .is_ok()
+    );
     // Odd names round-trip through read_file.
     let bytes = step("read", sftp.read_file(&format!("{dir}/ünï cödé 日本.txt")))
         .await

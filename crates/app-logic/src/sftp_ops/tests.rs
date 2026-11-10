@@ -63,6 +63,11 @@ struct Node {
 struct TreeSftp {
     nodes: Arc<Mutex<BTreeMap<String, Node>>>,
     log: Arc<Mutex<Vec<String>>>,
+    /// Issue #1291: `readlink` targets (absolute node path) by link path;
+    /// only links registered here are followed by `stat`.
+    link_targets: Arc<Mutex<BTreeMap<String, String>>>,
+    /// Issue #1291: every `stat`/`read_link` call, for call-count tests.
+    resolve_calls: Arc<Mutex<Vec<String>>>,
 }
 
 impl TreeSftp {
@@ -95,6 +100,15 @@ impl TreeSftp {
     fn symlink_to_dir(self, path: &str) -> Self {
         let s = self.file(path);
         s.nodes.lock().unwrap().get_mut(path).unwrap().is_symlink = true;
+        s
+    }
+    /// A symlink whose target path `target` is (or is not) in the tree.
+    fn link(self, path: &str, target: &str) -> Self {
+        let s = self.symlink_to_dir(path);
+        s.link_targets
+            .lock()
+            .unwrap()
+            .insert(path.to_string(), target.to_string());
         s
     }
     fn log(&self) -> Vec<String> {
@@ -191,7 +205,31 @@ impl SftpSession for TreeSftp {
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
-        self.lstat(path).await
+        self.resolve_calls
+            .lock()
+            .unwrap()
+            .push(format!("stat {path}"));
+        let target = self.link_targets.lock().unwrap().get(path).cloned();
+        match target {
+            Some(t) => {
+                let nodes = self.nodes.lock().unwrap();
+                let n = nodes.get(&t).ok_or_else(|| Self::missing(&t))?;
+                Ok(Self::entry(path, n))
+            }
+            None => self.lstat(path).await,
+        }
+    }
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        self.resolve_calls
+            .lock()
+            .unwrap()
+            .push(format!("read_link {path}"));
+        self.link_targets
+            .lock()
+            .unwrap()
+            .get(path)
+            .cloned()
+            .ok_or_else(|| Self::missing(path))
     }
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.nodes
@@ -472,6 +510,26 @@ async fn test_walk_tree_lists_parent_before_children_and_honours_stop() {
         .is_none());
 }
 
+/// Issue #1291: the folder-download walk (which only uses the lstat-like
+/// `is_dir` of the listing) reports a link to a folder as a non-folder and
+/// never lists the folder it points to.
+#[tokio::test]
+async fn test_walk_tree_does_not_descend_into_a_symlinked_directory() {
+    let sftp = TreeSftp::default()
+        .dir("/t")
+        .link("/t/link", "/other")
+        .dir("/other")
+        .file("/other/secret");
+    let mut lister = TreeLister(sftp.clone());
+    let mut v = Collect::default();
+    walk_tree(&mut lister, "/t", &Progress::default(), &mut v)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(v.seen, vec![("/t".to_string(), "/t/link".to_string())]);
+    assert!(!sftp.log().iter().any(|l| l.contains("/other")));
+}
+
 /// The visitor runs right after each listing: an entry it rejects stops the
 /// walk before any later directory is listed.
 #[tokio::test]
@@ -569,4 +627,39 @@ async fn test_overwrite_onto_folder_is_refused_untouched() {
         .calls()
         .iter()
         .any(|c| c.starts_with("remove") || c.contains("rename")));
+}
+
+#[tokio::test]
+async fn test_resolve_symlinks_classifies_links_with_one_stat_and_readlink_each() {
+    // Issue #1291: link-dir -> folder, link-file -> file, dangling link.
+    let mut sftp = TreeSftp::default()
+        .dir("/t")
+        .dir("/srv")
+        .file("/srv/f")
+        .file("/t/plain")
+        .dir("/t/sub")
+        .link("/t/link-dir", "/srv")
+        .link("/t/link-file", "/srv/f")
+        .link("/t/dangling", "/nowhere");
+    let entries = sftp.list_dir("/t").await.unwrap();
+    let dtos = crate::file_browser::resolve_symlinks(&mut sftp, &entries).await;
+    let by = |n: &str| dtos.iter().find(|d| d.name == n).unwrap();
+    use crate::file_browser::LinkKind;
+    assert!(by("link-dir").is_dir && by("link-dir").is_symlink);
+    assert_eq!(by("link-dir").link_kind, Some(LinkKind::Dir));
+    assert_eq!(by("link-dir").link_target.as_deref(), Some("/srv"));
+    assert!(!by("link-file").is_dir);
+    assert_eq!(by("link-file").link_kind, Some(LinkKind::File));
+    assert_eq!(by("dangling").link_kind, Some(LinkKind::Broken));
+    assert!(by("dangling").is_symlink && !by("dangling").is_dir);
+    assert_eq!(by("plain").link_kind, None);
+    assert!(!by("sub").is_symlink);
+    // Core entries stay lstat-like; only link entries cost extra calls.
+    assert!(entries.iter().all(|e| !e.is_dir || e.name == "sub"));
+    let mut calls = sftp.resolve_calls.lock().unwrap().clone();
+    calls.sort();
+    assert_eq!(calls.len(), 6, "{calls:?}");
+    assert!(calls
+        .iter()
+        .all(|c| c.contains("link") || c.contains("dangling")));
 }

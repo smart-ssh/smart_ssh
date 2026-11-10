@@ -1195,6 +1195,7 @@
       "newFile": "Новий файл",
       "chown": "Змінити власника…"
     },
+    "linkMarker": "символічне посилання",
     "properties": {
       "title": "Властивості",
       "name": "Назва",
@@ -1202,6 +1203,10 @@
       "type": "Тип",
       "typeFolder": "Тека",
       "typeFile": "Файл",
+      "typeLinkFolder": "Символічне посилання на папку",
+      "typeLinkFile": "Символічне посилання на файл",
+      "typeLinkBroken": "Пошкоджене символічне посилання",
+      "linkTarget": "Ціль посилання",
       "size": "Розмір",
       "permissionsSymbolic": "Дозволи (символічно)",
       "permissionsNumeric": "Дозволи (числово)",

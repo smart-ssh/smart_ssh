@@ -433,6 +433,13 @@ impl SftpSession for RusshSftpSession {
         Ok(remote_entry(name, path.to_string(), &metadata))
     }
 
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        self.inner
+            .read_link(path)
+            .await
+            .map_err(|e| self.map_error(path, e))
+    }
+
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
         self.inner
             .remove_file(path)

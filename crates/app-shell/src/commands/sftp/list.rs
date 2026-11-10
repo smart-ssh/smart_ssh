@@ -48,7 +48,7 @@ pub(super) async fn list_impl(
     channel: &BrowserChannel,
     path: &str,
 ) -> CommandResult<Vec<RemoteEntryDto>> {
-    let entries = {
+    let mut dtos = {
         let mut guard = lock_browser_sftp(session, channel).await;
         let mut sftp = guard.sftp().await?;
         let mut entries = sftp.list_dir(path).await?;
@@ -62,9 +62,9 @@ pub(super) async fn list_impl(
                 .await;
             app_logic::owner_names::apply_id_names(names, &mut entries);
         }
-        entries
+        // Issue #1291: resolve links (one stat + one readlink each).
+        app_logic::file_browser::resolve_symlinks(&mut sftp, &entries).await
     };
-    let mut dtos: Vec<RemoteEntryDto> = entries.iter().map(RemoteEntryDto::from).collect();
     sort_remote_entries(&mut dtos);
     Ok(dtos)
 }

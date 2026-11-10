@@ -1174,6 +1174,7 @@
       "newFile": "新建文件",
       "chown": "更改所有者…"
     },
+    "linkMarker": "符号链接",
     "properties": {
       "title": "属性",
       "name": "名称",
@@ -1181,6 +1182,10 @@
       "type": "类型",
       "typeFolder": "文件夹",
       "typeFile": "文件",
+      "typeLinkFolder": "指向文件夹的符号链接",
+      "typeLinkFile": "指向文件的符号链接",
+      "typeLinkBroken": "失效的符号链接",
+      "linkTarget": "链接目标",
       "size": "大小",
       "permissionsSymbolic": "权限（符号）",
       "permissionsNumeric": "权限（数字）",

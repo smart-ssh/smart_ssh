@@ -1181,6 +1181,7 @@
       "newFile": "New file",
       "chown": "Change owner…"
     },
+    "linkMarker": "symbolic link",
     "properties": {
       "title": "Properties",
       "name": "Name",
@@ -1188,6 +1189,10 @@
       "type": "Type",
       "typeFolder": "Folder",
       "typeFile": "File",
+      "typeLinkFolder": "Symbolic link to a folder",
+      "typeLinkFile": "Symbolic link to a file",
+      "typeLinkBroken": "Broken symbolic link",
+      "linkTarget": "Link target",
       "size": "Size",
       "permissionsSymbolic": "Permissions (symbolic)",
       "permissionsNumeric": "Permissions (numeric)",

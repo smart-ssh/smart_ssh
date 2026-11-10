@@ -102,6 +102,10 @@ impl SftpSession for BrowserSftp<'_> {
         self.operation().await?.sftp().stat(path).await
     }
 
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        self.operation().await?.sftp().read_link(path).await
+    }
+
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.operation().await?.sftp().lstat(path).await
     }

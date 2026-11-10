@@ -105,6 +105,25 @@ async fn test_elevated_request_uses_the_elevated_channel_not_the_normal_one() {
     );
 }
 
+/// Issue #1291: the elevated channel forwards `read_link` to its own session
+/// (not the trait default, which would make every link target unknown).
+#[tokio::test]
+async fn test_elevated_channel_delegates_read_link_to_the_elevated_session() {
+    let session = app_logic::test_support::session_with_transport(Box::new(NoTransport));
+    let normal = ssh_manager_core::ssh::mock::MockSftpSession::new().with_link("/l", "USER");
+    let elevated = ssh_manager_core::ssh::mock::MockSftpSession::new().with_link("/l", "/root/x");
+    session.set_sftp_for_tests(Box::new(normal)).await;
+    let session_id = SessionId::new_v4();
+    let registry = registry_with_channel(session_id, "root", elevated);
+
+    let channel = BrowserChannel::from_request(&registry, session_id, Some("root".to_string()));
+    let mut guard = lock_browser_sftp(&session, &channel).await;
+    assert_eq!(
+        guard.sftp().await.unwrap().read_link("/l").await.unwrap(),
+        "/root/x"
+    );
+}
+
 /// Spec 0084, T7: Zwei gleichzeitige Sitzungen zum **selben** Server,
 /// der erhöhte Kanal ist nur in A aktiv. B muss über den normalen Kanal
 /// laufen, und Ausschalten in B darf A nicht berühren. Scheitert, wenn

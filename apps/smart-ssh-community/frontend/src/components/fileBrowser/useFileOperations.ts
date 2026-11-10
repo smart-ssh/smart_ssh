@@ -15,7 +15,7 @@ import {
   sftpStat,
 } from "../../api/api";
 import { translateErrorCode } from "../../api/errorCodes";
-import { displayPath, joinPath, localBaseName, parentPath } from "../../lib/remotePath";
+import { displayPath, isRealDir, joinPath, localBaseName, parentPath } from "../../lib/remotePath";
 import { showToast } from "../../buses/toastBus";
 import type { DeletePreviewDto, RemoteEntryDto } from "../../api/types";
 import { isValidEntryName, type MoveKind } from "./shared";
@@ -132,7 +132,7 @@ export function useFileOperations(
   // Backend-Aufruf nötig).
   const deleteTarget = dialog.kind === "delete" ? dialog.entry : null;
   useEffect(() => {
-    if (!deleteTarget || !deleteTarget.isDir) return;
+    if (!deleteTarget || !isRealDir(deleteTarget)) return;
     let cancelled = false;
     sftpDeletePreview(sessionId, deleteTarget.path, channelUser)
       .then((preview) => {
@@ -174,7 +174,7 @@ export function useFileOperations(
     close();
     sftpDelete(sessionId, target.path, channelUser)
       .then(() => {
-        if (target.isDir && preview) {
+        if (isRealDir(target) && preview) {
           notifyOk("fileToasts.deletedDir", {
             name: target.name,
             files: preview.fileCount,
@@ -300,7 +300,7 @@ export function useFileOperations(
     const modeText = mode.toString(8).padStart(3, "0");
     sftpChmod(sessionId, target.path, mode, recursive, applySpecialBits, channelUser)
       .then((count) => {
-        if (recursive && target.isDir) {
+        if (recursive && isRealDir(target)) {
           notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });
         } else {
           notifyOk("fileToasts.chmodDone", { name: target.name, mode: modeText });
@@ -317,7 +317,7 @@ export function useFileOperations(
     close();
     sftpChown(sessionId, target.path, owner, group, recursive, channelUser)
       .then((count) => {
-        if (recursive && target.isDir) {
+        if (recursive && isRealDir(target)) {
           notifyOk("fileToasts.chownRecursive", { name: target.name, count });
         } else {
           notifyOk("fileToasts.chownDone", { name: target.name });

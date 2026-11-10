@@ -186,6 +186,8 @@ export type KeychainStatusDto = { available: boolean, reason: KeychainUnavailabl
 
 export type KeychainUnavailableReasonDto = "no_session_bus" | "no_secret_service_provider" | "locked" | "no_keystore" | "unknown";
 
+export type LinkKind = "dir" | "file" | "broken";
+
 export type LocalFilePreviewDto = { text: string | null, size: number, };
 
 export type McpActionTabRequestedPayload = { sessionId: string, serverId: ServerId, clientName: string | null, };
@@ -222,7 +224,7 @@ export type ProviderType = "openai" | "anthropic" | "generic_openai_compatible" 
 
 export type QuestionOptionDto = { label: string, description: string | null, };
 
-export type RemoteEntryDto = { name: string, path: string, isDir: boolean, size: number, permissions: string, modified: string | null, permissionsOctal: number, uid: number | null, gid: number | null, owner: string | null, group: string | null, };
+export type RemoteEntryDto = { name: string, path: string, isDir: boolean, size: number, permissions: string, modified: string | null, permissionsOctal: number, uid: number | null, gid: number | null, owner: string | null, group: string | null, isSymlink: boolean, linkTarget: string | null, linkKind: LinkKind | null, };
 
 export type RiskAssessment = { serverRisk: RiskLevel, serverRiskReason: string | null, dataRisk: RiskLevel, dataRiskReason: string | null, aiReviewed: boolean, };
 

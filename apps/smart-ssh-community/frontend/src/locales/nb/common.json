@@ -1181,6 +1181,7 @@
       "newFile": "Ny fil",
       "chown": "Endre eier…"
     },
+    "linkMarker": "symbolsk lenke",
     "properties": {
       "title": "Egenskaper",
       "name": "Navn",
@@ -1188,6 +1189,10 @@
       "type": "Type",
       "typeFolder": "Mappe",
       "typeFile": "Fil",
+      "typeLinkFolder": "Symbolsk lenke til en mappe",
+      "typeLinkFile": "Symbolsk lenke til en fil",
+      "typeLinkBroken": "Ødelagt symbolsk lenke",
+      "linkTarget": "Lenkemål",
       "size": "Størrelse",
       "permissionsSymbolic": "Tillatelser (symbolsk)",
       "permissionsNumeric": "Tillatelser (numerisk)",

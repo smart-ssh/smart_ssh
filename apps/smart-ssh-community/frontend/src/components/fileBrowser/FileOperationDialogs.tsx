@@ -1,3 +1,4 @@
+import { isRealDir } from "../../lib/remotePath";
 import { Trans, useTranslation } from "react-i18next";
 import { Button, DialogFrame } from "../ui";
 import { ChmodDialog } from "./ChmodDialog";
@@ -60,10 +61,10 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
           size="sm"
           title={
             elevated
-              ? t(entry.isDir ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
+              ? t(isRealDir(entry) ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
                   user: elevatedUser,
                 })
-              : entry.isDir
+              : isRealDir(entry)
                 ? t("fileBrowser.deleteDialog.dirTitle")
                 : t("fileBrowser.deleteDialog.fileTitle")
           }
@@ -80,7 +81,7 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
           <p>
             <span className="font-mono text-xs break-all">{entry.path}</span>{" "}
             {t("fileBrowser.deleteDialog.body")}
-            {entry.isDir &&
+            {isRealDir(entry) &&
               (preview ? (
                 <>
                   {" "}

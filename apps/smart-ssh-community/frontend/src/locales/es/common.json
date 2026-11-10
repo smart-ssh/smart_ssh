@@ -1188,6 +1188,7 @@
       "newFile": "Nuevo archivo",
       "chown": "Cambiar propietario…"
     },
+    "linkMarker": "enlace simbólico",
     "properties": {
       "title": "Propiedades",
       "name": "Nombre",
@@ -1195,6 +1196,10 @@
       "type": "Tipo",
       "typeFolder": "Carpeta",
       "typeFile": "Archivo",
+      "typeLinkFolder": "Enlace simbólico a una carpeta",
+      "typeLinkFile": "Enlace simbólico a un archivo",
+      "typeLinkBroken": "Enlace simbólico roto",
+      "linkTarget": "Destino del enlace",
       "size": "Tamaño",
       "permissionsSymbolic": "Permisos (simbólicos)",
       "permissionsNumeric": "Permisos (numéricos)",

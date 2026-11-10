@@ -1174,6 +1174,7 @@
       "newFile": "Tệp mới",
       "chown": "Đổi chủ sở hữu…"
     },
+    "linkMarker": "liên kết tượng trưng",
     "properties": {
       "title": "Thuộc tính",
       "name": "Tên",
@@ -1181,6 +1182,10 @@
       "type": "Loại",
       "typeFolder": "Thư mục",
       "typeFile": "Tệp",
+      "typeLinkFolder": "Liên kết tượng trưng tới thư mục",
+      "typeLinkFile": "Liên kết tượng trưng tới tệp",
+      "typeLinkBroken": "Liên kết tượng trưng bị hỏng",
+      "linkTarget": "Đích của liên kết",
       "size": "Kích thước",
       "permissionsSymbolic": "Quyền (dạng ký hiệu)",
       "permissionsNumeric": "Quyền (dạng số)",

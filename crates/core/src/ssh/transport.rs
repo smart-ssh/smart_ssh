@@ -336,6 +336,12 @@ pub trait SftpSession: Send {
     /// (s. `commands::delete_recursive`/`chmod_recursive`, die den
     /// Wurzelpfad damit statt mit `stat` prüfen).
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
+    /// Issue #1291: target string of the symbolic link at `path` (SFTP
+    /// `READLINK`), exactly as stored. The default reports "unsupported" so
+    /// fakes need no change; callers treat any error as "target unknown".
+    async fn read_link(&mut self, _path: &str) -> Result<String, SshError> {
+        Err(SshError::ChannelError("read_link is not supported".into()))
+    }
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
     /// Issue #625: benennt `from` atomar nach `to` um und **ersetzt** dabei

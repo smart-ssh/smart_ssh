@@ -318,6 +318,13 @@ impl SftpSession for LocalFileSession {
         Ok(path_entry(path, &metadata))
     }
 
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        let target = tokio::fs::read_link(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        Ok(target.to_string_lossy().into_owned())
+    }
+
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::symlink_metadata(self.resolve(path))
             .await
@@ -443,6 +450,37 @@ impl SftpSession for LocalFileSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #1291: the local session lists a link as itself (lstat view),
+    /// `read_link` returns its target, and `stat` follows it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_links_are_listed_as_links_and_read_link_returns_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir(root.join("folder")).unwrap();
+        std::fs::write(root.join("file"), b"x").unwrap();
+        std::os::unix::fs::symlink(root.join("folder"), root.join("link-dir")).unwrap();
+        std::os::unix::fs::symlink("nowhere", root.join("dangling")).unwrap();
+        let mut session = LocalFileSession::new();
+        let base = root.to_str().unwrap();
+
+        let entries = session.list_dir(base).await.unwrap();
+        let link = entries.iter().find(|e| e.name == "link-dir").unwrap();
+        assert!(link.is_symlink && !link.is_dir);
+        let plain = entries.iter().find(|e| e.name == "file").unwrap();
+        assert!(!plain.is_symlink);
+
+        let link_path = format!("{base}/link-dir");
+        assert_eq!(
+            session.read_link(&link_path).await.unwrap(),
+            root.join("folder").to_str().unwrap()
+        );
+        assert!(session.stat(&link_path).await.unwrap().is_dir);
+        let dangling = format!("{base}/dangling");
+        assert_eq!(session.read_link(&dangling).await.unwrap(), "nowhere");
+        assert!(session.stat(&dangling).await.is_err());
+    }
 
     #[tokio::test]
     async fn test_write_then_read_file_roundtrip() {

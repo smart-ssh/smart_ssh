@@ -1174,6 +1174,7 @@
       "newFile": "新しいファイル",
       "chown": "所有者を変更…"
     },
+    "linkMarker": "シンボリックリンク",
     "properties": {
       "title": "プロパティ",
       "name": "名前",
@@ -1181,6 +1182,10 @@
       "type": "種類",
       "typeFolder": "フォルダー",
       "typeFile": "ファイル",
+      "typeLinkFolder": "フォルダーへのシンボリックリンク",
+      "typeLinkFile": "ファイルへのシンボリックリンク",
+      "typeLinkBroken": "リンク切れのシンボリックリンク",
+      "linkTarget": "リンク先",
       "size": "サイズ",
       "permissionsSymbolic": "権限（シンボリック）",
       "permissionsNumeric": "権限（数値）",

@@ -1181,6 +1181,7 @@
       "newFile": "Ny fil",
       "chown": "Skift ejer…"
     },
+    "linkMarker": "symbolsk link",
     "properties": {
       "title": "Egenskaber",
       "name": "Navn",
@@ -1188,6 +1189,10 @@
       "type": "Type",
       "typeFolder": "Mappe",
       "typeFile": "Fil",
+      "typeLinkFolder": "Symbolsk link til en mappe",
+      "typeLinkFile": "Symbolsk link til en fil",
+      "typeLinkBroken": "Brudt symbolsk link",
+      "linkTarget": "Linkmål",
       "size": "Størrelse",
       "permissionsSymbolic": "Rettigheder (symbolsk)",
       "permissionsNumeric": "Rettigheder (numerisk)",

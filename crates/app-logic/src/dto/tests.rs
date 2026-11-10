@@ -349,6 +349,9 @@ fn dummy_entry(name: &str, is_dir: bool) -> RemoteEntryDto {
         gid: None,
         owner: None,
         group: None,
+        is_symlink: false,
+        link_target: None,
+        link_kind: None,
     }
 }
 

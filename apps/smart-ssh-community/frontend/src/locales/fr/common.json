@@ -1188,6 +1188,7 @@
       "newFile": "Nouveau fichier",
       "chown": "Changer le propriétaire…"
     },
+    "linkMarker": "lien symbolique",
     "properties": {
       "title": "Propriétés",
       "name": "Nom",
@@ -1195,6 +1196,10 @@
       "type": "Type",
       "typeFolder": "Dossier",
       "typeFile": "Fichier",
+      "typeLinkFolder": "Lien symbolique vers un dossier",
+      "typeLinkFile": "Lien symbolique vers un fichier",
+      "typeLinkBroken": "Lien symbolique cassé",
+      "linkTarget": "Cible du lien",
       "size": "Taille",
       "permissionsSymbolic": "Permissions (symbolique)",
       "permissionsNumeric": "Permissions (numérique)",

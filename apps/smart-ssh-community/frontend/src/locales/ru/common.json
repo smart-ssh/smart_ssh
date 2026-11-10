@@ -1195,6 +1195,7 @@
       "newFile": "Новый файл",
       "chown": "Сменить владельца…"
     },
+    "linkMarker": "символическая ссылка",
     "properties": {
       "title": "Свойства",
       "name": "Название",
@@ -1202,6 +1203,10 @@
       "type": "Тип",
       "typeFolder": "Папка",
       "typeFile": "Файл",
+      "typeLinkFolder": "Символическая ссылка на папку",
+      "typeLinkFile": "Символическая ссылка на файл",
+      "typeLinkBroken": "Битая символическая ссылка",
+      "linkTarget": "Цель ссылки",
       "size": "Размер",
       "permissionsSymbolic": "Права (символьные)",
       "permissionsNumeric": "Права (числовые)",

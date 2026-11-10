@@ -1188,6 +1188,7 @@
       "newFile": "Fișier nou",
       "chown": "Schimbă proprietarul…"
     },
+    "linkMarker": "legătură simbolică",
     "properties": {
       "title": "Proprietăți",
       "name": "Nume",
@@ -1195,6 +1196,10 @@
       "type": "Tip",
       "typeFolder": "Folder",
       "typeFile": "Fișier",
+      "typeLinkFolder": "Legătură simbolică către un dosar",
+      "typeLinkFile": "Legătură simbolică către un fișier",
+      "typeLinkBroken": "Legătură simbolică ruptă",
+      "linkTarget": "Ținta legăturii",
       "size": "Dimensiune",
       "permissionsSymbolic": "Permisiuni (simbolic)",
       "permissionsNumeric": "Permisiuni (numeric)",

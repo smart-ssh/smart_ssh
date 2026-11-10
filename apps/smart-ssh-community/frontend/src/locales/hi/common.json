@@ -1181,6 +1181,7 @@
       "newFile": "नई फ़ाइल",
       "chown": "स्वामी बदलें…"
     },
+    "linkMarker": "सिम्बॉलिक लिंक",
     "properties": {
       "title": "गुण",
       "name": "नाम",
@@ -1188,6 +1189,10 @@
       "type": "प्रकार",
       "typeFolder": "फ़ोल्डर",
       "typeFile": "फ़ाइल",
+      "typeLinkFolder": "फ़ोल्डर का सिम्बॉलिक लिंक",
+      "typeLinkFile": "फ़ाइल का सिम्बॉलिक लिंक",
+      "typeLinkBroken": "टूटा हुआ सिम्बॉलिक लिंक",
+      "linkTarget": "लिंक का लक्ष्य",
       "size": "आकार",
       "permissionsSymbolic": "अनुमतियाँ (सांकेतिक)",
       "permissionsNumeric": "अनुमतियाँ (संख्यात्मक)",

@@ -1181,6 +1181,7 @@
       "newFile": "Ny fil",
       "chown": "Ändra ägare…"
     },
+    "linkMarker": "symbolisk länk",
     "properties": {
       "title": "Egenskaper",
       "name": "Namn",
@@ -1188,6 +1189,10 @@
       "type": "Typ",
       "typeFolder": "Mapp",
       "typeFile": "Fil",
+      "typeLinkFolder": "Symbolisk länk till en mapp",
+      "typeLinkFile": "Symbolisk länk till en fil",
+      "typeLinkBroken": "Trasig symbolisk länk",
+      "linkTarget": "Länkmål",
       "size": "Storlek",
       "permissionsSymbolic": "Behörigheter (symboliska)",
       "permissionsNumeric": "Behörigheter (numeriska)",

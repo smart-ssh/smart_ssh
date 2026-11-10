@@ -171,6 +171,7 @@ fn generate() -> String {
         ProviderType,
         QuestionOptionDto,
         RemoteEntryDto,
+        LinkKind,
         RuleAction,
         RuleDto,
         RuleId,

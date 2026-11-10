@@ -1,3 +1,4 @@
+import { entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../lib/formatDateTime";
 import { formatOwner } from "../../lib/fileOwner";
@@ -153,13 +154,15 @@ export function FileTable({
                   type="button"
                   onClick={() => load(entry.path)}
                   className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-ring-flush"
-                  title={entry.name}
+                  title={entryTitle(entry)}
                 >
                   📁 {entry.name}
+                  <LinkMarker entry={entry} />
                 </Button>
               ) : (
-                <span className="block truncate text-fg-soft group-hover:underline" title={entry.name}>
-                  📄 {entry.name}
+                <span className={`block truncate text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
+                  {isBrokenLink(entry) ? "⚠️" : "📄"} {entry.name}
+                  <LinkMarker entry={entry} />
                 </span>
               )}
             </td>

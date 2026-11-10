@@ -56,6 +56,8 @@ struct Inner {
     rename_fails_for: HashSet<String>,
     /// Issue #625: Pfade, die `stat` als Ordner meldet.
     dirs: HashSet<String>,
+    /// Issue #1291: symbolic link path -> target string for `read_link`.
+    links: std::collections::HashMap<String, String>,
 }
 
 #[derive(Default, Clone)]
@@ -104,6 +106,14 @@ impl MockSftpSession {
     /// Issue #625: `stat` meldet diesen Pfad als Ordner.
     pub fn with_dir(self, path: impl Into<String>) -> Self {
         lock_tolerating_poison(&self.inner).dirs.insert(path.into());
+        self
+    }
+
+    /// Issue #1291: `read_link` returns `target` for the link at `path`.
+    pub fn with_link(self, path: impl Into<String>, target: impl Into<String>) -> Self {
+        lock_tolerating_poison(&self.inner)
+            .links
+            .insert(path.into(), target.into());
         self
     }
 
@@ -329,6 +339,16 @@ impl SftpSession for MockSftpSession {
         file.content[start..end].copy_from_slice(data);
         file.modified = Some(Utc::now());
         Ok(())
+    }
+
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("read_link {path}"));
+        inner
+            .links
+            .get(path)
+            .cloned()
+            .ok_or_else(|| SshError::ChannelError(format!("not a link: {path}")))
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {

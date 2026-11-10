@@ -4,6 +4,10 @@ import { displayPath, joinPath, localBaseName, parentPath } from "./remotePath";
 // Spec 0020, Abschnitt 5 — reine Pfad-Logik für den manuellen Dateibrowser.
 
 describe("parentPath", () => {
+  it("goes to the logical parent of a link path (issue #1291)", () => {
+    expect(parentPath("/var/www/current")).toBe("/var/www");
+  });
+
   it("bleibt im Startverzeichnis, wenn es dort schon ist", () => {
     expect(parentPath(".")).toBe(".");
   });
