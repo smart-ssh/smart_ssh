@@ -1181,6 +1181,7 @@
       "newFile": "Új fájl",
       "chown": "Tulajdonos módosítása…"
     },
+    "linkMarker": "szimbolikus hivatkozás",
     "properties": {
       "title": "Tulajdonságok",
       "name": "Név",
@@ -1188,6 +1189,10 @@
       "type": "Típus",
       "typeFolder": "Mappa",
       "typeFile": "Fájl",
+      "typeLinkFolder": "Szimbolikus hivatkozás egy mappára",
+      "typeLinkFile": "Szimbolikus hivatkozás egy fájlra",
+      "typeLinkBroken": "Törött szimbolikus hivatkozás",
+      "linkTarget": "Hivatkozás célja",
       "size": "Méret",
       "permissionsSymbolic": "Jogosultságok (szimbolikus)",
       "permissionsNumeric": "Jogosultságok (numerikus)",

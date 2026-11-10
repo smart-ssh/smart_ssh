@@ -1181,6 +1181,7 @@
       "newFile": "Uusi tiedosto",
       "chown": "Vaihda omistaja…"
     },
+    "linkMarker": "symbolinen linkki",
     "properties": {
       "title": "Ominaisuudet",
       "name": "Nimi",
@@ -1188,6 +1189,10 @@
       "type": "Tyyppi",
       "typeFolder": "Kansio",
       "typeFile": "Tiedosto",
+      "typeLinkFolder": "Symbolinen linkki kansioon",
+      "typeLinkFile": "Symbolinen linkki tiedostoon",
+      "typeLinkBroken": "Rikkinäinen symbolinen linkki",
+      "linkTarget": "Linkin kohde",
       "size": "Koko",
       "permissionsSymbolic": "Oikeudet (symbolinen)",
       "permissionsNumeric": "Oikeudet (numeerinen)",

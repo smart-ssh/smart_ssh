@@ -1195,6 +1195,7 @@
       "newFile": "Nowy plik",
       "chown": "Zmień właściciela…"
     },
+    "linkMarker": "dowiązanie symboliczne",
     "properties": {
       "title": "Właściwości",
       "name": "Nazwa",
@@ -1202,6 +1203,10 @@
       "type": "Typ",
       "typeFolder": "Folder",
       "typeFile": "Plik",
+      "typeLinkFolder": "Dowiązanie symboliczne do folderu",
+      "typeLinkFile": "Dowiązanie symboliczne do pliku",
+      "typeLinkBroken": "Uszkodzone dowiązanie symboliczne",
+      "linkTarget": "Cel dowiązania",
       "size": "Rozmiar",
       "permissionsSymbolic": "Uprawnienia (symboliczne)",
       "permissionsNumeric": "Uprawnienia (numeryczne)",

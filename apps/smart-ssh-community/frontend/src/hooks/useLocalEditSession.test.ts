@@ -47,7 +47,7 @@ const entry = {
   uid: null,
   gid: null,
   owner: null,
-  group: null,
+  group: null, isSymlink: false, linkTarget: null, linkKind: null,
 };
 
 beforeEach(() => {

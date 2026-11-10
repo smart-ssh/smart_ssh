@@ -1188,6 +1188,7 @@
       "newFile": "Nuovo file",
       "chown": "Cambia proprietario…"
     },
+    "linkMarker": "collegamento simbolico",
     "properties": {
       "title": "Proprietà",
       "name": "Nome",
@@ -1195,6 +1196,10 @@
       "type": "Tipo",
       "typeFolder": "Cartella",
       "typeFile": "File",
+      "typeLinkFolder": "Collegamento simbolico a una cartella",
+      "typeLinkFile": "Collegamento simbolico a un file",
+      "typeLinkBroken": "Collegamento simbolico interrotto",
+      "linkTarget": "Destinazione del collegamento",
       "size": "Dimensione",
       "permissionsSymbolic": "Permessi (simbolici)",
       "permissionsNumeric": "Permessi (numerici)",

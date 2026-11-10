@@ -24,7 +24,7 @@ function entry(name: string, isDir = false): RemoteEntryDto {
     uid: 1000,
     gid: 1000,
     owner: "deploy",
-    group: "deploy",
+    group: "deploy", isSymlink: false, linkTarget: null, linkKind: null,
   };
 }
 

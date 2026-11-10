@@ -1181,6 +1181,7 @@
       "newFile": "Neue Datei",
       "chown": "Besitzer ändern…"
     },
+    "linkMarker": "Symbolische Verknüpfung",
     "properties": {
       "title": "Eigenschaften",
       "name": "Name",
@@ -1188,6 +1189,10 @@
       "type": "Typ",
       "typeFolder": "Ordner",
       "typeFile": "Datei",
+      "typeLinkFolder": "Symbolische Verknüpfung auf einen Ordner",
+      "typeLinkFile": "Symbolische Verknüpfung auf eine Datei",
+      "typeLinkBroken": "Defekte symbolische Verknüpfung",
+      "linkTarget": "Ziel der Verknüpfung",
       "size": "Größe",
       "permissionsSymbolic": "Rechte (symbolisch)",
       "permissionsNumeric": "Rechte (numerisch)",

@@ -104,7 +104,7 @@ const fileEntry: RemoteEntryDto = {
   uid: 1000,
   gid: 1000,
   owner: null,
-  group: null,
+  group: null, isSymlink: false, linkTarget: null, linkKind: null,
 };
 
 async function openActions() {

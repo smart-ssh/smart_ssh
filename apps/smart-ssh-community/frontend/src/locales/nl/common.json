@@ -1181,6 +1181,7 @@
       "newFile": "Nieuw bestand",
       "chown": "Eigenaar wijzigen…"
     },
+    "linkMarker": "symbolische link",
     "properties": {
       "title": "Eigenschappen",
       "name": "Naam",
@@ -1188,6 +1189,10 @@
       "type": "Type",
       "typeFolder": "Map",
       "typeFile": "Bestand",
+      "typeLinkFolder": "Symbolische link naar een map",
+      "typeLinkFile": "Symbolische link naar een bestand",
+      "typeLinkBroken": "Verbroken symbolische link",
+      "linkTarget": "Doel van de link",
       "size": "Grootte",
       "permissionsSymbolic": "Rechten (symbolisch)",
       "permissionsNumeric": "Rechten (numeriek)",

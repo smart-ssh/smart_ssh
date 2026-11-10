@@ -1,3 +1,4 @@
+import { isRealDir } from "../../lib/remotePath";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type RemoteEntryDto } from "../../api/types";
@@ -43,7 +44,7 @@ export function ChownDialog({
       onSubmit={(e) => {
         e.preventDefault();
         if (nothingToChange) return;
-        onConfirm(ownerChange, groupChange, recursive && entry.isDir);
+        onConfirm(ownerChange, groupChange, recursive && isRealDir(entry));
       }}
       actions={
         <>
@@ -84,7 +85,7 @@ export function ChownDialog({
         )}
       </Field>
       <p className="mb-3 text-xs text-fg-subtle">{t("fileBrowser.chown.hint")}</p>
-      {entry.isDir && (
+      {isRealDir(entry) && (
         <label className="flex items-start gap-2 text-sm text-warning-fg-soft">
           <input
             type="checkbox"

@@ -1,3 +1,4 @@
+import { isRealDir } from "../../lib/remotePath";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type RemoteEntryDto } from "../../api/types";
@@ -169,7 +170,7 @@ export function ChmodDialog({
         )}
       </Field>
 
-      {entry.isDir && (
+      {isRealDir(entry) && (
         <label className="flex items-start gap-2 text-sm text-warning-fg-soft">
           <input
             type="checkbox"
@@ -183,7 +184,7 @@ export function ChmodDialog({
           </span>
         </label>
       )}
-      {entry.isDir && recursive && (
+      {isRealDir(entry) && recursive && (
         <p className="mt-2 text-xs text-fg-muted">
           {t("fileBrowser.chmod.recursiveSummary", {
             folders: folderBits.toString(8).padStart(3, "0"),

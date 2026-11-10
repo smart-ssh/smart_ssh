@@ -40,3 +40,10 @@ export function localBaseName(path: string): string {
   const segments = normalized.split("/").filter((s) => s.length > 0);
   return segments[segments.length - 1] ?? path;
 }
+
+/** Issue #1291: a real folder, not a symbolic link to one. The listing
+ * reports `isDir` for links to folders so they can be opened, but delete,
+ * chmod and chown recursion must never treat them as folders. */
+export function isRealDir(entry: { isDir: boolean; isSymlink: boolean }): boolean {
+  return entry.isDir && !entry.isSymlink;
+}

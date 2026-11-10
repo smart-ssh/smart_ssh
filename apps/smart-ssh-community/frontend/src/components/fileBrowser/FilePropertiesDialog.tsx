@@ -42,8 +42,19 @@ export function FilePropertiesDialog({
         {row(t("fileBrowser.properties.path"), entry.path)}
         {row(
           t("fileBrowser.properties.type"),
-          entry.isDir ? t("fileBrowser.properties.typeFolder") : t("fileBrowser.properties.typeFile"),
+          entry.isSymlink
+            ? t(
+                entry.linkKind === "dir"
+                  ? "fileBrowser.properties.typeLinkFolder"
+                  : entry.linkKind === "file"
+                    ? "fileBrowser.properties.typeLinkFile"
+                    : "fileBrowser.properties.typeLinkBroken",
+              )
+            : entry.isDir
+              ? t("fileBrowser.properties.typeFolder")
+              : t("fileBrowser.properties.typeFile"),
         )}
+        {entry.isSymlink && entry.linkTarget !== null && row(t("fileBrowser.properties.linkTarget"), entry.linkTarget)}
         {row(t("fileBrowser.properties.size"), entry.isDir ? "—" : formatBytes(entry.size))}
         {row(t("fileBrowser.properties.permissionsSymbolic"), entry.permissions)}
         {row(t("fileBrowser.properties.permissionsNumeric"), octal)}

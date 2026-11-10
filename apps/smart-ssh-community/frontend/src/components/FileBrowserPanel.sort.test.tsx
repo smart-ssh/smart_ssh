@@ -68,7 +68,7 @@ const base: RemoteEntryDto = {
   uid: 1000,
   gid: 1000,
   owner: null,
-  group: null,
+  group: null, isSymlink: false, linkTarget: null, linkKind: null,
 };
 const small = { ...base, name: "a.txt", path: "a.txt", size: 1 };
 const big = { ...base, name: "b.txt", path: "b.txt", size: 999 };

@@ -1174,6 +1174,7 @@
       "newFile": "새 파일",
       "chown": "소유자 변경…"
     },
+    "linkMarker": "심볼릭 링크",
     "properties": {
       "title": "속성",
       "name": "이름",
@@ -1181,6 +1182,10 @@
       "type": "유형",
       "typeFolder": "폴더",
       "typeFile": "파일",
+      "typeLinkFolder": "폴더로의 심볼릭 링크",
+      "typeLinkFile": "파일로의 심볼릭 링크",
+      "typeLinkBroken": "끊어진 심볼릭 링크",
+      "linkTarget": "링크 대상",
       "size": "크기",
       "permissionsSymbolic": "권한(기호)",
       "permissionsNumeric": "권한(숫자)",

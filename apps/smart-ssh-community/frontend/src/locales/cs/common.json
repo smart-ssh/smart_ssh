@@ -1195,6 +1195,7 @@
       "newFile": "Nový soubor",
       "chown": "Změnit vlastníka…"
     },
+    "linkMarker": "symbolický odkaz",
     "properties": {
       "title": "Vlastnosti",
       "name": "Název",
@@ -1202,6 +1203,10 @@
       "type": "Typ",
       "typeFolder": "Složka",
       "typeFile": "Soubor",
+      "typeLinkFolder": "Symbolický odkaz na složku",
+      "typeLinkFile": "Symbolický odkaz na soubor",
+      "typeLinkBroken": "Porušený symbolický odkaz",
+      "linkTarget": "Cíl odkazu",
       "size": "Velikost",
       "permissionsSymbolic": "Oprávnění (symbolicky)",
       "permissionsNumeric": "Oprávnění (číselně)",

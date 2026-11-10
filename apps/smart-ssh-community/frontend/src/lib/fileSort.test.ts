@@ -14,7 +14,7 @@ function e(name: string, over: Partial<RemoteEntryDto> = {}): RemoteEntryDto {
     uid: 1,
     gid: 1,
     owner: null,
-    group: null,
+    group: null, isSymlink: false, linkTarget: null, linkKind: null,
     ...over,
   };
 }

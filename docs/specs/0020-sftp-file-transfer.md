@@ -252,9 +252,26 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
 
 ## 7. Grenzen
 
-- **Symbolische Links** werden wie normale Einträge aufgelistet. Ob ein
-  Schreibvorgang das Ziel oder den Link ersetzt, ist nicht festgelegt und
-  hängt vom Server ab; das betrifft etwa Pfade unter `sites-enabled`.
+- **Symbolische Links** werden mit einer Markierung (kleines Symbol hinter
+  dem Namen, für Screenreader als „symbolic link" beschriftet) aufgelistet; der
+  Hover-Text zeigt das Linkziel (`-> <Ziel>`), sofern es lesbar ist. Die
+  Liste löst pro Link das Ziel mit einem `stat` auf:
+  - Ein Link auf einen **Ordner** erscheint mit dem Ordnersymbol, sortiert
+    unter den Ordnern, ist wie ein Ordner anklickbar und hat das
+    Ordner-Kontextmenü. Geöffnet wird der **logische Pfad** des Links (wie
+    `cd` in der Shell): Das Pfadfeld zeigt den Linkpfad, „Nach oben" geht
+    zum logischen Elternordner.
+  - Ein Link auf eine **Datei** erscheint wie eine Datei (mit Markierung)
+    und ist nicht navigierbar.
+  - Ein **defekter** Link (Ziel fehlt oder ist nicht zugänglich) wird
+    abgeblendet dargestellt, ist nicht navigierbar und lässt die Liste nicht
+    scheitern.
+  - Eigenschaften zeigen den Typ als Link (auf Ordner / auf Datei / defekt)
+    und das Linkziel.
+  - **Rekursive Operationen** (Löschen, chmod/chown rekursiv, Ordner-Download-Baum) folgen einem Link nie in den Zielordner;
+    Löschen entfernt nur den Link. Ob ein Schreibvorgang das Ziel oder den
+    Link ersetzt, ist nicht festgelegt und hängt vom Server ab; das betrifft
+    etwa Pfade unter `sites-enabled`.
 - **Backups** (`.smartssh-backup-*`) sammeln sich auf dem Server an; die App
   räumt sie nicht auf und listet sie nicht gesondert.
 - **Große Verzeichnisse** (mehrere tausend Einträge) werden vollständig

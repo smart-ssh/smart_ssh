@@ -1181,6 +1181,7 @@
       "newFile": "Yeni dosya",
       "chown": "Sahibi değiştir…"
     },
+    "linkMarker": "sembolik bağlantı",
     "properties": {
       "title": "Özellikler",
       "name": "Ad",
@@ -1188,6 +1189,10 @@
       "type": "Tür",
       "typeFolder": "Klasör",
       "typeFile": "Dosya",
+      "typeLinkFolder": "Klasöre sembolik bağlantı",
+      "typeLinkFile": "Dosyaya sembolik bağlantı",
+      "typeLinkBroken": "Bozuk sembolik bağlantı",
+      "linkTarget": "Bağlantı hedefi",
       "size": "Boyut",
       "permissionsSymbolic": "İzinler (sembolik)",
       "permissionsNumeric": "İzinler (sayısal)",

@@ -80,7 +80,7 @@ const entry = (name: string): RemoteEntryDto => ({
   uid: 1000,
   gid: 1000,
   owner: "deploy",
-  group: "deploy",
+  group: "deploy", isSymlink: false, linkTarget: null, linkKind: null,
 });
 
 async function openEntryMenuItem(app: import("../support/app").AppDriver, item: RegExp | string) {
@@ -145,7 +145,7 @@ test("xl: ssh_config import dialog is a full-screen sheet @phone", async ({ app 
     entries: Array.from({ length: 6 }, (_, index) => ({
       index,
       name: `host-${index}`,
-      group: 0,
+      group: 0, isSymlink: false, linkTarget: null, linkKind: null,
       host: { value: `host-${index}.example.test`, origin: null },
       port: { value: 22, origin: null },
       username: { value: "deploy", origin: null },

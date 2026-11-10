@@ -1174,6 +1174,7 @@
       "newFile": "File baru",
       "chown": "Ubah pemilik…"
     },
+    "linkMarker": "tautan simbolis",
     "properties": {
       "title": "Properti",
       "name": "Nama",
@@ -1181,6 +1182,10 @@
       "type": "Jenis",
       "typeFolder": "Folder berkas",
       "typeFile": "Berkas",
+      "typeLinkFolder": "Tautan simbolis ke folder",
+      "typeLinkFile": "Tautan simbolis ke berkas",
+      "typeLinkBroken": "Tautan simbolis rusak",
+      "linkTarget": "Target tautan",
       "size": "Ukuran",
       "permissionsSymbolic": "Izin (simbolis)",
       "permissionsNumeric": "Izin (numerik)",
