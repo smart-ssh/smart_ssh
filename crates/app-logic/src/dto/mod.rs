@@ -32,7 +32,7 @@ pub use sftp::*;
 
 #[cfg(test)]
 use crate::file_browser::format_unix_permissions;
-pub use crate::file_browser::{sort_remote_entries, RemoteEntryDto};
+pub use crate::file_browser::{sort_remote_entries, LinkKind, RemoteEntryDto};
 
 mod redacted_debug;
 #[cfg(test)]
