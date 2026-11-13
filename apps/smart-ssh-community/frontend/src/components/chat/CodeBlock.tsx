@@ -15,7 +15,7 @@ import { useIsNarrow } from "../../hooks/useIsNarrow";
 const FEEDBACK_MS = 2000;
 
 /** Plain text of a rendered subtree (the code block's source text). */
-export function nodeText(node: ReactNode): string {
+function nodeText(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean")
     return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -25,7 +25,7 @@ export function nodeText(node: ReactNode): string {
 }
 
 /** The renderer ends a fenced block's text with one newline that is not part of the code. */
-export function codeBlockText(children: ReactNode): string {
+function codeBlockText(children: ReactNode): string {
   return nodeText(children).replace(/\n$/, "");
 }
 
@@ -67,10 +67,10 @@ export function CodeBlock({
   return (
     <div className="relative">
       {/* A scrollable region must be keyboard-reachable (axe "scrollable-region-focusable"). */}
-      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <pre
         {...rest}
         className={`${rest.className ?? ""} pr-10!`}
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={narrow ? 0 : undefined}
       >
         {children}

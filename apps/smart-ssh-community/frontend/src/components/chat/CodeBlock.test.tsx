@@ -4,7 +4,6 @@ import {
   render,
   screen,
   fireEvent,
-  waitFor,
 } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { testI18n } from "../../testI18n";
@@ -65,8 +64,6 @@ describe("code block copy button", () => {
     vi.mocked(clipboardWriteText).mockRejectedValue(new Error("nope"));
     md("```\nx\n```\n");
     fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Copy failed" })).toBeTruthy(),
-    );
+    await screen.findByRole("button", { name: "Copy failed" });
   });
 });
