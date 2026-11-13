@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "copyCode": "Code kopiëren",
+    "codeCopied": "Code gekopieerd",
+    "codeCopyFailed": "Kopiëren mislukt",
     "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",

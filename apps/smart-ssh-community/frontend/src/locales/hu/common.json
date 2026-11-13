@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",
+    "copyCode": "Kód másolása",
+    "codeCopied": "Kód átmásolva",
+    "codeCopyFailed": "A másolás sikertelen",
     "composerMore": "További beviteli műveletek",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",
