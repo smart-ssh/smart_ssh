@@ -8,7 +8,7 @@ import {
 import { I18nextProvider } from "react-i18next";
 import { testI18n } from "../../testI18n";
 import ReactMarkdown from "react-markdown";
-import { MARKDOWN_COMPONENTS } from "./DocumentCard";
+import { DocumentCard, MARKDOWN_COMPONENTS } from "./DocumentCard";
 import { clipboardWriteText } from "../../api/api";
 
 vi.mock("../../api/api", async () =>
@@ -65,5 +65,21 @@ describe("code block copy button", () => {
     md("```\nx\n```\n");
     fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
     await screen.findByRole("button", { name: "Copy failed" });
+  });
+
+  it("is present and copies in a document card", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <DocumentCard
+          title="Doc"
+          contentMarkdown={"Intro `x`\n\n```sh\n" + CODE + "\n```\n"}
+          onExport={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    const buttons = screen.getAllByRole("button", { name: "Copy code" });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(clipboardWriteText).toHaveBeenLastCalledWith(CODE);
   });
 });
