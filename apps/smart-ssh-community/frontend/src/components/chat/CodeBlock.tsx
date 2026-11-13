@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { clipboardWriteText } from "../../api/api";
+import { Button } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 /** How long the check mark / error state stays before the copy icon returns. */
@@ -75,12 +76,12 @@ export function CodeBlock({
       >
         {children}
       </pre>
-      <button
-        type="button"
+      <Button
+        variant="bare"
         onClick={handleCopy}
         aria-label={label}
         title={label}
-        className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:text-fg focus-ring narrow:min-h-11 narrow:min-w-11 ${state === "failed" ? "text-danger-fg-soft" : ""}`}
+        className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:text-fg focus-ring-flush narrow:min-h-11 narrow:min-w-11 ${state === "failed" ? "text-danger-fg-soft" : ""}`}
       >
         <svg
           width="16"
@@ -104,7 +105,7 @@ export function CodeBlock({
             </>
           )}
         </svg>
-      </button>
+      </Button>
     </div>
   );
 }
