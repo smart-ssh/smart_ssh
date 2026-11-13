@@ -88,6 +88,13 @@ pub fn set_selected_speech_model(app: AppHandle, model: String) -> CommandResult
     write_selected_model(&app, parse_model(&model)?)
 }
 
+/// The models offered on this platform (id, engine, total size, source),
+/// so the UI does not hard-code them. Static data, no network.
+#[tauri::command]
+pub fn list_speech_models() -> Vec<speech::ModelInfo> {
+    SpeechModel::available_info()
+}
+
 /// Status of one model (local state only, no network).
 #[tauri::command]
 pub fn get_speech_model_status(app: AppHandle, model: String) -> CommandResult<serde_json::Value> {
@@ -159,6 +166,40 @@ mod tests {
     fn unknown_model_id_is_rejected() {
         assert!(parse_model("tiny").is_err());
         assert!(parse_model("base").is_ok());
+    }
+
+    #[test]
+    fn parakeet_is_listed_and_selectable_on_desktop_only() {
+        let ids: Vec<&str> = list_speech_models().iter().map(|m| m.id).collect();
+        if cfg!(target_os = "android") {
+            assert_eq!(ids, ["base", "small"]);
+            let err = parse_model("parakeet_v3").unwrap_err();
+            assert_eq!(err.code, Some("speech_model_unknown"));
+        } else {
+            assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+            assert_eq!(parse_model("parakeet_v3").unwrap(), SpeechModel::ParakeetV3);
+        }
+    }
+
+    /// A stored selection this platform does not offer falls back to the default.
+    #[test]
+    fn stored_unavailable_selection_falls_back_to_default() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        settings_store::update(handle, |c| {
+            c.set(SELECTED_MODEL_KEY, serde_json::json!("nonexistent"))
+        })
+        .unwrap();
+        assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
+        if cfg!(target_os = "android") {
+            settings_store::update(handle, |c| {
+                c.set(SELECTED_MODEL_KEY, serde_json::json!("parakeet_v3"))
+            })
+            .unwrap();
+            assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
+        }
+        settings_store::update(handle, |c| c.delete(SELECTED_MODEL_KEY)).unwrap();
     }
 
     #[test]

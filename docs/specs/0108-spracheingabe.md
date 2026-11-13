@@ -4,7 +4,7 @@ Status: umgesetzt (#416 Modellverwaltung, #417 Aufnahme und Erkennung,
 #418 Oberfläche)
 Zweck: Der Nutzer diktiert Text in das Eingabefeld des KI-Chats. Die
 Erkennung läuft vollständig auf dem eigenen Rechner mit einem lokalen
-Whisper-Modell; Audio verlässt den Rechner nie.
+Modell (Whisper oder Parakeet); Audio verlässt den Rechner nie.
 Bezüge: docs/netzwerkverbindungen.md (jede Verbindung ist dort gelistet),
 ADR 0086 (keine Inhalte in Standard-Logs).
 
@@ -12,25 +12,38 @@ ADR 0086 (keine Inhalte in Standard-Logs).
 
 **1.1** Spracheingabe gehört zur Community-Edition.
 
-**1.2** Die Erkennung läuft lokal mit Whisper-Modellen im GGML-Format
-(whisper.cpp). Es gibt keinen Cloud-Dienst für die Erkennung; Audio und
-erkannter Text werden nie an einen Server geschickt.
+**1.2** Die Erkennung läuft lokal, mit Whisper-Modellen im GGML-Format
+(whisper.cpp) oder mit dem Modell Parakeet TDT 0.6B v3 auf ONNX Runtime (nur
+CPU, fest in die App eingebunden; die Laufzeit lädt nichts nach). Es gibt
+keinen Cloud-Dienst für die Erkennung; Audio und erkannter Text werden nie
+an einen Server geschickt.
 
 **1.3** Die einzige Netzwerkverbindung dieser Funktion ist der Download des
 Modells (Abschnitt 3). Sie ist in docs/netzwerkverbindungen.md aufgeführt.
 
 ## 2. Modelle
 
-**2.1** Es gibt zwei mehrsprachige Modelle: `base` (rund 142 MiB, Vorgabe) und
-`small` (rund 466 MiB).
+**2.1** Es gibt drei mehrsprachige Modelle: `base` (rund 142 MiB, Vorgabe),
+`small` (rund 466 MiB) und `parakeet_v3` (Parakeet TDT 0.6B v3, int8, rund
+640 MiB; nur Desktop: macOS, Windows, Linux). Auf Android ist `parakeet_v3`
+nicht verfügbar: Es wird nicht aufgelistet, wird als unbekanntes Modell
+(`speech_model_unknown`) abgelehnt, und eine gespeicherte Auswahl davon
+fällt auf `base` zurück. Ein Befehl liefert die auf der Plattform
+verfügbaren Modelle mit Kennung, Engine (`whisper` oder `parakeet`),
+Gesamtgröße in Bytes sowie Host und Repository der Quelle; er löst keine
+Netzwerkanfrage aus.
+
+**2.1a** Ein Modell kann aus mehreren Dateien bestehen (Parakeet: Encoder,
+Decoder/Joint, Merkmals-Vorverarbeitung, Vokabular; Whisper: eine Datei).
+Es ist nur „bereit“, wenn jede Datei geprüft wurde.
 
 **2.2** Die Wahl des Modells ist eine Einstellung. Sie bleibt über Neustarts
 erhalten, die Vorgabe ist `base`.
 
 **2.3** Jedes Modell hat einen eigenen Zustand: nicht geladen, wird geladen
 (mit Fortschritt in Bytes), bereit, Fehler. Wählt der Nutzer ein Modell, das
-nicht geladen ist, ist dessen Zustand „nicht geladen“. Die Datei des anderen
-Modells bleibt, bis der Nutzer sie löscht.
+nicht geladen ist, ist dessen Zustand „nicht geladen“. Die Dateien der
+anderen Modelle bleiben, bis der Nutzer sie löscht.
 
 **2.4** Das Abfragen des Zustands und das Öffnen der Einstellungen lösen
 keine Netzwerkanfrage aus.
@@ -41,29 +54,35 @@ keine Netzwerkanfrage aus.
 (Zustimmungsdialog, Abschnitt 5.5). Es gibt keinen Download beim Start und
 keine Hintergrund-Aktualisierung.
 
-**3.2** Quelle ist je Modell eine feste URL auf einen unveränderlichen Stand
-des Repositories `ggerganov/whisper.cpp` auf huggingface.co (kein
-wandernder Branch). Je Modell ist eine SHA-256-Prüfsumme fest hinterlegt.
+**3.2** Quelle ist je Datei eines Modells eine feste URL auf einen
+unveränderlichen Stand eines Repositories auf huggingface.co (kein wandernder
+Branch): `ggerganov/whisper.cpp` für Whisper, `istupakov/parakeet-tdt-0.6b-v3-onnx`
+für Parakeet. Je Datei sind Größe und SHA-256-Prüfsumme fest hinterlegt.
 
-**3.3** Der Download wird in eine temporäre Datei im Datenverzeichnis der App
-geschrieben (Unterordner `speech-models`). Erst nach erfolgreicher Prüfung
-von Größe und SHA-256 wird sie atomar unter dem endgültigen Namen abgelegt.
-Eine Datei, deren Prüfsumme nicht stimmt, wird gelöscht, als Fehler gemeldet
-und nie geladen.
+**3.3** Der Download wird in temporäre Dateien im Datenverzeichnis der App
+geschrieben (Unterordner `speech-models`; ein Modell aus mehreren Dateien
+bekommt darin einen eigenen Ordner). Erst nachdem jede Datei von Größe und
+SHA-256 her geprüft wurde, werden die Dateien unter ihren endgültigen Namen
+abgelegt; keine Datei erscheint vorher unter ihrem endgültigen Namen. Stimmt
+Größe oder Prüfsumme einer Datei nicht, bleibt nichts vom Modell übrig, der
+Fehler `speech_model_hash_mismatch` wird gemeldet und nichts davon wird
+geladen.
 
 **3.4** Während des Downloads erhält die Oberfläche laufend Fortschritt
-(geladene Bytes von insgesamt). Ein zweiter Download desselben Modells
+(geladene Bytes von insgesamt, bei mehreren Dateien die Summe über alle). Ein zweiter Download desselben Modells
 parallel wird abgelehnt.
 
 **3.5** Der Nutzer kann den Download abbrechen. Dann stoppt die Übertragung,
-die temporäre Datei wird entfernt und der Zustand ist „nicht geladen“. Auch
-ein fehlgeschlagener Download hinterlässt kein Teilmodell.
+alle temporären und bereits fertig geladenen Dateien dieses Modells werden
+entfernt und der Zustand ist „nicht geladen“. Auch ein fehlgeschlagener
+Download hinterlässt kein Teilmodell.
 
 **3.6** Fehler tragen einen übersetzbaren Schlüssel: Netzwerk, HTTP-Status,
 Prüfsumme/Größe, Dateisystem. Der Fehlerzustand bleibt, bis der Nutzer
 erneut lädt oder das Modell löscht.
 
-**3.7** Der Nutzer kann ein Modell löschen. Die Datei verschwindet, der
+**3.7** Der Nutzer kann ein Modell löschen. Alle Dateien des Modells
+verschwinden (Dateien anderer Modelle bleiben), der
 Zustand ist „nicht geladen“. Während eines laufenden Downloads ist Löschen
 nicht möglich (erst abbrechen).
 
@@ -92,7 +111,10 @@ Abbrechen entfernt allen vorläufigen Text und stellt den Entwurf wie vor dem
 Start wieder her. Live-Text gibt es immer; es gibt keine Einstellung dafür.
 
 **5.3** Die Sprache wird standardmäßig automatisch erkannt. Eine Einstellung
-erlaubt eine feste Sprache.
+erlaubt eine feste Sprache. Parakeet erkennt die Sprache immer selbst: Ist
+`parakeet_v3` gewählt, wird eine feste Sprache für die Erkennung ignoriert
+(weder verändert noch abgelehnt); sie gilt wieder, sobald ein Whisper-Modell
+gewählt ist.
 
 **5.4** Der Knopf ist standardmäßig sichtbar. Spracheingabe lässt sich in den
 Einstellungen ausschalten; dann ist der Knopf ausgeblendet.
@@ -198,9 +220,18 @@ Logs nennen höchstens Dauer und Ergebnis.
   hinterlegten Wert verifiziert wurde.
 - Audio und erkannter Text verlassen den Rechner nicht.
 
+## 6a. Lizenzhinweis
+
+Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0
+(https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3); verwendet wird die
+ONNX-Umwandlung `istupakov/parakeet-tdt-0.6b-v3-onnx` (int8). Der Hinweis
+steht in den mitgelieferten Drittlizenz-Hinweisen der App.
+
 ## 7. Grenzen
 
-- Nur die Modelle `base` und `small`; eigene Modelldateien sind nicht
-  vorgesehen.
+- Nur die Modelle `base`, `small` und (nur Desktop) `parakeet_v3`; eigene
+  Modelldateien sind nicht vorgesehen.
+- Parakeet läuft nur auf der CPU; eine Aufnahme wird für die Erkennung in
+  Stücke von höchstens rund 30 Sekunden geteilt.
 - Kein Wiederaufnehmen eines abgebrochenen Downloads: Ein neuer Download
   beginnt von vorn.

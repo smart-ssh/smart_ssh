@@ -160,3 +160,4 @@
 | 0154 | Android code of the core ships as a Tauri plugin crate | Accepted | [0154-android-host-plugin-crate.md](0154-android-host-plugin-crate.md) |
 | 0155 | Entitlement tier ids are open; editions register their own | Accepted | [0155-open-entitlement-tier-ids.md](0155-open-entitlement-tier-ids.md) |
 | 0156 | Interactive terminal holds the wake lock while active | Accepted | [0156-terminal-wake-lock-idle-timeout.md](0156-terminal-wake-lock-idle-timeout.md) |
+| 0157 | Parakeet TDT 0.6B v3 on ONNX Runtime | Accepted | [0157-parakeet-on-onnx-runtime.md](0157-parakeet-on-onnx-runtime.md) |
