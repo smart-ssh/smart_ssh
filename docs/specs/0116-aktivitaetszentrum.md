@@ -26,7 +26,7 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 
 - Ein später geöffnetes Fenster oder eine neu aufgebaute Oberfläche zeigt die bereits laufenden Aktivitäten sofort.
 - Wer wissen will, ob eine Aktivität einer Art und eines Schlüssels läuft, findet sie im gemeinsamen Zustand; ein erneut geöffneter Dialog zeigt den laufenden Zustand, statt eine zweite Arbeit zu starten.
-- Aktivitäten werden nicht gespeichert: nach einem Neustart der App sind sie weg.
+- Laufende Aktivitäten werden nicht gespeichert: nach einem Neustart der App sind sie weg. Ausnahme: wiederaufnehmbare Aktivitäten (Abschnitt 6), die beim Beenden liefen.
 
 ## 4. Aktivitäten starten
 
@@ -35,6 +35,19 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 - Fortschrittsmeldungen erreichen die Oberfläche höchstens viermal pro Sekunde je Aktivität; Zustandswechsel (Beginn, neuer Statustext, Ende) kommen immer an.
 - Titel, Statustexte und Fehlermeldungen enthalten nie Zugangsdaten oder URLs mit Token.
 
-## 5. Texte
+## 5. Beenden mit laufenden Aktivitäten
+
+- Beenden der App (Menü, Cmd+Q, Schließen des letzten Fensters), während mindestens eine Aktivität läuft und abbrechbar oder wiederaufnehmbar ist, fragt zuerst nach: ein Dialog nennt die laufenden Aktivitäten beim Namen und bietet „Trotzdem beenden“ und „Weiterlaufen lassen“.
+- „Weiterlaufen lassen“ lässt die App offen und die Aktivitäten laufen. „Trotzdem beenden“ beendet die App.
+- Läuft keine solche Aktivität, erscheint kein Dialog. Ein Beenden, das die App selbst auslöst (etwa der Neustart nach einem Update), wird nicht gebremst.
+
+## 6. Wiederaufnehmbare Aktivitäten
+
+- Eine Aktivität kann sich als wiederaufnehmbar anmelden (Art und Schlüssel). Beim bestätigten Beenden werden die laufenden wiederaufnehmbaren Aktivitäten gespeichert: Art, Schlüssel, Titel, erledigte und gesamte Menge – sonst nichts, keine URLs, keine Zugangsdaten.
+- Beim nächsten Start erscheinen gespeicherte Einträge, für deren Art ein Handler angemeldet ist (Rust-Seite oder Erweiterung), im Aktivitätszentrum als „Unterbrochen“ mit „Fortsetzen“ und „Verwerfen“. Einträge ohne Handler werden still entfernt.
+- „Fortsetzen“ ruft den Handler, der eine neue Aktivität startet; der Eintrag verschwindet. Scheitert das Fortsetzen, bleibt der Eintrag mit einer Fehlermeldung stehen. „Verwerfen“ ruft den optionalen Verwerfen-Handler (etwa Teildateien löschen) und entfernt den Eintrag.
+- Sprachmodelle sind wiederaufnehmbar (Spec 0108, 3.9).
+
+## 7. Texte
 
 Alle Texte (`activities.*`) gibt es in jeder Sprache.
