@@ -202,27 +202,36 @@ pub fn pointer_file_path(os: PointerOs, exe: &Path, appimage: Option<&Path>) -> 
 
 /// The path from a pointer file's content: first non-empty line (trimmed),
 /// `~` / `~/…` expanded with `home`, a relative path taken relative to the
-/// pointer file's folder. `None` without a non-empty line (or `~` without a
-/// known home).
+/// pointer file's folder. `Ok(None)` without a non-empty line (default
+/// directory); `Err(HomeUnknown)` for `~` / `~/…` without a known home (an
+/// override that cannot be resolved must never fall back to the default).
 pub fn pointer_file_target(
     pointer_file: &Path,
     content: &str,
     home: Option<&Path>,
-) -> Option<PathBuf> {
-    let line = content.lines().map(str::trim).find(|l| !l.is_empty())?;
+) -> Result<Option<PathBuf>, HomeUnknown> {
+    let Some(line) = content.lines().map(str::trim).find(|l| !l.is_empty()) else {
+        return Ok(None);
+    };
     let path = if line == "~" {
-        home?.to_path_buf()
+        home.ok_or(HomeUnknown)?.to_path_buf()
     } else if let Some(rest) = line.strip_prefix("~/").or_else(|| line.strip_prefix("~\\")) {
-        home?.join(rest)
+        home.ok_or(HomeUnknown)?.join(rest)
     } else {
         PathBuf::from(line)
     };
     if path.is_absolute() {
-        Some(path)
+        Ok(Some(path))
     } else {
-        Some(pointer_file.parent().unwrap_or(Path::new("")).join(path))
+        Ok(Some(
+            pointer_file.parent().unwrap_or(Path::new("")).join(path),
+        ))
     }
 }
+
+/// A pointer file names `~` / `~/…` but the home directory is unknown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HomeUnknown;
 
 /// Precedence flag > env > pointer file as a pure function. Empty values
 /// count as not set. `pointer` is `(pointer file, content)` if the file exists.
@@ -231,15 +240,26 @@ pub fn select_override(
     env: Option<&str>,
     pointer: Option<(&Path, &str)>,
     home: Option<&Path>,
-) -> Option<(PathBuf, DataDirSource)> {
+) -> Result<Option<(PathBuf, DataDirSource)>, DataDirError> {
     if let Some(p) = data_dir_override_from(flag) {
-        return Some((p, DataDirSource::Flag));
+        return Ok(Some((p, DataDirSource::Flag)));
     }
     if let Some(p) = data_dir_override_from(env) {
-        return Some((p, DataDirSource::Env));
+        return Ok(Some((p, DataDirSource::Env)));
     }
-    let (file, content) = pointer?;
-    pointer_file_target(file, content, home).map(|p| (p, DataDirSource::PointerFile))
+    let Some((file, content)) = pointer else {
+        return Ok(None);
+    };
+    match pointer_file_target(file, content, home) {
+        Ok(target) => Ok(target.map(|p| (p, DataDirSource::PointerFile))),
+        Err(HomeUnknown) => Err(DataDirError {
+            path: file.to_path_buf(),
+            source: DataDirSource::PointerFile,
+            pointer_file: Some(file.to_path_buf()),
+            reason: "the pointer file starts with \"~\" but the home directory is unknown"
+                .to_owned(),
+        }),
+    }
 }
 
 static RESOLVED: std::sync::OnceLock<ResolvedDataDir> = std::sync::OnceLock::new();
@@ -276,7 +296,7 @@ pub fn resolve_with(
         }
     }
     let pointer = pointer_file.zip(content.as_deref());
-    let Some((dir, source)) = select_override(flag, env, pointer, home) else {
+    let Some((dir, source)) = select_override(flag, env, pointer, home)? else {
         return Ok(ResolvedDataDir {
             dir: platform_default_data_dir(),
             source: DataDirSource::Default,
@@ -806,7 +826,7 @@ mod tests {
     fn test_precedence_flag_over_env_over_pointer_over_default_with_empty_values() {
         let file = Path::new("/app/Test.data-dir");
         let ptr = Some((file, "/p\n"));
-        let sel = |f, e, p| select_override(f, e, p, None);
+        let sel = |f, e, p| select_override(f, e, p, None).unwrap();
         assert_eq!(
             sel(Some("/f"), Some("/e"), ptr),
             Some((PathBuf::from("/f"), DataDirSource::Flag))
@@ -827,7 +847,7 @@ mod tests {
     fn test_pointer_file_target_first_nonempty_line_tilde_and_relative() {
         let file = Path::new("/apps/Test.data-dir");
         let home = Path::new("/home/u");
-        let t = |c| pointer_file_target(file, c, Some(home));
+        let t = |c| pointer_file_target(file, c, Some(home)).unwrap();
         assert_eq!(t("\n  /abs/dir  \nsecond"), Some(PathBuf::from("/abs/dir")));
         assert_eq!(
             t("~/SmartSSH-Test"),
@@ -837,7 +857,29 @@ mod tests {
         assert_eq!(t("data"), Some(PathBuf::from("/apps/data")));
         assert_eq!(t("../data"), Some(PathBuf::from("/apps/../data")));
         assert_eq!(t(" \n"), None);
-        assert_eq!(pointer_file_target(file, "~/x", None), None);
+        assert_eq!(pointer_file_target(file, "~/x", None), Err(HomeUnknown));
+        assert_eq!(pointer_file_target(file, " \n", None), Ok(None));
+    }
+
+    #[test]
+    fn test_resolve_with_pointer_tilde_without_home_is_error_not_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Test.data-dir");
+        for content in ["~", "~/Foo", "\n ~\\Foo\n"] {
+            std::fs::write(&file, content).unwrap();
+            let err = resolve_with(None, None, Some(&file), None).unwrap_err();
+            assert_eq!(err.source, DataDirSource::PointerFile);
+            assert_eq!(err.pointer_file.as_deref(), Some(file.as_path()));
+            assert_eq!(err.path, file);
+            assert!(err.reason.contains("home directory is unknown"));
+            // With a known home it resolves as before.
+            let home = tempfile::tempdir().unwrap();
+            let r = resolve_with(None, None, Some(&file), Some(home.path())).unwrap();
+            assert_eq!(r.source, DataDirSource::PointerFile);
+        }
+        std::fs::write(&file, " \n").unwrap();
+        let r = resolve_with(None, None, Some(&file), None).unwrap();
+        assert_eq!(r.source, DataDirSource::Default);
     }
 
     #[test]
