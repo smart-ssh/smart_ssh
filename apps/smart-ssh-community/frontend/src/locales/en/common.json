@@ -1572,6 +1572,8 @@
     "succeeded": "Done",
     "cancelled": "Cancelled",
     "failed": "Failed",
-    "inProgress": "In progress"
+    "inProgress": "In progress",
+    "verifying": "Verifying",
+    "speechModelTitle": "Speech model {{name}}"
   }
 }

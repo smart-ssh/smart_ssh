@@ -1572,6 +1572,8 @@
     "succeeded": "Ολοκληρώθηκε",
     "cancelled": "Ακυρώθηκε",
     "failed": "Απέτυχε",
-    "inProgress": "Σε εξέλιξη"
+    "inProgress": "Σε εξέλιξη",
+    "verifying": "Επαλήθευση",
+    "speechModelTitle": "Μοντέλο ομιλίας {{name}}"
   }
 }

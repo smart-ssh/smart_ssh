@@ -1580,6 +1580,8 @@
     "succeeded": "Gata",
     "cancelled": "Anulat",
     "failed": "Eșuat",
-    "inProgress": "În curs"
+    "inProgress": "În curs",
+    "verifying": "Se verifică",
+    "speechModelTitle": "Model vocal {{name}}"
   }
 }

@@ -1572,6 +1572,8 @@
     "succeeded": "Klaar",
     "cancelled": "Geannuleerd",
     "failed": "Mislukt",
-    "inProgress": "Bezig"
+    "inProgress": "Bezig",
+    "verifying": "Controleren",
+    "speechModelTitle": "Spraakmodel {{name}}"
   }
 }

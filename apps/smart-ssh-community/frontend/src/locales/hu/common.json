@@ -1572,6 +1572,8 @@
     "succeeded": "Kész",
     "cancelled": "Megszakítva",
     "failed": "Sikertelen",
-    "inProgress": "Folyamatban"
+    "inProgress": "Folyamatban",
+    "verifying": "Ellenőrzés",
+    "speechModelTitle": "Beszédmodell: {{name}}"
   }
 }

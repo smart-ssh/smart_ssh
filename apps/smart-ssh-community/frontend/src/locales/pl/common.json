@@ -1588,6 +1588,8 @@
     "succeeded": "Gotowe",
     "cancelled": "Anulowano",
     "failed": "Niepowodzenie",
-    "inProgress": "W toku"
+    "inProgress": "W toku",
+    "verifying": "Weryfikacja",
+    "speechModelTitle": "Model mowy {{name}}"
   }
 }

@@ -1564,6 +1564,8 @@
     "succeeded": "Selesai",
     "cancelled": "Dibatalkan",
     "failed": "Gagal",
-    "inProgress": "Sedang berjalan"
+    "inProgress": "Sedang berjalan",
+    "verifying": "Memverifikasi",
+    "speechModelTitle": "Model ucapan {{name}}"
   }
 }

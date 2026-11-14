@@ -1572,6 +1572,8 @@
     "succeeded": "Fertig",
     "cancelled": "Abgebrochen",
     "failed": "Fehlgeschlagen",
-    "inProgress": "In Arbeit"
+    "inProgress": "In Arbeit",
+    "verifying": "Wird überprüft",
+    "speechModelTitle": "Sprachmodell {{name}}"
   }
 }

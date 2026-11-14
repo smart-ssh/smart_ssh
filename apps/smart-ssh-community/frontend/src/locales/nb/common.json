@@ -1572,6 +1572,8 @@
     "succeeded": "Ferdig",
     "cancelled": "Avbrutt",
     "failed": "Mislyktes",
-    "inProgress": "Pågår"
+    "inProgress": "Pågår",
+    "verifying": "Verifiserer",
+    "speechModelTitle": "Talemodell {{name}}"
   }
 }

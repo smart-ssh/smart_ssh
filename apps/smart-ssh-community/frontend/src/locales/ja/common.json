@@ -1564,6 +1564,8 @@
     "succeeded": "完了",
     "cancelled": "キャンセル済み",
     "failed": "失敗",
-    "inProgress": "処理中"
+    "inProgress": "処理中",
+    "verifying": "検証中",
+    "speechModelTitle": "音声モデル {{name}}"
   }
 }

@@ -1580,6 +1580,8 @@
     "succeeded": "Hecho",
     "cancelled": "Cancelado",
     "failed": "Falló",
-    "inProgress": "En curso"
+    "inProgress": "En curso",
+    "verifying": "Verificando",
+    "speechModelTitle": "Modelo de voz {{name}}"
   }
 }

@@ -121,6 +121,12 @@ export function useVoiceInput(handlers: VoiceHandlers) {
     try {
       const model = await getSelectedSpeechModel();
       const status = await getSpeechModelStatus(model);
+      if (status.state === "downloading") {
+        // A download of this model already runs (e.g. the dialog was closed
+        // meanwhile, issue #1326): show it instead of offering it again.
+        updateConsent({ model, progress: { done: status.done, total: status.total } });
+        return;
+      }
       if (status.state !== "ready") {
         updateConsent({ model, progress: null });
         return;
@@ -150,6 +156,10 @@ export function useVoiceInput(handlers: VoiceHandlers) {
     updateConsent(null);
     if (current.progress) void cancelSpeechModelDownload(current.model).catch(() => {});
   }, []);
+
+  /** Closes the dialog (X / Esc) without stopping a running download: it
+   * keeps running as an activity (issue #1326). */
+  const closeConsent = useCallback(() => updateConsent(null), []);
 
   // Download progress and result.
   useEffect(() => {
@@ -251,5 +261,6 @@ export function useVoiceInput(handlers: VoiceHandlers) {
     toggle,
     confirmDownload,
     dismissConsent,
+    closeConsent,
   };
 }
