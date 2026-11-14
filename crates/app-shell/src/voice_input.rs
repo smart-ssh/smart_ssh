@@ -9,7 +9,7 @@ use tauri_plugin_store::StoreExt;
 
 use app_logic::error::{CommandError, CommandResult};
 use speech::{
-    CpalSource, LiveConfig, ModelStatus, RecordError, Recorder, RecorderState, WhisperTranscriber,
+    CpalSource, LiveConfig, ModelStatus, RecordError, Recorder, RecorderState, SpeechTranscriber,
     MAX_RECORDING,
 };
 
@@ -38,7 +38,7 @@ fn recorder<R: Runtime>(app: &AppHandle<R>) -> Recorder {
             let partial_app = app.clone();
             Recorder::with_live(
                 Arc::new(CpalSource),
-                Arc::new(WhisperTranscriber),
+                Arc::new(SpeechTranscriber),
                 MAX_RECORDING,
                 Arc::new(move |s: RecorderState| {
                     let _ = emit_app.emit(STATE_EVENT, serde_json::json!({ "state": s }));
@@ -75,7 +75,8 @@ pub fn get_speech_language(app: AppHandle) -> CommandResult<String> {
     Ok(read_language(&app).unwrap_or_else(|| "auto".to_owned()))
 }
 
-/// `auto` or an ISO language code Whisper supports.
+/// `auto` or an ISO language code Whisper supports. Parakeet ignores the
+/// setting (it detects the language itself); it is kept for Whisper models.
 #[tauri::command]
 pub fn set_speech_language(app: AppHandle, language: String) -> CommandResult<()> {
     let parsed = speech::parse_language(&language).map_err(|_| {

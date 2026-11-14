@@ -14,8 +14,14 @@ fn sha_hex(data: &[u8]) -> String {
 /// Local HTTP fixture. `stall`: send only half of the body, then hang.
 /// Returns the URL and a request counter.
 async fn serve(body: Vec<u8>, status: u16, stall: bool) -> (String, Arc<AtomicUsize>) {
+    let (base, hits) = serve_routes(vec![("/ggml-base.bin".into(), body, status, stall)]).await;
+    (format!("{base}/ggml-base.bin"), hits)
+}
+
+/// Like `serve`, with one body per request path. Returns the base URL.
+async fn serve_routes(routes: Vec<(String, Vec<u8>, u16, bool)>) -> (String, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/ggml-base.bin", listener.local_addr().unwrap());
+    let url = format!("http://{}", listener.local_addr().unwrap());
     let hits = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&hits);
     tokio::spawn(async move {
@@ -24,10 +30,21 @@ async fn serve(body: Vec<u8>, status: u16, stall: bool) -> (String, Arc<AtomicUs
                 return;
             };
             counter.fetch_add(1, Ordering::SeqCst);
-            let body = body.clone();
+            let routes = routes.clone();
             tokio::spawn(async move {
                 let mut buf = [0u8; 2048];
-                let _ = sock.read(&mut buf).await;
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..n]).into_owned();
+                let path = request.split_whitespace().nth(1).unwrap_or("").to_owned();
+                let Some((_, body, status, stall)) = routes.into_iter().find(|r| r.0 == path)
+                else {
+                    let _ = sock
+                        .write_all(
+                            b"HTTP/1.1 404 X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .await;
+                    return;
+                };
                 let head = format!(
                     "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
@@ -45,11 +62,22 @@ async fn serve(body: Vec<u8>, status: u16, stall: bool) -> (String, Arc<AtomicUs
     (url, hits)
 }
 
-fn manager(dir: &Path, url: String, body: &[u8], hash: String) -> ModelManager {
-    let src = ModelSource {
+fn part(dir: &Path) -> PathBuf {
+    dir.join("ggml-base.bin.part")
+}
+
+fn file(name: &str, url: String, body: &[u8], hash: String) -> ModelFile {
+    ModelFile {
+        name: name.to_owned(),
         url,
         size: body.len() as u64,
         sha256: hash,
+    }
+}
+
+fn manager(dir: &Path, url: String, body: &[u8], hash: String) -> ModelManager {
+    let src = ModelSource {
+        files: vec![file("ggml-base.bin", url, body, hash)],
     };
     ModelManager::with_sources(dir.to_path_buf(), HashMap::from([(SpeechModel::Base, src)]))
 }
@@ -78,12 +106,31 @@ async fn wait_final(seen: &Seen) -> ModelStatus {
 fn constants_are_pinned() {
     for m in SpeechModel::ALL {
         let s = m.source();
-        assert!(s
-            .url
-            .starts_with("https://huggingface.co/ggerganov/whisper.cpp/resolve/"));
-        assert!(!s.url.contains("/resolve/main/"));
-        assert!(s.url.contains(REVISION));
-        assert_eq!(s.sha256.len(), 64);
+        assert!(!s.files.is_empty());
+        for f in &s.files {
+            assert!(!f.url.contains("/resolve/main/"));
+            assert_eq!(f.sha256.len(), 64);
+            assert!(f.url.ends_with(&f.name));
+        }
+        let (repo, rev) = match m.engine() {
+            Engine::Whisper => ("ggerganov/whisper.cpp", REVISION),
+            Engine::Parakeet => ("istupakov/parakeet-tdt-0.6b-v3-onnx", PARAKEET_REVISION),
+        };
+        for f in &s.files {
+            assert!(f
+                .url
+                .starts_with(&format!("https://huggingface.co/{repo}/resolve/{rev}/")));
+        }
+    }
+    assert_eq!(SpeechModel::ParakeetV3.source().files.len(), 4);
+    assert_eq!(SpeechModel::ParakeetV3.source().total_size(), 670_619_706);
+    assert_eq!(
+        SpeechModel::from_id("parakeet_v3"),
+        Some(SpeechModel::ParakeetV3)
+    );
+    assert_eq!(SpeechModel::ParakeetV3.id(), "parakeet_v3");
+    for m in SpeechModel::ALL {
+        assert_eq!(SpeechModel::from_id(m.id()), Some(m));
     }
     assert_eq!(SpeechModel::DEFAULT, SpeechModel::Base);
     assert_eq!(SpeechModel::from_id("small"), Some(SpeechModel::Small));
@@ -120,7 +167,7 @@ async fn download_verifies_and_becomes_ready() {
         std::fs::read(m.model_path(SpeechModel::Base)).unwrap(),
         body
     );
-    assert!(!part_path(dir.path(), SpeechModel::Base).exists());
+    assert!(!part(dir.path()).exists());
     // The other model is unaffected.
     assert_eq!(m.status(SpeechModel::Small), ModelStatus::NotDownloaded);
 }
@@ -140,7 +187,7 @@ async fn hash_mismatch_deletes_file_and_reports_error() {
         }
     );
     assert!(!m.model_path(SpeechModel::Base).exists());
-    assert!(!part_path(dir.path(), SpeechModel::Base).exists());
+    assert!(!part(dir.path()).exists());
     assert_eq!(
         m.status(SpeechModel::Base),
         ModelStatus::Error {
@@ -184,7 +231,7 @@ async fn cancel_stops_transfer_and_removes_temp_file() {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert!(part_path(dir.path(), SpeechModel::Base).exists());
+    assert!(part(dir.path()).exists());
     assert_eq!(
         m.start_download(SpeechModel::Base, recorder().0),
         Err(ModelManagerError::AlreadyDownloading)
@@ -195,7 +242,7 @@ async fn cancel_stops_transfer_and_removes_temp_file() {
     );
     assert!(m.cancel_download(SpeechModel::Base));
     assert_eq!(wait_final(&seen).await, ModelStatus::NotDownloaded);
-    assert!(!part_path(dir.path(), SpeechModel::Base).exists());
+    assert!(!part(dir.path()).exists());
     assert!(!m.model_path(SpeechModel::Base).exists());
     assert_eq!(m.status(SpeechModel::Base), ModelStatus::NotDownloaded);
 }
@@ -205,11 +252,9 @@ async fn oversized_body_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let body = vec![3u8; 5_000];
     let (url, _) = serve(body.clone(), 200, false).await;
-    let src = ModelSource {
-        url,
-        size: 1_000,
-        sha256: sha_hex(&body),
-    };
+    let mut f = file("ggml-base.bin", url, &body, sha_hex(&body));
+    f.size = 1_000;
+    let src = ModelSource { files: vec![f] };
     let m = ModelManager::with_sources(
         dir.path().to_path_buf(),
         HashMap::from([(SpeechModel::Base, src)]),
@@ -236,4 +281,214 @@ async fn delete_removes_file() {
     assert!(!m.model_path(SpeechModel::Base).exists());
     // Deleting again is fine.
     m.delete(SpeechModel::Base).unwrap();
+}
+
+/// Parakeet-shaped fixture: several files in the model's own directory.
+fn parakeet_manager(
+    dir: &Path,
+    base: &str,
+    bodies: &[(&str, Vec<u8>)],
+    bad: Option<&str>,
+) -> ModelManager {
+    let files = bodies
+        .iter()
+        .map(|(name, body)| {
+            let hash = if Some(*name) == bad {
+                sha_hex(b"other")
+            } else {
+                sha_hex(body)
+            };
+            file(name, format!("{base}/{name}"), body, hash)
+        })
+        .collect();
+    ModelManager::with_sources(
+        dir.to_path_buf(),
+        HashMap::from([(SpeechModel::ParakeetV3, ModelSource { files })]),
+    )
+}
+
+fn bodies() -> Vec<(&'static str, Vec<u8>)> {
+    vec![
+        ("a.onnx", vec![1u8; 40_000]),
+        ("b.onnx", vec![2u8; 30_000]),
+        ("vocab.txt", vec![3u8; 10_000]),
+    ]
+}
+
+async fn serve_bodies(bodies: &[(&str, Vec<u8>)], stall_on: Option<&str>) -> String {
+    let routes = bodies
+        .iter()
+        .map(|(n, b)| (format!("/{n}"), b.clone(), 200, Some(*n) == stall_on))
+        .collect();
+    serve_routes(routes).await.0
+}
+
+fn leftovers(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir.join(SpeechModel::ParakeetV3.file_name())) {
+        out.extend(
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned()),
+        );
+    }
+    out
+}
+
+#[tokio::test]
+async fn multi_file_download_reports_combined_progress_and_becomes_ready() {
+    let dir = tempfile::tempdir().unwrap();
+    let bodies = bodies();
+    let base = serve_bodies(&bodies, None).await;
+    let m = parakeet_manager(dir.path(), &base, &bodies, None);
+    let total = 80_000u64;
+    assert_eq!(
+        m.status(SpeechModel::ParakeetV3),
+        ModelStatus::NotDownloaded
+    );
+    let (cb, seen) = recorder();
+    m.start_download(SpeechModel::ParakeetV3, cb).unwrap();
+    assert_eq!(wait_final(&seen).await, ModelStatus::Ready);
+    let seen = seen.lock().unwrap();
+    let dones: Vec<u64> = seen
+        .iter()
+        .filter_map(|s| match s {
+            ModelStatus::Downloading { done, total: t } => {
+                assert_eq!(*t, total);
+                Some(*done)
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(
+        dones.windows(2).all(|w| w[0] <= w[1]),
+        "monotonic: {dones:?}"
+    );
+    assert_eq!(dones.last(), Some(&total));
+    drop(seen);
+    assert_eq!(m.status(SpeechModel::ParakeetV3), ModelStatus::Ready);
+    assert!(m.model_path(SpeechModel::ParakeetV3).is_dir());
+    let mut names = leftovers(dir.path());
+    names.sort();
+    assert_eq!(names, ["a.onnx", "b.onnx", "vocab.txt"]);
+}
+
+#[tokio::test]
+async fn hash_mismatch_in_any_file_leaves_no_file_of_the_model() {
+    for bad in ["a.onnx", "b.onnx", "vocab.txt"] {
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = bodies();
+        let base = serve_bodies(&bodies, None).await;
+        let m = parakeet_manager(dir.path(), &base, &bodies, Some(bad));
+        let (cb, seen) = recorder();
+        m.start_download(SpeechModel::ParakeetV3, cb).unwrap();
+        assert_eq!(
+            wait_final(&seen).await,
+            ModelStatus::Error {
+                key: "speech_model_hash_mismatch"
+            },
+            "{bad}"
+        );
+        assert_eq!(leftovers(dir.path()), Vec::<String>::new(), "{bad}");
+        m.delete(SpeechModel::ParakeetV3).unwrap();
+        assert_eq!(
+            m.status(SpeechModel::ParakeetV3),
+            ModelStatus::NotDownloaded
+        );
+    }
+}
+
+#[tokio::test]
+async fn model_with_a_missing_file_is_not_ready() {
+    let dir = tempfile::tempdir().unwrap();
+    let bodies = bodies();
+    let base = serve_bodies(&bodies, None).await;
+    let m = parakeet_manager(dir.path(), &base, &bodies, None);
+    let model_dir = m.model_path(SpeechModel::ParakeetV3);
+    std::fs::create_dir_all(&model_dir).unwrap();
+    std::fs::write(model_dir.join("a.onnx"), b"x").unwrap();
+    std::fs::write(model_dir.join("b.onnx"), b"x").unwrap();
+    assert_eq!(
+        m.status(SpeechModel::ParakeetV3),
+        ModelStatus::NotDownloaded
+    );
+    std::fs::write(model_dir.join("vocab.txt"), b"x").unwrap();
+    assert_eq!(m.status(SpeechModel::ParakeetV3), ModelStatus::Ready);
+}
+
+#[tokio::test]
+async fn cancel_during_a_later_file_removes_everything_of_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let bodies = bodies();
+    let base = serve_bodies(&bodies, Some("b.onnx")).await;
+    let m = parakeet_manager(dir.path(), &base, &bodies, None);
+    let (cb, seen) = recorder();
+    m.start_download(SpeechModel::ParakeetV3, cb).unwrap();
+    // The first file is done (40 000 bytes) and the second one is flowing.
+    for _ in 0..1000 {
+        if matches!(m.status(SpeechModel::ParakeetV3), ModelStatus::Downloading { done, .. } if done > 40_000)
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(leftovers(dir.path()).contains(&"a.onnx.part".to_owned()));
+    assert!(m.cancel_download(SpeechModel::ParakeetV3));
+    assert_eq!(wait_final(&seen).await, ModelStatus::NotDownloaded);
+    assert_eq!(leftovers(dir.path()), Vec::<String>::new());
+    assert_eq!(
+        m.status(SpeechModel::ParakeetV3),
+        ModelStatus::NotDownloaded
+    );
+}
+
+#[tokio::test]
+async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let bodies = bodies();
+    let base = serve_bodies(&bodies, None).await;
+    let m = parakeet_manager(dir.path(), &base, &bodies, None);
+    let (cb, seen) = recorder();
+    m.start_download(SpeechModel::ParakeetV3, cb).unwrap();
+    assert_eq!(wait_final(&seen).await, ModelStatus::Ready);
+    std::fs::write(dir.path().join("ggml-base.bin"), b"whisper").unwrap();
+    m.delete(SpeechModel::ParakeetV3).unwrap();
+    assert!(!m.model_path(SpeechModel::ParakeetV3).exists());
+    assert_eq!(
+        m.status(SpeechModel::ParakeetV3),
+        ModelStatus::NotDownloaded
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("ggml-base.bin")).unwrap(),
+        b"whisper"
+    );
+}
+
+#[test]
+fn availability_matches_the_platform() {
+    let ids: Vec<&str> = SpeechModel::available().iter().map(|m| m.id()).collect();
+    if cfg!(target_os = "android") {
+        assert_eq!(ids, ["base", "small"]);
+        assert_eq!(SpeechModel::from_id("parakeet_v3"), None);
+    } else {
+        assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+    }
+}
+
+#[test]
+fn model_info_lists_engine_size_and_source() {
+    let infos = SpeechModel::available_info();
+    let base = &infos[0];
+    assert_eq!(base.id, "base");
+    assert_eq!(base.engine, Engine::Whisper);
+    assert_eq!(base.total_size, 147_951_465);
+    assert_eq!(base.source_host, "huggingface.co");
+    assert_eq!(base.source_repo, "ggerganov/whisper.cpp");
+    let json = serde_json::to_value(base).unwrap();
+    assert_eq!(json["engine"], "whisper");
+    assert_eq!(json["total_size"], 147_951_465);
+    if let Some(p) = infos.iter().find(|i| i.id == "parakeet_v3") {
+        assert_eq!(p.engine, Engine::Parakeet);
+        assert_eq!(p.source_repo, "istupakov/parakeet-tdt-0.6b-v3-onnx");
+        assert_eq!(p.total_size, 670_619_706);
+    }
 }

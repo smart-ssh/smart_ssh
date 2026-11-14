@@ -22,8 +22,14 @@ whisper-rs = "0.16.0"
 cpal = "0.18.2"
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "net", "time"] }
+
+# Parakeet runs on ONNX Runtime, statically linked from the prebuilt binaries
+# `ort-sys` fetches at build time (never at run time). Not built for Android.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "api-22", "download-binaries", "tls-rustls"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tls-config = { workspace = true }
