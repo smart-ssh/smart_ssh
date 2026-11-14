@@ -102,6 +102,7 @@
       "speechModels": "Speech models",
       "sessions": "Sessions",
       "sessionsInDatabase": "stored in the database",
+      "keychainService": "Keychain service",
       "copy": "Copy",
       "copied": "Path copied",
       "copyFailed": "Copying failed:",

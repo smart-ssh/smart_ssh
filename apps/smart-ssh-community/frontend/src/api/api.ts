@@ -528,6 +528,9 @@ export const getKeychainStatus = () => invoke<KeychainStatusDto>("get_keychain_s
 /** Issue #16: die wirksamen Datenpfade dieser Instanz (nur Pfade). */
 export const getDataPaths = () => invoke<DataPathEntryDto[]>("get_data_paths");
 
+/** Issue #1314: name of the keychain service this instance uses (name only). */
+export const getKeychainService = () => invoke<string>("get_keychain_service");
+
 /** Issue #16: öffnet den Ordner zum Eintrag `id` aus `getDataPaths` — das
  * Backend löst den Pfad selbst auf, das Frontend übergibt keinen Pfad. */
 export const openDataPathFolder = (id: string) => invoke<void>("open_data_path_folder", { id });

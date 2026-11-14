@@ -68,7 +68,7 @@ Anwendungsfälle sind unabhängig vom Build-Profil sinnvoll, eine
 Beschränkung auf Debug-Builds hätte den zweiten Fall ausgeschlossen, ohne
 dass dafür ein Grund ersichtlich wäre.
 
-**Keychain-Service-Name bewusst unverändert.** Nur das Datei-/DB-
+**Keychain-Service-Name bewusst unverändert** (*überholt für Instanzen mit Datenverzeichnis-Override durch Issue #1314 / Spec 0101 A25: dort heißt der Service `Smart SSH (<id>)`; ohne Override bleibt er `Smart SSH`*). Nur das Datei-/DB-
 Verzeichnis wird getrennt — der Keychain-Service-Name
 (`credentials_keyring::SERVICE_NAME`, "Smart SSH") bleibt für Dev und
 Release identisch. Eine Dev-Instanz nutzt damit dieselben Secrets

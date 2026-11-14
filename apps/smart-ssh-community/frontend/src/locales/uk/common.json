@@ -102,6 +102,7 @@
       "speechModels": "Мовні моделі",
       "sessions": "Сеанси",
       "sessionsInDatabase": "зберігаються в базі даних",
+      "keychainService": "Служба в’язки ключів",
       "copy": "Копіювати",
       "copied": "Шлях скопійовано",
       "copyFailed": "Не вдалося скопіювати:",

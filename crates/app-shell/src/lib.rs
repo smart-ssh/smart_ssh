@@ -31,6 +31,7 @@ mod extension_plugins;
 mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
+mod keychain;
 mod local_file;
 pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
 mod local_server;
@@ -84,7 +85,6 @@ pub use services::{app_scope, BackgroundService, RunningService, ServiceContext,
 use std::sync::Arc;
 pub use wiring::{Edition, UnlockedPlugin, Wiring};
 
-use credentials_keyring::KeyringCredentialStore;
 use persistence_sqlite::default_db_path;
 
 use app_logic::confirmation::ConfirmationRegistry;
@@ -204,7 +204,7 @@ pub(crate) async fn open_and_assemble(
     // Betriebssystems trägt ab Etappe 2 ausschließlich den Wurzelschlüssel.
     // Die Secrets selbst liegen in der verschlüsselten Datenbank, hinter
     // `AppState.credential_store` (s. unten).
-    let keyring_store = KeyringCredentialStore::new();
+    let keyring_store = crate::keychain::process_keyring_store();
 
     // Spec 0101, A3/A5/A6: Der Start entscheidet nach Dateizustand und
     // Schlüsselzustand, **bevor** eine Migration läuft — und fasst in keinem
@@ -564,7 +564,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             None
         }
         app_logic::master_password::KeyMode::Keychain => {
-            let keyring = KeyringCredentialStore::new();
+            let keyring = crate::keychain::process_keyring_store();
             let prompt = crate::startup_prompt::NativeStartupPrompt {
                 db_path: inputs.db_path.clone(),
                 language: inputs.language,
@@ -910,6 +910,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::get_data_paths,
+            commands::get_keychain_service,
             commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,

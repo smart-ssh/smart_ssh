@@ -102,6 +102,7 @@
       "speechModels": "Речевые модели",
       "sessions": "Сеансы",
       "sessionsInDatabase": "хранятся в базе данных",
+      "keychainService": "Служба связки ключей",
       "copy": "Копировать",
       "copied": "Путь скопирован",
       "copyFailed": "Не удалось скопировать:",

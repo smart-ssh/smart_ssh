@@ -102,6 +102,7 @@
       "speechModels": "Talemodeller",
       "sessions": "Sessioner",
       "sessionsInDatabase": "gemt i databasen",
+      "keychainService": "Nøglering-tjeneste",
       "copy": "Kopiér",
       "copied": "Sti kopieret",
       "copyFailed": "Kopiering mislykkedes:",

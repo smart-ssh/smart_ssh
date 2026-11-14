@@ -102,6 +102,7 @@
       "speechModels": "Sprachmodelle",
       "sessions": "Sitzungen",
       "sessionsInDatabase": "in der Datenbank gespeichert",
+      "keychainService": "Schlüsselbund-Dienst",
       "copy": "Kopieren",
       "copied": "Pfad kopiert",
       "copyFailed": "Kopieren fehlgeschlagen:",

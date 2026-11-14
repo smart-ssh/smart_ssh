@@ -43,50 +43,94 @@ pub use availability::{
 };
 
 use secrecy::{ExposeSecret, SecretString};
+use sha2::{Digest, Sha256};
 use ssh_manager_core::profiles::{
     CredentialError, CredentialRef, CredentialResult, CredentialStore,
 };
+use std::path::{Component, Path, PathBuf};
 
-/// Alle Einträge dieser App teilen sich einen Service-Namen im Keychain;
-/// die `CredentialRef` (bereits eindeutig, s. `core::profiles::CredentialRef`-
-/// Doc-Kommentar) dient als Account-Name innerhalb dieses Service. Ein
-/// Konstante statt konfigurierbar: es gibt in diesem MVP nur eine einzige
-/// App-Installation pro Nutzer, kein Bedarf für mehrere unterscheidbare
-/// Services.
+/// Keychain service of an instance without a data-directory override. All
+/// entries of the instance share it; the `CredentialRef` is the account name.
 ///
-/// **Nutzer-sichtbar** (nicht nur internes Implementierungsdetail): dieser
-/// exakte String erscheint z. B. in macOS Keychain Access als "Wo"-Spalte
-/// eines Eintrags — nach der Umbenennung zu "Smart SSH" (Teil 1 dieser
-/// Aufgabenstellung) entsprechend angepasst. Bereits unter dem alten Namen
-/// "ssh-manager" im Keychain gespeicherte Einträge werden dadurch nicht
-/// automatisch migriert (kein Mechanismus dafür in diesem MVP) — bei
-/// diesem noch unveröffentlichten, lokal genutzten Projekt kein
-/// nennenswertes Risiko, betrifft aber denselben, in Teil 1 bereits für
-/// den Datenbankpfad akzeptierten Trade-off.
-const SERVICE_NAME: &str = "Smart SSH";
+/// **User-visible**: this exact string is the "Where" column in macOS
+/// Keychain Access. Never change it (no migration exists).
+pub const DEFAULT_SERVICE_NAME: &str = "Smart SSH";
 
-pub struct KeyringCredentialStore;
-
-impl KeyringCredentialStore {
-    pub fn new() -> Self {
-        Self
-    }
-
-    fn entry(r: &CredentialRef) -> CredentialResult<backend::Entry> {
-        backend::Entry::new(SERVICE_NAME, r.as_str())
-            .map_err(|e| CredentialError::Backend(e.to_string()))
+/// Issue #1314: the keychain service of this process for a data-directory
+/// override. `None` (no override) is exactly [`DEFAULT_SERVICE_NAME`]; with an
+/// override it is `Smart SSH (<id>)`, `<id>` being the first 12 hex characters
+/// of the SHA-256 of the canonical absolute path, so an instance with its own
+/// data directory can never read, replace or delete the secrets of another.
+pub fn service_name_for(data_dir_override: Option<&Path>) -> String {
+    match data_dir_override {
+        None => DEFAULT_SERVICE_NAME.to_string(),
+        Some(dir) => {
+            let canonical = canonical_dir(dir);
+            let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
+            let id: String = digest.iter().take(6).map(|b| format!("{b:02x}")).collect();
+            format!("{DEFAULT_SERVICE_NAME} ({id})")
+        }
     }
 }
 
-impl Default for KeyringCredentialStore {
-    fn default() -> Self {
-        Self::new()
+/// Absolute path with `.`/`..` and trailing separators resolved. Uses the
+/// file system (symlinks) when the directory exists, otherwise a lexical
+/// normalisation, so the result is deterministic either way.
+fn canonical_dir(dir: &Path) -> PathBuf {
+    if let Ok(real) = dir.canonicalize() {
+        return real;
+    }
+    let absolute = if dir.is_absolute() {
+        dir.to_path_buf()
+    } else {
+        std::env::current_dir().map_or_else(|_| dir.to_path_buf(), |cwd| cwd.join(dir))
+    };
+    let mut out = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// OS-keychain credential store bound to one service name. There is
+/// deliberately no constructor without a service: callers pass the name of
+/// their data-directory namespace (see [`service_name_for`]).
+pub struct KeyringCredentialStore {
+    service: String,
+}
+
+impl KeyringCredentialStore {
+    pub fn with_service(service: impl Into<String>) -> Self {
+        Self {
+            service: service.into(),
+        }
+    }
+
+    /// Store for the given data-directory override (`None` = default service).
+    pub fn for_data_dir(data_dir_override: Option<&Path>) -> Self {
+        Self::with_service(service_name_for(data_dir_override))
+    }
+
+    /// The service name all entries of this store live under.
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    fn entry(&self, r: &CredentialRef) -> CredentialResult<backend::Entry> {
+        backend::Entry::new(&self.service, r.as_str())
+            .map_err(|e| CredentialError::Backend(e.to_string()))
     }
 }
 
 impl CredentialStore for KeyringCredentialStore {
     fn get(&self, r: &CredentialRef) -> CredentialResult<SecretString> {
-        let entry = Self::entry(r)?;
+        let entry = self.entry(r)?;
         match entry.get_password() {
             Ok(password) => Ok(SecretString::from(password)),
             Err(keyring::Error::NoEntry) => Err(CredentialError::NotFound(r.clone())),
@@ -95,14 +139,14 @@ impl CredentialStore for KeyringCredentialStore {
     }
 
     fn set(&self, r: &CredentialRef, value: SecretString) -> CredentialResult<()> {
-        let entry = Self::entry(r)?;
+        let entry = self.entry(r)?;
         entry
             .set_password(value.expose_secret())
             .map_err(|e| CredentialError::Backend(e.to_string()))
     }
 
     fn delete(&self, r: &CredentialRef) -> CredentialResult<()> {
-        let entry = Self::entry(r)?;
+        let entry = self.entry(r)?;
         match entry.delete_credential() {
             // Löschen eines bereits fehlenden Eintrags ist idempotent kein
             // Fehler — passt zum Aufrufer-Verhalten in Spec 0007 Abschnitt
@@ -112,6 +156,85 @@ impl CredentialStore for KeyringCredentialStore {
             // Credential scheitern).
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(CredentialError::Backend(e.to_string())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_override_keeps_the_default_service() {
+        assert_eq!(service_name_for(None), "Smart SSH");
+        assert_eq!(
+            KeyringCredentialStore::for_data_dir(None).service(),
+            "Smart SSH"
+        );
+    }
+
+    /// A directory that does not exist (so the lexical path is used) and is
+    /// absolute on every platform.
+    fn missing(rel: &str) -> PathBuf {
+        std::env::temp_dir()
+            .join("smart-ssh-1314-missing")
+            .join(rel)
+    }
+
+    #[test]
+    fn test_override_service_is_namespaced_and_canonicalised() {
+        let a = service_name_for(Some(&missing("a/b")));
+        let with_slash = format!("{}/", missing("a/b").display());
+        assert_eq!(a, service_name_for(Some(Path::new(&with_slash))));
+        assert_eq!(a, service_name_for(Some(&missing("a/./b"))));
+        assert_eq!(a, service_name_for(Some(&missing("a/x/../b"))));
+        let id = a
+            .strip_prefix("Smart SSH (")
+            .and_then(|r| r.strip_suffix(')'))
+            .unwrap();
+        assert_eq!(id.len(), 12);
+        assert!(id.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')));
+        assert_ne!(a, service_name_for(Some(&missing("a/c"))));
+        assert_ne!(a, "Smart SSH");
+    }
+
+    #[test]
+    fn test_override_id_is_sha256_prefix_of_the_canonical_path() {
+        let dir = missing("a/b");
+        let digest = Sha256::digest(canonical_dir(&dir).to_string_lossy().as_bytes());
+        let expected: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(
+            service_name_for(Some(&dir)),
+            format!("Smart SSH ({expected})")
+        );
+    }
+
+    /// Issue #1314: no production code constructs a store with a fixed
+    /// service; every store comes from the process's namespace.
+    #[test]
+    fn test_no_hard_coded_service_in_production_call_sites() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for crate_dir in ["app-shell", "app-logic"] {
+            let mut stack = vec![root.join(crate_dir).join("src")];
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(&dir).unwrap() {
+                    let path = entry.unwrap().path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if path.extension().is_some_and(|e| e == "rs")
+                        && path.file_name().is_some_and(|n| n != "keychain.rs")
+                    {
+                        let text = std::fs::read_to_string(&path).unwrap();
+                        assert!(
+                            !text.contains("KeyringCredentialStore::with_service")
+                                && !text.contains("DEFAULT_SERVICE_NAME")
+                                && !text.contains("KeyringCredentialStore::for_data_dir"),
+                            "{} builds a keychain store itself; use app_shell::keychain::process_keyring_store",
+                            path.display()
+                        );
+                    }
+                }
+            }
         }
     }
 }

@@ -102,6 +102,7 @@
       "speechModels": "Mô hình giọng nói",
       "sessions": "Phiên",
       "sessionsInDatabase": "được lưu trong cơ sở dữ liệu",
+      "keychainService": "Dịch vụ chuỗi khóa",
       "copy": "Sao chép",
       "copied": "Đã sao chép đường dẫn",
       "copyFailed": "Sao chép thất bại:",

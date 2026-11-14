@@ -102,6 +102,7 @@
       "speechModels": "Řečové modely",
       "sessions": "Relace",
       "sessionsInDatabase": "uloženo v databázi",
+      "keychainService": "Služba klíčenky",
       "copy": "Kopírovat",
       "copied": "Cesta zkopírována",
       "copyFailed": "Kopírování selhalo:",

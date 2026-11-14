@@ -102,6 +102,7 @@
       "speechModels": "Konuşma modelleri",
       "sessions": "Oturumlar",
       "sessionsInDatabase": "veritabanında saklanır",
+      "keychainService": "Anahtar zinciri hizmeti",
       "copy": "Kopyala",
       "copied": "Yol kopyalandı",
       "copyFailed": "Kopyalama başarısız:",

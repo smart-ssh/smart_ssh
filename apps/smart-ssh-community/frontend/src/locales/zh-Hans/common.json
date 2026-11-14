@@ -102,6 +102,7 @@
       "speechModels": "语音模型",
       "sessions": "会话",
       "sessionsInDatabase": "保存在数据库中",
+      "keychainService": "钥匙串服务",
       "copy": "复制",
       "copied": "路径已复制",
       "copyFailed": "复制失败：",

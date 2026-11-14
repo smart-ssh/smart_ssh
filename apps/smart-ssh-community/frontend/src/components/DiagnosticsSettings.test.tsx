@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   generateDiagnosticsBundle,
   getDataPaths,
+  getKeychainService,
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
@@ -26,6 +27,7 @@ vi.mock("../api/api", async () =>
     saveDiagnosticsBundle: vi.fn(),
     getKeychainStatus: vi.fn(),
     getDataPaths: vi.fn(),
+    getKeychainService: vi.fn(),
     openDataPathFolder: vi.fn(),
   }),
 );
@@ -39,6 +41,7 @@ vi.mock("../api/api", async () =>
 beforeEach(() => {
   vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
   vi.mocked(getDataPaths).mockResolvedValue([]);
+  vi.mocked(getKeychainService).mockResolvedValue("Smart SSH");
 });
 
 function renderDiagnostics() {

@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getDataPaths, openDataPathFolder } from "../api/api";
+import { getDataPaths, getKeychainService, openDataPathFolder } from "../api/api";
 import { testI18n } from "../testI18n";
 import type { DataPathEntryDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
@@ -13,6 +13,7 @@ import { DataPathsSection } from "./DataPathsSection";
 vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     getDataPaths: vi.fn(),
+    getKeychainService: vi.fn(() => Promise.resolve("Smart SSH")),
     openDataPathFolder: vi.fn(),
   }),
 );
@@ -63,6 +64,18 @@ describe("DataPathsSection (Issue #16)", () => {
     expect(screen.getByTestId("data-path-sessions")).toHaveTextContent(
       "in der Datenbank gespeichert",
     );
+  });
+
+  it("zeigt den Schlüsselbund-Dienst (Issue #1314)", async () => {
+    vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
+    vi.mocked(getKeychainService).mockResolvedValue("Smart SSH (0123456789ab)");
+
+    renderSection();
+
+    expect(await screen.findByTestId("data-path-keychainService")).toHaveTextContent(
+      "Smart SSH (0123456789ab)",
+    );
+    expect(screen.getByTestId("data-path-keychainService")).toHaveTextContent("Schlüsselbund-Dienst");
   });
 
   it("zeigt Einträge einer Edition mit deren Beschriftung", async () => {

@@ -1099,6 +1099,9 @@ fn sibling(db_path: &Path, suffix: &str) -> PathBuf {
 mod instance_lock_tests;
 #[cfg(test)]
 mod tests;
+
 /// Issue #15: wiederholter Start und Downgrade an echten Datenbankdateien.
 #[cfg(test)]
 mod tests_release_upgrade;
+#[cfg(test)]
+mod tests_service_namespace;

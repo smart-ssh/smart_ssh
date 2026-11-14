@@ -481,7 +481,7 @@ pub async fn unlock_with_master_password(
     // Frage 3) gibt es noch keine Verpackung — dort fährt der Ablauf mit
     // `Keychain` weiter und läuft erneut in D1, diesmal mit der Maske im
     // Fenster.
-    let keyring = credentials_keyring::KeyringCredentialStore::new();
+    let keyring = crate::keychain::process_keyring_store();
     let access = match mode {
         KeyMode::Password => {
             let key = match master_password::unlock(&db_path, &password) {
@@ -852,7 +852,7 @@ pub fn set_up_master_password(
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
     let db_path = persistence_sqlite::default_db_path();
-    let keyring = credentials_keyring::KeyringCredentialStore::new();
+    let keyring = crate::keychain::process_keyring_store();
     let (warning, root_key) =
         check_set_up_preconditions(warning_confirmed, &state.root_key_fingerprint, || {
             ssh_manager_core::crypto::read_root_key(&keyring)
@@ -906,7 +906,7 @@ pub fn switch_to_os_keychain(
     master_password::switch_to_keychain(
         &persistence_sqlite::default_db_path(),
         &SecretString::from(current),
-        &credentials_keyring::KeyringCredentialStore::new(),
+        &crate::keychain::process_keyring_store(),
         if replace_another_key {
             master_password::KeychainOverwrite::ConfirmedByTheUser
         } else {

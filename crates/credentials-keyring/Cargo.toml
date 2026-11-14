@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 keyring = "4.1.6"
 secrecy = { workspace = true }
+sha2 = { workspace = true }
 ssh-manager-core = { workspace = true }
 
 # `keyring` has no Android backend; on Android the Keystore store is used
