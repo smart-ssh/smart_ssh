@@ -17,7 +17,7 @@ Ein leerer Wert gilt als nicht gesetzt. Unbekannte Argumente werden ignoriert. A
 
 ## 2. Zeigerdatei
 
-Eine Textdatei neben der App; die erste nicht leere Zeile ist der Pfad. `~` wird zum Home-Verzeichnis, ein relativer Pfad gilt relativ zum Ordner der Zeigerdatei.
+Eine Textdatei neben der App; die erste nicht leere Zeile ist der Pfad. `~` wird zum Home-Verzeichnis, ein relativer Pfad gilt relativ zum Ordner der Zeigerdatei. Eine leere Zeigerdatei (nur Leerraum) gilt als nicht gesetzt (Standardverzeichnis). Beginnt der Pfad mit `~`, das Home-Verzeichnis ist aber unbekannt, erscheint das Startfehlerfenster (Quelle Zeigerdatei, Ursache: Home-Verzeichnis unbekannt); die App weicht nicht auf das Standardverzeichnis aus.
 
 - macOS: `<Ordner der .app>/<Bundle-Name ohne .app>.data-dir` (z. B. `Smart SSH Test.data-dir`). Das Bundle bleibt unverändert, seine Signatur gültig.
 - Windows: `<Ordner der .exe>\<Name der .exe ohne Endung>.data-dir`.
