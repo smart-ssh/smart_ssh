@@ -29,7 +29,6 @@ test.describe("activity center", () => {
     await expect(page.getByRole("button", { name: /^Settings$/ })).toBeAttached();
     await expect(icon).toHaveCount(0);
 
-    await expect.poll(() => app.page.evaluate(() => window.__e2e.listenerCount("activity-changed"))).toBeGreaterThan(0);
     await app.emit("activity-changed", base);
     await expect(icon).toBeVisible();
     await expectFullyInViewport(icon);
@@ -55,7 +54,6 @@ test.describe("activity center", () => {
   test("a failed activity shows its error until dismissed", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
-    await expect.poll(() => app.page.evaluate(() => window.__e2e.listenerCount("activity-changed"))).toBeGreaterThan(0);
     await app.emit("activity-changed", { ...base, state: "failed", errorMessage: "Disk full", cancellable: false });
     await page.getByTestId("activity-center-button").click();
     const popover = page.getByRole("dialog", { name: "Activities" });
@@ -71,7 +69,6 @@ test.describe("activity center narrow @phone", () => {
   test("icon and popover fit the phone layout and Escape closes", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
-    await expect.poll(() => app.page.evaluate(() => window.__e2e.listenerCount("activity-changed"))).toBeGreaterThan(0);
     await app.emit("activity-changed", base);
     const icon = page.getByTestId("activity-center-button");
     await expect(icon).toBeVisible();
