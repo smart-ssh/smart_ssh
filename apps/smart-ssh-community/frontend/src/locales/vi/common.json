@@ -1398,7 +1398,8 @@
       "body": "Một mô hình giọng nói ({{model}}, khoảng {{size}} MiB) sẽ được tải một lần từ {{source}}. Sau đó, việc nhận dạng giọng nói chạy hoàn toàn trên máy tính này; âm thanh và văn bản không bao giờ rời khỏi máy.",
       "download": "Tải xuống",
       "cancel": "Hủy",
-      "progress": "Tiến trình tải xuống"
+      "progress": "Tiến trình tải xuống",
+      "parakeetLicense": "Giấy phép: {{license}}"
     },
     "errors": {
       "noDevice": "Không tìm thấy micrô. Hãy kết nối micrô và kiểm tra thiết bị đầu vào trong cài đặt hệ thống.",
@@ -1414,7 +1415,8 @@
       "model": "Mô hình giọng nói",
       "models": {
         "base": "Base (khoảng {{size}} MiB, mặc định)",
-        "small": "Small (khoảng {{size}} MiB, chính xác hơn, chậm hơn)"
+        "small": "Small (khoảng {{size}} MiB, chính xác hơn, chậm hơn)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (khoảng {{size}} MiB, đa ngôn ngữ, nhanh; tự động nhận diện ngôn ngữ)"
       },
       "statusReady": "Đã tải",
       "statusNotDownloaded": "Chưa tải",
@@ -1422,7 +1424,8 @@
       "download": "Tải xuống",
       "delete": "Xóa mô hình",
       "language": "Ngôn ngữ nhận dạng",
-      "languageAuto": "Tự động"
+      "languageAuto": "Tự động",
+      "languageParakeetHint": "Parakeet tự động nhận diện ngôn ngữ; cài đặt này áp dụng cho các mô hình Whisper."
     }
   },
   "connectTab": {

@@ -1406,7 +1406,8 @@
       "body": "Egy beszédmodell ({{model}}, kb. {{size}} MiB) egyszer letöltődik innen: {{source}}. Utána a beszédfelismerés teljesen ezen a számítógépen fut; a hang és a szöveg soha nem hagyja el.",
       "download": "Letöltés",
       "cancel": "Mégse",
-      "progress": "Letöltés előrehaladása"
+      "progress": "Letöltés előrehaladása",
+      "parakeetLicense": "Licenc: {{license}}"
     },
     "errors": {
       "noDevice": "Nem található mikrofon. Csatlakoztass mikrofont, és ellenőrizd a bemeneti eszközt a rendszerbeállításokban.",
@@ -1422,7 +1423,8 @@
       "model": "Beszédmodell",
       "models": {
         "base": "Base (kb. {{size}} MiB, alapértelmezett)",
-        "small": "Small (kb. {{size}} MiB, pontosabb, lassabb)"
+        "small": "Small (kb. {{size}} MiB, pontosabb, lassabb)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (kb. {{size}} MiB, többnyelvű, gyors; automatikusan felismeri a nyelvet)"
       },
       "statusReady": "Letöltve",
       "statusNotDownloaded": "Nincs letöltve",
@@ -1430,7 +1432,8 @@
       "download": "Letöltés",
       "delete": "Modell törlése",
       "language": "Felismerés nyelve",
-      "languageAuto": "Automatikus"
+      "languageAuto": "Automatikus",
+      "languageParakeetHint": "A Parakeet automatikusan felismeri a nyelvet; ez a beállítás a Whisper-modellekre vonatkozik."
     }
   },
   "connectTab": {

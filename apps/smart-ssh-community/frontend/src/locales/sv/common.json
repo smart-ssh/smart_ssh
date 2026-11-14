@@ -1406,7 +1406,8 @@
       "body": "En språkmodell ({{model}}, ca {{size}} MiB) laddas ner en gång från {{source}}. Därefter körs taligenkänningen helt på den här datorn; ljud och text lämnar den aldrig.",
       "download": "Ladda ner",
       "cancel": "Avbryt",
-      "progress": "Nedladdningens förlopp"
+      "progress": "Nedladdningens förlopp",
+      "parakeetLicense": "Licens: {{license}}"
     },
     "errors": {
       "noDevice": "Ingen mikrofon hittades. Anslut en mikrofon och kontrollera ingångsenheten i systeminställningarna.",
@@ -1422,7 +1423,8 @@
       "model": "Språkmodell",
       "models": {
         "base": "Base (ca {{size}} MiB, standard)",
-        "small": "Small (ca {{size}} MiB, noggrannare, långsammare)"
+        "small": "Small (ca {{size}} MiB, noggrannare, långsammare)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (cirka {{size}} MiB, flerspråkig, snabb; identifierar språket automatiskt)"
       },
       "statusReady": "Nedladdad",
       "statusNotDownloaded": "Inte nedladdad",
@@ -1430,7 +1432,8 @@
       "download": "Ladda ner",
       "delete": "Ta bort modell",
       "language": "Igenkänningsspråk",
-      "languageAuto": "Automatiskt"
+      "languageAuto": "Automatiskt",
+      "languageParakeetHint": "Parakeet identifierar språket automatiskt; den här inställningen gäller Whisper-modeller."
     }
   },
   "connectTab": {

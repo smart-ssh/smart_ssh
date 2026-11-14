@@ -1406,7 +1406,8 @@
       "body": "En sprogmodel ({{model}}, ca. {{size}} MiB) hentes én gang fra {{source}}. Derefter kører talegenkendelsen helt på denne computer; lyd og tekst forlader den aldrig.",
       "download": "Hent",
       "cancel": "Annullér",
-      "progress": "Hentningens fremdrift"
+      "progress": "Hentningens fremdrift",
+      "parakeetLicense": "Licens: {{license}}"
     },
     "errors": {
       "noDevice": "Ingen mikrofon fundet. Tilslut en mikrofon, og kontrollér inputenheden i systemindstillingerne.",
@@ -1422,7 +1423,8 @@
       "model": "Sprogmodel",
       "models": {
         "base": "Base (ca. {{size}} MiB, standard)",
-        "small": "Small (ca. {{size}} MiB, mere præcis, langsommere)"
+        "small": "Small (ca. {{size}} MiB, mere præcis, langsommere)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (ca. {{size}} MiB, flersproget, hurtig; registrerer sproget automatisk)"
       },
       "statusReady": "Hentet",
       "statusNotDownloaded": "Ikke hentet",
@@ -1430,7 +1432,8 @@
       "download": "Hent",
       "delete": "Slet model",
       "language": "Genkendelsessprog",
-      "languageAuto": "Automatisk"
+      "languageAuto": "Automatisk",
+      "languageParakeetHint": "Parakeet registrerer sproget automatisk; denne indstilling gælder for Whisper-modeller."
     }
   },
   "connectTab": {

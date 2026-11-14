@@ -1406,7 +1406,8 @@
       "body": "Een spraakmodel ({{model}}, ongeveer {{size}} MiB) wordt eenmalig gedownload van {{source}}. Daarna draait de spraakherkenning volledig op deze computer; audio en tekst verlaten hem nooit.",
       "download": "Downloaden",
       "cancel": "Annuleren",
-      "progress": "Voortgang van de download"
+      "progress": "Voortgang van de download",
+      "parakeetLicense": "Licentie: {{license}}"
     },
     "errors": {
       "noDevice": "Geen microfoon gevonden. Sluit een microfoon aan en controleer het invoerapparaat in de systeeminstellingen.",
@@ -1422,7 +1423,8 @@
       "model": "Spraakmodel",
       "models": {
         "base": "Base (ongeveer {{size}} MiB, standaard)",
-        "small": "Small (ongeveer {{size}} MiB, nauwkeuriger, trager)"
+        "small": "Small (ongeveer {{size}} MiB, nauwkeuriger, trager)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (ongeveer {{size}} MiB, meertalig, snel; herkent de taal automatisch)"
       },
       "statusReady": "Gedownload",
       "statusNotDownloaded": "Niet gedownload",
@@ -1430,7 +1432,8 @@
       "download": "Downloaden",
       "delete": "Model verwijderen",
       "language": "Herkenningstaal",
-      "languageAuto": "Automatisch"
+      "languageAuto": "Automatisch",
+      "languageParakeetHint": "Parakeet herkent de taal automatisch; deze instelling geldt voor Whisper-modellen."
     }
   },
   "connectTab": {

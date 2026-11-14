@@ -1414,7 +1414,8 @@
       "body": "Un modèle vocal ({{model}}, environ {{size}} Mio) sera téléchargé une seule fois depuis {{source}}. Ensuite, la reconnaissance vocale fonctionne entièrement sur cet ordinateur ; l'audio et le texte ne le quittent jamais.",
       "download": "Télécharger",
       "cancel": "Annuler",
-      "progress": "Progression du téléchargement"
+      "progress": "Progression du téléchargement",
+      "parakeetLicense": "Licence : {{license}}"
     },
     "errors": {
       "noDevice": "Aucun microphone trouvé. Branchez un microphone et vérifiez le périphérique d'entrée dans les réglages système.",
@@ -1430,7 +1431,8 @@
       "model": "Modèle vocal",
       "models": {
         "base": "Base (environ {{size}} Mio, par défaut)",
-        "small": "Small (environ {{size}} Mio, plus précis, plus lent)"
+        "small": "Small (environ {{size}} Mio, plus précis, plus lent)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (environ {{size}} Mio, multilingue, rapide ; détecte la langue automatiquement)"
       },
       "statusReady": "Téléchargé",
       "statusNotDownloaded": "Non téléchargé",
@@ -1438,7 +1440,8 @@
       "download": "Télécharger",
       "delete": "Supprimer le modèle",
       "language": "Langue de reconnaissance",
-      "languageAuto": "Automatique"
+      "languageAuto": "Automatique",
+      "languageParakeetHint": "Parakeet détecte la langue automatiquement ; ce réglage s’applique aux modèles Whisper."
     }
   },
   "connectTab": {

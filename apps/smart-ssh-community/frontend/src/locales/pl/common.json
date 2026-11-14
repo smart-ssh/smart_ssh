@@ -1422,7 +1422,8 @@
       "body": "Model mowy ({{model}}, ok. {{size}} MiB) zostanie pobrany jednorazowo z {{source}}. Potem rozpoznawanie mowy działa w całości na tym komputerze; dźwięk i tekst nigdy go nie opuszczają.",
       "download": "Pobierz",
       "cancel": "Anuluj",
-      "progress": "Postęp pobierania"
+      "progress": "Postęp pobierania",
+      "parakeetLicense": "Licencja: {{license}}"
     },
     "errors": {
       "noDevice": "Nie znaleziono mikrofonu. Podłącz mikrofon i sprawdź urządzenie wejściowe w ustawieniach systemu.",
@@ -1438,7 +1439,8 @@
       "model": "Model mowy",
       "models": {
         "base": "Base (ok. {{size}} MiB, domyślny)",
-        "small": "Small (ok. {{size}} MiB, dokładniejszy, wolniejszy)"
+        "small": "Small (ok. {{size}} MiB, dokładniejszy, wolniejszy)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (około {{size}} MiB, wielojęzyczny, szybki; wykrywa język automatycznie)"
       },
       "statusReady": "Pobrano",
       "statusNotDownloaded": "Nie pobrano",
@@ -1446,7 +1448,8 @@
       "download": "Pobierz",
       "delete": "Usuń model",
       "language": "Język rozpoznawania",
-      "languageAuto": "Automatycznie"
+      "languageAuto": "Automatycznie",
+      "languageParakeetHint": "Parakeet wykrywa język automatycznie; to ustawienie dotyczy modeli Whisper."
     }
   },
   "connectTab": {

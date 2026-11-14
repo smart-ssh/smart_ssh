@@ -1398,7 +1398,8 @@
       "body": "音声モデル（{{model}}、約 {{size}} MiB）を {{source}} から一度だけダウンロードします。以後、音声認識はこのコンピューター上だけで動作し、音声とテキストが外部に送られることはありません。",
       "download": "ダウンロード",
       "cancel": "キャンセル",
-      "progress": "ダウンロードの進行状況"
+      "progress": "ダウンロードの進行状況",
+      "parakeetLicense": "ライセンス: {{license}}"
     },
     "errors": {
       "noDevice": "マイクが見つかりません。マイクを接続し、システム設定で入力デバイスを確認してください。",
@@ -1414,7 +1415,8 @@
       "model": "音声モデル",
       "models": {
         "base": "Base（約 {{size}} MiB、既定）",
-        "small": "Small（約 {{size}} MiB、高精度・低速）"
+        "small": "Small（約 {{size}} MiB、高精度・低速）",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (約 {{size}} MiB、多言語、高速。言語を自動で検出します)"
       },
       "statusReady": "ダウンロード済み",
       "statusNotDownloaded": "未ダウンロード",
@@ -1422,7 +1424,8 @@
       "download": "ダウンロード",
       "delete": "モデルを削除",
       "language": "認識言語",
-      "languageAuto": "自動"
+      "languageAuto": "自動",
+      "languageParakeetHint": "Parakeet は言語を自動で検出します。この設定は Whisper モデルに適用されます。"
     }
   },
   "connectTab": {
