@@ -141,6 +141,18 @@ ignore = [
     # Überholt, wenn: ein `sqlx`-Release eine `libsqlite3-sys` erlaubt, deren
     # SQLCipher auf SQLite >= 3.54 beruht; spätestens 2027-01-31 erneut prüfen.
     "RUSTSEC-2026-0459",
+
+    # --- RUSTSEC-2026-0495: dokumentiertes Risk-Acceptance (2026-11-14) ---
+    #
+    # russh < 0.65.0: Der Agent-Server (`russh::keys::agent::server`) signiert
+    # mit Schlüsseln, die eine Bestätigung verlangen, ohne `Agent::confirm`
+    # aufzurufen. Vom Maintainer entschieden, s. Issue #1310.
+    #
+    # Warum vertretbar: Die App nutzt den Agent-Server von russh nicht; sie ist
+    # nur SSH-Client (und spricht mit dem Agent des Nutzers als Client).
+    #
+    # Überholt, wenn: russh >= 0.65.0 im Lockfile steht.
+    "RUSTSEC-2026-0495",
 ]
 
 # `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
