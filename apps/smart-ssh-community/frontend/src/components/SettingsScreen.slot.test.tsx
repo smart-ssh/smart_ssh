@@ -137,6 +137,24 @@ describe("SettingsScreen category slots for every built-in category (#1311)", ()
     warn.mockRestore();
   });
 
+  it("warns with the exact id and category when they contain colons, once per set", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    registerSettingsSection({ id: "a:b", label: "Colon entry", category: "x:y:z", component: mk("sec-colon") });
+    const { rerender } = renderScreen();
+    fireEvent.click(await screen.findByText("Colon entry"));
+    await screen.findByText("sec-colon");
+    const msg =
+      'Settings section "a:b" names unknown category "x:y:z"; showing it as a top-level entry.';
+    expect(warn).toHaveBeenCalledWith(msg);
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <SettingsScreen onClose={vi.fn()} onProvidersChanged={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(warn.mock.calls.filter((c) => c[0] === msg)).toHaveLength(1);
+    warn.mockRestore();
+  });
+
   it("a throwing section only breaks its own boundary", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const Boom = () => {

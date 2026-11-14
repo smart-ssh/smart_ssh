@@ -107,14 +107,14 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   // not lost; it falls back to its own top-level entry (and a warning).
   const builtinIds = new Set(builtinCategories.map((c) => c.id));
   const isTopLevel = (s: { category?: string }) => !s.category || !builtinIds.has(s.category);
-  const unknownCategoryKey = registeredSections
+  const unknownCategories = registeredSections
     .filter((s) => s.category && isTopLevel(s))
-    .map((s) => `${s.id}:${s.category}`)
-    .join("\n");
+    .map((s) => ({ id: s.id, category: s.category as string }));
+  // Stable dependency: warn once per change of the set, not per render.
+  const unknownCategoryKey = JSON.stringify(unknownCategories.map((u) => [u.id, u.category]));
   useEffect(() => {
-    if (!unknownCategoryKey) return;
-    for (const entry of unknownCategoryKey.split("\n")) {
-      const [id, category] = entry.split(":");
+    const pairs = JSON.parse(unknownCategoryKey) as [string, string][];
+    for (const [id, category] of pairs) {
       console.warn(
         `Settings section "${id}" names unknown category "${category}"; showing it as a top-level entry.`,
       );
