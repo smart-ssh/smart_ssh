@@ -110,6 +110,14 @@ pub(crate) fn text_or_blocks(parts: &[ContentPart], block: fn(&ContentPart) -> V
     }
 }
 
+/// Always a block array, even for one text part. Anthropic history must be
+/// prefix-stable (Spec 0064 Part 7): a plain string that becomes an array when
+/// a later part is merged into the same role group would change the bytes of an
+/// earlier request.
+pub(crate) fn anthropic_content(parts: &[ContentPart]) -> Value {
+    Value::Array(parts.iter().map(anthropic_block).collect())
+}
+
 /// Anthropic Messages API content block.
 pub(crate) fn anthropic_block(part: &ContentPart) -> Value {
     match part {
