@@ -401,4 +401,43 @@ mod tests {
         assert_eq!(path_of(LOGS), crate::logging::default_log_dir());
         assert_eq!(path_of(SPEECH_MODELS), dir.path().join("speech-models"));
     }
+
+    /// Issue #1313, AC 1: with an override, materialising every effective
+    /// path (what start-up does: DB, host keys, wrapping file, logs, store,
+    /// speech models) creates files only inside the data directory.
+    #[test]
+    fn test_override_start_up_files_all_live_under_the_data_dir() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _cleanup = EnvVarGuard;
+        let default_db = persistence_sqlite::default_db_path();
+        let default_logs = crate::logging::default_log_dir();
+        let dir = tempfile::tempdir().unwrap();
+        // SAFETY: s. `EnvVarGuard`.
+        unsafe {
+            std::env::set_var("SMART_SSH_DATA_DIR", dir.path());
+        }
+        let settings = persistence_sqlite::default_db_path()
+            .parent()
+            .unwrap()
+            .join("settings.json");
+        let entries = effective_data_paths(&settings, &speech_models_dir(Path::new("/c")), &[]);
+
+        let mut created = Vec::new();
+        for e in &entries {
+            let target = if e.is_directory {
+                e.path.join(".created")
+            } else {
+                e.path.clone()
+            };
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(&target, b"x").unwrap();
+            created.push(target);
+        }
+        assert!(!created.is_empty());
+        for f in &created {
+            assert!(f.starts_with(dir.path()), "{f:?} escapes the data dir");
+            assert!(!f.starts_with(default_db.parent().unwrap()));
+            assert!(!f.starts_with(&default_logs));
+        }
+    }
 }

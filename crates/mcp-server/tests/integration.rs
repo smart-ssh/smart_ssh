@@ -300,3 +300,31 @@ async fn test_confirm_timeout_over_real_http() {
     client.cancel().await.ok();
     handle.shutdown().await;
 }
+
+/// Issue #1313: a second instance whose MCP port is already taken gets an
+/// `AddrInUse` error from `serve` (which the app maps to its existing MCP
+/// error state) instead of panicking, and the first server keeps running.
+#[tokio::test]
+async fn test_second_server_on_occupied_port_fails_with_addr_in_use() {
+    let known_server = ServerId::new();
+    let backend = || TestBackend {
+        known_server,
+        release: None,
+        completed: Arc::new(AtomicBool::new(false)),
+    };
+    let (first, addr) = start_server(backend(), "t1", Duration::from_secs(5)).await;
+
+    let config = McpServerConfig {
+        bind_addr: addr,
+        confirm_timeout: Duration::from_secs(5),
+    };
+    let second = mcp_server::serve(config, Arc::new(backend()), SharedToken::new("t2")).await;
+    let err = second.err().expect("occupied port must be an error");
+    assert_eq!(err.kind(), std::io::ErrorKind::AddrInUse);
+
+    // The first server is unaffected and still accepts connections.
+    tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("first server keeps listening");
+    first.shutdown().await;
+}

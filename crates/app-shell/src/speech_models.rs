@@ -23,6 +23,13 @@ pub struct SpeechModels(OnceLock<Arc<ModelManager>>);
 /// Where the models live: inside the data directory with an override
 /// (issue #1313), otherwise below the Tauri app data directory as before.
 pub(crate) fn models_dir<R: Runtime>(app: &AppHandle<R>) -> CommandResult<std::path::PathBuf> {
+    // With an override the default app data dir is never consulted, so its
+    // lookup failing cannot affect an override instance.
+    if persistence_sqlite::data_dir_override().is_some() {
+        return Ok(app_logic::data_paths::speech_models_dir(
+            std::path::Path::new(""),
+        ));
+    }
     let app_data = app
         .path()
         .app_data_dir()
