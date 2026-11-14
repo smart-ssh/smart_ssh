@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
+    "copyCode": "Kodu kopyala",
+    "codeCopied": "Kod kopyalandı",
+    "codeCopyFailed": "Kopyalama başarısız",
     "composerMore": "Diğer giriş eylemleri",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",

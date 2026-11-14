@@ -1269,6 +1269,9 @@
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
+    "copyCode": "Kopírovat kód",
+    "codeCopied": "Kód zkopírován",
+    "codeCopyFailed": "Kopírování selhalo",
     "composerMore": "Další akce zadávání",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",

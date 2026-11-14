@@ -1262,6 +1262,9 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "copyCode": "Copiază codul",
+    "codeCopied": "Cod copiat",
+    "codeCopyFailed": "Copierea a eșuat",
     "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",

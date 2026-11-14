@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "최신 메시지로 이동",
+    "copyCode": "코드 복사",
+    "codeCopied": "코드를 복사했습니다",
+    "codeCopyFailed": "복사하지 못했습니다",
     "composerMore": "입력 추가 동작",
     "newChat": "새 채팅",
     "newChatDisabledHint": "AI가 응답하는 중이거나 확인 창이 열려 있는 동안에는 사용할 수 없습니다.",
