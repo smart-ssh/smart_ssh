@@ -57,3 +57,4 @@ pub const SPEECH_PARTIAL_TEXT: &str = "speech-partial-text";
 pub const STARTUP_PROMPT: &str = "startup:prompt";
 pub const STARTUP_UNLOCKED: &str = "startup:unlocked";
 pub const ACTIVITY_CHANGED: &str = "activity-changed";
+pub const QUIT_REQUESTED: &str = "quit-requested";

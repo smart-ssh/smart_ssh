@@ -9,7 +9,7 @@ use tauri_plugin_store::StoreExt;
 use app_logic::error::{CommandError, CommandResult};
 use speech::{ModelManager, ModelManagerError, ModelStatus, SpeechModel};
 
-use crate::activities::{ActivityHandle, ActivityRegistry, ActivitySpec};
+use crate::activities::{ActivityHandle, ActivityRegistry, ActivitySpec, ResumeSpec};
 use crate::settings_store;
 use ssh_manager_core::sync::lock_tolerating_poison;
 
@@ -185,6 +185,7 @@ impl DownloadActivity {
 fn start_download_with_activity<R: Runtime>(
     app: &AppHandle<R>,
     model: SpeechModel,
+    resume: bool,
 ) -> CommandResult<()> {
     let manager = manager(app)?;
     if matches!(manager.status(model), ModelStatus::Downloading { .. }) {
@@ -198,6 +199,11 @@ fn start_download_with_activity<R: Runtime>(
         title_params: [("name".to_owned(), model_display_name(model).to_owned())].into(),
         cancellable: true,
         total: None,
+        // A quit keeps the `.part` files; the next start offers to resume.
+        resume: Some(ResumeSpec {
+            kind: ACTIVITY_KIND.into(),
+            key: model.id().into(),
+        }),
     });
     let id = handle.id().to_owned();
     {
@@ -212,13 +218,15 @@ fn start_download_with_activity<R: Runtime>(
     });
     let emit_app = app.clone();
     let cb_activity = Arc::clone(&activity);
-    let result = manager.start_download(
-        model,
-        Arc::new(move |m, status| {
-            cb_activity.on_status(&status);
-            let _ = emit_app.emit(STATUS_EVENT, status_payload(m, &status));
-        }),
-    );
+    let on_status: speech::StatusCallback = Arc::new(move |m, status| {
+        cb_activity.on_status(&status);
+        let _ = emit_app.emit(STATUS_EVENT, status_payload(m, &status));
+    });
+    let result = if resume {
+        manager.resume_download(model, on_status)
+    } else {
+        manager.start_download(model, on_status)
+    };
     if let Err(err) = result {
         // No download started (e.g. one already runs): remove the new row so
         // the running download's row stays the only one.
@@ -231,9 +239,33 @@ fn start_download_with_activity<R: Runtime>(
     Ok(())
 }
 
+/// Registers the resume handler of interrupted model downloads (issue
+/// #1327): "Resume" continues from the `.part` files, "Discard" deletes them.
+pub(crate) fn register_resume_handler<R: Runtime>(app: &AppHandle<R>) {
+    let resume_app = app.clone();
+    let discard_app = app.clone();
+    crate::activities::register_resume_handler(
+        app,
+        ACTIVITY_KIND,
+        Arc::new(move |entry| {
+            start_download_with_activity(&resume_app, parse_model(&entry.key)?, true)
+        }),
+        Some(Arc::new(move |entry| {
+            let Ok(model) = parse_model(&entry.key) else {
+                return;
+            };
+            match manager(&discard_app).map(|m| m.delete(model)) {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => tracing::warn!(?err, "interrupted download files not deleted"),
+                Err(err) => tracing::warn!(code = ?err.code, "speech models unavailable"),
+            }
+        })),
+    );
+}
+
 #[tauri::command]
 pub async fn start_speech_model_download(app: AppHandle, model: String) -> CommandResult<()> {
-    start_download_with_activity(&app, parse_model(&model)?)
+    start_download_with_activity(&app, parse_model(&model)?, false)
 }
 
 #[tauri::command]

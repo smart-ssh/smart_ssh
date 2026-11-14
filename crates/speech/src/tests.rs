@@ -689,3 +689,19 @@ async fn resume_with_a_complete_part_file_only_verifies() {
     assert_eq!(wait_final(&st).await, ModelStatus::Ready);
     assert!(seen.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn delete_removes_the_part_file_of_an_interrupted_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = b"abcdef".to_vec();
+    let m = manager(
+        dir.path(),
+        "http://127.0.0.1:1/x".into(),
+        &body,
+        sha_hex(&body),
+    );
+    leave_part(dir.path(), b"abc");
+    assert!(part(dir.path()).exists());
+    m.delete(SpeechModel::Base).unwrap();
+    assert!(!part(dir.path()).exists());
+}

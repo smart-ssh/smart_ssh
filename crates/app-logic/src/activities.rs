@@ -116,6 +116,15 @@ pub struct InterruptedActivity {
     pub total: Option<u64>,
 }
 
+/// Payload of `quit-requested`: the running activities a quit would
+/// interrupt, for the confirmation dialog.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct QuitRequestedPayload {
+    pub activities: Vec<Activity>,
+}
+
 /// Partial update of a running activity as sent by the frontend
 /// (command `activity_update`); absent fields stay unchanged. An empty
 /// `status_key` clears the status text.
@@ -486,7 +495,9 @@ impl ResumeRegistry {
 
     /// Calls the handler of the entry's kind; unknown kind ⇒ error.
     pub fn resume(&self, entry: &InterruptedActivity) -> CommandResult<()> {
-        let handler = lock_tolerating_poison(&self.handlers).get(&entry.kind).cloned();
+        let handler = lock_tolerating_poison(&self.handlers)
+            .get(&entry.kind)
+            .cloned();
         match handler {
             Some(h) => (h.resume)(entry),
             None => Err(CommandError::with_code(
@@ -498,7 +509,9 @@ impl ResumeRegistry {
 
     /// Runs the optional discard handler of the entry's kind.
     pub fn discard(&self, entry: &InterruptedActivity) {
-        let handler = lock_tolerating_poison(&self.handlers).get(&entry.kind).cloned();
+        let handler = lock_tolerating_poison(&self.handlers)
+            .get(&entry.kind)
+            .cloned();
         if let Some(discard) = handler.and_then(|h| h.discard) {
             discard(entry);
         }

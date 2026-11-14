@@ -212,7 +212,15 @@ fn interrupted_snapshot_holds_only_running_resumable_activities() {
     keys.sort();
     assert_eq!(
         keys,
-        ["done", "id", "key", "kind", "titleKey", "titleParams", "total"]
+        [
+            "done",
+            "id",
+            "key",
+            "kind",
+            "titleKey",
+            "titleParams",
+            "total"
+        ]
     );
 }
 
