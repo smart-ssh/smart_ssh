@@ -59,6 +59,7 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
   let done = false;
   let unlisten: UnlistenFn | null = null;
   let released = false;
+  let terminalSeen = false;
 
   const release = () => {
     released = true;
@@ -71,7 +72,10 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
       done = true;
       cancelCallback?.();
     }
-    if (a.state !== "running") release();
+    if (a.state !== "running") {
+      terminalSeen = true;
+      release();
+    }
   })
     .then((un) => {
       if (released) un();
@@ -110,7 +114,9 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
       try {
         await cancelActivity(id);
       } catch (err) {
-        done = false; // refused (e.g. not cancellable): still running
+        // Refused (e.g. not cancellable): still running, unless the activity
+        // already ended meanwhile (e.g. cancelled from the activity center).
+        if (!terminalSeen) done = false;
         throw err;
       }
       release();
