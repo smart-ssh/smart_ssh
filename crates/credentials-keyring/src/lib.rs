@@ -173,32 +173,38 @@ mod tests {
         );
     }
 
+    /// A directory that does not exist (so the lexical path is used) and is
+    /// absolute on every platform.
+    fn missing(rel: &str) -> PathBuf {
+        std::env::temp_dir()
+            .join("smart-ssh-1314-missing")
+            .join(rel)
+    }
+
     #[test]
     fn test_override_service_is_namespaced_and_canonicalised() {
-        let a = service_name_for(Some(Path::new("/nonexistent-a/b")));
-        assert_eq!(a, service_name_for(Some(Path::new("/nonexistent-a/b/"))));
-        assert_eq!(a, service_name_for(Some(Path::new("/nonexistent-a/./b"))));
-        assert_eq!(
-            a,
-            service_name_for(Some(Path::new("/nonexistent-a/x/../b")))
-        );
+        let a = service_name_for(Some(&missing("a/b")));
+        let with_slash = format!("{}/", missing("a/b").display());
+        assert_eq!(a, service_name_for(Some(Path::new(&with_slash))));
+        assert_eq!(a, service_name_for(Some(&missing("a/./b"))));
+        assert_eq!(a, service_name_for(Some(&missing("a/x/../b"))));
         let id = a
             .strip_prefix("Smart SSH (")
             .and_then(|r| r.strip_suffix(')'))
             .unwrap();
         assert_eq!(id.len(), 12);
         assert!(id.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')));
-        assert_ne!(a, service_name_for(Some(Path::new("/nonexistent-a/c"))));
+        assert_ne!(a, service_name_for(Some(&missing("a/c"))));
         assert_ne!(a, "Smart SSH");
     }
 
     #[test]
-    fn test_override_id_is_sha256_prefix_of_the_path() {
-        // sha256("/nonexistent-a/b") first 6 bytes, computed independently.
-        let digest = Sha256::digest(b"/nonexistent-a/b");
+    fn test_override_id_is_sha256_prefix_of_the_canonical_path() {
+        let dir = missing("a/b");
+        let digest = Sha256::digest(canonical_dir(&dir).to_string_lossy().as_bytes());
         let expected: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(
-            service_name_for(Some(Path::new("/nonexistent-a/b"))),
+            service_name_for(Some(&dir)),
             format!("Smart SSH ({expected})")
         );
     }
