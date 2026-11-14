@@ -639,6 +639,19 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
+      # Issue #1305: a restored `target/` can hold the CMake build directory of
+      # whisper-rs-sys from an earlier runner image. CMake then sees changed
+      # compiler variables, drops its cache including the -D options of the
+      # build script and reconfigures for the host (x86_64, tests/examples ON),
+      # which fails ("add_subdirectory given source tests ... not an existing
+      # directory"). cmake-rs reconfigures on every build script run anyway, so
+      # only the incremental object cache is lost; the native code is rebuilt
+      # from a clean directory.
+      - name: Drop restored CMake build directories of native crates
+        shell: bash
+        run: |
+          rm -rf target/*-linux-android/*/build/whisper-rs-sys-*/out/build
+
       - name: Build Android debug APK
         working-directory: apps/smart-ssh-community
         # No `--locked`: `cargo tauri android build` does not forward it to Cargo.
