@@ -14,8 +14,8 @@ fn sha_hex(data: &[u8]) -> String {
 /// Local HTTP fixture. `stall`: send only half of the body, then hang.
 /// Returns the URL and a request counter.
 async fn serve(body: Vec<u8>, status: u16, stall: bool) -> (String, Arc<AtomicUsize>) {
-    let (base, hits) = serve_routes(vec![("/ggml-base.bin".into(), body, status, stall)]).await;
-    (format!("{base}/ggml-base.bin"), hits)
+    let (base, hits) = serve_routes(vec![("/model.onnx".into(), body, status, stall)]).await;
+    (format!("{base}/model.onnx"), hits)
 }
 
 /// Like `serve`, with one body per request path. Returns the base URL.
@@ -63,7 +63,8 @@ async fn serve_routes(routes: Vec<(String, Vec<u8>, u16, bool)>) -> (String, Arc
 }
 
 fn part(dir: &Path) -> PathBuf {
-    dir.join("ggml-base.bin.part")
+    dir.join(SpeechModel::Base.file_name())
+        .join("model.onnx.part")
 }
 
 fn file(name: &str, url: String, body: &[u8], hash: String) -> ModelFile {
@@ -77,7 +78,7 @@ fn file(name: &str, url: String, body: &[u8], hash: String) -> ModelFile {
 
 fn manager(dir: &Path, url: String, body: &[u8], hash: String) -> ModelManager {
     let src = ModelSource {
-        files: vec![file("ggml-base.bin", url, body, hash)],
+        files: vec![file("model.onnx", url, body, hash)],
     };
     ModelManager::with_sources(dir.to_path_buf(), HashMap::from([(SpeechModel::Base, src)]))
 }
@@ -111,9 +112,13 @@ fn constants_are_pinned() {
             assert!(!f.url.contains("/resolve/main/"));
             assert_eq!(f.sha256.len(), 64);
             assert!(f.url.ends_with(&f.name));
+            assert!(f.size > 0);
         }
         let (repo, rev) = match m.engine() {
-            Engine::Whisper => ("ggerganov/whisper.cpp", REVISION),
+            Engine::Whisper if m == SpeechModel::Small => {
+                ("onnx-community/whisper-small", WHISPER_SMALL_REVISION)
+            }
+            Engine::Whisper => ("onnx-community/whisper-base", WHISPER_BASE_REVISION),
             Engine::Parakeet => ("istupakov/parakeet-tdt-0.6b-v3-onnx", PARAKEET_REVISION),
         };
         for f in &s.files {
@@ -122,6 +127,21 @@ fn constants_are_pinned() {
                 .starts_with(&format!("https://huggingface.co/{repo}/resolve/{rev}/")));
         }
     }
+    for m in [SpeechModel::Base, SpeechModel::Small] {
+        let names: Vec<_> = m.source().files.iter().map(|f| f.name.clone()).collect();
+        assert_eq!(
+            names,
+            [
+                "encoder_model_int8.onnx",
+                "decoder_model_merged_int8.onnx",
+                "vocab.json",
+                "added_tokens.json",
+                "config.json"
+            ]
+        );
+    }
+    assert_eq!(SpeechModel::Base.source().total_size(), 77_968_043);
+    assert_eq!(SpeechModel::Small.source().total_size(), 250_150_387);
     assert_eq!(SpeechModel::ParakeetV3.source().files.len(), 4);
     assert_eq!(SpeechModel::ParakeetV3.source().total_size(), 670_619_706);
     assert_eq!(
@@ -164,7 +184,7 @@ async fn download_verifies_and_becomes_ready() {
         .any(|s| matches!(s, ModelStatus::Downloading { done, total } if *done > 0 && *total == body.len() as u64)));
     assert_eq!(m.status(SpeechModel::Base), ModelStatus::Ready);
     assert_eq!(
-        std::fs::read(m.model_path(SpeechModel::Base)).unwrap(),
+        std::fs::read(m.model_path(SpeechModel::Base).join("model.onnx")).unwrap(),
         body
     );
     assert!(!part(dir.path()).exists());
@@ -252,7 +272,7 @@ async fn oversized_body_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let body = vec![3u8; 5_000];
     let (url, _) = serve(body.clone(), 200, false).await;
-    let mut f = file("ggml-base.bin", url, &body, sha_hex(&body));
+    let mut f = file("model.onnx", url, &body, sha_hex(&body));
     f.size = 1_000;
     let src = ModelSource { files: vec![f] };
     let m = ModelManager::with_sources(
@@ -274,7 +294,8 @@ async fn oversized_body_is_rejected() {
 async fn delete_removes_file() {
     let dir = tempfile::tempdir().unwrap();
     let m = manager(dir.path(), String::new(), b"", String::new());
-    std::fs::write(m.model_path(SpeechModel::Base), b"x").unwrap();
+    std::fs::create_dir_all(m.model_path(SpeechModel::Base)).unwrap();
+    std::fs::write(m.model_path(SpeechModel::Base).join("model.onnx"), b"x").unwrap();
     assert_eq!(m.status(SpeechModel::Base), ModelStatus::Ready);
     m.delete(SpeechModel::Base).unwrap();
     assert_eq!(m.status(SpeechModel::Base), ModelStatus::NotDownloaded);
@@ -442,7 +463,7 @@ async fn cancel_during_a_later_file_removes_everything_of_the_model() {
 }
 
 #[tokio::test]
-async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
+async fn delete_removes_all_files_of_the_model_and_keeps_foreign_files() {
     let dir = tempfile::tempdir().unwrap();
     let bodies = bodies();
     let base = serve_bodies(&bodies, None).await;
@@ -450,7 +471,7 @@ async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
     let (cb, seen) = recorder();
     m.start_download(SpeechModel::ParakeetV3, cb).unwrap();
     assert_eq!(wait_final(&seen).await, ModelStatus::Ready);
-    std::fs::write(dir.path().join("ggml-base.bin"), b"whisper").unwrap();
+    std::fs::write(dir.path().join("foreign.bin"), b"whisper").unwrap();
     m.delete(SpeechModel::ParakeetV3).unwrap();
     assert!(!m.model_path(SpeechModel::ParakeetV3).exists());
     assert_eq!(
@@ -458,7 +479,7 @@ async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
         ModelStatus::NotDownloaded
     );
     assert_eq!(
-        std::fs::read(dir.path().join("ggml-base.bin")).unwrap(),
+        std::fs::read(dir.path().join("foreign.bin")).unwrap(),
         b"whisper"
     );
 }
@@ -466,12 +487,9 @@ async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
 #[test]
 fn availability_matches_the_platform() {
     let ids: Vec<&str> = SpeechModel::available().iter().map(|m| m.id()).collect();
-    if cfg!(target_os = "android") {
-        assert_eq!(ids, ["base", "small"]);
-        assert_eq!(SpeechModel::from_id("parakeet_v3"), None);
-    } else {
-        assert_eq!(ids, ["base", "small", "parakeet_v3"]);
-    }
+    // Parakeet is offered on every platform, Android included (issue #1300).
+    assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+    assert!(SpeechModel::ParakeetV3.is_available());
 }
 
 #[test]
@@ -480,15 +498,44 @@ fn model_info_lists_engine_size_and_source() {
     let base = &infos[0];
     assert_eq!(base.id, "base");
     assert_eq!(base.engine, Engine::Whisper);
-    assert_eq!(base.total_size, 147_951_465);
+    assert_eq!(base.total_size, 77_968_043);
     assert_eq!(base.source_host, "huggingface.co");
-    assert_eq!(base.source_repo, "ggerganov/whisper.cpp");
+    assert_eq!(base.source_repo, "onnx-community/whisper-base");
     let json = serde_json::to_value(base).unwrap();
     assert_eq!(json["engine"], "whisper");
-    assert_eq!(json["total_size"], 147_951_465);
+    assert_eq!(json["total_size"], 77_968_043);
     if let Some(p) = infos.iter().find(|i| i.id == "parakeet_v3") {
         assert_eq!(p.engine, Engine::Parakeet);
         assert_eq!(p.source_repo, "istupakov/parakeet-tdt-0.6b-v3-onnx");
         assert_eq!(p.total_size, 670_619_706);
     }
+}
+
+#[test]
+fn legacy_ggml_files_are_removed_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    for name in [
+        "ggml-base.bin",
+        "ggml-small.bin",
+        "ggml-base.bin.part",
+        "ggml-small.bin.part",
+        "other.bin",
+    ] {
+        std::fs::write(p.join(name), b"x").unwrap();
+    }
+    std::fs::create_dir(p.join("whisper-base-int8")).unwrap();
+    std::fs::write(p.join("whisper-base-int8").join("config.json"), b"x").unwrap();
+    remove_legacy_files(p);
+    let mut left: Vec<String> = std::fs::read_dir(p)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(left, ["other.bin", "whisper-base-int8"]);
+    // A directory that does not exist is fine, too.
+    remove_legacy_files(&p.join("missing"));
+    let m = ModelManager::new(p.to_path_buf());
+    assert_eq!(m.status(SpeechModel::Base), ModelStatus::NotDownloaded);
+    assert_eq!(m.status(SpeechModel::Small), ModelStatus::NotDownloaded);
 }

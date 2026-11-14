@@ -1,22 +1,21 @@
-//! Local speech-to-text model management (Spec 0108): download a whisper.cpp
-//! GGML model on explicit request, verify it against a pinned SHA-256, store
+//! Local speech-to-text model management (Spec 0108): download an ONNX speech
+//! model on explicit request, verify it against a pinned SHA-256, store
 //! it, report its state, delete it; plus voice recording and local
 //! transcription behind traits (`AudioSource`, `Transcriber`).
 //!
 //! Integrity rule: a model file only ever appears under its final name after
 //! its hash was verified (download to `<name>.part`, verify, rename). A model
-//! of several files is ready only when every file was verified; on cancel or
+//! (several files) is ready only when every file was verified; on cancel or
 //! failure nothing of it remains.
 //! Logs carry at most the model id, a byte count and the outcome.
 
 mod audio;
-#[cfg(not(target_os = "android"))]
 mod parakeet;
 mod recorder;
 mod transcribe;
+mod whisper;
 
 pub use audio::{resample_mono, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE};
-#[cfg(not(target_os = "android"))]
 pub use parakeet::ParakeetTranscriber;
 pub use recorder::{
     LiveConfig, PartialCallback, RecordError, Recorder, RecorderState, StateCallback,
@@ -24,8 +23,9 @@ pub use recorder::{
 };
 pub use transcribe::{
     parse_language, InvalidLanguage, SpeechTranscriber, TranscribeError, TranscribeSession,
-    Transcriber, WhisperTranscriber,
+    Transcriber,
 };
+pub use whisper::WhisperTranscriber;
 
 use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
@@ -38,8 +38,14 @@ use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
 
-/// Immutable revision of `ggerganov/whisper.cpp` the models are pinned to.
-const REVISION: &str = "5359861c739e955e79d9a303bcbc70fb988958b1";
+/// Immutable revisions of `onnx-community/whisper-base` / `-small` (Apache-2.0,
+/// int8 ONNX export of OpenAI Whisper) the Whisper files are pinned to.
+const WHISPER_BASE_REVISION: &str = "27a07b4b52b3a4c5886134bb4320e93e1a4bbc7c";
+const WHISPER_SMALL_REVISION: &str = "36050c46d777d46dc4b5f43f6d90574fc38f8732";
+
+/// Whisper files of the old whisper.cpp format; removed on start
+/// ([`remove_legacy_files`]).
+const LEGACY_FILES: [&str; 2] = ["ggml-base.bin", "ggml-small.bin"];
 
 /// Immutable revision of `istupakov/parakeet-tdt-0.6b-v3-onnx` (CC-BY-4.0,
 /// conversion of NVIDIA's Parakeet TDT 0.6B v3) the Parakeet files are pinned to.
@@ -72,16 +78,14 @@ impl SpeechModel {
     ];
     pub const DEFAULT: SpeechModel = SpeechModel::Base;
 
-    /// Models offered on this platform. Parakeet needs ONNX Runtime, which is
-    /// not built for Android yet.
+    /// Models offered on this platform (all of them, Android included).
     pub fn available() -> Vec<SpeechModel> {
         Self::ALL.into_iter().filter(|m| m.is_available()).collect()
     }
 
     pub fn is_available(self) -> bool {
         match self.engine() {
-            Engine::Whisper => true,
-            Engine::Parakeet => cfg!(not(target_os = "android")),
+            Engine::Whisper | Engine::Parakeet => true,
         }
     }
 
@@ -107,43 +111,102 @@ impl SpeechModel {
             .find(|m| m.id() == id && m.is_available())
     }
 
-    /// File name of a single-file model, directory name of a multi-file one.
+    /// Name of the model's directory inside the models directory.
     pub fn file_name(self) -> &'static str {
         match self {
-            SpeechModel::Base => "ggml-base.bin",
-            SpeechModel::Small => "ggml-small.bin",
+            SpeechModel::Base => "whisper-base-int8",
+            SpeechModel::Small => "whisper-small-int8",
             SpeechModel::ParakeetV3 => "parakeet-tdt-0.6b-v3-int8",
         }
-    }
-
-    /// Whether the model is a directory of several files.
-    pub fn is_multi_file(self) -> bool {
-        matches!(self, SpeechModel::ParakeetV3)
     }
 
     /// The single place that defines where a model comes from: fixed URLs
     /// (pinned revision, not a branch), exact sizes, SHA-256 per file.
     pub fn source(self) -> ModelSource {
-        let whisper = |size, sha256: &str| ModelSource {
-            files: vec![ModelFile {
-                name: self.file_name().to_owned(),
-                url: format!(
-                    "https://huggingface.co/{}/resolve/{REVISION}/{}",
-                    self.source_repo(),
-                    self.file_name()
-                ),
-                size,
-                sha256: sha256.to_owned(),
-            }],
+        let whisper = |revision: &str, files: [(&str, &str, u64, &str); 5]| ModelSource {
+            files: files
+                .into_iter()
+                .map(|(name, remote, size, sha256)| ModelFile {
+                    name: name.to_owned(),
+                    url: format!(
+                        "https://huggingface.co/{}/resolve/{revision}/{remote}",
+                        self.source_repo()
+                    ),
+                    size,
+                    sha256: sha256.to_owned(),
+                })
+                .collect(),
         };
         match self {
             SpeechModel::Base => whisper(
-                147_951_465,
-                "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+                WHISPER_BASE_REVISION,
+                [
+                    (
+                        "encoder_model_int8.onnx",
+                        "onnx/encoder_model_int8.onnx",
+                        23_201_297,
+                        "ca6177401f86a2c6b4dc5f7fc02fbca680678906bd0c22f6d89f0b80f124253f",
+                    ),
+                    (
+                        "decoder_model_merged_int8.onnx",
+                        "onnx/decoder_model_merged_int8.onnx",
+                        53_693_315,
+                        "fa3ef9902734ce5ae6f9ef2bdb2ba9a6c4b5785b09f4f420ce036573dc9d090b",
+                    ),
+                    (
+                        "vocab.json",
+                        "vocab.json",
+                        1_036_584,
+                        "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a",
+                    ),
+                    (
+                        "added_tokens.json",
+                        "added_tokens.json",
+                        34_604,
+                        "9715fd2243b6f06a5858b5e32950d2853f73dd5bc201aafcf76f5082a2d8acd1",
+                    ),
+                    (
+                        "config.json",
+                        "config.json",
+                        2_243,
+                        "f4d0608f7d918166da7edb3e188de5ef1bfe70d9802e785d271fd88111e9cf4b",
+                    ),
+                ],
             ),
             SpeechModel::Small => whisper(
-                487_601_967,
-                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+                WHISPER_SMALL_REVISION,
+                [
+                    (
+                        "encoder_model_int8.onnx",
+                        "onnx/encoder_model_int8.onnx",
+                        92_326_127,
+                        "2601c9eb2d345c5916d4576d36f663a7c96589740fb2273828c48c3fc2c7db75",
+                    ),
+                    (
+                        "decoder_model_merged_int8.onnx",
+                        "onnx/decoder_model_merged_int8.onnx",
+                        156_750_845,
+                        "ec07c3cbb64172c39791e26ee870a65ac22b458c36722bfe2776b3dbf741e0c9",
+                    ),
+                    (
+                        "vocab.json",
+                        "vocab.json",
+                        1_036_584,
+                        "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a",
+                    ),
+                    (
+                        "added_tokens.json",
+                        "added_tokens.json",
+                        34_604,
+                        "9715fd2243b6f06a5858b5e32950d2853f73dd5bc201aafcf76f5082a2d8acd1",
+                    ),
+                    (
+                        "config.json",
+                        "config.json",
+                        2_227,
+                        "457854d452f17661e197d74aee12b8e74fb75ba30ebfaa7426d0d61ea1e08a18",
+                    ),
+                ],
             ),
             SpeechModel::ParakeetV3 => {
                 let file = |name: &str, size, sha256: &str| ModelFile {
@@ -199,7 +262,10 @@ impl SpeechModel {
     /// Hugging Face repository the files come from.
     pub fn source_repo(self) -> &'static str {
         match self.engine() {
-            Engine::Whisper => "ggerganov/whisper.cpp",
+            Engine::Whisper => match self {
+                SpeechModel::Small => "onnx-community/whisper-small",
+                _ => "onnx-community/whisper-base",
+            },
             Engine::Parakeet => "istupakov/parakeet-tdt-0.6b-v3-onnx",
         }
     }
@@ -317,8 +383,7 @@ impl ModelManager {
         }
     }
 
-    /// The file (single-file model) or directory (multi-file model) the
-    /// transcriber loads.
+    /// The model's directory, which the transcriber loads.
     pub fn model_path(&self, model: SpeechModel) -> PathBuf {
         self.dir.join(model.file_name())
     }
@@ -427,13 +492,27 @@ impl ModelManager {
     }
 }
 
-/// Directory the files of a model live in: the model's own directory for a
-/// multi-file model, the shared models directory for a single-file one.
+/// Directory the files of a model live in: the model's own directory.
 fn files_dir(dir: &Path, model: SpeechModel) -> PathBuf {
-    if model.is_multi_file() {
-        dir.join(model.file_name())
-    } else {
-        dir.to_path_buf()
+    dir.join(model.file_name())
+}
+
+/// Deletes the old whisper.cpp model files (`ggml-*.bin`, and their `.part`
+/// leftovers) from the models directory. Local file operation only, never
+/// outside `dir`, never touches the network; a missing file is fine. Called
+/// once at start-up so the models report `not_downloaded` and the next use
+/// asks for consent to download the new format.
+pub fn remove_legacy_files(dir: &Path) {
+    for name in LEGACY_FILES {
+        for file in [name.to_owned(), format!("{name}.part")] {
+            match std::fs::remove_file(dir.join(&file)) {
+                Ok(()) => tracing::info!(file, "removed legacy speech model file"),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    tracing::warn!(file, error = %e, "could not remove legacy speech model file")
+                }
+            }
+        }
     }
 }
 
@@ -464,14 +543,9 @@ fn remove_model_files(dir: &Path, model: SpeechModel, source: &ModelSource) -> s
             }
         }
     }
-    if model.is_multi_file() {
-        match std::fs::remove_dir(files_dir(dir, model)) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            // Something foreign lives there: leave it.
-            Err(_) => {}
-        }
-    }
+    // Something foreign in there: leave the directory (remove_dir only
+    // succeeds on an empty one).
+    let _ = std::fs::remove_dir(files_dir(dir, model));
     Ok(())
 }
 
@@ -495,10 +569,8 @@ async fn download(
         for f in &source.files {
             let _ = tokio::fs::remove_file(part_path(dir, model, f)).await;
         }
-        if model.is_multi_file() {
-            // Only removes the directory when it is empty.
-            let _ = tokio::fs::remove_dir(files_dir(dir, model)).await;
-        }
+        // Only removes the directory when it is empty.
+        let _ = tokio::fs::remove_dir(files_dir(dir, model)).await;
     }
     result
 }

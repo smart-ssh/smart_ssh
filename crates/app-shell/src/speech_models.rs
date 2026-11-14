@@ -48,6 +48,15 @@ pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<Model
     ))
 }
 
+/// Start-up step (Spec 0108): deletes the old whisper.cpp model files from the
+/// models directory. A local file operation only; no network, no model load.
+pub(crate) fn remove_legacy_files_at_start<R: Runtime>(app: &AppHandle<R>) {
+    match app.path().app_data_dir() {
+        Ok(dir) => speech::remove_legacy_files(&dir.join(MODELS_SUBDIR)),
+        Err(e) => tracing::warn!(error = %e, "speech models directory unavailable at start"),
+    }
+}
+
 fn parse_model(id: &str) -> CommandResult<SpeechModel> {
     SpeechModel::from_id(id).ok_or_else(|| {
         CommandError::with_code(
@@ -181,16 +190,10 @@ mod tests {
     }
 
     #[test]
-    fn parakeet_is_listed_and_selectable_on_desktop_only() {
+    fn parakeet_is_listed_and_selectable_on_every_platform() {
         let ids: Vec<&str> = list_speech_models().iter().map(|m| m.id).collect();
-        if cfg!(target_os = "android") {
-            assert_eq!(ids, ["base", "small"]);
-            let err = parse_model("parakeet_v3").unwrap_err();
-            assert_eq!(err.code, Some("speech_model_unknown"));
-        } else {
-            assert_eq!(ids, ["base", "small", "parakeet_v3"]);
-            assert_eq!(parse_model("parakeet_v3").unwrap(), SpeechModel::ParakeetV3);
-        }
+        assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+        assert_eq!(parse_model("parakeet_v3").unwrap(), SpeechModel::ParakeetV3);
     }
 
     /// A stored selection this platform does not offer falls back to the default.
@@ -204,13 +207,11 @@ mod tests {
         })
         .unwrap();
         assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
-        if cfg!(target_os = "android") {
-            settings_store::update(handle, |c| {
-                c.set(SELECTED_MODEL_KEY, serde_json::json!("parakeet_v3"))
-            })
-            .unwrap();
-            assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
-        }
+        settings_store::update(handle, |c| {
+            c.set(SELECTED_MODEL_KEY, serde_json::json!("parakeet_v3"))
+        })
+        .unwrap();
+        assert_eq!(read_selected_model(handle), SpeechModel::ParakeetV3);
         settings_store::update(handle, |c| c.delete(SELECTED_MODEL_KEY)).unwrap();
     }
 

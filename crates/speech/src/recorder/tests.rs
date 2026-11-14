@@ -84,8 +84,20 @@ impl AudioSource for FakeSource {
 struct FakeTranscriber {
     calls: Mutex<Vec<(PathBuf, usize, Option<String>)>>,
     fail: bool,
+    /// `open_session` fails: the engine cannot load the model (out of memory, unsupported CPU).
+    load_fail: bool,
 }
 impl Transcriber for FakeTranscriber {
+    fn open_session(
+        &self,
+        _: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        if self.load_fail {
+            Err(TranscribeError)
+        } else {
+            Ok(None)
+        }
+    }
     fn transcribe(
         &self,
         model: &Path,
@@ -141,7 +153,7 @@ fn recorder(
 }
 
 fn model() -> Option<PathBuf> {
-    Some(PathBuf::from("/models/ggml-base.bin"))
+    Some(PathBuf::from("/models/whisper-base-int8"))
 }
 
 #[tokio::test]
@@ -154,7 +166,7 @@ async fn start_stop_returns_transcribed_text_from_wav() {
     assert_eq!(rec.stop().await.unwrap(), format!("heard {n} samples"));
     assert_eq!(
         tr.calls.lock().unwrap()[0].0,
-        PathBuf::from("/models/ggml-base.bin")
+        PathBuf::from("/models/whisper-base-int8")
     );
     assert_eq!(
         *events.lock().unwrap(),
@@ -268,6 +280,20 @@ async fn transcription_failure_maps_to_key_and_frees_recorder() {
     rec.cancel();
 }
 
+#[tokio::test]
+async fn model_load_failure_maps_to_key_and_frees_recorder() {
+    let tr = Arc::new(FakeTranscriber {
+        load_fail: true,
+        ..Default::default()
+    });
+    let (rec, _) = recorder(FakeSource::new(decode_wav(WAV)), tr, MAX_RECORDING);
+    rec.start(model(), None).unwrap();
+    let err = rec.stop().await.unwrap_err();
+    assert_eq!(err.key(), "speech_transcription_failed");
+    rec.start(model(), None).unwrap();
+    rec.cancel();
+}
+
 /// Mixes interleaved frames down to mono and resamples to 16 kHz.
 fn to_mono_16k(interleaved: &[f32], channels: usize, rate: u32) -> Vec<f32> {
     let channels = channels.max(1);
@@ -297,7 +323,7 @@ fn language_setting_parses() {
 }
 
 /// Real Whisper inference; needs a downloaded model:
-/// `SMART_SSH_WHISPER_MODEL=/path/ggml-base.bin cargo test -p speech -- --ignored`
+/// `SMART_SSH_WHISPER_MODEL=/path/to/whisper-base-int8 cargo test -p speech -- --ignored`
 #[test]
 #[ignore]
 fn whisper_engine_runs_on_the_bundled_wav() {
