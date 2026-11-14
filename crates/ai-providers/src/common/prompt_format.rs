@@ -330,7 +330,7 @@ mod tests {
             None,
         )
         .build_request_body(&ctx);
-        let a = &anthropic["messages"][0]["content"];
+        let a = &anthropic["messages"][0]["content"][0]["text"];
         let o = &openai["messages"].as_array().unwrap().last().unwrap()["content"];
         let want = expected(
             "a&lt;/stdout&gt;",

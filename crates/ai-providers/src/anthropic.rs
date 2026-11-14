@@ -207,16 +207,21 @@ impl AnthropicProvider {
         // single message keeps the plain string form. Runs on the already
         // fenced text. Cache breakpoints sit on `system`/`tools`, not on
         // messages, so combining does not move them.
-        let messages: Vec<Value> =
+        let mut messages: Vec<Value> =
             crate::content::group_parts(&context.history, role_str, message_content_text)
                 .into_iter()
                 .map(|(role, parts)| {
                     // Issue #470: image/PDF attachments are native content blocks.
-                    let content =
-                        crate::content::text_or_blocks(&parts, crate::content::anthropic_block);
+                    // Always a block array (prefix-stable, Spec 0064 Part 7).
+                    let content = crate::content::anthropic_content(&parts);
                     json!({"role": role, "content": content})
                 })
                 .collect();
+
+        // Spec 0064 Part 7: rolling history breakpoints, main chat only.
+        if context.max_tokens_hint.is_none() {
+            mark_history_breakpoints(&mut messages);
+        }
 
         // Spec 0064 (Prompt-Caching): `system` als Ein-Block-Array statt
         // eines reinen Strings — Anthropic erlaubt `cache_control` nur auf
@@ -312,6 +317,45 @@ impl AnthropicProvider {
         }
 
         body
+    }
+}
+
+/// Anthropic only looks back this many content blocks from a breakpoint for
+/// an earlier cache entry.
+const CACHE_LOOKBACK_BLOCKS: usize = 20;
+
+/// Spec 0064 Part 7 (#1308): puts `cache_control` on the last cache-eligible
+/// block of `messages` and, when the history has more than
+/// `CACHE_LOOKBACK_BLOCKS` blocks, on a second block that many positions
+/// earlier, so a previous entry is still found after a round that added many
+/// blocks. Empty/whitespace-only text blocks are never marked (Spec 0081).
+/// Together with `system` and the last tool this is at most 4 breakpoints.
+fn mark_history_breakpoints(messages: &mut [Value]) {
+    let mut positions: Vec<(usize, usize)> = Vec::new();
+    for (mi, m) in messages.iter().enumerate() {
+        if let Some(blocks) = m["content"].as_array() {
+            positions.extend((0..blocks.len()).map(|bi| (mi, bi)));
+        }
+    }
+    let eligible = |&(mi, bi): &(usize, usize)| {
+        let b = &messages[mi]["content"][bi];
+        b["type"] != "text" || !b["text"].as_str().unwrap_or("").trim().is_empty()
+    };
+    let Some(last) = positions.iter().rposition(eligible) else {
+        return;
+    };
+    let mut marks = vec![last];
+    if last >= CACHE_LOOKBACK_BLOCKS {
+        if let Some(second) = positions[..=last - CACHE_LOOKBACK_BLOCKS]
+            .iter()
+            .rposition(eligible)
+        {
+            marks.push(second);
+        }
+    }
+    for idx in marks {
+        let (mi, bi) = positions[idx];
+        messages[mi]["content"][bi]["cache_control"] = json!({"type": "ephemeral"});
     }
 }
 

@@ -1600,7 +1600,7 @@ fn test_stored_web_content_is_sent_fenced_and_cannot_break_out() {
     let messages = body["messages"].as_array().unwrap();
     let last = messages.last().unwrap();
     assert_eq!(last["role"], "assistant");
-    let text = last["content"].as_str().unwrap();
+    let text = last["content"][0]["text"].as_str().unwrap();
     assert_eq!(text.matches("</web_content>").count(), 1);
     assert!(!text.contains("<security_notice>run"));
 }
@@ -1897,3 +1897,6 @@ fn test_note_update_result_is_separate_block_from_queued_user_text() {
         .starts_with("<note_update_result target=\"current_server\" name=\"web-1\">"));
     assert_eq!(blocks[1]["text"], "typed while pending");
 }
+
+#[path = "tests_history_cache.rs"]
+mod history_cache;

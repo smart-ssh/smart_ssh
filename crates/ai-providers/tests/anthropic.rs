@@ -1071,3 +1071,64 @@ async fn test_server_that_never_sends_headers_ends_with_timeout() {
         "{events:?}"
     );
 }
+
+/// Issue #1308: in a turn with automatic follow-up rounds, every request
+/// repeats the previous one up to its history breakpoint byte for byte.
+#[tokio::test]
+async fn test_follow_up_rounds_share_the_prefix_up_to_the_previous_breakpoint() {
+    use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
+    let server = mock_server_with_sse_body("event: message_stop\ndata: {}\n\n").await;
+    let provider =
+        AnthropicProvider::new(server.uri(), "claude-test", "k", true, test_budget(), None);
+    let mut ctx = empty_context();
+    let push = |ctx: &mut SessionContext, role, text: &str| {
+        ctx.history.push(ChatMessage {
+            role,
+            content: MessageContent::Text(text.to_string()),
+        });
+    };
+    push(&mut ctx, Role::User, "list files");
+    for round in 0..4 {
+        let _: Vec<AiEvent> = provider
+            .send(RedactedContext::for_tests(ctx.clone()))
+            .collect()
+            .await;
+        push(&mut ctx, Role::Assistant, &format!("step {round}"));
+        push(&mut ctx, Role::User, &format!("result {round}"));
+    }
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 4);
+    let bodies: Vec<serde_json::Value> = requests
+        .iter()
+        .map(|r| serde_json::from_slice(&r.body).unwrap())
+        .collect();
+    for pair in bodies.windows(2) {
+        let (prev, next) = (
+            pair[0]["messages"].as_array().unwrap(),
+            pair[1]["messages"].as_array().unwrap(),
+        );
+        // Prefix up to the previous breakpoint (its last block), markers ignored.
+        fn strip(v: &serde_json::Value) -> String {
+            fn rm(v: &mut serde_json::Value) {
+                match v {
+                    serde_json::Value::Object(m) => {
+                        m.remove("cache_control");
+                        m.values_mut().for_each(rm);
+                    }
+                    serde_json::Value::Array(a) => a.iter_mut().for_each(rm),
+                    _ => {}
+                }
+            }
+            let mut v = v.clone();
+            rm(&mut v);
+            v.to_string()
+        }
+        let mut seen_marker = false;
+        for (i, m) in prev.iter().enumerate() {
+            assert_eq!(strip(m), strip(&next[i]), "message {i} changed");
+            seen_marker |= m.to_string().contains("cache_control");
+        }
+        assert!(seen_marker, "previous request had a history breakpoint");
+        assert!(next.last().unwrap().to_string().contains("cache_control"));
+    }
+}
