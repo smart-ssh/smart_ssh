@@ -63,6 +63,7 @@
     "copyFailed": "Error al copiar: en su lugar puede seleccionar el texto.",
     "loadFailed": "No se pudo cargar la información de versión y compilación.",
     "buildDev": "Compilación de desarrollo",
+    "dataDirMarker": "Datos: {{path}}",
     "buildRelease": "Compilación de lanzamiento",
     "thirdPartyLicenses": {
       "openButton": "Licencias de terceros",
@@ -98,6 +99,7 @@
       "hostKeys": "Claves de host",
       "wrappingFile": "Archivo de clave de la contraseña maestra",
       "mcpSettings": "Ajustes de MCP",
+      "speechModels": "Modelos de voz",
       "sessions": "Sesiones",
       "sessionsInDatabase": "guardadas en la base de datos",
       "copy": "Copiar",

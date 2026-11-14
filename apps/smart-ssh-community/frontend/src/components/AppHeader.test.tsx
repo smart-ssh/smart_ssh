@@ -254,3 +254,45 @@ describe("AppHeader version display (Spec 0052)", () => {
     expect(rightDiv).not.toContainElement(versionText);
   });
 });
+
+/** Issue #1313: the data-directory marker appears only with an override. */
+describe("AppHeader data directory marker (issue #1313)", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+  });
+
+  function mockInfo(extra: Record<string, unknown>) {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "get_platform") return Promise.resolve("macos");
+      if (command === "create_overlay_titlebar") return Promise.resolve("custom");
+      if (command === "get_app_info") {
+        return Promise.resolve({
+          version: "0.4.1",
+          commitHash: "a5b3e01",
+          versionDisplay: "0.4.1 (a5b3e01)",
+          edition: "Community",
+          buildType: "Release",
+          dataDir: null,
+          dataDirDisplay: null,
+          settingsStorePath: null,
+          ...extra,
+        });
+      }
+      return Promise.reject(new Error(`unexpected invoke: ${command}`));
+    });
+  }
+
+  it("shows the shortened path with the full path as tooltip when an override is active", async () => {
+    mockInfo({ dataDir: "/home/u/SmartSSH-Test", dataDirDisplay: "~/SmartSSH-Test" });
+    render(<AppHeader />);
+    const marker = await screen.findByTestId("titlebar-data-dir-marker");
+    expect(marker).toHaveAttribute("title", "/home/u/SmartSSH-Test");
+  });
+
+  it("shows no marker without an override", async () => {
+    mockInfo({});
+    render(<AppHeader />);
+    await screen.findByTestId("titlebar-version-full");
+    expect(screen.queryByTestId("titlebar-data-dir-marker")).toBeNull();
+  });
+});

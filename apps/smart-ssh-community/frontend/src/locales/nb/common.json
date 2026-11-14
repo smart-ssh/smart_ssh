@@ -63,6 +63,7 @@
     "copyFailed": "Kopiering mislyktes – teksten kan i stedet markeres.",
     "loadFailed": "Kunne ikke laste versjons- og byggeinformasjon.",
     "buildDev": "Utviklingsbygg",
+    "dataDirMarker": "Datamappe: {{path}}",
     "buildRelease": "Utgivelsesbygg",
     "thirdPartyLicenses": {
       "openButton": "Tredjepartslisenser",
@@ -98,6 +99,7 @@
       "hostKeys": "Vertsnøkler",
       "wrappingFile": "Nøkkelfil for hovedpassord",
       "mcpSettings": "MCP-innstillinger",
+      "speechModels": "Talemodeller",
       "sessions": "Økter",
       "sessionsInDatabase": "lagret i databasen",
       "copy": "Kopier",

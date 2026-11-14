@@ -190,6 +190,9 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       versionDisplay: "0.0.0-e2e (e2e)",
       edition: "Community",
       buildType: "Dev",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     }),
 
     // --- Servers and groups ----------------------------------------------

@@ -63,6 +63,7 @@
     "copyFailed": "Sao chép thất bại — có thể chọn văn bản để sao chép thủ công.",
     "loadFailed": "Không thể tải thông tin phiên bản/bản dựng.",
     "buildDev": "Bản dựng dev",
+    "dataDirMarker": "Dữ liệu: {{path}}",
     "buildRelease": "Bản dựng phát hành",
     "thirdPartyLicenses": {
       "openButton": "Giấy phép bên thứ ba",
@@ -98,6 +99,7 @@
       "hostKeys": "Khóa máy chủ",
       "wrappingFile": "Tệp khóa của mật khẩu chính",
       "mcpSettings": "Cài đặt MCP",
+      "speechModels": "Mô hình giọng nói",
       "sessions": "Phiên",
       "sessionsInDatabase": "được lưu trong cơ sở dữ liệu",
       "copy": "Sao chép",

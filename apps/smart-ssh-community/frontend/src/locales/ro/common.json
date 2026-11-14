@@ -63,6 +63,7 @@
     "copyFailed": "Copierea a eșuat — textul poate fi selectat în schimb.",
     "loadFailed": "Informațiile despre versiune/build nu au putut fi încărcate.",
     "buildDev": "Build de dezvoltare",
+    "dataDirMarker": "Date: {{path}}",
     "buildRelease": "Build de lansare",
     "thirdPartyLicenses": {
       "openButton": "Licențe terță parte",
@@ -98,6 +99,7 @@
       "hostKeys": "Chei de host",
       "wrappingFile": "Fișierul cheii parolei principale",
       "mcpSettings": "Setări MCP",
+      "speechModels": "Modele vocale",
       "sessions": "Sesiuni",
       "sessionsInDatabase": "stocate în baza de date",
       "copy": "Copiază",

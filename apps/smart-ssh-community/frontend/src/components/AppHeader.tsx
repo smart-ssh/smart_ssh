@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { getAppInfo } from "../api/api";
@@ -36,6 +37,7 @@ interface AppHeaderProps {
  * - Drag-Region via `data-tauri-drag-region`
  */
 export function AppHeader({ children }: AppHeaderProps) {
+  const { t } = useTranslation();
   const platform = usePlatform();
   const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
   const [appInfo, setAppInfo] = useState<AppInfoDto | null>(null);
@@ -133,6 +135,16 @@ export function AppHeader({ children }: AppHeaderProps) {
                       nur Dev wird markiert, Release bleibt der Normalfall. */}
                   {appInfo.buildType === "Dev" && " · Dev"} — Early Access
                 </span>
+                {appInfo.dataDirDisplay && (
+                  <span
+                    data-tauri-drag-region
+                    data-testid="titlebar-data-dir-marker"
+                    title={appInfo.dataDir ?? undefined}
+                    className="ml-1.5 max-w-[24ch] truncate align-bottom font-normal tracking-normal text-accent inline-block"
+                  >
+                    {t("about.dataDirMarker", { path: appInfo.dataDirDisplay })}
+                  </span>
+                )}
                 {appInfo.buildType === "Dev" && (
                   <span
                     data-tauri-drag-region

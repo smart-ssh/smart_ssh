@@ -63,6 +63,7 @@
     "copyFailed": "Kopieren fehlgeschlagen — Text lässt sich markieren.",
     "loadFailed": "Versions-/Build-Information konnte nicht geladen werden.",
     "buildDev": "Dev-Build",
+    "dataDirMarker": "Daten: {{path}}",
     "buildRelease": "Release-Build",
     "thirdPartyLicenses": {
       "openButton": "Drittanbieter-Lizenzen",
@@ -98,6 +99,7 @@
       "hostKeys": "Host-Keys",
       "wrappingFile": "Schlüsseldatei des Master-Passworts",
       "mcpSettings": "MCP-Einstellungen",
+      "speechModels": "Sprachmodelle",
       "sessions": "Sitzungen",
       "sessionsInDatabase": "in der Datenbank gespeichert",
       "copy": "Kopieren",

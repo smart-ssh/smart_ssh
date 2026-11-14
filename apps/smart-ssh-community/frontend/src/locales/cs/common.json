@@ -63,6 +63,7 @@
     "copyFailed": "Kopírování selhalo — text lze místo toho označit.",
     "loadFailed": "Informace o verzi a sestavení se nepodařilo načíst.",
     "buildDev": "Vývojové sestavení",
+    "dataDirMarker": "Adresář dat: {{path}}",
     "buildRelease": "Vydané sestavení",
     "thirdPartyLicenses": {
       "openButton": "Licence třetích stran",
@@ -98,6 +99,7 @@
       "hostKeys": "Klíče hostitelů",
       "wrappingFile": "Soubor klíče hlavního hesla",
       "mcpSettings": "Nastavení MCP",
+      "speechModels": "Řečové modely",
       "sessions": "Relace",
       "sessionsInDatabase": "uloženo v databázi",
       "copy": "Kopírovat",

@@ -63,6 +63,7 @@
     "copyFailed": "Kopieringen misslyckades — texten kan markeras i stället.",
     "loadFailed": "Det gick inte att läsa in versions-/bygginformationen.",
     "buildDev": "Utvecklingsbygge",
+    "dataDirMarker": "Datamapp: {{path}}",
     "buildRelease": "Releasebygge",
     "thirdPartyLicenses": {
       "openButton": "Licenser från tredje part",
@@ -98,6 +99,7 @@
       "hostKeys": "Värdnycklar",
       "wrappingFile": "Nyckelfil för huvudlösenord",
       "mcpSettings": "MCP-inställningar",
+      "speechModels": "Talmodeller",
       "sessions": "Sessioner",
       "sessionsInDatabase": "lagras i databasen",
       "copy": "Kopiera",

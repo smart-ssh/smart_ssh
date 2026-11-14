@@ -63,6 +63,7 @@
     "copyFailed": "Kopiointi epäonnistui – teksti voidaan valita sen sijaan.",
     "loadFailed": "Versio- ja koontitietoja ei voitu ladata.",
     "buildDev": "Kehitysversio",
+    "dataDirMarker": "Tiedot: {{path}}",
     "buildRelease": "Julkaisuversio",
     "thirdPartyLicenses": {
       "openButton": "Kolmansien osapuolten lisenssit",
@@ -98,6 +99,7 @@
       "hostKeys": "Isäntäavaimet",
       "wrappingFile": "Pääsalasanan avaintiedosto",
       "mcpSettings": "MCP-asetukset",
+      "speechModels": "Puhemallit",
       "sessions": "Istunnot",
       "sessionsInDatabase": "tallennettu tietokantaan",
       "copy": "Kopioi",

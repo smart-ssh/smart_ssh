@@ -39,6 +39,7 @@ pub mod confirmation_settled;
 pub mod connect;
 pub mod connect_attempts;
 pub mod credential_slots;
+pub mod data_dir_error_messages;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
 pub mod data_paths;
 /// Spec 0101, A3/A5: Die Entscheidungstabelle für den Datenbankstart und

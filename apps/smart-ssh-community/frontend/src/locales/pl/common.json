@@ -63,6 +63,7 @@
     "copyFailed": "Kopiowanie nie powiodło się — zamiast tego można zaznaczyć tekst.",
     "loadFailed": "Nie udało się wczytać informacji o wersji i kompilacji.",
     "buildDev": "Wersja deweloperska",
+    "dataDirMarker": "Dane: {{path}}",
     "buildRelease": "Wersja wydaniowa",
     "thirdPartyLicenses": {
       "openButton": "Licencje podmiotów trzecich",
@@ -98,6 +99,7 @@
       "hostKeys": "Klucze hostów",
       "wrappingFile": "Plik klucza hasła głównego",
       "mcpSettings": "Ustawienia MCP",
+      "speechModels": "Modele mowy",
       "sessions": "Sesje",
       "sessionsInDatabase": "zapisane w bazie danych",
       "copy": "Kopiuj",

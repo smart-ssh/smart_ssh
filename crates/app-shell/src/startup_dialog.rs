@@ -251,3 +251,21 @@ pub(crate) fn startup_language() -> app_logic::startup_error_messages::Language 
         ),
     )
 }
+
+/// Issue #1313: decides the data directory from the command line, the
+/// environment or the pointer file. An unusable choice shows the startup
+/// error window and ends the process; the default directory is never used
+/// as a fallback.
+pub(crate) fn resolve_data_dir_or_exit(
+    language: app_logic::startup_error_messages::Language,
+) -> &'static persistence_sqlite::ResolvedDataDir {
+    match persistence_sqlite::init_data_dir(
+        std::env::args_os().map(|a| a.to_string_lossy().into_owned()),
+    ) {
+        Ok(resolved) => resolved,
+        Err(err) => {
+            let text = app_logic::data_dir_error_messages::data_dir_failure_text(&err, language);
+            show_fatal_error_and_exit(&text.title, &text.message)
+        }
+    }
+}

@@ -416,15 +416,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // logging — the logger itself writes below it. An unusable directory
     // ends in the startup error window; there is no fallback to the default.
     let language = startup_dialog::startup_language();
-    let resolved_data_dir = match persistence_sqlite::init_data_dir(
-        std::env::args_os().map(|a| a.to_string_lossy().into_owned()),
-    ) {
-        Ok(resolved) => resolved,
-        Err(err) => {
-            let text = app_logic::startup_error_messages::data_dir_failure_text(&err, language);
-            crate::startup_dialog::show_fatal_error_and_exit(&text.title, &text.message);
-        }
-    };
+    let resolved_data_dir = startup_dialog::resolve_data_dir_or_exit(language);
     let _log_guard = app_logic::logging::init_logging();
 
     // Issue #935: before any HTTPS client is built, so dependencies that

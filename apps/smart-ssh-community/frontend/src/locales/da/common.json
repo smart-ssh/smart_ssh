@@ -63,6 +63,7 @@
     "copyFailed": "Kopiering mislykkedes – teksten kan i stedet markeres.",
     "loadFailed": "Versions- og buildoplysninger kunne ikke indlæses.",
     "buildDev": "Udviklerbuild",
+    "dataDirMarker": "Datamappe: {{path}}",
     "buildRelease": "Udgivelsesbuild",
     "thirdPartyLicenses": {
       "openButton": "Tredjepartslicenser",
@@ -98,6 +99,7 @@
       "hostKeys": "Værtsnøgler",
       "wrappingFile": "Nøglefil til hovedadgangskode",
       "mcpSettings": "MCP-indstillinger",
+      "speechModels": "Talemodeller",
       "sessions": "Sessioner",
       "sessionsInDatabase": "gemt i databasen",
       "copy": "Kopiér",

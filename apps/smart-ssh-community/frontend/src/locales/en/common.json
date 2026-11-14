@@ -63,6 +63,7 @@
     "copyFailed": "Copy failed — text can be selected instead.",
     "loadFailed": "Could not load version/build information.",
     "buildDev": "Dev build",
+    "dataDirMarker": "Data: {{path}}",
     "buildRelease": "Release build",
     "thirdPartyLicenses": {
       "openButton": "Third-party licenses",
@@ -98,6 +99,7 @@
       "hostKeys": "Host keys",
       "wrappingFile": "Master password key file",
       "mcpSettings": "MCP settings",
+      "speechModels": "Speech models",
       "sessions": "Sessions",
       "sessionsInDatabase": "stored in the database",
       "copy": "Copy",

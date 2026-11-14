@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { locale as systemLocale } from "@tauri-apps/plugin-os";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import i18next from "i18next";
+import type { AppInfoDto } from "./api/types";
 import { initReactI18next } from "react-i18next";
 import {
   DEFAULT_LANGUAGE,
@@ -52,7 +53,12 @@ export function settingsStore(): Promise<Store> {
     // für den ganzen Programmlauf kaputt bleibt: Nach dem Entsperren wären
     // Sprachwahl (Spec 0024) und Risiko-Einstellungen (Spec 0026) dauerhaft
     // nicht speicherbar, obwohl das Plugin längst da ist.
-    storePromise = load(STORE_FILE, { autoSave: false }).catch((err: unknown) => {
+    // Issue #1313: with a data-directory override the store lives inside it;
+    // the backend hands out the absolute path (an absolute path is not
+    // re-based onto the app data dir). Without one the bare name is unchanged.
+    storePromise = invoke<AppInfoDto>("get_app_info")
+      .then((info) => load(info.settingsStorePath ?? STORE_FILE, { autoSave: false }))
+      .catch((err: unknown) => {
       storePromise = null;
       throw err;
     });
