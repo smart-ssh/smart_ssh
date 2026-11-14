@@ -19,6 +19,13 @@ on:
   push:
     branches: [main, develop, "release/**", "hotfix/**"]
   pull_request:
+  # Nightly full run on `develop` (the default branch): outside changes (a new
+  # advisory, a changed toolchain or cache) turn checks red without a commit,
+  # and this makes that visible within a day. `workflow_dispatch` starts the
+  # same full run by hand.
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
 
 # Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab.
 # Jeder Push-Lauf (`main`, `develop`, `release/*`, `hotfix/*`) bekommt eine eigene Gruppe (`run_id`): Eine
