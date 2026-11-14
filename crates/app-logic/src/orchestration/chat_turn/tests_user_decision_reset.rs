@@ -72,6 +72,16 @@ async fn run_script(
     script: Vec<String>,
     decisions: Vec<ActionUserDecision>,
 ) -> (TestEmitter, usize) {
+    run_script_with(script, decisions.into_iter().map(Some).collect(), false).await
+}
+
+/// Like `run_script`; an answer of `None` leaves the prompt unanswered
+/// (it times out) or, with `drop_sender`, drops the pending sender.
+async fn run_script_with(
+    script: Vec<String>,
+    decisions: Vec<Option<ActionUserDecision>>,
+    drop_sender: bool,
+) -> (TestEmitter, usize) {
     let provider = ScriptProvider {
         script,
         next: StdMutex::new(0),
@@ -114,7 +124,12 @@ async fn run_script(
             if let Some(id) = pending {
                 answered += 1;
                 let decision = decisions.next().expect("more prompts than decisions");
-                confirmations.resolve(&id, decision).unwrap();
+                match decision {
+                    Some(d) => confirmations.resolve(&id, d).unwrap(),
+                    // Re-registering the key drops the waiting sender.
+                    None if drop_sender => drop(confirmations.register(id)),
+                    None => {}
+                }
             }
             // Sleeping (not yielding) lets the paused clock auto-advance
             // through the request pacing between rounds.
@@ -122,7 +137,7 @@ async fn run_script(
         }
     };
     // Virtual-time bound: a hang fails instead of blocking forever.
-    tokio::time::timeout(std::time::Duration::from_secs(3600), async {
+    tokio::time::timeout(std::time::Duration::from_secs(360_000), async {
         tokio::select! {
             done = turn => done,
             () = responder => unreachable!(),
@@ -259,4 +274,26 @@ async fn test_queued_message_resets_the_counter() {
     // Round 1, then the reset at round 2 gives 10 rounds from there.
     assert_eq!(proposed, 1 + MAX_AUTO_FOLLOWUP_ROUNDS);
     assert!(limit_reached(&emitter));
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_confirmation_timeout_does_not_reset_the_counter() {
+    let mut script = cmds("echo", 40);
+    script[4] = "confirm a".into();
+    // The prompt is never answered: it times out (RejectionReason::Timeout).
+    let (emitter, proposed) = run_script_with(script, vec![None], false).await;
+    assert_eq!(proposed, MAX_AUTO_FOLLOWUP_ROUNDS);
+    assert!(limit_reached(&emitter));
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_dropped_confirmation_sender_does_not_reset_the_counter() {
+    let mut script = cmds("echo", 40);
+    script[4] = "confirm a".into();
+    let (emitter, proposed) = run_script_with(script, vec![None], true).await;
+    // A dropped sender counts as an earlier rejection and ends the chain
+    // right after that round (it is not a user decision, so no reset and
+    // no continuation): the 5th proposal is the last.
+    assert_eq!(proposed, 5);
+    assert!(!limit_reached(&emitter));
 }
