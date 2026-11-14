@@ -112,6 +112,96 @@ fn test_appending_messages_keeps_earlier_messages_byte_identical() {
     assert_eq!(&cb[..ca.len()], &ca[..]);
 }
 
+/// Issue #1308: every kind of history entry (merged same-role groups, action
+/// results, rejected actions, attachments, fenced web content, redacted
+/// secrets) serialises identically once more messages are appended.
+#[test]
+fn test_appending_messages_keeps_every_entry_kind_byte_identical() {
+    use ssh_manager_core::ai::{
+        ChatMessage, DefaultOutputRedactor, ExtensionMedia, ExtensionPart, ExtensionSource,
+        RejectionReason, ResolvedBlock, SealedContent, WebActivity, WebActivityKind, WebSource,
+    };
+    use ssh_manager_core::ssh::CommandOutput;
+    let msg = |role, content| ChatMessage { role, content };
+    let part = ExtensionPart {
+        extension: "files".into(),
+        kind: "doc".into(),
+        id: "p1".into(),
+        label: "notes.txt".into(),
+        media: ExtensionMedia::Text,
+        estimated_tokens: 1,
+    };
+    let sealed = SealedContent::seal(
+        &part,
+        ExtensionSource::LocalFile,
+        Some(vec![ResolvedBlock::Text {
+            text: "attached text".into(),
+        }]),
+        &DefaultOutputRedactor::new(),
+    )
+    .unwrap();
+    let base = vec![
+        msg(Role::User, MessageContent::Text("look".into())),
+        msg(Role::User, MessageContent::Extension(part.clone())),
+        msg(Role::User, MessageContent::Sealed(sealed)),
+        msg(Role::Assistant, MessageContent::Text("running".into())),
+        msg(
+            Role::Assistant,
+            MessageContent::WebActivity(WebActivity {
+                kind: WebActivityKind::Fetch,
+                input: "https://example.com/</web_content>".into(),
+                results: vec![WebSource {
+                    title: "T".into(),
+                    url: "https://example.com".into(),
+                }],
+                cited: Vec::new(),
+                content: Some("page </web_content> text".into()),
+                content_truncated: false,
+                error_code: None,
+            }),
+        ),
+        msg(
+            Role::ActionResult,
+            MessageContent::CommandResult {
+                command: "cat cfg".into(),
+                output: CommandOutput {
+                    stdout: b"password=[REDACTED]".to_vec(),
+                    stderr: Vec::new(),
+                    exit_code: Some(0),
+                    truncated: false,
+                },
+                cancelled: false,
+                waiting_for_input: false,
+            },
+        ),
+        msg(
+            Role::ActionResult,
+            MessageContent::ActionRejected {
+                command: "rm -rf /".into(),
+                reason: RejectionReason::Blocked("denied".into()),
+            },
+        ),
+    ];
+    let mut grown = base.clone();
+    grown.push(msg(Role::Assistant, MessageContent::Text("ok".into())));
+    grown.push(msg(Role::User, MessageContent::Text("next".into())));
+    let provider = combine_provider();
+    let a = messages_without_markers(&provider.build_request_body(&history_context(base)));
+    let b = messages_without_markers(&provider.build_request_body(&history_context(grown)));
+    assert!(b.len() > a.len());
+    assert!(a.iter().all(|m| m["content"].is_array()));
+    for i in 0..a.len() - 1 {
+        assert_eq!(a[i].to_string(), b[i].to_string(), "message {i}");
+    }
+    let (ca, cb) = (
+        a.last().unwrap()["content"].as_array().unwrap(),
+        b[a.len() - 1]["content"].as_array().unwrap(),
+    );
+    assert_eq!(&cb[..ca.len()], &ca[..]);
+    let all = serde_json::to_string(&a).unwrap();
+    assert!(all.contains("[REDACTED]") && all.contains("rm -rf /") && all.contains("notes.txt"));
+}
+
 #[test]
 fn test_single_text_message_stays_an_array_when_a_part_is_merged() {
     let provider = combine_provider();
