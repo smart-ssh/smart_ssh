@@ -66,38 +66,15 @@ pub fn harden_permissions(path: &Path, mode: u32, kind: &'static str) {
 #[cfg(unix)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone, Default)]
-    struct Buf(Arc<Mutex<Vec<u8>>>);
-    impl std::io::Write for Buf {
-        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(b);
-            Ok(b.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Buf {
-        type Writer = Buf;
-        fn make_writer(&'a self) -> Buf {
-            self.clone()
-        }
-    }
+    use crate::log_capture;
 
     #[test]
     fn test_failing_chmod_warns_and_does_not_fail() {
-        let buf = Buf::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(buf.clone())
-            .with_ansi(false)
-            .finish();
+        // Global thread-local capture, never a scoped dispatcher (#1336).
+        log_capture::start_recording();
         let missing = Path::new("/nonexistent-dir-for-harden-test/secret.db");
-        tracing::subscriber::with_default(subscriber, || {
-            harden_permissions(missing, 0o600, "database");
-        });
-        let out = String::from_utf8(buf.0.lock().unwrap().clone()).unwrap();
+        harden_permissions(missing, 0o600, "database");
+        let out = log_capture::recorded_lines().join("\n");
         assert!(out.contains("WARN"), "{out}");
         assert!(out.contains("database"), "{out}");
         assert!(out.contains("600"), "{out}");
