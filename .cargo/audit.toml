@@ -126,6 +126,29 @@ ignore = [
     # Überholt, wenn: ein `sqlx`-Release eine `libsqlite3-sys` erlaubt, deren
     # SQLCipher auf SQLite >= 3.54 beruht; spätestens 2027-01-31 erneut prüfen.
     "RUSTSEC-2026-0459",
+
+    # --- RUSTSEC-2026-0495: documented risk acceptance (2026-11-14) ---
+    #
+    # russh < 0.65.0: the agent server (`russh::keys::agent::server`) signs
+    # with confirm-constrained keys without calling `Agent::confirm`.
+    # Decided by the maintainer, see issue #1310.
+    #
+    # Acceptable: the application does not use the russh agent server; outside
+    # `vendor/russh` nothing references `keys::agent::server`. It only acts as
+    # an SSH client (and talks to the user's agent as a client).
+    #
+    # Note: on `develop` russh comes from `vendor/russh` (path crate, 0.63.2),
+    # which cargo-audit does not check, so the advisory only shows up where
+    # russh comes from crates.io; the affected code is still present.
+    #
+    # Activation: while russh is the `[patch.crates-io]` path crate the A4
+    # stale-exemption check (Spec 0090) would flag an active entry. Once russh
+    # comes from crates.io again (no path patch) and is still < 0.65.0,
+    # add the ID to `ignore` (quoted, as above; keep it unquoted while commented).
+    #
+    # Obsolete when: russh >= 0.65.0 is used, including an upgrade of
+    # `vendor/russh`.
+    # RUSTSEC-2026-0495 goes here once activated.
 ]
 
 # `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
