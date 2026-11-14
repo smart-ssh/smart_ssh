@@ -41,18 +41,22 @@ Ein Debug-Build (`cargo tauri dev`) nutzt ein eigenes Datenverzeichnis, damit
 er die Datenbank einer installierten Version nicht verändert (ADR 0032):
 `Smart SSH (dev)` statt `Smart SSH` auf macOS und Windows, `smart-ssh-dev`
 statt `smart-ssh` auf Linux. Das betrifft Datenbank, Host-Keys und
-Schlüsseldatei; Logs und `settings.json` liegen am selben Ort wie oben.
+Schlüsseldatei; Logs und `settings.json` liegen am selben Ort wie oben (außer mit Override).
 
-## Eigenes Datenverzeichnis: `SMART_SSH_DATA_DIR`
+## Eigenes Datenverzeichnis (Spec 0115)
 
-Ist die Umgebungsvariable `SMART_SSH_DATA_DIR` gesetzt und nicht leer, liegen
-**Datenbank, Host-Keys und Schlüsseldatei** in diesem Verzeichnis — in
-Release- und Debug-Builds gleichermaßen, ohne Debug-Suffix:
+Quellen, höchste zuerst: `--data-dir <pfad>`, Umgebungsvariable
+`SMART_SSH_DATA_DIR`, Zeigerdatei neben der App
+(`<App-Name>.data-dir`, erste Zeile = Pfad), Standard. Ein leerer Wert gilt
+als nicht gesetzt.
 
 ```sh
 SMART_SSH_DATA_DIR=/pfad/zu/testdaten smart-ssh
+smart-ssh --data-dir /pfad/zu/testdaten
 ```
 
-Logs und `settings.json` bleiben an ihrem Standardort. Ein leerer Wert gilt
-als nicht gesetzt. Die Anzeige in den Einstellungen zeigt immer die
-tatsächlich wirksamen Pfade, also auch den Override.
+Mit einem Override liegen **alle** Dateien darin: Datenbank, Host-Keys,
+Schlüsseldatei, dem Ordner `logs`, `settings.json` und dem Ordner `speech-models`, in Release-
+und Debug-Builds gleichermaßen, ohne Debug-Suffix. Schlüsselbund-Einträge
+bleiben gemeinsam. Die Anzeige in den Einstellungen zeigt immer die
+tatsächlich wirksamen Pfade.
