@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
+    "copyCode": "コードをコピー",
+    "codeCopied": "コードをコピーしました",
+    "codeCopyFailed": "コピーに失敗しました",
     "composerMore": "その他の入力操作",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",

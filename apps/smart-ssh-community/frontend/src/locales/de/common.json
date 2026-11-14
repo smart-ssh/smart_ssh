@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
+    "copyCode": "Code kopieren",
+    "codeCopied": "Code kopiert",
+    "codeCopyFailed": "Kopieren fehlgeschlagen",
     "composerMore": "Weitere Eingabe-Aktionen",
     "newChat": "Neuer Chat",
     "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",

@@ -635,6 +635,21 @@ function renderFontSection(fontLicensePath) {
   return ["## Schriften", "", content.trimEnd(), ""].join("\n");
 }
 
+// Spec 0108: Sprachmodelle werden nicht mitgeliefert, sondern auf
+// Nutzerwunsch geladen; die Namensnennung der CC-BY-4.0-Lizenz steht trotzdem
+// hier, weil die App das Modell verwendet.
+const SPEECH_MODEL_ATTRIBUTION = [
+  "Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0",
+  "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+  "License: https://creativecommons.org/licenses/by/4.0/",
+  "ONNX conversion used by the app: https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+  "(CC-BY-4.0; int8 quantised, no other changes by Smart SSH).",
+];
+
+function renderSpeechModelSection() {
+  return ["## Sprachmodelle", "", ...SPEECH_MODEL_ATTRIBUTION, ""].join("\n");
+}
+
 // --- main ------------------------------------------------------------------
 
 function generate(args) {
@@ -690,6 +705,7 @@ function generate(args) {
     renderLicenseSection("npm-Produktionsabhaengigkeiten", npmGroups),
     renderLicenseSection("Build-Werkzeuge mit ausgeliefertem Code (devDependencies)", devGroups),
     renderFontSection(args.fontLicense),
+    renderSpeechModelSection(),
     renderNoticesSection([...rustNotices, ...vendoredLicenseNotices, ...npmNotices, ...devNotices]),
   ].join("\n");
 
@@ -735,4 +751,5 @@ export {
   collectNpmProdPackages,
   groupByText,
   generate,
+  renderSpeechModelSection,
 };

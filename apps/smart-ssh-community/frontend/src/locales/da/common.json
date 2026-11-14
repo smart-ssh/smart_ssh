@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
+    "copyCode": "Kopiér kode",
+    "codeCopied": "Kode kopieret",
+    "codeCopyFailed": "Kopiering mislykkedes",
     "composerMore": "Flere inputhandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgængelig, mens AI svarer, eller en bekræftelse er åben.",

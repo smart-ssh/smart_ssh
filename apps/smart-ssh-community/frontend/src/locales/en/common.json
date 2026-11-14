@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
+    "copyCode": "Copy code",
+    "codeCopied": "Code copied",
+    "codeCopyFailed": "Copy failed",
     "composerMore": "More input actions",
     "newChat": "New chat",
     "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",

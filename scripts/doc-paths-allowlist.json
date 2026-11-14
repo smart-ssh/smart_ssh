@@ -153,6 +153,10 @@
     {
       "token": "ggerganov/whisper.cpp",
       "reason": "GitHub owner/repository name, not a repository path."
+    },
+    {
+      "token": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+      "reason": "Hugging Face owner/repository name, not a repository path."
     }
   ],
   "docs/recipes/new-ui-text.md": [

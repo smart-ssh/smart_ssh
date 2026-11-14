@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
+    "copyCode": "Kopioi koodi",
+    "codeCopied": "Koodi kopioitu",
+    "codeCopyFailed": "Kopiointi epäonnistui",
     "composerMore": "Lisää syöttötoimintoja",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",

@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
+    "copyCode": "Kopiera kod",
+    "codeCopied": "Koden kopierad",
+    "codeCopyFailed": "Kopieringen misslyckades",
     "composerMore": "Fler inmatningsåtgärder",
     "newChat": "Ny chatt",
     "newChatDisabledHint": "Inte tillgängligt medan AI svarar eller en bekräftelse är öppen.",
