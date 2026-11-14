@@ -1,5 +1,5 @@
-//! Local transcription behind a trait. The whisper.cpp engine runs only on
-//! a verified model file (Spec 0108, 6).
+//! Local transcription behind a trait. The engines run only on verified model
+//! files (Spec 0108, 6).
 
 use std::path::Path;
 
@@ -43,11 +43,10 @@ pub fn parse_language(setting: &str) -> Result<Option<String>, InvalidLanguage> 
     if s.is_empty() || s == "auto" {
         return Ok(None);
     }
-    if whisper_rs::get_lang_id(&s).is_some() {
-        Ok(Some(s))
-    } else {
-        Err(InvalidLanguage)
-    }
+    // The ISO code or the English name Whisper knows; the code is returned.
+    crate::whisper::language_code(&s)
+        .map(|code| Some(code.to_owned()))
+        .ok_or(InvalidLanguage)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,86 +163,17 @@ pub fn strip_non_speech(text: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// whisper.cpp on the CPU.
-#[derive(Default)]
-pub struct WhisperTranscriber;
-
-struct WhisperSession(whisper_rs::WhisperContext);
-
-impl TranscribeSession for WhisperSession {
-    fn transcribe(
-        &self,
-        samples: &[f32],
-        language: Option<&str>,
-    ) -> Result<String, TranscribeError> {
-        use whisper_rs::{FullParams, SamplingStrategy};
-        let mut state = self.0.create_state().map_err(|_| TranscribeError)?;
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        params.set_language(Some(language.unwrap_or("auto")));
-        params.set_translate(false);
-        params.set_print_special(false);
-        params.set_print_progress(false);
-        params.set_print_realtime(false);
-        params.set_print_timestamps(false);
-        params.set_suppress_blank(true);
-        params.set_suppress_nst(true);
-        params.set_no_speech_thold(0.6);
-        state.full(params, samples).map_err(|_| TranscribeError)?;
-        let mut text = String::new();
-        for segment in state.as_iter() {
-            let cleaned = strip_non_speech(&segment.to_string());
-            if cleaned.is_empty() {
-                continue;
-            }
-            if !text.is_empty() {
-                text.push(' ');
-            }
-            text.push_str(&cleaned);
-        }
-        Ok(text)
-    }
-}
-
-impl Transcriber for WhisperTranscriber {
-    fn transcribe(
-        &self,
-        model: &Path,
-        samples: &[f32],
-        language: Option<&str>,
-    ) -> Result<String, TranscribeError> {
-        let session = self.open_session(model)?.ok_or(TranscribeError)?;
-        session.transcribe(samples, language)
-    }
-
-    fn open_session(
-        &self,
-        model: &Path,
-    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
-        use whisper_rs::{WhisperContext, WhisperContextParameters};
-        let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
-            .map_err(|_| TranscribeError)?;
-        Ok(Some(Box::new(WhisperSession(ctx))))
-    }
-}
-
-/// Picks the engine from what the model path is: a directory is a Parakeet
-/// model (several files), a file is a Whisper GGML model.
+/// Picks the engine from the files in the model directory.
 #[derive(Default)]
 pub struct SpeechTranscriber;
 
 impl SpeechTranscriber {
-    #[cfg(not(target_os = "android"))]
     fn engine_for(model: &Path) -> Box<dyn Transcriber> {
-        if model.is_dir() {
-            Box::new(crate::parakeet::ParakeetTranscriber)
+        if model.join(crate::whisper::ENCODER).is_file() {
+            Box::new(crate::whisper::WhisperTranscriber)
         } else {
-            Box::new(WhisperTranscriber)
+            Box::new(crate::parakeet::ParakeetTranscriber)
         }
-    }
-
-    #[cfg(target_os = "android")]
-    fn engine_for(_model: &Path) -> Box<dyn Transcriber> {
-        Box::new(WhisperTranscriber)
     }
 }
 

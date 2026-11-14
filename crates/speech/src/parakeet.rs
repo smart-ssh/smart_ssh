@@ -262,7 +262,7 @@ where
 
 /// Splits long audio into pieces of at most [`CHUNK_SAMPLES`], cutting at the
 /// quietest 20 ms near the end of each piece.
-fn split_chunks(samples: &[f32]) -> Vec<&[f32]> {
+pub(crate) fn split_chunks(samples: &[f32]) -> Vec<&[f32]> {
     let mut out = Vec::new();
     let mut rest = samples;
     while rest.len() > CHUNK_SAMPLES {

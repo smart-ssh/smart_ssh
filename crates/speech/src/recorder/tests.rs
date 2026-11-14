@@ -153,7 +153,7 @@ fn recorder(
 }
 
 fn model() -> Option<PathBuf> {
-    Some(PathBuf::from("/models/ggml-base.bin"))
+    Some(PathBuf::from("/models/whisper-base-int8"))
 }
 
 #[tokio::test]
@@ -166,7 +166,7 @@ async fn start_stop_returns_transcribed_text_from_wav() {
     assert_eq!(rec.stop().await.unwrap(), format!("heard {n} samples"));
     assert_eq!(
         tr.calls.lock().unwrap()[0].0,
-        PathBuf::from("/models/ggml-base.bin")
+        PathBuf::from("/models/whisper-base-int8")
     );
     assert_eq!(
         *events.lock().unwrap(),
@@ -323,7 +323,7 @@ fn language_setting_parses() {
 }
 
 /// Real Whisper inference; needs a downloaded model:
-/// `SMART_SSH_WHISPER_MODEL=/path/ggml-base.bin cargo test -p speech -- --ignored`
+/// `SMART_SSH_WHISPER_MODEL=/path/to/whisper-base-int8 cargo test -p speech -- --ignored`
 #[test]
 #[ignore]
 fn whisper_engine_runs_on_the_bundled_wav() {
