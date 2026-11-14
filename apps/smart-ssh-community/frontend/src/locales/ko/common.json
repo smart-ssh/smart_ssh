@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "하드 블랙리스트:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}}단계 후 자동 계속이 일시 중지되었습니다. 계속하려면 메시지를 보내십시오.",
+    "autoContinuationLimitReached": "확인 없이 {{limit}}단계가 진행되어 자동 계속이 일시 중지되었습니다. 계속하려면 메시지를 보내십시오.",
     "aiBudgetWaiting": "AI 사용 한도를 기다리는 중 — {{seconds}}초 후 다시 시도합니다…",
     "suggestCommand": "명령 제안",
     "generateDocument": "문서 생성: {{title}}",

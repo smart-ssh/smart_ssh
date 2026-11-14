@@ -651,6 +651,15 @@ async fn await_confirmation(
         }
     };
     drop(cleanup);
+    // Issue #1296: only a genuine user decision in the chat flow restarts
+    // the auto-continuation count (Timeout/Reconnect are not decisions).
+    if matches!(deny_reason, RejectionReason::User) && matches!(ctx.origin, ActionOrigin::Internal)
+    {
+        ctx.session
+            .conn
+            .user_decided_in_turn
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
     emit_settled_for_rejection(ctx.emitter, ctx.session_id, ctx.action_id, &deny_reason);
     if matches!(user_decision, ActionUserDecision::Deny) {
         ctx.earlier_rejection

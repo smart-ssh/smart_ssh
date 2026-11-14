@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "硬性黑名单："
   },
   "actionCard": {
-    "autoContinuationLimitReached": "自动继续已在 {{limit}} 步后暂停——发送一条消息即可继续。",
+    "autoContinuationLimitReached": "在 {{limit}} 步内未经您确认，自动继续已暂停——发送一条消息即可继续。",
     "aiBudgetWaiting": "正在等待 AI 额度——{{seconds}} 秒后再次尝试…",
     "suggestCommand": "建议命令",
     "generateDocument": "生成文档：{{title}}",

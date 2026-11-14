@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Lista negra fija:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuación automática en pausa tras {{limit}} pasos: envíe un mensaje para continuar.",
+    "autoContinuationLimitReached": "Continuación automática en pausa tras {{limit}} pasos sin su confirmación: envíe un mensaje para continuar.",
     "aiBudgetWaiting": "Esperando presupuesto de IA: próximo intento en {{seconds}} s…",
     "suggestCommand": "Sugerir comando",
     "generateDocument": "Generar documento: {{title}}",

@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Liste noire stricte :"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes — envoyez un message pour continuer.",
+    "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes sans votre confirmation — envoyez un message pour continuer.",
     "aiBudgetWaiting": "En attente du budget IA — prochaine tentative dans {{seconds}} s…",
     "suggestCommand": "Suggérer une commande",
     "generateDocument": "Générer un document : {{title}}",

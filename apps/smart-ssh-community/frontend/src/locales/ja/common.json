@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "ハードブラックリスト:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}}ステップで自動継続を一時停止しました。メッセージを送信すると続行します。",
+    "autoContinuationLimitReached": "確認なしで{{limit}}ステップが続いたため、自動継続を一時停止しました。メッセージを送信すると続行します。",
     "aiBudgetWaiting": "AIの利用枠を待機中 — {{seconds}}秒後に再試行します…",
     "suggestCommand": "コマンドを提案",
     "generateDocument": "ドキュメントを生成: {{title}}",

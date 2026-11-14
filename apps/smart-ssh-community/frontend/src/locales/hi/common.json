@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
+    "autoContinuationLimitReached": "आपकी पुष्टि के बिना {{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
     "aiBudgetWaiting": "AI बजट की प्रतीक्षा — अगला प्रयास {{seconds}} सेकंड में…",
     "suggestCommand": "कमांड सुझाएँ",
     "generateDocument": "दस्तावेज़ बनाएँ: {{title}}",

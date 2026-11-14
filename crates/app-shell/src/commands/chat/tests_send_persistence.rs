@@ -109,6 +109,7 @@ fn test_session(server_id: ServerId) -> Session {
             pending_action: std::sync::Mutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
+            user_decided_in_turn: std::sync::atomic::AtomicBool::new(false),
             chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
             // Spec 0092, A1.2: default on, as in the app
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),

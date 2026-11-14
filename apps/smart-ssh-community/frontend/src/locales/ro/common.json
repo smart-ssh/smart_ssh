@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Listă neagră fixă:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași — trimiteți un mesaj pentru a continua.",
+    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",
     "aiBudgetWaiting": "Se așteaptă bugetul IA — următoarea încercare în {{seconds}}s…",
     "suggestCommand": "Sugerează comandă",
     "generateDocument": "Generează document: {{title}}",
