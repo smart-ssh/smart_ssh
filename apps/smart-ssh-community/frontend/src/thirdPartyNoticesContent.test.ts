@@ -75,6 +75,9 @@ describe("Drittlizenzen: Hinweisdateien (Spec 0099, A1.2)", () => {
 // of a generated file).
 describe("Drittlizenzen: Sprachmodell-Namensnennung (Spec 0108)", () => {
   it("nennt Whisper, OpenAI, Apache-2.0 und die ONNX-Quellen", async () => {
+    const { renderSpeechModelSection } = await import(
+      "../../../../scripts/generate-third-party-notices.mjs"
+    );
     const section = renderSpeechModelSection();
     expect(section).toContain("Whisper base and small by OpenAI, Apache-2.0");
     expect(section).toContain("https://huggingface.co/onnx-community/whisper-base");
