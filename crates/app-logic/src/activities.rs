@@ -57,6 +57,9 @@ pub struct Activity {
     pub error_code: Option<String>,
     pub error_message: Option<String>,
     pub cancellable: bool,
+    /// Quitting stores this activity so it can be offered for resuming
+    /// after the next start (issue #1327).
+    pub resumable: bool,
     /// Unix milliseconds.
     pub started_at: u64,
     /// `true` on the final event after `dismiss`: remove the row.
@@ -76,6 +79,39 @@ pub struct ActivitySpec {
     pub title_params: BTreeMap<String, String>,
     #[serde(default)]
     pub cancellable: bool,
+    #[serde(default)]
+    pub total: Option<u64>,
+    /// Makes the activity resumable after a quit: `kind` selects the resume
+    /// handler, `key` identifies the subject (issue #1327).
+    #[serde(default)]
+    pub resume: Option<ResumeSpec>,
+}
+
+/// Which resume handler an interrupted activity belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct ResumeSpec {
+    pub kind: String,
+    pub key: String,
+}
+
+/// An activity that a quit interrupted, as stored in the settings store and
+/// shown as "Interrupted" at the next start. Holds no secrets and no URLs:
+/// only what the row needs to be shown and handed back to its handler.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct InterruptedActivity {
+    /// Identifies the stored entry (not the id of the old activity).
+    pub id: String,
+    pub kind: String,
+    pub key: String,
+    pub title_key: String,
+    #[serde(default)]
+    pub title_params: BTreeMap<String, String>,
+    #[serde(default)]
+    pub done: u64,
     #[serde(default)]
     pub total: Option<u64>,
 }
@@ -134,6 +170,7 @@ type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 struct Entry {
     activity: Activity,
     on_cancel: Option<CancelCallback>,
+    resume: Option<ResumeSpec>,
     /// Clock value of the last progress event sent for this activity.
     last_emit: Option<u64>,
 }
@@ -189,6 +226,7 @@ impl ActivityRegistry {
             error_code: None,
             error_message: None,
             cancellable: spec.cancellable,
+            resumable: spec.resume.is_some(),
             started_at: now,
             dismissed: false,
         };
@@ -201,6 +239,7 @@ impl ActivityRegistry {
                 Entry {
                     activity: activity.clone(),
                     on_cancel: None,
+                    resume: spec.resume,
                     last_emit: Some(now),
                 },
             );
@@ -216,6 +255,38 @@ impl ActivityRegistry {
             .order
             .iter()
             .filter_map(|id| inner.entries.get(id).map(|e| e.activity.clone()))
+            .collect()
+    }
+
+    /// Running activities that a quit would interrupt: cancellable or
+    /// resumable ones (issue #1327).
+    pub fn quit_blockers(&self) -> Vec<Activity> {
+        self.list()
+            .into_iter()
+            .filter(|a| a.state == ActivityState::Running && (a.cancellable || a.resumable))
+            .collect()
+    }
+
+    /// The running resumable activities in the form that is stored on quit.
+    pub fn interrupted_snapshot(&self) -> Vec<InterruptedActivity> {
+        let inner = lock_tolerating_poison(&self.inner);
+        inner
+            .order
+            .iter()
+            .filter_map(|id| inner.entries.get(id))
+            .filter(|e| e.activity.state == ActivityState::Running)
+            .filter_map(|e| {
+                let r = e.resume.as_ref()?;
+                Some(InterruptedActivity {
+                    id: Uuid::new_v4().to_string(),
+                    kind: r.kind.clone(),
+                    key: r.key.clone(),
+                    title_key: e.activity.title_key.clone(),
+                    title_params: e.activity.title_params.clone(),
+                    done: e.activity.done,
+                    total: e.activity.total,
+                })
+            })
             .collect()
     }
 
@@ -374,6 +445,62 @@ impl ActivityRegistry {
         match serde_json::to_value(activity) {
             Ok(v) => self.emitter.emit_event(names::ACTIVITY_CHANGED, v),
             Err(err) => tracing::warn!(error = %err, "activity event not serialisable"),
+        }
+    }
+}
+
+/// Called to resume an interrupted activity: starts a fresh activity.
+pub type ResumeFn = Arc<dyn Fn(&InterruptedActivity) -> CommandResult<()> + Send + Sync>;
+/// Called when the user discards an interrupted activity (e.g. delete
+/// partial files).
+pub type DiscardFn = Arc<dyn Fn(&InterruptedActivity) + Send + Sync>;
+
+#[derive(Clone)]
+struct ResumeHandler {
+    resume: ResumeFn,
+    discard: Option<DiscardFn>,
+}
+
+/// Resume handlers by activity kind (issue #1327). Handlers are registered
+/// by the core and by extensions at start-up; the first registration of a
+/// kind wins, later ones are ignored.
+#[derive(Default)]
+pub struct ResumeRegistry {
+    handlers: Mutex<HashMap<String, ResumeHandler>>,
+}
+
+impl ResumeRegistry {
+    /// Returns `false` (and keeps the existing handler) when the kind is taken.
+    pub fn register(&self, kind: &str, resume: ResumeFn, discard: Option<DiscardFn>) -> bool {
+        let mut map = lock_tolerating_poison(&self.handlers);
+        if map.contains_key(kind) {
+            return false;
+        }
+        map.insert(kind.to_owned(), ResumeHandler { resume, discard });
+        true
+    }
+
+    pub fn has(&self, kind: &str) -> bool {
+        lock_tolerating_poison(&self.handlers).contains_key(kind)
+    }
+
+    /// Calls the handler of the entry's kind; unknown kind ⇒ error.
+    pub fn resume(&self, entry: &InterruptedActivity) -> CommandResult<()> {
+        let handler = lock_tolerating_poison(&self.handlers).get(&entry.kind).cloned();
+        match handler {
+            Some(h) => (h.resume)(entry),
+            None => Err(CommandError::with_code(
+                "no resume handler for this kind",
+                "activity_resume_unhandled",
+            )),
+        }
+    }
+
+    /// Runs the optional discard handler of the entry's kind.
+    pub fn discard(&self, entry: &InterruptedActivity) {
+        let handler = lock_tolerating_poison(&self.handlers).get(&entry.kind).cloned();
+        if let Some(discard) = handler.and_then(|h| h.discard) {
+            discard(entry);
         }
     }
 }
