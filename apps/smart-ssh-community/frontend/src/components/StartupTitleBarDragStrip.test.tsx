@@ -30,6 +30,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("../api/events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
   onStartupUnlocked: vi.fn(() => Promise.resolve(() => {})),
+  onActivityChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 // `../i18n` spricht beim Import die Tauri-Plugins `store`/`os` an.
