@@ -9,6 +9,15 @@ import { listenTyped } from "./listenTyped";
 export type SpeechModelId = "base" | "small";
 export const SPEECH_MODELS: readonly SpeechModelId[] = ["base", "small"];
 
+/** Entry of `list_speech_models`: what the backend offers on this platform. */
+export interface SpeechModelInfo {
+  id: string;
+  engine: "whisper" | "parakeet";
+  total_size: number;
+  source_host: string;
+  source_repo: string;
+}
+
 export type SpeechModelStatus =
   | { state: "not_downloaded" }
   | { state: "downloading"; done: number; total: number }
@@ -22,6 +31,7 @@ export type RecordingState = "recording" | "transcribing" | "idle" | "finished";
 export const getSelectedSpeechModel = () => invoke<SpeechModelId>("get_selected_speech_model");
 export const setSelectedSpeechModel = (model: SpeechModelId) =>
   invoke<void>("set_selected_speech_model", { model });
+export const listSpeechModels = () => invoke<SpeechModelInfo[]>("list_speech_models");
 export const getSpeechModelStatus = (model: SpeechModelId) =>
   invoke<SpeechModelStatusEvent>("get_speech_model_status", { model });
 export const startSpeechModelDownload = (model: SpeechModelId) =>

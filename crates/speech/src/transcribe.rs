@@ -3,7 +3,8 @@
 
 use std::path::Path;
 
-/// `None` = auto-detect, `Some(code)` = fixed language.
+/// `None` = auto-detect, `Some(code)` = fixed language. Engines that always
+/// detect the language themselves (Parakeet) ignore it.
 pub trait Transcriber: Send + Sync {
     fn transcribe(
         &self,
@@ -222,6 +223,45 @@ impl Transcriber for WhisperTranscriber {
         let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
             .map_err(|_| TranscribeError)?;
         Ok(Some(Box::new(WhisperSession(ctx))))
+    }
+}
+
+/// Picks the engine from what the model path is: a directory is a Parakeet
+/// model (several files), a file is a Whisper GGML model.
+#[derive(Default)]
+pub struct SpeechTranscriber;
+
+impl SpeechTranscriber {
+    #[cfg(not(target_os = "android"))]
+    fn engine_for(model: &Path) -> Box<dyn Transcriber> {
+        if model.is_dir() {
+            Box::new(crate::parakeet::ParakeetTranscriber)
+        } else {
+            Box::new(WhisperTranscriber)
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    fn engine_for(_model: &Path) -> Box<dyn Transcriber> {
+        Box::new(WhisperTranscriber)
+    }
+}
+
+impl Transcriber for SpeechTranscriber {
+    fn transcribe(
+        &self,
+        model: &Path,
+        samples: &[f32],
+        language: Option<&str>,
+    ) -> Result<String, TranscribeError> {
+        Self::engine_for(model).transcribe(model, samples, language)
+    }
+
+    fn open_session(
+        &self,
+        model: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        Self::engine_for(model).open_session(model)
     }
 }
 

@@ -819,6 +819,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             elevated_sftp::idle::set_elevated_idle_timeout,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
+            speech_models::list_speech_models,
             speech_models::get_speech_model_status,
             speech_models::start_speech_model_download,
             speech_models::cancel_speech_model_download,

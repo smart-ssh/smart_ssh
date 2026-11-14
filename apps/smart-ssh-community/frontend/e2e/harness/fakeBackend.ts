@@ -386,6 +386,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     stop_auto_reconnect: () => null,
     get_selected_speech_model: () => "base",
     get_speech_language: () => "auto",
+    list_speech_models: () => [],
     get_speech_model_status: (args) => ({ model: (args as { model: string }).model, state: "not_downloaded" }),
     set_selected_speech_model: () => null,
     set_speech_language: () => null,

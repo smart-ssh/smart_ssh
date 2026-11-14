@@ -8,6 +8,11 @@ GGML_NATIVE = "OFF"
 # bundle (ignored outside Apple targets).
 MACOSX_DEPLOYMENT_TARGET = "10.15"
 
+# Parakeet (Spec 0108, ADR 0157) runs on ONNX Runtime. `ort-sys` downloads the
+# prebuilt static library once at build time (hash-checked, from its build
+# script) and links it in; nothing is fetched at run time. Not built for
+# Android. A fully offline build needs `ORT_LIB_PATH` pointing at a local copy.
+
 # Android 15+ devices may use 16 KB memory pages: every .so must have its LOAD
 # segments aligned to 16 KB. NDK r27 links with 4 KB unless told otherwise
 # (docs/android-build.md). Static native parts (OpenSSL, whisper.cpp) end up
