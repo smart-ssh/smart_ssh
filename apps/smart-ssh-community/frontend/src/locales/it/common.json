@@ -1582,6 +1582,18 @@
     "failed": "Non riuscito",
     "inProgress": "In corso",
     "verifying": "Verifica in corso",
-    "speechModelTitle": "Modello vocale {{name}}"
+    "speechModelTitle": "Modello vocale {{name}}",
+    "buttonInterrupted": "Attività: alcune sono state interrotte",
+    "interrupted": "Interrotta",
+    "resume": "Riprendi",
+    "resumeNamed": "Riprendi {{title}}",
+    "discard": "Scarta",
+    "discardNamed": "Scarta {{title}}",
+    "resumeFailed": "Impossibile riprendere.",
+    "quitTitle": "Uscire mentre ci sono attività in corso?",
+    "quitBody": "Queste attività sono ancora in corso e verranno fermate:",
+    "quitResumeHint": "I download interrotti possono essere ripresi al prossimo avvio dell'app.",
+    "quitAnyway": "Esci comunque",
+    "keepRunning": "Continua l'esecuzione"
   }
 }

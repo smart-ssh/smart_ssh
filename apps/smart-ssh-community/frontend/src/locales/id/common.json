@@ -1566,6 +1566,18 @@
     "failed": "Gagal",
     "inProgress": "Sedang berjalan",
     "verifying": "Memverifikasi",
-    "speechModelTitle": "Model ucapan {{name}}"
+    "speechModelTitle": "Model ucapan {{name}}",
+    "buttonInterrupted": "Aktivitas: beberapa terhenti",
+    "interrupted": "Terhenti",
+    "resume": "Lanjutkan",
+    "resumeNamed": "Lanjutkan {{title}}",
+    "discard": "Buang",
+    "discardNamed": "Buang {{title}}",
+    "resumeFailed": "Tidak dapat melanjutkan.",
+    "quitTitle": "Keluar saat aktivitas masih berjalan?",
+    "quitBody": "Aktivitas ini masih berjalan dan akan dihentikan:",
+    "quitResumeHint": "Unduhan yang terhenti dapat dilanjutkan saat Anda memulai aplikasi lagi.",
+    "quitAnyway": "Tetap keluar",
+    "keepRunning": "Biarkan berjalan"
   }
 }

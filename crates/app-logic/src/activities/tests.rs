@@ -264,7 +264,7 @@ fn resume_registry_calls_resume_and_discard_and_rejects_unknown_kinds() {
     reg.discard(&entry("k1"));
     assert!(resumed.load(Ordering::SeqCst) && discarded.load(Ordering::SeqCst));
     assert_eq!(
-        reg.resume(&entry("k2")).unwrap_err().code.as_deref(),
+        reg.resume(&entry("k2")).unwrap_err().code,
         Some("activity_resume_unhandled")
     );
     // Discard without a handler is a no-op.

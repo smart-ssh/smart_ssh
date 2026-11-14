@@ -1590,6 +1590,18 @@
     "failed": "Помилка",
     "inProgress": "Виконується",
     "verifying": "Перевірка",
-    "speechModelTitle": "Мовна модель {{name}}"
+    "speechModelTitle": "Мовна модель {{name}}",
+    "buttonInterrupted": "Дії: деякі було перервано",
+    "interrupted": "Перервано",
+    "resume": "Відновити",
+    "resumeNamed": "Відновити: {{title}}",
+    "discard": "Скасувати",
+    "discardNamed": "Скасувати: {{title}}",
+    "resumeFailed": "Не вдалося відновити.",
+    "quitTitle": "Вийти, поки виконуються дії?",
+    "quitBody": "Ці дії ще виконуються і будуть зупинені:",
+    "quitResumeHint": "Перервані завантаження можна відновити під час наступного запуску застосунку.",
+    "quitAnyway": "Усе одно вийти",
+    "keepRunning": "Залишити виконання"
   }
 }

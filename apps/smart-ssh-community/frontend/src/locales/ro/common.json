@@ -1582,6 +1582,18 @@
     "failed": "Eșuat",
     "inProgress": "În curs",
     "verifying": "Se verifică",
-    "speechModelTitle": "Model vocal {{name}}"
+    "speechModelTitle": "Model vocal {{name}}",
+    "buttonInterrupted": "Activități: unele au fost întrerupte",
+    "interrupted": "Întrerupt",
+    "resume": "Reia",
+    "resumeNamed": "Reia {{title}}",
+    "discard": "Renunță",
+    "discardNamed": "Renunță la {{title}}",
+    "resumeFailed": "Nu s-a putut relua.",
+    "quitTitle": "Ieși cât timp rulează activități?",
+    "quitBody": "Aceste activități încă rulează și vor fi oprite:",
+    "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
+    "quitAnyway": "Ieși oricum",
+    "keepRunning": "Lasă să ruleze"
   }
 }

@@ -38,6 +38,21 @@ use app_logic::events::{
     EventEmitter, SftpEntriesProgress, SftpTransferKind,
 };
 use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants};
+
+/// Window event hook (issue #89): the paths of a native file drop become local
+/// path grants. They come from the window's drag-and-drop event, never from the
+/// webview.
+pub(crate) fn record_drag_drop<R: tauri::Runtime>(
+    window: &tauri::Window<R>,
+    event: &tauri::WindowEvent,
+) {
+    use tauri::Manager;
+    if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+        if let Some(grants) = window.try_state::<LocalPathGrants>() {
+            grants.record_drop(paths.clone());
+        }
+    }
+}
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
 

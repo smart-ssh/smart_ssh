@@ -1574,6 +1574,18 @@
     "failed": "Sikertelen",
     "inProgress": "Folyamatban",
     "verifying": "Ellenőrzés",
-    "speechModelTitle": "Beszédmodell: {{name}}"
+    "speechModelTitle": "Beszédmodell: {{name}}",
+    "buttonInterrupted": "Tevékenységek: néhány megszakadt",
+    "interrupted": "Megszakadt",
+    "resume": "Folytatás",
+    "resumeNamed": "{{title}} folytatása",
+    "discard": "Elvetés",
+    "discardNamed": "{{title}} elvetése",
+    "resumeFailed": "A folytatás nem sikerült.",
+    "quitTitle": "Kilép, miközben tevékenységek futnak?",
+    "quitBody": "Ezek a tevékenységek még futnak, és le fognak állni:",
+    "quitResumeHint": "A megszakadt letöltések az alkalmazás következő indításakor folytathatók.",
+    "quitAnyway": "Kilépés mégis",
+    "keepRunning": "Futás folytatása"
   }
 }

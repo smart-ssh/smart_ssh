@@ -27,9 +27,10 @@ use tauri::Emitter;
 use crate::event_emitter::TauriEventEmitter;
 
 /// Managed state; the registry is created on first use because it needs the
-/// `AppHandle` for its event emitter.
+/// `AppHandle` for its event emitter. Also holds the resume handlers (issue
+/// #1327).
 #[derive(Default)]
-pub struct Activities(OnceLock<Arc<ActivityRegistry>>);
+pub struct Activities(OnceLock<Arc<ActivityRegistry>>, ResumeHandlers);
 
 /// The process-wide activity registry. Public for extension crates.
 pub fn activities<R: Runtime>(app: &AppHandle<R>) -> Arc<ActivityRegistry> {
@@ -79,7 +80,7 @@ const INTERRUPTED_KEY: &str = "interruptedActivities";
 
 /// Resume handlers by kind, and whether the user already confirmed the quit.
 #[derive(Default)]
-pub struct ResumeHandlers {
+pub(crate) struct ResumeHandlers {
     registry: ResumeRegistry,
     quit_confirmed: AtomicBool,
 }
@@ -93,7 +94,8 @@ pub fn register_resume_handler<R: Runtime>(
     resume: ResumeFn,
     discard: Option<DiscardFn>,
 ) -> bool {
-    app.state::<ResumeHandlers>()
+    app.state::<Activities>()
+        .1
         .registry
         .register(kind, resume, discard)
 }
@@ -137,7 +139,8 @@ fn write_interrupted<R: Runtime>(
 /// restart, `app.exit`) never goes through here.
 pub(crate) fn ask_before_quit<R: Runtime>(app: &AppHandle<R>) -> bool {
     if app
-        .state::<ResumeHandlers>()
+        .state::<Activities>()
+        .1
         .quit_confirmed
         .load(Ordering::SeqCst)
     {
@@ -167,7 +170,8 @@ pub(crate) fn ask_before_quit<R: Runtime>(app: &AppHandle<R>) -> bool {
 #[tauri::command]
 pub fn quit_confirmed(app: AppHandle) {
     store_interrupted_snapshot(&app);
-    app.state::<ResumeHandlers>()
+    app.state::<Activities>()
+        .1
         .quit_confirmed
         .store(true, Ordering::SeqCst);
     app.exit(0);
@@ -209,7 +213,8 @@ pub(crate) fn interrupted_rows<R: Runtime>(
     app: &AppHandle<R>,
     frontend_kinds: &[String],
 ) -> CommandResult<Vec<InterruptedRow>> {
-    let handlers = app.state::<ResumeHandlers>();
+    let state = app.state::<Activities>();
+    let handlers = &state.1;
     let all = read_interrupted(app);
     let total = all.len();
     let rows: Vec<InterruptedRow> = all
@@ -247,34 +252,60 @@ fn remove_interrupted<R: Runtime>(app: &AppHandle<R>, id: &str) -> CommandResult
 
 pub(crate) fn resume_interrupted<R: Runtime>(app: &AppHandle<R>, id: &str) -> CommandResult<()> {
     let entry = take_interrupted(app, id)?;
-    app.state::<ResumeHandlers>().registry.resume(&entry)?;
+    app.state::<Activities>().1.registry.resume(&entry)?;
     remove_interrupted(app, id)
 }
 
 pub(crate) fn discard_interrupted<R: Runtime>(app: &AppHandle<R>, id: &str) -> CommandResult<()> {
     let entry = take_interrupted(app, id)?;
-    app.state::<ResumeHandlers>().registry.discard(&entry);
+    app.state::<Activities>().1.registry.discard(&entry);
     remove_interrupted(app, id)
 }
 
-/// "Resume" for a kind with a Rust handler: the handler starts a fresh
-/// activity; the stored entry is removed once it did.
-#[tauri::command]
-pub fn activity_interrupted_resume(app: AppHandle, id: String) -> CommandResult<()> {
-    resume_interrupted(&app, &id)
+/// What to do with a stored interrupted activity.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum InterruptedAction {
+    /// Rust handler: starts a fresh activity, then removes the entry.
+    Resume,
+    /// Rust handler: runs its discard handler (if any), then removes the entry.
+    Discard,
+    /// Frontend handler already ran: only removes the entry.
+    Remove,
 }
 
-/// "Discard" for a kind with a Rust handler: runs its discard handler (if
-/// any) and removes the entry.
 #[tauri::command]
-pub fn activity_interrupted_discard(app: AppHandle, id: String) -> CommandResult<()> {
-    discard_interrupted(&app, &id)
+pub fn activity_interrupted_resolve(
+    app: AppHandle,
+    id: String,
+    action: InterruptedAction,
+) -> CommandResult<()> {
+    match action {
+        InterruptedAction::Resume => resume_interrupted(&app, &id),
+        InterruptedAction::Discard => discard_interrupted(&app, &id),
+        InterruptedAction::Remove => remove_interrupted(&app, &id),
+    }
 }
 
-/// Removes an entry whose frontend handler has run (resume or discard).
-#[tauri::command]
-pub fn activity_interrupted_remove(app: AppHandle, id: String) -> CommandResult<()> {
-    remove_interrupted(&app, &id)
+/// Run-loop hook (issue #1327): quitting with running activities asks first.
+/// Only a quit from outside (`code` is `None`: last window closed, Cmd+Q, menu)
+/// is held back; `app.exit(code)` (update restart, "Quit anyway") carries a
+/// code and goes through. Closing the last window is held back the same way.
+pub(crate) fn on_run_event<R: Runtime>(app: &AppHandle<R>, event: &tauri::RunEvent) {
+    match event {
+        tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } if ask_before_quit(app) => {
+            api.prevent_exit();
+        }
+        tauri::RunEvent::WindowEvent {
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if app.webview_windows().len() <= 1 && ask_before_quit(app) => {
+            api.prevent_close();
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
@@ -286,7 +317,6 @@ mod tests {
     fn app_with_state() -> tauri::App<tauri::test::MockRuntime> {
         let app = test_app();
         app.manage(Activities::default());
-        app.manage(ResumeHandlers::default());
         write_interrupted(app.handle(), &[]).unwrap();
         app
     }
@@ -328,7 +358,8 @@ mod tests {
         let _g = lock();
         let app = app_with_state();
         let _h = activities(app.handle()).start(resumable_spec("k", "a"));
-        app.state::<ResumeHandlers>()
+        app.state::<Activities>()
+            .1
             .quit_confirmed
             .store(true, Ordering::SeqCst);
         assert!(!ask_before_quit(app.handle()));

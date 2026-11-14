@@ -33,6 +33,11 @@ describe("startActivity", () => {
     api.handler = null;
   });
 
+  it("forwards a resume spec to the backend (issue #1327)", async () => {
+    await startActivity({ ...spec, resume: { kind: "k", key: "m" } });
+    expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ resume: { kind: "k", key: "m" } }));
+  });
+
   it("starts with defaults and forwards progress, status and success", async () => {
     const h = await startActivity({ ...spec, cancellable: undefined });
     expect(api.start).toHaveBeenCalledWith({
@@ -42,6 +47,7 @@ describe("startActivity", () => {
       titleParams: {},
       cancellable: false,
       total: null,
+      resume: null,
     });
     await h.progress(5, 10);
     expect(api.update).toHaveBeenCalledWith("id1", { done: 5, total: 10, statusKey: null });

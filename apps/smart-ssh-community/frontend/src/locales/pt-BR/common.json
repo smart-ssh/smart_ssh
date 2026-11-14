@@ -1582,6 +1582,18 @@
     "failed": "Falhou",
     "inProgress": "Em andamento",
     "verifying": "Verificando",
-    "speechModelTitle": "Modelo de voz {{name}}"
+    "speechModelTitle": "Modelo de voz {{name}}",
+    "buttonInterrupted": "Atividades: algumas foram interrompidas",
+    "interrupted": "Interrompida",
+    "resume": "Retomar",
+    "resumeNamed": "Retomar {{title}}",
+    "discard": "Descartar",
+    "discardNamed": "Descartar {{title}}",
+    "resumeFailed": "Não foi possível retomar.",
+    "quitTitle": "Sair com atividades em andamento?",
+    "quitBody": "Estas atividades ainda estão em andamento e serão interrompidas:",
+    "quitResumeHint": "Downloads interrompidos podem ser retomados na próxima vez que você abrir o app.",
+    "quitAnyway": "Sair mesmo assim",
+    "keepRunning": "Continuar executando"
   }
 }

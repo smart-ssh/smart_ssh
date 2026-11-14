@@ -26,7 +26,7 @@ mod notes;
 mod rules;
 mod scope;
 mod servers;
-mod sftp;
+pub(crate) mod sftp;
 mod terminal;
 #[cfg(test)]
 mod test_support;

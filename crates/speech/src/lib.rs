@@ -725,8 +725,7 @@ async fn download_file(
             },
         );
     }
-    loop {
-        let Some(stream) = stream.as_mut() else { break };
+    while let Some(stream) = stream.as_mut() {
         let chunk = tokio::select! {
             _ = cancel.changed() => return Err(None),
             c = stream.next() => c,

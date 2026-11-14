@@ -1574,6 +1574,18 @@
     "failed": "Misslyckades",
     "inProgress": "Pågår",
     "verifying": "Verifierar",
-    "speechModelTitle": "Talmodell {{name}}"
+    "speechModelTitle": "Talmodell {{name}}",
+    "buttonInterrupted": "Aktiviteter: några avbröts",
+    "interrupted": "Avbruten",
+    "resume": "Återuppta",
+    "resumeNamed": "Återuppta {{title}}",
+    "discard": "Kassera",
+    "discardNamed": "Kassera {{title}}",
+    "resumeFailed": "Det gick inte att återuppta.",
+    "quitTitle": "Avsluta medan aktiviteter pågår?",
+    "quitBody": "Dessa aktiviteter pågår fortfarande och stoppas:",
+    "quitResumeHint": "Avbrutna nedladdningar kan återupptas nästa gång du startar appen.",
+    "quitAnyway": "Avsluta ändå",
+    "keepRunning": "Låt dem fortsätta"
   }
 }

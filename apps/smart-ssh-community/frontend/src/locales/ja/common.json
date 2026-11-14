@@ -1566,6 +1566,18 @@
     "failed": "失敗",
     "inProgress": "処理中",
     "verifying": "検証中",
-    "speechModelTitle": "音声モデル {{name}}"
+    "speechModelTitle": "音声モデル {{name}}",
+    "buttonInterrupted": "アクティビティ: 一部が中断されました",
+    "interrupted": "中断",
+    "resume": "再開",
+    "resumeNamed": "{{title}}を再開",
+    "discard": "破棄",
+    "discardNamed": "{{title}}を破棄",
+    "resumeFailed": "再開できませんでした。",
+    "quitTitle": "実行中のアクティビティがありますが終了しますか?",
+    "quitBody": "次のアクティビティは実行中で、停止されます:",
+    "quitResumeHint": "中断されたダウンロードは、次回の起動時に再開できます。",
+    "quitAnyway": "終了する",
+    "keepRunning": "実行を続ける"
   }
 }

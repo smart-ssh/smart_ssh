@@ -4,12 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../../testI18n";
 import type { Activity } from "../../api/activitiesApi";
 import { resetActivitiesStoreForTests } from "../../hooks/useActivities";
+import { resetInterruptedForTests } from "../../hooks/useInterruptedActivities";
+import { registerActivityResumeHandler } from "../../lib/activityResume";
 import { ActivityCenter, combinedProgress } from "./ActivityCenter";
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
   cancel: vi.fn(),
   dismiss: vi.fn(),
+  interrupted: vi.fn(),
+  resolve: vi.fn(),
   handler: null as null | ((a: Activity) => void),
 }));
 
@@ -17,6 +21,8 @@ vi.mock("../../api/activitiesApi", () => ({
   listActivities: () => api.list(),
   cancelActivity: (id: string) => api.cancel(id),
   dismissActivity: (id: string) => api.dismiss(id),
+  listInterrupted: (kinds: string[]) => api.interrupted(kinds),
+  resolveInterrupted: (id: string, action: string) => api.resolve(id, action),
 }));
 vi.mock("../../api/events", () => ({
   onActivityChanged: (h: (a: Activity) => void) => {
@@ -41,6 +47,7 @@ function activity(over: Partial<Activity> = {}): Activity {
     errorCode: null,
     errorMessage: null,
     cancellable: false,
+    resumable: false,
     startedAt: 1,
     dismissed: false,
     ...over,
@@ -65,9 +72,12 @@ describe("ActivityCenter", () => {
     api.list.mockReset().mockResolvedValue([]);
     api.cancel.mockReset().mockResolvedValue(null);
     api.dismiss.mockReset().mockResolvedValue(null);
+    api.interrupted.mockReset().mockResolvedValue([]);
+    api.resolve.mockReset().mockResolvedValue(null);
   });
   afterEach(() => {
     resetActivitiesStoreForTests();
+    resetInterruptedForTests();
   });
 
   it("shows no icon without activities", async () => {
@@ -179,5 +189,62 @@ describe("ActivityCenter", () => {
       ]),
     ).toBeCloseTo(0.5);
     expect(combinedProgress([activity({ total: null })])).toBeNull();
+  });
+
+  describe("interrupted activities (issue #1327)", () => {
+    const row = (over = {}) => ({
+      id: "i1",
+      kind: "speech-model",
+      key: "base",
+      titleKey: "activities.speechModelTitle",
+      titleParams: { name: "Base" },
+      done: 50,
+      total: 100,
+      native: true,
+      ...over,
+    });
+
+    it("lists a stored entry as Interrupted with Resume and Discard", async () => {
+      api.interrupted.mockResolvedValue([row()]);
+      renderCenter();
+      fireEvent.click(await screen.findByTestId("activity-center-button"));
+      const item = await screen.findByRole("listitem", { name: "Sprachmodell Base" });
+      expect(within(item).getByText(/Unterbrochen/)).toBeTruthy();
+      expect(within(item).getByRole("button", { name: /fortsetzen/i })).toBeTruthy();
+      expect(within(item).getByRole("button", { name: /verwerfen/i })).toBeTruthy();
+    });
+
+    it("Resume calls the backend handler and the row goes away", async () => {
+      api.interrupted.mockResolvedValue([row()]);
+      renderCenter();
+      fireEvent.click(await screen.findByTestId("activity-center-button"));
+      fireEvent.click(await screen.findByRole("button", { name: /fortsetzen/i }));
+      await waitFor(() => expect(screen.queryByTestId("activity-center-button")).toBeNull());
+      expect(api.resolve).toHaveBeenCalledWith("i1", "resume");
+    });
+
+    it("Discard calls the backend discard and removes the row", async () => {
+      api.interrupted.mockResolvedValue([row()]);
+      renderCenter();
+      fireEvent.click(await screen.findByTestId("activity-center-button"));
+      fireEvent.click(await screen.findByRole("button", { name: /verwerfen/i }));
+      await waitFor(() => expect(screen.queryByTestId("activity-center-button")).toBeNull());
+      expect(api.resolve).toHaveBeenCalledWith("i1", "discard");
+    });
+
+    it("an extension kind goes through its frontend handler, then the entry is removed", async () => {
+      const resume = vi.fn();
+      const discard = vi.fn();
+      const un = registerActivityResumeHandler("ext-kind", { resume, discard });
+      api.interrupted.mockResolvedValue([row({ id: "i2", kind: "ext-kind", native: false })]);
+      renderCenter();
+      expect(api.interrupted).toHaveBeenCalledWith(["ext-kind"]);
+      fireEvent.click(await screen.findByTestId("activity-center-button"));
+      fireEvent.click(await screen.findByRole("button", { name: /fortsetzen/i }));
+      await waitFor(() => expect(api.resolve).toHaveBeenCalledWith("i2", "remove"));
+      expect(resume).toHaveBeenCalledTimes(1);
+      expect(api.resolve).not.toHaveBeenCalledWith("i2", "resume");
+      un();
+    });
   });
 });

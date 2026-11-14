@@ -27,6 +27,7 @@ export const onAutoReconnectChanged =
 
 /** Issue #1325: one activity changed (also the final event with `dismissed`). */
 export const onActivityChanged = typedListener(EVENT.ACTIVITY_CHANGED);
+export const onQuitRequested = typedListener(EVENT.QUIT_REQUESTED);
 
 /** Issue #1292: committed backend changes (coalesced), `kinds` only. */
 export const onDataChanged = typedListener(EVENT.DATA_CHANGED);

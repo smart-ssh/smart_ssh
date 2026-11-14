@@ -1566,6 +1566,18 @@
     "failed": "Thất bại",
     "inProgress": "Đang thực hiện",
     "verifying": "Đang xác minh",
-    "speechModelTitle": "Mô hình giọng nói {{name}}"
+    "speechModelTitle": "Mô hình giọng nói {{name}}",
+    "buttonInterrupted": "Hoạt động: một số đã bị gián đoạn",
+    "interrupted": "Bị gián đoạn",
+    "resume": "Tiếp tục",
+    "resumeNamed": "Tiếp tục {{title}}",
+    "discard": "Bỏ",
+    "discardNamed": "Bỏ {{title}}",
+    "resumeFailed": "Không thể tiếp tục.",
+    "quitTitle": "Thoát khi vẫn còn hoạt động đang chạy?",
+    "quitBody": "Các hoạt động này vẫn đang chạy và sẽ bị dừng:",
+    "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
+    "quitAnyway": "Vẫn thoát",
+    "keepRunning": "Tiếp tục chạy"
   }
 }

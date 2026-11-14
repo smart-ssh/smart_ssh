@@ -1574,6 +1574,18 @@
     "failed": "Fehlgeschlagen",
     "inProgress": "In Arbeit",
     "verifying": "Wird überprüft",
-    "speechModelTitle": "Sprachmodell {{name}}"
+    "speechModelTitle": "Sprachmodell {{name}}",
+    "buttonInterrupted": "Aktivitäten: einige wurden unterbrochen",
+    "interrupted": "Unterbrochen",
+    "resume": "Fortsetzen",
+    "resumeNamed": "{{title}} fortsetzen",
+    "discard": "Verwerfen",
+    "discardNamed": "{{title}} verwerfen",
+    "resumeFailed": "Fortsetzen nicht möglich.",
+    "quitTitle": "Beenden, obwohl Aktivitäten laufen?",
+    "quitBody": "Diese Aktivitäten laufen noch und werden gestoppt:",
+    "quitResumeHint": "Unterbrochene Downloads lassen sich beim nächsten Start fortsetzen.",
+    "quitAnyway": "Trotzdem beenden",
+    "keepRunning": "Weiterlaufen lassen"
   }
 }

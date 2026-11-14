@@ -1574,6 +1574,18 @@
     "failed": "विफल",
     "inProgress": "प्रगति पर",
     "verifying": "सत्यापित हो रहा है",
-    "speechModelTitle": "वाक् मॉडल {{name}}"
+    "speechModelTitle": "वाक् मॉडल {{name}}",
+    "buttonInterrupted": "गतिविधियाँ: कुछ बाधित हो गईं",
+    "interrupted": "बाधित",
+    "resume": "फिर शुरू करें",
+    "resumeNamed": "{{title}} फिर शुरू करें",
+    "discard": "छोड़ें",
+    "discardNamed": "{{title}} छोड़ें",
+    "resumeFailed": "फिर शुरू नहीं हो सका।",
+    "quitTitle": "गतिविधियाँ चल रही हैं, फिर भी बंद करें?",
+    "quitBody": "ये गतिविधियाँ अभी चल रही हैं और रोक दी जाएँगी:",
+    "quitResumeHint": "बाधित डाउनलोड अगली बार ऐप शुरू करने पर फिर शुरू किए जा सकते हैं।",
+    "quitAnyway": "फिर भी बंद करें",
+    "keepRunning": "चलने दें"
   }
 }
