@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { locale as systemLocale } from "@tauri-apps/plugin-os";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import i18next from "i18next";
-import type { AppInfoDto } from "./api/types";
+import { getAppInfo } from "./api/api";
 import { initReactI18next } from "react-i18next";
 import {
   DEFAULT_LANGUAGE,
@@ -56,12 +56,15 @@ export function settingsStore(): Promise<Store> {
     // Issue #1313: with a data-directory override the store lives inside it;
     // the backend hands out the absolute path (an absolute path is not
     // re-based onto the app data dir). Without one the bare name is unchanged.
-    storePromise = invoke<AppInfoDto>("get_app_info")
+    // `get_app_info` is on the startup gate's allow list, so it also works
+    // before the password-mode unlock; a failure is not cached (see above) and
+    // never falls back to the default directory.
+    storePromise = getAppInfo()
       .then((info) => load(info.settingsStorePath ?? STORE_FILE, { autoSave: false }))
       .catch((err: unknown) => {
-      storePromise = null;
-      throw err;
-    });
+        storePromise = null;
+        throw err;
+      });
   }
   return storePromise;
 }
