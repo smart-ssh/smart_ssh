@@ -169,16 +169,10 @@ mod tests {
     }
 
     #[test]
-    fn parakeet_is_listed_and_selectable_on_desktop_only() {
+    fn parakeet_is_listed_and_selectable_on_every_platform() {
         let ids: Vec<&str> = list_speech_models().iter().map(|m| m.id).collect();
-        if cfg!(target_os = "android") {
-            assert_eq!(ids, ["base", "small"]);
-            let err = parse_model("parakeet_v3").unwrap_err();
-            assert_eq!(err.code, Some("speech_model_unknown"));
-        } else {
-            assert_eq!(ids, ["base", "small", "parakeet_v3"]);
-            assert_eq!(parse_model("parakeet_v3").unwrap(), SpeechModel::ParakeetV3);
-        }
+        assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+        assert_eq!(parse_model("parakeet_v3").unwrap(), SpeechModel::ParakeetV3);
     }
 
     /// A stored selection this platform does not offer falls back to the default.
@@ -192,13 +186,11 @@ mod tests {
         })
         .unwrap();
         assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
-        if cfg!(target_os = "android") {
-            settings_store::update(handle, |c| {
-                c.set(SELECTED_MODEL_KEY, serde_json::json!("parakeet_v3"))
-            })
-            .unwrap();
-            assert_eq!(read_selected_model(handle), SpeechModel::DEFAULT);
-        }
+        settings_store::update(handle, |c| {
+            c.set(SELECTED_MODEL_KEY, serde_json::json!("parakeet_v3"))
+        })
+        .unwrap();
+        assert_eq!(read_selected_model(handle), SpeechModel::ParakeetV3);
         settings_store::update(handle, |c| c.delete(SELECTED_MODEL_KEY)).unwrap();
     }
 

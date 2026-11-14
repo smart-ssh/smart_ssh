@@ -21,6 +21,9 @@ export ANDROID_NDK_ROOT=$NDK_HOME   # CMake-Build von whisper.cpp
 SYSROOT=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot
 export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=$SYSROOT"
 export BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--sysroot=$SYSROOT"
+# Parakeet (ONNX Runtime): `ort-sys` lädt beim Build das vorgebaute, gepinnte
+# Android-Archiv (Feature `nnapi`; aarch64 und x86_64) und linkt es statisch
+# in die App-Bibliothek – kein Download zur Laufzeit, keine zusätzliche `.so`.
 # Nur Rust prüfen:
 cargo build -p smart-ssh-community --target aarch64-linux-android
 cargo build -p smart-ssh-community --target x86_64-linux-android

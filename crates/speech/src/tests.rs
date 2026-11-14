@@ -466,12 +466,9 @@ async fn delete_removes_all_files_of_the_model_and_keeps_whisper_files() {
 #[test]
 fn availability_matches_the_platform() {
     let ids: Vec<&str> = SpeechModel::available().iter().map(|m| m.id()).collect();
-    if cfg!(target_os = "android") {
-        assert_eq!(ids, ["base", "small"]);
-        assert_eq!(SpeechModel::from_id("parakeet_v3"), None);
-    } else {
-        assert_eq!(ids, ["base", "small", "parakeet_v3"]);
-    }
+    // Parakeet is offered on every platform, Android included (issue #1300).
+    assert_eq!(ids, ["base", "small", "parakeet_v3"]);
+    assert!(SpeechModel::ParakeetV3.is_available());
 }
 
 #[test]

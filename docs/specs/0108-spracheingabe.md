@@ -25,10 +25,10 @@ Modells (Abschnitt 3). Sie ist in docs/netzwerkverbindungen.md aufgeführt.
 
 **2.1** Es gibt drei mehrsprachige Modelle: `base` (rund 142 MiB, Vorgabe),
 `small` (rund 466 MiB) und `parakeet_v3` (Parakeet TDT 0.6B v3, int8, rund
-640 MiB; nur Desktop: macOS, Windows, Linux). Auf Android ist `parakeet_v3`
-nicht verfügbar: Es wird nicht aufgelistet, wird als unbekanntes Modell
-(`speech_model_unknown`) abgelehnt, und eine gespeicherte Auswahl davon
-fällt auf `base` zurück. Ein Befehl liefert die auf der Plattform
+640 MiB; auf allen Plattformen, auch Android). Kann die Engine das Modell
+nicht laden (z. B. zu wenig Arbeitsspeicher, nicht unterstützte CPU), endet
+die Aufnahme mit `speech_transcription_failed`, und die App bleibt
+bedienbar. Ein Befehl liefert die auf der Plattform
 verfügbaren Modelle mit Kennung, Engine (`whisper` oder `parakeet`),
 Gesamtgröße in Bytes sowie Host und Repository der Quelle; er löst keine
 Netzwerkanfrage aus.
@@ -207,7 +207,7 @@ Logs nennen höchstens Dauer und Ergebnis.
   mit Zustand, Herunterladen/Abbrechen/Löschen (Liste, Größen und Quelle
   stammen aus dem Befehl nach Abschnitt 2.1; Parakeet erscheint als „Parakeet
   v3 (NVIDIA)“ mit Größe und dem Hinweis „mehrsprachig, schnell; erkennt die
-  Sprache automatisch“, auf Android gar nicht), und die Erkennungssprache
+  Sprache automatisch“), und die Erkennungssprache
   (automatisch oder eine feste Sprache; ist Parakeet gewählt, steht darunter
   der Hinweis, dass Parakeet die Sprache selbst erkennt und die Einstellung für
   Whisper-Modelle gilt – die Auswahl bleibt bedienbar und der Wert unverändert). Alle Werte bleiben
