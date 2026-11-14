@@ -156,6 +156,13 @@ pub async fn get_data_paths<R: tauri::Runtime>(
         .collect())
 }
 
+/// Issue #1314: name of the keychain service this instance uses (Settings →
+/// Diagnostics). The name only, never an entry or a secret.
+#[tauri::command]
+pub fn get_keychain_service() -> String {
+    crate::keychain::process_keychain_service()
+}
+
 /// Issue #16: öffnet den Ordner zum Eintrag `id` im Dateimanager.
 ///
 /// Das Frontend übergibt nur den Bezeichner aus `get_data_paths`, nie einen

@@ -102,6 +102,7 @@
       "speechModels": "Beszédmodellek",
       "sessions": "Munkamenetek",
       "sessionsInDatabase": "az adatbázisban tárolva",
+      "keychainService": "Kulcstartó szolgáltatás",
       "copy": "Másolás",
       "copied": "Útvonal másolva",
       "copyFailed": "A másolás sikertelen:",

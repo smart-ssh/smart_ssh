@@ -102,6 +102,7 @@
       "speechModels": "음성 모델",
       "sessions": "세션",
       "sessionsInDatabase": "데이터베이스에 저장됨",
+      "keychainService": "키체인 서비스",
       "copy": "복사",
       "copied": "경로를 복사했습니다",
       "copyFailed": "복사에 실패했습니다:",

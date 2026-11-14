@@ -239,7 +239,7 @@ The exact paths per platform are listed in
 directory with `--data-dir`, `SMART_SSH_DATA_DIR` or a pointer file next to the
 app (Spec 0115); then every file of that instance lives there, and an unusable
 directory stops the start instead of falling back to the default one. The
-pointer file only names a path and holds no secret; keychain entries stay shared.
+pointer file only names a path and holds no secret. An instance with such an override keeps its keychain entries under its own service `Smart SSH (<id>)` (id = first 12 hex characters of the SHA-256 of the canonical data-directory path, Spec 0101 A25), so it cannot read, replace or delete the secrets of the default instance.
 
 | Data | Location | Protection |
 |---|---|---|

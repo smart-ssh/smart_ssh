@@ -102,6 +102,7 @@
       "speechModels": "वाक् मॉडल",
       "sessions": "सत्र",
       "sessionsInDatabase": "डेटाबेस में संग्रहीत",
+      "keychainService": "कीचेन सेवा",
       "copy": "कॉपी करें",
       "copied": "पथ कॉपी हो गया",
       "copyFailed": "कॉपी करना विफल रहा:",

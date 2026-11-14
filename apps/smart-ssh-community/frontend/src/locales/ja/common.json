@@ -102,6 +102,7 @@
       "speechModels": "音声モデル",
       "sessions": "セッション",
       "sessionsInDatabase": "データベースに保存",
+      "keychainService": "キーチェーンのサービス",
       "copy": "コピー",
       "copied": "パスをコピーしました",
       "copyFailed": "コピーに失敗しました:",

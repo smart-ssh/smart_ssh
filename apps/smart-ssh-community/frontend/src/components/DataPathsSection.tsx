@@ -1,7 +1,7 @@
 import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api/api";
+import { commandErrorMessage, getDataPaths, getKeychainService, openDataPathFolder } from "../api/api";
 import type { DataPathEntryDto } from "../api/types";
 import { Button } from "./ui";
 
@@ -13,6 +13,7 @@ import { Button } from "./ui";
 export function DataPathsSection() {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<DataPathEntryDto[] | null>(null);
+  const [keychainService, setKeychainService] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -20,6 +21,9 @@ export function DataPathsSection() {
     getDataPaths()
       .then(setEntries)
       .catch(() => setLoadFailed(true));
+    getKeychainService()
+      .then(setKeychainService)
+      .catch(() => setKeychainService(null));
   }, []);
 
   /** Eingebaute Einträge haben `label === null` und werden übersetzt; ein
@@ -99,6 +103,12 @@ export function DataPathsSection() {
             </div>
           </li>
         ))}
+        {keychainService && (
+          <li data-testid="data-path-keychainService">
+            <div className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.keychainService")}</div>
+            <code className="select-text break-all font-mono text-xs text-fg">{keychainService}</code>
+          </li>
+        )}
         <li data-testid="data-path-sessions">
           <div className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.sessions")}</div>
           <div className="text-xs text-fg">{t("diagnostics.dataPaths.sessionsInDatabase")}</div>

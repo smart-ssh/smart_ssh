@@ -102,6 +102,7 @@
       "speechModels": "Modele vocale",
       "sessions": "Sesiuni",
       "sessionsInDatabase": "stocate în baza de date",
+      "keychainService": "Serviciul breloului de chei",
       "copy": "Copiază",
       "copied": "Cale copiată",
       "copyFailed": "Copierea a eșuat:",

@@ -277,6 +277,21 @@ Nicht-Ziele:
   Instanz nach vorn: Mit einem anderen Datenverzeichnis startet er normal und
   läuft daneben, mit demselben endet er an der Sperre (A23; ADR 0121).
 
+- **A25** (Issue #1314) Schlüsselbund-Namensraum: Ohne Datenverzeichnis-
+  Override (Spec 0115) liegen alle Einträge der Instanz (Wurzelschlüssel K,
+  SSH-Zugangsdaten, KI-Schlüssel, Secrets einer Edition) unverändert unter dem
+  Service `Smart SSH`; es gibt keine Migration. Mit Override heißt der Service
+  `Smart SSH (<id>)`, wobei `<id>` die ersten 12 Hex-Zeichen des SHA-256 über
+  den kanonischen, absoluten Pfad des Datenverzeichnisses sind (`/a/b/` und
+  `/a/./b` ergeben dieselbe ID). Jeder Schlüsselbund-Zugriff des Prozesses
+  nutzt diesen einen Service; eine Instanz mit eigenem Verzeichnis liest,
+  ersetzt oder löscht nie Einträge des Standard-Service, auch nicht bei
+  „Neu beginnen" im Schlüsselbund-Modus. Wird das Override-Verzeichnis
+  verschoben oder umbenannt, ändert sich die ID: Die Instanz startet dann wie
+  mit einem leeren Schlüsselbund (fehlendes K, siehe A3/A5). Der Name des
+  Service steht unter Einstellungen → Diagnose neben den Datenpfaden (nur der
+  Name, nie ein Geheimnis).
+
 ## 5. Startablauf
 
 1. Log. 2. Dateizustand (A3). 3. K beschaffen: Verpackungsdatei vorhanden →

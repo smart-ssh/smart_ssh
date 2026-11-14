@@ -258,6 +258,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },
       { id: "logs", label: null, path: "/data/smart-ssh/logs", isDirectory: true },
     ],
+    get_keychain_service: () => "Smart SSH",
     get_keychain_status: () => ({ available: true, reason: null }),
     get_master_password_mode: () => "keychain",
     // --- Encrypted backup (Spec 0109, #666) ------------------------------

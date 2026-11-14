@@ -102,6 +102,7 @@
       "speechModels": "Spraakmodellen",
       "sessions": "Sessies",
       "sessionsInDatabase": "opgeslagen in de database",
+      "keychainService": "Sleutelhangerservice",
       "copy": "Kopiëren",
       "copied": "Pad gekopieerd",
       "copyFailed": "Kopiëren mislukt:",

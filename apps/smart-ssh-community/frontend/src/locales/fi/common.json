@@ -102,6 +102,7 @@
       "speechModels": "Puhemallit",
       "sessions": "Istunnot",
       "sessionsInDatabase": "tallennettu tietokantaan",
+      "keychainService": "Avainnipun palvelu",
       "copy": "Kopioi",
       "copied": "Polku kopioitu",
       "copyFailed": "Kopiointi epäonnistui:",

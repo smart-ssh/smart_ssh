@@ -102,6 +102,7 @@
       "speechModels": "Model suara",
       "sessions": "Sesi",
       "sessionsInDatabase": "disimpan di basis data",
+      "keychainService": "Layanan keychain",
       "copy": "Salin",
       "copied": "Jalur disalin",
       "copyFailed": "Penyalinan gagal:",

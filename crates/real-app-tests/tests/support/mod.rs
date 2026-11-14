@@ -71,8 +71,10 @@ fn db_path_in(data_dir: &Path) -> PathBuf {
 /// Removes everything the fixtures put into the test keychain, including the
 /// root key the app generates, so each case starts from the same keychain.
 /// Missing entries are fine.
-pub fn clear_test_keychain() -> TestResult {
-    let keychain = credentials_keyring::KeyringCredentialStore::new();
+pub fn clear_test_keychain(data_dir: &Path) -> TestResult {
+    // The app runs with `data_dir` as its override, so it uses that
+    // directory's keychain service (issue #1314).
+    let keychain = credentials_keyring::KeyringCredentialStore::for_data_dir(Some(data_dir));
     let a = uuid::Uuid::from_u128(0x0011);
     let b = uuid::Uuid::from_u128(0x0012);
     for name in [
@@ -95,7 +97,7 @@ pub fn clear_test_keychain() -> TestResult {
 pub fn seed_plaintext_upgrade(data_dir: &Path) -> TestResult {
     std::fs::copy(release_fixture_path(), db_path_in(data_dir))?;
     // The fixture's servers use fixed ids (see its generator).
-    let keychain = credentials_keyring::KeyringCredentialStore::new();
+    let keychain = credentials_keyring::KeyringCredentialStore::for_data_dir(Some(data_dir));
     let a = uuid::Uuid::from_u128(0x0011);
     let b = uuid::Uuid::from_u128(0x0012);
     // 0.5.2 kept its root key in the keychain and encrypted chat, prompt

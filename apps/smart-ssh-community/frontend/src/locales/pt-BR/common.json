@@ -102,6 +102,7 @@
       "speechModels": "Modelos de fala",
       "sessions": "Sessões",
       "sessionsInDatabase": "armazenadas no banco de dados",
+      "keychainService": "Serviço do chaveiro",
       "copy": "Copiar",
       "copied": "Caminho copiado",
       "copyFailed": "Falha ao copiar:",
