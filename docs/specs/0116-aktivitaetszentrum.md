@@ -46,7 +46,9 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 - Eine Aktivität kann sich als wiederaufnehmbar anmelden (Art und Schlüssel). Beim bestätigten Beenden werden die laufenden wiederaufnehmbaren Aktivitäten gespeichert: Art, Schlüssel, Titel, erledigte und gesamte Menge – sonst nichts, keine URLs, keine Zugangsdaten.
 - Beim nächsten Start erscheinen gespeicherte Einträge, für deren Art ein Handler angemeldet ist (Rust-Seite oder Erweiterung), im Aktivitätszentrum als „Unterbrochen“ mit „Fortsetzen“ und „Verwerfen“. Einträge ohne Handler werden still entfernt.
 - „Fortsetzen“ ruft den Handler, der eine neue Aktivität startet; der Eintrag verschwindet. Scheitert das Fortsetzen, bleibt der Eintrag mit einer Fehlermeldung stehen. „Verwerfen“ ruft den optionalen Verwerfen-Handler (etwa Teildateien löschen) und entfernt den Eintrag.
-- Sprachmodelle sind wiederaufnehmbar (Spec 0108, 3.9).
+- Gespeicherte Einträge sind je Art und Schlüssel eindeutig: Wird beim erneuten Beenden derselbe Eintrag noch einmal gespeichert, ersetzt der neuere Stand (mit dem jüngeren Fortschritt) den alten; es steht nie dieselbe Aktivität doppelt in der Liste.
+- Ein gespeicherter Eintrag, dessen Arbeit inzwischen neu gestartet wurde oder erfolgreich abgeschlossen ist (gleiche Art und gleicher Schlüssel), wird entfernt.
+- Sprachmodelle sind wiederaufnehmbar (Spec 0108, 3.9). „Verwerfen“ löscht dort nur die Teildateien eines unterbrochenen Downloads, niemals ein bereits installiertes Modell; „Fortsetzen“ für ein bereits installiertes Modell entfernt den Eintrag, ohne erneut herunterzuladen.
 
 ## 7. Texte
 

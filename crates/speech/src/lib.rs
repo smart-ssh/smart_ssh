@@ -513,6 +513,28 @@ impl ModelManager {
     }
 }
 
+impl ModelManager {
+    /// Removes only the leftover `<name>.part` files of the model; an
+    /// installed model is never touched (issue #1332). Refused while a
+    /// download runs.
+    pub fn delete_partial(&self, model: SpeechModel) -> Result<(), ModelManagerError> {
+        let slots = lock_tolerating_poison(&self.slots);
+        if matches!(slots.get(&model), Some(Slot::Downloading { .. })) {
+            return Err(ModelManagerError::Downloading);
+        }
+        for f in &self.source_of(model).files {
+            match std::fs::remove_file(part_path(&self.dir, model, f)) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return Err(ModelManagerError::Io),
+            }
+        }
+        // Only succeeds on an empty directory (nothing installed there).
+        let _ = std::fs::remove_dir(files_dir(&self.dir, model));
+        Ok(())
+    }
+}
+
 /// Directory the files of a model live in: the model's own directory.
 fn files_dir(dir: &Path, model: SpeechModel) -> PathBuf {
     dir.join(model.file_name())

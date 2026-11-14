@@ -304,6 +304,22 @@ async fn delete_removes_file() {
     m.delete(SpeechModel::Base).unwrap();
 }
 
+/// Issue #1332: discarding leftovers never removes an installed model.
+#[tokio::test]
+async fn delete_partial_keeps_the_installed_model_and_removes_part_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = manager(dir.path(), String::new(), b"", String::new());
+    let d = m.model_path(SpeechModel::Base);
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("model.onnx"), b"x").unwrap();
+    std::fs::write(d.join("model.onnx.part"), b"y").unwrap();
+    m.delete_partial(SpeechModel::Base).unwrap();
+    assert_eq!(m.status(SpeechModel::Base), ModelStatus::Ready);
+    assert!(!d.join("model.onnx.part").exists());
+    // Nothing to remove is fine.
+    m.delete_partial(SpeechModel::Base).unwrap();
+}
+
 /// Parakeet-shaped fixture: several files in the model's own directory.
 fn parakeet_manager(
     dir: &Path,
