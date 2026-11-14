@@ -34,6 +34,8 @@ mod first_run_notice;
 mod keychain;
 mod local_file;
 pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
+/// Issue #1325: the activity center (Spec 0116).
+mod activities;
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -78,6 +80,11 @@ mod voice_input;
 mod window_prompt;
 mod wiring;
 
+pub use activities::{activities, Activities};
+pub use app_logic::activities::{
+    Activity, ActivityHandle, ActivityOutcome, ActivityRegistry, ActivitySpec, ActivityState,
+    ActivityUpdate,
+};
 pub use db_extensions::DbExtension;
 pub use extension_plugins::UnlockedPluginFactory;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
@@ -777,6 +784,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             }
         })
         .manage(crate::speech_models::SpeechModels::default())
+        .manage(crate::activities::Activities::default())
         .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
         .manage(entitlement_catalogue)
@@ -826,6 +834,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             ui_preferences::set_ui_preference,
             elevated_sftp::idle::get_elevated_idle_timeout,
             elevated_sftp::idle::set_elevated_idle_timeout,
+            activities::activities_list,
+            activities::activity_cancel,
+            activities::activity_dismiss,
+            activities::activity_start,
+            activities::activity_update,
+            activities::activity_finish,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::list_speech_models,

@@ -22,6 +22,9 @@ macro_rules! decls {
 }
 
 fn generate() -> String {
+    use crate::activities::{
+        Activity, ActivityOutcome, ActivitySpec, ActivityState, ActivityUpdate,
+    };
     use crate::auth_prompt_events::*;
     use crate::auto_reconnect::{AutoReconnectChangedPayload, AutoReconnectPhase};
     use crate::confirmation_settled::{
@@ -48,6 +51,11 @@ fn generate() -> String {
     };
     use ssh_manager_core::ssh::{ConnectStepSnapshot, ConnectWarning};
     let decls = decls![
+        Activity,
+        ActivityOutcome,
+        ActivitySpec,
+        ActivityState,
+        ActivityUpdate,
         ActionConfirmationSettledPayload,
         ActionOrigin,
         AiAction,
@@ -216,6 +224,7 @@ fn event_payloads() -> String {
     use crate::event_names as names;
     let pairs: &[(&str, &str)] = &[
         (names::DATA_CHANGED, "DataChangedPayload"),
+        (names::ACTIVITY_CHANGED, "Activity"),
         (
             names::CONNECTION_STATUS_CHANGED,
             "ConnectionStatusChangedPayload",
