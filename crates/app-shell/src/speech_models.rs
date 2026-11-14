@@ -53,7 +53,7 @@ pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<Model
 pub(crate) fn remove_legacy_files_at_start<R: Runtime>(app: &AppHandle<R>) {
     match models_dir(app) {
         Ok(dir) => speech::remove_legacy_files(&dir),
-        Err(e) => tracing::warn!(error = %e, "speech models directory unavailable at start"),
+        Err(e) => tracing::warn!(error = %e.message, "speech models directory unavailable at start"),
     }
 }
 
