@@ -21,9 +21,14 @@ Diese Spec fasst die früheren Specs 0035, 0089, 0091 (CI-Teil), 0093 und
   dringende Korrektur der veröffentlichten Version). Ein Commit eines
   Pull-Request-Branches läuft einmal, nicht doppelt unter denselben
   Prüfnamen.
+- Zusätzlich läuft die CI jede Nacht um 02:30 UTC auf `develop` und lässt
+  sich von Hand starten. Beide Läufe führen jede Prüfung aus, die auch ein
+  Push auf `develop` ausführt, damit eine Prüfung, die ohne neuen Commit rot
+  wird (z. B. durch eine neue Sicherheitsmeldung), innerhalb eines Tages
+  auffällt.
 - Ein neuer Push auf denselben Pull Request bricht dessen noch laufenden
-  Lauf ab. Push-Läufe auf den langlebigen Branches brechen sich gegenseitig
-  nicht ab.
+  Lauf ab. Push-Läufe auf den langlebigen Branches sowie nächtliche und von Hand
+  gestartete Läufe brechen sich gegenseitig und andere Läufe nicht ab.
 - Die CI baut aus einem frischen Klon ohne Secrets. Scheitert ein Schritt,
   weil etwas außerhalb dieses Repositorys fehlt, ist das ein Fehler.
 
