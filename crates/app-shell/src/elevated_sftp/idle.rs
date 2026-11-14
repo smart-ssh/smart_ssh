@@ -247,7 +247,7 @@ pub(crate) fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let registry = app.state::<super::ElevatedSftpRegistry>();
     // With a master password the store plugin exists only after unlocking
     // (Spec 0101, A16); `reload_stored` applies the value then.
-    let pending = app.try_state::<crate::UnlockedPluginsPendingSlot>();
+    let pending = app.try_state::<crate::extension_plugins::UnlockedPluginsPendingSlot>();
     if !pending.is_some_and(|slot| slot.0) {
         registry.idle().set_minutes(read_stored(app));
     }

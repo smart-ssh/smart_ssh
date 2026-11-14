@@ -1551,5 +1551,19 @@
     "minutes60": "60 分钟",
     "never": "从不",
     "hint": "在此时间内没有提升操作时，文件浏览器会自动退出提升模式。正在运行的操作视为活动。"
+  },
+  "activities": {
+    "title": "活动",
+    "buttonRunning": "活动：{{running}} 个进行中",
+    "buttonFailed": "活动：有一个活动失败",
+    "buttonDone": "活动：已完成",
+    "cancel": "取消",
+    "cancelNamed": "取消 {{title}}",
+    "dismiss": "关闭",
+    "dismissNamed": "关闭 {{title}}",
+    "succeeded": "完成",
+    "cancelled": "已取消",
+    "failed": "失败",
+    "inProgress": "进行中"
   }
 }

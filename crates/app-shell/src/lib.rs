@@ -34,6 +34,8 @@ mod first_run_notice;
 mod keychain;
 mod local_file;
 pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
+/// Issue #1325: the activity center (Spec 0116).
+pub mod activities;
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -745,7 +747,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // Spec 0101, A16 / Klarstellung 9: Der Merkzettel ist **nur** da,
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
-        .manage(UnlockedPluginsPendingSlot(defer_plugins))
+        .manage(extension_plugins::UnlockedPluginsPendingSlot(defer_plugins))
         .manage(extension_plugins::pending(deferred_extension_plugins))
         // Spec 0101, Klarstellung 9 (Fund 8): Ab hier gehört der
         // Flush-Wächter dem verwalteten Zustand, damit `quit_application`
@@ -777,6 +779,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             }
         })
         .manage(crate::speech_models::SpeechModels::default())
+        .manage(crate::activities::Activities::default())
         .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
         .manage(entitlement_catalogue)
@@ -826,6 +829,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             ui_preferences::set_ui_preference,
             elevated_sftp::idle::get_elevated_idle_timeout,
             elevated_sftp::idle::set_elevated_idle_timeout,
+            activities::activities_list,
+            activities::activity_cancel,
+            activities::activity_dismiss,
+            activities::activity_start,
+            activities::activity_update,
+            activities::activity_finish,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::list_speech_models,
@@ -1128,7 +1137,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
     // Im Schlüsselbund-Modus stehen sie schon seit der Bauzeit. Ein
     // zweiter Versuch würde scheitern („plugin … already registered"),
     // deshalb wird nur im aufgeschobenen Fall registriert.
-    match app.try_state::<UnlockedPluginsPendingSlot>() {
+    match app.try_state::<extension_plugins::UnlockedPluginsPendingSlot>() {
         Some(slot) if slot.0 => {}
         _ => return,
     }
@@ -1158,16 +1167,6 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
          unlocking (Spec 0101, A16)"
     );
 }
-
-/// Merkzettel: Sind die Plugins aus [`register_unlocked_plugins_on`]
-/// aufgeschoben und nach dem Entsperren nachzuholen?
-///
-/// Ein eigener Typ statt eines `bool` im `PendingStartup`: So steht die
-/// Information dort, wo [`register_unlocked_plugins`] sie findet — ohne
-/// dass die Funktion den Startzustand kennen muss. **Immer** verwaltet,
-/// auch mit `false`: Ein nur manchmal vorhandener Zustand ist in Tauri eine
-/// Fehlerquelle (gemessen M1).
-pub(crate) struct UnlockedPluginsPendingSlot(pub bool);
 
 /// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
 /// Verteiler.

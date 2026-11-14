@@ -12,6 +12,16 @@ export type ActionResultPayload = { "kind": "command", command: string, stdout: 
 
 export type ActionUserDecision = { "decision": "approve" } | { "decision": "deny" } | { "decision": "editThenApprove", command: string, };
 
+export type Activity = { id: string, kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, state: ActivityState, done: number, total: number | null, statusKey: string | null, errorCode: string | null, errorMessage: string | null, cancellable: boolean, startedAt: number, dismissed: boolean, };
+
+export type ActivityOutcome = { "outcome": "succeeded" } | { "outcome": "failed", code: string, message: string, };
+
+export type ActivitySpec = { kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, cancellable: boolean, total: number | null, };
+
+export type ActivityState = "running" | "succeeded" | "failed" | "cancelled";
+
+export type ActivityUpdate = { done: number | null, total: number | null, statusKey: string | null, };
+
 export type AiAction = { "SuggestCommand": { command: string, } } | { "ProposeNoteUpdate": { target: NoteTargetSelector, new_content: string, } } | { "GenerateDocument": { title: string, content_markdown: string, } } | { "ReadRemoteFile": { path: string, } } | { "WriteRemoteFile": { path: string, content: string, } } | { "AskUser": { question: string, options: Array<AskUserOption>, multi_select: boolean, } };
 
 export type AiBudgetWaitingPayload = { sessionId: string, waitSeconds: number, };
@@ -306,6 +316,7 @@ export type WebSourceDto = { title: string, url: string, };
 export type EventPayloads = {
   "action-confirmation-settled": ActionConfirmationSettledPayload,
   "action-decision-escalated": ActionDecisionEscalatedPayload,
+  "activity-changed": Activity,
   "ai-budget-waiting": AiBudgetWaitingPayload,
   "auth-prompt-ended": AuthPromptEndedPayload,
   "auth-prompt-needed": AuthPromptNeededPayload,

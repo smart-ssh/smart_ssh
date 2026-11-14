@@ -1551,5 +1551,19 @@
     "minutes60": "60分",
     "never": "しない",
     "hint": "昇格した操作がこの時間なかった場合、ファイルブラウザーは自動的に昇格モードを終了します。実行中の操作はアクティビティとして扱われます。"
+  },
+  "activities": {
+    "title": "アクティビティ",
+    "buttonRunning": "アクティビティ: {{running}} 件実行中",
+    "buttonFailed": "アクティビティ: 1 件が失敗しました",
+    "buttonDone": "アクティビティ: 完了",
+    "cancel": "キャンセル",
+    "cancelNamed": "{{title}} をキャンセル",
+    "dismiss": "閉じる",
+    "dismissNamed": "{{title}} を閉じる",
+    "succeeded": "完了",
+    "cancelled": "キャンセル済み",
+    "failed": "失敗",
+    "inProgress": "処理中"
   }
 }

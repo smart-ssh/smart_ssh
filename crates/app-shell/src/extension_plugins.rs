@@ -116,6 +116,16 @@ pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) -> Vec<&'static s
     failed
 }
 
+/// Merkzettel: Sind die Plugins aus [`register_unlocked_plugins_on`]
+/// aufgeschoben und nach dem Entsperren nachzuholen?
+///
+/// Ein eigener Typ statt eines `bool` im `PendingStartup`: So steht die
+/// Information dort, wo [`register_unlocked_plugins`] sie findet — ohne
+/// dass die Funktion den Startzustand kennen muss. **Immer** verwaltet,
+/// auch mit `false`: Ein nur manchmal vorhandener Zustand ist in Tauri eine
+/// Fehlerquelle (gemessen M1).
+pub(crate) struct UnlockedPluginsPendingSlot(pub bool);
+
 #[cfg(test)]
 mod tests {
     use super::*;

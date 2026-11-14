@@ -1567,5 +1567,19 @@
     "minutes60": "60 minutes",
     "never": "Jamais",
     "hint": "Le navigateur de fichiers quitte le mode élevé de lui-même après cette durée sans activité élevée. Une opération en cours compte comme activité."
+  },
+  "activities": {
+    "title": "Activités",
+    "buttonRunning": "Activités : {{running}} en cours",
+    "buttonFailed": "Activités : une activité a échoué",
+    "buttonDone": "Activités : terminé",
+    "cancel": "Annuler",
+    "cancelNamed": "Annuler {{title}}",
+    "dismiss": "Fermer",
+    "dismissNamed": "Fermer {{title}}",
+    "succeeded": "Terminé",
+    "cancelled": "Annulé",
+    "failed": "Échec",
+    "inProgress": "En cours"
   }
 }

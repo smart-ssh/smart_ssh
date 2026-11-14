@@ -1559,5 +1559,19 @@
     "minutes60": "60 minuter",
     "never": "Aldrig",
     "hint": "Filläsaren lämnar det förhöjda läget av sig själv efter så här lång tid utan förhöjd aktivitet. En pågående åtgärd räknas som aktivitet."
+  },
+  "activities": {
+    "title": "Aktiviteter",
+    "buttonRunning": "Aktiviteter: {{running}} pågår",
+    "buttonFailed": "Aktiviteter: en aktivitet misslyckades",
+    "buttonDone": "Aktiviteter: klart",
+    "cancel": "Avbryt",
+    "cancelNamed": "Avbryt {{title}}",
+    "dismiss": "Avfärda",
+    "dismissNamed": "Avfärda {{title}}",
+    "succeeded": "Klar",
+    "cancelled": "Avbruten",
+    "failed": "Misslyckades",
+    "inProgress": "Pågår"
   }
 }

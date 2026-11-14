@@ -1559,5 +1559,19 @@
     "minutes60": "60 minutes",
     "never": "Never",
     "hint": "The file browser leaves elevated mode on its own after this long without elevated activity. A running operation counts as activity."
+  },
+  "activities": {
+    "title": "Activities",
+    "buttonRunning": "Activities: {{running}} running",
+    "buttonFailed": "Activities: an activity failed",
+    "buttonDone": "Activities: finished",
+    "cancel": "Cancel",
+    "cancelNamed": "Cancel {{title}}",
+    "dismiss": "Dismiss",
+    "dismissNamed": "Dismiss {{title}}",
+    "succeeded": "Done",
+    "cancelled": "Cancelled",
+    "failed": "Failed",
+    "inProgress": "In progress"
   }
 }

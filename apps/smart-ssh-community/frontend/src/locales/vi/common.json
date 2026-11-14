@@ -1551,5 +1551,19 @@
     "minutes60": "60 phút",
     "never": "Không bao giờ",
     "hint": "Trình duyệt tệp tự thoát chế độ nâng cao sau khoảng thời gian này không có hoạt động nâng cao. Một thao tác đang chạy được tính là hoạt động."
+  },
+  "activities": {
+    "title": "Hoạt động",
+    "buttonRunning": "Hoạt động: {{running}} đang chạy",
+    "buttonFailed": "Hoạt động: một hoạt động đã thất bại",
+    "buttonDone": "Hoạt động: đã xong",
+    "cancel": "Hủy",
+    "cancelNamed": "Hủy {{title}}",
+    "dismiss": "Bỏ qua",
+    "dismissNamed": "Bỏ qua {{title}}",
+    "succeeded": "Xong",
+    "cancelled": "Đã hủy",
+    "failed": "Thất bại",
+    "inProgress": "Đang thực hiện"
   }
 }

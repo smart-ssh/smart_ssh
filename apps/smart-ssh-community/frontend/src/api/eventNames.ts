@@ -55,6 +55,7 @@ export const EVENT = {
   SPEECH_MODEL_STATUS: "speech-model-status",
   SPEECH_RECORDING_STATE: "speech-recording-state",
   SPEECH_PARTIAL_TEXT: "speech-partial-text",
+  ACTIVITY_CHANGED: "activity-changed",
   STARTUP_PROMPT: "startup:prompt",
   STARTUP_UNLOCKED: "startup:unlocked",
 } as const;

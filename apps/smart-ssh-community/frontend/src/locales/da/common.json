@@ -1559,5 +1559,19 @@
     "minutes60": "60 minutter",
     "never": "Aldrig",
     "hint": "Filbrowseren forlader selv den forhøjede tilstand efter så lang tid uden forhøjet aktivitet. En igangværende handling tæller som aktivitet."
+  },
+  "activities": {
+    "title": "Aktiviteter",
+    "buttonRunning": "Aktiviteter: {{running}} i gang",
+    "buttonFailed": "Aktiviteter: en aktivitet mislykkedes",
+    "buttonDone": "Aktiviteter: færdig",
+    "cancel": "Annuller",
+    "cancelNamed": "Annuller {{title}}",
+    "dismiss": "Afvis",
+    "dismissNamed": "Afvis {{title}}",
+    "succeeded": "Færdig",
+    "cancelled": "Annulleret",
+    "failed": "Mislykkedes",
+    "inProgress": "I gang"
   }
 }

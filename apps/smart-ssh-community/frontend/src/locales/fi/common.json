@@ -1559,5 +1559,19 @@
     "minutes60": "60 minuuttia",
     "never": "Ei koskaan",
     "hint": "Tiedostoselain poistuu korotetusta tilasta itse, kun korotettua toimintaa ei ole ollut näin pitkään. Käynnissä oleva toiminto lasketaan toiminnaksi."
+  },
+  "activities": {
+    "title": "Toiminnot",
+    "buttonRunning": "Toiminnot: {{running}} käynnissä",
+    "buttonFailed": "Toiminnot: yksi toiminto epäonnistui",
+    "buttonDone": "Toiminnot: valmis",
+    "cancel": "Peruuta",
+    "cancelNamed": "Peruuta {{title}}",
+    "dismiss": "Sulje",
+    "dismissNamed": "Sulje {{title}}",
+    "succeeded": "Valmis",
+    "cancelled": "Peruttu",
+    "failed": "Epäonnistui",
+    "inProgress": "Käynnissä"
   }
 }

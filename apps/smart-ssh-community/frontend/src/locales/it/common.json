@@ -1567,5 +1567,19 @@
     "minutes60": "60 minuti",
     "never": "Mai",
     "hint": "Il browser di file esce da solo dalla modalità elevata dopo questo tempo senza attività elevata. Un’operazione in corso conta come attività."
+  },
+  "activities": {
+    "title": "Attività",
+    "buttonRunning": "Attività: {{running}} in corso",
+    "buttonFailed": "Attività: un'attività non è riuscita",
+    "buttonDone": "Attività: completato",
+    "cancel": "Annulla",
+    "cancelNamed": "Annulla {{title}}",
+    "dismiss": "Chiudi",
+    "dismissNamed": "Chiudi {{title}}",
+    "succeeded": "Fatto",
+    "cancelled": "Annullato",
+    "failed": "Non riuscito",
+    "inProgress": "In corso"
   }
 }

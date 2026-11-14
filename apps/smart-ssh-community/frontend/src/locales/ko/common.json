@@ -1551,5 +1551,19 @@
     "minutes60": "60분",
     "never": "안 함",
     "hint": "이 시간 동안 상승된 작업이 없으면 파일 브라우저가 스스로 상승 모드를 종료합니다. 진행 중인 작업은 활동으로 간주됩니다."
+  },
+  "activities": {
+    "title": "작업",
+    "buttonRunning": "작업: {{running}}개 진행 중",
+    "buttonFailed": "작업: 작업 하나가 실패했습니다",
+    "buttonDone": "작업: 완료",
+    "cancel": "취소",
+    "cancelNamed": "{{title}} 취소",
+    "dismiss": "닫기",
+    "dismissNamed": "{{title}} 닫기",
+    "succeeded": "완료",
+    "cancelled": "취소됨",
+    "failed": "실패",
+    "inProgress": "진행 중"
   }
 }
