@@ -1590,6 +1590,18 @@
     "failed": "Ошибка",
     "inProgress": "Выполняется",
     "verifying": "Проверка",
-    "speechModelTitle": "Речевая модель {{name}}"
+    "speechModelTitle": "Речевая модель {{name}}",
+    "buttonInterrupted": "Задачи: некоторые были прерваны",
+    "interrupted": "Прервано",
+    "resume": "Возобновить",
+    "resumeNamed": "Возобновить: {{title}}",
+    "discard": "Отменить",
+    "discardNamed": "Отменить: {{title}}",
+    "resumeFailed": "Не удалось возобновить.",
+    "quitTitle": "Выйти, пока выполняются задачи?",
+    "quitBody": "Эти задачи ещё выполняются и будут остановлены:",
+    "quitResumeHint": "Прерванные загрузки можно возобновить при следующем запуске приложения.",
+    "quitAnyway": "Всё равно выйти",
+    "keepRunning": "Продолжить выполнение"
   }
 }

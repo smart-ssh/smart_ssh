@@ -24,6 +24,7 @@ macro_rules! decls {
 fn generate() -> String {
     use crate::activities::{
         Activity, ActivityOutcome, ActivitySpec, ActivityState, ActivityUpdate,
+        InterruptedActivity, QuitRequestedPayload, ResumeSpec,
     };
     use crate::auth_prompt_events::*;
     use crate::auto_reconnect::{AutoReconnectChangedPayload, AutoReconnectPhase};
@@ -56,6 +57,9 @@ fn generate() -> String {
         ActivitySpec,
         ActivityState,
         ActivityUpdate,
+        InterruptedActivity,
+        QuitRequestedPayload,
+        ResumeSpec,
         ActionConfirmationSettledPayload,
         ActionOrigin,
         AiAction,
@@ -225,6 +229,7 @@ fn event_payloads() -> String {
     let pairs: &[(&str, &str)] = &[
         (names::DATA_CHANGED, "DataChangedPayload"),
         (names::ACTIVITY_CHANGED, "Activity"),
+        (names::QUIT_REQUESTED, "QuitRequestedPayload"),
         (
             names::CONNECTION_STATUS_CHANGED,
             "ConnectionStatusChangedPayload",

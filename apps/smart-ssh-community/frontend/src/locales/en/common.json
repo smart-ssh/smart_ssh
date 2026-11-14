@@ -1574,6 +1574,18 @@
     "failed": "Failed",
     "inProgress": "In progress",
     "verifying": "Verifying",
-    "speechModelTitle": "Speech model {{name}}"
+    "speechModelTitle": "Speech model {{name}}",
+    "buttonInterrupted": "Activities: some were interrupted",
+    "interrupted": "Interrupted",
+    "resume": "Resume",
+    "resumeNamed": "Resume {{title}}",
+    "discard": "Discard",
+    "discardNamed": "Discard {{title}}",
+    "resumeFailed": "Could not resume.",
+    "quitTitle": "Quit while activities are running?",
+    "quitBody": "These activities are still running and will be stopped:",
+    "quitResumeHint": "Interrupted downloads can be resumed the next time you start the app.",
+    "quitAnyway": "Quit anyway",
+    "keepRunning": "Keep running"
   }
 }

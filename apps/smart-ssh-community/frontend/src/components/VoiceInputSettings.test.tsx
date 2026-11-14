@@ -102,7 +102,7 @@ describe("VoiceInputSettings running download (issue #1326)", () => {
       {
         id: "a1", kind: "speech-model", key: "base", titleKey: "activities.speechModelTitle",
         titleParams: { name: "Base" }, state: "running", done: 50, total: 100, statusKey: null,
-        errorCode: null, errorMessage: null, cancellable: true, startedAt: 1, dismissed: false,
+        errorCode: null, errorMessage: null, cancellable: true, resumable: true, startedAt: 1, dismissed: false,
       },
     ];
   });

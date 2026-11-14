@@ -22,7 +22,9 @@ export type { ToastInput } from "./buses/toastBus";
 export { startActivity } from "./lib/startActivity";
 export type { ActivityHandle, StartActivitySpec } from "./lib/startActivity";
 export { useActivities, useRunningActivity, useIsActivityRunning } from "./hooks/useActivities";
-export type { Activity, ActivityState } from "./api/activitiesApi";
+export type { Activity, ActivityState, InterruptedActivity } from "./api/activitiesApi";
+export { registerActivityResumeHandler } from "./lib/activityResume";
+export type { ActivityResumeHandler } from "./lib/activityResume";
 
 export { bootstrap } from "./bootstrap";
 export type { BootstrapOptions } from "./bootstrap";

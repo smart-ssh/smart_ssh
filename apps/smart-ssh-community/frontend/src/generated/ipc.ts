@@ -12,11 +12,11 @@ export type ActionResultPayload = { "kind": "command", command: string, stdout: 
 
 export type ActionUserDecision = { "decision": "approve" } | { "decision": "deny" } | { "decision": "editThenApprove", command: string, };
 
-export type Activity = { id: string, kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, state: ActivityState, done: number, total: number | null, statusKey: string | null, errorCode: string | null, errorMessage: string | null, cancellable: boolean, startedAt: number, dismissed: boolean, };
+export type Activity = { id: string, kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, state: ActivityState, done: number, total: number | null, statusKey: string | null, errorCode: string | null, errorMessage: string | null, cancellable: boolean, resumable: boolean, startedAt: number, dismissed: boolean, };
 
 export type ActivityOutcome = { "outcome": "succeeded" } | { "outcome": "failed", code: string, message: string, };
 
-export type ActivitySpec = { kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, cancellable: boolean, total: number | null, };
+export type ActivitySpec = { kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, cancellable: boolean, total: number | null, resume: ResumeSpec | null, };
 
 export type ActivityState = "running" | "succeeded" | "failed" | "cancelled";
 
@@ -186,6 +186,8 @@ export type HostKeyVerificationNeededPayload = { sessionId: string, promptId: nu
 
 export type InjectionCheckState = { "state": "running" } | { "state": "clean" } | { "state": "suspected", reason: string, } | { "state": "unavailable" };
 
+export type InterruptedActivity = { id: string, kind: string, key: string, titleKey: string, titleParams: { [key in string]: string }, done: number, total: number | null, };
+
 export type KeepGroupResult = { applied: boolean, groups: number, servers: number, };
 
 export type KeyFileFactsDto = { exists: boolean, permissionsTooOpen: boolean, validKey: boolean, encrypted: boolean, problem: KeyFileProblemDto | null, };
@@ -234,7 +236,11 @@ export type ProviderType = "openai" | "anthropic" | "generic_openai_compatible" 
 
 export type QuestionOptionDto = { label: string, description: string | null, };
 
+export type QuitRequestedPayload = { activities: Array<Activity>, };
+
 export type RemoteEntryDto = { name: string, path: string, isDir: boolean, size: number, permissions: string, modified: string | null, permissionsOctal: number, uid: number | null, gid: number | null, owner: string | null, group: string | null, isSymlink: boolean, linkTarget: string | null, linkKind: LinkKind | null, };
+
+export type ResumeSpec = { kind: string, key: string, };
 
 export type RiskAssessment = { serverRisk: RiskLevel, serverRiskReason: string | null, dataRisk: RiskLevel, dataRiskReason: string | null, aiReviewed: boolean, };
 
@@ -359,6 +365,7 @@ export type EventPayloads = {
   "note-shrink-suggested": NoteShrinkSuggestedPayload,
   "note-update-expired": NoteUpdateExpiredPayload,
   "note-update-suggested": NoteUpdateSuggestedPayload,
+  "quit-requested": QuitRequestedPayload,
   "risk-assessment-updated": RiskAssessmentUpdatedPayload,
   "sftp-transfer-finished": SftpTransferFinishedPayload,
   "sftp-transfer-progress": SftpTransferProgressPayload,

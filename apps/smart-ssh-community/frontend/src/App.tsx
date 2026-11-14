@@ -17,6 +17,7 @@ import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
+import { QuitConfirmDialog } from "./components/activities/QuitConfirmDialog";
 import { commandErrorMessage, listAiProviders } from "./api/api";
 import {
   subscribeRequestResumeChatSession,
@@ -461,6 +462,7 @@ function MainScreen({
       )}
 
       <FeatureLockedDialog />
+      <QuitConfirmDialog />
     </div>
   );
 }

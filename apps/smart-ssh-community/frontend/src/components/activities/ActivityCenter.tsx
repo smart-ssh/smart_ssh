@@ -4,6 +4,12 @@ import { useTranslation } from "react-i18next";
 import type { TranslateFn, TranslationKey } from "../../i18nTypes";
 import { cancelActivity, dismissActivity, type Activity } from "../../api/activitiesApi";
 import { useActivities } from "../../hooks/useActivities";
+import {
+  discardInterrupted,
+  resumeInterrupted,
+  useInterruptedActivities,
+} from "../../hooks/useInterruptedActivities";
+import type { InterruptedRow } from "../../api/activitiesApi";
 import { formatBytes } from "../../lib/format";
 import { voiceErrorKey } from "../../settings/voiceInputSettings";
 import { Button } from "../ui";
@@ -134,10 +140,56 @@ function ActivityRow({ activity }: { activity: Activity }) {
   );
 }
 
+/** An activity a quit interrupted: offers Resume and Discard (issue #1327). */
+function InterruptedRowItem({ row }: { row: InterruptedRow }) {
+  const { t } = useTranslation();
+  const tx: TranslateFn = t as unknown as TranslateFn;
+  const [failed, setFailed] = useState(false);
+  const title = tx(row.titleKey as TranslationKey, { ...row.titleParams });
+  const known = row.total !== null && row.total > 0;
+  return (
+    <li className="border-b border-surface-raised px-3 py-2 last:border-b-0" aria-label={title}>
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 break-words font-semibold text-fg">{title}</span>
+        <span className="flex shrink-0 gap-1">
+          <Button
+            size="sm"
+            onClick={() => {
+              setFailed(false);
+              void resumeInterrupted(row).catch((e) => {
+                console.warn("resume failed:", e);
+                setFailed(true);
+              });
+            }}
+            aria-label={t("activities.resumeNamed", { title })}
+          >
+            {t("activities.resume")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void discardInterrupted(row).catch((e) => console.warn("discard failed:", e))}
+            aria-label={t("activities.discardNamed", { title })}
+          >
+            {t("activities.discard")}
+          </Button>
+        </span>
+      </div>
+      <p className="mt-1 text-fg-subtle">
+        {[t("activities.interrupted"), known ? `${formatBytes(row.done)} / ${formatBytes(row.total as number)}` : null]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+      {failed && <p className="mt-1 break-words text-danger-fg-soft">{t("activities.resumeFailed")}</p>}
+    </li>
+  );
+}
+
 /** Header icon with count and progress ring; hidden without activities. */
 export function ActivityCenter() {
   const { t } = useTranslation();
   const list = useActivities();
+  const interrupted = useInterruptedActivities();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -174,10 +226,10 @@ export function ActivityCenter() {
 
   // Nothing left to show: the popover goes with the last row.
   useEffect(() => {
-    if (list.length === 0) setOpen(false);
-  }, [list.length]);
+    if (list.length === 0 && interrupted.length === 0) setOpen(false);
+  }, [list.length, interrupted.length]);
 
-  if (list.length === 0) return null;
+  if (list.length === 0 && interrupted.length === 0) return null;
 
   const running = list.filter((a) => a.state === "running");
   const failed = list.some((a) => a.state === "failed");
@@ -187,7 +239,9 @@ export function ActivityCenter() {
       ? t("activities.buttonRunning", { running: running.length })
       : failed
         ? t("activities.buttonFailed")
-        : t("activities.buttonDone");
+        : interrupted.length > 0
+          ? t("activities.buttonInterrupted")
+          : t("activities.buttonDone");
 
   return (
     <div ref={wrapRef} className="relative">
@@ -204,7 +258,7 @@ export function ActivityCenter() {
       >
         {running.length > 0 ? (
           <Ring fraction={fraction}>{running.length}</Ring>
-        ) : failed ? (
+        ) : failed || interrupted.length > 0 ? (
           <span aria-hidden="true" className="text-sm font-bold text-danger-fg-soft">
             !
           </span>
@@ -225,6 +279,9 @@ export function ActivityCenter() {
             {t("activities.title")}
           </h2>
           <ul>
+            {interrupted.map((r) => (
+              <InterruptedRowItem key={r.id} row={r} />
+            ))}
             {list.map((a) => (
               <ActivityRow key={a.id} activity={a} />
             ))}

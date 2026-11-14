@@ -98,6 +98,8 @@ beide zeigen beim erneuten Öffnen den laufenden Download mit seinem
 Fortschritt und starten keinen zweiten. Abbrechen in der Aktivität und in den
 Einstellungen wirken gleich (3.5).
 
+**3.9** Ein Sprachmodell-Download ist wiederaufnehmbar (Spec 0116, Abschnitt 6). Beendet der Nutzer die App mit „Trotzdem beenden“, bleiben die temporären Dateien liegen, und das Modell erscheint beim nächsten Start als „Unterbrochen“. „Fortsetzen“ lädt ab der Größe der vorhandenen temporären Datei weiter (HTTP-Bereichsanfrage); die Prüfsumme wird über die ganze Datei geprüft. Antwortet der Server auf die Bereichsanfrage mit der vollständigen Datei (Status 200), beginnt der Download von vorn, ohne dass eine beschädigte Datei entsteht. „Verwerfen“ löscht die temporären Dateien und den Eintrag. Ein neu gestarteter Download (ohne „Fortsetzen“) beginnt immer bei null.
+
 **3.4** Whisper-Modelldateien einer früheren Version (`ggml-base.bin`,
 `ggml-small.bin` und ihre temporären `.part`-Reste im Unterordner
 `speech-models`) werden beim ersten Start nach dem Update lokal gelöscht; es

@@ -1574,6 +1574,18 @@
     "failed": "Mislykkedes",
     "inProgress": "I gang",
     "verifying": "Verificerer",
-    "speechModelTitle": "Talemodel {{name}}"
+    "speechModelTitle": "Talemodel {{name}}",
+    "buttonInterrupted": "Aktiviteter: nogle blev afbrudt",
+    "interrupted": "Afbrudt",
+    "resume": "Genoptag",
+    "resumeNamed": "Genoptag {{title}}",
+    "discard": "Kassér",
+    "discardNamed": "Kassér {{title}}",
+    "resumeFailed": "Kunne ikke genoptage.",
+    "quitTitle": "Afslut, mens aktiviteter kører?",
+    "quitBody": "Disse aktiviteter kører stadig og bliver stoppet:",
+    "quitResumeHint": "Afbrudte downloads kan genoptages, næste gang du starter appen.",
+    "quitAnyway": "Afslut alligevel",
+    "keepRunning": "Lad dem køre"
   }
 }

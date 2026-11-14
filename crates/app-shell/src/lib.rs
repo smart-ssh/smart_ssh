@@ -717,6 +717,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             // Spec 0108: old whisper.cpp model files are obsolete.
             speech_models::remove_legacy_files_at_start(app.handle());
+            speech_models::register_resume_handler(app.handle()); // #1327
 
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
@@ -767,17 +768,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // dialog, native drop, own edit copy). The drop paths come from the
         // window's native drag-and-drop event below, never from the webview.
         .manage(app_logic::local_path_grants::LocalPathGrants::new())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
-            {
-                use tauri::Manager;
-                if let Some(grants) =
-                    window.try_state::<app_logic::local_path_grants::LocalPathGrants>()
-                {
-                    grants.record_drop(paths.clone());
-                }
-            }
-        })
+        .on_window_event(commands::sftp::record_drag_drop)
         .manage(crate::speech_models::SpeechModels::default())
         .manage(crate::activities::Activities::default())
         .manage(crate::voice_input::VoiceRecorder::default())
@@ -835,6 +826,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             activities::activity_start,
             activities::activity_update,
             activities::activity_finish,
+            activities::quit_confirmed,
+            activities::activities_interrupted,
+            activities::activity_interrupted_resolve,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::list_speech_models,
@@ -981,6 +975,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .build(context)
         .expect("Fehler beim Starten der Tauri-App")
         .run(|app, event| {
+            activities::on_run_event(app, &event);
             // Issue #358: staged "Copy file" files are removed at exit.
             if matches!(event, tauri::RunEvent::Exit) {
                 // Issue #669 / #879: stop services, then the app-scope tasks.

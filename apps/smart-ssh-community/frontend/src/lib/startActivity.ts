@@ -20,6 +20,10 @@ export interface StartActivitySpec {
   /** Must be `true` for the row to offer a cancel button; `onCancel` then runs. */
   cancellable?: boolean;
   total?: number | null;
+  /** Makes the activity resumable: when the app quits while it runs, it is
+   * offered as "Interrupted" at the next start and handed to the handler
+   * registered with `registerActivityResumeHandler(kind, …)`. */
+  resume?: { kind: string; key: string };
 }
 
 export interface ActivityHandle {
@@ -42,6 +46,7 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
     titleParams: spec.titleParams ?? {},
     cancellable: spec.cancellable ?? false,
     total: spec.total ?? null,
+    resume: spec.resume ?? null,
   };
   const id = await startActivityCommand(full);
   let cancelCallback: (() => void) | null = null;

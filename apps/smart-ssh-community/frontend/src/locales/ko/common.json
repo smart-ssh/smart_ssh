@@ -1566,6 +1566,18 @@
     "failed": "실패",
     "inProgress": "진행 중",
     "verifying": "확인 중",
-    "speechModelTitle": "음성 모델 {{name}}"
+    "speechModelTitle": "음성 모델 {{name}}",
+    "buttonInterrupted": "작업: 일부가 중단되었습니다",
+    "interrupted": "중단됨",
+    "resume": "다시 시작",
+    "resumeNamed": "{{title}} 다시 시작",
+    "discard": "삭제",
+    "discardNamed": "{{title}} 삭제",
+    "resumeFailed": "다시 시작하지 못했습니다.",
+    "quitTitle": "실행 중인 작업이 있는데 종료할까요?",
+    "quitBody": "다음 작업이 아직 실행 중이며 중지됩니다:",
+    "quitResumeHint": "중단된 다운로드는 다음에 앱을 시작할 때 다시 시작할 수 있습니다.",
+    "quitAnyway": "그래도 종료",
+    "keepRunning": "계속 실행"
   }
 }

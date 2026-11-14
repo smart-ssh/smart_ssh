@@ -1574,6 +1574,18 @@
     "failed": "Epäonnistui",
     "inProgress": "Käynnissä",
     "verifying": "Tarkistetaan",
-    "speechModelTitle": "Puhemalli {{name}}"
+    "speechModelTitle": "Puhemalli {{name}}",
+    "buttonInterrupted": "Toiminnot: osa keskeytyi",
+    "interrupted": "Keskeytetty",
+    "resume": "Jatka",
+    "resumeNamed": "Jatka: {{title}}",
+    "discard": "Hylkää",
+    "discardNamed": "Hylkää: {{title}}",
+    "resumeFailed": "Jatkaminen epäonnistui.",
+    "quitTitle": "Suljetaanko, vaikka toimintoja on käynnissä?",
+    "quitBody": "Nämä toiminnot ovat vielä käynnissä ja pysäytetään:",
+    "quitResumeHint": "Keskeytyneet lataukset voi jatkaa, kun käynnistät sovelluksen seuraavan kerran.",
+    "quitAnyway": "Sulje silti",
+    "keepRunning": "Jatka suoritusta"
   }
 }

@@ -1574,6 +1574,18 @@
     "failed": "Mislukt",
     "inProgress": "Bezig",
     "verifying": "Controleren",
-    "speechModelTitle": "Spraakmodel {{name}}"
+    "speechModelTitle": "Spraakmodel {{name}}",
+    "buttonInterrupted": "Activiteiten: sommige zijn onderbroken",
+    "interrupted": "Onderbroken",
+    "resume": "Hervatten",
+    "resumeNamed": "{{title}} hervatten",
+    "discard": "Verwerpen",
+    "discardNamed": "{{title}} verwerpen",
+    "resumeFailed": "Hervatten is niet gelukt.",
+    "quitTitle": "Afsluiten terwijl er activiteiten lopen?",
+    "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
+    "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
+    "quitAnyway": "Toch afsluiten",
+    "keepRunning": "Blijven doorlopen"
   }
 }

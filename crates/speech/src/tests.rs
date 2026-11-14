@@ -539,3 +539,169 @@ fn legacy_ggml_files_are_removed_and_nothing_else() {
     assert_eq!(m.status(SpeechModel::Base), ModelStatus::NotDownloaded);
     assert_eq!(m.status(SpeechModel::Small), ModelStatus::NotDownloaded);
 }
+
+/// Fixture for resume tests: answers `Range: bytes=N-` with 206 when
+/// `honor`, else always with the full body (200). Returns the URL and the
+/// `Range` header values seen (`None` = no header).
+async fn serve_range(body: Vec<u8>, honor: bool) -> (String, Arc<Mutex<Vec<Option<String>>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/model.onnx", listener.local_addr().unwrap());
+    let seen: Arc<Mutex<Vec<Option<String>>>> = Arc::default();
+    let log = Arc::clone(&seen);
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut sock, _)) = listener.accept().await else {
+                return;
+            };
+            let body = body.clone();
+            let log = Arc::clone(&log);
+            tokio::spawn(async move {
+                let mut buf = [0u8; 2048];
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..n]).into_owned();
+                let range = request.lines().find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("range:")
+                        .map(|v| v.trim().to_owned())
+                });
+                log.lock().unwrap().push(range.clone());
+                let start = range
+                    .as_deref()
+                    .and_then(|r| r.strip_prefix("bytes="))
+                    .and_then(|r| r.strip_suffix('-'))
+                    .and_then(|r| r.parse::<usize>().ok());
+                let (head, payload) = match start {
+                    Some(s) if honor => (
+                        format!(
+                            "HTTP/1.1 206 X\r\nContent-Length: {}\r\nContent-Range: bytes {s}-{}/{}\r\nConnection: close\r\n\r\n",
+                            body.len() - s,
+                            body.len() - 1,
+                            body.len()
+                        ),
+                        body[s..].to_vec(),
+                    ),
+                    _ => (
+                        format!(
+                            "HTTP/1.1 200 X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        ),
+                        body.clone(),
+                    ),
+                };
+                let _ = sock.write_all(head.as_bytes()).await;
+                let _ = sock.write_all(&payload).await;
+            });
+        }
+    });
+    (url, seen)
+}
+
+fn leave_part(dir: &Path, bytes: &[u8]) {
+    let p = part(dir);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(p, bytes).unwrap();
+}
+
+#[tokio::test]
+async fn resume_continues_from_the_part_file_and_hashes_the_whole_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    let (url, seen) = serve_range(body.clone(), true).await;
+    let m = manager(dir.path(), url, &body, sha_hex(&body));
+    leave_part(dir.path(), &body[..70_000]);
+    let (cb, st) = recorder();
+    m.resume_download(SpeechModel::Base, cb).unwrap();
+    assert_eq!(wait_final(&st).await, ModelStatus::Ready);
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        [Some("bytes=70000-".to_owned())]
+    );
+    assert_eq!(
+        std::fs::read(m.model_path(SpeechModel::Base).join("model.onnx")).unwrap(),
+        body
+    );
+    // Progress started at the resumed offset, not at zero.
+    assert!(st
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|s| !matches!(s, ModelStatus::Downloading { done, .. } if *done < 70_000)));
+}
+
+#[tokio::test]
+async fn resume_hash_check_covers_the_kept_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    let (url, _) = serve_range(body.clone(), true).await;
+    let m = manager(dir.path(), url, &body, sha_hex(&body));
+    // Corrupt kept bytes: the tail is right, the whole file must not verify.
+    leave_part(dir.path(), &vec![0xAB; 70_000]);
+    let (cb, st) = recorder();
+    m.resume_download(SpeechModel::Base, cb).unwrap();
+    assert_eq!(
+        wait_final(&st).await,
+        ModelStatus::Error {
+            key: ModelErrorKey::HashMismatch.key()
+        }
+    );
+    assert!(!part(dir.path()).exists());
+}
+
+#[tokio::test]
+async fn server_ignoring_range_restarts_from_zero_without_corruption() {
+    let dir = tempfile::tempdir().unwrap();
+    let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    let (url, seen) = serve_range(body.clone(), false).await;
+    let m = manager(dir.path(), url, &body, sha_hex(&body));
+    leave_part(dir.path(), &body[..70_000]);
+    let (cb, st) = recorder();
+    m.resume_download(SpeechModel::Base, cb).unwrap();
+    assert_eq!(wait_final(&st).await, ModelStatus::Ready);
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    assert_eq!(
+        std::fs::read(m.model_path(SpeechModel::Base).join("model.onnx")).unwrap(),
+        body
+    );
+}
+
+#[tokio::test]
+async fn plain_start_ignores_a_leftover_part_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let body: Vec<u8> = (0..50_000u32).map(|i| (i % 251) as u8).collect();
+    let (url, seen) = serve_range(body.clone(), true).await;
+    let m = manager(dir.path(), url, &body, sha_hex(&body));
+    leave_part(dir.path(), b"stale");
+    let (cb, st) = recorder();
+    m.start_download(SpeechModel::Base, cb).unwrap();
+    assert_eq!(wait_final(&st).await, ModelStatus::Ready);
+    assert_eq!(seen.lock().unwrap().as_slice(), [None]);
+}
+
+#[tokio::test]
+async fn resume_with_a_complete_part_file_only_verifies() {
+    let dir = tempfile::tempdir().unwrap();
+    let body: Vec<u8> = (0..50_000u32).map(|i| (i % 251) as u8).collect();
+    let (url, seen) = serve_range(body.clone(), true).await;
+    let m = manager(dir.path(), url, &body, sha_hex(&body));
+    leave_part(dir.path(), &body);
+    let (cb, st) = recorder();
+    m.resume_download(SpeechModel::Base, cb).unwrap();
+    assert_eq!(wait_final(&st).await, ModelStatus::Ready);
+    assert!(seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_removes_the_part_file_of_an_interrupted_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = b"abcdef".to_vec();
+    let m = manager(
+        dir.path(),
+        "http://127.0.0.1:1/x".into(),
+        &body,
+        sha_hex(&body),
+    );
+    leave_part(dir.path(), b"abc");
+    assert!(part(dir.path()).exists());
+    m.delete(SpeechModel::Base).unwrap();
+    assert!(!part(dir.path()).exists());
+}

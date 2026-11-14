@@ -1590,6 +1590,18 @@
     "failed": "Selhalo",
     "inProgress": "Probíhá",
     "verifying": "Ověřování",
-    "speechModelTitle": "Hlasový model {{name}}"
+    "speechModelTitle": "Hlasový model {{name}}",
+    "buttonInterrupted": "Aktivity: některé byly přerušeny",
+    "interrupted": "Přerušeno",
+    "resume": "Pokračovat",
+    "resumeNamed": "Pokračovat: {{title}}",
+    "discard": "Zahodit",
+    "discardNamed": "Zahodit: {{title}}",
+    "resumeFailed": "Pokračování se nezdařilo.",
+    "quitTitle": "Ukončit, i když běží aktivity?",
+    "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
+    "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
+    "quitAnyway": "Přesto ukončit",
+    "keepRunning": "Nechat běžet"
   }
 }

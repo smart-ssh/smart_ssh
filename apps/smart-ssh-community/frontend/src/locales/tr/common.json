@@ -1574,6 +1574,18 @@
     "failed": "Başarısız",
     "inProgress": "Sürüyor",
     "verifying": "Doğrulanıyor",
-    "speechModelTitle": "Konuşma modeli {{name}}"
+    "speechModelTitle": "Konuşma modeli {{name}}",
+    "buttonInterrupted": "Etkinlikler: bazıları yarıda kaldı",
+    "interrupted": "Yarıda kaldı",
+    "resume": "Sürdür",
+    "resumeNamed": "{{title}} öğesini sürdür",
+    "discard": "Vazgeç",
+    "discardNamed": "{{title}} öğesinden vazgeç",
+    "resumeFailed": "Sürdürülemedi.",
+    "quitTitle": "Etkinlikler çalışırken çıkılsın mı?",
+    "quitBody": "Bu etkinlikler hâlâ çalışıyor ve durdurulacak:",
+    "quitResumeHint": "Yarıda kalan indirmeler uygulamayı bir sonraki açışınızda sürdürülebilir.",
+    "quitAnyway": "Yine de çık",
+    "keepRunning": "Çalışmaya devam etsin"
   }
 }

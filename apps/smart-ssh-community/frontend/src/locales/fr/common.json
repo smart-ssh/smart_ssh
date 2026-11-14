@@ -1582,6 +1582,18 @@
     "failed": "Échec",
     "inProgress": "En cours",
     "verifying": "Vérification",
-    "speechModelTitle": "Modèle vocal {{name}}"
+    "speechModelTitle": "Modèle vocal {{name}}",
+    "buttonInterrupted": "Activités : certaines ont été interrompues",
+    "interrupted": "Interrompu",
+    "resume": "Reprendre",
+    "resumeNamed": "Reprendre {{title}}",
+    "discard": "Abandonner",
+    "discardNamed": "Abandonner {{title}}",
+    "resumeFailed": "Impossible de reprendre.",
+    "quitTitle": "Quitter alors que des activités sont en cours ?",
+    "quitBody": "Ces activités sont encore en cours et seront arrêtées :",
+    "quitResumeHint": "Les téléchargements interrompus peuvent être repris au prochain démarrage.",
+    "quitAnyway": "Quitter quand même",
+    "keepRunning": "Laisser continuer"
   }
 }

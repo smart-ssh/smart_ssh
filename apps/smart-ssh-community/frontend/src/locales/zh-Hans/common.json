@@ -1566,6 +1566,18 @@
     "failed": "失败",
     "inProgress": "进行中",
     "verifying": "正在验证",
-    "speechModelTitle": "语音模型 {{name}}"
+    "speechModelTitle": "语音模型 {{name}}",
+    "buttonInterrupted": "活动：部分已中断",
+    "interrupted": "已中断",
+    "resume": "继续",
+    "resumeNamed": "继续 {{title}}",
+    "discard": "放弃",
+    "discardNamed": "放弃 {{title}}",
+    "resumeFailed": "无法继续。",
+    "quitTitle": "仍有活动在运行，要退出吗？",
+    "quitBody": "以下活动仍在运行，退出后将被停止：",
+    "quitResumeHint": "中断的下载可在下次启动应用时继续。",
+    "quitAnyway": "仍然退出",
+    "keepRunning": "继续运行"
   }
 }

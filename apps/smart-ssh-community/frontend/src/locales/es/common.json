@@ -1582,6 +1582,18 @@
     "failed": "Falló",
     "inProgress": "En curso",
     "verifying": "Verificando",
-    "speechModelTitle": "Modelo de voz {{name}}"
+    "speechModelTitle": "Modelo de voz {{name}}",
+    "buttonInterrupted": "Actividades: algunas se interrumpieron",
+    "interrupted": "Interrumpida",
+    "resume": "Reanudar",
+    "resumeNamed": "Reanudar {{title}}",
+    "discard": "Descartar",
+    "discardNamed": "Descartar {{title}}",
+    "resumeFailed": "No se pudo reanudar.",
+    "quitTitle": "¿Salir con actividades en curso?",
+    "quitBody": "Estas actividades siguen en curso y se detendrán:",
+    "quitResumeHint": "Las descargas interrumpidas se pueden reanudar la próxima vez que inicies la aplicación.",
+    "quitAnyway": "Salir de todos modos",
+    "keepRunning": "Seguir en ejecución"
   }
 }

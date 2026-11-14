@@ -1574,6 +1574,18 @@
     "failed": "Mislyktes",
     "inProgress": "Pågår",
     "verifying": "Verifiserer",
-    "speechModelTitle": "Talemodell {{name}}"
+    "speechModelTitle": "Talemodell {{name}}",
+    "buttonInterrupted": "Aktiviteter: noen ble avbrutt",
+    "interrupted": "Avbrutt",
+    "resume": "Gjenoppta",
+    "resumeNamed": "Gjenoppta {{title}}",
+    "discard": "Forkast",
+    "discardNamed": "Forkast {{title}}",
+    "resumeFailed": "Kunne ikke gjenoppta.",
+    "quitTitle": "Avslutte mens aktiviteter pågår?",
+    "quitBody": "Disse aktivitetene pågår fortsatt og blir stoppet:",
+    "quitResumeHint": "Avbrutte nedlastinger kan gjenopptas neste gang du starter appen.",
+    "quitAnyway": "Avslutt likevel",
+    "keepRunning": "La dem fortsette"
   }
 }

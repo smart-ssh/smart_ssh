@@ -390,6 +390,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     stop_auto_reconnect: () => null,
     get_selected_speech_model: () => "base",
     activities_list: () => [],
+    activities_interrupted: () => [],
     activity_cancel: () => null,
     activity_dismiss: () => null,
     activity_start: () => "fake-activity",
