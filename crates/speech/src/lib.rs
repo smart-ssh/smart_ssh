@@ -35,7 +35,7 @@ use std::sync::{Arc, Mutex};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch;
 
 /// Immutable revisions of `onnx-community/whisper-base` / `-small` (Apache-2.0,
@@ -420,6 +420,27 @@ impl ModelManager {
         model: SpeechModel,
         on_status: StatusCallback,
     ) -> Result<(), ModelManagerError> {
+        self.start_download_inner(model, on_status, false)
+    }
+
+    /// Like [`Self::start_download`], but continues from the `<name>.part`
+    /// files an interrupted download left on disk (HTTP `Range`; a server
+    /// that ignores it makes the file restart from zero). The hash is
+    /// still checked over the whole file.
+    pub fn resume_download(
+        &self,
+        model: SpeechModel,
+        on_status: StatusCallback,
+    ) -> Result<(), ModelManagerError> {
+        self.start_download_inner(model, on_status, true)
+    }
+
+    fn start_download_inner(
+        &self,
+        model: SpeechModel,
+        on_status: StatusCallback,
+        resume: bool,
+    ) -> Result<(), ModelManagerError> {
         let source = self.source_of(model);
         let (tx, rx) = watch::channel(false);
         {
@@ -439,7 +460,7 @@ impl ModelManager {
         let dir = self.dir.clone();
         let slots = Arc::clone(&self.slots);
         tokio::spawn(async move {
-            let result = download(&dir, model, &source, &slots, rx, &on_status).await;
+            let result = download(&dir, model, &source, &slots, rx, &on_status, resume).await;
             let final_status = {
                 let mut guard = lock_tolerating_poison(&slots);
                 match result {
@@ -563,8 +584,9 @@ async fn download(
     slots: &Mutex<HashMap<SpeechModel, Slot>>,
     mut cancel: watch::Receiver<bool>,
     on_status: &StatusCallback,
+    resume: bool,
 ) -> Result<(), Option<ModelErrorKey>> {
-    let result = download_all(dir, model, source, slots, &mut cancel, on_status).await;
+    let result = download_all(dir, model, source, slots, &mut cancel, on_status, resume).await;
     if result.is_err() {
         for f in &source.files {
             let _ = tokio::fs::remove_file(part_path(dir, model, f)).await;
@@ -584,6 +606,7 @@ async fn download_all(
     slots: &Mutex<HashMap<SpeechModel, Slot>>,
     cancel: &mut watch::Receiver<bool>,
     on_status: &StatusCallback,
+    resume: bool,
 ) -> Result<(), Option<ModelErrorKey>> {
     let io = |_| Some(ModelErrorKey::Io);
     tokio::fs::create_dir_all(files_dir(dir, model))
@@ -605,6 +628,7 @@ async fn download_all(
             slots,
             cancel,
             on_status,
+            resume,
         )
         .await?;
         base += file.size;
@@ -636,23 +660,73 @@ async fn download_file(
     slots: &Mutex<HashMap<SpeechModel, Slot>>,
     cancel: &mut watch::Receiver<bool>,
     on_status: &StatusCallback,
+    resume: bool,
 ) -> Result<(), Option<ModelErrorKey>> {
     let io = |_| Some(ModelErrorKey::Io);
-    let _ = tokio::fs::remove_file(part).await;
-    let response = tokio::select! {
-        _ = cancel.changed() => return Err(None),
-        r = client.get(&file.url).send() => r,
+    // Bytes of an earlier attempt that are kept (only when resuming and the
+    // leftover is not larger than the file).
+    let existing = match tokio::fs::metadata(part).await {
+        Ok(m) if resume && m.len() <= file.size => m.len(),
+        _ => 0,
+    };
+    if existing == 0 {
+        let _ = tokio::fs::remove_file(part).await;
     }
-    .map_err(|_| Some(ModelErrorKey::Network))?;
-    if !response.status().is_success() {
-        return Err(Some(ModelErrorKey::HttpStatus));
-    }
-
-    let mut out = tokio::fs::File::create(part).await.map_err(io)?;
     let mut hasher = Sha256::new();
     let mut done: u64 = 0;
-    let mut stream = response.bytes_stream();
+    let mut out;
+    let mut stream = None;
+    if existing > 0 && existing == file.size {
+        // Everything is on disk already: only the hash check is left.
+        done = hash_existing(part, &mut hasher, existing, cancel).await?;
+        out = tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(part)
+            .await
+            .map_err(io)?;
+    } else {
+        let mut request = client.get(&file.url);
+        if existing > 0 {
+            request = request.header(reqwest::header::RANGE, format!("bytes={existing}-"));
+        }
+        let response = tokio::select! {
+            _ = cancel.changed() => return Err(None),
+            r = request.send() => r,
+        }
+        .map_err(|_| Some(ModelErrorKey::Network))?;
+        let status = response.status();
+        if existing > 0 && status == reqwest::StatusCode::PARTIAL_CONTENT {
+            done = hash_existing(part, &mut hasher, existing, cancel).await?;
+            out = tokio::fs::OpenOptions::new()
+                .append(true)
+                .open(part)
+                .await
+                .map_err(io)?;
+        } else if status.is_success() {
+            // A plain 200 means the server ignored `Range` (or this is a
+            // fresh download): the body is the whole file, start from zero.
+            out = tokio::fs::File::create(part).await.map_err(io)?;
+        } else {
+            return Err(Some(ModelErrorKey::HttpStatus));
+        }
+        stream = Some(response.bytes_stream());
+    }
+    if done > 0 {
+        if let Some(Slot::Downloading { done: d, .. }) =
+            lock_tolerating_poison(slots).get_mut(&model)
+        {
+            *d = base + done;
+        }
+        on_status(
+            model,
+            ModelStatus::Downloading {
+                done: base + done,
+                total,
+            },
+        );
+    }
     loop {
+        let Some(stream) = stream.as_mut() else { break };
         let chunk = tokio::select! {
             _ = cancel.changed() => return Err(None),
             c = stream.next() => c,
@@ -687,6 +761,34 @@ async fn download_file(
         return Err(Some(ModelErrorKey::HashMismatch));
     }
     Ok(())
+}
+
+/// Feeds the first `len` bytes of `part` into the hasher (so the hash covers
+/// the whole file after a resume); returns the number of bytes read.
+async fn hash_existing(
+    part: &Path,
+    hasher: &mut Sha256,
+    len: u64,
+    cancel: &mut watch::Receiver<bool>,
+) -> Result<u64, Option<ModelErrorKey>> {
+    let io = |_| Some(ModelErrorKey::Io);
+    let mut f = tokio::fs::File::open(part).await.map_err(io)?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut read: u64 = 0;
+    while read < len {
+        if *cancel.borrow() {
+            return Err(None);
+        }
+        let want = (len - read).min(buf.len() as u64) as usize;
+        let n = f.read(&mut buf[..want]).await.map_err(io)?;
+        if n == 0 {
+            // The file shrank under us; the hash check cannot succeed.
+            return Err(Some(ModelErrorKey::HashMismatch));
+        }
+        hasher.update(&buf[..n]);
+        read += n as u64;
+    }
+    Ok(read)
 }
 
 #[cfg(test)]
