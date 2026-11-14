@@ -11,12 +11,18 @@ fn visit(dir: &Path, hits: &mut Vec<String>) {
             visit(&path, hits);
         } else if path.extension().is_some_and(|e| e == "rs") {
             let text = std::fs::read_to_string(&path).expect("read");
-            for pat in ["with_default(", "set_default("] {
-                if text.contains(&format!("tracing::subscriber::{pat}"))
-                    || text.contains(&format!("dispatcher::{pat}"))
-                {
-                    hits.push(path.display().to_string());
-                }
+            // `subscriber::with_default(` / `dispatcher::set_default(` also
+            // match the fully qualified forms; the `use` lines catch the
+            // bare `with_default(...)` after an import.
+            let found = ["with_default", "set_default"].iter().any(|f| {
+                ["subscriber", "dispatcher"].iter().any(|m| {
+                    text.contains(&format!("{m}::{f}("))
+                        || text.contains(&format!("{m}::{f};"))
+                        || text.contains(&format!("{m}::{{{f}"))
+                })
+            });
+            if found {
+                hits.push(path.display().to_string());
             }
         }
     }
