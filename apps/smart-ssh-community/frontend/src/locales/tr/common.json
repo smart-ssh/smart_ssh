@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Katı kara liste:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Otomatik devam {{limit}} adımdan sonra duraklatıldı — devam etmek için bir mesaj gönderin.",
+    "autoContinuationLimitReached": "Otomatik devam, onayınız olmadan {{limit}} adımdan sonra duraklatıldı — devam etmek için bir mesaj gönderin.",
     "aiBudgetWaiting": "Yapay zeka bütçesi bekleniyor — sonraki deneme {{seconds}} sn içinde…",
     "suggestCommand": "Komut öner",
     "generateDocument": "Belge oluştur: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
+    "copyCode": "Kodu kopyala",
+    "codeCopied": "Kod kopyalandı",
+    "codeCopyFailed": "Kopyalama başarısız",
     "composerMore": "Diğer giriş eylemleri",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",

@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Danh sách chặn cứng:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Chế độ tự động tiếp tục đã tạm dừng sau {{limit}} bước — hãy gửi một tin nhắn để tiếp tục.",
+    "autoContinuationLimitReached": "Chế độ tự động tiếp tục đã tạm dừng sau {{limit}} bước mà không có xác nhận của bạn — hãy gửi một tin nhắn để tiếp tục.",
     "aiBudgetWaiting": "Đang chờ hạn mức AI — thử lại sau {{seconds}} giây…",
     "suggestCommand": "Đề xuất lệnh",
     "generateDocument": "Tạo tài liệu: {{title}}",
@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
+    "copyCode": "Sao chép mã",
+    "codeCopied": "Đã sao chép mã",
+    "codeCopyFailed": "Sao chép thất bại",
     "composerMore": "Thêm thao tác nhập",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",

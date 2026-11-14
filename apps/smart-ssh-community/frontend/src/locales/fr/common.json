@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Liste noire stricte :"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes — envoyez un message pour continuer.",
+    "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes sans votre confirmation — envoyez un message pour continuer.",
     "aiBudgetWaiting": "En attente du budget IA — prochaine tentative dans {{seconds}} s…",
     "suggestCommand": "Suggérer une commande",
     "generateDocument": "Générer un document : {{title}}",
@@ -1262,6 +1262,9 @@
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",
+    "copyCode": "Copier le code",
+    "codeCopied": "Code copié",
+    "codeCopyFailed": "Échec de la copie",
     "composerMore": "Plus d'actions de saisie",
     "newChat": "Nouveau chat",
     "newChatDisabledHint": "Indisponible pendant que l’IA répond ou qu’une confirmation est ouverte.",

@@ -69,3 +69,17 @@ describe("Drittlizenzen: Hinweisdateien (Spec 0099, A1.2)", () => {
     expect(content).toContain("tectonic_cfg_support is licensed under the MIT License");
   });
 });
+
+// Spec 0108: the CC-BY-4.0 attribution of the downloadable Parakeet model is
+// part of the shipped notices (checked on the generator output, independent
+// of a generated file).
+describe("Drittlizenzen: Sprachmodell-Namensnennung (Spec 0108)", () => {
+  it("nennt Parakeet TDT 0.6B v3, NVIDIA, CC-BY-4.0 und die Quelle", async () => {
+    const { renderSpeechModelSection } = await import(
+      "../../../../scripts/generate-third-party-notices.mjs"
+    );
+    const section = renderSpeechModelSection();
+    expect(section).toContain("Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0");
+    expect(section).toContain("https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3");
+  });
+});

@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Kiinteä estolista:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automaattinen jatkaminen keskeytetty {{limit}} vaiheen jälkeen – lähetä viesti jatkaaksesi.",
+    "autoContinuationLimitReached": "Automaattinen jatkaminen keskeytetty {{limit}} vaiheen jälkeen ilman vahvistustasi – lähetä viesti jatkaaksesi.",
     "aiBudgetWaiting": "Odotetaan tekoälyn kiintiötä – seuraava yritys {{seconds}} s kuluttua…",
     "suggestCommand": "Ehdota komentoa",
     "generateDocument": "Luo asiakirja: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
+    "copyCode": "Kopioi koodi",
+    "codeCopied": "Koodi kopioitu",
+    "codeCopyFailed": "Kopiointi epäonnistui",
     "composerMore": "Lisää syöttötoimintoja",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",

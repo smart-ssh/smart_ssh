@@ -84,6 +84,11 @@ const ALLOWED_DEPENDENTS: &[(&str, &str)] = &[
     // Sprachmodell-Download (Spec 0108): genau ein fester Host, nur nach
     // ausdrücklicher Nutzeraktion; Hash-Prüfung vor dem Ablegen.
     ("speech", "reqwest"),
+    // ONNX Runtime für Parakeet (Spec 0108, ADR 0157): `ureq` ist dort nur
+    // Build-Abhängigkeit des Build-Skripts, das die Laufzeitbibliothek einmal
+    // beim Bauen lädt (Hash-geprüft). Im ausgelieferten Programm ist kein
+    // HTTP-Client daraus enthalten, und es wird nichts zur Laufzeit geladen.
+    ("ort-sys", "ureq"),
     // Lokaler MCP-Listener (`mcp-server`, nur 127.0.0.1): axum nutzt hyper
     // als Server.
     ("axum", "hyper"),

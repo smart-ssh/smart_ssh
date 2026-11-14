@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
+    "autoContinuationLimitReached": "आपकी पुष्टि के बिना {{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
     "aiBudgetWaiting": "AI बजट की प्रतीक्षा — अगला प्रयास {{seconds}} सेकंड में…",
     "suggestCommand": "कमांड सुझाएँ",
     "generateDocument": "दस्तावेज़ बनाएँ: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",
+    "copyCode": "कोड कॉपी करें",
+    "codeCopied": "कोड कॉपी हो गया",
+    "codeCopyFailed": "कॉपी विफल रही",
     "composerMore": "और इनपुट क्रियाएँ",
     "newChat": "नई चैट",
     "newChatDisabledHint": "AI के उत्तर देते समय या पुष्टि खुली होने पर उपलब्ध नहीं।",

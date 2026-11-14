@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Daftar hitam keras:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Kelanjutan otomatis dijeda setelah {{limit}} langkah — kirim pesan untuk melanjutkan.",
+    "autoContinuationLimitReached": "Kelanjutan otomatis dijeda setelah {{limit}} langkah tanpa konfirmasi Anda — kirim pesan untuk melanjutkan.",
     "aiBudgetWaiting": "Menunggu anggaran AI — percobaan berikutnya dalam {{seconds}} dtk…",
     "suggestCommand": "Sarankan perintah",
     "generateDocument": "Buat dokumen: {{title}}",
@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
+    "copyCode": "Salin kode",
+    "codeCopied": "Kode disalin",
+    "codeCopyFailed": "Gagal menyalin",
     "composerMore": "Tindakan input lainnya",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",

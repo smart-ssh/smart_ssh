@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Szigorú feketelista:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után szünetel – a folytatáshoz küldjön üzenetet.",
+    "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után a jóváhagyása nélkül szünetel – a folytatáshoz küldjön üzenetet.",
     "aiBudgetWaiting": "Várakozás az AI-keretre – következő próbálkozás {{seconds}} mp múlva…",
     "suggestCommand": "Parancs javaslata",
     "generateDocument": "Dokumentum létrehozása: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",
+    "copyCode": "Kód másolása",
+    "codeCopied": "Kód átmásolva",
+    "codeCopyFailed": "A másolás sikertelen",
     "composerMore": "További beviteli műveletek",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",

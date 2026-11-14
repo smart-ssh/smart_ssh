@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "硬性黑名单："
   },
   "actionCard": {
-    "autoContinuationLimitReached": "自动继续已在 {{limit}} 步后暂停——发送一条消息即可继续。",
+    "autoContinuationLimitReached": "在 {{limit}} 步内未经您确认，自动继续已暂停——发送一条消息即可继续。",
     "aiBudgetWaiting": "正在等待 AI 额度——{{seconds}} 秒后再次尝试…",
     "suggestCommand": "建议命令",
     "generateDocument": "生成文档：{{title}}",
@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "copyCode": "复制代码",
+    "codeCopied": "代码已复制",
+    "codeCopyFailed": "复制失败",
     "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",

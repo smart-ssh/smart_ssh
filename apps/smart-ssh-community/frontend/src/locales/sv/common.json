@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Hård svartlista:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatisk fortsättning pausad efter {{limit}} steg — skicka ett meddelande för att fortsätta.",
+    "autoContinuationLimitReached": "Automatisk fortsättning pausad efter {{limit}} steg utan din bekräftelse — skicka ett meddelande för att fortsätta.",
     "aiBudgetWaiting": "Väntar på AI-budget — nästa försök om {{seconds}} s…",
     "suggestCommand": "Föreslå kommando",
     "generateDocument": "Skapa dokument: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
+    "copyCode": "Kopiera kod",
+    "codeCopied": "Koden kopierad",
+    "codeCopyFailed": "Kopieringen misslyckades",
     "composerMore": "Fler inmatningsåtgärder",
     "newChat": "Ny chatt",
     "newChatDisabledHint": "Inte tillgängligt medan AI svarar eller en bekräftelse är öppen.",

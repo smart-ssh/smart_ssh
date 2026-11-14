@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Blacklist fissa:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuazione automatica in pausa dopo {{limit}} passaggi: invii un messaggio per continuare.",
+    "autoContinuationLimitReached": "Continuazione automatica in pausa dopo {{limit}} passaggi senza la sua conferma: invii un messaggio per continuare.",
     "aiBudgetWaiting": "In attesa del budget IA: prossimo tentativo tra {{seconds}}s…",
     "suggestCommand": "Suggerisci comando",
     "generateDocument": "Genera documento: {{title}}",
@@ -1262,6 +1262,9 @@
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",
+    "copyCode": "Copia codice",
+    "codeCopied": "Codice copiato",
+    "codeCopyFailed": "Copia non riuscita",
     "composerMore": "Altre azioni di input",
     "newChat": "Nuova chat",
     "newChatDisabledHint": "Non disponibile mentre l'IA risponde o è aperta una conferma.",

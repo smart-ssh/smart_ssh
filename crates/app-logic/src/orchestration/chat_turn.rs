@@ -38,6 +38,9 @@ mod tests_compaction;
 #[cfg(test)]
 #[expect(clippy::expect_used, reason = "test code")]
 mod tests_continuation;
+#[cfg(test)]
+#[expect(clippy::expect_used, reason = "test code")]
+mod tests_user_decision_reset;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 mod tests_rounds;
@@ -399,7 +402,16 @@ pub async fn run_chat_turn(
     // mehreren DB-Zugriffen, verschluckte einen früh gedrückten Stopp).
     // Issue #604: consecutive responses with only invalid tool calls.
     let mut invalid_only_streak = 0u32;
-    for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
+    // Issue #1296 / Spec 0021, Abschnitt 4: rounds since the last user
+    // involvement (turn start, confirmation decision, injected queued message).
+    let mut rounds_since_user = 0usize;
+    session
+        .conn
+        .user_decided_in_turn
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let mut round = 0usize;
+    loop {
+        round += 1;
         let mut injected_queued_messages = false;
         if round > 1 {
             // Stopp zwischen zwei Runden: keine weitere Runde. Eingereihte
@@ -425,6 +437,7 @@ pub async fn run_chat_turn(
             let queued = session.take_queued_user_messages();
             if !queued.is_empty() {
                 injected_queued_messages = true;
+                rounds_since_user = 0;
                 for text in queued {
                     push_history(
                         session,
@@ -439,6 +452,7 @@ pub async fn run_chat_turn(
             }
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
+        rounds_since_user += 1;
 
         // Spec 0080, A2, Klarstellung Q-BL-0259-01 (2026-09-24,
         // Variante b): "leere Runde" gilt nur für eine Runde, die eine
@@ -500,10 +514,22 @@ pub async fn run_chat_turn(
             // Aufrufer muss sie mit einem Folge-Turn beantworten lassen.
             RoundOutcome::StoppedBeforeSend => return injected_queued_messages,
         }
+        if session
+            .conn
+            .user_decided_in_turn
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            rounds_since_user = 0;
+        }
+        if rounds_since_user >= MAX_AUTO_FOLLOWUP_ROUNDS {
+            emit_chat_auto_continuation_limit_reached(
+                emitter,
+                session_id,
+                MAX_AUTO_FOLLOWUP_ROUNDS,
+            );
+            return false;
+        }
     }
-
-    emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
-    false
 }
 
 /// Issue #604: after this many consecutive responses with only invalid tool

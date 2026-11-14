@@ -28,7 +28,7 @@ here, update this file in the same change.
 | `crates/app-logic/` | Tauri-free application logic: chat-turn orchestration, confirmation, server/group management, DTOs | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session/mod.rs` — `Session`, `ChatTurnState`; `crates/core/src/ipc_error.rs` — `CommandError`; `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; `crates/app-logic/src/servers.rs` — `create_server` |
 | `crates/app-shell/` | Tauri layer: commands, events, wiring | `crates/app-shell/src/lib.rs` — `run`; `crates/app-shell/src/wiring.rs` — `Wiring`; `crates/app-shell/src/commands/` — all `#[tauri::command]`s |
 | `crates/mcp-server/` | MCP server that exposes sessions to external clients | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`, `ProposeCommandArgs`; `crates/mcp-server/src/auth.rs` — `require_bearer_token`, `SharedToken` |
-| `crates/speech/` | Speech-to-text | `crates/speech/src/lib.rs` — `ModelManager`; `crates/speech/src/transcribe.rs` — `strip_non_speech` |
+| `crates/speech/` | Speech-to-text | `crates/speech/src/lib.rs` — `ModelManager`; `crates/speech/src/transcribe.rs` — `strip_non_speech`; `crates/speech/src/parakeet.rs` — `ParakeetTranscriber` |
 | `crates/tls-config/` | Shared TLS configuration | `crates/tls-config/src/lib.rs` |
 | `crates/tauri-plugin-android-host/` | Android library module (session service, microphone permission) for apps embedding app-shell | `crates/tauri-plugin-android-host/src/lib.rs`, `crates/tauri-plugin-android-host/android/` |
 | `crates/real-app-tests/` | Starts the real app in CI | `crates/real-app-tests/tests/` |

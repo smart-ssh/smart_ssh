@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Vaste blokkeerlijst:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen — stuur een bericht om door te gaan.",
+    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",
     "aiBudgetWaiting": "Wachten op AI-budget — volgende poging over {{seconds}}s…",
     "suggestCommand": "Opdracht voorstellen",
     "generateDocument": "Document genereren: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "copyCode": "Code kopiëren",
+    "codeCopied": "Code gekopieerd",
+    "codeCopyFailed": "Kopiëren mislukt",
     "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",

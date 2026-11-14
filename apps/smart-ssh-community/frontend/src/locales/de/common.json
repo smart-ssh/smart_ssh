@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Hard-Blacklist:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten angehalten — schreib weiter, um fortzufahren.",
+    "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten ohne deine Bestätigung angehalten — schreib weiter, um fortzufahren.",
     "aiBudgetWaiting": "Warte auf KI-Budget — nächster Versuch in {{seconds}}s…",
     "suggestCommand": "Kommando vorschlagen",
     "generateDocument": "Dokument generieren: {{title}}",
@@ -1255,6 +1255,9 @@
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
+    "copyCode": "Code kopieren",
+    "codeCopied": "Code kopiert",
+    "codeCopyFailed": "Kopieren fehlgeschlagen",
     "composerMore": "Weitere Eingabe-Aktionen",
     "newChat": "Neuer Chat",
     "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",

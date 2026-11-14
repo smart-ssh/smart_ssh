@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Listă neagră fixă:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași — trimiteți un mesaj pentru a continua.",
+    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",
     "aiBudgetWaiting": "Se așteaptă bugetul IA — următoarea încercare în {{seconds}}s…",
     "suggestCommand": "Sugerează comandă",
     "generateDocument": "Generează document: {{title}}",
@@ -1262,6 +1262,9 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "copyCode": "Copiază codul",
+    "codeCopied": "Cod copiat",
+    "codeCopyFailed": "Copierea a eșuat",
     "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",

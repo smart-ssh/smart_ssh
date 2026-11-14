@@ -155,6 +155,7 @@ fn session_with_ai_transport_and_server_id(
             pending_action: std::sync::Mutex::new(None),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
+            user_decided_in_turn: std::sync::atomic::AtomicBool::new(false),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
             running_command_cancellations: Arc::new(
                 crate::confirmation::ConfirmationRegistry::new(),
