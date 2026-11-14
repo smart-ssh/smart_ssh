@@ -15,6 +15,8 @@ pub mod entitlements;
 pub mod filter;
 pub mod fs_hardening;
 pub mod ipc_error;
+#[cfg(test)]
+mod log_capture;
 pub mod outgoing;
 pub mod profiles;
 pub mod risk;
