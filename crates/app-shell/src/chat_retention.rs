@@ -11,12 +11,12 @@ use tauri_plugin_store::StoreExt;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 
 const RETENTION_DAYS_KEY: &str = "chatSessionRetentionDays";
 
 pub(crate) fn read_retention_days<R: Runtime>(app: &AppHandle<R>) -> Option<u32> {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()?
         .get(RETENTION_DAYS_KEY)?
         .as_u64()

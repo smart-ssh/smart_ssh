@@ -29,7 +29,6 @@ use app_logic::state::AppState;
 /// UI-/App-Einstellungen ohne Bezug zu Server-/Gruppen-Fachdaten, keine
 /// eigene SQLite-Migration nötig (Spec 0026, Abschnitt 1, Punkt 1 verlangt
 /// das explizit: "keine neue SQLite-Tabelle").
-use crate::settings_store::SETTINGS_STORE_FILE;
 const ENABLED_KEY: &str = "riskClassifierEnabled";
 const PROVIDER_ID_KEY: &str = "riskClassifierProviderId";
 /// Spec 0092, A1.1.
@@ -46,7 +45,7 @@ const RED_RISK_ALWAYS_CONFIRM_KEY: &str = "redRiskAlwaysConfirm";
 /// nicht öffenbarer Store, ein fehlender Schlüssel und ein nicht-boolescher
 /// Wert führen deshalb alle auf `true`.
 pub(crate) fn red_risk_always_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
-    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+    let Ok(store) = app.store(crate::settings_store::settings_store_file()) else {
         return true;
     };
     red_risk_always_confirm_from_stored(store.get(RED_RISK_ALWAYS_CONFIRM_KEY))
@@ -219,7 +218,7 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
     state: &AppState,
 ) -> SecondOpinionSetup {
     // Ein nicht öffenbarer Store verhält sich wie bisher: "aus".
-    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+    let Ok(store) = app.store(crate::settings_store::settings_store_file()) else {
         return SecondOpinionSetup::Disabled;
     };
     let provider_id =
@@ -343,7 +342,9 @@ mod tests {
         let handle = app.handle();
         let id = uuid::Uuid::new_v4().to_string();
         write_second_opinion_settings(handle, true, Some(&id), |_| true).unwrap();
-        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
         assert_eq!(store.get(ENABLED_KEY), Some(serde_json::json!(true)));
         assert_eq!(store.get(PROVIDER_ID_KEY), Some(serde_json::json!(id)));
         write_second_opinion_settings(handle, false, None, |_| false).unwrap();
@@ -366,7 +367,9 @@ mod tests {
         assert!(!red_risk_always_confirm(handle));
         write_red_risk_always_confirm(handle, true).unwrap();
         assert!(red_risk_always_confirm(handle));
-        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
         assert_eq!(
             store.get(RED_RISK_ALWAYS_CONFIRM_KEY),
             Some(serde_json::json!(true))
@@ -424,7 +427,7 @@ mod tests {
         let app = test_app();
         let handle = app.handle().clone();
         let store = handle
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("Store sollte sich öffnen lassen");
 
         store.delete(RED_RISK_ALWAYS_CONFIRM_KEY);

@@ -63,6 +63,7 @@
     "copyFailed": "Échec de la copie — vous pouvez sélectionner le texte à la place.",
     "loadFailed": "Impossible de charger les informations de version et de build.",
     "buildDev": "Build de développement",
+    "dataDirMarker": "Données : {{path}}",
     "buildRelease": "Build de production",
     "thirdPartyLicenses": {
       "openButton": "Licences tierces",
@@ -98,6 +99,7 @@
       "hostKeys": "Clés d’hôte",
       "wrappingFile": "Fichier de clé du mot de passe principal",
       "mcpSettings": "Paramètres MCP",
+      "speechModels": "Modèles vocaux",
       "sessions": "Sessions",
       "sessionsInDatabase": "stockées dans la base de données",
       "copy": "Copier",

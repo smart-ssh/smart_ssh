@@ -235,7 +235,11 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
 
 The exact paths per platform are listed in
 [docs/datenpfade.md](docs/datenpfade.md); the running app shows them under
-**Settings → Diagnostics → Data paths**.
+**Settings → Diagnostics → Data paths**. A second instance can be pointed at its own
+directory with `--data-dir`, `SMART_SSH_DATA_DIR` or a pointer file next to the
+app (Spec 0115); then every file of that instance lives there, and an unusable
+directory stops the start instead of falling back to the default one. The
+pointer file only names a path and holds no secret; keychain entries stay shared.
 
 | Data | Location | Protection |
 |---|---|---|

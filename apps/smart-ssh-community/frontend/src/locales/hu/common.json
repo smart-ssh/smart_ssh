@@ -63,6 +63,7 @@
     "copyFailed": "A másolás sikertelen – a szöveg kijelölhető.",
     "loadFailed": "A verzió-/buildinformációk nem tölthetők be.",
     "buildDev": "Fejlesztői build",
+    "dataDirMarker": "Adatok: {{path}}",
     "buildRelease": "Kiadási build",
     "thirdPartyLicenses": {
       "openButton": "Harmadik féltől származó licencek",
@@ -98,6 +99,7 @@
       "hostKeys": "Gazdakulcsok",
       "wrappingFile": "Mesterjelszó-kulcsfájl",
       "mcpSettings": "MCP-beállítások",
+      "speechModels": "Beszédmodellek",
       "sessions": "Munkamenetek",
       "sessionsInDatabase": "az adatbázisban tárolva",
       "copy": "Másolás",

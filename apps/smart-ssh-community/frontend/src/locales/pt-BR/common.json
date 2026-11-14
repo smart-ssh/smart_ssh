@@ -63,6 +63,7 @@
     "copyFailed": "Falha ao copiar — o texto pode ser selecionado manualmente.",
     "loadFailed": "Não foi possível carregar as informações de versão/compilação.",
     "buildDev": "Build de dev",
+    "dataDirMarker": "Dados: {{path}}",
     "buildRelease": "Compilação de lançamento",
     "thirdPartyLicenses": {
       "openButton": "Licenças de terceiros",
@@ -98,6 +99,7 @@
       "hostKeys": "Chaves de host",
       "wrappingFile": "Arquivo de chave da senha mestra",
       "mcpSettings": "Configurações do MCP",
+      "speechModels": "Modelos de fala",
       "sessions": "Sessões",
       "sessionsInDatabase": "armazenadas no banco de dados",
       "copy": "Copiar",

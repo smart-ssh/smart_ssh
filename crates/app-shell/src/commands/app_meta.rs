@@ -60,6 +60,10 @@ pub fn get_app_info<R: tauri::Runtime>(
         &app.package_info().version.to_string(),
         *edition,
         app_logic::version::BuildType::current(),
+        persistence_sqlite::data_dir_override().as_deref(),
+        directories::BaseDirs::new()
+            .map(|b| b.home_dir().to_path_buf())
+            .as_deref(),
     )
 }
 
@@ -71,6 +75,8 @@ fn build_app_info(
     version: &str,
     edition: crate::wiring::Edition,
     build_type: app_logic::version::BuildType,
+    data_dir: Option<&std::path::Path>,
+    home: Option<&std::path::Path>,
 ) -> AppInfoDto {
     AppInfoDto {
         version: version.to_string(),
@@ -81,6 +87,13 @@ fn build_app_info(
             crate::wiring::Edition::Official => "Official".to_string(),
         },
         build_type,
+        data_dir: data_dir.map(|d| d.display().to_string()),
+        data_dir_display: data_dir.map(|d| app_logic::data_paths::shorten_home(d, home)),
+        settings_store_path: data_dir.map(|d| {
+            d.join(crate::settings_store::SETTINGS_STORE_FILE)
+                .display()
+                .to_string()
+        }),
     }
 }
 
@@ -96,6 +109,8 @@ mod app_info_tests {
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         assert_eq!(info.version, "0.4.1");
@@ -108,16 +123,52 @@ mod app_info_tests {
     }
 
     #[test]
+    fn test_build_app_info_reports_data_dir_only_with_override() {
+        let none = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            app_logic::version::BuildType::Release,
+            None,
+            None,
+        );
+        assert_eq!(none.data_dir, None);
+        assert_eq!(none.data_dir_display, None);
+        assert_eq!(none.settings_store_path, None);
+
+        let dir = std::path::Path::new("/home/u/SmartSSH-Test");
+        let some = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            app_logic::version::BuildType::Release,
+            Some(dir),
+            Some(std::path::Path::new("/home/u")),
+        );
+        assert_eq!(some.data_dir.as_deref(), Some("/home/u/SmartSSH-Test"));
+        assert_eq!(
+            some.data_dir_display,
+            Some(format!("~{}SmartSSH-Test", std::path::MAIN_SEPARATOR))
+        );
+        assert_eq!(
+            some.settings_store_path,
+            Some(dir.join("settings.json").display().to_string())
+        );
+    }
+
+    #[test]
     fn test_build_app_info_reports_build_type() {
         let dev = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Dev,
+            None,
+            None,
         );
         let release = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         // Das Frontend liest `buildType` mit exakt diesen Werten
@@ -136,6 +187,8 @@ mod app_info_tests {
             "0.4.1",
             crate::wiring::Edition::Official,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         assert_eq!(info.edition, "Official");

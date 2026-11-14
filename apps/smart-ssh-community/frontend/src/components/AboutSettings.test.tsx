@@ -30,6 +30,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -44,6 +47,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.5.0 (abf7a22)",
       edition: "Community",
       buildType: "Dev",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -76,6 +82,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -93,6 +102,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const writeText = vi.fn(() => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
@@ -112,6 +124,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const writeText = vi.fn(() => Promise.reject(new Error("denied")));
     Object.assign(navigator, { clipboard: { writeText } });
@@ -141,6 +156,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.5.0 (abf7a22)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const content = `${THIRD_PARTY_NOTICES_MARKER}\n\nMIT License`;
     vi.stubGlobal(

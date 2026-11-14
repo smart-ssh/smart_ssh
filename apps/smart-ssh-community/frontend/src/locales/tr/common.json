@@ -63,6 +63,7 @@
     "copyFailed": "Kopyalama başarısız — bunun yerine metin seçilebilir.",
     "loadFailed": "Sürüm/derleme bilgileri yüklenemedi.",
     "buildDev": "Geliştirme derlemesi",
+    "dataDirMarker": "Veri: {{path}}",
     "buildRelease": "Sürüm derlemesi",
     "thirdPartyLicenses": {
       "openButton": "Üçüncü taraf lisansları",
@@ -98,6 +99,7 @@
       "hostKeys": "Ana makine anahtarları",
       "wrappingFile": "Ana parola anahtar dosyası",
       "mcpSettings": "MCP ayarları",
+      "speechModels": "Konuşma modelleri",
       "sessions": "Oturumlar",
       "sessionsInDatabase": "veritabanında saklanır",
       "copy": "Kopyala",

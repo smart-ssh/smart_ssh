@@ -62,7 +62,13 @@ pub(crate) fn instance_root_for(cache_dir: &Path, data_dir: &Path) -> PathBuf {
 
 /// The OS cache directory. On Android there is no `HOME`, so the app-private
 /// cache directory is used (Spec 0114).
+///
+/// Issue #1313: with a data-directory override the cache lives inside it
+/// (`<data dir>/cache`), so the instance writes nothing outside.
 fn platform_cache_dir() -> Option<PathBuf> {
+    if let Some(dir) = persistence_sqlite::data_dir_override() {
+        return Some(dir.join("cache"));
+    }
     #[cfg(target_os = "android")]
     {
         Some(persistence_sqlite::android_cache_dir())

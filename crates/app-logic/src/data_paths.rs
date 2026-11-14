@@ -12,6 +12,7 @@
 //! - Host-Keys: [`crate::startup_error_messages::host_key_store_path`]
 //! - Verpackungsdatei des Master-Passworts:
 //!   [`crate::master_password::wrapping_file_path`]
+//! - Speech models: [`speech_models_dir`] (issue #1313).
 //! - MCP-Einstellungen: kommt vom Aufrufer (`app-shell`), weil der Ort an
 //!   `tauri-plugin-store` hängt und nur mit einem `AppHandle` auflösbar ist
 //!   (s. ADR 0105).
@@ -30,6 +31,7 @@ pub const LOGS: &str = "logs";
 pub const HOST_KEYS: &str = "hostKeys";
 pub const WRAPPING_FILE: &str = "wrappingFile";
 pub const MCP_SETTINGS: &str = "mcpSettings";
+pub const SPEECH_MODELS: &str = "speechModels";
 
 /// Ein zusätzlicher Pfad, den eine Edition über `Wiring` beisteuert (z. B.
 /// eine Lizenzdatei). Die Community-Edition liefert keinen.
@@ -94,6 +96,7 @@ pub fn data_paths_for(
     db_path: &Path,
     log_dir: &Path,
     mcp_settings_path: &Path,
+    speech_models_dir: &Path,
     extra: &[ExtraDataPath],
 ) -> Vec<DataPathEntry> {
     let builtin = |id: &str, path: PathBuf, is_directory: bool| DataPathEntry {
@@ -116,6 +119,7 @@ pub fn data_paths_for(
             false,
         ),
         builtin(MCP_SETTINGS, mcp_settings_path.to_path_buf(), false),
+        builtin(SPEECH_MODELS, speech_models_dir.to_path_buf(), true),
     ];
     entries.extend(extra.iter().map(|e| DataPathEntry {
         id: e.id.clone(),
@@ -129,15 +133,41 @@ pub fn data_paths_for(
 /// Die wirksamen Pfade der laufenden Instanz.
 pub fn effective_data_paths(
     mcp_settings_path: &Path,
+    speech_models_dir: &Path,
     extra: &[ExtraDataPath],
 ) -> Vec<DataPathEntry> {
     data_paths_for(
         &persistence_sqlite::default_db_path(),
         &crate::logging::default_log_dir(),
         mcp_settings_path,
+        speech_models_dir,
         extra,
     )
 }
+
+/// Issue #1313: folder of the downloaded speech models. Inside the data
+/// directory with an override; otherwise the Tauri app data directory
+/// (`default_app_data_dir`, unchanged for existing users).
+pub fn speech_models_dir(default_app_data_dir: &Path) -> PathBuf {
+    match persistence_sqlite::data_dir_override() {
+        Some(dir) => dir.join(SPEECH_MODELS_SUBDIR),
+        None => default_app_data_dir.join(SPEECH_MODELS_SUBDIR),
+    }
+}
+
+/// `path` for display with the home directory shortened to `~` (issue #1313).
+pub fn shorten_home(path: &Path, home: Option<&Path>) -> String {
+    if let Some(rest) = home.and_then(|h| path.strip_prefix(h).ok()) {
+        if rest.as_os_str().is_empty() {
+            return "~".to_owned();
+        }
+        return format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display());
+    }
+    path.display().to_string()
+}
+
+/// Folder name of the speech models.
+pub const SPEECH_MODELS_SUBDIR: &str = "speech-models";
 
 /// Der Ordner zum Eintrag `id`, den „Ordner öffnen" zeigen soll.
 ///
@@ -158,6 +188,22 @@ pub fn open_folder_target(entries: &[DataPathEntry], id: &str) -> Result<PathBuf
 #[cfg(test)]
 #[expect(unsafe_code, reason = "tests mutate process env under ENV_LOCK")]
 mod tests {
+    #[test]
+    fn test_shorten_home_replaces_only_a_real_prefix() {
+        let home = Path::new("/home/u");
+        let sep = std::path::MAIN_SEPARATOR;
+        assert_eq!(
+            shorten_home(Path::new("/home/u/SmartSSH-Test"), Some(home)),
+            format!("~{sep}SmartSSH-Test")
+        );
+        assert_eq!(shorten_home(Path::new("/home/u"), Some(home)), "~");
+        assert_eq!(
+            shorten_home(Path::new("/home/user/x"), Some(home)),
+            "/home/user/x"
+        );
+        assert_eq!(shorten_home(Path::new("/tmp/x"), None), "/tmp/x");
+    }
+
     use super::*;
 
     fn ids(entries: &[DataPathEntry]) -> Vec<&str> {
@@ -171,12 +217,20 @@ mod tests {
             &db,
             Path::new("/logs"),
             Path::new("/cfg/settings.json"),
+            Path::new("/sm"),
             &[],
         );
 
         assert_eq!(
             ids(&entries),
-            vec![DATABASE, LOGS, HOST_KEYS, WRAPPING_FILE, MCP_SETTINGS]
+            vec![
+                DATABASE,
+                LOGS,
+                HOST_KEYS,
+                WRAPPING_FILE,
+                MCP_SETTINGS,
+                SPEECH_MODELS
+            ]
         );
         assert_eq!(entries[0].path, db);
         assert_eq!(entries[1].path, PathBuf::from("/logs"));
@@ -204,9 +258,10 @@ mod tests {
             Path::new("/d/smart-ssh.db"),
             Path::new("/l"),
             Path::new("/c/settings.json"),
+            Path::new("/sm"),
             &[],
         );
-        assert_eq!(base.len(), 5);
+        assert_eq!(base.len(), 6);
 
         let extra = [ExtraDataPath {
             id: "license".into(),
@@ -218,9 +273,10 @@ mod tests {
             Path::new("/d/smart-ssh.db"),
             Path::new("/l"),
             Path::new("/c/settings.json"),
+            Path::new("/sm"),
             &extra,
         );
-        assert_eq!(with_extra.len(), 6);
+        assert_eq!(with_extra.len(), 7);
         let last = with_extra.last().unwrap();
         assert_eq!(last.id, "license");
         assert_eq!(last.label.as_deref(), Some("License file"));
@@ -233,6 +289,7 @@ mod tests {
             Path::new("/d/smart-ssh.db"),
             Path::new("/l/logs"),
             Path::new("/c/settings.json"),
+            Path::new("/sm"),
             &[],
         );
         assert_eq!(
@@ -261,6 +318,7 @@ mod tests {
             Path::new("/d/smart-ssh.db"),
             Path::new("/l"),
             Path::new("/c/settings.json"),
+            Path::new("/sm"),
             &[],
         );
         assert!(open_folder_target(&entries, "/etc").is_err());
@@ -315,7 +373,11 @@ mod tests {
             std::env::set_var("SMART_SSH_DATA_DIR", dir.path());
         }
 
-        let entries = effective_data_paths(Path::new("/c/settings.json"), &[]);
+        let entries = effective_data_paths(
+            Path::new("/c/settings.json"),
+            &speech_models_dir(Path::new("/c")),
+            &[],
+        );
         let path_of = |id: &str| {
             entries
                 .iter()
@@ -334,7 +396,48 @@ mod tests {
             open_folder_target(&entries, DATABASE).unwrap(),
             dir.path().to_path_buf()
         );
-        // Logs hängen nicht am Override (Spec 0016): derselbe Ort wie ohne.
+        // Issue #1313: logs and speech models follow the override too.
+        assert_eq!(path_of(LOGS), dir.path().join("logs"));
         assert_eq!(path_of(LOGS), crate::logging::default_log_dir());
+        assert_eq!(path_of(SPEECH_MODELS), dir.path().join("speech-models"));
+    }
+
+    /// Issue #1313, AC 1: with an override, materialising every effective
+    /// path (what start-up does: DB, host keys, wrapping file, logs, store,
+    /// speech models) creates files only inside the data directory.
+    #[test]
+    fn test_override_start_up_files_all_live_under_the_data_dir() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _cleanup = EnvVarGuard;
+        let default_db = persistence_sqlite::default_db_path();
+        let default_logs = crate::logging::default_log_dir();
+        let dir = tempfile::tempdir().unwrap();
+        // SAFETY: s. `EnvVarGuard`.
+        unsafe {
+            std::env::set_var("SMART_SSH_DATA_DIR", dir.path());
+        }
+        let settings = persistence_sqlite::default_db_path()
+            .parent()
+            .unwrap()
+            .join("settings.json");
+        let entries = effective_data_paths(&settings, &speech_models_dir(Path::new("/c")), &[]);
+
+        let mut created = Vec::new();
+        for e in &entries {
+            let target = if e.is_directory {
+                e.path.join(".created")
+            } else {
+                e.path.clone()
+            };
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(&target, b"x").unwrap();
+            created.push(target);
+        }
+        assert!(!created.is_empty());
+        for f in &created {
+            assert!(f.starts_with(dir.path()), "{f:?} escapes the data dir");
+            assert!(!f.starts_with(default_db.parent().unwrap()));
+            assert!(!f.starts_with(&default_logs));
+        }
     }
 }

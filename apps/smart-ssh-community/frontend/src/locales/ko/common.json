@@ -63,6 +63,7 @@
     "copyFailed": "복사에 실패했습니다. 대신 텍스트를 직접 선택할 수 있습니다.",
     "loadFailed": "버전/빌드 정보를 불러오지 못했습니다.",
     "buildDev": "개발 빌드",
+    "dataDirMarker": "데이터: {{path}}",
     "buildRelease": "릴리스 빌드",
     "thirdPartyLicenses": {
       "openButton": "서드파티 라이선스",
@@ -98,6 +99,7 @@
       "hostKeys": "호스트 키",
       "wrappingFile": "마스터 비밀번호 키 파일",
       "mcpSettings": "MCP 설정",
+      "speechModels": "음성 모델",
       "sessions": "세션",
       "sessionsInDatabase": "데이터베이스에 저장됨",
       "copy": "복사",

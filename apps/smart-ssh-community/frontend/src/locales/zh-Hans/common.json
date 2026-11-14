@@ -63,6 +63,7 @@
     "copyFailed": "复制失败——可改为手动选中文本。",
     "loadFailed": "无法加载版本/构建信息。",
     "buildDev": "开发构建",
+    "dataDirMarker": "数据：{{path}}",
     "buildRelease": "发布构建",
     "thirdPartyLicenses": {
       "openButton": "第三方许可证",
@@ -98,6 +99,7 @@
       "hostKeys": "主机密钥",
       "wrappingFile": "主密码密钥文件",
       "mcpSettings": "MCP 设置",
+      "speechModels": "语音模型",
       "sessions": "会话",
       "sessionsInDatabase": "保存在数据库中",
       "copy": "复制",

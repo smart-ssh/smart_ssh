@@ -30,4 +30,12 @@ pub struct AppInfoDto {
     pub edition: String,
     /// s. [`crate::version::BuildType`].
     pub build_type: crate::version::BuildType,
+    /// Issue #1313: the full data directory, only with an active override
+    /// (`--data-dir`, `SMART_SSH_DATA_DIR`, pointer file); `None` otherwise.
+    pub data_dir: Option<String>,
+    /// The same path shortened with `~` for the header marker.
+    pub data_dir_display: Option<String>,
+    /// Absolute path of `settings.json` inside the override directory; the
+    /// webview opens the settings store through it. `None` without override.
+    pub settings_store_path: Option<String>,
 }

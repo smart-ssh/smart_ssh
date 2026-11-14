@@ -13,7 +13,7 @@ use speech::{
     MAX_RECORDING,
 };
 
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 use crate::speech_models;
 
 const LANGUAGE_KEY: &str = "speechLanguage";
@@ -63,7 +63,7 @@ fn record_error(err: RecordError) -> CommandError {
 /// Stored language setting; `None` = auto-detect. An unusable stored value
 /// falls back to auto.
 pub(crate) fn read_language<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|s| s.get(LANGUAGE_KEY))
         .and_then(|v| v.as_str().map(str::to_owned))

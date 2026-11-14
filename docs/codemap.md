@@ -113,6 +113,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Backup and restore | `crates/core/src/backup/format.rs`; `crates/persistence-sqlite/src/backup_store.rs`; `crates/app-shell/src/commands/backup.rs` |
 | Master password and field encryption | `crates/app-logic/src/master_password.rs`; `crates/persistence-sqlite/src/encryption.rs`; `crates/core/src/crypto/key.rs` |
 | Data paths on disk | `crates/app-logic/src/data_paths.rs`; `docs/datenpfade.md` |
+| Data directory override (flag, env, pointer file) | `crates/persistence-sqlite/src/paths.rs`; `crates/app-shell/src/settings_store.rs`; Spec 0115 |
 | Outgoing network connections | `crates/core/src/outgoing.rs`; `docs/netzwerkverbindungen.md` |
 | Build hash and build type | `crates/app-logic/src/version.rs`; `crates/app-shell/src/commands/app_meta.rs` — `get_app_info` |
 | Architecture decisions | `docs/adr/`; specs `docs/specs/` |

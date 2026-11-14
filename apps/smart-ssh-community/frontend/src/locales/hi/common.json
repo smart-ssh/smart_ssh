@@ -63,6 +63,7 @@
     "copyFailed": "कॉपी नहीं हो सका — इसके बजाय टेक्स्ट चुना जा सकता है।",
     "loadFailed": "संस्करण/बिल्ड जानकारी लोड नहीं हो सकी।",
     "buildDev": "डेव बिल्ड",
+    "dataDirMarker": "डेटा: {{path}}",
     "buildRelease": "रिलीज़ बिल्ड",
     "thirdPartyLicenses": {
       "openButton": "थर्ड-पार्टी लाइसेंस",
@@ -98,6 +99,7 @@
       "hostKeys": "होस्ट कुंजियाँ",
       "wrappingFile": "मास्टर पासवर्ड कुंजी फ़ाइल",
       "mcpSettings": "MCP सेटिंग्स",
+      "speechModels": "वाक् मॉडल",
       "sessions": "सत्र",
       "sessionsInDatabase": "डेटाबेस में संग्रहीत",
       "copy": "कॉपी करें",

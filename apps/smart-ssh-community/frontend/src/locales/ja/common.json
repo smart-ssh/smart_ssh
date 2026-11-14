@@ -63,6 +63,7 @@
     "copyFailed": "コピーに失敗しました。代わりにテキストを選択できます。",
     "loadFailed": "バージョン／ビルド情報を読み込めませんでした。",
     "buildDev": "開発ビルド",
+    "dataDirMarker": "データ: {{path}}",
     "buildRelease": "リリースビルド",
     "thirdPartyLicenses": {
       "openButton": "サードパーティのライセンス",
@@ -98,6 +99,7 @@
       "hostKeys": "ホストキー",
       "wrappingFile": "マスターパスワードの鍵ファイル",
       "mcpSettings": "MCP設定",
+      "speechModels": "音声モデル",
       "sessions": "セッション",
       "sessionsInDatabase": "データベースに保存",
       "copy": "コピー",

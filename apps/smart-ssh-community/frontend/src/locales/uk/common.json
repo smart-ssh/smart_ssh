@@ -63,6 +63,7 @@
     "copyFailed": "Не вдалося скопіювати — натомість можна виділити текст.",
     "loadFailed": "Не вдалося завантажити відомості про версію та збірку.",
     "buildDev": "Збірка для розробки",
+    "dataDirMarker": "Дані: {{path}}",
     "buildRelease": "Релізна збірка",
     "thirdPartyLicenses": {
       "openButton": "Ліцензії сторонніх компонентів",
@@ -98,6 +99,7 @@
       "hostKeys": "Ключі хостів",
       "wrappingFile": "Файл ключа головного пароля",
       "mcpSettings": "Параметри MCP",
+      "speechModels": "Мовні моделі",
       "sessions": "Сеанси",
       "sessionsInDatabase": "зберігаються в базі даних",
       "copy": "Копіювати",

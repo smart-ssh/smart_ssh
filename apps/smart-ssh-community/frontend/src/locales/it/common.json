@@ -63,6 +63,7 @@
     "copyFailed": "Copia non riuscita: il testo può essere selezionato.",
     "loadFailed": "Impossibile caricare le informazioni su versione e build.",
     "buildDev": "Build di sviluppo",
+    "dataDirMarker": "Dati: {{path}}",
     "buildRelease": "Build di rilascio",
     "thirdPartyLicenses": {
       "openButton": "Licenze di terze parti",
@@ -98,6 +99,7 @@
       "hostKeys": "Chiavi host",
       "wrappingFile": "File della chiave della password principale",
       "mcpSettings": "Impostazioni MCP",
+      "speechModels": "Modelli vocali",
       "sessions": "Sessioni",
       "sessionsInDatabase": "memorizzate nel database",
       "copy": "Copia",

@@ -63,6 +63,7 @@
     "copyFailed": "Gagal menyalin — teks dapat dipilih secara manual.",
     "loadFailed": "Tidak dapat memuat informasi versi/build.",
     "buildDev": "Build pengembangan",
+    "dataDirMarker": "Direktori data: {{path}}",
     "buildRelease": "Build rilis",
     "thirdPartyLicenses": {
       "openButton": "Lisensi pihak ketiga",
@@ -98,6 +99,7 @@
       "hostKeys": "Kunci host",
       "wrappingFile": "Berkas kunci kata sandi utama",
       "mcpSettings": "Pengaturan MCP",
+      "speechModels": "Model suara",
       "sessions": "Sesi",
       "sessionsInDatabase": "disimpan di basis data",
       "copy": "Salin",

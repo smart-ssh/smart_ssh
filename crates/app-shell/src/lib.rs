@@ -411,6 +411,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // gesamte App-Laufzeit am Leben bleiben (s. `app_logic::logging::
     // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
+    //
+    // Issue #1313: the data directory is decided first, once, and without
+    // logging — the logger itself writes below it. An unusable directory
+    // ends in the startup error window; there is no fallback to the default.
+    let language = startup_dialog::startup_language();
+    let resolved_data_dir = startup_dialog::resolve_data_dir_or_exit(language);
     let _log_guard = app_logic::logging::init_logging();
 
     // Issue #935: before any HTTPS client is built, so dependencies that
@@ -461,6 +467,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
         data_path = %db_path.display(),
+        data_dir_source = resolved_data_dir.source.as_str(),
         "Smart SSH startet"
     );
 
@@ -496,7 +503,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // nichts angefasst — entweder übernimmt die laufende Instanz desselben
     // Builds (sie kommt nach vorn, dieser Prozess endet mit 0), oder es
     // erscheint der Startfehler „läuft bereits".
-    let language = startup_dialog::startup_language();
     let data_dir_lock = match app_logic::database_startup::lock_data_directory(&db_path) {
         Ok(lock) => {
             tracing::info!("locked the data directory for this process (issue #19)");

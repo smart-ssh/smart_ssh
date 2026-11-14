@@ -195,7 +195,7 @@ impl IdleTimer {
 
 /// Reads the stored idle timeout (minutes, `0` = never).
 pub(crate) fn read_stored<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> u32 {
-    match app.store(crate::settings_store::SETTINGS_STORE_FILE) {
+    match app.store(crate::settings_store::settings_store_file()) {
         Ok(store) => from_stored(store.get(IDLE_TIMEOUT_KEY)),
         Err(_) => DEFAULT_IDLE_MINUTES,
     }

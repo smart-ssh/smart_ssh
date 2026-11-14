@@ -252,7 +252,7 @@ pub(crate) fn forget_deleted_server<R: Runtime>(
 ) -> CommandResult<()> {
     use tauri_plugin_store::StoreExt;
     let store = app
-        .store(crate::settings_store::SETTINGS_STORE_FILE)
+        .store(crate::settings_store::settings_store_file())
         .map_err(|e| CommandError::with_code(e.to_string(), "SETTINGS_STORE_FAILED"))?;
     let Some(next) = store
         .get(ELEVATION_NOTICE_DISMISSED_KEY)
@@ -279,7 +279,7 @@ pub fn set_ui_preference(
 mod tests {
     use super::*;
     use crate::first_run_notice::test_support::{lock, test_app};
-    use crate::settings_store::{settings_store_path, SETTINGS_STORE_FILE};
+    use crate::settings_store::settings_store_path;
     use serde_json::json;
     use tauri_plugin_store::StoreExt;
 
@@ -375,7 +375,9 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
         let original = store.get(ELEVATION_NOTICE_DISMISSED_KEY);
         store.set(ELEVATION_NOTICE_DISMISSED_KEY, json!(["s1", "s2"]));
         forget_deleted_server(handle, "s1").unwrap();
@@ -442,7 +444,7 @@ mod tests {
         assert_eq!(std::fs::read(&path).ok(), before);
 
         let original = handle
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .unwrap()
             .get("autoReconnectSeconds");
         write_ui_preference(handle, &registry, "autoReconnectSeconds", json!(300)).unwrap();

@@ -9,10 +9,9 @@ use tauri_plugin_store::StoreExt;
 use app_logic::error::{CommandError, CommandResult};
 use speech::{ModelManager, ModelManagerError, ModelStatus, SpeechModel};
 
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 
 const SELECTED_MODEL_KEY: &str = "speechModel";
-const MODELS_SUBDIR: &str = "speech-models";
 /// Event with `{ model, state, done?, total?, key? }`, emitted on every
 /// progress step and on the final state of a download.
 pub(crate) const STATUS_EVENT: &str = app_logic::event_names::SPEECH_MODEL_STATUS;
@@ -21,16 +20,29 @@ pub(crate) const STATUS_EVENT: &str = app_logic::event_names::SPEECH_MODEL_STATU
 #[derive(Default)]
 pub struct SpeechModels(OnceLock<Arc<ModelManager>>);
 
+/// Where the models live: inside the data directory with an override
+/// (issue #1313), otherwise below the Tauri app data directory as before.
+pub(crate) fn models_dir<R: Runtime>(app: &AppHandle<R>) -> CommandResult<std::path::PathBuf> {
+    // With an override the default app data dir is never consulted, so its
+    // lookup failing cannot affect an override instance.
+    if persistence_sqlite::data_dir_override().is_some() {
+        return Ok(app_logic::data_paths::speech_models_dir(
+            std::path::Path::new(""),
+        ));
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CommandError::with_code(e.to_string(), "SPEECH_MODELS_DIR_UNAVAILABLE"))?;
+    Ok(app_logic::data_paths::speech_models_dir(&app_data))
+}
+
 pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<ModelManager>> {
     let state = app.state::<SpeechModels>();
     if let Some(m) = state.0.get() {
         return Ok(Arc::clone(m));
     }
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| CommandError::with_code(e.to_string(), "SPEECH_MODELS_DIR_UNAVAILABLE"))?
-        .join(MODELS_SUBDIR);
+    let dir = models_dir(app)?;
     Ok(Arc::clone(
         state.0.get_or_init(|| Arc::new(ModelManager::new(dir))),
     ))
@@ -39,9 +51,11 @@ pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<Model
 /// Start-up step (Spec 0108): deletes the old whisper.cpp model files from the
 /// models directory. A local file operation only; no network, no model load.
 pub(crate) fn remove_legacy_files_at_start<R: Runtime>(app: &AppHandle<R>) {
-    match app.path().app_data_dir() {
-        Ok(dir) => speech::remove_legacy_files(&dir.join(MODELS_SUBDIR)),
-        Err(e) => tracing::warn!(error = %e, "speech models directory unavailable at start"),
+    match models_dir(app) {
+        Ok(dir) => speech::remove_legacy_files(&dir),
+        Err(e) => {
+            tracing::warn!(error = %e.message, "speech models directory unavailable at start")
+        }
     }
 }
 
@@ -71,7 +85,7 @@ fn manager_error(err: ModelManagerError) -> CommandError {
 }
 
 pub(crate) fn read_selected_model<R: Runtime>(app: &AppHandle<R>) -> SpeechModel {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|s| s.get(SELECTED_MODEL_KEY))
         .and_then(|v| v.as_str().and_then(SpeechModel::from_id))

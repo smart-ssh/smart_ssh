@@ -63,6 +63,7 @@
     "copyFailed": "Не удалось скопировать — вместо этого можно выделить текст.",
     "loadFailed": "Не удалось загрузить сведения о версии и сборке.",
     "buildDev": "Сборка для разработки",
+    "dataDirMarker": "Данные: {{path}}",
     "buildRelease": "Релизная сборка",
     "thirdPartyLicenses": {
       "openButton": "Лицензии сторонних компонентов",
@@ -98,6 +99,7 @@
       "hostKeys": "Ключи хостов",
       "wrappingFile": "Файл ключа мастер-пароля",
       "mcpSettings": "Настройки MCP",
+      "speechModels": "Речевые модели",
       "sessions": "Сеансы",
       "sessionsInDatabase": "хранятся в базе данных",
       "copy": "Копировать",

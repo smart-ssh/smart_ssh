@@ -63,6 +63,7 @@
     "copyFailed": "Kopiëren mislukt — de tekst kan in plaats daarvan worden geselecteerd.",
     "loadFailed": "Versie- en buildgegevens konden niet worden geladen.",
     "buildDev": "Ontwikkelbuild",
+    "dataDirMarker": "Gegevens: {{path}}",
     "buildRelease": "Releasebuild",
     "thirdPartyLicenses": {
       "openButton": "Licenties van derden",
@@ -98,6 +99,7 @@
       "hostKeys": "Hostsleutels",
       "wrappingFile": "Sleutelbestand hoofdwachtwoord",
       "mcpSettings": "MCP-instellingen",
+      "speechModels": "Spraakmodellen",
       "sessions": "Sessies",
       "sessionsInDatabase": "opgeslagen in de database",
       "copy": "Kopiëren",
