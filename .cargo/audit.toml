@@ -144,11 +144,11 @@ ignore = [
     # Activation: while russh is the `[patch.crates-io]` path crate the A4
     # stale-exemption check (Spec 0090) would flag an active entry. Once russh
     # comes from crates.io again (no path patch) and is still < 0.65.0,
-    # uncomment the ID below.
+    # add the ID to `ignore` (quoted, as above; keep it unquoted while commented).
     #
     # Obsolete when: russh >= 0.65.0 is used, including an upgrade of
     # `vendor/russh`.
-    # "RUSTSEC-2026-0495",
+    # RUSTSEC-2026-0495 goes here once activated.
 ]
 
 # `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
