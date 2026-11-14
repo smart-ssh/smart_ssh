@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Vaste blokkeerlijst:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen — stuur een bericht om door te gaan.",
+    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",
     "aiBudgetWaiting": "Wachten op AI-budget — volgende poging over {{seconds}}s…",
     "suggestCommand": "Opdracht voorstellen",
     "generateDocument": "Document genereren: {{title}}",

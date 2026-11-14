@@ -71,4 +71,11 @@ pub struct TransportState {
     /// sofort abgebrochen wird statt erst an der nächsten Rundengrenze.
     /// Immer über [`Session::request_auto_continue_stop`] setzen.
     pub auto_continue_stop_notify: tokio::sync::Notify,
+    /// Issue #1296 / Spec 0021, Abschnitt 4: set when the user genuinely
+    /// decided on a chat confirmation prompt (approve, edit-then-approve,
+    /// deny; never timeout, reconnect or dropped sender). `run_chat_turn`
+    /// takes and clears it after each round and restarts its auto-
+    /// continuation count. Set only in the confirmation path, never from
+    /// AI, tool or command output.
+    pub user_decided_in_turn: std::sync::atomic::AtomicBool,
 }

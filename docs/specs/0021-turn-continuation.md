@@ -53,11 +53,21 @@ ein abgelehntes Kommando.
 
 ## 4. Sicherheits-Cap gegen Endlosschleifen
 
-Pro Nutzer-Nachricht zählt die App die automatischen Fortsetzungsrunden;
-das Limit ist fest 10. Bei Erreichen stoppt die Automatik, eine sichtbare
-Chat-Systemnachricht erscheint („Automatische Fortsetzung nach 10 Schritten
-angehalten — schreib weiter, um fortzufahren"). Eine neue Nutzer-Nachricht
-setzt den Zähler zurück.
+Die App zählt die automatischen Fortsetzungsrunden **seit der letzten
+Nutzer-Beteiligung**; das Limit ist fest 10 und nicht konfigurierbar. Bei
+10 Runden in Folge ohne Nutzer-Beteiligung stoppt die Automatik, eine
+sichtbare Chat-Systemnachricht erscheint („Automatische Fortsetzung nach 10
+Schritten ohne deine Bestätigung angehalten — schreib weiter, um
+fortzufahren"). Den Zähler auf 0 setzen: eine neue Nutzer-Nachricht, eine
+während der Automatik eingereihte Nutzer-Nachricht, die in eine Runde
+eingespeist wird, und jede Entscheidung des Nutzers über einen
+Bestätigungsdialog (Genehmigen, Bearbeiten und Genehmigen, Ablehnen). Das
+Zeitlimit eines Dialogs, eine Ablehnung wegen Wiederverbindung, ein
+verworfener Dialog, ohne Dialog ausgeführte Aktionen (Regel erlaubt),
+blockierte Aktionen und ungültige Werkzeugaufrufe setzen den Zähler nicht
+zurück; KI-Ausgabe oder Kommando-Ausgabe können ihn nie zurücksetzen. Wer
+also mindestens alle 10 Runden eine Bestätigung entscheidet, lässt eine
+lange Aufgabe durchlaufen.
 
 ## 5. Sichtbare Kontrolle
 

@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Pevná černá listina:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích — pokračujte odesláním zprávy.",
+    "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích bez vašeho potvrzení — pokračujte odesláním zprávy.",
     "aiBudgetWaiting": "Čekání na rozpočet AI — další pokus za {{seconds}} s…",
     "suggestCommand": "Navrhnout příkaz",
     "generateDocument": "Vytvořit dokument: {{title}}",

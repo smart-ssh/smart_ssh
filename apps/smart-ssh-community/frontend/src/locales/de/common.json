@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Hard-Blacklist:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten angehalten — schreib weiter, um fortzufahren.",
+    "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten ohne deine Bestätigung angehalten — schreib weiter, um fortzufahren.",
     "aiBudgetWaiting": "Warte auf KI-Budget — nächster Versuch in {{seconds}}s…",
     "suggestCommand": "Kommando vorschlagen",
     "generateDocument": "Dokument generieren: {{title}}",

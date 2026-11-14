@@ -356,7 +356,7 @@
     "hardBlacklistLabel": "Lista de bloqueio fixa:"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuação automática pausada após {{limit}} passos — envie uma mensagem para continuar.",
+    "autoContinuationLimitReached": "Continuação automática pausada após {{limit}} passos sem a sua confirmação — envie uma mensagem para continuar.",
     "aiBudgetWaiting": "Aguardando o orçamento de IA — próxima tentativa em {{seconds}}s…",
     "suggestCommand": "Sugerir comando",
     "generateDocument": "Gerar documento: {{title}}",
