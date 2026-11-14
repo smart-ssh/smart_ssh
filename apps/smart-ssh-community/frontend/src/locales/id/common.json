@@ -1551,5 +1551,19 @@
     "minutes60": "60 menit",
     "never": "Tidak pernah",
     "hint": "Peramban berkas keluar sendiri dari mode istimewa setelah selama ini tanpa aktivitas istimewa. Operasi yang sedang berjalan dihitung sebagai aktivitas."
+  },
+  "activities": {
+    "title": "Aktivitas",
+    "buttonRunning": "Aktivitas: {{running}} berjalan",
+    "buttonFailed": "Aktivitas: satu aktivitas gagal",
+    "buttonDone": "Aktivitas: selesai",
+    "cancel": "Batal",
+    "cancelNamed": "Batalkan {{title}}",
+    "dismiss": "Tutup",
+    "dismissNamed": "Tutup {{title}}",
+    "succeeded": "Selesai",
+    "cancelled": "Dibatalkan",
+    "failed": "Gagal",
+    "inProgress": "Sedang berjalan"
   }
 }

@@ -1575,5 +1575,19 @@
     "minutes60": "60 min",
     "never": "Nigdy",
     "hint": "Przeglądarka plików sama opuszcza tryb podwyższony po tym czasie bez podwyższonej aktywności. Trwająca operacja liczy się jako aktywność."
+  },
+  "activities": {
+    "title": "Aktywności",
+    "buttonRunning": "Aktywności: {{running}} w toku",
+    "buttonFailed": "Aktywności: jedna aktywność nie powiodła się",
+    "buttonDone": "Aktywności: zakończono",
+    "cancel": "Anuluj",
+    "cancelNamed": "Anuluj {{title}}",
+    "dismiss": "Odrzuć",
+    "dismissNamed": "Odrzuć {{title}}",
+    "succeeded": "Gotowe",
+    "cancelled": "Anulowano",
+    "failed": "Niepowodzenie",
+    "inProgress": "W toku"
   }
 }

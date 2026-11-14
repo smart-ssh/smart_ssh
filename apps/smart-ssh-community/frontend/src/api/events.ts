@@ -25,6 +25,9 @@ export const onChatSessionChanged =
 export const onAutoReconnectChanged =
   typedListener(EVENT.AUTO_RECONNECT_CHANGED);
 
+/** Issue #1325: one activity changed (also the final event with `dismissed`). */
+export const onActivityChanged = typedListener(EVENT.ACTIVITY_CHANGED);
+
 /** Issue #1292: committed backend changes (coalesced), `kinds` only. */
 export const onDataChanged = typedListener(EVENT.DATA_CHANGED);
 

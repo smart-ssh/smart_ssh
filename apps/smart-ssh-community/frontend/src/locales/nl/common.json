@@ -1559,5 +1559,19 @@
     "minutes60": "60 minuten",
     "never": "Nooit",
     "hint": "De bestandsbrowser verlaat de verhoogde modus vanzelf na zo lang zonder verhoogde activiteit. Een lopende bewerking telt als activiteit."
+  },
+  "activities": {
+    "title": "Activiteiten",
+    "buttonRunning": "Activiteiten: {{running}} bezig",
+    "buttonFailed": "Activiteiten: een activiteit is mislukt",
+    "buttonDone": "Activiteiten: voltooid",
+    "cancel": "Annuleren",
+    "cancelNamed": "{{title}} annuleren",
+    "dismiss": "Verbergen",
+    "dismissNamed": "{{title}} verbergen",
+    "succeeded": "Klaar",
+    "cancelled": "Geannuleerd",
+    "failed": "Mislukt",
+    "inProgress": "Bezig"
   }
 }

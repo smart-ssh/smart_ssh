@@ -1567,5 +1567,19 @@
     "minutes60": "60 minutos",
     "never": "Nunca",
     "hint": "O navegador de arquivos sai sozinho do modo elevado após esse tempo sem atividade elevada. Uma operação em andamento conta como atividade."
+  },
+  "activities": {
+    "title": "Atividades",
+    "buttonRunning": "Atividades: {{running}} em andamento",
+    "buttonFailed": "Atividades: uma atividade falhou",
+    "buttonDone": "Atividades: concluído",
+    "cancel": "Cancelar",
+    "cancelNamed": "Cancelar {{title}}",
+    "dismiss": "Dispensar",
+    "dismissNamed": "Dispensar {{title}}",
+    "succeeded": "Concluído",
+    "cancelled": "Cancelado",
+    "failed": "Falhou",
+    "inProgress": "Em andamento"
   }
 }

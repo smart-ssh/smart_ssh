@@ -1559,5 +1559,19 @@
     "minutes60": "60 Minuten",
     "never": "Nie",
     "hint": "Der Dateibrowser verlässt den erhöhten Modus selbst, wenn so lange keine erhöhte Aktivität stattfand. Ein laufender Vorgang zählt als Aktivität."
+  },
+  "activities": {
+    "title": "Aktivitäten",
+    "buttonRunning": "Aktivitäten: {{running}} laufend",
+    "buttonFailed": "Aktivitäten: eine Aktivität ist fehlgeschlagen",
+    "buttonDone": "Aktivitäten: abgeschlossen",
+    "cancel": "Abbrechen",
+    "cancelNamed": "{{title}} abbrechen",
+    "dismiss": "Ausblenden",
+    "dismissNamed": "{{title}} ausblenden",
+    "succeeded": "Fertig",
+    "cancelled": "Abgebrochen",
+    "failed": "Fehlgeschlagen",
+    "inProgress": "In Arbeit"
   }
 }

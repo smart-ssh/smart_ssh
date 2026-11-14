@@ -1567,5 +1567,19 @@
     "minutes60": "60 minute",
     "never": "Niciodată",
     "hint": "Browserul de fișiere iese singur din modul ridicat după acest timp fără activitate ridicată. O operațiune în curs contează ca activitate."
+  },
+  "activities": {
+    "title": "Activități",
+    "buttonRunning": "Activități: {{running}} în curs",
+    "buttonFailed": "Activități: o activitate a eșuat",
+    "buttonDone": "Activități: finalizat",
+    "cancel": "Anulează",
+    "cancelNamed": "Anulează {{title}}",
+    "dismiss": "Închide",
+    "dismissNamed": "Închide {{title}}",
+    "succeeded": "Gata",
+    "cancelled": "Anulat",
+    "failed": "Eșuat",
+    "inProgress": "În curs"
   }
 }

@@ -12,8 +12,9 @@ use std::sync::{Arc, OnceLock};
 
 use tauri::{AppHandle, Manager, Runtime};
 
-use app_logic::activities::{
-    Activity, ActivityOutcome, ActivityRegistry, ActivitySpec, ActivityUpdate,
+pub use app_logic::activities::{
+    Activity, ActivityHandle, ActivityOutcome, ActivityRegistry, ActivitySpec, ActivityState,
+    ActivityUpdate,
 };
 use app_logic::error::CommandResult;
 

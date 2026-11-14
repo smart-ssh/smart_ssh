@@ -1575,5 +1575,19 @@
     "minutes60": "60 minut",
     "never": "Nikdy",
     "hint": "Prohlížeč souborů sám opustí zvýšený režim po této době bez zvýšené aktivity. Probíhající operace se počítá jako aktivita."
+  },
+  "activities": {
+    "title": "Aktivity",
+    "buttonRunning": "Aktivity: probíhá {{running}}",
+    "buttonFailed": "Aktivity: jedna aktivita selhala",
+    "buttonDone": "Aktivity: dokončeno",
+    "cancel": "Zrušit",
+    "cancelNamed": "Zrušit {{title}}",
+    "dismiss": "Skrýt",
+    "dismissNamed": "Skrýt {{title}}",
+    "succeeded": "Hotovo",
+    "cancelled": "Zrušeno",
+    "failed": "Selhalo",
+    "inProgress": "Probíhá"
   }
 }

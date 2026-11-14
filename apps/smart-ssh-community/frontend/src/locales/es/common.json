@@ -1567,5 +1567,19 @@
     "minutes60": "60 minutos",
     "never": "Nunca",
     "hint": "El explorador de archivos sale solo del modo elevado tras este tiempo sin actividad elevada. Una operación en curso cuenta como actividad."
+  },
+  "activities": {
+    "title": "Actividades",
+    "buttonRunning": "Actividades: {{running}} en curso",
+    "buttonFailed": "Actividades: una actividad falló",
+    "buttonDone": "Actividades: finalizado",
+    "cancel": "Cancelar",
+    "cancelNamed": "Cancelar {{title}}",
+    "dismiss": "Descartar",
+    "dismissNamed": "Descartar {{title}}",
+    "succeeded": "Hecho",
+    "cancelled": "Cancelado",
+    "failed": "Falló",
+    "inProgress": "En curso"
   }
 }

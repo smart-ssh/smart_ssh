@@ -1559,5 +1559,19 @@
     "minutes60": "60 dakika",
     "never": "Asla",
     "hint": "Dosya tarayıcısı, bu süre boyunca yükseltilmiş etkinlik olmazsa yükseltilmiş moddan kendiliğinden çıkar. Devam eden bir işlem etkinlik sayılır."
+  },
+  "activities": {
+    "title": "Etkinlikler",
+    "buttonRunning": "Etkinlikler: {{running}} sürüyor",
+    "buttonFailed": "Etkinlikler: bir etkinlik başarısız oldu",
+    "buttonDone": "Etkinlikler: tamamlandı",
+    "cancel": "İptal",
+    "cancelNamed": "{{title}} öğesini iptal et",
+    "dismiss": "Kapat",
+    "dismissNamed": "{{title}} öğesini kapat",
+    "succeeded": "Bitti",
+    "cancelled": "İptal edildi",
+    "failed": "Başarısız",
+    "inProgress": "Sürüyor"
   }
 }

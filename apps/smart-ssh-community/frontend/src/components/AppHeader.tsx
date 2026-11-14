@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { ActivityCenter } from "./activities/ActivityCenter";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { getAppInfo } from "../api/api";
 import type { AppInfoDto } from "../api/types";
@@ -171,6 +172,8 @@ export function AppHeader({ children }: AppHeaderProps) {
         {/* Rechter Bereich: Platzhalter für optionale interaktive Header-Aktionen */}
         <div data-tauri-drag-region className="flex items-center gap-2">
           {/* Interaktive Elemente hier müssen ohne `data-tauri-drag-region` eingebunden werden */}
+          {/* Issue #1325: activity center, hidden without activities. */}
+          <ActivityCenter />
         </div>
       </header>
       {/* Issue #160 / Spec 0014, Abschnitt 5: Titelleisten-Drag-Schicht.

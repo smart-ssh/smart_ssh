@@ -1559,5 +1559,19 @@
     "minutes60": "60 minutter",
     "never": "Aldri",
     "hint": "Filleseren forlater den forhøyde modusen av seg selv etter så lang tid uten forhøyet aktivitet. En pågående operasjon teller som aktivitet."
+  },
+  "activities": {
+    "title": "Aktiviteter",
+    "buttonRunning": "Aktiviteter: {{running}} pågår",
+    "buttonFailed": "Aktiviteter: en aktivitet mislyktes",
+    "buttonDone": "Aktiviteter: ferdig",
+    "cancel": "Avbryt",
+    "cancelNamed": "Avbryt {{title}}",
+    "dismiss": "Lukk",
+    "dismissNamed": "Lukk {{title}}",
+    "succeeded": "Ferdig",
+    "cancelled": "Avbrutt",
+    "failed": "Mislyktes",
+    "inProgress": "Pågår"
   }
 }
