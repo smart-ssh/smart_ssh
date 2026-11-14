@@ -84,8 +84,20 @@ impl AudioSource for FakeSource {
 struct FakeTranscriber {
     calls: Mutex<Vec<(PathBuf, usize, Option<String>)>>,
     fail: bool,
+    /// `open_session` fails: the engine cannot load the model (out of memory, unsupported CPU).
+    load_fail: bool,
 }
 impl Transcriber for FakeTranscriber {
+    fn open_session(
+        &self,
+        _: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        if self.load_fail {
+            Err(TranscribeError)
+        } else {
+            Ok(None)
+        }
+    }
     fn transcribe(
         &self,
         model: &Path,
@@ -258,6 +270,20 @@ async fn device_errors_map_to_keys() {
 async fn transcription_failure_maps_to_key_and_frees_recorder() {
     let tr = Arc::new(FakeTranscriber {
         fail: true,
+        ..Default::default()
+    });
+    let (rec, _) = recorder(FakeSource::new(decode_wav(WAV)), tr, MAX_RECORDING);
+    rec.start(model(), None).unwrap();
+    let err = rec.stop().await.unwrap_err();
+    assert_eq!(err.key(), "speech_transcription_failed");
+    rec.start(model(), None).unwrap();
+    rec.cancel();
+}
+
+#[tokio::test]
+async fn model_load_failure_maps_to_key_and_frees_recorder() {
+    let tr = Arc::new(FakeTranscriber {
+        load_fail: true,
         ..Default::default()
     });
     let (rec, _) = recorder(FakeSource::new(decode_wav(WAV)), tr, MAX_RECORDING);

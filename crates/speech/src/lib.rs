@@ -10,13 +10,11 @@
 //! Logs carry at most the model id, a byte count and the outcome.
 
 mod audio;
-#[cfg(not(target_os = "android"))]
 mod parakeet;
 mod recorder;
 mod transcribe;
 
 pub use audio::{resample_mono, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE};
-#[cfg(not(target_os = "android"))]
 pub use parakeet::ParakeetTranscriber;
 pub use recorder::{
     LiveConfig, PartialCallback, RecordError, Recorder, RecorderState, StateCallback,
@@ -72,16 +70,14 @@ impl SpeechModel {
     ];
     pub const DEFAULT: SpeechModel = SpeechModel::Base;
 
-    /// Models offered on this platform. Parakeet needs ONNX Runtime, which is
-    /// not built for Android yet.
+    /// Models offered on this platform (all of them, Android included).
     pub fn available() -> Vec<SpeechModel> {
         Self::ALL.into_iter().filter(|m| m.is_available()).collect()
     }
 
     pub fn is_available(self) -> bool {
         match self.engine() {
-            Engine::Whisper => true,
-            Engine::Parakeet => cfg!(not(target_os = "android")),
+            Engine::Whisper | Engine::Parakeet => true,
         }
     }
 
