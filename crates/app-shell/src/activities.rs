@@ -35,11 +35,16 @@ pub struct Activities(OnceLock<Arc<ActivityRegistry>>, ResumeHandlers);
 /// The process-wide activity registry. Public for extension crates.
 pub fn activities<R: Runtime>(app: &AppHandle<R>) -> Arc<ActivityRegistry> {
     let state = app.state::<Activities>();
-    Arc::clone(
-        state
-            .0
-            .get_or_init(|| ActivityRegistry::new(Arc::new(TauriEventEmitter(app.clone())))),
-    )
+    Arc::clone(state.0.get_or_init(|| {
+        let registry = ActivityRegistry::new(Arc::new(TauriEventEmitter(app.clone())));
+        let hook_app = app.clone();
+        registry.set_stale_hook(Arc::new(move |kind, key| {
+            if let Err(err) = remove_interrupted_for(&hook_app, kind, key) {
+                tracing::warn!(code = ?err.code, "stale interrupted entry not removed");
+            }
+        }));
+        registry
+    }))
 }
 
 /// Snapshot for a window that opens later or a remounted UI.
@@ -183,6 +188,8 @@ pub(crate) fn store_interrupted_snapshot<R: Runtime>(app: &AppHandle<R>) {
         return;
     }
     let mut all = read_interrupted(app);
+    // One entry per kind + key: the newer progress replaces the old entry.
+    all.retain(|e| !snapshot.iter().any(|n| n.kind == e.kind && n.key == e.key));
     all.extend(snapshot);
     if let Err(err) = write_interrupted(app, &all) {
         tracing::warn!(code = ?err.code, "interrupted activities could not be stored");
@@ -247,6 +254,25 @@ fn remove_interrupted<R: Runtime>(app: &AppHandle<R>, id: &str) -> CommandResult
         .into_iter()
         .filter(|e| e.id != id)
         .collect();
+    write_interrupted(app, &rest)
+}
+
+/// Removes the stored entries of one kind + key (stale: the work started
+/// again or finished).
+fn remove_interrupted_for<R: Runtime>(
+    app: &AppHandle<R>,
+    kind: &str,
+    key: &str,
+) -> CommandResult<()> {
+    let all = read_interrupted(app);
+    let rest: Vec<_> = all
+        .iter()
+        .filter(|e| !(e.kind == kind && e.key == key))
+        .cloned()
+        .collect();
+    if rest.len() == all.len() {
+        return Ok(());
+    }
     write_interrupted(app, &rest)
 }
 
@@ -452,5 +478,63 @@ mod tests {
         assert!(resume_interrupted(handle, &id).is_err());
         assert_eq!(read_interrupted(handle).len(), 1);
         write_interrupted(handle, &[]).unwrap();
+    }
+
+    /// Issue #1332: two quits with the same kind + key keep one entry, the
+    /// newer progress wins.
+    #[test]
+    fn storing_the_same_kind_and_key_twice_keeps_one_newer_entry() {
+        let _g = lock();
+        let app = app_with_state();
+        let handle = app.handle();
+        let a = activities(handle).start(resumable_spec("known", "m1"));
+        a.progress(10, Some(100));
+        store_interrupted_snapshot(handle);
+        a.progress(60, Some(100));
+        store_interrupted_snapshot(handle);
+        let stored = read_interrupted(handle);
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].done, 60);
+        write_interrupted(handle, &[]).unwrap();
+    }
+
+    /// Issue #1332: starting the same work again makes the stored entry stale.
+    #[test]
+    fn starting_the_same_kind_and_key_removes_the_stored_entry() {
+        let _g = lock();
+        let app = app_with_state();
+        let handle = app.handle();
+        let a = activities(handle).start(resumable_spec("known", "m1"));
+        let _other = activities(handle).start(resumable_spec("known", "m2"));
+        store_interrupted_snapshot(handle);
+        assert_eq!(read_interrupted(handle).len(), 2);
+        drop(a);
+        let _again = activities(handle).start(resumable_spec("known", "m1"));
+        let stored = read_interrupted(handle);
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].key, "m2");
+        write_interrupted(handle, &[]).unwrap();
+    }
+
+    /// Issue #1332: an activity that completes removes a stored entry that
+    /// was written after it started (e.g. by an earlier quit snapshot).
+    #[test]
+    fn a_succeeding_activity_removes_the_stored_entry() {
+        let _g = lock();
+        let app = app_with_state();
+        let handle = app.handle();
+        let a = activities(handle).start(resumable_spec("known", "m1"));
+        let stale = InterruptedActivity {
+            id: "old".into(),
+            kind: "known".into(),
+            key: "m1".into(),
+            title_key: "t".into(),
+            title_params: Default::default(),
+            done: 1,
+            total: None,
+        };
+        write_interrupted(handle, &[stale]).unwrap();
+        a.succeed();
+        assert!(read_interrupted(handle).is_empty());
     }
 }

@@ -191,7 +191,12 @@ struct Inner {
     entries: HashMap<String, Entry>,
 }
 
+/// Called with `(kind, key)` when an activity with that resume identity
+/// starts or succeeds, so a stored interrupted entry for it is stale.
+pub type StaleHook = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
 pub struct ActivityRegistry {
+    stale_hook: Mutex<Option<StaleHook>>,
     emitter: Arc<dyn EventEmitter>,
     clock: Clock,
     inner: Mutex<Inner>,
@@ -204,10 +209,24 @@ impl ActivityRegistry {
 
     pub fn with_clock(emitter: Arc<dyn EventEmitter>, clock: Clock) -> Arc<Self> {
         Arc::new(Self {
+            stale_hook: Mutex::new(None),
             emitter,
             clock,
             inner: Mutex::new(Inner::default()),
         })
+    }
+
+    /// Installs the hook that removes stale interrupted entries (issue #1332).
+    pub fn set_stale_hook(&self, hook: StaleHook) {
+        *lock_tolerating_poison(&self.stale_hook) = Some(hook);
+    }
+
+    fn notify_stale(&self, resume: Option<&ResumeSpec>) {
+        let Some(r) = resume else { return };
+        let hook = lock_tolerating_poison(&self.stale_hook).clone();
+        if let Some(hook) = hook {
+            hook(&r.kind, &r.key);
+        }
     }
 
     /// Starts an activity and returns a handle for the owning Rust code.
@@ -240,6 +259,7 @@ impl ActivityRegistry {
             dismissed: false,
         };
         let id = activity.id.clone();
+        let stale = spec.resume.clone();
         {
             let mut inner = lock_tolerating_poison(&self.inner);
             inner.order.push(id.clone());
@@ -254,6 +274,8 @@ impl ActivityRegistry {
             );
         }
         self.emit(&activity);
+        // A fresh run of the same work makes a stored interrupted entry stale.
+        self.notify_stale(stale.as_ref());
         id
     }
 
@@ -368,6 +390,7 @@ impl ActivityRegistry {
 
     /// Ends a running activity. The final state is always sent.
     pub fn finish(&self, id: &str, outcome: ActivityOutcome) {
+        let mut stale = None;
         let to_emit = {
             let mut inner = lock_tolerating_poison(&self.inner);
             let Some(entry) = inner.entries.get_mut(id) else {
@@ -375,6 +398,9 @@ impl ActivityRegistry {
             };
             if entry.activity.state != ActivityState::Running {
                 return;
+            }
+            if matches!(outcome, ActivityOutcome::Succeeded) {
+                stale = entry.resume.clone();
             }
             let a = &mut entry.activity;
             match outcome {
@@ -396,6 +422,7 @@ impl ActivityRegistry {
             entry.activity.clone()
         };
         self.emit(&to_emit);
+        self.notify_stale(stale.as_ref());
     }
 
     /// The user cancelled: runs the cancel callback (outside the lock) and

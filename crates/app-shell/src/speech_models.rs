@@ -188,8 +188,14 @@ fn start_download_with_activity<R: Runtime>(
     resume: bool,
 ) -> CommandResult<()> {
     let manager = manager(app)?;
-    if matches!(manager.status(model), ModelStatus::Downloading { .. }) {
-        return Err(manager_error(ModelManagerError::AlreadyDownloading));
+    match manager.status(model) {
+        ModelStatus::Downloading { .. } => {
+            return Err(manager_error(ModelManagerError::AlreadyDownloading));
+        }
+        // Resuming a model that is installed again: nothing to download; the
+        // caller removes the stale entry (issue #1332).
+        ModelStatus::Ready if resume => return Ok(()),
+        _ => {}
     }
     let registry = crate::activities::activities(app);
     let handle = registry.start(ActivitySpec {
@@ -240,7 +246,7 @@ fn start_download_with_activity<R: Runtime>(
 }
 
 /// Registers the resume handler of interrupted model downloads (issue
-/// #1327): "Resume" continues from the `.part` files, "Discard" deletes them.
+/// #1327): "Resume" continues from the `.part` files, "Discard" deletes only them, never an installed model.
 pub(crate) fn register_resume_handler<R: Runtime>(app: &AppHandle<R>) {
     let resume_app = app.clone();
     let discard_app = app.clone();
@@ -254,7 +260,7 @@ pub(crate) fn register_resume_handler<R: Runtime>(app: &AppHandle<R>) {
             let Ok(model) = parse_model(&entry.key) else {
                 return;
             };
-            match manager(&discard_app).map(|m| m.delete(model)) {
+            match manager(&discard_app).map(|m| m.delete_partial(model)) {
                 Ok(Ok(())) => {}
                 Ok(Err(err)) => tracing::warn!(?err, "interrupted download files not deleted"),
                 Err(err) => tracing::warn!(code = ?err.code, "speech models unavailable"),
@@ -440,5 +446,106 @@ mod tests {
             reg.list()[0].state,
             app_logic::activities::ActivityState::Cancelled
         );
+    }
+
+    // ---- Issue #1332: stale interrupted entries ----
+
+    fn model_app(dir: &std::path::Path) -> tauri::App<tauri::test::MockRuntime> {
+        use speech::{ModelFile, ModelSource};
+        let app = test_app();
+        app.manage(crate::activities::Activities::default());
+        let source = ModelSource {
+            files: vec![ModelFile {
+                name: "model.onnx".into(),
+                url: String::new(),
+                size: 1,
+                sha256: String::new(),
+            }],
+        };
+        let manager = ModelManager::with_sources(
+            dir.to_path_buf(),
+            std::collections::HashMap::from([(SpeechModel::Base, source)]),
+        );
+        let cell = OnceLock::new();
+        let _ = cell.set(Arc::new(manager));
+        app.manage(SpeechModels(cell));
+        register_resume_handler(app.handle());
+        app
+    }
+
+    /// Runs a quit with a resumable Base download and returns the entry id.
+    fn store_entry(app: &tauri::App<tauri::test::MockRuntime>) -> (String, ActivityHandle) {
+        let h = crate::activities::activities(app.handle()).start(ActivitySpec {
+            kind: ACTIVITY_KIND.into(),
+            key: "base".into(),
+            title_key: "t".into(),
+            resume: Some(ResumeSpec {
+                kind: ACTIVITY_KIND.into(),
+                key: "base".into(),
+            }),
+            ..Default::default()
+        });
+        crate::activities::store_interrupted_snapshot(app.handle());
+        let id = crate::activities::interrupted_rows(app.handle(), &[]).unwrap()[0]
+            .entry
+            .id
+            .clone();
+        (id, h)
+    }
+
+    fn base_dir(dir: &std::path::Path) -> std::path::PathBuf {
+        let d = dir.join(SpeechModel::Base.file_name());
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn discard_never_deletes_an_installed_model() {
+        let _g = lock();
+        let tmp = tempfile::tempdir().unwrap();
+        let app = model_app(tmp.path());
+        let d = base_dir(tmp.path());
+        let (id, _h) = store_entry(&app);
+        std::fs::write(d.join("model.onnx"), b"x").unwrap();
+        crate::activities::discard_interrupted(app.handle(), &id).unwrap();
+        assert!(d.join("model.onnx").is_file());
+        assert!(crate::activities::interrupted_rows(app.handle(), &[])
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn discard_with_only_a_part_file_deletes_it_and_the_entry() {
+        let _g = lock();
+        let tmp = tempfile::tempdir().unwrap();
+        let app = model_app(tmp.path());
+        let d = base_dir(tmp.path());
+        std::fs::write(d.join("model.onnx.part"), b"x").unwrap();
+        let (id, _h) = store_entry(&app);
+        crate::activities::discard_interrupted(app.handle(), &id).unwrap();
+        assert!(!d.join("model.onnx.part").exists());
+        assert!(crate::activities::interrupted_rows(app.handle(), &[])
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn resume_of_an_installed_model_removes_the_entry_without_a_download() {
+        let _g = lock();
+        let tmp = tempfile::tempdir().unwrap();
+        let app = model_app(tmp.path());
+        let d = base_dir(tmp.path());
+        let (id, _h) = store_entry(&app);
+        std::fs::write(d.join("model.onnx"), b"x").unwrap();
+        let before = crate::activities::activities(app.handle()).list().len();
+        crate::activities::resume_interrupted(app.handle(), &id).unwrap();
+        assert_eq!(
+            crate::activities::activities(app.handle()).list().len(),
+            before,
+            "no new download activity"
+        );
+        assert!(crate::activities::interrupted_rows(app.handle(), &[])
+            .unwrap()
+            .is_empty());
     }
 }
