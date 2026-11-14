@@ -1262,6 +1262,9 @@
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",
+    "copyCode": "Copier le code",
+    "codeCopied": "Code copié",
+    "codeCopyFailed": "Échec de la copie",
     "composerMore": "Plus d'actions de saisie",
     "newChat": "Nouveau chat",
     "newChatDisabledHint": "Indisponible pendant que l’IA répond ou qu’une confirmation est ouverte.",

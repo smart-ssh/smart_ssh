@@ -1269,6 +1269,9 @@
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",
+    "copyCode": "Kopiuj kod",
+    "codeCopied": "Skopiowano kod",
+    "codeCopyFailed": "Kopiowanie nie powiodło się",
     "composerMore": "Więcej akcji pola wiadomości",
     "newChat": "Nowy czat",
     "newChatDisabledHint": "Niedostępne, gdy AI odpowiada lub otwarte jest potwierdzenie.",

@@ -2,20 +2,12 @@ import { useState, useSyncExternalStore, type ComponentPropsWithoutRef } from "r
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
-import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { listDocumentActions, subscribeDocumentActions } from "../../extensions/registry";
 import type { DocumentFormat } from "../../api/types";
 import { Button, ErrorBoundary } from "../ui";
+import { CodeBlock } from "./CodeBlock";
 
-/** Spec 0113 §4a: in the narrow layout a code block scrolls sideways inside its own box, so it
- * must be reachable by keyboard; the wide layout keeps the plain `pre`. */
-function ScrollablePre(props: ComponentPropsWithoutRef<"pre">) {
-  const narrow = useIsNarrow();
-  // A scrollable region must be keyboard-reachable (axe "scrollable-region-focusable").
-  // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-  return <pre {...props} tabIndex={narrow ? 0 : undefined} />;
-}
-export const MARKDOWN_COMPONENTS = { pre: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"pre"> & { node?: unknown }) => <ScrollablePre {...rest} /> };
+export const MARKDOWN_COMPONENTS = { pre: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"pre"> & { node?: unknown }) => <CodeBlock {...rest} /> };
 
 /** Spec 0012, Abschnitt 3: eigene Karte für `chat-document-generated`,
  * gerendertes Markdown statt Rohtext, mit den beiden Export-Buttons. Kein

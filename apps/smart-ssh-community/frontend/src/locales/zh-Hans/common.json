@@ -1248,6 +1248,9 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "copyCode": "复制代码",
+    "codeCopied": "代码已复制",
+    "codeCopyFailed": "复制失败",
     "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
