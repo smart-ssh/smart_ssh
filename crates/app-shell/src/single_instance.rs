@@ -35,7 +35,9 @@ pub(crate) fn enabled() -> bool {
     if cfg!(target_os = "android") {
         return false;
     }
-    let raw_override = std::env::var(persistence_sqlite::DATA_DIR_OVERRIDE_ENV).ok();
+    // Issue #1313: the resolved override of any source (flag, env, pointer file).
+    let raw_override =
+        persistence_sqlite::data_dir_override().map(|p| p.to_string_lossy().into_owned());
     app_logic::single_instance::focusing_applies(raw_override.as_deref(), cfg!(debug_assertions))
 }
 

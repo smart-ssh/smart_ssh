@@ -21,7 +21,7 @@ use tauri_plugin_store::StoreExt;
 use ssh_manager_core::shared::ServerId;
 
 use crate::mcp_backend::AppMcpBackend;
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
@@ -89,7 +89,7 @@ impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
     fn read_token(&self) -> CommandResult<Option<String>> {
         let store = self
             .app
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .or_code("SETTINGS_STORE_FAILED")?;
         Ok(store
             .get(TOKEN_KEY)
@@ -130,7 +130,7 @@ fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String
 
 fn load_allowed_servers(app: &AppHandle) -> CommandResult<HashSet<ServerId>> {
     let store = app
-        .store(SETTINGS_STORE_FILE)
+        .store(crate::settings_store::settings_store_file())
         .or_code("SETTINGS_STORE_FAILED")?;
     let Some(value) = store.get(ALLOWED_SERVERS_KEY) else {
         return Ok(HashSet::new());
@@ -155,7 +155,7 @@ fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandRes
 
 fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u64> {
     let store = app
-        .store(SETTINGS_STORE_FILE)
+        .store(crate::settings_store::settings_store_file())
         .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(CONFIRM_TIMEOUT_SECS_KEY)
@@ -165,7 +165,7 @@ fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u6
 
 fn is_enabled_setting(app: &AppHandle) -> CommandResult<bool> {
     let store = app
-        .store(SETTINGS_STORE_FILE)
+        .store(crate::settings_store::settings_store_file())
         .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(ENABLED_KEY)
@@ -380,7 +380,7 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = handle.store(crate::settings_store::settings_store_file()) {
             store.delete(CONFIRM_TIMEOUT_SECS_KEY);
             let _ = store.save();
         }
@@ -389,7 +389,7 @@ mod tests {
 
         assert_eq!(secs, mcp_server::DEFAULT_CONFIRM_TIMEOUT.as_secs());
 
-        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = handle.store(crate::settings_store::settings_store_file()) {
             store.delete(CONFIRM_TIMEOUT_SECS_KEY);
             let _ = store.save();
         }
@@ -403,7 +403,9 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .expect("Store");
         store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
         store.save().expect("Store konnte nicht gespeichert werden");
 
@@ -430,12 +432,17 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .expect("Store");
         store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
         store.save().expect("Store konnte nicht gespeichert werden");
 
-        let store_path = tauri_plugin_store::resolve_store_path(handle, SETTINGS_STORE_FILE)
-            .expect("store path must resolve");
+        let store_path = tauri_plugin_store::resolve_store_path(
+            handle,
+            crate::settings_store::SETTINGS_STORE_FILE,
+        )
+        .expect("store path must resolve");
         std::fs::set_permissions(&store_path, std::fs::Permissions::from_mode(0o644))
             .expect("store file must exist after save");
 

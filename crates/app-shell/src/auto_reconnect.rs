@@ -18,7 +18,6 @@ use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
 
 use crate::event_emitter::TauriEventEmitter;
-use crate::settings_store::SETTINGS_STORE_FILE;
 
 /// Registers the loss hook of a freshly connected session.
 pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
@@ -32,7 +31,7 @@ pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
 /// Read at every drop, so a changed setting applies from the next drop on.
 /// `None` = off. A missing, unreadable or unknown value means the default.
 fn read_budget<R: Runtime>(app: &AppHandle<R>) -> Option<Duration> {
-    match app.store(SETTINGS_STORE_FILE) {
+    match app.store(crate::settings_store::settings_store_file()) {
         Ok(store) => budget_from_stored(store.get(SETTING_KEY).as_ref()),
         Err(_) => budget_from_stored(None),
     }

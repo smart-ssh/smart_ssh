@@ -138,6 +138,7 @@ fn current_data_paths<R: tauri::Runtime>(
 ) -> CommandResult<Vec<app_logic::data_paths::DataPathEntry>> {
     Ok(app_logic::data_paths::effective_data_paths(
         &mcp_settings_path(app)?,
+        &crate::speech_models::models_dir(app)?,
         &extra.0,
     ))
 }

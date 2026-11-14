@@ -32,13 +32,13 @@ pub(crate) const fn offered() -> bool {
     !cfg!(target_os = "android")
 }
 
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 
 const NOTES_KEY: &str = "localServerNotes";
 const TAGS_KEY: &str = "localServerTags";
 
 fn load_notes<R: Runtime>(app: &AppHandle<R>) -> String {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|store| store.get(NOTES_KEY))
         .and_then(|v| v.as_str().map(str::to_string))
@@ -46,7 +46,7 @@ fn load_notes<R: Runtime>(app: &AppHandle<R>) -> String {
 }
 
 fn load_tags<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|store| store.get(TAGS_KEY))
         .and_then(|v| v.as_array().cloned())
@@ -153,7 +153,7 @@ mod tests {
     use ssh_manager_core::filter::PolicyRules;
 
     fn reset_local_store<R: Runtime>(app: &AppHandle<R>) {
-        if let Ok(store) = app.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = app.store(crate::settings_store::settings_store_file()) {
             store.delete(NOTES_KEY);
             store.delete(TAGS_KEY);
             let _ = store.save();

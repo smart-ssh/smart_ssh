@@ -118,8 +118,11 @@ pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::{
     android_cache_dir, android_cache_dir_for, android_files_dir, android_files_dir_for,
-    android_user_id_from_uid, data_dir_override, data_dir_override_from, default_db_path,
-    set_android_app_id, AndroidAppIdError, ANDROID_APP_ID, DATA_DIR_OVERRIDE_ENV,
+    android_user_id_from_uid, data_dir_flag_from, data_dir_override, data_dir_override_from,
+    default_db_path, init_data_dir, pointer_file_path, pointer_file_target, resolve_with,
+    resolved_data_dir, select_override, set_android_app_id, AndroidAppIdError, DataDirError,
+    DataDirSource, PointerOs, ResolvedDataDir, ANDROID_APP_ID, DATA_DIR_FLAG,
+    DATA_DIR_OVERRIDE_ENV, POINTER_FILE_EXTENSION,
 };
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};

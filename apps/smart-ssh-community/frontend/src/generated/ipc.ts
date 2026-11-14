@@ -20,7 +20,7 @@ export type AiProviderConfigDto = { id: ProviderId, providerType: ProviderType, 
 
 export type AiProviderConfigInput = { providerType: ProviderType, displayName: string, baseUrl: string | null, model: string, supportsNativeToolCalling: boolean, apiKey: string, extraHeaders: Array<[string, string]>, attestationUrl: string | null, maxTokensOverride: number | null, webResearchEnabled: boolean, };
 
-export type AppInfoDto = { version: string, commitHash: string, versionDisplay: string, edition: string, buildType: BuildType, };
+export type AppInfoDto = { version: string, commitHash: string, versionDisplay: string, edition: string, buildType: BuildType, dataDir: string | null, dataDirDisplay: string | null, settingsStorePath: string | null, };
 
 export type AskUserOption = { label: string, description?: string | null, };
 
