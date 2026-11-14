@@ -30,7 +30,7 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 
 ## 4. Aktivitäten starten
 
-- Rust-Code (auch Erweiterungs-Crates) und Frontend-Code (Erweiterungen) können Aktivitäten anmelden; beide verhalten sich gleich: Fortschritt, Statustext, Abbruch-Rückruf, Erfolg, Fehler.
+- Rust-Code (auch Erweiterungs-Crates) und Frontend-Code (Erweiterungen) können Aktivitäten anmelden; beide verhalten sich gleich: Fortschritt, Statustext, Abbruch-Rückruf, Erfolg, Fehler, Abbruch durch den Besitzer selbst (endet als „abgebrochen“ ohne Fehlertext; der Abbruch-Rückruf läuft dafür nicht; bei einer nicht abbrechbaren Aktivität wird der Abbruch abgelehnt und der Fehler an den Aufrufer gegeben).
 - Wird die Rust-Seite einer Aktivität verworfen, ohne sie zu beenden, gilt die Aktivität als fehlgeschlagen.
 - Fortschrittsmeldungen erreichen die Oberfläche höchstens viermal pro Sekunde je Aktivität; Zustandswechsel (Beginn, neuer Statustext, Ende) kommen immer an.
 - Titel, Statustexte und Fehlermeldungen enthalten nie Zugangsdaten oder URLs mit Token.
