@@ -1406,7 +1406,8 @@
       "body": "A speech model ({{model}}, about {{size}} MiB) will be downloaded once from {{source}}. After that, speech recognition runs entirely on this computer; audio and text never leave it.",
       "download": "Download",
       "cancel": "Cancel",
-      "progress": "Download progress"
+      "progress": "Download progress",
+      "parakeetLicense": "License: {{license}}"
     },
     "errors": {
       "noDevice": "No microphone found. Connect a microphone and check the input device in your system settings.",
@@ -1422,7 +1423,8 @@
       "model": "Speech model",
       "models": {
         "base": "Base (about {{size}} MiB, default)",
-        "small": "Small (about {{size}} MiB, more accurate, slower)"
+        "small": "Small (about {{size}} MiB, more accurate, slower)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (about {{size}} MiB, multilingual, fast; detects the language automatically)"
       },
       "statusReady": "Downloaded",
       "statusNotDownloaded": "Not downloaded",
@@ -1430,7 +1432,8 @@
       "download": "Download",
       "delete": "Delete model",
       "language": "Recognition language",
-      "languageAuto": "Automatic"
+      "languageAuto": "Automatic",
+      "languageParakeetHint": "Parakeet detects the language automatically; this setting applies to Whisper models."
     }
   },
   "connectTab": {

@@ -1398,7 +1398,8 @@
       "body": "Model suara ({{model}}, sekitar {{size}} MiB) akan diunduh sekali dari {{source}}. Setelah itu, pengenalan suara berjalan sepenuhnya di komputer ini; audio dan teks tidak pernah keluar darinya.",
       "download": "Unduh",
       "cancel": "Batal",
-      "progress": "Progres unduhan"
+      "progress": "Progres unduhan",
+      "parakeetLicense": "Lisensi: {{license}}"
     },
     "errors": {
       "noDevice": "Mikrofon tidak ditemukan. Sambungkan mikrofon dan periksa perangkat input di pengaturan sistem.",
@@ -1414,7 +1415,8 @@
       "model": "Model suara",
       "models": {
         "base": "Base (sekitar {{size}} MiB, bawaan)",
-        "small": "Small (sekitar {{size}} MiB, lebih akurat, lebih lambat)"
+        "small": "Small (sekitar {{size}} MiB, lebih akurat, lebih lambat)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (sekitar {{size}} MiB, multibahasa, cepat; mendeteksi bahasa secara otomatis)"
       },
       "statusReady": "Sudah diunduh",
       "statusNotDownloaded": "Belum diunduh",
@@ -1422,7 +1424,8 @@
       "download": "Unduh",
       "delete": "Hapus model",
       "language": "Bahasa pengenalan",
-      "languageAuto": "Otomatis"
+      "languageAuto": "Otomatis",
+      "languageParakeetHint": "Parakeet mendeteksi bahasa secara otomatis; pengaturan ini berlaku untuk model Whisper."
     }
   },
   "connectTab": {

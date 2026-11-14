@@ -1406,7 +1406,8 @@
       "body": "Ein Sprachmodell ({{model}}, rund {{size}} MiB) wird einmalig von {{source}} heruntergeladen. Danach läuft die Spracherkennung vollständig auf diesem Computer; Audio und Text verlassen ihn nie.",
       "download": "Herunterladen",
       "cancel": "Abbrechen",
-      "progress": "Fortschritt des Downloads"
+      "progress": "Fortschritt des Downloads",
+      "parakeetLicense": "Lizenz: {{license}}"
     },
     "errors": {
       "noDevice": "Kein Mikrofon gefunden. Schließe ein Mikrofon an und prüfe das Eingabegerät in den Systemeinstellungen.",
@@ -1422,7 +1423,8 @@
       "model": "Sprachmodell",
       "models": {
         "base": "Base (rund {{size}} MiB, Vorgabe)",
-        "small": "Small (rund {{size}} MiB, genauer, langsamer)"
+        "small": "Small (rund {{size}} MiB, genauer, langsamer)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (rund {{size}} MiB, mehrsprachig, schnell; erkennt die Sprache automatisch)"
       },
       "statusReady": "Heruntergeladen",
       "statusNotDownloaded": "Nicht heruntergeladen",
@@ -1430,7 +1432,8 @@
       "download": "Herunterladen",
       "delete": "Modell löschen",
       "language": "Erkennungssprache",
-      "languageAuto": "Automatisch"
+      "languageAuto": "Automatisch",
+      "languageParakeetHint": "Parakeet erkennt die Sprache automatisch; diese Einstellung gilt für Whisper-Modelle."
     }
   },
   "connectTab": {

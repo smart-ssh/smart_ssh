@@ -1398,7 +1398,8 @@
       "body": "将从 {{source}} 一次性下载语音模型（{{model}}，约 {{size}} MiB）。之后语音识别完全在本机运行，音频和文本绝不会离开本机。",
       "download": "下载",
       "cancel": "取消",
-      "progress": "下载进度"
+      "progress": "下载进度",
+      "parakeetLicense": "许可证：{{license}}"
     },
     "errors": {
       "noDevice": "未找到麦克风。请连接麦克风，并在系统设置中检查输入设备。",
@@ -1414,7 +1415,8 @@
       "model": "语音模型",
       "models": {
         "base": "Base（约 {{size}} MiB，默认）",
-        "small": "Small（约 {{size}} MiB，更准确，更慢）"
+        "small": "Small（约 {{size}} MiB，更准确，更慢）",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (约 {{size}} MiB，多语言，速度快；自动检测语言)"
       },
       "statusReady": "已下载",
       "statusNotDownloaded": "未下载",
@@ -1422,7 +1424,8 @@
       "download": "下载",
       "delete": "删除模型",
       "language": "识别语言",
-      "languageAuto": "自动"
+      "languageAuto": "自动",
+      "languageParakeetHint": "Parakeet 会自动检测语言；此设置适用于 Whisper 模型。"
     }
   },
   "connectTab": {

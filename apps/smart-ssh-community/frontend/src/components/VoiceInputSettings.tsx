@@ -9,13 +9,14 @@ import {
   getSpeechLanguage,
   getSpeechModelStatus,
   onSpeechModelStatus,
-  SPEECH_MODEL_SIZE_MIB,
-  SPEECH_MODEL_SOURCE,
-  SPEECH_MODELS,
+  listSpeechModels,
+  SPEECH_MODEL_PARAKEET,
+  speechModelSizeMib,
   setSelectedSpeechModel,
   setSpeechLanguage,
   startSpeechModelDownload,
   type SpeechModelId,
+  type SpeechModelInfo,
   type SpeechModelStatus,
 } from "../api/voiceApi";
 import {
@@ -36,6 +37,7 @@ export function VoiceInputSettings() {
   const { t, i18n } = useTranslation();
   const [enabled, setEnabled] = useState(true);
   const [model, setModel] = useState<SpeechModelId>("base");
+  const [models, setModels] = useState<SpeechModelInfo[]>([]);
   const [statuses, setStatuses] = useState<Partial<Record<SpeechModelId, SpeechModelStatus>>>({});
   const [language, setLanguage] = useState("auto");
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
@@ -51,7 +53,12 @@ export function VoiceInputSettings() {
     loadVoiceInputEnabled().then(setEnabled).catch(() => {});
     getSelectedSpeechModel().then(setModel).catch(fail);
     getSpeechLanguage().then(setLanguage).catch(fail);
-    for (const id of SPEECH_MODELS) refresh(id).catch(fail);
+    listSpeechModels()
+      .then((list) => {
+        setModels(list);
+        for (const m of list) refresh(m.id).catch(fail);
+      })
+      .catch(fail);
     let unlisten: (() => void) | undefined;
     let disposed = false;
     onSpeechModelStatus((ev) => setStatuses((prev) => ({ ...prev, [ev.model]: ev })))
@@ -95,7 +102,7 @@ export function VoiceInputSettings() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-fg-muted">
-        {t("voice.settings.description", { source: SPEECH_MODEL_SOURCE })}
+        {t("voice.settings.description", { source: models[0]?.source_host ?? "huggingface.co" })}
       </p>
       {errorKey && (
         <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
@@ -122,7 +129,8 @@ export function VoiceInputSettings() {
         <legend className="mb-2 text-sm font-semibold text-fg-soft">
           {t("voice.settings.model")}
         </legend>
-        {SPEECH_MODELS.map((id) => {
+        {models.map((info) => {
+          const id = info.id;
           const status = statuses[id];
           const downloading = status?.state === "downloading";
           const ready = status?.state === "ready";
@@ -138,7 +146,7 @@ export function VoiceInputSettings() {
                     run(() => setSelectedSpeechModel(id));
                   }}
                 />
-                {t(`voice.settings.models.${id}`, { size: SPEECH_MODEL_SIZE_MIB[id] })}
+                {t(`voice.settings.models.${id}` as TranslationKey, { size: speechModelSizeMib(info) })}
               </label>
               <span aria-live="polite" className="text-fg-subtle">
                 {statusText(status)}
@@ -194,6 +202,9 @@ export function VoiceInputSettings() {
           ))}
         </select>
       </label>
+      {model === SPEECH_MODEL_PARAKEET && models.some((m) => m.id === SPEECH_MODEL_PARAKEET) && (
+        <p className="text-xs text-fg-subtle">{t("voice.settings.languageParakeetHint")}</p>
+      )}
     </div>
   );
 }

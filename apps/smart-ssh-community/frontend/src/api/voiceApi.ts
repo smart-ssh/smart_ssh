@@ -6,8 +6,8 @@ import { listenTyped } from "./listenTyped";
 // Spec 0108: Wrapper um die Befehle und Ereignisse der Spracheingabe. Eigene
 // Datei, damit die Chat-Oberfläche sie nur bei einer Nutzeraktion ruft.
 
-export type SpeechModelId = "base" | "small";
-export const SPEECH_MODELS: readonly SpeechModelId[] = ["base", "small"];
+/** Model id as reported by `list_speech_models` (e.g. `base`, `small`, `parakeet_v3`). */
+export type SpeechModelId = string;
 
 /** Entry of `list_speech_models`: what the backend offers on this platform. */
 export interface SpeechModelInfo {
@@ -68,6 +68,9 @@ export const onSpeechPartialText = (
 ): Promise<UnlistenFn> =>
   listenTyped(EVENT.SPEECH_PARTIAL_TEXT, handler);
 
-/** Approximate download sizes (Spec 0108 §2.1), for the consent dialog and settings. */
-export const SPEECH_MODEL_SIZE_MIB: Record<SpeechModelId, number> = { base: 142, small: 466 };
-export const SPEECH_MODEL_SOURCE = "huggingface.co";
+/** Download size in MiB (rounded up) for display; the backend reports bytes. */
+export const speechModelSizeMib = (info: SpeechModelInfo): number =>
+  Math.ceil(info.total_size / (1024 * 1024));
+
+/** Display name of a model; Whisper models keep their plain id. */
+export const SPEECH_MODEL_PARAKEET = "parakeet_v3";

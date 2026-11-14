@@ -193,7 +193,8 @@ Logs nennen höchstens Dauer und Ergebnis.
   ungeprüfte Nutzereingabe; er geht erst mit Enter auf dem normalen Sendeweg
   an die KI. Der Fokus wechselt ins Eingabefeld.
 - Zustimmungsdialog (ohne bereites Modell): nennt Modell, Größe und Quelle
-  und sagt, dass die Erkennung danach vollständig lokal läuft. „Herunterladen“
+  (Host und Repository; bei Parakeet zusätzlich der Lizenzhinweis
+  „CC-BY-4.0, NVIDIA“) und sagt, dass die Erkennung danach vollständig lokal läuft. „Herunterladen“
   startet den Download mit Fortschrittsanzeige; „Abbrechen“ schließt den
   Dialog ohne Netzwerkanfrage, während des Downloads bricht es ihn ab. Erst
   nach erfolgreichem Download beginnt die Aufnahme (das Betriebssystem fragt
@@ -203,8 +204,13 @@ Logs nennen höchstens Dauer und Ergebnis.
   nicht technischer Text mit Hinweis, was zu tun ist; der Knopf kehrt in den
   Ruhezustand zurück.
 - Einstellungen, Abschnitt „Spracheingabe“: Ein/Aus (Standard an), Modell
-  `base`/`small` mit Zustand, Herunterladen/Abbrechen/Löschen, und die
-  Erkennungssprache (automatisch oder eine feste Sprache). Alle Werte bleiben
+  mit Zustand, Herunterladen/Abbrechen/Löschen (Liste, Größen und Quelle
+  stammen aus dem Befehl nach Abschnitt 2.1; Parakeet erscheint als „Parakeet
+  v3 (NVIDIA)“ mit Größe und dem Hinweis „mehrsprachig, schnell; erkennt die
+  Sprache automatisch“, auf Android gar nicht), und die Erkennungssprache
+  (automatisch oder eine feste Sprache; ist Parakeet gewählt, steht darunter
+  der Hinweis, dass Parakeet die Sprache selbst erkennt und die Einstellung für
+  Whisper-Modelle gilt – die Auswahl bleibt bedienbar und der Wert unverändert). Alle Werte bleiben
   über Neustarts erhalten.
 - Erkannte Nicht-Sprach-Marker (z. B. „[BLANK_AUDIO]“, „(Musik)“,
   „[silence]“, „*music*“, „♪“) erscheinen weder im Live-Text noch im

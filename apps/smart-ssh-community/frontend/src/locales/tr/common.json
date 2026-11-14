@@ -1406,7 +1406,8 @@
       "body": "Bir konuşma modeli ({{model}}, yaklaşık {{size}} MiB) {{source}} adresinden bir kez indirilecek. Sonrasında konuşma tanıma tamamen bu bilgisayarda çalışır; ses ve metin bilgisayardan asla çıkmaz.",
       "download": "İndir",
       "cancel": "İptal",
-      "progress": "İndirme ilerlemesi"
+      "progress": "İndirme ilerlemesi",
+      "parakeetLicense": "Lisans: {{license}}"
     },
     "errors": {
       "noDevice": "Mikrofon bulunamadı. Bir mikrofon bağlayın ve sistem ayarlarından giriş aygıtını denetleyin.",
@@ -1422,7 +1423,8 @@
       "model": "Konuşma modeli",
       "models": {
         "base": "Base (yaklaşık {{size}} MiB, varsayılan)",
-        "small": "Small (yaklaşık {{size}} MiB, daha doğru, daha yavaş)"
+        "small": "Small (yaklaşık {{size}} MiB, daha doğru, daha yavaş)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (yaklaşık {{size}} MiB, çok dilli, hızlı; dili otomatik algılar)"
       },
       "statusReady": "İndirildi",
       "statusNotDownloaded": "İndirilmedi",
@@ -1430,7 +1432,8 @@
       "download": "İndir",
       "delete": "Modeli sil",
       "language": "Tanıma dili",
-      "languageAuto": "Otomatik"
+      "languageAuto": "Otomatik",
+      "languageParakeetHint": "Parakeet dili otomatik algılar; bu ayar Whisper modelleri için geçerlidir."
     }
   },
   "connectTab": {

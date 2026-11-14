@@ -60,6 +60,12 @@ const emitPartial = (text: string, revision: number) =>
 vi.mock("../api/voiceApi", async (importActual) => ({
   ...(await importActual<typeof import("../api/voiceApi")>()),
   getSelectedSpeechModel: vi.fn(() => Promise.resolve("base")),
+  listSpeechModels: vi.fn(() =>
+    Promise.resolve([
+      { id: "base", engine: "whisper", total_size: 147_951_465, source_host: "huggingface.co", source_repo: "ggerganov/whisper.cpp" },
+      { id: "parakeet_v3", engine: "parakeet", total_size: 670_619_706, source_host: "huggingface.co", source_repo: "istupakov/parakeet-tdt-0.6b-v3-onnx" },
+    ]),
+  ),
   getSpeechModelStatus: vi.fn(() =>
     Promise.resolve({ model: "base", state: "ready" }),
   ),
@@ -171,7 +177,7 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.click(await screen.findByRole("button", { name: START }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("142");
+    await waitFor(() => expect(dialog).toHaveTextContent("142"));
     expect(dialog).toHaveTextContent("huggingface.co");
     fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -179,6 +185,22 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     expect(cancelSpeechModelDownload).not.toHaveBeenCalled();
     expect(startVoiceRecording).not.toHaveBeenCalled();
     expect(getSelectedSpeechModel).toHaveBeenCalled();
+  });
+
+  it("consent dialog for Parakeet names model, size, source repo and license", async () => {
+    vi.mocked(getSelectedSpeechModel).mockResolvedValueOnce("parakeet_v3");
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "parakeet_v3",
+      state: "not_downloaded",
+    } as never);
+    renderChatPanel();
+    await screen.findByPlaceholderText(PLACEHOLDER);
+    fireEvent.click(await screen.findByRole("button", { name: START }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(dialog).toHaveTextContent("Parakeet v3 (NVIDIA)"));
+    expect(dialog).toHaveTextContent("640");
+    expect(dialog).toHaveTextContent("huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx");
+    expect(dialog).toHaveTextContent("CC-BY-4.0, NVIDIA");
   });
 
   it("confirming downloads the model and starts recording only once it is ready", async () => {

@@ -1406,7 +1406,8 @@
       "body": "Puhemalli ({{model}}, noin {{size}} MiB) ladataan kerran osoitteesta {{source}}. Sen jälkeen puheentunnistus toimii kokonaan tällä tietokoneella; ääni ja teksti eivät koskaan poistu siitä.",
       "download": "Lataa",
       "cancel": "Peruuta",
-      "progress": "Latauksen edistyminen"
+      "progress": "Latauksen edistyminen",
+      "parakeetLicense": "Lisenssi: {{license}}"
     },
     "errors": {
       "noDevice": "Mikrofonia ei löytynyt. Liitä mikrofoni ja tarkista syöttölaite järjestelmäasetuksista.",
@@ -1422,7 +1423,8 @@
       "model": "Puhemalli",
       "models": {
         "base": "Base (noin {{size}} MiB, oletus)",
-        "small": "Small (noin {{size}} MiB, tarkempi, hitaampi)"
+        "small": "Small (noin {{size}} MiB, tarkempi, hitaampi)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (noin {{size}} MiB, monikielinen, nopea; tunnistaa kielen automaattisesti)"
       },
       "statusReady": "Ladattu",
       "statusNotDownloaded": "Ei ladattu",
@@ -1430,7 +1432,8 @@
       "download": "Lataa",
       "delete": "Poista malli",
       "language": "Tunnistuskieli",
-      "languageAuto": "Automaattinen"
+      "languageAuto": "Automaattinen",
+      "languageParakeetHint": "Parakeet tunnistaa kielen automaattisesti; tämä asetus koskee Whisper-malleja."
     }
   },
   "connectTab": {

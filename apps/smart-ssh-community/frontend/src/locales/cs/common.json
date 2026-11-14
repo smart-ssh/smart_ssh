@@ -1422,7 +1422,8 @@
       "body": "Jazykový model ({{model}}, asi {{size}} MiB) se jednorázově stáhne z {{source}}. Poté rozpoznávání řeči běží celé na tomto počítači; zvuk ani text jej nikdy neopustí.",
       "download": "Stáhnout",
       "cancel": "Zrušit",
-      "progress": "Průběh stahování"
+      "progress": "Průběh stahování",
+      "parakeetLicense": "Licence: {{license}}"
     },
     "errors": {
       "noDevice": "Nebyl nalezen žádný mikrofon. Připojte mikrofon a zkontrolujte vstupní zařízení v nastavení systému.",
@@ -1438,7 +1439,8 @@
       "model": "Jazykový model",
       "models": {
         "base": "Base (asi {{size}} MiB, výchozí)",
-        "small": "Small (asi {{size}} MiB, přesnější, pomalejší)"
+        "small": "Small (asi {{size}} MiB, přesnější, pomalejší)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (asi {{size}} MiB, vícejazyčný, rychlý; jazyk rozpozná automaticky)"
       },
       "statusReady": "Staženo",
       "statusNotDownloaded": "Nestaženo",
@@ -1446,7 +1448,8 @@
       "download": "Stáhnout",
       "delete": "Smazat model",
       "language": "Jazyk rozpoznávání",
-      "languageAuto": "Automaticky"
+      "languageAuto": "Automaticky",
+      "languageParakeetHint": "Parakeet rozpozná jazyk automaticky; toto nastavení platí pro modely Whisper."
     }
   },
   "connectTab": {

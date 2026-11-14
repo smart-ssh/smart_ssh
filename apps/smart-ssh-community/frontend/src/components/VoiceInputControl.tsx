@@ -1,10 +1,18 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../hooks/useVoiceInput";
 import { isMacLike } from "../lib/platform";
-import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../api/voiceApi";
+import {
+  listSpeechModels,
+  SPEECH_MODEL_PARAKEET,
+  speechModelSizeMib,
+  type SpeechModelInfo,
+} from "../api/voiceApi";
 import { formatElapsed } from "../settings/voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
+
+/** Product name, not translated. */
+const PARAKEET_DISPLAY_NAME = "Parakeet v3 (NVIDIA)";
 
 const IS_MAC = isMacLike();
 
@@ -103,13 +111,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
             </>
           }
         >
-          <p className="text-sm text-fg-muted">
-            {t("voice.consent.body", {
-              model: voice.consent.model,
-              size: SPEECH_MODEL_SIZE_MIB[voice.consent.model],
-              source: SPEECH_MODEL_SOURCE,
-            })}
-          </p>
+          <ConsentText model={voice.consent.model} />
           {voice.consent.progress && (
             <progress
               className="mt-3 w-full"
@@ -130,5 +132,34 @@ function MicIcon() {
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
     </svg>
+  );
+}
+
+/** Model, size and source (and license note for Parakeet) from the backend list. */
+function ConsentText({ model }: { model: string }) {
+  const { t } = useTranslation();
+  const [info, setInfo] = useState<SpeechModelInfo | null>(null);
+  useEffect(() => {
+    let live = true;
+    listSpeechModels()
+      .then((list) => live && setInfo(list.find((m) => m.id === model) ?? null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [model]);
+  if (!info) return null;
+  const parakeet = info.id === SPEECH_MODEL_PARAKEET;
+  return (
+    <>
+      <p className="text-sm text-fg-muted">
+        {t("voice.consent.body", {
+          model: parakeet ? PARAKEET_DISPLAY_NAME : info.id,
+          size: speechModelSizeMib(info),
+          source: parakeet ? `${info.source_host}/${info.source_repo}` : info.source_host,
+        })}
+      </p>
+      {parakeet && <p className="mt-2 text-sm text-fg-muted">{t("voice.consent.parakeetLicense", { license: "CC-BY-4.0, NVIDIA" })}</p>}
+    </>
   );
 }
