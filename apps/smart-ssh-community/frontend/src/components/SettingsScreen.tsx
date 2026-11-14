@@ -103,8 +103,25 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
     subscribeSettingsSections,
     listSettingsSections,
   );
+  // Issue #1311: a section whose `category` matches no built-in category is
+  // not lost; it falls back to its own top-level entry (and a warning).
+  const builtinIds = new Set(builtinCategories.map((c) => c.id));
+  const isTopLevel = (s: { category?: string }) => !s.category || !builtinIds.has(s.category);
+  const unknownCategoryKey = registeredSections
+    .filter((s) => s.category && isTopLevel(s))
+    .map((s) => `${s.id}:${s.category}`)
+    .join("\n");
+  useEffect(() => {
+    if (!unknownCategoryKey) return;
+    for (const entry of unknownCategoryKey.split("\n")) {
+      const [id, category] = entry.split(":");
+      console.warn(
+        `Settings section "${id}" names unknown category "${category}"; showing it as a top-level entry.`,
+      );
+    }
+  }, [unknownCategoryKey]);
   const registeredCategories: NavCategory[] = registeredSections
-    .filter((s) => !s.category)
+    .filter(isTopLevel)
     .map(({ id, label }) => ({
     id,
     label: resolveSectionLabel(label, id, i18n, t),
@@ -220,25 +237,20 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
             {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
             {active?.id === MASTER_PASSWORD_CATEGORY_ID && <MasterPasswordSettings />}
-            {active?.id === DATA_BACKUP_CATEGORY_ID && (
-              <>
-                <BackupSettings />
-                {listSettingsSectionsForCategory(DATA_BACKUP_CATEGORY_ID).map(
-                  ({ id, component: Section }) => (
-                    <div key={id} className="mt-6 min-w-0">
-                      <ErrorBoundary id={`settings-section:${id}`}>
-                        <Section />
-                      </ErrorBoundary>
-                    </div>
-                  ),
-                )}
-              </>
-            )}
+            {active?.id === DATA_BACKUP_CATEGORY_ID && <BackupSettings />}
             {active?.id === VOICE_INPUT_CATEGORY_ID && <VoiceInputSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
+            {active && builtinIds.has(active.id) &&
+              listSettingsSectionsForCategory(active.id).map(({ id, component: Section }) => (
+                <div key={id} className="mt-6 min-w-0">
+                  <ErrorBoundary id={`settings-section:${id}`}>
+                    <Section />
+                  </ErrorBoundary>
+                </div>
+              ))}
             {registeredSections.map(
               ({ id, category, component: Section }) =>
-                !category && active?.id === id && (
+                isTopLevel({ category }) && active?.id === id && (
                   <ErrorBoundary key={id} id={`settings-section:${id}`}>
                     <Section />
                   </ErrorBoundary>
