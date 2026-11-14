@@ -154,6 +154,7 @@ struct Config {
     decoder_layers: usize,
     decoder_attention_heads: usize,
     num_mel_bins: usize,
+    eos_token_id: i64,
     #[serde(default)]
     suppress_tokens: Vec<i64>,
     #[serde(default)]
@@ -220,7 +221,9 @@ impl Tokens {
 }
 
 impl Specials {
-    fn parse(added_tokens_json: &str) -> Option<Self> {
+    /// `eot` is the model's end-of-text id (`eos_token_id`; it lives in
+    /// `vocab.json`, not in the added tokens).
+    fn parse(added_tokens_json: &str, eot: i64) -> Option<Self> {
         let added: HashMap<String, i64> = serde_json::from_str(added_tokens_json).ok()?;
         let id = |name: &str| added.get(name).copied();
         let sot = id("<|startoftranscript|>")?;
@@ -237,7 +240,7 @@ impl Specials {
             .collect();
         languages.sort_by_key(|(_, i)| *i);
         Some(Self {
-            eot: id("<|endoftext|>")?,
+            eot,
             sot,
             transcribe: id("<|transcribe|>")?,
             no_timestamps: id("<|notimestamps|>")?,
@@ -275,7 +278,8 @@ impl Transcriber for WhisperTranscriber {
             |name: &str| std::fs::read_to_string(model.join(name)).map_err(|_| TranscribeError);
         let config: Config = serde_json::from_str(&read(CONFIG)?).map_err(|_| TranscribeError)?;
         let tokens = Tokens::parse(&read(VOCAB)?).ok_or(TranscribeError)?;
-        let specials = Specials::parse(&read(ADDED_TOKENS)?).ok_or(TranscribeError)?;
+        let specials =
+            Specials::parse(&read(ADDED_TOKENS)?, config.eos_token_id).ok_or(TranscribeError)?;
         let env = ort::environment::init()
             .with_telemetry(false)
             .build()
@@ -319,6 +323,20 @@ struct Cache {
     decoder: Vec<(DynValue, DynValue)>,
     /// Cross-attention keys/values, computed once per chunk.
     encoder: Vec<(DynValue, DynValue)>,
+}
+
+/// Greedy decoding can fall into a loop ("im Land oder im Land oder ...").
+/// When the tail is one block repeated four times, keeps a single copy and
+/// returns `true` (stop).
+fn trim_repetition(out: &mut Vec<i64>) -> bool {
+    for k in 1..=out.len() / 4 {
+        let tail = &out[out.len() - k..];
+        if (2..=4).all(|r| &out[out.len() - r * k..out.len() - (r - 1) * k] == tail) {
+            out.truncate(out.len() - 3 * k);
+            return true;
+        }
+    }
+    false
 }
 
 fn argmax(values: &[f32]) -> usize {
@@ -428,6 +446,9 @@ impl WhisperSession {
             }
             logprob_sum += log_prob(&logits, next);
             out.push(next as i64);
+            if trim_repetition(&mut out) {
+                break;
+            }
             let (l, c) = self.decode_step(&mut dec, &hidden, &[next as i64], Some(cache))?;
             logits = l;
             cache = c;
