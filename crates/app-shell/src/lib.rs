@@ -707,6 +707,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             crate::elevated_sftp::install_idle_timer(app.handle());
 
+            // Spec 0108: old whisper.cpp model files are obsolete.
+            speech_models::remove_legacy_files_at_start(app.handle());
+
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
 

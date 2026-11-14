@@ -18,17 +18,16 @@ serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "time"] }
 tracing = { workspace = true }
-whisper-rs = "0.16.0"
+serde_json = { workspace = true }
 cpal = "0.18.2"
 
-# Parakeet runs on ONNX Runtime, statically linked from the prebuilt binaries
+# Parakeet and Whisper run on ONNX Runtime, statically linked from the prebuilt binaries
 # `ort-sys` fetches at build time (never at run time). On Android the prebuilt
 # set is the `nnapi` one (aarch64 and x86_64, the ABIs the APK ships); the
 # execution provider is not used at run time, the CPU provider is.
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "api-22", "download-binaries", "tls-rustls"] }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "net", "time"] }
 

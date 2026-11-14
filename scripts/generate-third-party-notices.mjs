@@ -636,9 +636,15 @@ function renderFontSection(fontLicensePath) {
 }
 
 // Spec 0108: Sprachmodelle werden nicht mitgeliefert, sondern auf
-// Nutzerwunsch geladen; die Namensnennung der CC-BY-4.0-Lizenz steht trotzdem
-// hier, weil die App das Modell verwendet.
+// Nutzerwunsch geladen; die Namensnennung (CC-BY-4.0 bzw. Apache-2.0) steht
+// trotzdem hier, weil die App das Modell verwendet.
 const SPEECH_MODEL_ATTRIBUTION = [
+  "Whisper base and small by OpenAI, Apache-2.0",
+  "https://huggingface.co/openai/whisper-base and https://huggingface.co/openai/whisper-small",
+  "License: https://www.apache.org/licenses/LICENSE-2.0",
+  "ONNX conversions used by the app: https://huggingface.co/onnx-community/whisper-base and",
+  "https://huggingface.co/onnx-community/whisper-small (Apache-2.0; int8 quantised, no other changes by Smart SSH).",
+  "",
   "Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0",
   "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
   "License: https://creativecommons.org/licenses/by/4.0/",

@@ -107,7 +107,7 @@ fn missing_model_files_fail_to_open() {
 }
 
 /// 16 kHz mono WAV, 16-bit PCM or 32-bit float.
-fn read_wav(path: &str) -> Vec<f32> {
+pub(crate) fn read_wav(path: &str) -> Vec<f32> {
     let b = std::fs::read(path).unwrap();
     assert_eq!(&b[..4], b"RIFF");
     let fmt = b.windows(4).position(|w| w == b"fmt ").unwrap() + 8;

@@ -12,9 +12,10 @@ ADR 0086 (keine Inhalte in Standard-Logs).
 
 **1.1** Spracheingabe gehört zur Community-Edition.
 
-**1.2** Die Erkennung läuft lokal, mit Whisper-Modellen im GGML-Format
-(whisper.cpp) oder mit dem Modell Parakeet TDT 0.6B v3 auf ONNX Runtime (nur
-CPU, fest in die App eingebunden; die Laufzeit lädt nichts nach). Es gibt
+**1.2** Die Erkennung läuft lokal, mit den Whisper-Modellen
+(int8-ONNX-Export) oder mit dem Modell Parakeet TDT 0.6B v3, beide auf
+derselben ONNX Runtime (nur CPU, fest in die App eingebunden; die Laufzeit
+lädt nichts nach). Es gibt
 keinen Cloud-Dienst für die Erkennung; Audio und erkannter Text werden nie
 an einen Server geschickt.
 
@@ -23,8 +24,8 @@ Modells (Abschnitt 3). Sie ist in docs/netzwerkverbindungen.md aufgeführt.
 
 ## 2. Modelle
 
-**2.1** Es gibt drei mehrsprachige Modelle: `base` (rund 142 MiB, Vorgabe),
-`small` (rund 466 MiB) und `parakeet_v3` (Parakeet TDT 0.6B v3, int8, rund
+**2.1** Es gibt drei mehrsprachige Modelle: `base` (rund 74 MiB, Vorgabe),
+`small` (rund 239 MiB) und `parakeet_v3` (Parakeet TDT 0.6B v3, int8, rund
 640 MiB; auf allen Plattformen, auch Android). Kann die Engine das Modell
 nicht laden (z. B. zu wenig Arbeitsspeicher, nicht unterstützte CPU), endet
 die Aufnahme mit `speech_transcription_failed`, und die App bleibt
@@ -34,7 +35,7 @@ Gesamtgröße in Bytes sowie Host und Repository der Quelle; er löst keine
 Netzwerkanfrage aus.
 
 **2.1a** Ein Modell kann aus mehreren Dateien bestehen (Parakeet: Encoder,
-Decoder/Joint, Merkmals-Vorverarbeitung, Vokabular; Whisper: eine Datei).
+Decoder/Joint, Merkmals-Vorverarbeitung, Vokabular; Whisper: Encoder, Decoder, Vokabular, zusätzliche Token, Konfiguration).
 Es ist nur „bereit“, wenn jede Datei geprüft wurde.
 
 **2.2** Die Wahl des Modells ist eine Einstellung. Sie bleibt über Neustarts
@@ -56,7 +57,7 @@ keine Hintergrund-Aktualisierung.
 
 **3.2** Quelle ist je Datei eines Modells eine feste URL auf einen
 unveränderlichen Stand eines Repositories auf huggingface.co (kein wandernder
-Branch): `ggerganov/whisper.cpp` für Whisper, `istupakov/parakeet-tdt-0.6b-v3-onnx`
+Branch): `onnx-community/whisper-base` bzw. `onnx-community/whisper-small` für Whisper, `istupakov/parakeet-tdt-0.6b-v3-onnx`
 für Parakeet. Je Datei sind Größe und SHA-256-Prüfsumme fest hinterlegt.
 
 **3.3** Der Download wird in temporäre Dateien im Datenverzeichnis der App
@@ -85,6 +86,14 @@ erneut lädt oder das Modell löscht.
 verschwinden (Dateien anderer Modelle bleiben), der
 Zustand ist „nicht geladen“. Während eines laufenden Downloads ist Löschen
 nicht möglich (erst abbrechen).
+
+**3.4** Whisper-Modelldateien einer früheren Version (`ggml-base.bin`,
+`ggml-small.bin` und ihre temporären `.part`-Reste im Unterordner
+`speech-models`) werden beim ersten Start nach dem Update lokal gelöscht; es
+wird nichts aus diesem Unterordner sonst angefasst und keine Netzwerkanfrage
+ausgelöst. `base` und `small` zeigen danach „nicht geladen“; die nächste
+Nutzung öffnet den Zustimmungsdialog mit der neuen Größe und Quelle. Es gibt
+keinen automatischen Download.
 
 ## 4. Protokollierung
 
@@ -227,6 +236,10 @@ Logs nennen höchstens Dauer und Ergebnis.
 - Audio und erkannter Text verlassen den Rechner nicht.
 
 ## 6a. Lizenzhinweis
+
+Whisper `base` und `small` von OpenAI, Apache-2.0
+(https://huggingface.co/openai/whisper-base, `.../whisper-small`); verwendet
+werden die ONNX-Umwandlungen `onnx-community/whisper-base` und `-small` (int8).
 
 Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0
 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3); verwendet wird die

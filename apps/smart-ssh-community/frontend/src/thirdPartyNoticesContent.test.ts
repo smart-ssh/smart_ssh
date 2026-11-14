@@ -74,6 +74,17 @@ describe("Drittlizenzen: Hinweisdateien (Spec 0099, A1.2)", () => {
 // part of the shipped notices (checked on the generator output, independent
 // of a generated file).
 describe("Drittlizenzen: Sprachmodell-Namensnennung (Spec 0108)", () => {
+  it("nennt Whisper, OpenAI, Apache-2.0 und die ONNX-Quellen", async () => {
+    const { renderSpeechModelSection } = await import(
+      "../../../../scripts/generate-third-party-notices.mjs"
+    );
+    const section = renderSpeechModelSection();
+    expect(section).toContain("Whisper base and small by OpenAI, Apache-2.0");
+    expect(section).toContain("https://huggingface.co/onnx-community/whisper-base");
+    expect(section).toContain("https://huggingface.co/onnx-community/whisper-small");
+    expect(section).not.toContain("whisper.cpp");
+  });
+
   it("nennt Parakeet TDT 0.6B v3, NVIDIA, CC-BY-4.0 und die Quelle", async () => {
     const { renderSpeechModelSection } = await import(
       "../../../../scripts/generate-third-party-notices.mjs"

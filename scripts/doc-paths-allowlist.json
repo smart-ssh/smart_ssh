@@ -151,8 +151,12 @@
   ],
   "docs/netzwerkverbindungen.md": [
     {
-      "token": "ggerganov/whisper.cpp",
-      "reason": "GitHub owner/repository name, not a repository path."
+      "token": "onnx-community/whisper-base",
+      "reason": "Hugging Face owner/repository name, not a repository path."
+    },
+    {
+      "token": "onnx-community/whisper-small",
+      "reason": "Hugging Face owner/repository name, not a repository path."
     },
     {
       "token": "istupakov/parakeet-tdt-0.6b-v3-onnx",
