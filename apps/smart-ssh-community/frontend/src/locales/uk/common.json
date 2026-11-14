@@ -1588,6 +1588,8 @@
     "succeeded": "Готово",
     "cancelled": "Скасовано",
     "failed": "Помилка",
-    "inProgress": "Виконується"
+    "inProgress": "Виконується",
+    "verifying": "Перевірка",
+    "speechModelTitle": "Мовна модель {{name}}"
   }
 }

@@ -2,6 +2,7 @@ import type { TranslationKey } from "../i18nTypes";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode } from "../api/api";
+import { useActivities } from "../hooks/useActivities";
 import {
   cancelSpeechModelDownload,
   deleteSpeechModel,
@@ -32,6 +33,9 @@ const LANGUAGE_CODES = [
   "da", "sv", "no", "fi", "id", "vi", "hi", "ja", "ko", "zh",
 ] as const;
 
+/** Kind of the activity of a speech model download; its key is the model id. */
+const SPEECH_MODEL_ACTIVITY_KIND = "speech-model";
+
 /** Spec 0108 §2, §5.3, §5.4: on/off, model, recognition language. */
 export function VoiceInputSettings() {
   const { t, i18n } = useTranslation();
@@ -41,6 +45,12 @@ export function VoiceInputSettings() {
   const [statuses, setStatuses] = useState<Partial<Record<SpeechModelId, SpeechModelStatus>>>({});
   const [language, setLanguage] = useState("auto");
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+
+  // Issue #1326: a running download is also an activity; a reopened dialog
+  // shows it (even before the status call answers) and never starts a second.
+  const runningDownloads = useActivities().filter(
+    (a) => a.kind === SPEECH_MODEL_ACTIVITY_KIND && a.state === "running",
+  );
 
   const fail = (err: unknown) => setErrorKey(voiceErrorKey(commandErrorCode(err)));
 
@@ -131,7 +141,12 @@ export function VoiceInputSettings() {
         </legend>
         {models.map((info) => {
           const id = info.id;
-          const status = statuses[id];
+          const activity = runningDownloads.find((a) => a.key === id);
+          // The activity wins over a not-yet-loaded status (reopened dialog).
+          const status: SpeechModelStatus | undefined =
+            activity && statuses[id]?.state !== "downloading"
+              ? { state: "downloading", done: activity.done, total: activity.total ?? 0 }
+              : statuses[id];
           const downloading = status?.state === "downloading";
           const ready = status?.state === "ready";
           return (

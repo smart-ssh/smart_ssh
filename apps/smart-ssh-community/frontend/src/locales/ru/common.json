@@ -1588,6 +1588,8 @@
     "succeeded": "Готово",
     "cancelled": "Отменено",
     "failed": "Ошибка",
-    "inProgress": "Выполняется"
+    "inProgress": "Выполняется",
+    "verifying": "Проверка",
+    "speechModelTitle": "Речевая модель {{name}}"
   }
 }

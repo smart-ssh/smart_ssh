@@ -1564,6 +1564,8 @@
     "succeeded": "Xong",
     "cancelled": "Đã hủy",
     "failed": "Thất bại",
-    "inProgress": "Đang thực hiện"
+    "inProgress": "Đang thực hiện",
+    "verifying": "Đang xác minh",
+    "speechModelTitle": "Mô hình giọng nói {{name}}"
   }
 }

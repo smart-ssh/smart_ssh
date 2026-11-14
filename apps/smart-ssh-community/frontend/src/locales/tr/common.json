@@ -1572,6 +1572,8 @@
     "succeeded": "Bitti",
     "cancelled": "İptal edildi",
     "failed": "Başarısız",
-    "inProgress": "Sürüyor"
+    "inProgress": "Sürüyor",
+    "verifying": "Doğrulanıyor",
+    "speechModelTitle": "Konuşma modeli {{name}}"
   }
 }

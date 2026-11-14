@@ -1572,6 +1572,8 @@
     "succeeded": "Valmis",
     "cancelled": "Peruttu",
     "failed": "Epäonnistui",
-    "inProgress": "Käynnissä"
+    "inProgress": "Käynnissä",
+    "verifying": "Tarkistetaan",
+    "speechModelTitle": "Puhemalli {{name}}"
   }
 }

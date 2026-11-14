@@ -256,6 +256,37 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     expect(startVoiceRecording).not.toHaveBeenCalled();
   });
 
+  it("closing the dialog during the download keeps it running; reopening shows it without a second start (issue #1326)", async () => {
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "not_downloaded",
+    } as never);
+    renderChatPanel();
+    await screen.findByPlaceholderText(PLACEHOLDER);
+    fireEvent.click(await screen.findByRole("button", { name: START }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Herunterladen" }),
+    );
+    await waitFor(() => expect(startSpeechModelDownload).toHaveBeenCalledTimes(1));
+    await screen.findByRole("progressbar");
+    // Esc closes the dialog but must not cancel the download.
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(cancelSpeechModelDownload).not.toHaveBeenCalled();
+    // Reopen while the backend reports the running download.
+    vi.mocked(getSpeechModelStatus).mockResolvedValue({
+      model: "base",
+      state: "downloading",
+      done: 5,
+      total: 10,
+    } as never);
+    fireEvent.click(await screen.findByRole("button", { name: START }));
+    const bar = await screen.findByRole("progressbar");
+    expect(bar).toHaveAttribute("value", "5");
+    expect(screen.queryByRole("button", { name: "Herunterladen" })).toBeNull();
+    expect(startSpeechModelDownload).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the translated message for a backend error and returns to idle", async () => {
     vi.mocked(startVoiceRecording).mockRejectedValueOnce({
       code: "speech_permission_denied",

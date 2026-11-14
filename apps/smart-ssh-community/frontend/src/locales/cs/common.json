@@ -1588,6 +1588,8 @@
     "succeeded": "Hotovo",
     "cancelled": "Zrušeno",
     "failed": "Selhalo",
-    "inProgress": "Probíhá"
+    "inProgress": "Probíhá",
+    "verifying": "Ověřování",
+    "speechModelTitle": "Hlasový model {{name}}"
   }
 }

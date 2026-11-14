@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import { listSpeechModels, setSpeechLanguage, setSelectedSpeechModel } from "../api/voiceApi";
 import { VoiceInputSettings } from "./VoiceInputSettings";
+import { cancelSpeechModelDownload, startSpeechModelDownload } from "../api/voiceApi";
+import type { Activity } from "../api/activitiesApi";
+
+let activitiesNow: Activity[] = [];
+vi.mock("../hooks/useActivities", () => ({ useActivities: () => activitiesNow }));
 
 const WHISPER = [
   { id: "base", engine: "whisper", total_size: 147_951_465, source_host: "huggingface.co", source_repo: "ggerganov/whisper.cpp" },
@@ -23,6 +28,8 @@ vi.mock("../api/voiceApi", async (importActual) => ({
   setSelectedSpeechModel: vi.fn(() => Promise.resolve()),
   getSpeechLanguage: vi.fn(() => Promise.resolve("de")),
   setSpeechLanguage: vi.fn(() => Promise.resolve()),
+  startSpeechModelDownload: vi.fn(() => Promise.resolve()),
+  cancelSpeechModelDownload: vi.fn(() => Promise.resolve()),
   getSpeechModelStatus: vi.fn((model: string) => Promise.resolve({ model, state: "not_downloaded" })),
   onSpeechModelStatus: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -81,5 +88,40 @@ describe("VoiceInputSettings models", () => {
     fireEvent.click(screen.getByLabelText(/^Base/));
     await waitFor(() => expect(screen.queryByText(HINT)).toBeNull());
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("de");
+  });
+});
+
+describe("VoiceInputSettings running download (issue #1326)", () => {
+  beforeEach(async () => {
+    selected = "base";
+    await testI18n.changeLanguage("de");
+    vi.mocked(listSpeechModels).mockResolvedValue(WHISPER as never);
+    vi.clearAllMocks();
+    vi.mocked(listSpeechModels).mockResolvedValue(WHISPER as never);
+    activitiesNow = [
+      {
+        id: "a1", kind: "speech-model", key: "base", titleKey: "activities.speechModelTitle",
+        titleParams: { name: "Base" }, state: "running", done: 50, total: 100, statusKey: null,
+        errorCode: null, errorMessage: null, cancellable: true, startedAt: 1, dismissed: false,
+      },
+    ];
+  });
+  afterEach(() => {
+    cleanup();
+    activitiesNow = [];
+  });
+
+  it("shows a running download from the activity store with cancel and no second download", async () => {
+    renderSettings();
+    await screen.findAllByRole("radio");
+    const row = screen.getByLabelText(/^Base/).closest("div") as HTMLElement;
+    expect(within(row).getByText(/50\s*%/)).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Herunterladen" })).toBeNull();
+    // The other model is still offered.
+    const small = screen.getByLabelText(/^Small/).closest("div") as HTMLElement;
+    expect(within(small).getByRole("button", { name: "Herunterladen" })).toBeTruthy();
+    expect(startSpeechModelDownload).not.toHaveBeenCalled();
+    fireEvent.click(within(row).getByRole("button", { name: "Abbrechen" }));
+    await waitFor(() => expect(cancelSpeechModelDownload).toHaveBeenCalledWith("base"));
   });
 });

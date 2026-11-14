@@ -121,6 +121,24 @@ describe("ActivityCenter", () => {
     await waitFor(() => expect(screen.queryByTestId("activity-center-button")).toBeNull());
   });
 
+  it("shows the translated message for a speech model error code (issue #1326)", async () => {
+    renderCenter();
+    await emit(
+      activity({
+        state: "failed",
+        errorCode: "speech_model_hash_mismatch",
+        errorMessage: "speech model download failed",
+        titleKey: "activities.speechModelTitle",
+        titleParams: { name: "Base" },
+      }),
+    );
+    fireEvent.click(await screen.findByTestId("activity-center-button"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Integritätsprüfung/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/download failed/)).toBeNull();
+    expect(within(dialog).getByText(/Sprachmodell Base/)).toBeInTheDocument();
+  });
+
   it("shows a check mark for success and clears it when the popover closes", async () => {
     renderCenter();
     await emit(activity({ state: "succeeded", done: 1000 }));

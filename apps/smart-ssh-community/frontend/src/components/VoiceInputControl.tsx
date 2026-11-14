@@ -97,7 +97,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
         <DialogFrame
           layer="app"
           title={t("voice.consent.title")}
-          onClose={voice.dismissConsent}
+          onClose={voice.closeConsent}
           actions={
             <>
               <Button variant="secondary" onClick={voice.dismissConsent}>

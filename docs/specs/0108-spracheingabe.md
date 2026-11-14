@@ -87,6 +87,17 @@ verschwinden (Dateien anderer Modelle bleiben), der
 Zustand ist „nicht geladen“. Während eines laufenden Downloads ist Löschen
 nicht möglich (erst abbrechen).
 
+**3.8** Jeder Download eines Sprachmodells (auch Parakeet) erscheint als
+Aktivität „Sprachmodell <Name>“ im Aktivitätszentrum (Spec 0116) mit
+Fortschritt in Bytes, dem Status „Verifying“ während der Prüfsummenprüfung
+und einer Abbrechen-Schaltfläche. Erfolg, Fehler und Abbruch beenden die
+Aktivität entsprechend; bei einem Fehler zeigt die Zeile die übersetzte
+Meldung zum Fehlerschlüssel. Der Download läuft weiter, wenn die
+Spracheingabe-Einstellungen oder der Zustimmungsdialog geschlossen werden;
+beide zeigen beim erneuten Öffnen den laufenden Download mit seinem
+Fortschritt und starten keinen zweiten. Abbrechen in der Aktivität und in den
+Einstellungen wirken gleich (3.5).
+
 **3.4** Whisper-Modelldateien einer früheren Version (`ggml-base.bin`,
 `ggml-small.bin` und ihre temporären `.part`-Reste im Unterordner
 `speech-models`) werden beim ersten Start nach dem Update lokal gelöscht; es
@@ -130,7 +141,10 @@ Einstellungen ausschalten; dann ist der Knopf ausgeblendet.
 
 **5.5** Ist noch kein Modell geladen, öffnet der erste Klick einen
 Zustimmungsdialog mit Modellgröße und Quelle. Erst nach Zustimmung beginnt
-der Download.
+der Download. Schließt der Nutzer den Dialog (Kreuz, Escape) während des
+Downloads, läuft dieser weiter (Aktivitätszentrum, 3.8); die Schaltfläche
+„Abbrechen“ bricht ihn ab. Ein erneuter Klick während des Downloads zeigt den
+Dialog wieder mit dem Fortschritt, statt erneut zu laden.
 
 **5.6** Audio liegt nur im Arbeitsspeicher, wird nie auf die Platte
 geschrieben und nie protokolliert. Auch der erkannte Text steht in keinem Log;

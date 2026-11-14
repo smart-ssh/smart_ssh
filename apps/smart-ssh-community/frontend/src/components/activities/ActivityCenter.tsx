@@ -5,6 +5,7 @@ import type { TranslateFn, TranslationKey } from "../../i18nTypes";
 import { cancelActivity, dismissActivity, type Activity } from "../../api/activitiesApi";
 import { useActivities } from "../../hooks/useActivities";
 import { formatBytes } from "../../lib/format";
+import { voiceErrorKey } from "../../settings/voiceInputSettings";
 import { Button } from "../ui";
 
 const RING_R = 9;
@@ -69,6 +70,10 @@ function ActivityRow({ activity }: { activity: Activity }) {
         ? t("activities.cancelled")
         : null;
 
+  // Speech model errors carry a code the voice texts translate (issue #1326).
+  const errorText = a.errorCode?.startsWith("speech_model_")
+    ? t(voiceErrorKey(a.errorCode))
+    : a.errorMessage;
   return (
     <li className="border-b border-surface-raised px-3 py-2 last:border-b-0" aria-label={title}>
       <div className="flex items-start justify-between gap-2">
@@ -122,7 +127,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
       {a.state === "failed" && (
         <p className="mt-1 break-words text-danger-fg-soft">
           {t("activities.failed")}
-          {a.errorMessage ? `: ${a.errorMessage}` : ""}
+          {errorText ? `: ${errorText}` : ""}
         </p>
       )}
     </li>

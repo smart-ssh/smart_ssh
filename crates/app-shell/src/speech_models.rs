@@ -1,7 +1,7 @@
 //! Voice input, model management (Spec 0108): thin Tauri layer over the
 //! `speech` crate. Download only on an explicit command, never at start-up.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
@@ -9,7 +9,9 @@ use tauri_plugin_store::StoreExt;
 use app_logic::error::{CommandError, CommandResult};
 use speech::{ModelManager, ModelManagerError, ModelStatus, SpeechModel};
 
+use crate::activities::{ActivityHandle, ActivityRegistry, ActivitySpec};
 use crate::settings_store;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 const SELECTED_MODEL_KEY: &str = "speechModel";
 /// Event with `{ model, state, done?, total?, key? }`, emitted on every
@@ -125,19 +127,113 @@ pub fn get_speech_model_status(app: AppHandle, model: String) -> CommandResult<s
     Ok(status_payload(model, &manager(&app)?.status(model)))
 }
 
-/// Starts the download. Only ever called from an explicit user action.
+/// Activity kind of a model download (Spec 0116); the key is the model id.
+pub(crate) const ACTIVITY_KIND: &str = "speech-model";
+
+fn model_display_name(model: SpeechModel) -> &'static str {
+    match model {
+        SpeechModel::Base => "Base",
+        SpeechModel::Small => "Small",
+        SpeechModel::ParakeetV3 => "Parakeet v3",
+    }
+}
+
+/// Drives the activity of one download from the speech crate's status
+/// callback (issue #1326). The handle is taken on the final status.
+struct DownloadActivity {
+    registry: Arc<ActivityRegistry>,
+    handle: Mutex<Option<ActivityHandle>>,
+}
+
+impl DownloadActivity {
+    fn on_status(&self, status: &ModelStatus) {
+        let mut slot = lock_tolerating_poison(&self.handle);
+        match status {
+            ModelStatus::Downloading { done, total } => {
+                if let Some(h) = slot.as_ref() {
+                    h.progress(*done, Some(*total));
+                    // All bytes are in; the hash check of the last file follows.
+                    if *total > 0 && done >= total {
+                        h.status(Some("activities.verifying"));
+                    }
+                }
+            }
+            ModelStatus::Ready => {
+                if let Some(h) = slot.take() {
+                    h.succeed();
+                }
+            }
+            ModelStatus::Error { key } => {
+                if let Some(h) = slot.take() {
+                    h.fail(key, "speech model download failed");
+                }
+            }
+            ModelStatus::NotDownloaded => {
+                if let Some(h) = slot.take() {
+                    // Cancelled from the settings: end the row as cancelled.
+                    // Already cancelled from the activity center: the call is
+                    // refused (the row is no longer running), which is fine.
+                    let _ = self.registry.cancel(h.id());
+                }
+            }
+        }
+    }
+}
+
+/// Starts the download and its activity. Only ever called from an explicit
+/// user action.
+fn start_download_with_activity<R: Runtime>(
+    app: &AppHandle<R>,
+    model: SpeechModel,
+) -> CommandResult<()> {
+    let manager = manager(app)?;
+    if matches!(manager.status(model), ModelStatus::Downloading { .. }) {
+        return Err(manager_error(ModelManagerError::AlreadyDownloading));
+    }
+    let registry = crate::activities::activities(app);
+    let handle = registry.start(ActivitySpec {
+        kind: ACTIVITY_KIND.into(),
+        key: model.id().into(),
+        title_key: "activities.speechModelTitle".into(),
+        title_params: [("name".to_owned(), model_display_name(model).to_owned())].into(),
+        cancellable: true,
+        total: None,
+    });
+    let id = handle.id().to_owned();
+    {
+        let manager = Arc::clone(&manager);
+        handle.on_cancel(move || {
+            manager.cancel_download(model);
+        });
+    }
+    let activity = Arc::new(DownloadActivity {
+        registry: Arc::clone(&registry),
+        handle: Mutex::new(Some(handle)),
+    });
+    let emit_app = app.clone();
+    let cb_activity = Arc::clone(&activity);
+    let result = manager.start_download(
+        model,
+        Arc::new(move |m, status| {
+            cb_activity.on_status(&status);
+            let _ = emit_app.emit(STATUS_EVENT, status_payload(m, &status));
+        }),
+    );
+    if let Err(err) = result {
+        // No download started (e.g. one already runs): remove the new row so
+        // the running download's row stays the only one.
+        if let Some(h) = lock_tolerating_poison(&activity.handle).take() {
+            h.succeed();
+        }
+        let _ = registry.dismiss(&id);
+        return Err(manager_error(err));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn start_speech_model_download(app: AppHandle, model: String) -> CommandResult<()> {
-    let model = parse_model(&model)?;
-    let emit_app = app.clone();
-    manager(&app)?
-        .start_download(
-            model,
-            Arc::new(move |m, status| {
-                let _ = emit_app.emit(STATUS_EVENT, status_payload(m, &status));
-            }),
-        )
-        .map_err(manager_error)
+    start_download_with_activity(&app, parse_model(&model)?)
 }
 
 #[tauri::command]
@@ -229,6 +325,88 @@ mod tests {
         assert_eq!(
             status_payload(SpeechModel::Base, &ModelStatus::NotDownloaded)["state"],
             "not_downloaded"
+        );
+    }
+
+    fn activity_fixture(model: SpeechModel) -> (DownloadActivity, Arc<ActivityRegistry>) {
+        let registry = ActivityRegistry::new(Arc::new(app_logic::events::TestEmitter::default()));
+        let handle = registry.start(ActivitySpec {
+            kind: ACTIVITY_KIND.into(),
+            key: model.id().into(),
+            title_key: "activities.speechModelTitle".into(),
+            cancellable: true,
+            ..Default::default()
+        });
+        let activity = DownloadActivity {
+            registry: Arc::clone(&registry),
+            handle: Mutex::new(Some(handle)),
+        };
+        (activity, registry)
+    }
+
+    /// Issue #1326: progress, "Verifying" at full size, success.
+    #[test]
+    fn activity_follows_progress_verifying_and_success() {
+        let (a, reg) = activity_fixture(SpeechModel::Small);
+        a.on_status(&ModelStatus::Downloading {
+            done: 10,
+            total: 100,
+        });
+        let row = reg.list().remove(0);
+        assert_eq!((row.done, row.total), (10, Some(100)));
+        assert_eq!(row.status_key, None);
+        a.on_status(&ModelStatus::Downloading {
+            done: 100,
+            total: 100,
+        });
+        assert_eq!(
+            reg.list()[0].status_key.as_deref(),
+            Some("activities.verifying")
+        );
+        a.on_status(&ModelStatus::Ready);
+        assert_eq!(
+            reg.list()[0].state,
+            app_logic::activities::ActivityState::Succeeded
+        );
+    }
+
+    /// A hash mismatch / network error ends the activity as failed with the code.
+    #[test]
+    fn activity_fails_with_the_error_code() {
+        let (a, reg) = activity_fixture(SpeechModel::Base);
+        a.on_status(&ModelStatus::Error {
+            key: "speech_model_hash_mismatch",
+        });
+        let row = reg.list().remove(0);
+        assert_eq!(row.state, app_logic::activities::ActivityState::Failed);
+        assert_eq!(
+            row.error_code.as_deref(),
+            Some("speech_model_hash_mismatch")
+        );
+    }
+
+    /// Cancel from the settings (final `NotDownloaded`) ends the row as cancelled.
+    #[test]
+    fn activity_is_cancelled_when_the_download_reports_not_downloaded() {
+        let (a, reg) = activity_fixture(SpeechModel::ParakeetV3);
+        a.on_status(&ModelStatus::NotDownloaded);
+        assert_eq!(
+            reg.list()[0].state,
+            app_logic::activities::ActivityState::Cancelled
+        );
+    }
+
+    /// Cancel from the activity center stops the download through the manager
+    /// and the later `NotDownloaded` does not disturb the cancelled row.
+    #[test]
+    fn activity_center_cancel_then_not_downloaded_is_stable() {
+        let (a, reg) = activity_fixture(SpeechModel::Base);
+        let id = reg.list()[0].id.clone();
+        reg.cancel(&id).unwrap();
+        a.on_status(&ModelStatus::NotDownloaded);
+        assert_eq!(
+            reg.list()[0].state,
+            app_logic::activities::ActivityState::Cancelled
         );
     }
 }

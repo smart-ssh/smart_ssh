@@ -1572,6 +1572,8 @@
     "succeeded": "पूर्ण",
     "cancelled": "रद्द किया गया",
     "failed": "विफल",
-    "inProgress": "प्रगति पर"
+    "inProgress": "प्रगति पर",
+    "verifying": "सत्यापित हो रहा है",
+    "speechModelTitle": "वाक् मॉडल {{name}}"
   }
 }
