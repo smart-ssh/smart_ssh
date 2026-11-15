@@ -19,7 +19,7 @@ export type { Entitlements, Feature, Tier, FeatureLockedPayload } from "./extens
 export { showToast } from "./buses/toastBus";
 export type { ToastInput } from "./buses/toastBus";
 
-export { startActivity } from "./lib/startActivity";
+export { adoptActivity, startActivity } from "./lib/startActivity";
 export type { ActivityHandle, StartActivitySpec } from "./lib/startActivity";
 export { useActivities, useRunningActivity, useIsActivityRunning } from "./hooks/useActivities";
 export type { Activity, ActivityState, InterruptedActivity } from "./api/activitiesApi";

@@ -5,6 +5,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   cancelActivity,
   finishActivityCommand,
+  listActivities,
   startActivityCommand,
   updateActivityCommand,
   type ActivitySpec,
@@ -55,6 +56,21 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
     resume: spec.resume ?? null,
   };
   const id = await startActivityCommand(full);
+  return makeHandle(id);
+}
+
+/** Re-attaches to the oldest running activity with this kind and key (e.g. after
+ * a webview reload) and returns an owner handle for it, or `null` if none runs.
+ * If the user cancelled it in the meantime (no owner), it is no longer running
+ * and `null` is returned. */
+export async function adoptActivity(kind: string, key = ""): Promise<ActivityHandle | null> {
+  const match = (await listActivities())
+    .filter((a) => a.state === "running" && a.kind === kind && a.key === key)
+    .sort((a, b) => a.startedAt - b.startedAt)[0];
+  return match ? makeHandle(match.id) : null;
+}
+
+function makeHandle(id: string): ActivityHandle {
   let cancelCallback: (() => void) | null = null;
   let done = false;
   let unlisten: UnlistenFn | null = null;
