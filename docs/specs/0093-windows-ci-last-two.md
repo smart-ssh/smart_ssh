@@ -1,6 +1,7 @@
 # Spec 0093 — Windows-CI grün (aufgelöst)
 
 Status: aufgelöst
+Zweck: Aufgabenliste für die letzten roten und wackeligen Tests unter Windows; die bleibenden Regeln stehen in ADR 0122.
 Nachfolger: Spec 0090 (§2, A9), ADR 0122 (R1, R4, R5, R10–R12), ADR 0085
 
 Eine Aufgabenliste für die letzten roten und wackeligen Tests unter
