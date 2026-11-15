@@ -142,6 +142,7 @@ describe("startActivity", () => {
 
   it("cancel() surfaces the refusal for a non-cancellable activity and the handle stays usable", async () => {
     api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    api.list.mockResolvedValue([{ id: "id1", state: "running" }]);
     const h = await startActivity({ ...spec, cancellable: false });
     await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
     await h.succeed();
@@ -183,6 +184,31 @@ describe("startActivity", () => {
     expect(api.update).not.toHaveBeenCalled();
     expect(api.finish).not.toHaveBeenCalled();
     expect(api.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the handle done when the activity is gone from the list (cancelled and dismissed)", async () => {
+    api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    api.list.mockResolvedValue([]);
+    const h = await startActivity(spec);
+    const onCancel = vi.fn();
+    h.onCancel(onCancel);
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    api.handler?.({ id: "id1", state: "cancelled" } as Activity);
+    await h.succeed();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(api.finish).not.toHaveBeenCalled();
+  });
+
+  it("keeps the handle done when the terminal event arrives during a failing re-query", async () => {
+    api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    api.list.mockImplementation(async () => {
+      api.handler?.({ id: "id1", state: "cancelled" } as Activity);
+      throw new Error("boom");
+    });
+    const h = await startActivity(spec);
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    await h.succeed();
+    expect(api.finish).not.toHaveBeenCalled();
   });
 
   it("resets done after a refusal for a still-running activity (re-query says running)", async () => {
