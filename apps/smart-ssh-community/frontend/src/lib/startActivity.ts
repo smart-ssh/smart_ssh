@@ -59,6 +59,7 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
   // Listen before the command: a cancel arriving before it returns is buffered.
   const watcher = watchActivityEvents();
   try {
+    await watcher.ready;
     return makeHandle(await startActivityCommand(full), watcher);
   } catch (err) {
     watcher.stop();
@@ -74,6 +75,7 @@ export async function adoptActivity(kind: string, key = ""): Promise<ActivityHan
   // Listen before the list call: a cancel arriving after the read is buffered.
   const watcher = watchActivityEvents();
   try {
+    await watcher.ready;
     const match = (await listActivities())
       .filter((a) => a.state === "running" && a.kind === kind && a.key === key)
       .sort((a, b) => a.startedAt - b.startedAt)[0];
@@ -96,7 +98,7 @@ function watchActivityEvents() {
   const buffer: Activity[] = [];
   let stopped = false;
   let unlisten: UnlistenFn | null = null;
-  onActivityChanged((a) => {
+  const ready = onActivityChanged((a) => {
     if (handler) handler(a);
     else buffer.push(a);
   })
@@ -106,6 +108,8 @@ function watchActivityEvents() {
     })
     .catch((err) => console.warn("activity-changed listener failed:", err));
   return {
+    /** Resolves once the registration finished (or failed, which only warns). */
+    ready,
     bind(h: (a: Activity) => void) {
       handler = h;
       for (const a of buffer.splice(0)) h(a);

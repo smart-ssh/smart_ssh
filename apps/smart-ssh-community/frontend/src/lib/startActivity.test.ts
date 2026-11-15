@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   finish: vi.fn(),
   cancel: vi.fn(),
   handler: null as null | ((a: Activity) => void),
+  gate: null as null | Promise<void>,
 }));
 
 vi.mock("../api/activitiesApi", () => ({
@@ -21,7 +22,7 @@ vi.mock("../api/activitiesApi", () => ({
 vi.mock("../api/events", () => ({
   onActivityChanged: (h: (a: Activity) => void) => {
     api.handler = h;
-    return Promise.resolve(() => {
+    return (api.gate ?? Promise.resolve()).then(() => () => {
       api.handler = null;
     });
   },
@@ -37,6 +38,23 @@ describe("startActivity", () => {
     api.finish.mockReset().mockResolvedValue(null);
     api.cancel.mockReset().mockResolvedValue(null);
     api.handler = null;
+    api.gate = null;
+  });
+
+  it("does not call start or list before the listener registration resolved", async () => {
+    let open!: () => void;
+    api.gate = new Promise<void>((r) => (open = r));
+    const p1 = startActivity(spec);
+    const p2 = adoptActivity("k", "m");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(api.start).not.toHaveBeenCalled();
+    expect(api.list).not.toHaveBeenCalled();
+    open();
+    await p1;
+    await p2;
+    expect(api.start).toHaveBeenCalledTimes(1);
+    expect(api.list).toHaveBeenCalledTimes(1);
   });
 
   it("forwards a resume spec to the backend (issue #1327)", async () => {
