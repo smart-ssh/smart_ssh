@@ -8,6 +8,7 @@ import {
   listActivities,
   startActivityCommand,
   updateActivityCommand,
+  type Activity,
   type ActivitySpec,
 } from "../api/activitiesApi";
 import { onActivityChanged } from "../api/events";
@@ -55,8 +56,14 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
     total: spec.total ?? null,
     resume: spec.resume ?? null,
   };
-  const id = await startActivityCommand(full);
-  return makeHandle(id);
+  // Listen before the command: a cancel arriving before it returns is buffered.
+  const watcher = watchActivityEvents();
+  try {
+    return makeHandle(await startActivityCommand(full), watcher);
+  } catch (err) {
+    watcher.stop();
+    throw err;
+  }
 }
 
 /** Re-attaches to the oldest running activity with this kind and key (e.g. after
@@ -64,40 +71,72 @@ export async function startActivity(spec: StartActivitySpec): Promise<ActivityHa
  * If the user cancelled it in the meantime (no owner), it is no longer running
  * and `null` is returned. */
 export async function adoptActivity(kind: string, key = ""): Promise<ActivityHandle | null> {
-  const match = (await listActivities())
-    .filter((a) => a.state === "running" && a.kind === kind && a.key === key)
-    .sort((a, b) => a.startedAt - b.startedAt)[0];
-  return match ? makeHandle(match.id) : null;
+  // Listen before the list call: a cancel arriving after the read is buffered.
+  const watcher = watchActivityEvents();
+  try {
+    const match = (await listActivities())
+      .filter((a) => a.state === "running" && a.kind === kind && a.key === key)
+      .sort((a, b) => a.startedAt - b.startedAt)[0];
+    if (!match) {
+      watcher.stop();
+      return null;
+    }
+    return makeHandle(match.id, watcher);
+  } catch (err) {
+    watcher.stop();
+    throw err;
+  }
 }
 
-function makeHandle(id: string): ActivityHandle {
-  let cancelCallback: (() => void) | null = null;
-  let done = false;
+/** Subscribes to `activity-changed` right away and buffers the events until
+ * `bind` supplies the handler (the id is not known before the start/list call
+ * returns); buffered events are then replayed in order. */
+function watchActivityEvents() {
+  let handler: ((a: Activity) => void) | null = null;
+  const buffer: Activity[] = [];
+  let stopped = false;
   let unlisten: UnlistenFn | null = null;
-  let released = false;
+  onActivityChanged((a) => {
+    if (handler) handler(a);
+    else buffer.push(a);
+  })
+    .then((un) => {
+      if (stopped) un();
+      else unlisten = un;
+    })
+    .catch((err) => console.warn("activity-changed listener failed:", err));
+  return {
+    bind(h: (a: Activity) => void) {
+      handler = h;
+      for (const a of buffer.splice(0)) h(a);
+    },
+    stop() {
+      stopped = true;
+      unlisten?.();
+      unlisten = null;
+    },
+  };
+}
+
+function makeHandle(id: string, watcher: ReturnType<typeof watchActivityEvents>): ActivityHandle {
+  let cancelCallback: (() => void) | null = null;
+  let cancelPending = false; // cancelled before `onCancel` was registered
+  let done = false;
   let terminalSeen = false;
 
-  const release = () => {
-    released = true;
-    unlisten?.();
-    unlisten = null;
-  };
-  onActivityChanged((a) => {
+  const release = () => watcher.stop();
+  watcher.bind((a) => {
     if (a.id !== id) return;
     if (a.state === "cancelled" && !done) {
       done = true;
-      cancelCallback?.();
+      if (cancelCallback) cancelCallback();
+      else cancelPending = true;
     }
     if (a.state !== "running") {
       terminalSeen = true;
       release();
     }
-  })
-    .then((un) => {
-      if (released) un();
-      else unlisten = un;
-    })
-    .catch((err) => console.warn("activity-changed listener failed:", err));
+  });
 
   return {
     id,
@@ -110,6 +149,11 @@ function makeHandle(id: string): ActivityHandle {
       await updateActivityCommand(id, { done: null, total: null, statusKey: key ?? "" });
     },
     onCancel: (cb) => {
+      if (cancelPending) {
+        cancelPending = false;
+        cb();
+        return;
+      }
       cancelCallback = cb;
     },
     succeed: async () => {
