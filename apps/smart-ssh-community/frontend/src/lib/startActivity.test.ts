@@ -147,6 +147,52 @@ describe("startActivity", () => {
     await h.succeed();
     expect(api.finish).toHaveBeenCalledWith("id1", { outcome: "succeeded" });
   });
+
+  it("keeps the handle done when the center cancelled and the rejection arrives before the terminal event", async () => {
+    api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    api.list.mockResolvedValue([{ id: "id1", state: "cancelled" }]);
+    const h = await startActivity(spec);
+    const onCancel = vi.fn();
+    h.onCancel(onCancel);
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    api.handler?.({ id: "id1", state: "cancelled" } as Activity);
+    await h.progress(1);
+    await h.status("x");
+    await h.succeed();
+    await h.fail("c", "m");
+    await h.cancel();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(api.update).not.toHaveBeenCalled();
+    expect(api.finish).not.toHaveBeenCalled();
+    expect(api.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the handle done when the terminal event arrives before the rejection", async () => {
+    const h = await startActivity(spec);
+    const onCancel = vi.fn();
+    h.onCancel(onCancel);
+    api.cancel.mockImplementation(async () => {
+      api.handler?.({ id: "id1", state: "cancelled" } as Activity);
+      throw new Error("activity_not_cancellable");
+    });
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    await h.progress(1);
+    await h.succeed();
+    await h.cancel();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(api.update).not.toHaveBeenCalled();
+    expect(api.finish).not.toHaveBeenCalled();
+    expect(api.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets done after a refusal for a still-running activity (re-query says running)", async () => {
+    api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    api.list.mockResolvedValue([{ id: "id1", state: "running" }]);
+    const h = await startActivity(spec);
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    await h.succeed();
+    expect(api.finish).toHaveBeenCalledWith("id1", { outcome: "succeeded" });
+  });
 });
 
 const act = (o: Partial<Activity>): Activity => ({

@@ -122,6 +122,17 @@ function watchActivityEvents() {
   };
 }
 
+/** Whether the backend lists the activity in a state other than running. A
+ * failed query counts as "not ended" (the handle then stays usable). */
+async function hasEnded(id: string): Promise<boolean> {
+  try {
+    const a = (await listActivities()).find((x) => x.id === id);
+    return !!a && a.state !== "running";
+  } catch {
+    return false;
+  }
+}
+
 function makeHandle(id: string, watcher: ReturnType<typeof watchActivityEvents>): ActivityHandle {
   let cancelCallback: (() => void) | null = null;
   let cancelPending = false; // cancelled before `onCancel` was registered
@@ -180,7 +191,8 @@ function makeHandle(id: string, watcher: ReturnType<typeof watchActivityEvents>)
       } catch (err) {
         // Refused (e.g. not cancellable): still running, unless the activity
         // already ended meanwhile (e.g. cancelled from the activity center).
-        if (!terminalSeen) done = false;
+        // The terminal event may not have arrived yet, so ask the backend.
+        if (!terminalSeen && !(await hasEnded(id))) done = false;
         throw err;
       }
       release();
