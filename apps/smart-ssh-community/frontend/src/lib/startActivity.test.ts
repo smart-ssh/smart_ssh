@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   update: vi.fn(),
   finish: vi.fn(),
+  cancel: vi.fn(),
   handler: null as null | ((a: Activity) => void),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("../api/activitiesApi", () => ({
   listActivities: () => api.list(),
   startActivityCommand: (s: unknown) => api.start(s),
   updateActivityCommand: (...a: unknown[]) => api.update(...a),
+  cancelActivity: (id: string) => api.cancel(id),
   finishActivityCommand: (...a: unknown[]) => api.finish(...a),
 }));
 vi.mock("../api/events", () => ({
@@ -33,6 +35,7 @@ describe("startActivity", () => {
     api.start.mockReset().mockResolvedValue("id1");
     api.update.mockReset().mockResolvedValue(null);
     api.finish.mockReset().mockResolvedValue(null);
+    api.cancel.mockReset().mockResolvedValue(null);
     api.handler = null;
   });
 
@@ -85,6 +88,46 @@ describe("startActivity", () => {
     await h.progress(1, 2);
     expect(api.finish).not.toHaveBeenCalled();
     expect(api.update).not.toHaveBeenCalled();
+  });
+
+  it("cancel() ends the activity as cancelled without onCancel, then ignores later calls", async () => {
+    const h = await startActivity(spec);
+    const cb = vi.fn();
+    h.onCancel(cb);
+    await vi.waitFor(() => expect(api.handler).not.toBeNull());
+    api.cancel.mockImplementation(async () => {
+      api.handler?.({ id: "id1", state: "cancelled" } as Activity);
+    });
+    await h.cancel();
+    expect(api.cancel).toHaveBeenCalledWith("id1");
+    expect(api.finish).not.toHaveBeenCalled();
+    expect(cb).not.toHaveBeenCalled();
+    await h.progress(1);
+    await h.status("x");
+    await h.succeed();
+    await h.fail("E", "m");
+    await h.cancel();
+    expect(api.update).not.toHaveBeenCalled();
+    expect(api.finish).not.toHaveBeenCalled();
+    expect(api.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancel() after succeed() or fail() does nothing", async () => {
+    const h = await startActivity(spec);
+    await h.succeed();
+    await h.cancel();
+    const h2 = await startActivity(spec);
+    await h2.fail("E", "m");
+    await h2.cancel();
+    expect(api.cancel).not.toHaveBeenCalled();
+  });
+
+  it("cancel() surfaces the refusal for a non-cancellable activity and the handle stays usable", async () => {
+    api.cancel.mockRejectedValue(new Error("activity_not_cancellable"));
+    const h = await startActivity({ ...spec, cancellable: false });
+    await expect(h.cancel()).rejects.toThrow("activity_not_cancellable");
+    await h.succeed();
+    expect(api.finish).toHaveBeenCalledWith("id1", { outcome: "succeeded" });
   });
 });
 
