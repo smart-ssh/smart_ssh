@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   finish: vi.fn(),
   cancel: vi.fn(),
   handler: null as null | ((a: Activity) => void),
+  gate: null as null | Promise<void>,
 }));
 
 vi.mock("../api/activitiesApi", () => ({
@@ -21,7 +22,7 @@ vi.mock("../api/activitiesApi", () => ({
 vi.mock("../api/events", () => ({
   onActivityChanged: (h: (a: Activity) => void) => {
     api.handler = h;
-    return Promise.resolve(() => {
+    return (api.gate ?? Promise.resolve()).then(() => () => {
       api.handler = null;
     });
   },
@@ -37,6 +38,23 @@ describe("startActivity", () => {
     api.finish.mockReset().mockResolvedValue(null);
     api.cancel.mockReset().mockResolvedValue(null);
     api.handler = null;
+    api.gate = null;
+  });
+
+  it("does not call start or list before the listener registration resolved", async () => {
+    let open!: () => void;
+    api.gate = new Promise<void>((r) => (open = r));
+    const p1 = startActivity(spec);
+    const p2 = adoptActivity("k", "m");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(api.start).not.toHaveBeenCalled();
+    expect(api.list).not.toHaveBeenCalled();
+    open();
+    await p1;
+    await p2;
+    expect(api.start).toHaveBeenCalledTimes(1);
+    expect(api.list).toHaveBeenCalledTimes(1);
   });
 
   it("forwards a resume spec to the backend (issue #1327)", async () => {
@@ -217,5 +235,63 @@ describe("adoptActivity (issue #1339)", () => {
       act({ id: "mid", startedAt: 200 }),
     ]);
     expect((await adoptActivity("k", "m"))?.id).toBe("old");
+  });
+
+  it("runs onCancel once for a cancel delivered between list and listener registration (issue #1343)", async () => {
+    api.list.mockImplementation(async () => {
+      const list = [act({ id: "x1" })];
+      // The cancel arrives right after the read, before `adoptActivity` returns.
+      queueMicrotask(() => api.handler?.(act({ id: "x1", state: "cancelled" })));
+      return list;
+    });
+    const h = await adoptActivity("k", "m");
+    const cb = vi.fn();
+    h!.onCancel(cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    await h!.progress(1, 2);
+    expect(api.update).not.toHaveBeenCalled();
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("startActivity race (issue #1343)", () => {
+  beforeEach(() => {
+    api.list.mockReset().mockResolvedValue([]);
+    api.start.mockReset();
+    api.update.mockReset().mockResolvedValue(null);
+    api.finish.mockReset().mockResolvedValue(null);
+    api.handler = null;
+  });
+
+  it("runs onCancel once for a cancel delivered before activity_start returns", async () => {
+    api.start.mockImplementation(async () => {
+      api.handler?.(act({ id: "id1", state: "cancelled" }));
+      return "id1";
+    });
+    const h = await startActivity(spec);
+    const cb = vi.fn();
+    h.onCancel(cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    await h.progress(1);
+    expect(api.update).not.toHaveBeenCalled();
+  });
+
+  it("does not call onCancel when the activity ended as succeeded or failed in the gap", async () => {
+    for (const state of ["succeeded", "failed"] as const) {
+      api.start.mockImplementation(async () => {
+        api.handler?.(act({ id: "id1", state }));
+        return "id1";
+      });
+      const h = await startActivity(spec);
+      const cb = vi.fn();
+      h.onCancel(cb);
+      expect(cb).not.toHaveBeenCalled();
+    }
+  });
+
+  it("stops listening when activity_start fails", async () => {
+    api.start.mockRejectedValue(new Error("boom"));
+    await expect(startActivity(spec)).rejects.toThrow("boom");
+    await vi.waitFor(() => expect(api.handler).toBeNull());
   });
 });
