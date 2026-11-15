@@ -1,6 +1,7 @@
 # Spec 0091 — Tests grün unter Windows (aufgelöst)
 
 Status: aufgelöst
+Zweck: Aufgabenliste, die Tests unter Windows grün zu bekommen; das Produktverhalten dazu steht in Spec 0075.
 Nachfolger: Spec 0075 (§3.1.4, `Include`), Spec 0090 (§2, A9), ADR 0122
 (R2, R3)
 

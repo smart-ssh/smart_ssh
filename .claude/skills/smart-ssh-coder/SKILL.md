@@ -106,10 +106,4 @@ sagst du ausdrücklich.
 
 ## Was bei diesem Produkt zählt
 
-- Kernversprechen: volle Transparenz und Kontrolle über jedes Kommando, das
-  einen Server erreicht. Die KI ist Copilot, nie autonomer Akteur.
-- Sicherheit vor Bequemlichkeit — aber keine Bevormundung bei manuellen
-  Aktionen (Dateibrowser, Terminal sind vertrauenswürdige Nutzeraktionen).
-- Ehrliche Hinweise statt Verharmlosung.
-- Wird ein Befehl per Berechtigung abgelehnt (z. B. `rm`), ihn zum
-  Selbst-Ausführen anbieten, nicht umgehen.
+Steht in `AGENTS.md`, Abschnitt „Product principles". Dort gibt es genau eine Quelle.

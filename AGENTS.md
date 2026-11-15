@@ -12,6 +12,18 @@ contributor and every coding agent. Issues and this file define the work.
 The agent and skill definitions under `.claude/` are optional helpers for
 interactive Claude Code sessions; on conflict, this file and the issue win.
 
+## Product principles
+
+Use these to decide edge cases an issue leaves open:
+
+- Core promise: full transparency and control over every command that reaches
+  a server. The AI is a copilot, never an autonomous actor.
+- Safety before convenience — but no patronising of manual actions (the file
+  browser and the terminal are trusted user actions).
+- Honest notices instead of playing things down.
+- When a command is refused by a permission (e.g. `rm`), offer it to the user
+  to run themselves; never work around the refusal.
+
 ## Before every commit
 
 Run the full gate and make sure it's green — this mirrors CI
@@ -210,6 +222,7 @@ inside the security logic itself.
 - `docs/android-build.md` — read this when you build for or debug on Android.
 - `docs/dev-environment.md` — read this when you set up a development environment.
 - `README_DEV.md` — read this for developer-facing build and run instructions.
+- `docs/specs/INDEX.md` — read this to find the spec for an area (generated, `node scripts/check-spec-index.mjs --write-index`).
 - `docs/specs/README.md` — read this when you change user-visible behaviour or write a spec.
 - `docs/adr/README.md` — read this when you make or look up an architecture decision.
 - `changelog.d/README.md` — read this when you add a changelog fragment.

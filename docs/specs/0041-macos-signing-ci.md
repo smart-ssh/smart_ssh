@@ -1,6 +1,7 @@
 # Spec 0041 — macOS-Signierung in einer separaten Release-Pipeline (aufgelöst)
 
 Status: aufgelöst
+Zweck: Vorbereitung einer Release-Pipeline mit macOS-Signierung außerhalb dieses Repositorys; beschreibt kein Verhalten dieses Repositorys.
 Nachfolger: Spec 0090 (§5, Grenzen), ADR 0022, ADR 0033
 
 Diese Spec war die Vorbereitung einer Release-Pipeline außerhalb dieses
