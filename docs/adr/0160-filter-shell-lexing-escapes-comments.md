@@ -1,0 +1,109 @@
+# ADR 0160 — Filter parser: shell lexing of escapes, comments and line continuations
+
+## Status
+
+Accepted
+
+Betrifft: Spec 0002 (Abschnitt 4.4), ADR 0107, ADR 0001
+
+## Problem
+
+The segment scanner of the filter parser tracked single quotes, double
+quotes, backticks and `$(...)`, but not three things a shell reads before it
+splits a command:
+
+- an unquoted backslash escapes the next character (`\'` is a literal
+  quote, not the start of a quoted string);
+- a `#` at the start of a word, outside quotes, starts a comment up to the
+  end of the line;
+- a backslash-newline is removed (line continuation), also inside double
+  quotes.
+
+So the scanner could see other commands than the shell runs. Under
+`Allow "*"` (or `Allow "echo *"`) plus `Deny "rm *"` these were `AutoExec`,
+while bash runs the hidden command; neither the deny rule nor the hard
+blacklist saw it:
+
+- `echo \' ; rm -rf / ; echo \'` (escaped quote opens a fake quoted region)
+- `echo a #'<LF>rm -rf /<LF>#'` (quote inside a comment)
+- `echo \" > /tmp/o; echo RAN; echo "\""` (hidden redirection and command)
+- `r\<LF>m -rf /` (line continuation splits the program name)
+
+The helpers that run on each segment afterwards (output-redirection check,
+substitution stripping, first-word unquoting, rule matching) share the same
+blind spot.
+
+## Decision
+
+1. **One lexer in front of the scanner** (`crates/core/src/filter/shell_lexer.rs`).
+   `split_command` lexes the command first and splits the resulting
+   canonical text; every consumer of the split (filter engine, risk
+   classifier, rule suggestions, the structure check of prepared commands,
+   here-string extraction) gets the same view. The canonical text is read by
+   the shell like the input but contains none of the three constructs:
+   - unquoted `\x` becomes `'x'` (`\'` becomes `"'"`), which the existing
+     quote-aware helpers already understand;
+   - a line continuation is removed, unquoted and inside double quotes
+     (inside single quotes it stays literal; inside a comment it is part of
+     the comment, as in bash);
+   - a comment is removed up to, not including, its newline;
+   - in `$'...'` a `\'` does not end the string; it is rewritten to the
+     equivalent `\x27` so later steps find the same end.
+
+   Unterminated quotes, `$'...'` strings or backticks and a trailing lone
+   backslash make the command not safely analysable (`Confirm`), as
+   unbalanced quotes did before.
+
+2. **Where a comment starts.** Only at a word start: at the beginning, after
+   a blank (space, tab, newline), after `;`, `&`, `|` and after an opening
+   `(` / `$(` / `<(` / `>(`. Never inside quotes, inside `${...}` (bash
+   reads `${x:- #}` as a parameter expansion), inside a word (`a#b`, `$#`,
+   `a\ #b`) or after `)`, `<`, `>` or `\r`. Where in doubt the `#` is read as
+   code: that only adds segments.
+
+3. **A misread comment cannot hide a segment.** When the lexer found a
+   comment, the command is lexed a second time with the comment kept as
+   quoted text (`'#'`), and the segments of that view are added to the
+   result when it can be split. If the lexer took something for a comment
+   that the shell runs, those commands are still evaluated, so a deny rule
+   or the hard blacklist still applies.
+
+4. **Fail closed for the constructs themselves.** An unquoted backslash, a
+   line continuation, a comment or a backslash inside backticks raises the
+   decision to at least `Confirm` with `FILTER_PARSE_AMBIGUOUS` (via
+   `opaque_encoding_reason`, the same place as the Unicode and ANSI-C checks
+   of ADR 0107). As in ADR 0107 this only escalates: the regular evaluation
+   of the canonical text still runs, so a `Deny` behind the construct wins.
+   Consequences that are deliberate:
+   - `echo a\ b` and `echo a # comment` need confirmation under an Allow
+     rule. The lexer resolves both exactly, but the text the user approves
+     differs from the text the rules saw, and AI-proposed commands rarely
+     need either.
+   - `find . -exec … {} \;` needs confirmation under `Allow "find *"`. The
+     same command with a quoted `';'` keeps its previous decision.
+   - The single-quote nesting idiom `'it'\''s'` contains an unquoted `\'`
+     and therefore needs confirmation too; nesting with double quotes does
+     not. If this turns out to cost too many confirmations, a later change
+     can drop the confirmation for plain escapes (the canonical text
+     resolves them exactly) and keep it for continuations and comments.
+   - A backslash inside backticks is not resolved (`` \` `` nests a
+     substitution the scanner does not follow); it only triggers the
+     confirmation.
+
+   Commands without any of these constructs are lexed to the same text and
+   keep their decision.
+
+5. **Risk classification changes with it.** ADR 0107 kept its new checks out
+   of `split_command` so that the risk segmentation stayed the same. This
+   decision changes `split_command` on purpose: the risk classifier must see
+   the hidden `rm -rf /` too, and for input without the three constructs the
+   segmentation is unchanged.
+
+## Testing
+
+`crates/core/src/filter/adversarial_tests.rs` holds the four inputs above
+and further variants; they failed before this change and pass after it. A
+differential test runs bash (skipped where none is installed) with a
+`DEBUG` trap under `extdebug` that prints and skips every simple command,
+and checks that each command word bash would run is a segment the parser
+sees. The lexer has its own unit tests in `shell_lexer.rs`.

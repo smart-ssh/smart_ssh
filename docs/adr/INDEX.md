@@ -163,3 +163,4 @@
 | 0157 | Parakeet TDT 0.6B v3 on ONNX Runtime | Accepted | [0157-parakeet-on-onnx-runtime.md](0157-parakeet-on-onnx-runtime.md) |
 | 0158 | Rolling cache breakpoint on the Anthropic conversation history | Accepted | [0158-anthropic-history-cache-breakpoint.md](0158-anthropic-history-cache-breakpoint.md) |
 | 0159 | Whisper on ONNX Runtime, whisper.cpp removed | Accepted | [0159-whisper-on-onnx-runtime.md](0159-whisper-on-onnx-runtime.md) |
+| 0160 | Filter parser: shell lexing of escapes, comments and line continuations | Accepted | [0160-filter-shell-lexing-escapes-comments.md](0160-filter-shell-lexing-escapes-comments.md) |

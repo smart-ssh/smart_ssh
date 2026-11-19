@@ -235,3 +235,8 @@ wie weit die Engine sie auflösen soll.
   Prüfungen liegen bewusst in der Engine und nicht in `split_command`,
   damit dessen Segmentierung (und damit die Risiko-Einstufung) unverändert
   bleibt.
+
+  > **Nachtrag (ADR 0160):** `split_command` liest jetzt Backslash-Escapes,
+  > Kommentare und Zeilenfortsetzungen wie die Shell, damit auch die
+  > Risiko-Einstufung ein dahinter verstecktes Kommando sieht. Für Eingaben
+  > ohne diese Konstrukte bleibt die Segmentierung unverändert.
