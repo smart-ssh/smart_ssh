@@ -21,9 +21,16 @@ const SECRET: &str = "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM";
 const SFTP: &str = "FILTER_SFTP_SERVER_REQUIRES_CONFIRM";
 const INJECTION: &str = "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM";
 
-/// Quoting wie `shell_words::quote` für Text mit Sonderzeichen.
+/// Double-quotes `text` for the shell. Not the `'\''` idiom: an unquoted
+/// backslash alone already makes the filter ask (Spec 0002, 4.4), and these
+/// cases must reach the links with `AutoExec`.
 fn quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
+        .replace('`', "\\`");
+    format!("\"{escaped}\"")
 }
 
 /// `inner` in `levels` verschachtelten `watch '…'`-Aufrufen. Bewusst nicht

@@ -1646,3 +1646,242 @@ mod non_writing_redirection_adversarial {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Backslash escapes, `#` comments and line continuations. The segment scanner
+// used to track quotes only, so an escaped quote, a quote inside a comment or
+// a backslash-newline made it see different commands than the shell runs.
+// ---------------------------------------------------------------------------
+
+/// The four inputs that hid a command from the scanner. Each one runs
+/// something other than `echo` in bash.
+const HIDDEN_BEHIND_ESCAPE_OR_COMMENT: [&str; 4] = [
+    // An escaped quote opened a fake quoted region over `; rm -rf / ;`.
+    "echo \\' ; rm -rf / ; echo \\'",
+    // A quote inside a comment opened a fake quoted region over the next line.
+    "echo a #'\nrm -rf /\n#'",
+    // An escaped double quote hid the redirection and the second command.
+    "echo \\\" > /tmp/o; echo RAN; echo \"\\\"\"",
+    // A line continuation split the program name.
+    "r\\\nm -rf /",
+];
+
+#[tokio::test]
+async fn test_adv_escaped_quote_hides_rm() {
+    assert_denied_by_rm_rule(HIDDEN_BEHIND_ESCAPE_OR_COMMENT[0]).await;
+}
+
+#[tokio::test]
+async fn test_adv_comment_quote_hides_rm() {
+    assert_denied_by_rm_rule(HIDDEN_BEHIND_ESCAPE_OR_COMMENT[1]).await;
+}
+
+#[tokio::test]
+async fn test_adv_escaped_double_quote_hides_commands() {
+    assert_never_autoexec(HIDDEN_BEHIND_ESCAPE_OR_COMMENT[2]).await;
+}
+
+#[tokio::test]
+async fn test_adv_line_continuation_hides_rm() {
+    assert_denied_by_rm_rule(HIDDEN_BEHIND_ESCAPE_OR_COMMENT[3]).await;
+}
+
+/// Without a deny rule the hard blacklist sees the hidden `rm -rf /`.
+#[tokio::test]
+async fn test_adv_hidden_rm_reaches_hard_blacklist() {
+    for cmd in [
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[0],
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[1],
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[3],
+    ] {
+        let trace = engine(vec![allow_all()])
+            .evaluate_explained(cmd, &ctx())
+            .await;
+        assert!(
+            trace_has_blacklist_entry(&trace),
+            "{cmd:?}: hard blacklist not reached: {trace:?}"
+        );
+        assert!(!matches!(trace.decision, Decision::AutoExec), "{cmd:?}");
+    }
+}
+
+/// An `Allow "echo *"` rule alone does not let the hidden commands run.
+#[tokio::test]
+async fn test_adv_allow_echo_only_hidden_commands() {
+    let rules = || {
+        vec![
+            rule("allow-echo", "echo *", RuleAction::Allow, 100),
+            deny_rm(),
+        ]
+    };
+    for cmd in HIDDEN_BEHIND_ESCAPE_OR_COMMENT {
+        let decision = engine(rules()).evaluate(cmd, &ctx()).await;
+        assert!(
+            !matches!(decision, Decision::AutoExec),
+            "{cmd:?} under allow-echo: got AutoExec"
+        );
+    }
+    for cmd in [
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[0],
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[1],
+        HIDDEN_BEHIND_ESCAPE_OR_COMMENT[3],
+    ] {
+        let decision = engine(rules()).evaluate(cmd, &ctx()).await;
+        assert!(
+            matches!(decision, Decision::Deny { .. }),
+            "{cmd:?} under allow-echo + deny-rm: expected Deny, got {decision:?}"
+        );
+    }
+}
+
+/// More shapes of the same kind: an escape or a comment never lets a hidden
+/// command through, and the hidden `rm` is denied where it is a segment.
+#[tokio::test]
+async fn test_adv_escape_and_comment_variants() {
+    for cmd in [
+        "\\rm -rf /",
+        "r\\m -rf /",
+        "echo \\; rm -rf /",
+        "echo a\\\n; rm -rf /",
+        "echo \"a\\\nb\"; rm -rf /",
+        "echo a # x\nrm -rf /",
+        "echo a;#'\nrm -rf /",
+        "echo $'\\'' ; rm -rf / ; echo '",
+        "echo ${x:- #}; rm -rf /",
+        "echo $(#'\nrm -rf /)",
+        "echo `echo \\` ; rm -rf / ; echo \\``",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+    for cmd in [
+        "\\rm -rf /",
+        "r\\m -rf /",
+        "echo a # x\nrm -rf /",
+        "echo a;#'\nrm -rf /",
+        "echo ${x:- #}; rm -rf /",
+        "echo $(#'\nrm -rf /)",
+        "echo a\\\n; rm -rf /",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// Documented behaviour: an unquoted backslash, a line continuation or a
+/// comment makes the command need confirmation (fail closed), with the
+/// "not safely analysable" code. Quoted `\` and `#`, and a `#` inside a word,
+/// stay ordinary text.
+#[tokio::test]
+async fn test_adv_escape_and_comment_need_confirmation() {
+    for cmd in [
+        "echo a\\ b",
+        "echo a # comment",
+        "# only a comment\nls",
+        "ls \\\n -la",
+        "find . -name x -exec ls {} \\;",
+    ] {
+        let decision = engine(vec![allow_all(), deny_rm()])
+            .evaluate(cmd, &ctx())
+            .await;
+        match decision {
+            Decision::Confirm { code, .. } => {
+                assert_eq!(code, "FILTER_PARSE_AMBIGUOUS", "{cmd:?}");
+            }
+            other => panic!("{cmd:?}: expected Confirm, got {other:?}"),
+        }
+    }
+    for cmd in [
+        "echo 'a\\ b'",
+        "echo \"a # b\"",
+        "echo 'a # b'",
+        "echo a#b",
+        "echo $#",
+        "echo \"a\\\"b\"",
+        "ls -la",
+        "ps aux | grep java",
+        "grep -rn foo . && echo done",
+    ] {
+        assert_benign_autoexec(cmd).await;
+    }
+}
+
+/// Differential check against a real bash (skipped where none is
+/// installed): every simple command bash would run for an input must be a
+/// segment the parser sees, judged by its command word. Bash runs with a
+/// `DEBUG` trap under `extdebug` that prints each command and skips it, an
+/// empty environment and a `PATH` that does not exist, and the inputs only
+/// name `echo` and made-up `probe_*` programs, so nothing is executed.
+#[cfg(unix)]
+#[test]
+fn test_adv_segments_match_bash() {
+    use std::process::Command;
+
+    const TRACE: &str = "set -T; shopt -s extdebug; \
+                         trap 'printf \"%s\\0\" \"$BASH_COMMAND\"; false' DEBUG";
+    // Resolved here, since the child's own `PATH` points nowhere.
+    let Some(bash) = std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|dir| dir.join("bash"))
+            .find(|path| path.is_file())
+    }) else {
+        eprintln!("bash not found, differential test skipped");
+        return;
+    };
+    let bash_commands = |cmd: &str| -> Option<Vec<String>> {
+        let output = Command::new(&bash)
+            .args(["--norc", "--noprofile", "-c", &format!("{TRACE}\n{cmd}")])
+            .env_clear()
+            .env("PATH", "/nonexistent-filter-probe")
+            .current_dir(std::env::temp_dir())
+            .output()
+            .ok()?;
+        Some(
+            String::from_utf8_lossy(&output.stdout)
+                .split('\0')
+                .filter(|c| !c.is_empty())
+                .map(str::to_string)
+                .collect(),
+        )
+    };
+    let command_word = |text: &str| -> String {
+        shell_words::split(text)
+            .ok()
+            .and_then(|words| words.into_iter().next())
+            .unwrap_or_default()
+    };
+    for cmd in [
+        "echo \\' ; probe_hidden -rf / ; echo \\'",
+        "echo a #'\nprobe_hidden -rf /\n#'",
+        "echo \\\" > /dev/null; echo RAN; echo \"\\\"\"",
+        "probe_hid\\\nden -rf /",
+        "\\probe_hidden x",
+        "probe_\\hidden x",
+        "echo \\; probe_hidden",
+        "echo a\\\n; probe_hidden",
+        "echo \"a\\\nb\"; probe_hidden",
+        "echo a # x; probe_not_run\nprobe_hidden",
+        "echo a;#'\nprobe_hidden",
+        "echo ${x:- #}; probe_hidden",
+        "# c \\\nprobe_hidden",
+        "echo a\\ #b; probe_hidden",
+        "echo $'\\''; probe_hidden",
+        "echo 'a\\'; probe_hidden",
+        "echo \"a\\\\\"; probe_hidden",
+        "find . -exec probe_f {} \\;",
+        "probe_a | probe_b && probe_c; probe_d & probe_e",
+        "echo a#b; echo $#; probe_hidden",
+    ] {
+        let Some(segments) = split_top_level_segments(cmd) else {
+            panic!("{cmd:?}: the parser must split this input");
+        };
+        let seen: Vec<String> = segments.iter().map(|s| command_word(s)).collect();
+        let run = bash_commands(cmd).expect("bash ran before");
+        assert!(!run.is_empty(), "{cmd:?}: bash ran nothing");
+        for command in &run {
+            let word = command_word(command);
+            assert!(
+                seen.contains(&word),
+                "{cmd:?}: bash runs {command:?}, parser sees only {segments:?}"
+            );
+        }
+    }
+}

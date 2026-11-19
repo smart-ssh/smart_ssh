@@ -125,6 +125,21 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    ungewöhnliche Escape-Folgen, Here-Docs), lautet die Entscheidung
    `Confirm` mit dem Grund „Kommando konnte nicht sicher analysiert
    werden", nie `AutoExec`.
+
+   Die Zerlegung liest das Kommando so, wie die Shell es liest: Ein
+   Backslash außerhalb von Quotes macht das nächste Zeichen zu einem
+   gewöhnlichen Zeichen (`\'` öffnet keinen quotierten Bereich, `\;` trennt
+   nicht), ein Backslash vor einem Zeilenumbruch verbindet zwei Zeilen (auch
+   innerhalb doppelter Quotes, z. B. `r\` + Zeilenumbruch + `m` ist `rm`),
+   und ein `#` am Wortanfang außerhalb von Quotes beginnt einen Kommentar bis
+   zum Zeilenende. Ein dahinter verstecktes Kommando ist damit ein eigenes
+   Teilkommando, für das Deny-Regeln und die Hard-Blacklist gelten. Weil der
+   bestätigte Text dann vom geprüften abweicht, ist ein Kommando mit
+   Backslash außerhalb von Quotes, mit Zeilenfortsetzung, mit Kommentar oder
+   mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a\ b`,
+   `echo a # Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#`
+   innerhalb von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern
+   nichts.
 5. Command-Substitution (`$(...)`, Backticks) ist ein eigener Prüfbestandteil
    und erzwingt mindestens `Confirm`, weil sie zur Laufzeit anderen Code
    ausführen kann, der bei der Prüfung nicht vollständig bekannt ist.

@@ -15,7 +15,10 @@ const MARKER: &str = "zq9marker";
 fn nested_watch(levels: usize) -> String {
     let mut command = "ls -la".to_string();
     for _ in 0..levels {
-        command = format!("watch '{}'", command.replace('\'', "'\\''"));
+        // Double quotes: an unquoted backslash (`'\''`) alone already
+        // makes the filter ask (Spec 0002, 4.4).
+        let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+        command = format!("watch \"{escaped}\"");
     }
     command
 }
