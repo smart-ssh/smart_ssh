@@ -6,19 +6,27 @@ live in `apps/smart-ssh-community/frontend/src/components/ui/` (`Button`,
 hand-written Tailwind class strings. Behaviour of the product is described in
 `docs/specs/`; this document is about how screens look and respond.
 
-The theme tokens (slate surfaces, indigo accent, emerald/amber/red for
-allow/confirm/deny per Spec 0009, nearly square radii, Barlow / Barlow
-Condensed / JetBrains Mono) are defined in `src/index.css`. The app has a dark
-theme only.
+The theme tokens (neutral graphite surfaces, signal-cyan accent,
+emerald/amber/red for allow/confirm/deny per Spec 0009, radius 0 everywhere,
+Barlow / Barlow Condensed / JetBrains Mono) follow the "Angular" design in
+the Angular design reference (docs/design/angular) and are defined in `src/theme/dark.css`,
+`src/theme/light.css` and `src/index.css`; the app has a dark and a light
+theme (see `THEMING.md`). Depth comes from 1 px rules, not shadows; only
+floating layers (menu, tooltip, popovers, dialogs) have a hard offset shadow
+without blur. Type scale: `text-display`, `text-title`, `text-label`
+(uppercase Barlow Condensed); body Barlow 14 px; hosts, paths, commands and
+counts in JetBrains Mono. Status is always an 8 px `StatusSquare`, never a
+dot. A `DialogFrame` can draw decorative `CornerTicks` (`ticks="danger"` for
+the host-key warning); the narrow layout has none.
 
 ## Buttons
 
 | Variant | Use for | Look |
 |---|---|---|
-| `primary` | The one action the user most likely wants in this view (Save, Connect, Close in an info dialog). At most one per dialog or form. | Indigo fill, dark text |
-| `secondary` | Every other action, Cancel. The default. | Slate fill, border |
-| `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Red tint |
-| `ghost` | Low-emphasis actions inside content, link-like actions. | No fill, accent text |
+| `primary` | The one action the user most likely wants in this view (Save, Connect, Close in an info dialog). At most one per dialog or form. | Cyan fill, dark text (white in the light theme) |
+| `secondary` | Every other action, Cancel. The default. | Transparent, `border-strong` outline |
+| `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Transparent, red outline and text |
+| `ghost` | Low-emphasis actions inside content, link-like actions. | No border, muted text |
 | `bare` | Controls with their own look (tabs, list rows, icon toggles, inline links). The caller passes all classes; no base styling or size. | None |
 
 Sizes: `md` (default) for dialogs and forms, `sm` for toolbars and inline
@@ -76,7 +84,7 @@ Use `Field`. Layout, top to bottom: label, control, help text, error text.
 
 ## Focus ring
 
-Every interactive element shows a 2 px indigo ring (`indigo-400`) on
+Every interactive element shows a 2 px cyan ring (`focus`, no offset) on
 `:focus-visible`; never remove an outline without replacing it. The ring has at
 least 3:1 contrast against the surface it sits on. Use the `focus-ring`,
 `focus-ring-flush` or `focus-ring-inset` utilities (`index.css`), not a literal
@@ -88,7 +96,7 @@ ring chain; the ring is changed in one place.
   Body text is `text-sm` (14 px).
 - Contrast targets (WCAG 2.1 AA): 4.5:1 for text (3:1 for large text), 3:1 for
   UI component boundaries and focus indicators. Disabled controls are exempt.
-  Secondary text uses `slate-400` or lighter. The axe scans in the browser tests
+  Secondary text uses `fg-subtle` or lighter. The axe scans in the browser tests
   check this on every covered screen (Spec 0055).
 
 ## Truncation

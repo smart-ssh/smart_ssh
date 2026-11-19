@@ -87,7 +87,14 @@ Hauptfenster, jede Einstellungskategorie und die Befehlsbestätigung.
 Die Oberfläche bezieht jede Farbe aus benannten Rollen (Flächen, Text,
 Linien, Akzent, Gefahr, Warnung, Erfolg, Fokus, Terminal). Die Werte stehen
 an einer Stelle; ein weiteres Erscheinungsbild ersetzt nur diese Werte. Das
-dunkle Erscheinungsbild und seine Kontraste bleiben dabei unverändert.
+dunkle und das helle Erscheinungsbild folgen der Gestaltungsrichtung „Angular“
+(neutrales Graphit, Signal-Cyan als Akzent) und halten die Textkontraste
+(mindestens 4,5 : 1, Fokusring mindestens 3 : 1). Alle Elemente sind eckig,
+Tiefe entsteht durch 1-px-Linien statt durch Schatten; nur schwebende Ebenen
+(Menüs, Tooltips, Dialoge) haben einen harten Versatzschatten ohne Unschärfe.
+Der Tastaturfokus ist ein 2 px dicker Ring ohne Abstand. Statusmarkierungen
+sind Quadrate, Beschriftungen von Feldern und Dialogtiteln stehen in
+Großbuchstaben (außer in Sprachen ohne Groß-/Kleinschreibung).
 
 ## Grenzen
 

@@ -126,7 +126,7 @@ export function Menu({
       className={
         narrow
           ? "fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-border bg-surface py-1 text-left text-xs shadow-lg"
-          : `fixed ${className} border border-border bg-surface py-1 text-left text-xs shadow-lg`
+          : `fixed ${className} border border-border bg-surface py-1 text-left text-xs shadow-offset-sm`
       }
       style={narrow ? undefined : style}
     >

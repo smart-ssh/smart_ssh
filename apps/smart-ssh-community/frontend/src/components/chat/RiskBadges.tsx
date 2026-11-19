@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { RiskAssessment } from "../../api/types";
 import { Tooltip } from "../ui";
+import { StatusSquare } from "../ui/StatusSquare";
 
 export const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none">, string> = {
   yellow: "bg-warning-subtle-hover text-warning-fg-soft",
@@ -84,7 +85,7 @@ export function RiskBadges({
           title={t("actionCard.riskSecondOpinionPending")}
           className="inline-flex items-center gap-1 text-xs text-fg-subtle"
         >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-fg-faint" />
+          <StatusSquare tone="neutral" pulse />
         </span>
       )}
     </span>

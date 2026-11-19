@@ -1,9 +1,10 @@
+import { StatusSquare } from "./StatusSquare";
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 
 export interface TabItem {
   id: string;
   label: ReactNode;
-  /** Marks the tab as containing an error (shown as a red dot + hidden text). */
+  /** Marks the tab as containing an error (shown as a red square + hidden text). */
   invalid?: boolean;
   /** Screen-reader text appended to an invalid tab. */
   invalidLabel?: string;
@@ -68,19 +69,16 @@ export function Tabs({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-ring-flush ${
+            className={`label-condensed -mb-px border-t-2 px-3 py-1.5 text-[13.5px] tracking-[0.06em] ${tabClassName} focus-ring-flush ${
               selected
-                ? "border-accent-fg text-fg"
-                : "border-transparent text-fg-muted hover:text-fg-bright"
+                ? "border-accent bg-surface-raised text-fg-strong"
+                : "border-transparent text-fg-subtle hover:text-fg-bright"
             }`}
           >
             {tab.label}
             {tab.invalid && (
               <>
-                <span
-                  aria-hidden="true"
-                  className="ml-1.5 inline-block h-2 w-2 rounded-full bg-danger-fg"
-                />
+                <StatusSquare tone="danger" className="ml-1.5" />
                 {tab.invalidLabel && (
                   <span className="sr-only"> ({tab.invalidLabel})</span>
                 )}

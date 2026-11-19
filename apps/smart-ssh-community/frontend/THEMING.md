@@ -1,7 +1,9 @@
 # Theming — semantic colour tokens (issue #805, Spec 0055)
 
-Colour values live in exactly one place: the theme file
-[`src/theme/dark.css`](src/theme/dark.css). Components use **semantic Tailwind
+Colour values live in the two theme files
+[`src/theme/dark.css`](src/theme/dark.css) and `light.css`. Both follow the "Angular" design
+(`docs/design/angular/tokens.md`): neutral graphite surfaces, signal-cyan accent.
+The palette primitives are `--palette-graphite-*` (was slate) and `--palette-cyan-*` (was indigo). Components use **semantic Tailwind
 classes only** (`bg-surface`, `text-fg-muted`, `border-border`, `ring-focus`,
 opacity modifiers such as `bg-accent/16` work). `src/index.css` maps each token
 to a Tailwind utility (`@theme inline { --color-surface: var(--surface); … }`).
@@ -21,13 +23,31 @@ non-test `src/**/*.{ts,tsx}`. There is no allowlist: every component is migrated
 | Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` (`danger` has `-fg-faintest` for text on a solid danger fill) |
 | Info | `info`, `info-fg` |
 | Local session | `local-border`, `local`, `local-fg` (badge and header of a local-shell session) |
-| Misc | `on-accent` (text on a solid accent fill), `on-solid` (white text on a solid accent/danger button in every theme), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
+| Misc | `on-accent` / `on-solid` (text on a solid accent fill: dark in the dark theme, white in light), `focus` (focus ring, = accent), `shadow-offset` (colour of the hard offset shadow), `grid-line` (1 px grid of the start screens, `bg-grid-line`), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` (read by the terminal as CSS variables; not Tailwind utilities) |
+
+Shape and depth (Angular design): all `--radius-*` values are `0`, including
+`rounded-full` (status markers are `StatusSquare`s; the spinner and the typing
+pings are square, too). All blurred `shadow-*` values are `none`; depth comes
+from 1 px `border`/`border-strong` rules and surface steps. Floating layers use
+the hard offset shadows `shadow-offset-sm` (4 px: menu, tooltip, drag ghost),
+`shadow-offset` (6 px: popovers) and `shadow-offset-lg` (8 px: dialogs), coloured by
+`--shadow-offset`.
 
 Focus ring: use the utilities defined once in `src/index.css`, never a literal
 `focus-visible:ring-2` chain (guarded by `colourGuard.test.ts`): `focus-ring`
-(2 px `focus` ring with a 1 px surface offset — the default), `focus-ring-flush`
-(no offset) and `focus-ring-inset` (drawn inside the element).
+and `focus-ring-flush` (2 px `focus` ring, no offset) and `focus-ring-inset`
+(drawn inside the element). `FIELD_CONTROL_CLASS` uses the same look.
+
+Type scale utilities (`src/index.css`): `text-display` (Barlow Condensed
+32/700, +0.06em, uppercase), `text-title` (20/600, +0.05em), `text-label`
+(11.5/600, +0.14em, `fg-faint`), plus the `label-condensed` class for buttons,
+tabs and badges (600, uppercase, +0.08em). For Japanese, Chinese, Korean and
+Hindi the letter spacing is `normal`.
+
+Primitives (`src/components/ui/`): `Button` (`primary`, `secondary`, `danger`,
+`ghost`, `bare`, `iconOnly`), `Field`, `Tabs`, `DialogFrame` (`icon`, `ticks`,
+`tone`), `Badge`, `StatusSquare`, `CornerTicks`, `Menu`, `Tooltip`, `TagInput`.
 
 Preferences when migrating: focus rings/outlines → `ring-focus`/`outline-focus`
 (not `accent-fg`); text on a solid accent button → `text-on-accent`; hover on a
@@ -41,28 +61,28 @@ Applies to every utility prefix (`bg-`, `text-`, `border-`, `ring-`,
 
 | Palette class suffix | Token suffix |
 |---|---|
-| `slate-950` | `surface-sunken` |
-| `slate-900` | `surface` |
-| `slate-800` | `surface-raised` |
-| `slate-700` | `border` |
-| `slate-600` | `border-strong` |
-| `slate-500` | `fg-faint` |
-| `slate-400` | `fg-subtle` |
-| `slate-300` | `fg-muted` |
-| `slate-200` | `fg-soft` |
-| `slate-100` | `fg` |
-| `slate-50` | `fg-strong` |
-| `indigo-950` | `accent-subtle` |
-| `indigo-900` | `accent-subtle-hover` |
-| `indigo-800` | `accent-border` |
-| `indigo-700` | `accent-border-strong` |
-| `indigo-600` | `accent` |
-| `indigo-500` | `accent-strong` |
-| `indigo-400` | `accent-fg` |
-| `indigo-300` | `accent-fg-soft` |
-| `indigo-200` | `accent-fg-softer` |
-| `indigo-100` | `accent-fg-faint` |
-| `indigo-50` | `accent-fg-faintest` |
+| `graphite-950` | `surface-sunken` |
+| `graphite-900` | `surface` |
+| `graphite-800` | `surface-raised` |
+| `graphite-700` | `border` |
+| `graphite-600` | `border-strong` |
+| `graphite-500` | `fg-faint` |
+| `graphite-400` | `fg-subtle` |
+| `graphite-300` | `fg-muted` |
+| `graphite-200` | `fg-soft` |
+| `graphite-100` | `fg` |
+| `graphite-50` | `fg-strong` |
+| `cyan-950` | `accent-subtle` |
+| `cyan-900` | `accent-subtle-hover` |
+| `cyan-800` | `accent-border` |
+| `cyan-700` | `accent-border-strong` |
+| `cyan-600` | `accent` |
+| `cyan-500` | `accent-strong` |
+| `cyan-400` | `accent-fg` |
+| `cyan-300` | `accent-fg-soft` |
+| `cyan-200` | `accent-fg-softer` |
+| `cyan-100` | `accent-fg-faint` |
+| `cyan-50` | `accent-fg-faintest` |
 | `red-950` | `danger-subtle` |
 | `red-900` | `danger-subtle-hover` |
 | `red-800` | `danger-border` |
@@ -102,8 +122,8 @@ Applies to every utility prefix (`bg-`, `text-`, `border-`, `ring-`,
 | `white` | `fg-bright` |
 | `black` | `overlay` |
 
-Example: `text-slate-400` → `text-fg-subtle`; `border-red-800` →
-`border-danger-border`; `bg-indigo-600/16` → `bg-accent/16`.
+Example: `text-graphite-400` → `text-fg-subtle`; `border-red-800` →
+`border-danger-border`; `bg-cyan-600/16` → `bg-accent/16`.
 
 ## Add a token
 

@@ -15,6 +15,7 @@ import { Button } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
+import { StatusSquare } from "../ui/StatusSquare";
 
 export function ActionCard({
   item,
@@ -275,7 +276,7 @@ export function RunningCommandIndicator({
 
   return (
     <div className="mt-2 flex items-center gap-2 border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning-fg" />
+      <StatusSquare tone="warning" pulse />
       <span className="flex-1">
         {waitingForInput
           ? t("actionCard.waitingForInputHint")
