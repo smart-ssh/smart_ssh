@@ -169,7 +169,7 @@ pub async fn create_quick_rules_batch(
     state: State<'_, AppState>,
     rules: Vec<app_logic::dto::StagedRuleDto>,
 ) -> CommandResult<Vec<RuleId>> {
-    app_logic::rule_suggestions::create_quick_rules_batch(&state.policy_store, rules)
+    app_logic::quick_rules_batch::create_quick_rules_batch(&state.policy_store, rules)
         .await
         .map_err(Into::into)
 }

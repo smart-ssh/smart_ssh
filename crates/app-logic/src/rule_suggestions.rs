@@ -573,50 +573,6 @@ pub async fn create_quick_rules(
     Ok(stored.into_iter().map(|r| r.id).collect())
 }
 
-/// Issue #1356: saves several staged rules, each with its own patterns and
-/// scope, in ONE transaction: all or nothing. Any invalid pattern (empty,
-/// does not compile, Spec 0077) rejects the whole batch before anything is
-/// written. Does not touch a pending confirmation.
-pub async fn create_quick_rules_batch(
-    policy_store: &SqlitePolicyStore,
-    rules: Vec<crate::dto::StagedRuleDto>,
-) -> Result<Vec<RuleId>, RuleWriteError> {
-    let now = chrono::Utc::now();
-    let mut stored = Vec::new();
-    for staged in rules {
-        for p in staged.patterns {
-            // A staged rule never carries an empty pattern (stricter than
-            // `Pattern::validate`, which accepts one).
-            if p.pattern_value.trim().is_empty() {
-                return Err(RuleWriteError::InvalidPattern(
-                    ssh_manager_core::filter::PatternError {
-                        message: "empty pattern".to_string(),
-                    },
-                ));
-            }
-            stored.push(
-                RuleInput {
-                    pattern_type: p.pattern_type,
-                    pattern_value: p.pattern_value,
-                    action: RuleAction::Allow,
-                    scope: staged.scope.clone(),
-                    priority: 0,
-                }
-                .into_stored_rule(
-                    RuleId(uuid::Uuid::new_v4().to_string()),
-                    now,
-                    now,
-                ),
-            );
-        }
-    }
-    for rule in &stored {
-        rule.pattern.validate()?;
-    }
-    policy_store.create_many(&stored).await?;
-    Ok(stored.into_iter().map(|r| r.id).collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1172,49 +1128,6 @@ mod tests {
     }
 
     // --- Issue #1356: batch save and per-segment suggestions ---------------
-
-    fn staged(value: &str, scope: Scope) -> crate::dto::StagedRuleDto {
-        crate::dto::StagedRuleDto {
-            patterns: vec![glob(value)],
-            scope,
-        }
-    }
-
-    #[tokio::test]
-    async fn batch_stores_rules_with_different_scopes() {
-        let (_dir, store) = new_store().await;
-        let server = Scope::Server(ssh_manager_core::shared::ServerId::new());
-        let ids = create_quick_rules_batch(
-            &store,
-            vec![
-                staged("ls *", Scope::Global),
-                staged("git *", server.clone()),
-                staged("cat *", Scope::Tag("prod".into())),
-            ],
-        )
-        .await
-        .unwrap();
-        assert_eq!(ids.len(), 3);
-        let all = store.list_all().await.unwrap();
-        assert_eq!(all.len(), 3);
-        assert!(all.iter().any(|r| r.scope == server));
-        assert!(all.iter().any(|r| r.scope == Scope::Tag("prod".into())));
-    }
-
-    #[tokio::test]
-    async fn batch_with_one_invalid_rule_stores_nothing() {
-        for bad in ["ls [abc *", ""] {
-            let (_dir, store) = new_store().await;
-            let err = create_quick_rules_batch(
-                &store,
-                vec![staged("ls *", Scope::Global), staged(bad, Scope::Global)],
-            )
-            .await
-            .expect_err("invalid pattern");
-            assert!(matches!(err, RuleWriteError::InvalidPattern(_)), "{err:?}");
-            assert!(store.list_all().await.unwrap().is_empty());
-        }
-    }
 
     #[test]
     fn segment_suggestions_derive_only_from_the_segment() {
