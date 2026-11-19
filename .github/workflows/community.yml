@@ -355,7 +355,9 @@ jobs:
   # packages through apt.
   browser-tests:
     name: Browser Tests (Playwright)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright's WebKit build needs the Ubuntu 24.04 libraries (libicu74).
+    # Drop the pin once Playwright supports the newer ubuntu-latest image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -385,7 +387,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+          key: playwright-ubuntu-24.04-${{ steps.playwright.outputs.version }}-chromium-webkit
 
       - name: Install Playwright browsers (with system dependencies)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -463,7 +465,8 @@ jobs:
     name: Real app startup (tauri-driver)
     needs: real-app-changes
     if: needs.real-app-changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    # Pinned: webkit2gtk-driver is not available on the newer ubuntu-latest image.
+    runs-on: ubuntu-24.04
     # A slow apt mirror once used up the whole job budget during the
     # package install; the install has its own step timeout, so this only
     # has to leave room for the build and the tests.
