@@ -218,6 +218,7 @@ stammt aus der Kandidaten-Auswertung der Engine (Abschnitt 6).
   stattdessen die Gründe.
 - **Sammel-Speichern.** Speichert eine Liste vorgemerkter Regeln, jede mit eigenen
   Mustern und eigenem Geltungsbereich, in einem Schritt: alles oder nichts. Ist
-  ein Muster ungültig (leer oder nicht übersetzbar, Spec 0077), wird nichts
+  ein Muster ungültig (leer oder nicht übersetzbar, Spec 0077) oder eine
+  vorgemerkte Regel ohne jedes Muster, wird nichts
   gespeichert und ein Fehler geliefert. Eine wartende Bestätigung bleibt offen;
   das Speichern löst sie nicht auf. Rückgabe: die neuen Regel-Kennungen.

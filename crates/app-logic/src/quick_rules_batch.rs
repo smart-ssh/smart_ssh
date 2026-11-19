@@ -17,6 +17,14 @@ pub async fn create_quick_rules_batch(
     let now = chrono::Utc::now();
     let mut stored = Vec::new();
     for staged in rules {
+        // A staged rule without any pattern is rejected like an empty pattern.
+        if staged.patterns.is_empty() {
+            return Err(RuleWriteError::InvalidPattern(
+                ssh_manager_core::filter::PatternError {
+                    message: "staged rule without patterns".to_string(),
+                },
+            ));
+        }
         for p in staged.patterns {
             // A staged rule never carries an empty pattern (stricter than
             // `Pattern::validate`, which accepts one).
@@ -110,5 +118,31 @@ mod tests {
             assert!(matches!(err, RuleWriteError::InvalidPattern(_)), "{err:?}");
             assert!(store.list_all().await.unwrap().is_empty());
         }
+        // A staged rule with an empty patterns list is rejected too.
+        let (_dir, store) = new_store().await;
+        let mut empty = staged("x", Scope::Global);
+        empty.patterns.clear();
+        let err = create_quick_rules_batch(&store, vec![staged("ls *", Scope::Global), empty])
+            .await
+            .expect_err("no patterns");
+        assert!(matches!(err, RuleWriteError::InvalidPattern(_)), "{err:?}");
+        assert!(store.list_all().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn batch_leaves_pending_confirmation_open() {
+        use crate::confirmation::ConfirmationRegistry;
+        use crate::dto::ActionUserDecision;
+        let (_dir, store) = new_store().await;
+        let registry: ConfirmationRegistry<uuid::Uuid, ActionUserDecision> =
+            ConfirmationRegistry::new();
+        let id = uuid::Uuid::new_v4();
+        let rx = registry.register(id);
+        create_quick_rules_batch(&store, vec![staged("ls *", Scope::Global)])
+            .await
+            .unwrap();
+        assert!(registry.contains(&id));
+        registry.resolve(&id, ActionUserDecision::Approve).unwrap();
+        assert!(matches!(rx.await.unwrap(), ActionUserDecision::Approve));
     }
 }

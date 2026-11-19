@@ -1018,7 +1018,12 @@ mod tests {
         .await
         .unwrap();
         assert!(r.suggestions.is_empty());
-        assert!(!r.blocked_reasons.is_empty());
+        assert!(
+            r.blocked_reasons
+                .contains(&"FILTER_HARD_BLACKLIST".to_string()),
+            "{:?}",
+            r.blocked_reasons
+        );
 
         let r = seg(vec![], "grep a f > /tmp/out", 0, Scope::Global, &[])
             .await
