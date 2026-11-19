@@ -409,9 +409,6 @@
     "editableCommand": "Command — editable",
     "execute": "Execute",
     "deny": "Deny",
-    "quickRule": "Accept + Rule",
-    "quickRuleDropdownAria": "Show rule suggestions",
-    "newRulePatternHeading": "Pattern for the new allow rule",
     "scopeThisServer": "This Server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "will still ask: {{reasons}}",
       "notice": "Rule created. This command will still ask next time: {{reasons}}",
       "reasonOther": "another safety check",
-      "loadFailed": "Rule coverage could not be loaded"
+      "loadFailed": "Rule coverage could not be loaded",
+      "summaryHeading": "Already allowed",
+      "toDecideHeading": "Still to decide",
+      "expandAria": "Rule suggestions for {{segment}}",
+      "stagedBadge": "not saved yet",
+      "removeStaged": "Remove",
+      "saveRules": "Save rules ({{count}})",
+      "saveFailed": "Rules could not be saved: {{message}}",
+      "unsavedHint": "Rules not saved: {{count}}",
+      "segmentCovered": "covers this part; the command still asks: {{reasons}}"
     }
   },
   "authPrompt": {

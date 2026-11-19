@@ -409,9 +409,6 @@
     "editableCommand": "Comando — modificabile",
     "execute": "Esegui",
     "deny": "Nega",
-    "quickRule": "Accetta + regola",
-    "quickRuleDropdownAria": "Mostra suggerimenti di regole",
-    "newRulePatternHeading": "Modello per la nuova regola di consenso",
     "scopeThisServer": "Questo server",
     "scopeGlobal": "Globale",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "chiederà ancora: {{reasons}}",
       "notice": "Regola creata. Questo comando chiederà ancora la prossima volta: {{reasons}}",
       "reasonOther": "un altro controllo di sicurezza",
-      "loadFailed": "Impossibile caricare la copertura delle regole"
+      "loadFailed": "Impossibile caricare la copertura delle regole",
+      "summaryHeading": "Già consentito",
+      "toDecideHeading": "Ancora da decidere",
+      "expandAria": "Suggerimenti di regola per {{segment}}",
+      "stagedBadge": "non ancora salvata",
+      "removeStaged": "Rimuovi",
+      "saveRules": "Salva regole ({{count}})",
+      "saveFailed": "Impossibile salvare le regole: {{message}}",
+      "unsavedHint": "Regole non salvate: {{count}}",
+      "segmentCovered": "copre questa parte; il comando chiede comunque conferma: {{reasons}}"
     }
   },
   "authPrompt": {

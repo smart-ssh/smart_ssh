@@ -409,9 +409,6 @@
     "editableCommand": "Opdracht — bewerkbaar",
     "execute": "Uitvoeren",
     "deny": "Weigeren",
-    "quickRule": "Accepteren + regel",
-    "quickRuleDropdownAria": "Regelsuggesties tonen",
-    "newRulePatternHeading": "Patroon voor de nieuwe toestaan-regel",
     "scopeThisServer": "Deze server",
     "scopeGlobal": "Globaal",
     "scopeTag": "Label",
@@ -439,7 +436,16 @@
       "verdictAsk": "vraagt nog steeds: {{reasons}}",
       "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
       "reasonOther": "een andere veiligheidscontrole",
-      "loadFailed": "Regeldekking kon niet worden geladen"
+      "loadFailed": "Regeldekking kon niet worden geladen",
+      "summaryHeading": "Al toegestaan",
+      "toDecideHeading": "Nog te beslissen",
+      "expandAria": "Regelsuggesties voor {{segment}}",
+      "stagedBadge": "nog niet opgeslagen",
+      "removeStaged": "Verwijderen",
+      "saveRules": "Regels opslaan ({{count}})",
+      "saveFailed": "Regels konden niet worden opgeslagen: {{message}}",
+      "unsavedHint": "Niet-opgeslagen regels: {{count}}",
+      "segmentCovered": "dekt dit deel; het commando vraagt nog steeds: {{reasons}}"
     }
   },
   "authPrompt": {

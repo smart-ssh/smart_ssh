@@ -128,11 +128,11 @@ test.describe("chat panel review", () => {
     await captureScreen(app.page, "chat-messages");
   });
 
-  test("screenshot of the command confirmation and its quick-rule popup", async ({ app }) => {
+  test("screenshot of the command confirmation and its expanded rule row", async ({ app }) => {
     await openChatWithConfirmation(app);
     await captureScreen(app.page, "chat-confirmation");
-    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
+    await app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ }).click();
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
     await captureScreen(app.page, "chat-quick-rule");
   });
 
@@ -196,14 +196,14 @@ test.describe("chat panel review", () => {
     expect(ring, "the chat input shows no focus indicator").toBe(true);
   });
 
-  test("the quick-rule popup closes with Escape and focus returns to its trigger", async ({ app }) => {
+  test("the rule row toggle expands inline and keeps focus on itself", async ({ app }) => {
     await openChatWithConfirmation(app);
-    const trigger = app.page.getByRole("button", { name: "Show rule suggestions" });
-    await trigger.click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
-    await app.page.keyboard.press("Escape");
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+    const toggle = app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ });
+    await toggle.focus();
+    await app.page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
+    await expect(toggle).toBeFocused();
   });
 
   for (const size of SIZES) {

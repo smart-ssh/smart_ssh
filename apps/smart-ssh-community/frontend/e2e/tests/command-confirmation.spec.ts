@@ -90,4 +90,57 @@ test.describe("command confirmation", () => {
       },
     ]);
   });
+
+  // Issue #1357: rules per sub-command, staged and saved in one batch.
+  test("stages a rule per sub-command, saves them without executing, then Execute runs", async ({ app }) => {
+    // One canned answer for every row: it offers both rules.
+    const offer = (tool: string, pattern: string) => ({
+      kind: "tool", names: [tool], patterns: [{ patternType: "glob", patternValue: pattern }],
+      segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: false, reasons: [] },
+    });
+    await app.launch({
+      ...populated(),
+      commands: {
+        explain_confirmation: { result: { segments: [
+          { index: 0, text: "echo a", state: "covered", rule: { patternType: "glob", patternValue: "echo *" }, reasons: [] },
+          { index: 1, text: "ls -la /tmp", state: "needsRule", rule: null, reasons: [] },
+          { index: 2, text: "git status", state: "needsRule", rule: null, reasons: [] },
+        ], suggestions: [] } },
+        explain_segment_rules: { result: {
+          segmentIndex: 1, segmentText: "ls -la /tmp", blockedReasons: [],
+          suggestions: [offer("ls", "ls *"), offer("git", "git status *")],
+        } },
+        create_quick_rules_batch: { result: ["r1", "r2"] },
+      },
+    });
+    const sessionId = await openSession(app, "db-primary");
+    await app.emit("chat-action-proposed", redCommandProposal(sessionId, "echo a && ls -la /tmp && git status"));
+    const page = app.page;
+    await expect(page.getByText("Already allowed")).toBeVisible();
+    const lsToggle = page.getByRole("button", { name: "Rule suggestions for ls -la /tmp" });
+    const gitToggle = page.getByRole("button", { name: "Rule suggestions for git status" });
+    await expect(lsToggle).toHaveAttribute("aria-expanded", "false");
+    await lsToggle.click();
+    await expect(lsToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("radio", { name: "This Server" })).toBeChecked();
+    await page.getByRole("button", { name: /All `ls` calls/ }).click();
+    await gitToggle.click();
+    await page.getByRole("radio", { name: "Global" }).check();
+    await page.getByRole("button", { name: /All `git` calls/ }).click();
+    await expect(page.getByTestId("staged-rule")).toHaveCount(2);
+    await expect(page.getByText("Rules not saved: 2")).toBeVisible();
+    expect(await app.calls("respond_to_action")).toHaveLength(0);
+
+    await page.getByRole("button", { name: "Save rules (2)" }).click();
+    await expect(page.getByTestId("saved-rule")).toHaveCount(2);
+    const [batch] = await app.calls("create_quick_rules_batch");
+    expect((batch.args as { rules: { scope: unknown }[] }).rules.map((r) => r.scope)).toEqual([
+      { Server: expect.any(String) },
+      "Global",
+    ]);
+    await expect(lsToggle).toBeVisible();
+    expect(await app.calls("respond_to_action")).toHaveLength(0);
+    await page.getByRole("button", { name: "Execute", exact: true }).click();
+    expect(await app.calls("respond_to_action")).toHaveLength(1);
+  });
 });

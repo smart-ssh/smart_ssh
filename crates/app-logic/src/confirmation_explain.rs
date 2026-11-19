@@ -132,7 +132,6 @@ pub async fn explain(
     let trace = evaluator.evaluate_explained(command, ctx).await;
     let seg_traces = segment_traces(&trace);
     let texts = segment_texts(command, seg_traces.len());
-    let multi = seg_traces.len() > 1;
 
     // Post-engine escalation, attributed per segment text; if no segment
     // hits but the whole command does, it applies to every covered segment.
@@ -164,19 +163,18 @@ pub async fn explain(
             state = SegmentCoverageState::Blocked;
             reasons.push(code.to_string());
         }
-        if multi || state == SegmentCoverageState::Blocked {
-            segments.push(SegmentCoverageDto {
-                index: i,
-                text,
-                state,
-                rule: if state == SegmentCoverageState::Covered {
-                    rule
-                } else {
-                    None
-                },
-                reasons,
-            });
-        }
+        // Issue #1357: the list is shown for a single command too.
+        segments.push(SegmentCoverageDto {
+            index: i,
+            text,
+            state,
+            rule: if state == SegmentCoverageState::Covered {
+                rule
+            } else {
+                None
+            },
+            reasons,
+        });
     }
 
     let mut suggestions = Vec::new();
@@ -699,9 +697,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn single_covered_segment_has_no_list_and_unrelated_rule_missing_says_no_rule() {
+    async fn single_needs_rule_segment_is_listed_and_unrelated_rule_missing_says_no_rule() {
         let r = run(vec![], "wc -l", Scope::Global, &none).await;
-        assert!(r.segments.is_empty());
+        assert_eq!(r.segments.len(), 1);
+        assert_eq!(r.segments[0].state, SegmentCoverageState::NeedsRule);
         let tool = r
             .suggestions
             .iter()
@@ -845,7 +844,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn single_covered_command_without_escalation_has_no_segments() {
+    async fn single_covered_command_without_escalation_is_listed_as_covered() {
         let r = run(
             vec![allow("r1", "cat *")],
             "cat /tmp/a",
@@ -853,7 +852,8 @@ mod tests {
             &none,
         )
         .await;
-        assert!(r.segments.is_empty());
+        assert_eq!(r.segments.len(), 1);
+        assert_eq!(r.segments[0].state, SegmentCoverageState::Covered);
     }
 
     async fn auto_rules(rules: Vec<Rule>, command: &str) -> (Decision, Vec<AutoExecRuleDto>) {

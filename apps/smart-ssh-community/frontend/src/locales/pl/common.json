@@ -409,9 +409,6 @@
     "editableCommand": "Polecenie — do edycji",
     "execute": "Wykonaj",
     "deny": "Odmów",
-    "quickRule": "Zezwól + reguła",
-    "quickRuleDropdownAria": "Pokaż propozycje reguł",
-    "newRulePatternHeading": "Wzorzec nowej reguły zezwalającej",
     "scopeThisServer": "Ten serwer",
     "scopeGlobal": "Globalnie",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "nadal będzie pytać: {{reasons}}",
       "notice": "Reguła utworzona. To polecenie nadal będzie pytać następnym razem: {{reasons}}",
       "reasonOther": "inna kontrola bezpieczeństwa",
-      "loadFailed": "Nie udało się wczytać pokrycia reguł"
+      "loadFailed": "Nie udało się wczytać pokrycia reguł",
+      "summaryHeading": "Już dozwolone",
+      "toDecideHeading": "Do rozstrzygnięcia",
+      "expandAria": "Propozycje reguł dla {{segment}}",
+      "stagedBadge": "jeszcze nie zapisana",
+      "removeStaged": "Usuń",
+      "saveRules": "Zapisz reguły ({{count}})",
+      "saveFailed": "Nie udało się zapisać reguł: {{message}}",
+      "unsavedHint": "Niezapisane reguły: {{count}}",
+      "segmentCovered": "obejmuje tę część; polecenie nadal pyta: {{reasons}}"
     }
   },
   "authPrompt": {

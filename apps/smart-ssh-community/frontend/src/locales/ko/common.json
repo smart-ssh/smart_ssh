@@ -409,9 +409,6 @@
     "editableCommand": "명령 — 편집 가능",
     "execute": "실행",
     "deny": "거부",
-    "quickRule": "허용 + 규칙",
-    "quickRuleDropdownAria": "규칙 제안 표시",
-    "newRulePatternHeading": "새 허용 규칙의 패턴",
     "scopeThisServer": "이 서버",
     "scopeGlobal": "전역",
     "scopeTag": "태그",
@@ -439,7 +436,16 @@
       "verdictAsk": "계속 확인합니다: {{reasons}}",
       "notice": "규칙을 만들었습니다. 이 명령은 다음에도 확인이 필요합니다: {{reasons}}",
       "reasonOther": "다른 보안 검사",
-      "loadFailed": "규칙 적용 범위를 불러올 수 없습니다"
+      "loadFailed": "규칙 적용 범위를 불러올 수 없습니다",
+      "summaryHeading": "이미 허용됨",
+      "toDecideHeading": "결정 필요",
+      "expandAria": "{{segment}}에 대한 규칙 제안",
+      "stagedBadge": "아직 저장 안 됨",
+      "removeStaged": "제거",
+      "saveRules": "규칙 저장 ({{count}})",
+      "saveFailed": "규칙을 저장하지 못했습니다: {{message}}",
+      "unsavedHint": "저장되지 않은 규칙: {{count}}",
+      "segmentCovered": "이 부분은 포함되지만 명령은 여전히 확인을 요청합니다: {{reasons}}"
     }
   },
   "authPrompt": {

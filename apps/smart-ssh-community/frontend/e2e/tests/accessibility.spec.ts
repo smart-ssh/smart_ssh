@@ -144,10 +144,10 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
   "chat confirmation, long command": async (app) => {
     await openChatWithConfirmation(app);
   },
-  "chat quick-rule popup": async (app) => {
+  "chat rule row expanded": async (app) => {
     await openChatWithConfirmation(app);
-    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
+    await app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ }).click();
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
   },
 };
 
