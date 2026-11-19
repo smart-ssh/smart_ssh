@@ -133,13 +133,15 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    innerhalb doppelter Quotes, z. B. `r\` + Zeilenumbruch + `m` ist `rm`),
    und ein `#` am Wortanfang außerhalb von Quotes beginnt einen Kommentar bis
    zum Zeilenende. Ein dahinter verstecktes Kommando ist damit ein eigenes
-   Teilkommando, für das Deny-Regeln und die Hard-Blacklist gelten. Weil der
-   bestätigte Text dann vom geprüften abweicht, ist ein Kommando mit
-   Backslash außerhalb von Quotes, mit Zeilenfortsetzung, mit Kommentar oder
-   mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a\ b`,
-   `echo a # Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#`
-   innerhalb von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern
-   nichts.
+   Teilkommando, für das Deny-Regeln und die Hard-Blacklist gelten. Ein
+   einfacher Backslash-Escape wird dabei genau aufgelöst und wie quotierter
+   Text gegen die Regeln geprüft: `echo a\ b` oder `find . -exec ls {} \;`
+   laufen unter einer passenden Allow-Regel weiter automatisch, `\rm -rf /`
+   trifft eine Deny-Regel für `rm *`. Weil der bestätigte Text sonst vom
+   geprüften abweicht, ist ein Kommando mit Zeilenfortsetzung, mit Kommentar
+   oder mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a #
+   Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#` innerhalb
+   von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern nichts.
 5. Command-Substitution (`$(...)`, Backticks) ist ein eigener Prüfbestandteil
    und erzwingt mindestens `Confirm`, weil sie zur Laufzeit anderen Code
    ausführen kann, der bei der Prüfung nicht vollständig bekannt ist.

@@ -1741,7 +1741,6 @@ async fn test_adv_escape_and_comment_variants() {
     for cmd in [
         "\\rm -rf /",
         "r\\m -rf /",
-        "echo \\; rm -rf /",
         "echo a\\\n; rm -rf /",
         "echo \"a\\\nb\"; rm -rf /",
         "echo a # x\nrm -rf /",
@@ -1766,18 +1765,17 @@ async fn test_adv_escape_and_comment_variants() {
     }
 }
 
-/// Documented behaviour: an unquoted backslash, a line continuation or a
-/// comment makes the command need confirmation (fail closed), with the
-/// "not safely analysable" code. Quoted `\` and `#`, and a `#` inside a word,
-/// stay ordinary text.
+/// Documented behaviour: a line continuation, a comment or a backslash
+/// inside backticks makes the command need confirmation (fail closed), with
+/// the "not safely analysable" code, even under an `Allow "*"` rule. Quoted
+/// `\` and `#`, and a `#` inside a word, stay ordinary text.
 #[tokio::test]
-async fn test_adv_escape_and_comment_need_confirmation() {
+async fn test_adv_continuation_and_comment_need_confirmation() {
     for cmd in [
-        "echo a\\ b",
         "echo a # comment",
         "# only a comment\nls",
         "ls \\\n -la",
-        "find . -name x -exec ls {} \\;",
+        "echo \"a\\\nb\"",
     ] {
         let decision = engine(vec![allow_all(), deny_rm()])
             .evaluate(cmd, &ctx())
@@ -1789,6 +1787,8 @@ async fn test_adv_escape_and_comment_need_confirmation() {
             other => panic!("{cmd:?}: expected Confirm, got {other:?}"),
         }
     }
+    // Inside backticks a backslash can nest a substitution: never AutoExec.
+    assert_never_autoexec("echo `echo \\`date\\``").await;
     for cmd in [
         "echo 'a\\ b'",
         "echo \"a # b\"",
@@ -1801,6 +1801,58 @@ async fn test_adv_escape_and_comment_need_confirmation() {
         "grep -rn foo . && echo done",
     ] {
         assert_benign_autoexec(cmd).await;
+    }
+}
+
+/// `inner` nested in `levels` `watch '…'` calls with the `'\''` idiom.
+fn nested_single_quotes(inner: &str, levels: usize) -> String {
+    let mut command = inner.to_string();
+    for _ in 0..levels {
+        command = format!("watch '{}'", command.replace('\'', "'\\''"));
+    }
+    command
+}
+
+/// Documented behaviour: a plain unquoted backslash escape is resolved
+/// exactly and evaluated against the rules like quoted text, so it stays
+/// `AutoExec` under a matching Allow rule, and a deny rule behind it wins.
+#[tokio::test]
+async fn test_adv_plain_escapes_follow_the_rules() {
+    let cases = [
+        ("echo *", "echo a\\ b".to_string()),
+        ("echo *", "echo 'it'\\''s'".to_string()),
+        ("find *", "find . -exec ls {} \\;".to_string()),
+        ("find *", "find /tmp -name x -exec cat {} \\;".to_string()),
+        ("ls *", "ls my\\ dir".to_string()),
+        // bash prints "; rm -rf /" here, it runs no rm.
+        ("echo *", "echo \\; rm -rf /".to_string()),
+        ("watch *", nested_single_quotes("ls -la", 4)),
+    ];
+    for (allow, cmd) in cases {
+        let decision = engine(vec![
+            rule("allow", allow, RuleAction::Allow, 100),
+            deny_rm(),
+        ])
+        .evaluate(&cmd, &ctx())
+        .await;
+        assert!(
+            matches!(decision, Decision::AutoExec),
+            "{cmd:?} under Allow {allow:?}: expected AutoExec, got {decision:?}"
+        );
+    }
+    for cmd in [
+        "\\rm -rf /",
+        "r\\m x",
+        "echo \\' ; rm x ; echo \\'",
+        "echo \\\\; ls; rm x",
+    ] {
+        let decision = engine(vec![allow_all(), deny_rm()])
+            .evaluate(cmd, &ctx())
+            .await;
+        assert!(
+            matches!(decision, Decision::Deny { .. }),
+            "{cmd:?}: expected Deny via deny-rm, got {decision:?}"
+        );
     }
 }
 
@@ -1867,6 +1919,10 @@ fn test_adv_segments_match_bash() {
         "echo 'a\\'; probe_hidden",
         "echo \"a\\\\\"; probe_hidden",
         "find . -exec probe_f {} \\;",
+        "echo 'it'\\''s'; probe_hidden",
+        "probe_a 'x'\\''; probe_b 'y'\\'''",
+        "echo a\\ b\\ \\;c; probe_hidden",
+        "probe_ls my\\ dir\\|x | probe_hidden",
         "probe_a | probe_b && probe_c; probe_d & probe_e",
         "echo a#b; echo $#; probe_hidden",
     ] {

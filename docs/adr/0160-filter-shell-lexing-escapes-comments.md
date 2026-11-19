@@ -68,30 +68,36 @@ blind spot.
    that the shell runs, those commands are still evaluated, so a deny rule
    or the hard blacklist still applies.
 
-4. **Fail closed for the constructs themselves.** An unquoted backslash, a
-   line continuation, a comment or a backslash inside backticks raises the
+4. **Fail closed only where the lexer cannot make the text exact.** A line
+   continuation, a comment or a backslash inside backticks raises the
    decision to at least `Confirm` with `FILTER_PARSE_AMBIGUOUS` (via
    `opaque_encoding_reason`, the same place as the Unicode and ANSI-C checks
    of ADR 0107). As in ADR 0107 this only escalates: the regular evaluation
    of the canonical text still runs, so a `Deny` behind the construct wins.
-   Consequences that are deliberate:
-   - `echo a\ b` and `echo a # comment` need confirmation under an Allow
-     rule. The lexer resolves both exactly, but the text the user approves
-     differs from the text the rules saw, and AI-proposed commands rarely
-     need either.
-   - `find . -exec … {} \;` needs confirmation under `Allow "find *"`. The
-     same command with a quoted `';'` keeps its previous decision.
-   - The single-quote nesting idiom `'it'\''s'` contains an unquoted `\'`
-     and therefore needs confirmation too; nesting with double quotes does
-     not. If this turns out to cost too many confirmations, a later change
-     can drop the confirmation for plain escapes (the canonical text
-     resolves them exactly) and keep it for continuations and comments.
+   - A continuation or a comment changes which lines and words the user
+     sees compared with what runs (`r\<LF>m`, a quote inside a comment), and
+     the comment boundary rests on the word-start rule above; both are rare
+     in AI-proposed commands.
    - A backslash inside backticks is not resolved (`` \` `` nests a
      substitution the scanner does not follow); it only triggers the
      confirmation.
 
+   **Plain backslash escapes do not raise the decision.** An unquoted `\x`
+   outside backticks is resolved exactly into quotes (`'x'`), and the
+   canonical text is evaluated against the rules like any quoted input:
+   deny rules and the hard blacklist see the command behind it
+   (`echo \' ; rm -rf / ; echo \'` is `Deny` under `Deny "rm *"`, `\rm` and
+   `r\m` are `rm`), and an Allow rule matches as before. So `echo a\ b`,
+   `ls my\ dir`, `find . -exec … {} \;` and the single-quote nesting idiom
+   `'it'\''s'` stay `AutoExec` under a matching Allow rule;
+   `echo \; rm -rf /` is an `echo` (bash prints the text) and is decided as
+   one. A blanket confirmation for every escape was considered and
+   rejected: these forms are common in generated commands, and the escape
+   itself no longer changes what the engine sees.
+
    Commands without any of these constructs are lexed to the same text and
-   keep their decision.
+   keep their decision. `echo a # comment` needs confirmation under an
+   Allow rule.
 
 5. **Risk classification changes with it.** ADR 0107 kept its new checks out
    of `split_command` so that the risk segmentation stayed the same. This

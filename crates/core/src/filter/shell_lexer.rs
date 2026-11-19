@@ -13,8 +13,9 @@
 //! unquoted `\x` becomes `'x'` (`\'` becomes `"'"`), a line continuation is
 //! removed, and a comment is removed up to (not including) its newline. Every
 //! later step works on that text. Whether any such construct was present is
-//! reported, so the engine can require a confirmation for it (fail closed,
-//! see [`opaque_syntax_reason`]).
+//! reported; continuations, comments and backslashes inside backticks need a
+//! confirmation (fail closed, see [`opaque_syntax_reason`]), plain escapes
+//! are evaluated against the rules like quoted text.
 
 use super::parser::non_writing_redirection_len;
 
@@ -262,19 +263,27 @@ fn lex_backticks(chars: &[char], start: usize, out: &mut Lexed) -> Option<usize>
     }
 }
 
-/// Fail closed (Spec 0002, Abschnitt 4.4): an unquoted backslash, a line
-/// continuation, a comment or a backslash inside backticks makes the text
-/// differ from what the engine evaluates, so such a command needs at least a
-/// confirmation. The regular evaluation of the canonical text still runs, so
-/// a `Deny` for a command behind the construct keeps winning. Returns the
-/// reason, or `None`. Input that does not lex at all is already rejected as
-/// not safely analysable by the parser.
+/// Fail closed (Spec 0002, Abschnitt 4.4): a line continuation, a comment
+/// or a backslash inside backticks makes the text differ from what the
+/// engine evaluates (or, in backticks, leaves a nesting unresolved), so such
+/// a command needs at least a confirmation. A plain unquoted backslash
+/// escape does not: [`lex`] resolves it exactly into quotes, and the
+/// canonical text is evaluated against the rules like any quoted input. The
+/// regular evaluation always runs, so a `Deny` behind any of these keeps
+/// winning. Returns the reason, or `None`. Input that does not lex at all is
+/// already rejected as not safely analysable by the parser.
 pub(super) fn opaque_syntax_reason(cmd: &str) -> Option<&'static str> {
     let lexed = lex(cmd, CommentMode::Strip)?;
-    if lexed.escape || lexed.continuation || lexed.escape_in_backticks {
+    if lexed.continuation {
         return Some(
-            "Kommando enthält Backslash-Escapes oder Zeilenfortsetzungen und konnte \
-             nicht sicher analysiert werden",
+            "Kommando enthält eine Zeilenfortsetzung (Backslash vor Zeilenumbruch) \
+             und konnte nicht sicher analysiert werden",
+        );
+    }
+    if lexed.escape_in_backticks {
+        return Some(
+            "Kommando enthält einen Backslash in Backticks und konnte nicht sicher \
+             analysiert werden",
         );
     }
     if lexed.comment {
@@ -584,6 +593,26 @@ mod tests {
             let lexed = lex(text, CommentMode::Strip).unwrap();
             assert_eq!(lexed.canonical, text);
             assert!(opaque_syntax_reason(text).is_none(), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn only_continuations_comments_and_backtick_escapes_are_opaque() {
+        for text in [
+            "echo a\\ b",
+            "echo \\' x",
+            "find . -exec ls {} \\;",
+            "echo 'it'\\''s'",
+        ] {
+            assert!(opaque_syntax_reason(text).is_none(), "{text:?}");
+        }
+        for text in [
+            "r\\\nm x",
+            "echo \"a\\\nb\"",
+            "echo a # c",
+            "echo `echo \\` x \\``",
+        ] {
+            assert!(opaque_syntax_reason(text).is_some(), "{text:?}");
         }
     }
 
