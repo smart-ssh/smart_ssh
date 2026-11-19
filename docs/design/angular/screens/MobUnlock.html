@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Mobile – Unlock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#080a0d}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.tick{position:absolute;width:12px;height:12px;border-color:#2cc6e8;border-style:solid;border-width:0}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; background-color: #080a0d; background-image: linear-gradient(#141920 1px, transparent 1px), linear-gradient(90deg, #141920 1px, transparent 1px); background-size: 26px 26px; font-family: Barlow, sans-serif; color: #e3e7ed; display: flex; flex-direction: column; padding: 72px 20px 28px">
+  <div style="display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 40px">
+    <svg viewBox="0 0 64 64" style="width: 72px; height: 72px" aria-hidden="true"><rect width="64" height="64" style="fill: #151a21"></rect><g transform="translate(6.4 6.4) scale(.8)"><path d="M48 14H16v18h32v18H16" style="fill: none; stroke: #f2f4f7; stroke-width: 7; stroke-linecap: square; stroke-linejoin: miter"></path><rect x="42" y="8" width="12" height="12" style="fill: #2cc6e8"></rect><rect x="10" y="44" width="12" height="12" style="fill: #2cc6e8"></rect></g></svg>
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: #f2f4f7">Smart<span style="color: #2cc6e8">SSH</span></span>
+  </div>
+  <main style="position: relative; background: #0e1116; border: 1px solid #3a4452; padding: 22px 18px 18px">
+    <span class="tick" style="top: -7px; left: -7px; border-top-width: 2px; border-left-width: 2px"></span>
+    <span class="tick" style="top: -7px; right: -7px; border-top-width: 2px; border-right-width: 2px"></span>
+    <span class="tick" style="bottom: -7px; left: -7px; border-bottom-width: 2px; border-left-width: 2px"></span>
+    <span class="tick" style="bottom: -7px; right: -7px; border-bottom-width: 2px; border-right-width: 2px"></span>
+    <h1 style="margin: 0 0 6px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: .06em; text-transform: uppercase; color: #f2f4f7">Unlock</h1>
+    <p style="margin: 0 0 18px; font-size: 14px; color: #aeb6c2">Your local database is encrypted with a master password. Enter it to unlock Smart SSH.</p>
+    <label for="mmp" style="display: block; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #7d8796; margin-bottom: 6px">Master password</label>
+    <input id="mmp" type="password" placeholder="" style="display: block; width: 100%; height: 48px; border: 1px solid #2cc6e8; box-shadow: 0 0 0 1px #2cc6e8; background: #080a0d; color: #e3e7ed; padding: 0 12px; font-size: 16px">
+    <button type="button" style="width: 100%; height: 48px; margin-top: 14px; border: 1px solid #2cc6e8; background: #2cc6e8; color: #041015; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .12em; text-transform: uppercase">Unlock</button>
+  </main>
+  <div style="flex: 1"></div>
+  <p style="margin: 0; font-size: 12.5px; color: #7d8796">You can start over if you no longer know your master password. Your existing data is lost in the process — the files are only renamed, not deleted.</p>
+  <button type="button" style="margin-top: 10px; height: 44px; border: 1px solid #5c1c1d; background: transparent; color: #ff8a85; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase">Start over</button>
+</div>
+</body>
+</html>

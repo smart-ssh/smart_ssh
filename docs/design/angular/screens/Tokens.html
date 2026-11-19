@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Colour &amp; type tokens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#7d8796}
+.mono{font-family:"JetBrains Mono",monospace}
+.sw{display:grid;grid-template-columns:28px minmax(0,1fr) 70px 70px;align-items:center;gap:10px;height:30px;border-bottom:1px solid #1b2129;font-size:12px}
+.chip{width:28px;height:20px;border:1px solid #3a4452}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;height:32px;padding:0 14px;border:1px solid #3a4452;background:transparent;color:#c9cfd8;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 6px;border:1px solid #3a4452;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#aeb6c2}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 1100px; background: #0e1116; color: #e3e7ed; font-family: Barlow, sans-serif; padding: 48px 56px; display: flex; flex-direction: column; gap: 22px">
+  <div style="display: flex; align-items: flex-end; gap: 24px; border-bottom: 1px solid #3a4452; padding-bottom: 18px">
+    <div>
+      <div class="lbl">03 · Foundations</div>
+      <h1 style="margin: 6px 0 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 44px; letter-spacing: .06em; text-transform: uppercase; color: #f2f4f7">Tokens — mapped to theme/*.css</h1>
+    </div>
+    <p style="margin: 0 0 6px auto; max-width: 520px; color: #aeb6c2; font-size: 14px">Same semantic names as today (<span class="mono" style="font-size: 12px">--surface*, --fg*, --accent*, --danger*, --warning*, --success*, --info*, --local*, --term-*</span>); only the layer-1 palette changes. Indigo becomes signal cyan, slate becomes a neutral graphite.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 470px; gap: 32px">
+    
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px"><span class="lbl" style="color: #6fdcf2">Dark (primary)</span><span class="mono" style="font-size: 11px; color: #7d8796">theme/dark.css</span></div>
+        <div class="sw" style="height: 22px; border-bottom: 1px solid #3a4452"><span></span><span class="lbl" style="font-size: 10.5px">token</span><span class="lbl" style="font-size: 10.5px">hex</span><span class="lbl" style="font-size: 10.5px">contrast</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #080a0d"></span><span class="mono" style="color: #c9cfd8">--surface-sunken</span><span class="mono" style="color: #96a0ae">#080a0d</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #0e1116"></span><span class="mono" style="color: #c9cfd8">--surface</span><span class="mono" style="color: #96a0ae">#0e1116</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #151a21"></span><span class="mono" style="color: #c9cfd8">--surface-raised</span><span class="mono" style="color: #96a0ae">#151a21</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #1e252f"></span><span class="mono" style="color: #c9cfd8">--surface-hover</span><span class="mono" style="color: #96a0ae">#1e252f</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #242b35"></span><span class="mono" style="color: #c9cfd8">--border</span><span class="mono" style="color: #96a0ae">#242b35</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #3a4452"></span><span class="mono" style="color: #c9cfd8">--border-strong</span><span class="mono" style="color: #96a0ae">#3a4452</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #7d8796"></span><span class="mono" style="color: #c9cfd8">--fg-faint</span><span class="mono" style="color: #96a0ae">#7d8796</span><span class="mono" style="color: #7d8796">5.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #aeb6c2"></span><span class="mono" style="color: #c9cfd8">--fg-muted</span><span class="mono" style="color: #96a0ae">#aeb6c2</span><span class="mono" style="color: #7d8796">9.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #e3e7ed"></span><span class="mono" style="color: #c9cfd8">--fg</span><span class="mono" style="color: #96a0ae">#e3e7ed</span><span class="mono" style="color: #7d8796">15.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #f2f4f7"></span><span class="mono" style="color: #c9cfd8">--fg-strong</span><span class="mono" style="color: #96a0ae">#f2f4f7</span><span class="mono" style="color: #7d8796">17.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #2cc6e8"></span><span class="mono" style="color: #c9cfd8">--accent</span><span class="mono" style="color: #96a0ae">#2cc6e8</span><span class="mono" style="color: #7d8796">9.3:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #6fdcf2"></span><span class="mono" style="color: #c9cfd8">--accent-fg</span><span class="mono" style="color: #96a0ae">#6fdcf2</span><span class="mono" style="color: #7d8796">11.9:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #0a2630"></span><span class="mono" style="color: #c9cfd8">--accent-subtle</span><span class="mono" style="color: #96a0ae">#0a2630</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #134a59"></span><span class="mono" style="color: #c9cfd8">--accent-border</span><span class="mono" style="color: #96a0ae">#134a59</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #f04848"></span><span class="mono" style="color: #c9cfd8">--danger</span><span class="mono" style="color: #96a0ae">#f04848</span><span class="mono" style="color: #7d8796">5.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #ff8a85"></span><span class="mono" style="color: #c9cfd8">--danger-fg</span><span class="mono" style="color: #96a0ae">#ff8a85</span><span class="mono" style="color: #7d8796">8.3:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #f5a524"></span><span class="mono" style="color: #c9cfd8">--warning</span><span class="mono" style="color: #96a0ae">#f5a524</span><span class="mono" style="color: #7d8796">9.3:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #ffc266"></span><span class="mono" style="color: #c9cfd8">--warning-fg</span><span class="mono" style="color: #96a0ae">#ffc266</span><span class="mono" style="color: #7d8796">11.9:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #3dd68c"></span><span class="mono" style="color: #c9cfd8">--success</span><span class="mono" style="color: #96a0ae">#3dd68c</span><span class="mono" style="color: #7d8796">10.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #7be5ae"></span><span class="mono" style="color: #c9cfd8">--success-fg</span><span class="mono" style="color: #96a0ae">#7be5ae</span><span class="mono" style="color: #7d8796">12.3:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #b5c2d8"></span><span class="mono" style="color: #c9cfd8">--info-fg</span><span class="mono" style="color: #96a0ae">#b5c2d8</span><span class="mono" style="color: #7d8796">10.5:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #e9a6f7"></span><span class="mono" style="color: #c9cfd8">--local-fg</span><span class="mono" style="color: #96a0ae">#e9a6f7</span><span class="mono" style="color: #7d8796">10.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #07090c"></span><span class="mono" style="color: #c9cfd8">--term-bg</span><span class="mono" style="color: #96a0ae">#07090c</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #d8dee6"></span><span class="mono" style="color: #c9cfd8">--term-fg</span><span class="mono" style="color: #96a0ae">#d8dee6</span><span class="mono" style="color: #7d8796">14.0:1</span></div>
+        
+      </div>
+    
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px"><span class="lbl" style="color: #6fdcf2">Light</span><span class="mono" style="font-size: 11px; color: #7d8796">theme/light.css</span></div>
+        <div class="sw" style="height: 22px; border-bottom: 1px solid #3a4452"><span></span><span class="lbl" style="font-size: 10.5px">token</span><span class="lbl" style="font-size: 10.5px">hex</span><span class="lbl" style="font-size: 10.5px">contrast</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #f2f4f7"></span><span class="mono" style="color: #c9cfd8">--surface-sunken</span><span class="mono" style="color: #96a0ae">#f2f4f7</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #ffffff"></span><span class="mono" style="color: #c9cfd8">--surface</span><span class="mono" style="color: #96a0ae">#ffffff</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #ebeef2"></span><span class="mono" style="color: #c9cfd8">--surface-raised</span><span class="mono" style="color: #96a0ae">#ebeef2</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #dfe3e9"></span><span class="mono" style="color: #c9cfd8">--surface-hover</span><span class="mono" style="color: #96a0ae">#dfe3e9</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #d5dae1"></span><span class="mono" style="color: #c9cfd8">--border</span><span class="mono" style="color: #96a0ae">#d5dae1</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #a9b2bf"></span><span class="mono" style="color: #c9cfd8">--border-strong</span><span class="mono" style="color: #96a0ae">#a9b2bf</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #5b6472"></span><span class="mono" style="color: #c9cfd8">--fg-faint</span><span class="mono" style="color: #96a0ae">#5b6472</span><span class="mono" style="color: #7d8796">6.0:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #3f4753"></span><span class="mono" style="color: #c9cfd8">--fg-muted</span><span class="mono" style="color: #96a0ae">#3f4753</span><span class="mono" style="color: #7d8796">9.4:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #12161c"></span><span class="mono" style="color: #c9cfd8">--fg</span><span class="mono" style="color: #96a0ae">#12161c</span><span class="mono" style="color: #7d8796">18.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #06080b"></span><span class="mono" style="color: #c9cfd8">--fg-strong</span><span class="mono" style="color: #96a0ae">#06080b</span><span class="mono" style="color: #7d8796">20.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #0a7fa0"></span><span class="mono" style="color: #c9cfd8">--accent</span><span class="mono" style="color: #96a0ae">#0a7fa0</span><span class="mono" style="color: #7d8796">4.6:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #086a86"></span><span class="mono" style="color: #c9cfd8">--accent-fg</span><span class="mono" style="color: #96a0ae">#086a86</span><span class="mono" style="color: #7d8796">6.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #e3f4f9"></span><span class="mono" style="color: #c9cfd8">--accent-subtle</span><span class="mono" style="color: #96a0ae">#e3f4f9</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #9fd6e6"></span><span class="mono" style="color: #c9cfd8">--accent-border</span><span class="mono" style="color: #96a0ae">#9fd6e6</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #c42b2b"></span><span class="mono" style="color: #c9cfd8">--danger</span><span class="mono" style="color: #96a0ae">#c42b2b</span><span class="mono" style="color: #7d8796">5.6:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #a32020"></span><span class="mono" style="color: #c9cfd8">--danger-fg</span><span class="mono" style="color: #96a0ae">#a32020</span><span class="mono" style="color: #7d8796">7.5:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #9a5b00"></span><span class="mono" style="color: #c9cfd8">--warning</span><span class="mono" style="color: #96a0ae">#9a5b00</span><span class="mono" style="color: #7d8796">5.4:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #7f4a00"></span><span class="mono" style="color: #c9cfd8">--warning-fg</span><span class="mono" style="color: #96a0ae">#7f4a00</span><span class="mono" style="color: #7d8796">7.3:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #157a47"></span><span class="mono" style="color: #c9cfd8">--success</span><span class="mono" style="color: #96a0ae">#157a47</span><span class="mono" style="color: #7d8796">5.4:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #11653b"></span><span class="mono" style="color: #c9cfd8">--success-fg</span><span class="mono" style="color: #96a0ae">#11653b</span><span class="mono" style="color: #7d8796">7.1:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #3c4c66"></span><span class="mono" style="color: #c9cfd8">--info-fg</span><span class="mono" style="color: #96a0ae">#3c4c66</span><span class="mono" style="color: #7d8796">8.7:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #8a2aa0"></span><span class="mono" style="color: #c9cfd8">--local-fg</span><span class="mono" style="color: #96a0ae">#8a2aa0</span><span class="mono" style="color: #7d8796">7.2:1</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #f7f8fa"></span><span class="mono" style="color: #c9cfd8">--term-bg</span><span class="mono" style="color: #96a0ae">#f7f8fa</span><span class="mono" style="color: #7d8796">—</span></div>
+        
+          <div class="sw"><span class="chip" style="background: #1a1f27"></span><span class="mono" style="color: #c9cfd8">--term-fg</span><span class="mono" style="color: #96a0ae">#1a1f27</span><span class="mono" style="color: #7d8796">16.5:1</span></div>
+        
+      </div>
+    
+
+    <div style="display: flex; flex-direction: column; gap: 18px">
+      <div>
+        <div class="lbl" style="color: #6fdcf2; margin-bottom: 10px">Type — fonts already bundled</div>
+        <div style="border-top: 1px solid #242b35">
+          <div style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #242b35"><span class="mono" style="width: 92px; font-size: 10.5px; color: #7d8796">display 32/700</span><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 32px; letter-spacing: .06em; text-transform: uppercase">Unlock</span></div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #242b35"><span class="mono" style="width: 92px; font-size: 10.5px; color: #7d8796">title 20/600</span><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: .05em; text-transform: uppercase">Server: web-01</span></div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #242b35"><span class="mono" style="width: 92px; font-size: 10.5px; color: #7d8796">label 11.5/600</span><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: #aeb6c2">Parts of this command</span></div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #242b35"><span class="mono" style="width: 92px; font-size: 10.5px; color: #7d8796">body 14/400</span><span style="font-size: 14px">nginx itself is fine; php-fpm refuses connections.</span></div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #242b35"><span class="mono" style="width: 92px; font-size: 10.5px; color: #7d8796">mono 12.5/400</span><span class="mono" style="font-size: 12.5px">journalctl -u php8.3-fpm -n 200</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl" style="color: #6fdcf2; margin-bottom: 10px">Components — radius 0</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px">
+          <button class="btn" type="button" style="background: #2cc6e8; border-color: #2cc6e8; color: #041015">Execute</button>
+          <button class="btn" type="button">Save rules (2)</button>
+          <button class="btn" type="button" style="border-color: #5c1c1d; color: #ff8a85">Deny</button>
+          <button class="btn" type="button" style="border-color: transparent; color: #aeb6c2">Cancel</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px">
+          <span class="badge"><span style="width: 7px; height: 7px; background: #3dd68c"></span>Connected</span>
+          <span class="badge" style="border-color: #5a3e0e; color: #ffc266"><span style="width: 7px; height: 7px; background: #f5a524"></span>Server · yellow</span>
+          <span class="badge" style="border-color: #5c1c1d; color: #ff8a85"><span style="width: 7px; height: 7px; background: #f04848"></span>Data · red</span>
+          <span class="badge" style="border-color: #5a2366; color: #e9a6f7">Local</span>
+          <span class="badge" style="border-color: #134a59; color: #6fdcf2">Allow</span>
+        </div>
+        <label for="tk-in" style="display: block; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: #7d8796; margin-bottom: 4px">Host</label>
+        <input id="tk-in" value="10.0.4.21" style="height: 34px; width: 100%; border: 1px solid #2cc6e8; box-shadow: 0 0 0 1px #2cc6e8; background: #080a0d; color: #e3e7ed; padding: 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px">
+        <div style="display: flex; margin-top: 12px; border-bottom: 1px solid #242b35">
+          <span style="padding: 8px 14px; border-top: 2px solid #2cc6e8; background: #151a21; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase">General</span>
+          <span style="padding: 8px 14px; border-top: 2px solid transparent; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #96a0ae">Connection</span>
+          <span style="padding: 8px 14px; border-top: 2px solid transparent; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #96a0ae">Security</span>
+        </div>
+      </div>
+
+      <div style="border: 1px solid #242b35; padding: 12px 14px; font-size: 13px; color: #aeb6c2; display: flex; flex-direction: column; gap: 4px">
+        <div class="lbl" style="color: #6fdcf2">Rules of the system</div>
+        <span>Radius 0 on every element; focus = 1 px accent border + 1 px accent ring (no glow).</span>
+        <span>Depth by 1 px rules and surface steps, never by shadow; one hard offset shadow (4 px, no blur) only for drag ghosts and menus.</span>
+        <span>Status = 8 px solid square, never a dot.</span>
+        <span>Spacing on a 4 px grid; desktop controls 32 px, mobile 44 px.</span>
+        <span>Colour pairs keep ≥ 4.5 : 1 for text (values right are against --surface).</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

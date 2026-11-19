@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Desktop – Settings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--danger-fg:#ff8a85;--danger-border:#5c1c1d;--success:#3dd68c;--success-fg:#7be5ae;--success-border:#175536;font-family:Barlow,system-ui,sans-serif;font-size:14px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint)}
+.mono{font-family:"JetBrains Mono",monospace}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;height:32px;padding:0 12px;border:1px solid var(--border-strong);background:transparent;color:var(--fg-soft);display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 6px;border:1px solid var(--border-strong);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-muted);white-space:nowrap}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.nav{display:flex;align-items:center;gap:10px;width:100%;height:38px;padding:0 14px;background:transparent;border:0;border-left:2px solid transparent;color:var(--fg-muted);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.nav.on{background:var(--surface-raised);color:var(--fg-strong);border-left-color:var(--accent)}
+.sw{width:36px;height:20px;border:1px solid var(--border-strong);background:var(--surface-sunken);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;background:var(--fg-faint)}
+.sw.on{background:var(--accent-subtle);border-color:var(--accent)}
+.sw.on::after{left:19px;background:var(--accent)}
+.card{border:1px solid var(--border);background:var(--surface-sunken)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 100%; height: 900px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <svg viewBox="0 0 64 64" style="width: 20px; height: 20px" aria-hidden="true"><path d="M48 14H16v18h32v18H16" style="fill: none; stroke: #e3e7ed; stroke-width: 7; stroke-linecap: square; stroke-linejoin: miter"></path><rect x="42" y="8" width="12" height="12" style="fill: #2cc6e8"></rect><rect x="10" y="44" width="12" height="12" style="fill: #2cc6e8"></rect></svg>
+    <h1 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Settings</h1>
+    <div style="flex: 1"></div>
+    <button class="btn" type="button" aria-label="Close" style="width: 32px; padding: 0; justify-content: center; border-color: transparent"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18"></path></svg></button>
+  </header>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <nav aria-label="Settings sections" style="width: 260px; flex: none; border-right: 1px solid var(--border); background: var(--surface-sunken); padding: 12px 0">
+      
+        <button class="nav on" type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">01</span>AI Provider</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">02</span>Display &amp; Language</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">03</span>Diagnostics</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">04</span>Files</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">05</span>Master password</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">06</span>Data and backup</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">07</span>Voice input</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">08</span>About</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">09</span>Sessions &amp; Data</button>
+      
+        <button class="nav " type="button"><span class="mono" style="font-size: 10.5px; color: var(--fg-faint); width: 18px">10</span>MCP Server</button>
+      
+    </nav>
+    <main style="flex: 1; min-width: 0; padding: 26px 32px; overflow: hidden">
+      <div style="max-width: 880px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 14px">
+          <span class="mono" style="font-size: 12px; color: var(--accent-fg)">01</span>
+          <h2 class="h" style="margin: 0; font-size: 24px; font-weight: 700; color: var(--fg-strong)">AI Provider</h2>
+          <div style="flex: 1"></div>
+          <button class="btn pri" type="button">+ Add Provider</button>
+        </div>
+
+        <section>
+          <div class="lbl" style="margin-bottom: 8px">Configured providers</div>
+          <div class="card">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 200px 120px 140px; align-items: center; min-height: 52px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--accent-subtle); box-shadow: inset 0 0 0 1px var(--accent-border)">
+              <div><div style="font-weight: 600">Anthropic</div><div style="font-size: 12px; color: var(--fg-faint)">Type: Anthropic</div></div>
+              <span class="mono" style="font-size: 12px; color: var(--fg-soft)">claude-sonnet-5</span>
+              <span><span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success)"></span>active</span></span>
+              <span style="display: flex; justify-content: flex-end"><button class="btn" type="button" style="height: 28px">Edit</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 200px 120px 140px; align-items: center; min-height: 52px; padding: 0 14px">
+              <div><div style="font-weight: 600">Ollama (local)</div><div style="font-size: 12px; color: var(--fg-faint)">Type: Ollama · http://localhost:11434</div></div>
+              <span class="mono" style="font-size: 12px; color: var(--fg-soft)">qwen3:14b</span>
+              <span></span>
+              <span style="display: flex; justify-content: flex-end; gap: 6px"><button class="btn" type="button" style="height: 28px">Set Active</button><button class="btn" type="button" style="height: 28px">Edit</button></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
+          <h3 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Risk Indicators — AI Second Opinion</h3>
+          <label style="display: flex; gap: 14px; align-items: flex-start; cursor: pointer">
+            <span class="sw on" aria-hidden="true" style="margin-top: 2px"></span>
+            <span><span style="display: block; font-weight: 600">Enable AI second opinion</span><span style="display: block; font-size: 13px; color: var(--fg-subtle); max-width: 640px">Optional: a second AI provider assesses, in addition to the rule-based check, whether a command might touch sensitive data or change the server.</span></span>
+            <input type="checkbox" checked style="position: absolute; opacity: 0; width: 1px; height: 1px">
+          </label>
+          <div style="display: grid; grid-template-columns: 200px 260px; gap: 10px; align-items: center; padding-left: 50px">
+            <label for="rp" class="lbl">Provider for the second opinion</label>
+            <select id="rp" style="height: 34px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); padding: 0 10px; font: inherit"><option>Ollama (local) · qwen3:14b</option></select>
+          </div>
+          <div style="height: 1px; background: var(--border)"></div>
+          <label style="display: flex; gap: 14px; align-items: flex-start; cursor: pointer">
+            <span class="sw" aria-hidden="true" style="margin-top: 2px"></span>
+            <span><span style="display: block; font-weight: 600">Always confirm on red risk</span><span style="display: block; font-size: 13px; color: var(--fg-subtle); max-width: 640px">When this is on, any suggestion rated red on either risk axis always requires confirmation – even against an allow rule.</span></span>
+            <input type="checkbox" style="position: absolute; opacity: 0; width: 1px; height: 1px">
+          </label>
+        </section>
+
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--fg-faint); font-size: 12.5px">
+          <svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px" aria-hidden="true"><path d="M3 3h18v18H3z M12 11v6 M12 7v.5"></path></svg>
+          Two-column layout on desktop; on narrow screens the list opens a section with a Back button (as today).
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>
