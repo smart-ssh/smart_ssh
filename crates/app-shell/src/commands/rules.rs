@@ -128,6 +128,52 @@ pub async fn explain_confirmation(
     .await)
 }
 
+/// Issue #1356, Spec 0011: rule suggestions for ONE segment of the pending
+/// `command` (index as in `SegmentCoverageDto.index`) in `scope`, with a
+/// segment verdict and a command verdict per suggestion, given the rules the
+/// user has staged. Read-only: nothing is stored. Server and tags come from
+/// the session.
+#[tauri::command]
+pub async fn explain_segment_rules(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    command: String,
+    segment_index: usize,
+    scope: Scope,
+    staged: Vec<app_logic::dto::StagedRuleDto>,
+) -> CommandResult<app_logic::dto::SegmentRuleSuggestionsDto> {
+    let session = app_logic::confirmation_explain::session_for_explain(
+        &state.sessions,
+        session_id,
+        &command,
+    )?;
+    app_logic::confirmation_explain::explain_segment_rules_for_session(
+        &session,
+        state.profile_store.as_ref(),
+        &command,
+        segment_index,
+        scope,
+        &staged,
+    )
+    .await
+    .inspect_err(|e| {
+        app_logic::confirmation_explain::log_explain_failure(e, session_id, &command);
+    })
+}
+
+/// Issue #1356, Spec 0011: saves the staged rules (each with its own
+/// patterns and scope) in one transaction, all or nothing. Does not touch
+/// the pending confirmation.
+#[tauri::command]
+pub async fn create_quick_rules_batch(
+    state: State<'_, AppState>,
+    rules: Vec<app_logic::dto::StagedRuleDto>,
+) -> CommandResult<Vec<RuleId>> {
+    app_logic::rule_suggestions::create_quick_rules_batch(&state.policy_store, rules)
+        .await
+        .map_err(Into::into)
+}
+
 /// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
 /// delegiert an [`app_logic::filter_rules::create_rule`] über
 /// [`app_logic::rule_suggestions::create_quick_rule`]), löst **danach** die

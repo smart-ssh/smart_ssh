@@ -450,6 +450,68 @@ pub fn suggest_rule_patterns_excluding(
     suggestions
 }
 
+/// Issue #1356: suggestions for ONE segment (specific to broad, at most
+/// [`MAX_SUGGESTIONS`]), built from [`analyze_segment`]. Every pattern is
+/// derived from this segment only; each suggestion is checked against the
+/// engine's matching of that segment, like in
+/// [`suggest_rule_patterns_excluding`].
+pub fn suggest_segment_patterns(segment: &str) -> Vec<PatternSuggestionDto> {
+    let segment = segment.trim();
+    if segment.is_empty() {
+        return Vec::new();
+    }
+    let a = analyze_segment(segment);
+    let mut candidates = vec![PatternSuggestionDto {
+        kind: SuggestionKind::Exact,
+        names: Vec::new(),
+        patterns: vec![a.exact.clone()],
+    }];
+    if !a.path_scoped.is_empty() {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::PathScoped,
+            names: Vec::new(),
+            patterns: a.path_scoped.clone(),
+        });
+    }
+    if let Some(p) = &a.last_arg_open {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::LastArgOpen,
+            names: Vec::new(),
+            patterns: vec![p.clone()],
+        });
+    }
+    if let Some((name, pats)) = &a.sub {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Subcommand,
+            names: vec![name.clone()],
+            patterns: pats.clone(),
+        });
+    }
+    if let Some((name, pat)) = &a.tool {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Tool,
+            names: vec![name.clone()],
+            patterns: vec![pat.clone()],
+        });
+    }
+    let segments = [segment.to_string()];
+    let mut out: Vec<PatternSuggestionDto> = Vec::new();
+    for candidate in candidates {
+        if !suggestion_covers(&candidate, &segments) {
+            continue;
+        }
+        let same_set = |o: &PatternSuggestionDto| {
+            o.patterns.len() == candidate.patterns.len()
+                && o.patterns.iter().all(|p| candidate.patterns.contains(p))
+        };
+        if !out.iter().any(same_set) {
+            out.push(candidate);
+        }
+    }
+    out.truncate(MAX_SUGGESTIONS);
+    out
+}
+
 /// Spec 0011, Abschnitt 2: höchstens sechs Vorschläge.
 pub const MAX_SUGGESTIONS: usize = 6;
 
@@ -504,6 +566,50 @@ pub async fn create_quick_rules(
             .into_stored_rule(RuleId(uuid::Uuid::new_v4().to_string()), now, now)
         })
         .collect();
+    for rule in &stored {
+        rule.pattern.validate()?;
+    }
+    policy_store.create_many(&stored).await?;
+    Ok(stored.into_iter().map(|r| r.id).collect())
+}
+
+/// Issue #1356: saves several staged rules, each with its own patterns and
+/// scope, in ONE transaction: all or nothing. Any invalid pattern (empty,
+/// does not compile, Spec 0077) rejects the whole batch before anything is
+/// written. Does not touch a pending confirmation.
+pub async fn create_quick_rules_batch(
+    policy_store: &SqlitePolicyStore,
+    rules: Vec<crate::dto::StagedRuleDto>,
+) -> Result<Vec<RuleId>, RuleWriteError> {
+    let now = chrono::Utc::now();
+    let mut stored = Vec::new();
+    for staged in rules {
+        for p in staged.patterns {
+            // A staged rule never carries an empty pattern (stricter than
+            // `Pattern::validate`, which accepts one).
+            if p.pattern_value.trim().is_empty() {
+                return Err(RuleWriteError::InvalidPattern(
+                    ssh_manager_core::filter::PatternError {
+                        message: "empty pattern".to_string(),
+                    },
+                ));
+            }
+            stored.push(
+                RuleInput {
+                    pattern_type: p.pattern_type,
+                    pattern_value: p.pattern_value,
+                    action: RuleAction::Allow,
+                    scope: staged.scope.clone(),
+                    priority: 0,
+                }
+                .into_stored_rule(
+                    RuleId(uuid::Uuid::new_v4().to_string()),
+                    now,
+                    now,
+                ),
+            );
+        }
+    }
     for rule in &stored {
         rule.pattern.validate()?;
     }
@@ -1063,5 +1169,62 @@ mod tests {
                 }
             }
         }
+    }
+
+    // --- Issue #1356: batch save and per-segment suggestions ---------------
+
+    fn staged(value: &str, scope: Scope) -> crate::dto::StagedRuleDto {
+        crate::dto::StagedRuleDto {
+            patterns: vec![glob(value)],
+            scope,
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_stores_rules_with_different_scopes() {
+        let (_dir, store) = new_store().await;
+        let server = Scope::Server(ssh_manager_core::shared::ServerId::new());
+        let ids = create_quick_rules_batch(
+            &store,
+            vec![
+                staged("ls *", Scope::Global),
+                staged("git *", server.clone()),
+                staged("cat *", Scope::Tag("prod".into())),
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(ids.len(), 3);
+        let all = store.list_all().await.unwrap();
+        assert_eq!(all.len(), 3);
+        assert!(all.iter().any(|r| r.scope == server));
+        assert!(all.iter().any(|r| r.scope == Scope::Tag("prod".into())));
+    }
+
+    #[tokio::test]
+    async fn batch_with_one_invalid_rule_stores_nothing() {
+        for bad in ["ls [abc *", ""] {
+            let (_dir, store) = new_store().await;
+            let err = create_quick_rules_batch(
+                &store,
+                vec![staged("ls *", Scope::Global), staged(bad, Scope::Global)],
+            )
+            .await
+            .expect_err("invalid pattern");
+            assert!(matches!(err, RuleWriteError::InvalidPattern(_)), "{err:?}");
+            assert!(store.list_all().await.unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn segment_suggestions_derive_only_from_the_segment() {
+        let s = suggest_segment_patterns("ls -la /tmp");
+        assert!(s.iter().any(|x| x.kind == SuggestionKind::Exact));
+        assert!(s.iter().any(|x| x.kind == SuggestionKind::Tool));
+        assert!(s.len() <= MAX_SUGGESTIONS);
+        assert!(suggest_segment_patterns("  ").is_empty());
+        // Non-plain tool: exact only.
+        let s = suggest_segment_patterns("FOO=1 ls");
+        assert!(s.iter().all(|x| x.kind == SuggestionKind::Exact));
     }
 }

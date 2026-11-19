@@ -35,6 +35,8 @@ import type {
   PatternDto,
   ConfirmationExplanationDto,
   SuggestionPatternDto,
+  SegmentRuleSuggestionsDto,
+  StagedRuleDto,
   RemoteEntryDto,
   RuleDto,
   RuleInput,
@@ -479,6 +481,29 @@ export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
  * verdict per suggestion, evaluated by the backend for the session's server. */
 export const explainConfirmation = (sessionId: string, command: string, scope: Scope) =>
   invoke<ConfirmationExplanationDto>("explain_confirmation", { sessionId, command, scope });
+
+/** Issue #1356: suggestions for one segment (`segmentIndex` as in
+ * `SegmentCoverageDto.index`) in `scope`, with a segment and a command verdict
+ * each, given the rules staged so far. Read-only. */
+export const explainSegmentRules = (
+  sessionId: string,
+  command: string,
+  segmentIndex: number,
+  scope: Scope,
+  staged: StagedRuleDto[],
+) =>
+  invoke<SegmentRuleSuggestionsDto>("explain_segment_rules", {
+    sessionId,
+    command,
+    segmentIndex,
+    scope,
+    staged,
+  });
+
+/** Issue #1356: saves the staged rules (own patterns and scope each) in one
+ * transaction, all or nothing. Does not resolve a pending confirmation. */
+export const createQuickRulesBatch = (rules: StagedRuleDto[]) =>
+  invoke<string[]>("create_quick_rules_batch", { rules });
 
 /** `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
  * `undefined`/gleich dem ursprünglichen Kommando löst wie zuvor über

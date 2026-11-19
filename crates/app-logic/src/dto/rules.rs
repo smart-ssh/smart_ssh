@@ -338,4 +338,53 @@ pub struct ConfirmationExplanationDto {
     pub suggestions: Vec<ExplainedSuggestionDto>,
 }
 
+// --- Issue #1356: rule suggestions per segment ---------------------------
+
+/// A rule the user has staged in the confirmation dialog but not saved yet:
+/// a set of patterns that is saved together, with its own scope.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct StagedRuleDto {
+    pub patterns: Vec<SuggestionPatternDto>,
+    pub scope: Scope,
+}
+
+/// Whether a suggestion covers one segment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct SegmentVerdictDto {
+    /// The engine lets the segment run automatically with the staged rules
+    /// plus this suggestion.
+    pub covered: bool,
+    /// Why it still asks (`FILTER_*` codes, `RULE_SCOPE_NOT_APPLICABLE`, or a
+    /// post-engine escalation code). Empty if `covered`.
+    pub reasons: Vec<String>,
+}
+
+/// A suggestion for one segment with its two verdicts.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct SegmentSuggestionDto {
+    #[serde(flatten)]
+    pub suggestion: PatternSuggestionDto,
+    pub segment_verdict: SegmentVerdictDto,
+    pub command_verdict: SuggestionVerdictDto,
+}
+
+/// Response of `explain_segment_rules`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct SegmentRuleSuggestionsDto {
+    pub segment_index: usize,
+    pub segment_text: String,
+    /// Non-empty when the segment always asks (state `blocked`): then there
+    /// are no suggestions. Same codes as `SegmentCoverageDto.reasons`.
+    pub blocked_reasons: Vec<String>,
+    pub suggestions: Vec<SegmentSuggestionDto>,
+}
+
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------

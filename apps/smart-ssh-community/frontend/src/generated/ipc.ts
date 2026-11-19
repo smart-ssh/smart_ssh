@@ -264,6 +264,12 @@ export type SegmentCoverageDto = { index: number, text: string, state: SegmentCo
 
 export type SegmentCoverageState = "covered" | "needsRule" | "blocked";
 
+export type SegmentRuleSuggestionsDto = { segmentIndex: number, segmentText: string, blockedReasons: Array<string>, suggestions: Array<SegmentSuggestionDto>, };
+
+export type SegmentSuggestionDto = { segmentVerdict: SegmentVerdictDto, commandVerdict: SuggestionVerdictDto, kind: SuggestionKind, names: Array<string>, patterns: Array<SuggestionPatternDto>, };
+
+export type SegmentVerdictDto = { covered: boolean, reasons: Array<string>, };
+
 export type ServerDto = { id: string, name: string, host: string, port: number, username: string, groupId: string | null, tags: Array<string>, authKind: AuthMethodKind, identityFilePath: string | null, jumpHost: string | null, notes: string, hasSudoPassword: boolean, sudoPasswordUnknown: boolean, isLocal: boolean, postIngestPolicy: PostIngestPolicy, aiInjectionCheckEnabled: boolean, sftpServerPath: string | null, startDirectory: string | null, elevationAllowed: boolean, isCopy: boolean, };
 
 export type ServerId = string;
@@ -285,6 +291,8 @@ export type SftpTransferKind = "upload" | "download" | "delete" | "chmod" | "cho
 export type SftpTransferProgressPayload = { sessionId: string, transferId: string, bytesDone: number, totalBytes: number | null, folder: SftpFolderProgress | null, entries: SftpEntriesProgress | null, };
 
 export type SftpTransferStartedPayload = { sessionId: string, transferId: string, kind: SftpTransferKind, fileName: string, totalBytes: number | null, };
+
+export type StagedRuleDto = { patterns: Array<SuggestionPatternDto>, scope: Scope, };
 
 export type StepDetail = { "code": "contacting", target: string, } | { "code": "tunnel", hop: string, } | { "code": "waitingForResponse" } | { "code": "waitingForDecision" } | { "code": "authMethod", method: string, };
 
