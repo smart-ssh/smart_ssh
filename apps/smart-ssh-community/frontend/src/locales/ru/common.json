@@ -356,7 +356,13 @@
     "matchedRuleLabel": "Правило:",
     "segmentLabel": "Часть {{index}}",
     "checksLabel": "Проверки:",
-    "hardBlacklistLabel": "Жёсткий чёрный список:"
+    "hardBlacklistLabel": "Жёсткий чёрный список:",
+    "invalidPattern": "Недопустимый шаблон",
+    "rowActions": "Действия строки",
+    "ruleCount_one": "{{count}} правило",
+    "ruleCount_few": "{{count}} правила",
+    "ruleCount_many": "{{count}} правил",
+    "ruleCount_other": "{{count}} правила"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Автоматическое продолжение приостановлено после {{limit}} шагов без вашего подтверждения — отправьте сообщение, чтобы продолжить.",

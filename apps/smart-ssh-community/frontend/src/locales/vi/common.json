@@ -356,7 +356,10 @@
     "matchedRuleLabel": "Quy tắc:",
     "segmentLabel": "Đoạn {{index}}",
     "checksLabel": "Kiểm tra:",
-    "hardBlacklistLabel": "Danh sách chặn cứng:"
+    "hardBlacklistLabel": "Danh sách chặn cứng:",
+    "invalidPattern": "Mẫu không hợp lệ",
+    "rowActions": "Thao tác của hàng",
+    "ruleCount_other": "{{count}} quy tắc"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Chế độ tự động tiếp tục đã tạm dừng sau {{limit}} bước mà không có xác nhận của bạn — hãy gửi một tin nhắn để tiếp tục.",

@@ -356,7 +356,10 @@
     "matchedRuleLabel": "Aturan:",
     "segmentLabel": "Segmen {{index}}",
     "checksLabel": "Pemeriksaan:",
-    "hardBlacklistLabel": "Daftar hitam keras:"
+    "hardBlacklistLabel": "Daftar hitam keras:",
+    "invalidPattern": "Pola tidak valid",
+    "rowActions": "Tindakan baris",
+    "ruleCount_other": "{{count}} aturan"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Kelanjutan otomatis dijeda setelah {{limit}} langkah tanpa konfirmasi Anda — kirim pesan untuk melanjutkan.",

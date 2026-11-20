@@ -40,7 +40,7 @@ describe("FilterRulesView initialRuleId (issue #696)", () => {
     const consumed = renderView("gone");
     await waitFor(() => expect(consumed).toHaveBeenCalled());
     // The rule list is rendered (loaded) before the absence of an opened form means anything.
-    expect(await screen.findByText("glob: df *")).toBeInTheDocument();
+    expect(await screen.findByText("df *")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("df *")).toBeNull();
   });
 });

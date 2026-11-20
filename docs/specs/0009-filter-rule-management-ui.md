@@ -54,15 +54,23 @@ sich nur, dass Nutzerregeln greifen.
 
 ## 6. Oberfläche: Regel-Manager
 
-- **Regel-Liste**, gruppiert nach Geltungsbereich: zuerst Global, dann je
-  Server, dann je Tag; innerhalb einer Gruppe nach Priorität. Jede Zeile zeigt
-  das Muster, die Aktion (Allow grün, Confirm gelb, Deny rot) und die
-  Priorität. Die Priorität lässt sich mit Auf-/Ab-Schaltflächen ändern, nicht
-  per Drag-and-Drop (wie in Spec 0008). Eine Regel mit ungültigem Muster ist
-  sichtbar markiert, und ihre Pfeile sind deaktiviert (Spec 0077).
-- **Hard-Blacklist-Bereich**, deutlich als „fest codiert, nicht bearbeitbar"
-  gekennzeichnet. Er zeigt die Muster aus Spec 0002, Abschnitt 3.1, damit der
-  Nutzer weiß, dass sie immer greifen.
+- **Kopfzeile:** Titel „Regeln“, die Anzahl der Regeln (z. B. „9 Regeln“, mit der Pluralform der Sprache) und „+ Regel“.
+- **Regel-Tabellen**, gruppiert nach Geltungsbereich: zuerst Global, dann je
+  Server, dann je Tag; die Überschrift der Gruppe steht über jeder Tabelle.
+  Die Gruppierung bleibt, weil die Engine den Geltungsbereich vor der
+  Priorität prüft (Spec 0002, 3.2). Innerhalb einer Gruppe nach Priorität.
+  Spalten: Priorität, Typ, Muster (umgebrochen), Aktion (Allow grün, Confirm
+  gelb, Deny rot, jeweils als Badge mit Farbquadrat), Geltungsbereich (Symbol
+  und Text, z. B. „Server: web-01“) sowie Schaltflächen für Priorität
+  erhöhen/senken, Bearbeiten und Löschen (Symbolschaltflächen mit
+  zugänglichem Namen). Die Priorität lässt sich mit den Auf-/Ab-Schaltflächen
+  innerhalb der Gruppe ändern, nicht per Drag-and-Drop (wie in Spec 0008). Eine Regel mit
+  ungültigem Muster trägt das Badge „Ungültiges Muster“ und die Fehlermeldung
+  der Bibliothek, und ihre Pfeile sind deaktiviert (Spec 0077).
+- **Hard-Blacklist-Bereich**, ein rot umrahmter Block mit Schloss-Symbol,
+  „fest codiert, nicht bearbeitbar“ und einem Hinweis. Er zeigt jedes Muster
+  aus Spec 0002, Abschnitt 3.1, im Wortlaut als eigenen Chip, damit der
+  Nutzer weiß, dass sie immer greifen. Die Chips haben keine Bedienelemente.
 - **Regel-Formular:** Muster-Typ mit Eingabefeld, Aktion, Geltungsbereich
   (Global, ein Server aus der Serverliste oder ein Tag; ein neues, noch nicht
   verwendetes Tag lässt sich eintippen) und Priorität als Zahlenfeld. Das
@@ -73,12 +81,17 @@ sich nur, dass Nutzerregeln greifen.
   Validierungsfehler (auch ein ungültiges Muster, Spec 0077) erscheinen im
   Dialog, der dabei offen bleibt. Escape und „Abbrechen" schließen ohne zu
   speichern; der Fokus kehrt zur auslösenden Schaltfläche zurück.
-- **Testen-Panel:** Eingabefeld für ein Beispielkommando, optional ein
-  simulierter Server und simulierte Tags (Tags eines gewählten Servers werden
-  übernommen). „Testen" zeigt die Gesamtentscheidung und bei verketteten
-  Kommandos jedes Teilkommando mit seiner eigenen Entscheidung sowie die
-  gegriffene Regel bzw. den Hard-Blacklist-Eintrag. So wird die Logik „das
-  strengste Teilergebnis gewinnt" sichtbar.
+- **Testen-Panel:** Bei breitem Fenster (ab 1100 px) als Seitenleiste
+  rechts neben der Liste, sonst unter der Liste; bei schmalem Layout setzt
+  die Schaltfläche „Regeln testen“ in der Kopfzeile den Fokus auf das Panel.
+  Einzeiliges Eingabefeld für ein Beispielkommando (Enter testet; eingefügte
+  mehrzeilige Kommandos bleiben erhalten), optional ein simulierter Server und
+  simulierte Tags (Tags eines gewählten Servers werden übernommen; der Hinweis
+  dazu steht sichtbar unter den Feldern). „Testen“ zeigt die
+  Gesamtentscheidung in der Farbe der Entscheidung und bei verketteten
+  Kommandos jedes Teilkommando mit seiner eigenen Entscheidung sowie der
+  gegriffenen Regel samt Geltungsbereich bzw. dem Hard-Blacklist-Eintrag. So
+  wird die Logik „das strengste Teilergebnis gewinnt“ sichtbar.
 
 ## 7. Grenzen
 

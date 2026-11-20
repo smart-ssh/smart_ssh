@@ -356,7 +356,13 @@
     "matchedRuleLabel": "Pravidlo:",
     "segmentLabel": "Část {{index}}",
     "checksLabel": "Kontroly:",
-    "hardBlacklistLabel": "Pevná černá listina:"
+    "hardBlacklistLabel": "Pevná černá listina:",
+    "invalidPattern": "Neplatný vzor",
+    "rowActions": "Akce řádku",
+    "ruleCount_one": "{{count}} pravidlo",
+    "ruleCount_few": "{{count}} pravidla",
+    "ruleCount_many": "{{count}} pravidla",
+    "ruleCount_other": "{{count}} pravidel"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích bez vašeho potvrzení — pokračujte odesláním zprávy.",

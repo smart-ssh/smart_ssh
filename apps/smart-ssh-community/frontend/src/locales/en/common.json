@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Rule:",
     "segmentLabel": "Segment {{index}}",
     "checksLabel": "Checks:",
-    "hardBlacklistLabel": "Hard blacklist:"
+    "hardBlacklistLabel": "Hard blacklist:",
+    "invalidPattern": "Invalid pattern",
+    "rowActions": "Row actions",
+    "ruleCount_one": "{{count}} rule",
+    "ruleCount_other": "{{count}} rules"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatic continuation paused after {{limit}} steps without your confirmation — send a message to continue.",

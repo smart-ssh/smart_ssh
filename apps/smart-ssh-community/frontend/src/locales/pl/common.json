@@ -356,7 +356,13 @@
     "matchedRuleLabel": "Reguła:",
     "segmentLabel": "Część {{index}}",
     "checksLabel": "Kontrole:",
-    "hardBlacklistLabel": "Twarda czarna lista:"
+    "hardBlacklistLabel": "Twarda czarna lista:",
+    "invalidPattern": "Nieprawidłowy wzorzec",
+    "rowActions": "Akcje wiersza",
+    "ruleCount_one": "{{count}} reguła",
+    "ruleCount_few": "{{count}} reguły",
+    "ruleCount_many": "{{count}} reguł",
+    "ruleCount_other": "{{count}} reguły"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatyczna kontynuacja wstrzymana po {{limit}} krokach bez Twojego potwierdzenia — wyślij wiadomość, aby kontynuować.",

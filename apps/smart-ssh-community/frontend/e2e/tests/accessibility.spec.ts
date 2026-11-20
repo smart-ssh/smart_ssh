@@ -119,6 +119,8 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     });
     await app.page.getByRole("button", { name: "Filter Rules", exact: true }).click();
     await expect(app.page.getByText("ls *")).toBeVisible();
+    await expect(app.page.getByRole("region", { name: "Test Rules" })).toBeVisible();
+    await expect(app.page.getByText("3 rules")).toBeVisible();
   },
   "session view": async (app) => {
     await app.launch(populated());

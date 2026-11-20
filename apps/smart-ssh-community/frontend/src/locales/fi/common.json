@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Sääntö:",
     "segmentLabel": "Osa {{index}}",
     "checksLabel": "Tarkistukset:",
-    "hardBlacklistLabel": "Kiinteä estolista:"
+    "hardBlacklistLabel": "Kiinteä estolista:",
+    "invalidPattern": "Virheellinen kaava",
+    "rowActions": "Rivin toiminnot",
+    "ruleCount_one": "{{count}} sääntö",
+    "ruleCount_other": "{{count}} sääntöä"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automaattinen jatkaminen keskeytetty {{limit}} vaiheen jälkeen ilman vahvistustasi – lähetä viesti jatkaaksesi.",

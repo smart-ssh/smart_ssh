@@ -356,7 +356,11 @@
     "matchedRuleLabel": "नियम:",
     "segmentLabel": "खंड {{index}}",
     "checksLabel": "जाँच:",
-    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
+    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:",
+    "invalidPattern": "अमान्य पैटर्न",
+    "rowActions": "पंक्ति की क्रियाएँ",
+    "ruleCount_one": "{{count}} नियम",
+    "ruleCount_other": "{{count}} नियम"
   },
   "actionCard": {
     "autoContinuationLimitReached": "आपकी पुष्टि के बिना {{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",

@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Kural:",
     "segmentLabel": "Bölüm {{index}}",
     "checksLabel": "Denetimler:",
-    "hardBlacklistLabel": "Katı kara liste:"
+    "hardBlacklistLabel": "Katı kara liste:",
+    "invalidPattern": "Geçersiz desen",
+    "rowActions": "Satır eylemleri",
+    "ruleCount_one": "{{count}} kural",
+    "ruleCount_other": "{{count}} kural"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Otomatik devam, onayınız olmadan {{limit}} adımdan sonra duraklatıldı — devam etmek için bir mesaj gönderin.",

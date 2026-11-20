@@ -1,74 +1,26 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
   commandErrorMessage,
-  createRule,
   deleteRule,
-  evaluateExplained,
   listHardBlacklist,
   listKnownTags,
   listRules,
   listServers,
   swapRulePriorities,
-  updateRule,
 } from "../api/api";
-import { translateErrorCode } from "../api/errorCodes";
-import type {
-  EvaluationTraceDto,
-  PatternDto,
-  PatternType,
-  RuleAction,
-  RuleDto,
-  RuleInput,
-  Scope,
-  ServerDto,
-} from "../api/types";
-import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS, TagInput, Icon } from "./ui";
-import { DialogFrame } from "./ui/DialogFrame";
+import type { PatternDto, RuleDto, ServerDto } from "../api/types";
+import { useIsNarrow } from "../hooks/useIsNarrow";
+import { HardBlacklistSection } from "./filterRules/HardBlacklistSection";
+import { RuleForm } from "./filterRules/RuleForm";
+import { RuleTable, type RuleGroup } from "./filterRules/RuleTable";
+import { RuleTester } from "./filterRules/RuleTester";
+import { scopeKey, scopeKind, scopeServerId, scopeTag } from "./filterRules/scope";
+import { Button } from "./ui";
 
-type ScopeKind = "global" | "server" | "tag";
-
-function scopeKind(scope: Scope): ScopeKind {
-  if (scope === "Global") return "global";
-  if ("Server" in scope) return "server";
-  return "tag";
-}
-
-function scopeServerId(scope: Scope): string | null {
-  return typeof scope === "object" && "Server" in scope ? scope.Server : null;
-}
-
-function scopeTag(scope: Scope): string | null {
-  return typeof scope === "object" && "Tag" in scope ? scope.Tag : null;
-}
-
-function scopeKey(scope: Scope): string {
-  const kind = scopeKind(scope);
-  if (kind === "server") return `server:${scopeServerId(scope)}`;
-  if (kind === "tag") return `tag:${scopeTag(scope)}`;
-  return "global";
-}
-
-const ACTION_COLORS: Record<RuleAction, string> = {
-  Allow: "bg-success-subtle-hover text-success-fg-soft",
-  Confirm: "bg-warning-subtle-hover text-warning-fg-soft",
-  Deny: "bg-danger-subtle-hover text-danger-fg-soft",
-};
-
-/** Ampel-Randfarbe je Regel-Aktion (Spec 0009) — Design-Import, Regeln-
- * Bildschirm: farbig markierter linker Kartenrand statt nur der Text-Badge. */
-const ACTION_BORDER: Record<RuleAction, string> = {
-  Allow: "border-l-success",
-  Confirm: "border-l-warning",
-  Deny: "border-l-danger",
-};
-
-/** Spec 0009, Abschnitt 6: Regel-Liste (gruppiert nach Scope, Auf/Ab statt
- * Drag-and-Drop), Hard-Blacklist-Sektion, Regel-Formular, Testen-Panel — in
- * einer Datei wie schon `ServerForm.tsx` (Spec 0008), um das Zusammenspiel
- * von Liste/Formular/Test nicht über mehrere Dateien zu verteilen. */
+/** Spec 0009, section 6: rule tables grouped by scope (up/down instead of
+ * drag-and-drop), the hard blacklist block, the rule form dialog and the rule
+ * tester (side panel on wide windows). The parts live in `filterRules/`. */
 export function FilterRulesView({
   initialRuleId = null,
   onInitialRuleConsumed,
@@ -78,6 +30,8 @@ export function FilterRulesView({
   onInitialRuleConsumed?: () => void;
 } = {}) {
   const { t } = useTranslation();
+  const narrow = useIsNarrow();
+  const testerRef = useRef<HTMLElement>(null);
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [knownTags, setKnownTags] = useState<string[]>([]);
@@ -114,22 +68,26 @@ export function FilterRulesView({
 
   const serverName = (id: string) => servers.find((s) => s.id === id)?.name ?? id;
 
-  // Spec 0009, Abschnitt 6: "gruppiert nach Scope (Global zuerst, dann pro
-  // Server, dann pro Tag) — innerhalb einer Gruppe sortiert nach priority".
+  const scopeText = (rule: RuleDto): string => {
+    const kind = scopeKind(rule.scope);
+    if (kind === "global") return t("filterRules.scopeGlobal");
+    if (kind === "server") {
+      return t("filterRules.scopeServerPrefix", { name: serverName(scopeServerId(rule.scope)!) });
+    }
+    return t("filterRules.scopeTagPrefix", { tag: scopeTag(rule.scope) });
+  };
+
+  // Spec 0009, section 6: grouped by scope (Global first, then per server,
+  // then per tag), sorted by priority within a group — the engine checks the
+  // scope before the priority (Spec 0002, 3.2).
   const groups = useMemo(() => {
-    const byKey = new Map<string, { label: string; order: number; rules: RuleDto[] }>();
+    const byKey = new Map<string, RuleGroup & { order: number }>();
     for (const rule of rules) {
       const key = scopeKey(rule.scope);
       if (!byKey.has(key)) {
         const kind = scopeKind(rule.scope);
-        const label =
-          kind === "global"
-            ? t("filterRules.scopeGlobal")
-            : kind === "server"
-              ? t("filterRules.scopeServerPrefix", { name: serverName(scopeServerId(rule.scope)!) })
-              : t("filterRules.scopeTagPrefix", { tag: scopeTag(rule.scope) });
         const order = kind === "global" ? 0 : kind === "server" ? 1 : 2;
-        byKey.set(key, { label, order, rules: [] });
+        byKey.set(key, { key, label: scopeText(rule), order, rules: [] });
       }
       byKey.get(key)!.rules.push(rule);
     }
@@ -140,28 +98,16 @@ export function FilterRulesView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- grouping depends on rules, servers and the language only
   }, [rules, servers, t]);
 
-  // Spec 0077, 3.2.3: Grund, warum ein Pfeil gesperrt ist — die Regel selbst
-  // oder die Nachbarregel, mit der sie tauschen würde, trägt ein ungültiges
-  // Muster.
-  const moveBlockedTitle = (rule: RuleDto, neighbour: RuleDto | undefined) => {
-    if (rule.patternError) return t("filterRules.priorityDisabledPatternError");
-    if (neighbour?.patternError) return t("filterRules.priorityDisabledNeighbourPatternError");
-    return undefined;
-  };
-
   const movePriority = async (groupRules: RuleDto[], index: number, direction: -1 | 1) => {
     const otherIndex = index + direction;
     if (otherIndex < 0 || otherIndex >= groupRules.length) return;
     const a = groupRules[index];
     const b = groupRules[otherIndex];
-    // Spec 0077, 3.2.3: Trägt eine der beiden beteiligten Regeln ein
-    // ungültiges Muster, wird nichts geschrieben (die Pfeile sind dann
-    // ohnehin deaktiviert). Das Backend prüft beide Muster zusätzlich.
+    // Spec 0077, 3.2.3: nothing is written when one of the two rules has an
+    // invalid pattern (the arrows are disabled anyway; the backend checks too).
     if (a.patternError || b.patternError) return;
     try {
-      // Ein Befehl tauscht beide Prioritäten in einer Transaktion: Entweder
-      // sind beide getauscht oder keine, nie zwei Regeln mit derselben
-      // Priorität.
+      // One command swaps both priorities in one transaction.
       await swapRulePriorities(a.id, b.id);
       reload();
     } catch (err) {
@@ -183,95 +129,42 @@ export function FilterRulesView({
     selection?.kind === "rule" ? (rules.find((r) => r.id === selection.id) ?? null) : null;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 narrow:p-3">
-      <div className="max-w-3xl min-w-0 space-y-6">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-heading text-2xl font-bold tracking-wide text-fg">
-            {t("filterRules.title")}
-          </h2>
-          <Button variant="primary" className="narrow:min-h-11" onClick={() => setSelection({ kind: "new" })}>
-            {t("filterRules.addRule")}
-          </Button>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto min-[1100px]:flex-row min-[1100px]:overflow-hidden">
+      <div className="min-w-0 flex-1 space-y-6 p-4 narrow:p-3 min-[1100px]:overflow-y-auto">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 className="text-display text-fg">{t("filterRules.title")}</h2>
+          <span className="font-mono text-sm text-fg-subtle">
+            {t("filterRules.ruleCount", { count: rules.length })}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {narrow && (
+              <Button className="min-h-11" onClick={() => testerRef.current?.focus()}>
+                {t("filterRules.testRules")}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              className="narrow:min-h-11"
+              onClick={() => setSelection({ kind: "new" })}
+            >
+              {t("filterRules.addRule")}
+            </Button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         <div className="space-y-4">
-          {groups.length === 0 && (
-            <p className="text-sm text-fg-subtle">{t("filterRules.noRules")}</p>
-          )}
+          {groups.length === 0 && <p className="text-sm text-fg-subtle">{t("filterRules.noRules")}</p>}
           {groups.map((group) => (
-            <div key={group.label}>
-              <h3 className="font-heading mb-1 text-sm font-semibold tracking-[0.14em] text-fg-subtle uppercase">
-                {group.label}
-              </h3>
-              <ul className="space-y-1">
-                {group.rules.map((rule, index) => (
-                  <li
-                    key={rule.id}
-                    className={`border border-l-4 border-border bg-surface-raised/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
-                  >
-                    <div className="flex items-center gap-2 narrow:flex-wrap">
-                    <span
-                      className={`font-heading w-[70px] shrink-0 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${ACTION_COLORS[rule.action]}`}
-                    >
-                      {rule.action}
-                    </span>
-                    <code
-                      className="min-w-0 flex-1 truncate font-mono text-fg-soft narrow:basis-full narrow:overflow-visible narrow:break-all narrow:whitespace-normal"
-                      title={`${rule.patternType}: ${rule.patternValue}`}
-                    >
-                      {rule.patternType}: {rule.patternValue}
-                    </code>
-                    <span className="font-mono text-xs text-fg-subtle narrow:mr-auto">
-                      {t("filterRules.priority", { value: rule.priority })}
-                    </span>
-                    <Button
-                      size="sm"
-                      className="narrow:min-h-11 narrow:min-w-11"
-                      onClick={() => movePriority(group.rules, index, -1)}
-                      disabled={index === 0 || !!rule.patternError || !!group.rules[index - 1]?.patternError}
-                      title={moveBlockedTitle(rule, group.rules[index - 1])}
-                      aria-label={t("filterRules.increasePriority")}
-                    >
-                      <Icon name="parent" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="narrow:min-h-11 narrow:min-w-11"
-                      onClick={() => movePriority(group.rules, index, 1)}
-                      disabled={
-                        index === group.rules.length - 1 ||
-                        !!rule.patternError ||
-                        !!group.rules[index + 1]?.patternError
-                      }
-                      title={moveBlockedTitle(rule, group.rules[index + 1])}
-                      aria-label={t("filterRules.decreasePriority")}
-                    >
-                      <Icon name="arrow-down" />
-                    </Button>
-                    <Button size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={() => setSelection({ kind: "rule", id: rule.id })}>
-                      {t("common.edit")}
-                    </Button>
-                    <Button size="sm" variant="danger" className="narrow:min-h-11" onClick={() => handleDelete(rule.id)}>
-                      {t("common.delete")}
-                    </Button>
-                    </div>
-                    {/* Spec 0077, 3.2.3: Eine Regel, deren Muster sich nicht
-                        übersetzen lässt, kann nicht greifen, soweit ihr Muster
-                        nicht übersetzt — das muss man ihr ansehen. Bearbeiten
-                        und Löschen bleiben möglich; Speichern verlangt dann
-                        ein gültiges Muster. */}
-                    {rule.patternError && (
-                      <p className="mt-1.5 text-xs text-warning-fg-soft" role="alert">
-                        <Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
-                        <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <RuleTable
+              key={group.key}
+              group={group}
+              scopeText={scopeText}
+              onMove={movePriority}
+              onEdit={(id) => setSelection({ kind: "rule", id })}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
 
@@ -290,494 +183,9 @@ export function FilterRulesView({
         )}
 
         <HardBlacklistSection patterns={hardBlacklist} />
-
-        <TestPanel servers={servers} rules={rules} />
-      </div>
-    </div>
-  );
-}
-
-interface RuleFormProps {
-  /** `null` = Neuanlage. */
-  rule: RuleDto | null;
-  servers: ServerDto[];
-  knownTags: string[];
-  onSaved: () => void;
-  onCancel: () => void;
-}
-
-/** Spec 0009, Abschnitt 6: Pattern-Typ mit passendem Eingabefeld, Aktion,
- * Scope-Auswahl (Global/Server/Tag — Tag als freie Eingabe mit
- * Vorschlägen aus `list_known_tags`), Priorität. */
-function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps) {
-  const { t } = useTranslation();
-  const isCreate = rule === null;
-  const patternTypeRef = useRef<HTMLSelectElement>(null);
-  const [patternType, setPatternType] = useState<PatternType>(rule?.patternType ?? "glob");
-  const [patternValue, setPatternValue] = useState(rule?.patternValue ?? "");
-  const [action, setAction] = useState<RuleAction>(rule?.action ?? "Confirm");
-  const [kind, setKind] = useState<ScopeKind>(rule ? scopeKind(rule.scope) : "global");
-  const [serverId, setServerId] = useState<string>(rule ? (scopeServerId(rule.scope) ?? "") : "");
-  const [tag, setTag] = useState<string>(rule ? (scopeTag(rule.scope) ?? "") : "");
-  const [priority, setPriority] = useState(rule?.priority ?? 0);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Spec 0077, 3.1.4: Fehlertext der Bibliothek zu einem ungültigen
-   * Muster — steht **zusätzlich** unter dem übersetzten Satz, weil er die
-   * Stelle im Muster nennt. `translateErrorCode` ersetzt die `message` bei
-   * bekanntem Code vollständig, sie ginge sonst verloren. */
-  const [patternErrorDetail, setPatternErrorDetail] = useState<string | null>(null);
-
-  const buildScope = (): Scope | null => {
-    if (kind === "global") return "Global";
-    if (kind === "server") return serverId ? { Server: serverId } : null;
-    const trimmed = tag.trim();
-    return trimmed ? { Tag: trimmed } : null;
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    const scope = buildScope();
-    if (!scope) {
-      setError(kind === "server" ? t("filterRules.serverRequired") : t("filterRules.tagRequired"));
-      return;
-    }
-    const input: RuleInput = { patternType, patternValue, action, scope, priority };
-    setSaving(true);
-    setError(null);
-    setPatternErrorDetail(null);
-    try {
-      if (isCreate) {
-        await createRule(input);
-      } else {
-        await updateRule(rule.id, input);
-      }
-      onSaved();
-    } catch (err) {
-      // Spec 0077, 3.1.4: Für `FILTER_RULE_PATTERN_INVALID` den übersetzten
-      // Satz zeigen UND darunter den Fehlertext der Bibliothek. Andere Codes
-      // bleiben wie bisher beim rohen `message`-Text — diese Spec ändert nur
-      // das Verhalten für den einen neuen Code.
-      const code = commandErrorCode(err);
-      const message = commandErrorMessage(err);
-      if (code === "FILTER_RULE_PATTERN_INVALID") {
-        setError(translateErrorCode(t, code, message));
-        setPatternErrorDetail(message);
-      } else {
-        setError(message);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const patternPlaceholder =
-    patternType === "glob" ? "ls *" : patternType === "regex" ? "^systemctl\\s" : "ls -la";
-
-  return (
-    <DialogFrame
-      layer="app"
-      size="lg"
-      title={isCreate ? t("filterRules.newRule") : t("filterRules.editRule")}
-      onClose={onCancel}
-      onSubmit={handleSubmit}
-      initialFocusRef={patternTypeRef}
-      actions={
-        <>
-          <Button className="narrow:min-h-11" onClick={onCancel}>{t("common.cancel")}</Button>
-          <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={saving}>
-            {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.patternType")}
-          <select
-            ref={patternTypeRef}
-            value={patternType}
-            onChange={(e) => setPatternType(e.target.value as PatternType)}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="glob">Glob</option>
-            <option value="regex">Regex</option>
-            <option value="exact">Exact</option>
-          </select>
-        </label>
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.pattern")}
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            type="text"
-            required
-            value={patternValue}
-            onChange={(e) => setPatternValue(e.target.value)}
-            placeholder={patternPlaceholder}
-            className={`mt-1 w-full font-mono ${FIELD_CONTROL_CLASS}`}
-          />
-        </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.action")}
-          <select
-            value={action}
-            onChange={(e) => setAction(e.target.value as RuleAction)}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="Allow">Allow</option>
-            <option value="Confirm">Confirm</option>
-            <option value="Deny">Deny</option>
-          </select>
-        </label>
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.priorityLabel")}
-          <input
-            type="number"
-            value={priority}
-            onChange={(e) => setPriority(Number(e.target.value))}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          />
-        </label>
-      </div>
-
-      <div className="space-y-2">
-        <span id="filter-rule-scope-label" className="block text-sm text-fg-muted">
-          {t("filterRules.scope")}
-        </span>
-        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted">
-          <label className="flex items-center gap-1">
-            <input
-              type="radio"
-              name="filter-rule-scope"
-              checked={kind === "global"}
-              onChange={() => setKind("global")}
-            />
-            {t("filterRules.scopeGlobal")}
-          </label>
-          <label className="flex items-center gap-1">
-            <input type="radio" name="filter-rule-scope" checked={kind === "server"} onChange={() => setKind("server")} />
-            {t("filterRules.scopeServerOption")}
-          </label>
-          <label className="flex items-center gap-1">
-            <input type="radio" name="filter-rule-scope" checked={kind === "tag"} onChange={() => setKind("tag")} />
-            {t("filterRules.scopeTagOption")}
-          </label>
-        </div>
-        {kind === "server" && (
-          <select
-            value={serverId}
-            onChange={(e) => setServerId(e.target.value)}
-            aria-label={t("filterRules.scopeServerOption")}
-            className={`w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="">{t("filterRules.selectServer")}</option>
-            {servers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {kind === "tag" && (
-          <>
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              list="known-tags"
-              type="text"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              aria-label={t("filterRules.scopeTagOption")}
-              placeholder={t("filterRules.tagInputPlaceholder")}
-              className={`w-full ${FIELD_CONTROL_CLASS}`}
-            />
-            <datalist id="known-tags">
-              {knownTags.map((t) => (
-                <option key={t} value={t} aria-label={t} />
-              ))}
-            </datalist>
-          </>
-        )}
-      </div>
-
-      {error && (
-        <div className="space-y-1">
-          <p className="text-sm text-danger-fg">{error}</p>
-          {/* Spec 0077, 3.1.4: der Fehlertext der Bibliothek als Detail — er
-              nennt die Stelle im Muster. */}
-          {patternErrorDetail && (
-            <p className="font-mono text-xs text-danger-fg-soft/80">{patternErrorDetail}</p>
-          )}
-        </div>
-      )}
-
-      </div>
-    </DialogFrame>
-  );
-}
-
-/** Spec 0009, Abschnitt 6: read-only, deutlich als nicht bearbeitbar
- * gekennzeichnet — kein Bearbeiten-/Löschen-Button an diesen Einträgen. */
-function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-2 border-t border-border pt-4">
-      <h3 className="font-heading flex items-center gap-2 text-sm font-semibold tracking-wide text-fg">
-        {t("filterRules.hardBlacklist")}
-        <span className="rounded bg-border px-2 py-0.5 text-xs text-fg-muted">
-          {t("filterRules.hardBlacklistBadge")}
-        </span>
-      </h3>
-      <p className="text-xs text-fg-subtle">{t("filterRules.hardBlacklistHint")}</p>
-      <ul className="space-y-1">
-        {patterns.map((p, i) => (
-          <li
-            key={i}
-            className="rounded border border-surface-raised bg-surface/60 px-3 py-1.5 text-xs text-fg-muted"
-          >
-            <span className="text-fg-subtle">{p.kind}:</span>{" "}
-            <code className="break-all">{p.value}</code>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-type Decision = EvaluationTraceDto["decision"];
-
-function decisionInfo(
-  decision: Decision,
-): { text: string; className: string; reason?: string; code?: string } {
-  if (decision === "AutoExec") {
-    return { text: "AutoExec", className: "bg-success-subtle-hover text-success-fg-soft" };
-  }
-  if ("Confirm" in decision) {
-    return {
-      text: "Confirm",
-      className: "bg-warning-subtle-hover text-warning-fg-soft",
-      reason: decision.Confirm.reason,
-      code: decision.Confirm.code,
-    };
-  }
-  return {
-    text: "Deny",
-    className: "bg-danger-subtle-hover text-danger-fg-soft",
-    reason: decision.Deny.reason,
-    code: decision.Deny.code,
-  };
-}
-
-function DecisionBadge({ decision, big }: { decision: Decision; big?: boolean }) {
-  const { text, className } = decisionInfo(decision);
-  return (
-    <span
-      className={`font-heading inline-block px-2 py-0.5 tracking-wide uppercase ${big ? "text-sm font-semibold" : "text-xs font-medium"} ${className}`}
-    >
-      {text}
-    </span>
-  );
-}
-
-function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
-  const { t } = useTranslation();
-  const { reason, code } = decisionInfo(trace.decision);
-  const matchedRule = trace.matchedRule ? rules.find((r) => r.id === trace.matchedRule) : null;
-  return (
-    <div className="mt-1 space-y-0.5 text-xs text-fg-subtle">
-      {reason && <p>{translateErrorCode(t, code, reason)}</p>}
-      {matchedRule && (
-        <p>
-          {t("filterRules.matchedRuleLabel")} <code>{matchedRule.patternValue}</code> (
-          {matchedRule.action})
-        </p>
-      )}
-      {trace.checks.length > 0 && (
-        <p data-testid="trace-checks">
-          {t("filterRules.checksLabel")}{" "}
-          {trace.checks.map((c) => translateErrorCode(t, c, c)).join("; ")}
-        </p>
-      )}
-      {trace.matchedHardBlacklistEntry && (
-        <p>
-          {t("filterRules.hardBlacklistLabel")} <code>{trace.matchedHardBlacklistEntry}</code>
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Rekursiv: ein Trace pro Teilkommando (Chaining) bzw. Command-
- * Substitution, s. `EvaluationTraceDto`-Doc-Kommentar. */
-function TraceView({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
-  const { t } = useTranslation();
-  return (
-    <div className="rounded border border-border bg-surface/60 p-2">
-      {trace.kind === "Segment" && trace.segmentIndex !== null && (
-        <span className="mr-2 text-xs text-fg-subtle">
-          {t("filterRules.segmentLabel", { index: trace.segmentIndex + 1 })}
-        </span>
-      )}
-      <DecisionBadge decision={trace.decision} />
-      <TraceDetails trace={trace} rules={rules} />
-      {trace.subCommandTraces.length > 0 && (
-        <div className="mt-2 space-y-1 border-l border-border pl-2">
-          {trace.subCommandTraces.map((sub, i) => (
-            <TraceView key={i} trace={sub} rules={rules} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Spec 0009, Abschnitt 6: Beispielkommando + optionale Scope-Simulation,
- * `evaluate_explained` — bei Chaining jedes Teilkommando einzeln plus
- * hervorgehobene Gesamt-Entscheidung. */
-export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: RuleDto[] }) {
-  const { t } = useTranslation();
-  const [command, setCommand] = useState("");
-  const [serverId, setServerId] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [result, setResult] = useState<EvaluationTraceDto | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Spec 0046, Fund 2: der gewählte Server bringt seine eigenen Tags
-  // (`server_tags`, Spec 0004) automatisch mit in die Simulation — sonst
-  // zeigt das Panel für ein tag-scoped `AutoExec`-Kommando fälschlich
-  // "keine Regel matcht", obwohl im echten Betrieb genau diese Tags aus
-  // dem gewählten Server abgeleitet würden.
-  const selectedServerTags = useMemo(
-    () => servers.find((s) => s.id === serverId)?.tags ?? [],
-    [servers, serverId],
-  );
-
-  // Spec 0077, 3.2.3: Eine Regel mit ungültigem Muster passt in der
-  // Simulation nie vollständig; sie wird hier genauso markiert wie in der
-  // Regelliste, damit „passt nicht" nicht als Ergebnis eines gültigen
-  // Musters gelesen wird.
-  const invalidRules = useMemo(() => rules.filter((r) => !!r.patternError), [rules]);
-
-  const handleTest = async () => {
-    if (!command.trim()) return;
-    setTesting(true);
-    setError(null);
-    try {
-      const effectiveTags = Array.from(new Set([...selectedServerTags, ...tags]));
-      setResult(
-        await evaluateExplained(command, { serverId: serverId || null, tags: effectiveTags }),
-      );
-    } catch (err) {
-      setError(commandErrorMessage(err));
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <h3 className="font-heading text-sm font-semibold tracking-wide text-fg">
-        {t("filterRules.testRules")}
-      </h3>
-
-      <label className="block text-sm text-fg-muted">
-        {t("filterRules.exampleCommand")}
-        <textarea
-          {...TECHNICAL_INPUT_PROPS}
-          value={command}
-          onChange={(e) => setCommand(e.target.value)}
-          rows={2}
-          placeholder="ls -la && rm -rf /tmp/x"
-          className={`mt-1 w-full font-mono ${FIELD_CONTROL_CLASS}`}
-        />
-      </label>
-
-      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.simulateServer")}
-          <select
-            value={serverId}
-            onChange={(e) => setServerId(e.target.value)}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="">{t("filterRules.noServerOption")}</option>
-            {servers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="block text-sm text-fg-muted">
-          {t("filterRules.simulateTags")}
-          <TagInput
-            value={tags}
-            onChange={setTags}
-            readOnlyTags={selectedServerTags}
-            readOnlyTitle={t("filterRules.tagFromServer")}
-            placeholder={t("serverForm.tagPlaceholder")}
-            aria-label={t("filterRules.simulateTags")}
-          />
-        </div>
-      </div>
-
-      <Button
-        variant="primary"
-        className="narrow:min-h-11"
-        onClick={handleTest}
-        disabled={testing || !command.trim()}
-      >
-        {testing ? t("common.testing") : t("filterRules.test")}
-      </Button>
-
-      {error && <p className="text-sm text-danger-fg">{error}</p>}
-
-      {result && invalidRules.length > 0 && (
-        <div className="space-y-1" data-testid="test-invalid-pattern-rules">
-          <p className="text-xs uppercase tracking-wide text-fg-subtle">
-            {t("filterRules.testInvalidPatternRules")}
-          </p>
-          <ul className="space-y-1">
-            {invalidRules.map((rule) => (
-              <li key={rule.id} className="text-xs text-warning-fg-soft" role="alert">
-                <code className="text-fg-soft">
-                  {rule.patternType}: {rule.patternValue}
-                </code>{" "}
-                <Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
-                <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {result && (
-        <div className="space-y-3 rounded border border-border bg-surface-raised/60 p-3">
-          <div>
-            <p className="mb-1 text-xs uppercase tracking-wide text-fg-subtle">
-              {t("filterRules.overallDecision")}
-            </p>
-            <DecisionBadge decision={result.decision} big />
-            {result.subCommandTraces.length === 0 && (
-              <TraceDetails trace={result} rules={rules} />
-            )}
-          </div>
-          {result.subCommandTraces.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-fg-subtle">
-                {t("filterRules.subCommands")}
-              </p>
-              {result.subCommandTraces.map((sub, i) => (
-                <TraceView key={i} trace={sub} rules={rules} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <RuleTester ref={testerRef} servers={servers} rules={rules} scopeText={scopeText} />
     </div>
   );
 }

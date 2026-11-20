@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Deel {{index}}",
     "checksLabel": "Controles:",
-    "hardBlacklistLabel": "Vaste blokkeerlijst:"
+    "hardBlacklistLabel": "Vaste blokkeerlijst:",
+    "invalidPattern": "Ongeldig patroon",
+    "rowActions": "Rijacties",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regels"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",

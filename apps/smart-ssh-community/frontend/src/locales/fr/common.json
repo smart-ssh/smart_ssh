@@ -356,7 +356,12 @@
     "matchedRuleLabel": "Règle :",
     "segmentLabel": "Partie {{index}}",
     "checksLabel": "Vérifications :",
-    "hardBlacklistLabel": "Liste noire stricte :"
+    "hardBlacklistLabel": "Liste noire stricte :",
+    "invalidPattern": "Motif invalide",
+    "rowActions": "Actions de la ligne",
+    "ruleCount_one": "{{count}} règle",
+    "ruleCount_many": "{{count}} règles",
+    "ruleCount_other": "{{count}} règles"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes sans votre confirmation — envoyez un message pour continuer.",

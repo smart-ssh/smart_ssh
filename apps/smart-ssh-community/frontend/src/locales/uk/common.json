@@ -356,7 +356,13 @@
     "matchedRuleLabel": "Правило:",
     "segmentLabel": "Частина {{index}}",
     "checksLabel": "Перевірки:",
-    "hardBlacklistLabel": "Жорсткий чорний список:"
+    "hardBlacklistLabel": "Жорсткий чорний список:",
+    "invalidPattern": "Недійсний шаблон",
+    "rowActions": "Дії рядка",
+    "ruleCount_one": "{{count}} правило",
+    "ruleCount_few": "{{count}} правила",
+    "ruleCount_many": "{{count}} правил",
+    "ruleCount_other": "{{count}} правила"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Автоматичне продовження призупинено після {{limit}} кроків без вашого підтвердження — надішліть повідомлення, щоб продовжити.",
