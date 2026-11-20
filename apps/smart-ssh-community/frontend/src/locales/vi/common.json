@@ -481,7 +481,11 @@
     "menu": {
       "open": "Mở menu điều hướng",
       "title": "Menu điều hướng",
-      "sessions": "Phiên đang mở"
+      "sessions": "Phiên đang mở",
+      "close": "Đóng menu điều hướng",
+      "needsConfirmation": "Cần xác nhận",
+      "activities": "Hoạt động",
+      "activitiesRunning": "{{count}} đang chạy"
     },
     "mcp": {
       "badge": "MCP",

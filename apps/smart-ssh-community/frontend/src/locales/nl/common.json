@@ -482,7 +482,11 @@
     "menu": {
       "open": "Navigatiemenu openen",
       "title": "Navigatiemenu",
-      "sessions": "Open sessies"
+      "sessions": "Open sessies",
+      "close": "Navigatiemenu sluiten",
+      "needsConfirmation": "Bevestiging nodig",
+      "activities": "Activiteiten",
+      "activitiesRunning": "{{count}} bezig"
     },
     "mcp": {
       "badge": "MCP",

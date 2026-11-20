@@ -483,7 +483,11 @@
     "menu": {
       "open": "Ouvrir le menu de navigation",
       "title": "Menu de navigation",
-      "sessions": "Sessions ouvertes"
+      "sessions": "Sessions ouvertes",
+      "close": "Fermer le menu de navigation",
+      "needsConfirmation": "Confirmation requise",
+      "activities": "Activités",
+      "activitiesRunning": "{{count}} en cours"
     },
     "mcp": {
       "badge": "MCP",

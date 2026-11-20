@@ -482,7 +482,11 @@
     "menu": {
       "open": "Open navigation menu",
       "title": "Navigation menu",
-      "sessions": "Open sessions"
+      "sessions": "Open sessions",
+      "close": "Close navigation menu",
+      "needsConfirmation": "Needs confirmation",
+      "activities": "Activities",
+      "activitiesRunning": "{{count}} running"
     },
     "mcp": {
       "badge": "MCP",

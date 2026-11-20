@@ -482,7 +482,11 @@
     "menu": {
       "open": "Åpne navigasjonsmenyen",
       "title": "Navigasjonsmeny",
-      "sessions": "Åpne økter"
+      "sessions": "Åpne økter",
+      "close": "Lukk navigasjonsmenyen",
+      "needsConfirmation": "Krever bekreftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",

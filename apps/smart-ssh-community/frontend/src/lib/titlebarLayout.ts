@@ -30,9 +30,9 @@ export type { Platform, PlatformCapabilities };
  * entsteht, falls die Aktivierung (der Normalfall) erfolgreich ist. */
 export type DecorationMode = "pending" | "custom" | "native";
 
-/** Title bar height (Tailwind `h-11`, 44 px, wide and narrow alike) — for the header and
- * the drag layers. Keep `--tauri-plugin-decoration-titlebar-height` in `index.css` in sync. */
-export const TITLEBAR_HEIGHT_CLASS = "h-11";
+/** Title bar height (Tailwind `h-11`, 44 px wide; `h-14`, 56 px narrow) — for the header and
+ * the drag layers. `--tauri-plugin-decoration-titlebar-height` in `index.css` is the wide value. */
+export const TITLEBAR_HEIGHT_CLASS = "h-11 narrow:h-14";
 
 /** Freiraum für die macOS-Ampel (links). */
 const MAC_CONTROLS_CLEARANCE = "max(78px, var(--tauri-plugin-decoration-left-clearance, 78px))";

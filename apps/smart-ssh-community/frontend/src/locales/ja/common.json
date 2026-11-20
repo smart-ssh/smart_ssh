@@ -481,7 +481,11 @@
     "menu": {
       "open": "ナビゲーションメニューを開く",
       "title": "ナビゲーションメニュー",
-      "sessions": "開いているセッション"
+      "sessions": "開いているセッション",
+      "close": "ナビゲーションメニューを閉じる",
+      "needsConfirmation": "確認が必要",
+      "activities": "アクティビティ",
+      "activitiesRunning": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",

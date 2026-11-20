@@ -484,7 +484,11 @@
     "menu": {
       "open": "Открыть меню навигации",
       "title": "Меню навигации",
-      "sessions": "Открытые сеансы"
+      "sessions": "Открытые сеансы",
+      "close": "Закрыть меню навигации",
+      "needsConfirmation": "Требуется подтверждение",
+      "activities": "Активности",
+      "activitiesRunning": "выполняется: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

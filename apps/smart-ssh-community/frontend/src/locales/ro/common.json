@@ -483,7 +483,11 @@
     "menu": {
       "open": "Deschide meniul de navigare",
       "title": "Meniu de navigare",
-      "sessions": "Sesiuni deschise"
+      "sessions": "Sesiuni deschise",
+      "close": "Închide meniul de navigare",
+      "needsConfirmation": "Necesită confirmare",
+      "activities": "Activități",
+      "activitiesRunning": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",

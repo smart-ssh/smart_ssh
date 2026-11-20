@@ -482,7 +482,11 @@
     "menu": {
       "open": "Avaa navigointivalikko",
       "title": "Navigointivalikko",
-      "sessions": "Avoimet istunnot"
+      "sessions": "Avoimet istunnot",
+      "close": "Sulje navigointivalikko",
+      "needsConfirmation": "Vaatii vahvistuksen",
+      "activities": "Toiminnot",
+      "activitiesRunning": "{{count}} käynnissä"
     },
     "mcp": {
       "badge": "MCP",

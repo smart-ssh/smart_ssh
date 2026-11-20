@@ -13,7 +13,8 @@ test.describe("narrow shell @phone", () => {
     const burger = page.getByRole("button", { name: "Open navigation menu" });
     await expect(burger).toBeVisible();
     await expectFullyInViewport(burger);
-    await expect(page.getByTestId("narrow-title")).toHaveText("Smart SSH");
+    await expect(page.getByTestId("narrow-title").getByRole("img", { name: "Smart SSH" })).toBeVisible();
+    expect((await page.locator("header").boundingBox())?.height).toBe(56);
     await expect(page.getByRole("navigation")).toHaveCount(0);
     await expect(page.getByRole("toolbar")).toHaveCount(0);
     await expectNoHorizontalPageScroll(page);
@@ -26,10 +27,11 @@ test.describe("narrow shell @phone", () => {
     await burger.click();
     const menu = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(menu).toBeVisible();
-    for (const name of ["Connect", "Manage", "Filter Rules", "Settings", "db-primary", 'Close tab "db-primary"']) {
+    for (const name of ["Connect", "Manage", "Filter Rules", "New session", "Settings", "db-primary", 'Close tab "db-primary"', "Close navigation menu"]) {
       const entry = menu.getByRole("button", { name, exact: true });
       await expectFullyInViewport(entry);
       await expectTopmostAtCenter(entry);
+      expect((await entry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     }
     await expect(menu.getByRole("button", { name: "db-primary", exact: true })).toHaveAttribute("aria-current", "page");
     await expectNoHorizontalPageScroll(page);
@@ -45,6 +47,11 @@ test.describe("narrow shell @phone", () => {
 
     await burger.click();
     await menu.getByRole("button", { name: "Manage", exact: true }).click();
+    await expect(menu).toBeHidden();
+    await expect(burger).toBeFocused();
+
+    await burger.click();
+    await menu.getByRole("button", { name: "Close navigation menu" }).click();
     await expect(menu).toBeHidden();
     await expect(burger).toBeFocused();
 

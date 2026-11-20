@@ -484,7 +484,11 @@
     "menu": {
       "open": "Otevřít navigační nabídku",
       "title": "Navigační nabídka",
-      "sessions": "Otevřené relace"
+      "sessions": "Otevřené relace",
+      "close": "Zavřít navigační menu",
+      "needsConfirmation": "Čeká na potvrzení",
+      "activities": "Aktivity",
+      "activitiesRunning": "běží: {{count}}"
     },
     "mcp": {
       "badge": "MCP",
