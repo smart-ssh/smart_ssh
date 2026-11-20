@@ -1092,6 +1092,7 @@
     "parentDirectory": "Directory superiore",
     "newFolderButton": "+ Cartella",
     "fileActionsGroup": "Azioni sui file",
+    "directoryActions": "Azioni della cartella",
     "upload": "Carica",
     "uploadDialogTitle": "Carica file",
     "uploadFolder": "Carica cartella",

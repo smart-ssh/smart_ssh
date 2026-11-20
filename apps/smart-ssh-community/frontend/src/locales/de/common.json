@@ -1087,6 +1087,7 @@
     "parentDirectory": "Übergeordnetes Verzeichnis",
     "newFolderButton": "+ Ordner",
     "fileActionsGroup": "Dateiaktionen",
+    "directoryActions": "Verzeichnisaktionen",
     "upload": "Hochladen",
     "uploadDialogTitle": "Datei(en) hochladen",
     "uploadFolder": "Ordner hochladen",

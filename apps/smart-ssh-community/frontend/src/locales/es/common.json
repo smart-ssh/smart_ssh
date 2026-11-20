@@ -1092,6 +1092,7 @@
     "parentDirectory": "Directorio superior",
     "newFolderButton": "+ Carpeta",
     "fileActionsGroup": "Acciones de archivos",
+    "directoryActions": "Acciones del directorio",
     "upload": "Subir",
     "uploadDialogTitle": "Subir archivo(s)",
     "uploadFolder": "Subir carpeta",

@@ -1087,6 +1087,7 @@
     "parentDirectory": "Overordnet katalog",
     "newFolderButton": "+ Mappe",
     "fileActionsGroup": "Filhandlinger",
+    "directoryActions": "Mappehandlinger",
     "upload": "Last opp",
     "uploadDialogTitle": "Last opp fil(er)",
     "uploadFolder": "Last opp mappe",

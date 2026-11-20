@@ -1097,6 +1097,7 @@
     "parentDirectory": "Katalog nadrzędny",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Operacje na plikach",
+    "directoryActions": "Akcje katalogu",
     "upload": "Wyślij",
     "uploadDialogTitle": "Wyślij pliki",
     "uploadFolder": "Wyślij folder",

@@ -25,10 +25,10 @@ import { ACTIONS_COLUMN_WIDTH, NAME_MIN_WIDTH } from "./shared";
  * `clampColumnWidth` ein, damit eine sehr breit gezogene Nachbarspalte
  * die Name-Spalte nie unter ihre eigene Mindestbreite drückt. */
 const DEFAULT_COLUMN_WIDTHS: FileManagerColumnWidths = {
-  size: 90,
-  permissions: 90,
-  modified: 150,
-  owner: 130,
+  size: 110,
+  permissions: 130,
+  modified: 170,
+  owner: 150,
 };
 const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
   size: 56,

@@ -1087,6 +1087,7 @@
     "parentDirectory": "Γονικός φάκελος",
     "newFolderButton": "+ Φάκελος",
     "fileActionsGroup": "Ενέργειες αρχείων",
+    "directoryActions": "Ενέργειες καταλόγου",
     "upload": "Μεταφόρτωση",
     "uploadDialogTitle": "Μεταφόρτωση αρχείων",
     "uploadFolder": "Μεταφόρτωση φακέλου",

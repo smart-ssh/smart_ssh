@@ -1082,6 +1082,7 @@
     "parentDirectory": "상위 디렉터리",
     "newFolderButton": "+ 폴더",
     "fileActionsGroup": "파일 작업",
+    "directoryActions": "디렉터리 작업",
     "upload": "업로드",
     "uploadDialogTitle": "파일 업로드",
     "uploadFolder": "폴더 업로드",

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sortEntries } from "../lib/fileSort";
 import { displayPath } from "../lib/remotePath";
@@ -195,6 +195,21 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
   });
 
 
+  const [pathEditing, setPathEditing] = useState(false);
+  // Ctrl/Cmd+L while the file browser has focus switches the breadcrumb to the input.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        setPathEditing(true);
+      }
+    };
+    panel.addEventListener("keydown", onKeyDown);
+    return () => panel.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleRefresh = () => {
     setOpenMenu(null);
     load(path);
@@ -269,6 +284,14 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
         pathInput={pathInput}
         setPathInput={setPathInput}
         load={load}
+        pathEditing={pathEditing}
+        setPathEditing={setPathEditing}
+        onRefresh={handleRefresh}
+        onShowColumns={(point) => {
+          setOpenMenu(null);
+          setDirMenu(null);
+          setColumnsMenu(point);
+        }}
         overflowRef={menus.overflowRef}
         overflowButtonRef={menus.overflowButtonRef}
         overflowOpen={menus.overflowOpen}

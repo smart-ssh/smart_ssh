@@ -1097,6 +1097,7 @@
     "parentDirectory": "Nadřazený adresář",
     "newFolderButton": "+ Složka",
     "fileActionsGroup": "Akce se soubory",
+    "directoryActions": "Akce adresáře",
     "upload": "Nahrát",
     "uploadDialogTitle": "Nahrát soubory",
     "uploadFolder": "Nahrát složku",

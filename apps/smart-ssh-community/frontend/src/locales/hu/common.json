@@ -1087,6 +1087,7 @@
     "parentDirectory": "Szülőkönyvtár",
     "newFolderButton": "+ Mappa",
     "fileActionsGroup": "Fájlműveletek",
+    "directoryActions": "Könyvtárműveletek",
     "upload": "Feltöltés",
     "uploadDialogTitle": "Fájl(ok) feltöltése",
     "uploadFolder": "Mappa feltöltése",
