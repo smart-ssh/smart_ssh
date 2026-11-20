@@ -113,7 +113,17 @@ test.describe("light theme focus and letter spacing (issue #1397)", () => {
         outline: cs.outlineColor,
         outlineWidth: cs.outlineWidth,
         outlineStyle: cs.outlineStyle,
-        bg: cs.backgroundColor,
+        // Fill the ring/outline sits on: nearest non-transparent background, starting at the
+        // element itself for inset rings and at its parent for outer rings and outlines.
+        bg: (() => {
+          let n: HTMLElement | null = cs.boxShadow.includes("inset") ? el : el.parentElement;
+          while (n) {
+            const c = getComputedStyle(n).backgroundColor;
+            if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c;
+            n = n.parentElement;
+          }
+          return "rgb(255, 255, 255)";
+        })(),
         focus,
       };
     });
