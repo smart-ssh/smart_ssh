@@ -64,7 +64,8 @@ test.describe("narrow chat panel @phone", () => {
 
     // Inline expansion (no popup): suggestions inside the viewport, tall
     // touch targets; staging a rule neither executes nor saves it.
-    expect(await page.getByRole("button", { name: /Accept \+ Rule/ }).count()).toBe(0);
+    await expect(page.getByRole("button", { name: /^Rule suggestions for/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Accept \+ Rule/ })).toHaveCount(0);
     const toggle = page.getByRole("button", { name: /^Rule suggestions for rm -rf/ });
     await expectUsable(toggle);
     expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -80,8 +81,8 @@ test.describe("narrow chat panel @phone", () => {
     await expectUsable(save);
     await save.click();
     await expect(page.getByTestId("saved-rule")).toBeVisible();
-    expect((await app.calls("create_quick_rules_batch")).length).toBe(1);
-    expect((await app.calls("respond_to_action")).length).toBe(0);
+    await expect.poll(() => app.calls("create_quick_rules_batch")).toHaveLength(1);
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
 
     // Composer: both extension actions behind "+", send reachable.
     await expectFullyInViewport(chatInput(page));
