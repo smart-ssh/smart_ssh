@@ -231,7 +231,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
+    expect(await screen.findByText("Zugangsdaten gültig")).toBeInTheDocument();
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
@@ -250,7 +250,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen")).toBeInTheDocument();
+    expect(await screen.findByText("Authentifizierung fehlgeschlagen – API-Key prüfen")).toBeInTheDocument();
   });
 
   it("shows an unreachable result including the message", async () => {
@@ -267,7 +267,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✗ Provider nicht erreichbar: connection refused")).toBeInTheDocument();
+    expect(await screen.findByText("Provider nicht erreichbar: connection refused")).toBeInTheDocument();
   });
 
   // Spec 0069, Teil A5, Test 19: `unreachable` mit `AI_RATE_LIMITED` zeigt
@@ -348,13 +348,13 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.click(
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
-    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
+    expect(await screen.findByText("Zugangsdaten gültig")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc-changed" },
     });
 
-    expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zugangsdaten gültig")).not.toBeInTheDocument();
   });
 });
 

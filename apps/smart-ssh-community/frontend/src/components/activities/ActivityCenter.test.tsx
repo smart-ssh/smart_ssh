@@ -153,7 +153,7 @@ describe("ActivityCenter", () => {
     renderCenter();
     await emit(activity({ state: "succeeded", done: 1000 }));
     const button = await screen.findByTestId("activity-center-button");
-    expect(button).toHaveTextContent("✓");
+    expect(button.querySelector('[data-icon="check"]')).not.toBeNull();
     fireEvent.click(button);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });

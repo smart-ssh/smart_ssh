@@ -39,7 +39,7 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
       code: null,
     });
 
-    expect(screen.getByText("✗ Netzwerkfehler: some raw backend text")).toBeInTheDocument();
+    expect(screen.getByText("Netzwerkfehler: some raw backend text")).toBeInTheDocument();
   });
 
   // Spec 0098, T8 (A4/A5/A6): Der Verbindungstest meldet einen
@@ -53,7 +53,7 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
   //
   // *Gegenbeweis:* ohne den Eintrag in `KNOWN_ERROR_CODES` greift
   // `translateErrorCode` auf den Fallback zurück und die Zeile lautet
-  // „✗ Netzwerkfehler: deploy@jump.example:22: Zugriff auf den
+  // „Netzwerkfehler: deploy@jump.example:22: Zugriff auf den
   // Schlüsselbund fehlgeschlagen (Passwort)" — beide Erwartungen unten
   // schlagen dann fehl.
   it("shows the keychain reason for a networkError, not a network error text", () => {
@@ -71,6 +71,6 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
   it("still shows the plain success text unaffected by the code change", () => {
     renderBadge({ kind: "success" });
 
-    expect(screen.getByText("✓ Verbindung erfolgreich")).toBeInTheDocument();
+    expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
   });
 });

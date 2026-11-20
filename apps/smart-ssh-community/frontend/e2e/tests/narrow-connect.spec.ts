@@ -30,16 +30,16 @@ test.describe("narrow Connect area @phone", () => {
     await captureScreen(page, "connect-narrow-tree");
   });
 
-  test("servers start at the 📁 icon of their folder (three levels, 28 px step)", async ({ app }) => {
+  test("servers start at the icon of their folder (three levels, 28 px step)", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
     const pad = async (loc: import("@playwright/test").Locator) =>
       parseFloat(await loc.evaluate((el) => (el as HTMLElement).style.paddingLeft));
-    const prod = page.getByRole("button", { name: /^📁 Production/ });
-    const web = page.getByRole("button", { name: /^📁 Web/ });
+    const prod = page.getByRole("button", { name: /^Production/ });
+    const web = page.getByRole("button", { name: /^Web/ });
     const web1 = page.getByRole("button", { name: /^web-1\b/ });
     await expect(web1).toBeVisible();
-    expect((await prod.locator("svg").boundingBox())!.width).toBe(20);
+    expect((await prod.locator("svg").first().boundingBox())!.width).toBe(20);
     expect((await pad(web)) - (await pad(prod))).toBe(28);
     expect((await pad(web1)) - (await pad(web))).toBe(28);
     await expectNoHorizontalPageScroll(page);
@@ -64,9 +64,9 @@ test.describe("narrow Connect area @phone", () => {
     await page.getByRole("button", { name: /^alpha\b/ }).click();
     const dialog = page.getByRole("dialog");
     await expectFullyInViewport(dialog);
-    await expectUsable(dialog.getByRole("button", { name: "New conversation" }));
+    await expectUsable(dialog.getByRole("button", { name: "New conversation", exact: true }));
     await expectUsable(dialog.getByRole("button", { name: "Cancel", exact: true }));
-    await expectUsable(dialog.getByRole("button", { name: "Rename" }).first());
+    await expectUsable(dialog.getByRole("button", { name: "Rename", exact: true }).first());
     await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow session picker");
     await captureScreen(page, "connect-narrow-session-picker");

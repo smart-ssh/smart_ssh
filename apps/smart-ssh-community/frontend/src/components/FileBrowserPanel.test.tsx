@@ -3206,18 +3206,18 @@ describe("FileBrowserPanel header sorting (Spec 0053, Teil 3)", () => {
     expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "asc" });
     expect(screen.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "ascending");
     expect(screen.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
-    expect(rowNames(container)).toEqual(["📄 a.txt", "📄 b.txt"]);
+    expect(rowNames(container)).toEqual(["a.txt", "b.txt"]);
 
     fireEvent.click(screen.getByTestId("column-sort-size"));
     expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "desc" });
-    expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]);
+    expect(rowNames(container)).toEqual(["b.txt", "a.txt"]);
   });
 
   it("applies the persisted sort on mount", async () => {
     vi.mocked(loadFileManagerSort).mockResolvedValue({ column: "size", direction: "desc" });
     const { container } = renderPanel();
     await screen.findByText(/a\.txt/);
-    await waitFor(() => expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]));
+    await waitFor(() => expect(rowNames(container)).toEqual(["b.txt", "a.txt"]));
   });
 
   it("a resize handle click never changes the sort", async () => {
