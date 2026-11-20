@@ -81,7 +81,7 @@ export function CodeBlock({
         onClick={handleCopy}
         aria-label={label}
         title={label}
-        className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:text-fg focus-ring-flush narrow:min-h-11 narrow:min-w-11 ${state === "failed" ? "text-danger-fg-soft" : ""}`}
+        className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center text-fg-subtle hover:text-fg focus-ring-flush narrow:min-h-11 narrow:min-w-11 ${state === "failed" ? "text-danger-fg-soft" : ""}`}
       >
         <Icon name={state === "copied" ? "check" : state === "failed" ? "x" : "copy"} />
       </Button>

@@ -61,7 +61,7 @@ export function ErrorCardExtras({
       {lines.length > 0 && (
         <details data-testid="chat-error-details">
           <summary className="cursor-pointer select-none text-danger-fg-softer">{t("chat.errorDetails")}</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-danger-subtle/60 p-2 text-danger-fg-softer">{text}</pre>
+          <pre className="mt-1 whitespace-pre-wrap break-words bg-danger-subtle/60 p-2 text-danger-fg-softer">{text}</pre>
           <Button size="sm" onClick={copy}>
             {t("about.copyButton")}
           </Button>

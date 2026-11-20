@@ -1,4 +1,4 @@
-import { type ChatItem, describeAction, splitInjectionReason, formatReason, truncateMcpClientName, decisionBadge, decisionCardTone } from "./chatItem";
+import { type ChatItem, describeAction, splitInjectionReason, formatReason, truncateMcpClientName, decisionBadge } from "./chatItem";
 import { SegmentRules, useRuleStaging } from "./RuleStaging";
 import { RiskBadges, RiskHintFootnote } from "./RiskBadges";
 import { useEffect, useState } from "react";
@@ -45,29 +45,39 @@ export function ActionCard({
   const settled = item.settled;
   const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
   const badge = settled
-    ? { text: t("actionCard.expired"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
+    ? { text: t("actionCard.expired"), className: "text-danger-fg", icon: "x" as const }
     : rejectedByUser
-    ? { text: t("actionCard.rejected"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
+    ? { text: t("actionCard.rejected"), className: "text-danger-fg", icon: "x" as const }
     : decisionBadge(t, item.decision);
-  const cardTone = settled || rejectedByUser
-    ? "border-danger-border-strong/45 bg-danger-subtle/15"
-    : decisionCardTone(item.decision);
+  // Issue #1371: executed card shows how the command ran in its header
+  // (bolt, "Ran automatically", rules, exit code); other states keep
+  // their status colour in the header label and icon, with a neutral frame.
+  const autoExecHeader = item.decision === "AutoExec" && !settled && !rejectedByUser;
+  const exitCode =
+    item.result && item.result.kind !== "noteUpdate" && item.result.kind !== "fileRead" &&
+    item.result.kind !== "fileWrite" && !item.result.cancelled
+      ? (item.result.exitCode ?? "—")
+      : null;
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
 
   return (
-    <div className={`border p-3 text-sm ${cardTone}`}>
+    <div className="border border-border bg-surface-sunken text-sm">
       {/* Spec 0029, Abschnitt 2: Label — Lücke — Risiko-Badges —
        * Entscheidungs-Badge, alle in derselben Zeile, der rechte Cluster
        * rechtsbündig ans Zeilenende (`ml-auto`). Der Ursprungs-Badge (Spec
        * 0028) ist in der Positionierungs-Spec nicht erwähnt, reiht sich
        * aber sinngemäß vor die Risiko-Badges ein — der Entscheidungs-Badge
        * bleibt so, wie von der Spec verlangt, das letzte Element. */}
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="font-heading font-semibold tracking-wide text-fg">{label}</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        {autoExecHeader ? (
+          <AutoExecRulesLine rules={item.autoExecRules ?? []} />
+        ) : (
+          <span className="text-label text-fg">{label}</span>
+        )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {item.origin.kind === "mcp" && (
             <span
-              className="font-heading rounded-sm bg-mcp-subtle px-2 py-0.5 text-xs font-semibold tracking-wide text-mcp-fg"
+              className="font-heading bg-mcp-subtle px-2 py-0.5 text-xs font-semibold tracking-wide text-mcp-fg"
               title={t("actionCard.mcpOriginHint")}
             >
               {t("actionCard.mcpOrigin", {
@@ -90,17 +100,22 @@ export function ActionCard({
             pending={item.riskSecondOpinionPending}
             unavailable={item.secondOpinionUnavailable}
           />
-          <span
-            className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
-          >
-            {badge.text}
-          </span>
+          {!autoExecHeader && (
+            <span className={`text-label inline-flex items-center gap-1 ${badge.className}`}>
+              <Icon name={badge.icon} />
+              {badge.text}
+            </span>
+          )}
+          {autoExecHeader && exitCode !== null && (
+            <span className="font-mono text-xs text-fg-subtle">exit code: {exitCode}</span>
+          )}
         </div>
       </div>
+      <div className="p-3">
       <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
-          className={`block border border-border bg-surface-sunken px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
+          className={`block font-mono text-xs break-words whitespace-pre-wrap before:content-['$_'] ${
             settled || rejectedByUser || blockedByFilter
               ? "text-fg-subtle line-through decoration-danger-strong/60"
               : "text-fg-soft"
@@ -108,9 +123,6 @@ export function ActionCard({
         >
           {command}
         </code>
-      )}
-      {item.decision === "AutoExec" && item.autoExecRules && item.autoExecRules.length > 0 && (
-        <AutoExecRulesLine rules={item.autoExecRules} />
       )}
       {item.usesStoredSudoPassword && (
         // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher
@@ -224,8 +236,9 @@ export function ActionCard({
         <LiveCommandOutput output={liveOutput} />
       )}
 
-      {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}
+      {item.result && <ActionResultView result={item.result} sessionId={sessionId} exitInHeader={autoExecHeader} />}
       {item.result && <InjectionCheckStatus check={injectionCheck} />}
+      </div>
     </div>
   );
 }
@@ -378,9 +391,11 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
 export function ActionResultView({
   result,
   sessionId,
+  exitInHeader = false,
 }: {
   result: ActionResultPayload;
   sessionId: string;
+  exitInHeader?: boolean;
 }) {
   const { t } = useTranslation();
   if (result.kind === "noteUpdate") {
@@ -390,7 +405,7 @@ export function ActionResultView({
     s.length > max ? `${s.slice(0, max)}\n… ${t("chat.outputTruncated")}` : s;
   if (result.kind === "fileRead") {
     return (
-      <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
+      <div className="mt-2 space-y-1 border-t border-border pt-2 font-mono text-xs">
         <div className="flex items-start justify-between gap-2 font-sans">
           <TakeIntoNoteButton sessionId={sessionId} content={result.content} />
         </div>
@@ -411,7 +426,7 @@ export function ActionResultView({
   }
   const noteContent = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return (
-    <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
+    <div className="mt-2 space-y-1 border-t border-border pt-2 font-mono text-xs">
       {/* Spec 0027, Abschnitt 4: bei Abbruch statt "exit code: —" ein
        * expliziter Hinweis — ein fehlender Exit-Code allein sähe sonst wie
        * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
@@ -427,12 +442,12 @@ export function ActionResultView({
         </div>
       )}
       {result.stdout && (
-        <pre className="whitespace-pre-wrap text-fg-muted">{truncate(result.stdout)}</pre>
+        <pre className="whitespace-pre-wrap text-fg-subtle">{truncate(result.stdout)}</pre>
       )}
       {result.stderr && (
         <pre className="whitespace-pre-wrap text-danger-fg-soft">{truncate(result.stderr)}</pre>
       )}
-      {!result.cancelled && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
+      {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
     </div>
   );
 }

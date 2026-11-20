@@ -86,8 +86,9 @@ describe("auto-exec rule line (issue #696)", () => {
     const off = subscribeRequestOpenFilterRule((id) => requested.push(id));
     renderItem(item({ autoExecRules: [globalRule] }));
     const link = await screen.findByRole("button", { name: "uptime" });
-    expect(link.closest("p")?.textContent).toContain("Automatisch ausgeführt");
-    expect(link.closest("p")?.textContent).toContain("global");
+    const header = link.closest("div");
+    expect(header?.textContent).toContain("Automatisch ausgeführt");
+    expect(header?.textContent).toContain("global");
     await act(async () => {
       fireEvent.click(link);
     });
@@ -158,8 +159,30 @@ describe("auto-exec rule line (issue #696)", () => {
     expect(screen.queryByText(/Automatisch ausgeführt/)).toBeNull();
   });
 
-  it("shows no line when no rules came with the event", () => {
+  it("shows the header without rules when no rules came with the event", () => {
     renderItem(item({ autoExecRules: [] }));
-    expect(screen.queryByText(/Automatisch ausgeführt/)).toBeNull();
+    expect(screen.getByText("Automatisch ausgeführt")).toBeInTheDocument();
+    expect(screen.queryByText("Regel")).toBeNull();
+  });
+
+  it("shows the exit code in the header once the result exists", async () => {
+    renderItem(
+      item({
+        autoExecRules: [globalRule],
+        result: {
+          kind: "command",
+          command: "uptime",
+          stdout: "up",
+          stderr: "",
+          exitCode: 3,
+          cancelled: false,
+          truncated: false,
+        },
+      }),
+    );
+    const code = screen.getByText("exit code: 3");
+    expect(code.parentElement?.parentElement?.textContent).toContain("Automatisch ausgeführt");
+    expect(screen.getAllByText(/exit code/)).toHaveLength(1);
+    await screen.findByRole("button", { name: "uptime" });
   });
 });

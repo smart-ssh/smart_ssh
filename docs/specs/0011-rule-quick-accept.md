@@ -188,8 +188,12 @@ Nutzer einen Vorschlag annimmt.
 ## 7. Hinweis zur Regel bei automatischer Ausführung
 
 Läuft ein Kommando automatisch (Entscheidung „automatisch ausführen“, ohne
-Bestätigung), zeigt seine Karte im Chat unter dem Kommando eine gedämpfte
-Zeile: „Automatisch ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Der
+Bestätigung), zeigt seine Karte im Chat in der Kopfzeile (statt des Labels „Vorgeschlagenes
+Kommando“ und eines Entscheidungs-Badges) ein Blitz-Symbol und: „Automatisch
+ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Das Muster steht als Chip
+mit Rahmen. Liegt das Ergebnis vor, steht der Exit-Code rechtsbündig in
+derselben Kopfzeile (nicht mehr unter der Ausgabe). Bei wiederhergestellten
+Chats ohne Regeldaten zeigt die Kopfzeile nur „Automatisch ausgeführt“. Der
 Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
 
 - Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel
