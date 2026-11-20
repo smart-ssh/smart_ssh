@@ -97,6 +97,116 @@ test.describe("appearance", () => {
   });
 });
 
+test.describe("light theme focus and letter spacing (issue #1397)", () => {
+  type Ring = { shadow: string; outline: string; outlineWidth: string; outlineStyle: string; bg: string; focus: string };
+  const ringOf = (page: import("@playwright/test").Page) =>
+    page.evaluate((): Ring => {
+      const el = document.activeElement as HTMLElement;
+      const cs = getComputedStyle(el);
+      const probe = document.createElement("div");
+      probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--focus");
+      document.body.appendChild(probe);
+      const focus = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        shadow: cs.boxShadow,
+        outline: cs.outlineColor,
+        outlineWidth: cs.outlineWidth,
+        outlineStyle: cs.outlineStyle,
+        // Fill the ring/outline sits on: nearest non-transparent background, starting at the
+        // element itself for inset rings and at its parent for outer rings and outlines.
+        bg: (() => {
+          let n: HTMLElement | null = cs.boxShadow.includes("inset") ? el : el.parentElement;
+          while (n) {
+            const c = getComputedStyle(n).backgroundColor;
+            if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c;
+            n = n.parentElement;
+          }
+          return "rgb(255, 255, 255)";
+        })(),
+        focus,
+      };
+    });
+  const expectBoxRing = async (page: import("@playwright/test").Page) => {
+    const r = await ringOf(page);
+    expect(r.shadow).toContain("0px 0px 0px 2px");
+    expect(r.shadow).toContain(r.focus);
+    expect(r.focus).not.toBe(r.bg);
+  };
+
+  test.beforeEach(async ({ app }) => {
+    await app.page.addInitScript(() => window.localStorage.setItem("smart-ssh.theme", "light"));
+  });
+
+  test("input shows a 2 px focus outline", async ({ app }) => {
+    const { page } = app;
+    await app.launch({ ...populated(), commands: { sftp_list: { result: [] } } });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+    // Field: 2 px outline in the focus colour.
+    await page.getByRole("button", { name: "Manage", exact: true }).click();
+    await page.getByRole("button", { name: "+ Server", exact: true }).click();
+    const input = page.getByRole("textbox").first();
+    await expect(input).toBeVisible();
+    await input.focus();
+    await expect(input).toBeFocused();
+    const f = await ringOf(page);
+    expect(f.outlineStyle).toBe("solid");
+    expect(f.outlineWidth).toBe("2px");
+    expect(f.outline).toBe(f.focus);
+    expect(f.outline).not.toBe(f.bg);
+  });
+
+  test("tab shows the 2 px ring", async ({ app }) => {
+    const { page } = app;
+    await app.launch(populated());
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: "Manage", exact: true }).click();
+    await page.getByRole("treeitem", { name: /db-primary/ }).click();
+    const general = page.getByRole("tab", { name: "General", exact: true });
+    await expect(general).toHaveAttribute("aria-selected", "true");
+    await general.focus();
+    // Keyboard navigation makes the focus visible on the tab.
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Connection", exact: true })).toBeFocused();
+    await expectBoxRing(page);
+  });
+
+  test("menu item shows the 2 px ring", async ({ app }) => {
+    const { page } = app;
+    const entry = {
+      name: "notes.txt", path: "/home/deploy/notes.txt", isDir: false, size: 2048, permissions: "rw-r--r--",
+      modified: "2026-01-15T10:30:00Z", permissionsOctal: 0o644, uid: 1000, gid: 1000, owner: "deploy",
+      group: "deploy", isSymlink: false, linkTarget: null, linkKind: null,
+    };
+    await app.launch({ ...populated(), commands: { sftp_list: { result: [entry] } } });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: /^db-primary\b/ }).click();
+    await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await expect(page.getByText("notes.txt")).toBeVisible();
+    await page.getByRole("button", { name: /^Actions: notes.txt$/ }).click();
+    const items = page.getByRole("menuitem");
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(items.nth(1)).toBeFocused();
+    await expectBoxRing(page);
+  });
+
+  test("lang=ja resets the label letter spacing, en keeps it", async ({ app }) => {
+    const { page } = app;
+    await app.launch(populated());
+    await page.getByRole("button", { name: "Manage", exact: true }).click();
+    await page.getByRole("button", { name: "+ Server", exact: true }).click();
+    const label = page.locator("label.text-label").first();
+    await expect(label).toBeVisible();
+    await page.evaluate(() => (document.documentElement.lang = "en"));
+    await expect.poll(() => label.evaluate((el) => getComputedStyle(el).letterSpacing)).not.toBe("normal");
+    await page.evaluate(() => (document.documentElement.lang = "ja"));
+    await expect.poll(() => label.evaluate((el) => getComputedStyle(el).letterSpacing)).toBe("normal");
+  });
+});
+
 test("the cached choice is applied before the app renders (no flash)", async ({ app }) => {
   await app.page.addInitScript(() => window.localStorage.setItem("smart-ssh.theme", "light"));
   // The pre-paint script runs from <head>; observe the attribute at DOMContentLoaded.
