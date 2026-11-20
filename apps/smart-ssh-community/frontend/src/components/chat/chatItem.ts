@@ -106,9 +106,6 @@ export type ChatItem =
       };
       retryable?: boolean;
     }
-  // Issue #596: a rule was created from the confirmation card but the
-  // command will still ask next time; `reasons` are backend reason codes.
-  | { type: "ruleNotice"; id: string; reasons: string[] }
   | { type: "contextCompacted"; id: string }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
   // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion

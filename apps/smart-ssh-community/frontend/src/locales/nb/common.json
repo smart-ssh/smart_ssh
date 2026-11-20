@@ -434,7 +434,6 @@
       "blocked": "spør alltid, uansett regler: {{reasons}}",
       "verdictAuto": "kjører automatisk neste gang",
       "verdictAsk": "spør fortsatt: {{reasons}}",
-      "notice": "Regel opprettet. Denne kommandoen spør fortsatt neste gang: {{reasons}}",
       "reasonOther": "en annen sikkerhetskontroll",
       "loadFailed": "Regeldekningen kunne ikke lastes",
       "summaryHeading": "Allerede tillatt",
