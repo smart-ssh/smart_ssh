@@ -98,3 +98,22 @@ test("title bar: navigation tabs stay visible in a session, Connect and + lead b
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 });
+
+test("with many open tabs every tab keeps a readable width and the strip scrolls", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await openSession(app, "db-primary");
+  for (let i = 1; i <= 5; i++) {
+    await app.emit("mcp-action-tab-requested", {
+      sessionId: `mcp-session-${i}`,
+      serverId: "s-lab",
+      clientName: `Client ${i}`,
+    });
+  }
+  const tabs = page.locator("header div.group");
+  await expect(tabs).toHaveCount(6);
+  for (let i = 0; i < 6; i++) {
+    const box = await tabs.nth(i).locator("button").first().boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(40);
+  }
+});

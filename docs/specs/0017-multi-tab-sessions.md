@@ -116,7 +116,7 @@ Bestätigung geben, ohne zu sehen, auf welchem Server sie wirkt.
 
 - Der betroffene Tab trägt einen auffälligen Hinweis: ein gelbes Abzeichen
   „Ausstehend“ neben dem Namen (Tooltip „Wartet auf Bestätigung"); bei einem
-  MCP-Tab zusätzlich das beschriftete Abzeichen „Bestätigung nötig".
+  MCP-Tab steht statt dessen das beschriftete Abzeichen „Bestätigung nötig".
 - Der Dialog erscheint erst, wenn der Nutzer zu diesem Tab wechselt, also im
   Kontext des Servers, auf dem er wirkt.
 - Der Hinweis erscheint auch dann, wenn eine zunächst automatisch erlaubte

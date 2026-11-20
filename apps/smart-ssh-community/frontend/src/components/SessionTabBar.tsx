@@ -86,7 +86,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       aria-orientation="horizontal"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
-      className="flex h-full min-w-0 items-stretch overflow-hidden"
+      className="flex h-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
     >
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
@@ -107,7 +107,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                   }
                 : undefined
             }
-            className={`group flex min-w-0 shrink items-center gap-2 border-l border-t-2 border-l-border px-3 text-[12.5px] ${
+            className={`group flex min-w-[7rem] shrink items-center gap-2 border-l border-t-2 border-l-border px-3 text-[12.5px] ${
               active
                 ? "border-t-accent bg-surface text-fg-strong"
                 : "border-t-transparent text-fg-subtle hover:bg-surface-raised hover:text-fg"
