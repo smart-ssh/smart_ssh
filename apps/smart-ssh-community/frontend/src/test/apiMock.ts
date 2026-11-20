@@ -26,9 +26,11 @@ export type ApiModule = typeof import("../api/api");
 function defaultImplementations(): Partial<Record<keyof ApiModule, unknown>> {
   return {
     getChatHistory: vi.fn(() => Promise.resolve([])),
+    listServers: vi.fn(() => Promise.resolve([])),
     getKeychainService: vi.fn(() => Promise.resolve("Smart SSH")),
     sftpElevationAllowed: vi.fn(() => Promise.resolve(true)),
     listAiProviders: vi.fn(() => Promise.resolve([])),
+    getSessionAiProvider: vi.fn(() => Promise.reject(new Error("no provider"))),
     listPromptHistory: vi.fn(() => Promise.resolve([])),
     startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
     explainConfirmation: vi.fn(() =>

@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nouvelle session",
-    "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Confirmation requise",
       "readOnlyHint": "Cette session appartient à un outil externe (MCP). Elle n’affiche que les actions de l’outil à confirmer ou rejeter et leurs résultats ; il n’y a ni saisie de chat ni terminal ici. La fermer met fin à la session MCP et rejette les confirmations en attente."
     },
-    "confirmClosePending": "Une confirmation est encore en attente pour « {{name}} ». Fermer l’onglet malgré tout ? L’action en attente sera alors considérée comme rejetée."
+    "confirmClosePending": "Une confirmation est encore en attente pour « {{name}} ». Fermer l’onglet malgré tout ? L’action en attente sera alors considérée comme rejetée.",
+    "pendingBadge": "En attente",
+    "newConnection": "Nouvelle connexion"
   },
   "aiProvider": {
     "openLogs": "Ouvrir les journaux de diagnostic dans le gestionnaire de fichiers",
@@ -1297,8 +1298,9 @@
     "queued": "Sera envoyé avec la prochaine requête",
     "responseCancelled": "Réponse annulée.",
     "contextCompactedNotice": "Les parties plus anciennes de ce chat ont été résumées pour tenir dans le contexte du modèle.",
-    "contextUsage": "Contexte {{used}} / {{window}}",
     "contextUsageTooltip": "Les parties plus anciennes du chat sont résumées automatiquement lorsque le contexte est plein.",
+    "messageLabel": "Message",
+    "headerProviderTooltip": "Fournisseur : {{provider}}",
     "webResearchUnavailable": "La recherche web n’est pas disponible pour ce compte fournisseur (la recherche web y est désactivée). Cette session répond sans recherche web. Pour la désactiver définitivement : Paramètres → Fournisseur d’IA → « Recherche web ».",
     "emptyResponse": "Le modèle n’a renvoyé aucune réponse. Pour les modèles avec phase de réflexion, une limite de sortie plus élevée dans les paramètres du fournisseur aide.",
     "refusedResponse": "Le modèle a refusé cette demande. Reformulez-la ou démarrez un nouveau chat.",

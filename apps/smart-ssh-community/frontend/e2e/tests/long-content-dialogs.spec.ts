@@ -58,7 +58,7 @@ test("note diff preview: the diff scrolls, title and decision buttons stay usabl
   await page.getByRole("button", { name: "Show", exact: true }).click();
 
   const title = page.getByText('Note suggestion for server "db-primary"');
-  const card = page.locator("div.rounded-lg", { has: title });
+  const card = page.locator("div.bg-surface-raised", { has: title });
   const reject = card.getByRole("button", { name: "Reject", exact: true });
   const apply = card.getByRole("button", { name: "Apply", exact: true });
   const diffLine = card.getByText("line 119: changed");
@@ -149,8 +149,8 @@ test("connection step log: a long log scrolls with the page, the navigation stay
   await expect(failedStep).toBeVisible();
 
   // Issue #548: the failure now lives in the connection tab, so the stable
-  // chrome is the tab strip's Overview button.
-  const overview = page.getByRole("button", { name: "Overview", exact: true });
+  // chrome is the title bar's Connect tab.
+  const overview = page.getByRole("button", { name: "Connect", exact: true });
   const scroller = page.locator("main:visible");
   await expectUsable(overview);
   await expectOnlyContentScrolls(scroller, [overview]);

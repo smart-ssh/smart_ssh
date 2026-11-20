@@ -69,6 +69,14 @@ describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
     expect(field.tagName).toBe("TEXTAREA");
   });
 
+  // Issue #1372: visible label bound to the 2-row textarea.
+  it("has a visible label associated with the textarea", async () => {
+    renderChatPanel();
+    const field = await screen.findByLabelText("Nachricht");
+    expect(field.tagName).toBe("TEXTAREA");
+    expect(field).toHaveAttribute("rows", "2");
+  });
+
   it("Enter sends the message and clears the draft", async () => {
     renderChatPanel();
     const field = await screen.findByPlaceholderText(

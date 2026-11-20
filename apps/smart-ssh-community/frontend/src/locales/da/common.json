@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Kræver bekræftelse",
       "readOnlyHint": "Denne session tilhører et eksternt værktøj (MCP). Den viser kun værktøjets handlinger, der skal bekræftes eller afvises, og deres resultater; her er hverken chatinput eller terminal. Lukkes den, afsluttes MCP-sessionen, og ventende bekræftelser afvises."
     },
-    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist."
+    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist.",
+    "pendingBadge": "Afventer",
+    "newConnection": "Ny forbindelse"
   },
   "aiProvider": {
     "openLogs": "Åbn diagnoselogfiler i filhåndtering",
@@ -1290,8 +1291,9 @@
     "queued": "Sendes med næste anmodning",
     "responseCancelled": "Svaret blev annulleret.",
     "contextCompactedNotice": "Ældre dele af denne chat er blevet opsummeret, så de passer ind i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
+    "messageLabel": "Besked",
+    "headerProviderTooltip": "Udbyder: {{provider}}",
     "webResearchUnavailable": "Webresearch er ikke tilgængelig for denne udbyderkonto (websøgning er slået fra dér). Denne session svarer uden webresearch. Sådan slår du det fra permanent: Indstillinger → AI-udbyder → “Webresearch”.",
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
     "refusedResponse": "Modellen afviste denne anmodning. Omformuler den, eller start en ny chat.",

@@ -73,7 +73,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
         className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-ring-flush disabled:cursor-not-allowed disabled:opacity-70 ${
           recording
             ? "animate-pulse border-danger-border-strong bg-danger-subtle-hover text-danger-fg-faint"
-            : "border-border-strong bg-surface-raised text-fg hover:bg-border"
+            : "border-transparent bg-transparent text-fg-muted hover:bg-border hover:text-fg-bright"
         }`}
       >
         {transcribing ? <Spinner /> : <Icon name="mic" />}

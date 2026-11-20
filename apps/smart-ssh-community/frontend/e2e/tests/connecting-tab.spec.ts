@@ -77,7 +77,7 @@ test("a failed connect keeps the tab with the failed step, error, Retry and Clos
   await expect(page.getByRole("button", { name: /^(Connecting to|Connection to) alpha/ })).toHaveCount(1);
 
   // Overview shows no connect error above the list.
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText("Authentication failed")).toHaveCount(0);
 });
 
@@ -102,7 +102,7 @@ test("a second click on a connecting server focuses its tab without a second con
   await launchHeld(app);
   const page = app.page;
   await page.getByRole("button", { name: /^alpha\b/ }).click();
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.locator("span", { hasText: "Connecting…" })).toBeVisible();
   await page.getByRole("button", { name: /^alpha\b/ }).click();
   await expect(page.getByRole("heading", { name: "Connecting to alpha …" })).toBeVisible();

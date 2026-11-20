@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Uusi istunto",
-    "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Vaatii vahvistuksen",
       "readOnlyHint": "Tämä istunto kuuluu ulkoiselle työkalulle (MCP). Se näyttää vain työkalun vahvistettavat tai hylättävät toiminnot ja niiden tulokset; keskustelukenttää tai päätettä ei ole. Sulkeminen päättää MCP-istunnon ja hylkää odottavat vahvistukset."
     },
-    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi."
+    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi.",
+    "pendingBadge": "Odottaa",
+    "newConnection": "Uusi yhteys"
   },
   "aiProvider": {
     "openLogs": "Avaa diagnostiikkalokit tiedostonhallinnassa",
@@ -1290,8 +1291,9 @@
     "queued": "Lähetetään seuraavan pyynnön mukana",
     "responseCancelled": "Vastaus peruttu.",
     "contextCompactedNotice": "Tämän keskustelun vanhempia osia tiivistettiin, jotta ne mahtuvat mallin kontekstiin.",
-    "contextUsage": "Konteksti {{used}} / {{window}}",
     "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
+    "messageLabel": "Viesti",
+    "headerProviderTooltip": "Palveluntarjoaja: {{provider}}",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
     "refusedResponse": "Malli hylkäsi pyynnön. Muotoile se uudelleen tai aloita uusi keskustelu.",

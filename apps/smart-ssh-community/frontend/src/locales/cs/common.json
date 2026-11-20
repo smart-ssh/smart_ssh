@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nová relace",
-    "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Vyžaduje potvrzení",
       "readOnlyHint": "Tato relace patří externímu nástroji (MCP). Zobrazuje pouze akce nástroje k potvrzení či zamítnutí a jejich výsledky; není zde vstup chatu ani terminál. Zavřením se relace MCP ukončí a čekající potvrzení se zamítnou."
     },
-    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou."
+    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou.",
+    "pendingBadge": "Čeká",
+    "newConnection": "Nové připojení"
   },
   "aiProvider": {
     "openLogs": "Otevřít diagnostické logy ve správci souborů",
@@ -1304,8 +1305,9 @@
     "queued": "Bude odesláno s dalším požadavkem",
     "responseCancelled": "Odpověď zrušena.",
     "contextCompactedNotice": "Starší části tohoto chatu byly shrnuty, aby se vešly do kontextu modelu.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
+    "messageLabel": "Zpráva",
+    "headerProviderTooltip": "Poskytovatel: {{provider}}",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
     "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
