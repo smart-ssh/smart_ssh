@@ -37,7 +37,6 @@ function Harness({ initial }: { initial: ChatItem[] }) {
           key={item.id}
           item={item}
           onRespond={noop}
-          onAcceptWithRule={noop}
           onExport={noopAsync}
           onContinueTruncated={noop}
           serverId="s"

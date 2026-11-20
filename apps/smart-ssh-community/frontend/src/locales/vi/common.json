@@ -409,9 +409,6 @@
     "editableCommand": "Lệnh — có thể chỉnh sửa",
     "execute": "Thực thi",
     "deny": "Từ chối",
-    "quickRule": "Chấp nhận + Quy tắc",
-    "quickRuleDropdownAria": "Hiện các đề xuất quy tắc",
-    "newRulePatternHeading": "Mẫu cho quy tắc cho phép mới",
     "scopeThisServer": "Máy chủ này",
     "scopeGlobal": "Toàn cục",
     "scopeTag": "Thẻ",
@@ -439,7 +436,16 @@
       "verdictAsk": "vẫn sẽ hỏi: {{reasons}}",
       "notice": "Đã tạo quy tắc. Lệnh này lần sau vẫn sẽ hỏi: {{reasons}}",
       "reasonOther": "một kiểm tra an toàn khác",
-      "loadFailed": "Không thể tải phạm vi áp dụng quy tắc"
+      "loadFailed": "Không thể tải phạm vi áp dụng quy tắc",
+      "summaryHeading": "Đã được cho phép",
+      "toDecideHeading": "Còn cần quyết định",
+      "expandAria": "Gợi ý quy tắc cho {{segment}}",
+      "stagedBadge": "chưa lưu",
+      "removeStaged": "Xóa",
+      "saveRules": "Lưu quy tắc ({{count}})",
+      "saveFailed": "Không thể lưu quy tắc: {{message}}",
+      "unsavedHint": "Quy tắc chưa lưu: {{count}}",
+      "segmentCovered": "bao phủ phần này; lệnh vẫn sẽ hỏi: {{reasons}}"
     }
   },
   "authPrompt": {

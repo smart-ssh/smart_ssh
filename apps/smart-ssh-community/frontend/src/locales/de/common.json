@@ -409,9 +409,6 @@
     "editableCommand": "Kommando — editierbar",
     "execute": "Ausführen",
     "deny": "Ablehnen",
-    "quickRule": "Akzeptieren + Regel",
-    "quickRuleDropdownAria": "Regel-Vorschläge anzeigen",
-    "newRulePatternHeading": "Muster für die neue Allow-Regel",
     "scopeThisServer": "Dieser Server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "fragt weiterhin nach: {{reasons}}",
       "notice": "Regel angelegt. Dieses Kommando fragt beim nächsten Mal weiterhin nach: {{reasons}}",
       "reasonOther": "eine andere Sicherheitsprüfung",
-      "loadFailed": "Regelabdeckung konnte nicht geladen werden"
+      "loadFailed": "Regelabdeckung konnte nicht geladen werden",
+      "summaryHeading": "Bereits erlaubt",
+      "toDecideHeading": "Noch zu entscheiden",
+      "expandAria": "Regelvorschläge für {{segment}}",
+      "stagedBadge": "noch nicht gespeichert",
+      "removeStaged": "Entfernen",
+      "saveRules": "Regeln speichern ({{count}})",
+      "saveFailed": "Regeln konnten nicht gespeichert werden: {{message}}",
+      "unsavedHint": "Nicht gespeicherte Regeln: {{count}}",
+      "segmentCovered": "deckt diesen Teil ab; der Befehl fragt trotzdem nach: {{reasons}}"
     }
   },
   "authPrompt": {

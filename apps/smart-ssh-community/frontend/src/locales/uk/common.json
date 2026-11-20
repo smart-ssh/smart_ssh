@@ -409,9 +409,6 @@
     "editableCommand": "Команда — можна редагувати",
     "execute": "Виконати",
     "deny": "Заборонити",
-    "quickRule": "Прийняти + правило",
-    "quickRuleDropdownAria": "Показати пропозиції правил",
-    "newRulePatternHeading": "Шаблон нового правила «Дозволити»",
     "scopeThisServer": "Цей сервер",
     "scopeGlobal": "Глобально",
     "scopeTag": "Тег",
@@ -439,7 +436,16 @@
       "verdictAsk": "і далі питатиме: {{reasons}}",
       "notice": "Правило створено. Ця команда й наступного разу питатиме: {{reasons}}",
       "reasonOther": "інша перевірка безпеки",
-      "loadFailed": "Не вдалося завантажити покриття правил"
+      "loadFailed": "Не вдалося завантажити покриття правил",
+      "summaryHeading": "Уже дозволено",
+      "toDecideHeading": "Ще потрібно вирішити",
+      "expandAria": "Пропозиції правил для {{segment}}",
+      "stagedBadge": "ще не збережено",
+      "removeStaged": "Прибрати",
+      "saveRules": "Зберегти правила ({{count}})",
+      "saveFailed": "Не вдалося зберегти правила: {{message}}",
+      "unsavedHint": "Незбережені правила: {{count}}",
+      "segmentCovered": "охоплює цю частину; команда все одно питатиме: {{reasons}}"
     }
   },
   "authPrompt": {

@@ -409,9 +409,6 @@
     "editableCommand": "Команда — можно изменить",
     "execute": "Выполнить",
     "deny": "Запретить",
-    "quickRule": "Принять + правило",
-    "quickRuleDropdownAria": "Показать варианты правил",
-    "newRulePatternHeading": "Шаблон для нового правила разрешения",
     "scopeThisServer": "Этот сервер",
     "scopeGlobal": "Глобально",
     "scopeTag": "Тег",
@@ -439,7 +436,16 @@
       "verdictAsk": "по-прежнему будет спрашивать: {{reasons}}",
       "notice": "Правило создано. Эта команда и в следующий раз будет спрашивать: {{reasons}}",
       "reasonOther": "другая проверка безопасности",
-      "loadFailed": "Не удалось загрузить покрытие правил"
+      "loadFailed": "Не удалось загрузить покрытие правил",
+      "summaryHeading": "Уже разрешено",
+      "toDecideHeading": "Осталось решить",
+      "expandAria": "Варианты правил для {{segment}}",
+      "stagedBadge": "ещё не сохранено",
+      "removeStaged": "Убрать",
+      "saveRules": "Сохранить правила ({{count}})",
+      "saveFailed": "Не удалось сохранить правила: {{message}}",
+      "unsavedHint": "Несохранённые правила: {{count}}",
+      "segmentCovered": "покрывает эту часть; команда всё равно будет спрашивать: {{reasons}}"
     }
   },
   "authPrompt": {

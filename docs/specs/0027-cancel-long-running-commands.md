@@ -41,7 +41,7 @@ beendetes Kommando.
 
 **2.1 Wann.** Sobald ein vorgeschlagenes Kommando tatsächlich ausgeführt wird —
 sofort bei automatischer Ausführung, sonst nach „Ausführen" bzw. dem
-Ausführen eines bearbeiteten Vorschlags oder dem Akzeptieren mit Regel —
+Ausführen eines bearbeiteten Vorschlags —
 läuft in der Oberfläche ein Zähler. Liegt nach 5 Sekunden noch kein Ergebnis
 vor, erscheint an der Aktionskarte:
 

@@ -409,9 +409,6 @@
     "editableCommand": "कमांड — संपादन योग्य",
     "execute": "चलाएँ",
     "deny": "अस्वीकार करें",
-    "quickRule": "स्वीकार करें + नियम",
-    "quickRuleDropdownAria": "नियम सुझाव दिखाएँ",
-    "newRulePatternHeading": "नए अनुमति नियम के लिए पैटर्न",
     "scopeThisServer": "यह सर्वर",
     "scopeGlobal": "वैश्विक",
     "scopeTag": "टैग",
@@ -439,7 +436,16 @@
       "verdictAsk": "फिर भी पूछेगा: {{reasons}}",
       "notice": "नियम बन गया। यह कमांड अगली बार भी पूछेगी: {{reasons}}",
       "reasonOther": "एक और सुरक्षा जाँच",
-      "loadFailed": "नियम कवरेज लोड नहीं हो सका"
+      "loadFailed": "नियम कवरेज लोड नहीं हो सका",
+      "summaryHeading": "पहले से अनुमत",
+      "toDecideHeading": "तय करना बाकी",
+      "expandAria": "{{segment}} के लिए नियम सुझाव",
+      "stagedBadge": "अभी सहेजा नहीं गया",
+      "removeStaged": "हटाएँ",
+      "saveRules": "नियम सहेजें ({{count}})",
+      "saveFailed": "नियम सहेजे नहीं जा सके: {{message}}",
+      "unsavedHint": "न सहेजे गए नियम: {{count}}",
+      "segmentCovered": "यह भाग कवर होता है; कमांड फिर भी पूछेगा: {{reasons}}"
     }
   },
   "authPrompt": {

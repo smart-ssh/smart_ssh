@@ -491,7 +491,7 @@ export function useSessionTabs() {
 
   const switchTo = (sessionId: string | null) => setActiveSessionId(sessionId);
 
-  /** Vom Chat-Bestätigungsdialog aufgerufen (`respond`/`acceptWithRule` in
+  /** Vom Chat-Bestätigungsdialog aufgerufen (`respond` in
    * `ChatPanel`), sobald der Nutzer eine wartende Aktion auflöst — nötig,
    * weil eine Ablehnung (anders als Approve/EditThenApprove) kein
    * `chat-action-result`-Event auslöst (s. `ChatPanel`-Doc-Kommentar), der
