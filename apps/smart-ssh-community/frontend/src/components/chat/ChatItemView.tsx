@@ -4,7 +4,6 @@ import { type ChatItem } from "./chatItem";
 import { ActionCard, TakeIntoNoteButton } from "./ActionCard";
 import { AssistantMessageView } from "./AssistantMessageView";
 import { errorCardText, ErrorCardExtras } from "./ErrorCard";
-import { reasonList } from "./reasonList";
 import { useTranslation } from "react-i18next";
 import { type LiveOutput } from "../../lib/liveOutput";
 import { type ComposerAttachment } from "../../extensions/registry";
@@ -103,13 +102,6 @@ export const ChatItemView = memo(function ChatItemView({
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}
       </div>
-    );
-  }
-  if (item.type === "ruleNotice") {
-    return (
-      <output className="block border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
-        {t("confirmDialog.explain.notice", { reasons: reasonList(t, item.reasons) })}
-      </output>
     );
   }
   if (item.type === "autoContinuationLimitReached") {

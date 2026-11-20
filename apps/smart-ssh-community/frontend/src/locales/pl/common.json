@@ -434,7 +434,6 @@
       "blocked": "zawsze pyta, niezależnie od reguł: {{reasons}}",
       "verdictAuto": "następnym razem uruchomi się automatycznie",
       "verdictAsk": "nadal będzie pytać: {{reasons}}",
-      "notice": "Reguła utworzona. To polecenie nadal będzie pytać następnym razem: {{reasons}}",
       "reasonOther": "inna kontrola bezpieczeństwa",
       "loadFailed": "Nie udało się wczytać pokrycia reguł",
       "summaryHeading": "Już dozwolone",

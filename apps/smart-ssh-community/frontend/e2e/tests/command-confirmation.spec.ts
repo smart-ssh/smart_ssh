@@ -71,7 +71,7 @@ test.describe("command confirmation", () => {
     const { sessionId, card } = await proposeLongRedCommand(app);
     await decisionButtons(card).reject.click();
     await expect(decisionButtons(card).reject).toHaveCount(0);
-    expect(await app.calls("respond_to_action")).toEqual([
+    await expect.poll(() => app.calls("respond_to_action")).toEqual([
       {
         cmd: "respond_to_action",
         args: { sessionId, actionId: "action-1", decision: { decision: "deny" } },
@@ -83,7 +83,7 @@ test.describe("command confirmation", () => {
     const { sessionId, card } = await proposeLongRedCommand(app);
     await decisionButtons(card).confirm.click();
     await expect(decisionButtons(card).confirm).toHaveCount(0);
-    expect(await app.calls("respond_to_action")).toEqual([
+    await expect.poll(() => app.calls("respond_to_action")).toEqual([
       {
         cmd: "respond_to_action",
         args: { sessionId, actionId: "action-1", decision: { decision: "approve" } },
@@ -129,18 +129,19 @@ test.describe("command confirmation", () => {
     await page.getByRole("button", { name: /All `git` calls/ }).click();
     await expect(page.getByTestId("staged-rule")).toHaveCount(2);
     await expect(page.getByText("Rules not saved: 2")).toBeVisible();
-    expect(await app.calls("respond_to_action")).toHaveLength(0);
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
 
     await page.getByRole("button", { name: "Save rules (2)" }).click();
     await expect(page.getByTestId("saved-rule")).toHaveCount(2);
+    await expect.poll(() => app.calls("create_quick_rules_batch")).toHaveLength(1);
     const [batch] = await app.calls("create_quick_rules_batch");
     expect((batch.args as { rules: { scope: unknown }[] }).rules.map((r) => r.scope)).toEqual([
       { Server: expect.any(String) },
       "Global",
     ]);
     await expect(lsToggle).toBeVisible();
-    expect(await app.calls("respond_to_action")).toHaveLength(0);
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
     await page.getByRole("button", { name: "Execute", exact: true }).click();
-    expect(await app.calls("respond_to_action")).toHaveLength(1);
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(1);
   });
 });

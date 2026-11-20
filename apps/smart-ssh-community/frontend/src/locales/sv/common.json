@@ -434,7 +434,6 @@
       "blocked": "frågar alltid, oavsett regler: {{reasons}}",
       "verdictAuto": "körs automatiskt nästa gång",
       "verdictAsk": "frågar fortfarande: {{reasons}}",
-      "notice": "Regel skapad. Det här kommandot frågar fortfarande nästa gång: {{reasons}}",
       "reasonOther": "en annan säkerhetskontroll",
       "loadFailed": "Regeltäckningen kunde inte läsas in",
       "summaryHeading": "Redan tillåtet",

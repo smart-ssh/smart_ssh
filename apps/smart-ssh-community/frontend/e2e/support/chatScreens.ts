@@ -60,5 +60,6 @@ export async function openChatWithConfirmation(app: AppDriver): Promise<string> 
     redCommandProposal(sessionId, `rm -rf /var/lib/app/cache\n${LONG_COMMAND_LINE}`),
   );
   await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
+  await expect(app.page.getByRole("button", { name: /^Rule suggestions for/ }).first()).toBeVisible();
   return sessionId;
 }
