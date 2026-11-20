@@ -365,6 +365,8 @@ export function Sidebar({
             {...rowProps(`group:${node.group.id}`, depth, selected, parentId)}
             {...(narrow ? {} : { "aria-expanded": !isCollapsed })}
             data-group-id={node.group.id}
+            // The count is a visual aid; the accessible name stays the group name.
+            aria-label={name}
             {...handlersFor({ kind: "group", id: node.group.id, label: name })}
             onClick={() => onSelect({ kind: "group", id: node.group.id })}
             title={name}
@@ -388,7 +390,7 @@ export function Sidebar({
               </span>
             )}
             <Icon name={isCollapsed ? "folder" : "folder-open"} className="shrink-0 text-fg-muted" />
-            <span className="truncate">{name}</span>
+            <span className="truncate" title={name}>{name}</span>
             <span
               data-testid="group-count"
               className="ml-auto shrink-0 font-mono text-xs font-normal text-fg-faint"
@@ -433,7 +435,7 @@ export function Sidebar({
           className={`${ROW_BASE} ${padFor(depth)} ${selected ? SELECTED_ROW : "text-fg-muted"}`}
         >
           <Icon name={server.isLocal ? "local" : "server"} className="shrink-0 text-fg-muted" />
-          <span className="truncate font-mono">{server.name}</span>
+          <span className="truncate font-mono" title={server.name}>{server.name}</span>
           {server.isLocal && (
             <Badge tone="local" className="ml-auto shrink-0">
               {t("mainScreen.localBadge")}
@@ -470,7 +472,7 @@ export function Sidebar({
           }`}
         >
           <Icon name="warn" className="shrink-0" />
-          <span className="truncate">{server.name}</span>
+          <span className="truncate" title={server.name}>{server.name}</span>
           <span className="ml-auto shrink-0 text-xs not-italic text-fg-subtle">
             ({t("unusableServer.badge")})
           </span>
@@ -541,7 +543,7 @@ export function Sidebar({
                       className={`${ROW_BASE} pl-3 ${selected ? SELECTED_ROW : "text-fg-muted"}`}
                     >
                       {view.icon && <span aria-hidden="true">{view.icon}</span>}
-                      <span className="truncate">{label}</span>
+                      <span className="truncate" title={label}>{label}</span>
                     </div>
                     </div>
                   );

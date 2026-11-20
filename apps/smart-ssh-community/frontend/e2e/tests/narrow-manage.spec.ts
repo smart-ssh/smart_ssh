@@ -43,6 +43,12 @@ test.describe("narrow Manage area @phone", () => {
     await expectUsable(page.getByRole("button", { name: "Import …", exact: true }));
     await expectUsable(page.getByRole("button", { name: "Export …", exact: true }));
     await expect(page.getByText("Select a group or server on the left")).toHaveCount(0);
+    // Groups collapse with their own toggle button (issue #1368).
+    const toggle = page.getByRole("button", { name: /^Collapse group/ }).first();
+    await expectUsable(toggle);
+    await toggle.click();
+    await expect(page.getByRole("button", { name: /^Expand group/ }).first()).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: /^Expand group/ }).first().click();
     await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow manage list");
     await captureScreen(page, "manage-narrow-list");
@@ -50,6 +56,9 @@ test.describe("narrow Manage area @phone", () => {
     await row.click();
     await expect(page.getByRole("button", { name: "db-primary", exact: true })).toHaveCount(0);
     await expectUsable(back(app));
+    // The header names the open item, with its icon (issue #1368).
+    await expect(back(app).locator("xpath=..").getByText("db-primary", { exact: true })).toBeVisible();
+    await expect(back(app).locator("xpath=..").locator('svg[data-icon="server"]')).toBeVisible();
     await expectUsable(page.getByRole("button", { name: "Save", exact: true }));
     await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow server form");

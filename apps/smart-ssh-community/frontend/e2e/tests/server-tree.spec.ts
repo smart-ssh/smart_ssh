@@ -2,6 +2,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 import { populated } from "../support/data";
+import { captureScreen } from "../support/screenshots";
 
 /** Drags with real pointer events, in steps, like a user's mouse. */
 async function dragOnto(page: Page, source: Locator, target: Locator) {
@@ -47,5 +48,32 @@ test.describe("server tree", () => {
     // The form's "Group" field, found through its label.
     const groupField = page.getByLabel("Group", { exact: true });
     await expect(groupField).toHaveValue("g-lab");
+  });
+
+  test("a folder collapses and expands by chevron and by Left/Right, and its tree stays a tree", async ({ app }) => {
+    const page = app.page;
+    const lab = page.getByRole("treeitem", { name: "Lab", exact: true });
+    await expect(lab).toHaveAttribute("aria-expanded", "true");
+    const inside = folderBlock(page, lab).getByRole("treeitem").nth(1);
+    await expect(inside).toBeVisible();
+
+    await lab.getByTestId("group-chevron").click();
+    await expect(lab).toHaveAttribute("aria-expanded", "false");
+    await expect(inside).toBeHidden();
+
+    await lab.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(lab).toHaveAttribute("aria-expanded", "true");
+    await expect(inside).toBeVisible();
+    await page.keyboard.press("ArrowLeft");
+    await expect(lab).toHaveAttribute("aria-expanded", "false");
+    await expect(lab).toBeFocused();
+  });
+
+  // Review screenshots (SCREENSHOT_LABEL=before|after, SCREENSHOT_SCHEME=dark).
+  test("review screenshots of the Manage sidebar", async ({ app }) => {
+    if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
+    await app.page.getByRole("treeitem", { name: "standalone", exact: true }).click();
+    await captureScreen(app.page, `manage-sidebar-${process.env.SCREENSHOT_SCHEME ?? "light"}`);
   });
 });
