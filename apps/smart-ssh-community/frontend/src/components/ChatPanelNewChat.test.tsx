@@ -4,7 +4,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage, startNewChat } from "../api/api";
+import { getSessionAiProvider, listAiProviders, sendChatMessage, startNewChat } from "../api/api";
 import { onChatActionProposed, onChatContextUsage } from "../api/events";
 import type { ChatActionProposedEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
@@ -191,5 +191,14 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
     expect(meter.textContent).toBe("12.4k / 200k");
     expect(meter.closest("[data-testid='chat-header-title']")).toBeNull();
     expect(screen.getByTestId("chat-header-title").parentElement).toContainElement(meter);
+  });
+
+  it("shows the session's pinned provider, not the currently active one", async () => {
+    const { anthropicProvider } = await import("../test/fixtures");
+    vi.mocked(listAiProviders).mockResolvedValue([anthropicProvider({ model: "active-model" })]);
+    vi.mocked(getSessionAiProvider).mockResolvedValue({ displayName: "Pinned", model: "pinned-model" });
+    renderChatPanel();
+    expect(await screen.findByText("AI · pinned-model")).toBeInTheDocument();
+    expect(screen.queryByText("AI · active-model")).not.toBeInTheDocument();
   });
 });

@@ -296,7 +296,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             data-testid="chat-ai-waiting"
             className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
           >
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+            <Icon name="spark" className="shrink-0 animate-pulse" />
             <span className="flex-1">
               {t("chat.aiWaiting", {
                 provider: aiWait.provider,
@@ -309,7 +309,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </output>
         ) : autoContinuing ? (
           <div className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+            <Icon name="spark" className="shrink-0 animate-pulse" />
             <span className="flex-1">
               <Icon name="spark" className="mr-1 inline align-text-bottom" /> {t("chat.autoContinuing")}
             </span>
@@ -320,7 +320,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         ) : (
           sending && (
             <div className="flex items-center gap-2 bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
-              <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+              <Icon name="spark" className="shrink-0 animate-pulse" />
               <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
               <Button size="sm" onClick={handleStopAutoContinuation}>
@@ -355,12 +355,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       </div>
 
       {readOnlyHint !== undefined ? (
-        <div className="border-t border-border bg-surface-raised p-3 text-xs text-fg-subtle">
-          {readOnlyHint}
+        <div className="flex items-center gap-2 border-t border-border bg-surface-raised p-3 text-xs text-fg-subtle">
+          <Icon name="lock" className="shrink-0" />
+          <span>{readOnlyHint}</span>
         </div>
       ) : hasActiveProvider === false ? (
-        <div className="border-t border-border p-4 text-sm text-warning-fg-soft">
-          {t("chat.noActiveProvider")}
+        <div className="flex items-center gap-2 border-t border-border p-4 text-sm text-warning-fg-soft">
+          <Icon name="warn" className="shrink-0" />
+          <span>{t("chat.noActiveProvider")}</span>
         </div>
       ) : (
         <Composer
