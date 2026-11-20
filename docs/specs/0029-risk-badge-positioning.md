@@ -27,7 +27,7 @@ steht als Fußnote unter dieser Zeile.
 
 Die Entscheidung wird in der Kopfzeile ohne gefüllten Hintergrund dargestellt:
 Symbol und Beschriftung in der Statusfarbe (Blitz = automatisch ausgeführt,
-Haken = Bestätigung nötig, Kreuz = blockiert/abgelehnt). Bei einer automatisch
+Schild = Bestätigung nötig, Kreuz = blockiert/abgelehnt). Bei einer automatisch
 ausgeführten Aktion ersetzt die Kopfzeile „Automatisch ausgeführt · Regel …“
 (Spec 0011, Abschnitt 7) das Label und den Entscheidungs-Badge; Herkunfts- und
 Risiko-Badges bleiben rechts.
