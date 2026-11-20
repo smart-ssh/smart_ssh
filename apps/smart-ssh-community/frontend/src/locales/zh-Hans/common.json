@@ -434,7 +434,6 @@
       "blocked": "无论规则如何都会询问：{{reasons}}",
       "verdictAuto": "下次将自动运行",
       "verdictAsk": "仍会询问：{{reasons}}",
-      "notice": "规则已创建。此命令下次仍会询问：{{reasons}}",
       "reasonOther": "另一项安全检查",
       "loadFailed": "无法加载规则覆盖情况",
       "summaryHeading": "已允许",

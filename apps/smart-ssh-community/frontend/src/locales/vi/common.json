@@ -434,7 +434,6 @@
       "blocked": "luôn hỏi, bất kể quy tắc nào: {{reasons}}",
       "verdictAuto": "lần sau sẽ tự động chạy",
       "verdictAsk": "vẫn sẽ hỏi: {{reasons}}",
-      "notice": "Đã tạo quy tắc. Lệnh này lần sau vẫn sẽ hỏi: {{reasons}}",
       "reasonOther": "một kiểm tra an toàn khác",
       "loadFailed": "Không thể tải phạm vi áp dụng quy tắc",
       "summaryHeading": "Đã được cho phép",
