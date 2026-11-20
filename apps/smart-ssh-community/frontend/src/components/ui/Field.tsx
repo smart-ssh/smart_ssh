@@ -33,7 +33,7 @@ export function Field({ label, help, error, children, className }: FieldProps) {
     <div
       className={["flex flex-col gap-1", className].filter(Boolean).join(" ")}
     >
-      <label htmlFor={id} className="text-sm font-medium text-fg-soft">
+      <label htmlFor={id} className="text-label">
         {label}
       </label>
       {children({

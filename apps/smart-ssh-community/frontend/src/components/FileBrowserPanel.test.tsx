@@ -2505,7 +2505,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     const heading = await screen.findByRole("heading", { name: "Delete folder?" });
-    const body = heading.nextElementSibling as HTMLElement;
+    const body = heading.parentElement!.nextElementSibling as HTMLElement;
     await waitFor(() =>
       expect(body.textContent).toBe(
         "logs will be deleted from the server permanently. Contains 3 files in 1 folder (including this one) — all of them will be deleted.",
@@ -2619,7 +2619,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Löschen" }));
 
     const heading = await screen.findByRole("heading", { name: "Ordner löschen?" });
-    const body = heading.nextElementSibling as HTMLElement;
+    const body = heading.parentElement!.nextElementSibling as HTMLElement;
     await waitFor(() =>
       expect(body.textContent).toBe(
         "logs wird unwiderruflich vom Server gelöscht. Enthält 1 Datei(en) in 1 Ordner(n) (inkl. diesem) — alle werden mitgelöscht.",

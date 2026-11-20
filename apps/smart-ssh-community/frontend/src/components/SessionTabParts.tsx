@@ -3,12 +3,13 @@
 import type { TFunction } from "i18next";
 import { Spinner } from "./ui";
 import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
+import { StatusSquare, type StatusTone } from "./ui/StatusSquare";
 
-const STATUS_DOT: Record<SessionTab["status"], string> = {
-  connected: "bg-success-strong",
-  disconnected: "bg-fg-faint",
-  reconnecting: "bg-warning-strong",
-  awaiting_host_key: "bg-warning-strong",
+const STATUS_TONE: Record<SessionTab["status"], StatusTone> = {
+  connected: "success",
+  disconnected: "neutral",
+  reconnecting: "warning",
+  awaiting_host_key: "warning",
 };
 
 /** The visible label of a tab, including connecting/failed wording. */
@@ -29,7 +30,7 @@ export function TabStateIndicator({ tab }: { tab: SessionTab }) {
       ✗
     </span>
   ) : (
-    <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
+    <StatusSquare tone={STATUS_TONE[tab.status]} />
   );
 }
 
@@ -62,10 +63,7 @@ export function SessionTabContent({
             {t("sessionTabs.mcp.pendingBadge")}
           </span>
         ) : (
-          <span
-            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning-fg"
-            title={t("sessionTabs.pendingAction")}
-          />
+          <StatusSquare tone="warning" pulse title={t("sessionTabs.pendingAction")} />
         ))}
     </>
   );

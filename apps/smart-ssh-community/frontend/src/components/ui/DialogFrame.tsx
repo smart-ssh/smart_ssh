@@ -3,6 +3,7 @@ import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode, RefObject } f
 
 import { useDialogFocusTrap } from "../../hooks/useDialogFocusTrap";
 import { ModalBackdrop, type ModalBackdropLayer } from "../ModalBackdrop";
+import { CornerTicks } from "./CornerTicks";
 
 export interface DialogFrameProps {
   /** See `ModalBackdrop`: `"app"` portals to `document.body`. */
@@ -41,6 +42,12 @@ export interface DialogFrameProps {
   returnFocusTo?: HTMLElement | null;
   /** A click on the backdrop outside the panel calls this (sheet layout). */
   onBackdropClick?: () => void;
+  /** Optional leading icon in the header row, left of the title. */
+  icon?: ReactNode;
+  /** Decorative corner ticks on the two top corners (wide windows only). */
+  ticks?: "accent" | "danger";
+  /** `"danger"` colours the panel rule with `danger-border`. */
+  tone?: "danger";
   children?: ReactNode;
 }
 
@@ -69,6 +76,9 @@ export function DialogFrame({
   yieldToNested = false,
   returnFocusTo,
   onBackdropClick,
+  icon,
+  ticks,
+  tone,
   children,
 }: DialogFrameProps) {
   const titleId = useId();
@@ -99,15 +109,19 @@ export function DialogFrame({
         }`;
   const panelClass = bare
     ? `${panelClassName ?? ""} focus:outline-none`
-    : `flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded border border-border-strong bg-surface p-6 shadow-xl narrow:max-h-none narrow:max-w-none narrow:rounded-none narrow:border-0 narrow:p-4 focus:outline-none`;
+    : `relative flex max-h-[85vh] w-full ${SIZES[size]} flex-col border ${
+        tone === "danger" ? "border-danger-border" : "border-border-strong"
+      } bg-surface-raised shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none focus:outline-none`;
 
   const content = (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm text-fg-muted">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4 text-sm text-fg-muted narrow:px-4">
         {children}
       </div>
       {actions ? (
-        <div className="mt-4 flex flex-wrap justify-end gap-2 narrow:mt-3 narrow:shrink-0">{actions}</div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border bg-surface px-5 py-3 narrow:shrink-0 narrow:px-4">
+          {actions}
+        </div>
       ) : null}
     </>
   );
@@ -136,12 +150,17 @@ export function DialogFrame({
           children
         ) : (
           <>
-        <h2
-          id={titleId}
-          className="font-heading mb-3 shrink-0 text-lg break-words font-semibold text-fg"
-        >
-          {title}
-        </h2>
+        {ticks ? (
+          <div className="narrow:hidden" data-testid="dialog-ticks">
+            <CornerTicks tone={ticks} corners="top" />
+          </div>
+        ) : null}
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3 narrow:px-4">
+          {icon ? <span aria-hidden="true" className="shrink-0 text-fg-muted">{icon}</span> : null}
+          <h2 id={titleId} className="text-title min-w-0 break-words text-fg-strong">
+            {title}
+          </h2>
+        </div>
         {onSubmit ? (
           <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
             {content}

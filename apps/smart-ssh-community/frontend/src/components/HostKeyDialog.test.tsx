@@ -59,6 +59,18 @@ describe.each(branches)("HostKeyDialog ($name)", ({ event, role, rejectLabel, tr
     expect(description?.textContent?.length ?? 0).toBeGreaterThan(0);
   });
 
+  it("draws the danger corner ticks, hidden in the narrow layout, with an offset shadow", () => {
+    renderDialog(event);
+    const wrapper = screen.getByTestId("dialog-ticks");
+    expect(wrapper).toHaveClass("narrow:hidden");
+    const ticks = wrapper.querySelectorAll("[data-corner-tick]");
+    expect(ticks).toHaveLength(2);
+    ticks.forEach((tick) => expect(tick).toHaveClass("border-danger"));
+    const dialog = screen.getByRole(role);
+    expect(dialog).toHaveClass("relative", "shadow-offset-lg", "narrow:shadow-none");
+    expect(dialog.className).not.toContain("shadow-xl");
+  });
+
   it("T2: fokussiert die ablehnende Schaltfläche nach dem Rendern (A2)", () => {
     renderDialog(event);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: rejectLabel }));

@@ -45,10 +45,10 @@ ein Warten hinweg gehalten.
   Verwaltungsansichten, ohne offene Sitzungen zu schließen. Sie erscheint,
   sobald mindestens eine Sitzung offen ist.
 - Ein Tab zeigt den Servernamen (bei langen Namen gekürzt, der volle Name steht
-  im Tooltip), einen Statuspunkt (grün verbunden, grau getrennt, gelb wartet
+  im Tooltip), ein quadratisches Statuszeichen (grün verbunden, grau getrennt, gelb wartet
   auf Host-Key) und eine Schließen-Schaltfläche.
 - Ein Tab, dessen Verbindung gerade aufgebaut wird oder gescheitert ist, trägt
-  statt des Statuspunkts ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
+  statt des Statuszeichens ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
   mit …“ bzw. „Verbindung zu … fehlgeschlagen“ (Spec 0112, Abschnitt 4). Er
   zählt als der Tab dieses Servers: ein Klick auf den Server wechselt zu ihm.
 - Ein Klick auf einen Server in der Serverliste öffnet einen **neuen** Tab. Ist
@@ -108,8 +108,8 @@ Legt eine Hintergrund-Sitzung ein Kommando zur Bestätigung vor, erscheint
 **kein** Dialog im gerade sichtbaren Tab: der Nutzer könnte sonst eine
 Bestätigung geben, ohne zu sehen, auf welchem Server sie wirkt.
 
-- Der betroffene Tab trägt einen auffälligen Hinweis: einen pulsierenden gelben
-  Punkt (Tooltip „Wartet auf Bestätigung"); bei einem MCP-Tab ein
+- Der betroffene Tab trägt einen auffälligen Hinweis: ein pulsierendes gelbes
+  Quadrat (Tooltip „Wartet auf Bestätigung"); bei einem MCP-Tab ein
   beschriftetes Abzeichen „Bestätigung nötig".
 - Der Dialog erscheint erst, wenn der Nutzer zu diesem Tab wechselt, also im
   Kontext des Servers, auf dem er wirkt.

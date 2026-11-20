@@ -273,7 +273,7 @@ export function ActivityCenter() {
           open
           id={panelId}
           aria-label={t("activities.title")}
-          className="absolute left-auto right-0 top-full z-40 m-0 mt-1 p-0 text-fg max-h-[70vh] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto border border-border bg-surface text-left text-xs shadow-lg"
+          className="absolute left-auto right-0 top-full z-40 m-0 mt-1 p-0 text-fg max-h-[70vh] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto border border-border bg-surface text-left text-xs shadow-offset"
         >
           <h2 className="border-b border-surface-raised px-3 py-2 font-heading text-xs font-semibold tracking-wide text-fg">
             {t("activities.title")}

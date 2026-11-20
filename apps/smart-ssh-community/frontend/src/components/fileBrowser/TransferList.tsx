@@ -5,6 +5,7 @@ import { formatBytes } from "../../lib/format";
 import { formatDuration, formatSpeed } from "../../lib/transferRate";
 import { Button } from "../ui";
 import type { Transfer } from "./shared";
+import { StatusSquare } from "../ui/StatusSquare";
 
 interface TransferListProps {
   transfers: Transfer[];
@@ -90,7 +91,7 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
             </>
           ) : (
             <>
-              <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent-fg" />
+              <StatusSquare tone="accent" pulse />
               <span className="min-w-0 flex-1 truncate text-fg-muted">
                 {t(
                   ({

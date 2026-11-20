@@ -21,7 +21,7 @@ export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropK
     <div
       aria-hidden="true"
       style={{ position: "fixed", left: drag.x + 14, top: drag.y + 14 }}
-      className={`pointer-events-none z-50 rounded border px-2 py-1 text-xs shadow-lg ${
+      className={`pointer-events-none z-50 rounded border px-2 py-1 text-xs shadow-offset-sm ${
         kind === "cycle"
           ? "border-danger-strong bg-danger-subtle text-danger-fg-faint"
           : "border-border-strong bg-surface-raised text-fg"
