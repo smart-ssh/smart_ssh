@@ -318,15 +318,15 @@ function SegmentRow({
             {(["server", "global", "tag"] as const).map((kind) => (
               <label
                 key={kind}
-                className={`text-label flex cursor-pointer items-center border px-3 py-1 focus-within:outline focus-within:outline-2 focus-within:outline-accent-fg narrow:min-h-11 ${
+                className={`text-label relative flex cursor-pointer items-center border px-3 py-1 focus-within:outline focus-within:outline-2 focus-within:outline-accent-fg narrow:min-h-11 ${
                   scopeKind === kind
-                    ? "border-accent-border-strong bg-accent text-accent-subtle"
+                    ? "border-accent bg-accent text-on-accent"
                     : "border-border-strong hover:bg-border"
                 }`}
               >
                 <input
                   type="radio"
-                  className="sr-only"
+                  className="absolute inset-0 m-0 cursor-pointer opacity-0"
                   name={`${panelId}-scope`}
                   checked={scopeKind === kind}
                   onChange={() => setScopeKind(kind)}

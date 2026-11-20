@@ -63,8 +63,8 @@ test.describe("command confirmation", () => {
 
     // Keyboard: from the command field, Tab reaches both buttons.
     await editor.focus();
-    await expectReachableByTab(app.page, confirm);
     await expectReachableByTab(app.page, reject);
+    await expectReachableByTab(app.page, confirm);
   });
 
   test("Deny sends exactly one deny decision", async ({ app }) => {
