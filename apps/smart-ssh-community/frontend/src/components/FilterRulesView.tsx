@@ -130,7 +130,10 @@ export function FilterRulesView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto min-[1100px]:flex-row min-[1100px]:overflow-hidden">
-      <div className="min-w-0 flex-1 space-y-6 p-4 narrow:p-3 min-[1100px]:overflow-y-auto">
+      <div
+        data-testid="filter-rules-list"
+        className="min-w-0 flex-1 space-y-6 p-4 narrow:p-3 min-[1100px]:overflow-y-auto"
+      >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="text-display text-fg">{t("filterRules.title")}</h2>
           <span className="font-mono text-sm text-fg-subtle">

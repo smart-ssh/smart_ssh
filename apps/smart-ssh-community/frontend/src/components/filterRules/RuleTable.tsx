@@ -192,9 +192,7 @@ export function RuleTable({ group, scopeText, onMove, onEdit, onDelete }: RuleTa
             <th scope="col" className="text-label px-2 py-2 font-normal text-fg-subtle">
               {t("filterRules.scope")}
             </th>
-            <th scope="col" className="px-2 py-2">
-              <span className="sr-only">{t("filterRules.rowActions")}</span>
-            </th>
+            <th scope="col" className="px-2 py-2" aria-label={t("filterRules.rowActions")} />
           </tr>
         </thead>
         <tbody>

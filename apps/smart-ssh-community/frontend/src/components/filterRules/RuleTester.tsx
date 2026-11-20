@@ -172,6 +172,7 @@ export const RuleTester = forwardRef<HTMLElement, RuleTesterProps>(function Rule
   return (
     <section
       ref={ref}
+      data-testid="filter-rules-tester"
       tabIndex={-1}
       aria-labelledby="filter-rules-tester-title"
       className="min-w-0 space-y-3 border-t border-border bg-surface-sunken p-4 outline-none narrow:p-3 min-[1100px]:min-h-0 min-[1100px]:w-[460px] min-[1100px]:shrink-0 min-[1100px]:overflow-y-auto min-[1100px]:border-t-0 min-[1100px]:border-l"

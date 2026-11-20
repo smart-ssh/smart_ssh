@@ -96,7 +96,10 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
   const heading = page.getByRole("heading", { name: "Rules", level: 2 });
   await expect(heading).toBeVisible();
   const view = page.locator("div.overflow-y-auto", { has: heading }).last();
-  await expectTabOrderFollowsVisualOrder(page, view);
+  // Issue #1375: the tester is a side panel on wide windows, so the two
+  // columns are each checked on their own (the list first, then the tester).
+  await expectTabOrderFollowsVisualOrder(page, page.getByTestId("filter-rules-list"));
+  await expectTabOrderFollowsVisualOrder(page, page.getByTestId("filter-rules-tester"));
   await expectNoClippedText(view);
   await captureScreen(page, "filter-rules");
 
