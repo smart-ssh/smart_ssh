@@ -29,7 +29,7 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 
 ## 2a. Terminal mit Zusatztastenreihe
 
-- Auf Touch-Geräten (Android sowie jedes Gerät mit grobem Zeiger) zeigt der Terminal-Tab unter dem Terminal eine Tastenreihe: `Esc`, `Ctrl`, `Alt`, `Tab`, `↑ ↓ ← →`, `Home`, `End`, `PgUp`, `PgDn`, `|`, `~`, `/`, `-`. Auf dem Desktop mit Maus fehlt sie. Jede Taste ist mindestens 44 × 44 px groß und hat in allen Sprachen eine Beschriftung für Screenreader.
+- Auf Touch-Geräten (Android sowie jedes Gerät mit grobem Zeiger) zeigt der Terminal-Tab unter dem Terminal einen Tastenblock aus zwei festen Reihen zu je acht Tasten ohne Abstände und ohne horizontales Scrollen: Reihe 1 `Esc`, `Tab`, `Ctrl`, `Alt`, `↑ ↓ ← →`; Reihe 2 `Home`, `End`, `PgUp`, `PgDn`, `|`, `~`, `/`, `-`. Aktives `Ctrl`/`Alt` ist mit Akzentfläche hervorgehoben. Auf dem Desktop mit Maus fehlt sie. Jede Taste ist mindestens 44 × 44 px groß und hat in allen Sprachen eine Beschriftung für Screenreader.
 - Die Tasten senden dieselben Zeichenfolgen wie die entsprechenden physischen Tasten im Terminal (Pfeiltasten und `Home`/`End` folgen dem Anwendungsmodus der Programme, z. B. in `vim`).
 - `Ctrl` und `Alt` sind einrastend für genau eine Eingabe: Nach dem Antippen (die Taste erscheint gedrückt) wirken sie auf die nächste Taste der Bildschirmtastatur oder der Reihe und lösen sich danach. `Ctrl` + `c` sendet `Ctrl+C`, `Alt` + `b` sendet `Esc b`. Eingaben aus mehreren Zeichen (Einfügen, Diktat) bleiben unverändert.
 - Die Tasten der Reihe nehmen der Bildschirmtastatur den Fokus nicht weg.
