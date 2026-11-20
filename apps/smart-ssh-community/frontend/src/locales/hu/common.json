@@ -477,7 +477,6 @@
   },
   "sessionTabs": {
     "newSession": "Új munkamenet",
-    "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
     "menu": {
@@ -492,7 +491,9 @@
       "pendingBadge": "Megerősítés szükséges",
       "readOnlyHint": "Ez a munkamenet egy külső eszközé (MCP). Csak az eszköz megerősítendő vagy elutasítandó műveleteit és azok eredményét mutatja; nincs itt csevegőbevitel vagy terminál. Bezárása befejezi az MCP-munkamenetet, és elutasítja a függő megerősítéseket."
     },
-    "confirmClosePending": "A(z) \"{{name}}\" megerősítése még függőben van. Mégis bezárja a lapot? A függő művelet ekkor elutasítottnak minősül."
+    "confirmClosePending": "A(z) \"{{name}}\" megerősítése még függőben van. Mégis bezárja a lapot? A függő művelet ekkor elutasítottnak minősül.",
+    "pendingBadge": "Függőben",
+    "newConnection": "Új kapcsolat"
   },
   "aiProvider": {
     "openLogs": "Diagnosztikai naplók megnyitása a fájlkezelőben",
@@ -1090,6 +1091,7 @@
     "parentDirectory": "Szülőkönyvtár",
     "newFolderButton": "+ Mappa",
     "fileActionsGroup": "Fájlműveletek",
+    "directoryActions": "Könyvtárműveletek",
     "upload": "Feltöltés",
     "uploadDialogTitle": "Fájl(ok) feltöltése",
     "uploadFolder": "Mappa feltöltése",
@@ -1293,8 +1295,9 @@
     "queued": "A következő kéréssel lesz elküldve",
     "responseCancelled": "A válasz megszakítva.",
     "contextCompactedNotice": "A csevegés régebbi részeit összefoglaltuk, hogy beleférjenek a modell kontextusába.",
-    "contextUsage": "Kontextus {{used}} / {{window}}",
     "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
+    "messageLabel": "Üzenet",
+    "headerProviderTooltip": "Szolgáltató: {{provider}}",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
     "refusedResponse": "A modell elutasította a kérést. Fogalmazza át, vagy kezdjen új csevegést.",

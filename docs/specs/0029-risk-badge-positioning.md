@@ -25,6 +25,13 @@ aus einem externen Tool (Spec 0028), steht dessen Herkunfts-Badge ebenfalls in
 dieser Zeile, vor den Risiko-Badges. Der Hinweistext (Spec 0026, Abschnitt 4)
 steht als Fußnote unter dieser Zeile.
 
+Die Entscheidung wird in der Kopfzeile ohne gefüllten Hintergrund dargestellt:
+Symbol und Beschriftung in der Statusfarbe (Blitz = automatisch ausgeführt,
+Schild = Bestätigung nötig, Kreuz = blockiert/abgelehnt). Bei einer automatisch
+ausgeführten Aktion ersetzt die Kopfzeile „Automatisch ausgeführt · Regel …“
+(Spec 0011, Abschnitt 7) das Label und den Entscheidungs-Badge; Herkunfts- und
+Risiko-Badges bleiben rechts.
+
 ## 3. Umfang
 
 Die Anordnung gilt überall, wo die Badges erscheinen: in der Aktionskarte im

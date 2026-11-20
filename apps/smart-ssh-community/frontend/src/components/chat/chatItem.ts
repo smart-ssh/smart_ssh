@@ -251,24 +251,12 @@ export function truncateMcpClientName(name: string): string {
 export function decisionBadge(
   t: TranslateFn,
   decision: Decision,
-): { text: string; className: string } {
+): { text: string; className: string; icon: "bolt" | "shield" | "x" } {
   if (decision === "AutoExec") {
-    return { text: t("actionCard.autoExecuted"), className: "bg-success-subtle-hover text-success-fg-soft" };
+    return { text: t("actionCard.autoExecuted"), className: "text-success-fg", icon: "bolt" };
   }
   if ("Confirm" in decision) {
-    return { text: t("actionCard.confirmationNeeded"), className: "bg-warning-subtle-hover text-warning-fg-soft" };
+    return { text: t("actionCard.confirmationNeeded"), className: "text-warning-fg", icon: "shield" };
   }
-  return { text: t("actionCard.blocked"), className: "bg-danger-subtle-hover text-danger-fg-soft" };
+  return { text: t("actionCard.blocked"), className: "text-danger-fg", icon: "x" };
 }
-
-/** Ampel-Kartenrahmen passend zur `Decision` (Spec 0009: Allow/Confirm/Deny
- * grün/gelb/rot) — Design-Import, Abschnitt "FARBSYSTEM · STATUS IST
- * ÜBERALL GLEICH CODIERT": derselbe Statuscode gilt für Kartenrahmen,
- * Badge und Dot durchgängig, nicht nur für die Badge wie zuvor. */
-export function decisionCardTone(decision: Decision): string {
-  if (decision === "AutoExec") return "border-success-border-strong/40 bg-success-subtle/20";
-  if ("Confirm" in decision) return "border-warning-border-strong/45 bg-warning-subtle/15";
-  return "border-danger-border-strong/45 bg-danger-subtle/15";
-}
-
-

@@ -478,7 +478,6 @@
   },
   "sessionTabs": {
     "newSession": "Nuova sessione",
-    "overview": "Panoramica",
     "pendingAction": "In attesa di conferma",
     "closeTab": "Chiudi scheda \"{{name}}\"",
     "menu": {
@@ -493,7 +492,9 @@
       "pendingBadge": "Richiede conferma",
       "readOnlyHint": "Questa sessione appartiene a uno strumento esterno (MCP). Mostra solo le azioni dello strumento da confermare o rifiutare e i relativi risultati; qui non ci sono input di chat né terminale. Chiuderla termina la sessione MCP e rifiuta le conferme in sospeso."
     },
-    "confirmClosePending": "Per \"{{name}}\" è ancora in sospeso una conferma. Chiudere comunque la scheda? L'azione in sospeso verrà considerata rifiutata."
+    "confirmClosePending": "Per \"{{name}}\" è ancora in sospeso una conferma. Chiudere comunque la scheda? L'azione in sospeso verrà considerata rifiutata.",
+    "pendingBadge": "In sospeso",
+    "newConnection": "Nuova connessione"
   },
   "aiProvider": {
     "openLogs": "Apri i log diagnostici nel gestore di file",
@@ -1096,6 +1097,7 @@
     "parentDirectory": "Directory superiore",
     "newFolderButton": "+ Cartella",
     "fileActionsGroup": "Azioni sui file",
+    "directoryActions": "Azioni della cartella",
     "upload": "Carica",
     "uploadDialogTitle": "Carica file",
     "uploadFolder": "Carica cartella",
@@ -1301,8 +1303,9 @@
     "queued": "Verrà inviato con la prossima richiesta",
     "responseCancelled": "Risposta annullata.",
     "contextCompactedNotice": "Le parti più vecchie di questa chat sono state riassunte per rientrare nel contesto del modello.",
-    "contextUsage": "Contesto {{used}} / {{window}}",
     "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
+    "messageLabel": "Messaggio",
+    "headerProviderTooltip": "Provider: {{provider}}",
     "webResearchUnavailable": "La ricerca web non è disponibile per questo account provider (la ricerca web è disattivata lì). Questa sessione risponde senza ricerca web. Per disattivarla in modo permanente: Impostazioni → Provider IA → “Ricerca web”.",
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
     "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",

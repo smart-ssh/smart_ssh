@@ -30,7 +30,7 @@ test.describe("smoke", () => {
   test("starts with an empty backend", async ({ app }) => {
     await app.launch(EMPTY);
     const page = app.page;
-    await expect(page.getByRole("heading", { name: "Smart SSH" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Smart SSH" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
     await expectNavigationUsable(page);
     await expectSidebar(app, []);
@@ -51,7 +51,7 @@ test.describe("smoke", () => {
     await openSession(app, "db-primary");
     await expectUsable(chatInput(page));
     await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeAttached();
-    await expectUsable(page.getByRole("button", { name: "Overview", exact: true }));
+    await expectUsable(page.getByRole("button", { name: "Connect", exact: true }));
     expect(app.consoleErrors).toEqual([]);
   });
 });

@@ -574,6 +574,27 @@ pub async fn stop_auto_reconnect(
     Ok(())
 }
 
+/// Issue #1372: name and model of the provider this session was pinned to at
+/// connect time (the one its requests actually use), for the chat header.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionAiProviderDto {
+    pub display_name: String,
+    pub model: String,
+}
+
+#[tauri::command]
+pub async fn get_session_ai_provider(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<SessionAiProviderDto> {
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    Ok(SessionAiProviderDto {
+        display_name: session.ai.label.clone(),
+        model: session.ai.model.clone(),
+    })
+}
+
 /// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
 /// Verbindung — s. `app_logic::orchestration::start_new_chat`. Liefert die
 /// ID der neuen `chat_sessions`-Zeile (`None` für einen lokalen Tab).

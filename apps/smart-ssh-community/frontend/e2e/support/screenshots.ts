@@ -39,3 +39,19 @@ export async function captureScreen(page: Page, name: string): Promise<string[]>
   }
   return files;
 }
+
+/**
+ * Captures the page at its current viewport without resizing, for states that a
+ * resize would drop (open menus). Written as `<name>-<width>x<height>.png`.
+ */
+export async function captureCurrent(page: Page, name: string): Promise<string> {
+  if (!/^[\w-]+$/.test(name)) throw new Error(`invalid screenshot name: ${name}`);
+  const label = process.env.SCREENSHOT_LABEL ?? "current";
+  if (!/^[\w-]+$/.test(label)) throw new Error(`invalid SCREENSHOT_LABEL: ${label}`);
+  const dir = path.join(import.meta.dirname, "..", "screenshots", label);
+  fs.mkdirSync(dir, { recursive: true });
+  const size = page.viewportSize();
+  const file = path.join(dir, `${name}-open-${size?.width ?? 0}x${size?.height ?? 0}.png`);
+  await page.screenshot({ path: file });
+  return file;
+}

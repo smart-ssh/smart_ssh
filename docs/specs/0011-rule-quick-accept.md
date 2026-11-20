@@ -100,7 +100,7 @@ ausdrücklichen Bestätigung. Erst künftige, ähnliche Kommandos profitieren.
 Die Teilkommando-Liste (Abschnitt 6) steht immer im Bestätigungsdialog, auch bei
 einem einzelnen Kommando. Oben fasst sie die Teilkommandos, die beim Öffnen schon
 erlaubt sind, kompakt zusammen: eine kurze Zeile je Teilkommando mit grünem
-Haken, die abdeckende Regel als Tooltip. Darunter steht jedes Teilkommando, das
+Haken, die abdeckende Regel als sichtbarer Text in der Zeile (zusätzlich als Tooltip). Darunter steht jedes Teilkommando, das
 noch entschieden werden muss, als eigene Zeile.
 
 - Eine Zeile „braucht eine Regel" hat einen Umschalter ▸/▾ (`aria-expanded`,
@@ -116,7 +116,7 @@ noch entschieden werden muss, als eigene Zeile.
   der Vorschläge anderer Zeilen berücksichtigen die vorgemerkten Regeln.
 - Zeilen „fragt unabhängig von Regeln nach" und bereits erlaubte Teilkommandos
   haben keinen Umschalter.
-- **„Regeln speichern (N)"** ist ab N ≥ 1 bedienbar und speichert die
+- **„Regeln speichern (N)"** steht in der Fußzeile neben Ablehnen/Ausführen und ist ab N ≥ 1 bedienbar und speichert die
   vorgemerkten Regeln (Abschnitt 3); es führt das Kommando nicht aus und lehnt
   es nicht ab. Bei Erfolg wird aus der Vormerkung ein grüner Haken „abgedeckt
   durch Regel …"; die Zeilen bleiben in diesem Dialog an ihrer Stelle, der
@@ -188,8 +188,12 @@ Nutzer einen Vorschlag annimmt.
 ## 7. Hinweis zur Regel bei automatischer Ausführung
 
 Läuft ein Kommando automatisch (Entscheidung „automatisch ausführen“, ohne
-Bestätigung), zeigt seine Karte im Chat unter dem Kommando eine gedämpfte
-Zeile: „Automatisch ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Der
+Bestätigung), zeigt seine Karte im Chat in der Kopfzeile (statt des Labels „Vorgeschlagenes
+Kommando“ und eines Entscheidungs-Badges) ein Blitz-Symbol und: „Automatisch
+ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Das Muster steht als Chip
+mit Rahmen. Liegt das Ergebnis vor, steht der Exit-Code rechtsbündig in
+derselben Kopfzeile (nicht mehr unter der Ausgabe). Bei wiederhergestellten
+Chats ohne Regeldaten zeigt die Kopfzeile nur „Automatisch ausgeführt“. Der
 Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
 
 - Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel

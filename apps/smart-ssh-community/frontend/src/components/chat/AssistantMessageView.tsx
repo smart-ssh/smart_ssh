@@ -77,8 +77,8 @@ export function AssistantMessageView({
   const forceVisible = exporting !== null || savedFormat !== null || noteState !== "idle";
 
   return (
-    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 rounded-lg bg-surface-raised p-3 text-sm text-fg shadow-sm">
-      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-surface-sunken prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 text-sm text-fg-soft">
+      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-surface-sunken prose-p:text-fg-soft prose-headings:text-fg prose-strong:text-fg prose-code:bg-surface-raised prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
       </div>
       {/* Spec 0080, A3, zweiter Punkt: keine Export-/Notiz-Leiste bei

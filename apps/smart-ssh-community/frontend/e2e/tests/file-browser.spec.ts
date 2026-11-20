@@ -7,7 +7,7 @@ import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
 import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
 const LONG_NAME = `${"very-long-directory-name-".repeat(6)}end.log`;
@@ -203,6 +203,7 @@ test.describe("file browser", () => {
   test("screenshots for the review", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
     await captureScreen(page, "file-browser-list");
     await rowMenu(page, "notes.txt").click();
     await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
@@ -217,6 +218,7 @@ test.describe("file browser, narrow layout @phone", () => {
     await openSession(app, "db-primary");
     await app.page.getByRole("tab", { name: "Files", exact: true }).click();
     await expect(app.page.getByText("notes.txt")).toBeVisible();
+    if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   }
   test("two-line rows, no horizontal scroll, toolbar actions behind the overflow menu", async ({ app }) => {
     await openNarrow(app);
@@ -229,25 +231,24 @@ test.describe("file browser, narrow layout @phone", () => {
     await expectUsable(rowMenu(page, "notes.txt"));
     await captureScreen(page, "file-browser-narrow-list");
 
-    const more = page.getByRole("button", { name: "File actions", exact: true });
+    const more = page.getByRole("button", { name: "Directory actions", exact: true });
     await expectUsable(more);
     await more.click();
-    for (const name of ["+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
+    for (const name of ["Go to start directory", "+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
       const item = page.getByRole("menuitem", { name });
       await expect(item.first()).toBeVisible();
       await expectFullyInViewport(item.first());
     }
     await expectNoSeriousA11yViolations(page, "file browser narrow: overflow menu");
-    await captureScreen(page, "file-browser-narrow-overflow");
-    // The screenshot helper resizes through wide sizes, which drops the menu.
-    await more.click();
+    await captureCurrent(page, "file-browser-narrow-overflow");
+    // captureCurrent does not resize, so the menu is still open.
     await page.getByRole("menuitem", { name: /As another user/ }).click();
     const field = page.getByLabel("Target user");
     await expectFullyInViewport(field);
     await expect(page.getByRole("button", { name: "Elevate", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(field).toBeHidden();
-    await expect(page.getByRole("button", { name: "File actions", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Directory actions", exact: true })).toBeFocused();
   });
 
   test("row menu opens inside the viewport, Properties shows owner, group and permissions", async ({ app }) => {
@@ -257,7 +258,7 @@ test.describe("file browser, narrow layout @phone", () => {
     const del = page.getByRole("menuitem", { name: "Delete", exact: true });
     await expectFullyInViewport(del);
     await expectNoSeriousA11yViolations(page, "file browser narrow: entry menu");
-    await captureScreen(page, "file-browser-narrow-menu");
+    await captureCurrent(page, "file-browser-narrow-menu");
     await expect(del).toBeVisible();
     await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     const dialog = page.getByRole("dialog");
@@ -273,6 +274,6 @@ test.describe("file browser, narrow layout @phone", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator("table")).toBeVisible();
     const widths = await page.locator("col").evaluateAll((cols) => cols.map((c) => (c as HTMLElement).style.width));
-    expect(widths).toEqual(["", "90px", "90px", "130px", "150px", "36px"]);
+    expect(widths).toEqual(["", "110px", "130px", "170px", "150px", "44px"]);
   });
 });

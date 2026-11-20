@@ -73,7 +73,7 @@ Früher Ist-Stand vor dieser Spec; kein Verhalten.
   Seitenleiste wechselt zum Nutzer-Tab bzw. öffnet einen neuen, nie zum
   MCP-Tab.
 - **Wartende Bestätigung:** Der MCP-Tab zeigt dann ein pulsierendes,
-  beschriftetes Abzeichen „Bestätigung nötig" statt nur des Quadrats der
+  beschriftetes Abzeichen „Bestätigung nötig" statt des Abzeichens „Ausstehend" der
   Nutzer-Tabs. Dazu kommt die OS-Benachrichtigung aus Spec 0028,
   Abschnitt 9a. Der Bestätigungs-Timeout aus Spec 0028, Abschnitt 7 gilt
   unverändert.

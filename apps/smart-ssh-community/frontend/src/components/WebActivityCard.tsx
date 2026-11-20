@@ -40,7 +40,7 @@ export function WebActivityCard({ activity }: { activity: WebActivityDto }) {
 
   return (
     <div
-      className="rounded border border-web-border/50 bg-surface px-3 py-2 text-xs text-fg-muted"
+      className="border border-web-border/50 bg-surface px-3 py-2 text-xs text-fg-muted"
       data-testid="web-activity-card"
     >
       <p className="font-medium break-all text-web-fg"><Icon name="globe" className="mr-1 inline align-text-bottom" /> {title}</p>

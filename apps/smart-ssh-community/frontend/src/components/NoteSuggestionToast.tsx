@@ -151,7 +151,7 @@ export function NoteSuggestionToast() {
       {suggestions.map((suggestion) => (
         <div
           key={suggestion.actionId}
-          className="rounded-lg border border-border bg-surface-raised p-3 text-sm shadow-lg"
+          className="border border-border bg-surface-raised p-3 text-sm"
         >
           {suggestion.expired ? (
             <div className="flex items-center justify-between gap-2">

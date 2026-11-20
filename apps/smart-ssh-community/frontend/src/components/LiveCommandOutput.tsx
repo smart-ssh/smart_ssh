@@ -36,7 +36,7 @@ export function LiveCommandOutput({ output }: { output: LiveOutput }) {
       aria-live="off"
       aria-label={t("actionCard.liveOutputLabel")}
       data-testid="live-command-output"
-      className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded bg-surface-sunken p-2 font-mono text-xs"
+      className="mt-2 max-h-64 space-y-1 overflow-y-auto bg-surface-sunken p-2 font-mono text-xs"
     >
       {output.stdout && <pre className="whitespace-pre-wrap text-fg-muted">{output.stdout}</pre>}
       {output.stderr && <pre className="whitespace-pre-wrap text-danger-fg-soft">{output.stderr}</pre>}

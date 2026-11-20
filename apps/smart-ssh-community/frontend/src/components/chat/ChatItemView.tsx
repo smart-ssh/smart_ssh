@@ -70,15 +70,15 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "user") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] break-words border border-accent-strong/60 bg-accent-border-strong px-3 py-2 text-sm text-accent-fg-faintest">
+      <div className="ml-auto max-w-[86%] narrow:max-w-[85%] break-words border border-border-strong bg-surface-raised px-3 py-2 text-sm text-fg">
         {item.text}
         {item.attachments && item.attachments.length > 0 && (
-          <p className="mt-1 text-xs text-accent-fg-softer/80">
+          <p className="mt-1 text-xs text-fg-subtle">
             {t("chat.historyAttached", { files: attachmentLine(t, item.attachments) })}
           </p>
         )}
         {item.queued && (
-          <p className="mt-1 text-xs text-accent-fg-softer/80"><Icon name="clock" className="mr-1 inline align-text-bottom" /> {t("chat.queued")}</p>
+          <p className="mt-1 text-xs text-fg-subtle"><Icon name="clock" className="mr-1 inline align-text-bottom" /> {t("chat.queued")}</p>
         )}
       </div>
     );
@@ -161,7 +161,7 @@ export const ChatItemView = memo(function ChatItemView({
       .filter(Boolean)
       .join("\n");
     return (
-      <div className="rounded border border-border bg-surface px-3 py-2 text-xs">
+      <div className="border border-border bg-surface-sunken px-3 py-2 text-xs">
         <div className="flex items-start justify-between gap-2">
           <p className="font-mono text-fg-muted">$ {item.command}</p>
           <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
@@ -184,7 +184,7 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "historyAttachments") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] border border-accent-strong/40 bg-accent-border/60 px-3 py-1 text-xs text-accent-fg-faint">
+      <div className="ml-auto max-w-[86%] narrow:max-w-[85%] border border-border-strong bg-surface-raised px-3 py-1 text-xs text-fg-subtle">
         {t("chat.historyAttached", { files: attachmentLine(t, item.items) })}
       </div>
     );
@@ -200,7 +200,7 @@ export const ChatItemView = memo(function ChatItemView({
   if (item.type === "historyActionResult") {
     return (
       <div
-        className="rounded border border-border bg-surface-sunken px-3 py-2 text-xs"
+        className="border border-border bg-surface-sunken px-3 py-2 text-xs"
         data-testid="history-action-result"
       >
         <p className="whitespace-pre-wrap break-words font-mono">{item.text}</p>
@@ -209,7 +209,7 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "historyRejected") {
     return (
-      <div className="rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
+      <div className="border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
         <p className="font-mono">$ {item.command}</p>
         <p className="mt-1">{item.reason}</p>
       </div>

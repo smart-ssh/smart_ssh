@@ -62,6 +62,7 @@ describe("SessionTabBar drag region", () => {
           activeSessionId="s1"
           onSwitch={vi.fn()}
           onRequestClose={vi.fn()}
+          onOpenConnect={vi.fn()}
         />
       </I18nextProvider>,
     );
@@ -105,7 +106,7 @@ describe("SessionTabBar MCP tabs", () => {
     ];
     render(
       <I18nextProvider i18n={testI18n}>
-        <SessionTabBar tabs={mcpTabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+        <SessionTabBar tabs={mcpTabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
       </I18nextProvider>,
     );
 
@@ -121,12 +122,12 @@ describe("SessionTabBar close button frame", () => {
   it("has a fixed 20x20 box with a reserved border and a hover/focus frame", () => {
     render(
       <I18nextProvider i18n={testI18n}>
-        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
       </I18nextProvider>,
     );
     const close = screen.getByRole("button", { name: testI18n.t("sessionTabs.closeTab", { name: "prod-db" }) });
     // Fixed size + transparent border at rest => no layout shift on hover.
-    expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent", "rounded");
+    expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent");
     for (const prefix of ["hover:", "focus-visible:"]) {
       expect(close).toHaveClass(`${prefix}border-fg-faint`, `${prefix}bg-border-strong/60`);
     }
@@ -144,6 +145,7 @@ describe("SessionTabBar new session (issue #657)", () => {
           activeSessionId="s1"
           onSwitch={vi.fn()}
           onRequestClose={vi.fn()}
+          onOpenConnect={vi.fn()}
           onNewSession={onNewSession}
         />
       </I18nextProvider>,
@@ -152,5 +154,45 @@ describe("SessionTabBar new session (issue #657)", () => {
     fireEvent.contextMenu(screen.getByText("prod-db (2)"));
     fireEvent.click(screen.getByRole("menuitem", { name: "Neue Sitzung" }));
     expect(onNewSession).toHaveBeenCalledWith({ id: "server-1", name: "prod-db" });
+  });
+});
+
+// Issue #1365: flat tabs, "+" button, local marker, Pending badge.
+describe("SessionTabBar flat tabs (issue #1365)", () => {
+  const renderBar = (list: SessionTab[], onOpenConnect = vi.fn()) =>
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={list} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={onOpenConnect} />
+      </I18nextProvider>,
+    );
+
+  it("has no Overview tile and the + button opens the Connect view", () => {
+    const onOpenConnect = vi.fn();
+    renderBar(tabs, onOpenConnect);
+    expect(screen.queryByRole("button", { name: "Overview" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: testI18n.t("sessionTabs.newConnection") }));
+    expect(onOpenConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows square markers: success, neutral and local", () => {
+    const { container } = renderBar([tabs[0]!, tabs[1]!, { ...tabs[0]!, sessionId: "s3", serverName: "local", isLocal: true }]);
+    const tones = Array.from(container.querySelectorAll("[data-status-square]")).map((e) => e.getAttribute("data-status-square"));
+    expect(tones).toEqual(["success", "neutral", "local"]);
+  });
+
+  it("shows the Pending badge with the tooltip on a user tab with a pending confirmation", () => {
+    renderBar([tabs[0]!, { ...tabs[1]!, hasPendingAction: true, pendingActionId: "a1" }]);
+    const badge = screen.getByText(testI18n.t("sessionTabs.pendingBadge"));
+    expect(badge.closest("[title]")).toHaveAttribute("title", testI18n.t("sessionTabs.pendingAction"));
+  });
+
+  it("keeps one Tab stop on the first tab when the overview is shown", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={tabs} activeSessionId={null} onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const stops = document.querySelectorAll("[data-tab-stop]");
+    expect(Array.from(stops).map((e) => e.getAttribute("tabindex"))).toEqual(["0", "-1", "-1"]);
   });
 });

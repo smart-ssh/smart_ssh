@@ -9,7 +9,9 @@ import { Button, Icon } from "./ui";
 interface SessionTabBarProps {
   tabs: SessionTab[];
   activeSessionId: string | null;
-  onSwitch: (sessionId: string | null) => void;
+  onSwitch: (sessionId: string) => void;
+  /** The "+" button at the end of the strip: opens the Connect view. */
+  onOpenConnect: () => void;
   onRequestClose: (sessionId: string) => void;
   /** Issue #657: opens an additional session to the tab's server. */
   onNewSession?: (server: { id: string; name: string }) => void;
@@ -18,10 +20,9 @@ interface SessionTabBarProps {
 /**
  * Spec 0017, Abschnitt 3: ein Tab pro offener Session (Servername,
  * bei MCP-Tabs "<Client> @ <Server>" samt MCP-Abzeichen, Spec 0104,
- * Statuspunkt, Schließen-Button), plus eine feste "Übersicht"-Kachel, die zu
- * den Server-/Verwaltungs-Screens zurückführt, ohne die im Hintergrund
- * offenen Sessions zu schließen — nur sichtbar, sobald mindestens ein Tab
- * offen ist (sonst zeigt `MainScreen` ohnehin schon dieselbe Übersicht).
+ * Statuspunkt, Schließen-Button), plus ein "+"-Button am Ende, der die
+ * Verbinden-Ansicht öffnet. Die frühere "Übersicht"-Kachel gibt es nicht
+ * mehr: "Verbinden" in der Titelleiste (`AppHeader`) führt zur Übersicht.
  *
  * **Kein `data-tauri-drag-region`** auf den Tabs/Buttons selbst (Spec 0014,
  * Abschnitt 5 / Spec 0017, Abschnitt 3) — die bleiben klickbar statt das
@@ -33,7 +34,7 @@ interface SessionTabBarProps {
  * "Loch" machen, sobald mindestens ein Tab existiert — nicht nur die
  * Buttons selbst.
  */
-export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose, onNewSession }: SessionTabBarProps) {
+export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose, onOpenConnect, onNewSession }: SessionTabBarProps) {
   const { t } = useTranslation();
   // Roving Tab stop (docs/ui-guidelines.md, "Keyboard"): the strip is one Tab
   // stop; arrow keys, Home and End move between the tabs. `focused` follows the
@@ -42,16 +43,21 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
   const [menu, setMenu] = useState<{ x: number; y: number; tab: SessionTab } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   if (tabs.length === 0) return null;
-  const stopId = focused !== undefined && (focused === null || tabs.some((x) => x.sessionId === focused)) ? focused : activeSessionId;
+  const stopId =
+    focused !== undefined && (focused === "+" || tabs.some((x) => x.sessionId === focused))
+      ? focused
+      : tabs.some((x) => x.sessionId === activeSessionId)
+        ? activeSessionId
+        : tabs[0]!.sessionId;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const stops = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[data-tab-stop]"));
     const current = stops.indexOf(e.target as HTMLButtonElement);
     if (current < 0) return;
     const key = e.key;
-    if (key === "Delete" && tabs.length > 0 && current > 0) {
+    if (key === "Delete" && current < tabs.length) {
       e.preventDefault();
-      onRequestClose(tabs[current - 1]!.sessionId);
+      onRequestClose(tabs[current]!.sessionId);
       return;
     }
     let next: number;
@@ -66,7 +72,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
   const onBlur = (e: FocusEvent<HTMLDivElement>) => {
     if (!e.currentTarget.contains(e.relatedTarget)) setFocused(undefined);
   };
-  const stopProps = (id: string | null) => ({
+  const stopProps = (id: string) => ({
     "data-tab-stop": "",
     tabIndex: stopId === id ? 0 : -1,
     onFocus: () => setFocused(id),
@@ -80,23 +86,8 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       aria-orientation="horizontal"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
-      className="flex w-full items-center gap-1 overflow-x-auto"
+      className="flex h-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
     >
-      <Button variant="bare"
-        type="button"
-        {...stopProps(null)}
-        aria-current={activeSessionId === null ? "page" : undefined}
-        onClick={() => onSwitch(null)}
-        title={t("sessionTabs.overview")}
-        className={`focus-ring font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
-          activeSessionId === null
-            ? "border-accent/55 bg-accent/16 text-accent-fg"
-            : "border-transparent text-fg-subtle hover:bg-surface-raised"
-        }`}
-      >
-        {t("sessionTabs.overview")}
-      </Button>
-
       {tabs.map((tab) => {
         const active = tab.sessionId === activeSessionId;
         // Spec 0104: MCP-Tabs heißen "<Client> @ <Server>", tragen ein
@@ -116,10 +107,10 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
                   }
                 : undefined
             }
-            className={`group flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs ${
+            className={`group flex min-w-[7rem] shrink items-center gap-2 border-l border-t-2 border-l-border px-3 text-[12.5px] ${
               active
-                ? "border-accent/55 bg-accent/16 text-accent-fg-soft"
-                : "border-transparent text-fg-subtle hover:bg-surface-raised"
+                ? "border-t-accent bg-surface text-fg-strong"
+                : "border-t-transparent text-fg-subtle hover:bg-surface-raised hover:text-fg"
             }`}
           >
             <Button variant="bare"
@@ -127,7 +118,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
               {...stopProps(tab.sessionId)}
               aria-current={active ? "page" : undefined}
               onClick={() => onSwitch(tab.sessionId)}
-              className={`focus-ring font-heading flex items-center gap-1.5 font-semibold tracking-wide`}
+              className="focus-ring flex h-full min-w-0 items-center gap-2 font-mono"
               title={
                 tab.mcp
                   ? `${label} — ${t("sessionTabs.mcp.tabHint")}`
@@ -150,13 +141,24 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
               // Eigener Tab-Stopp nur im aktiven Tab; die übrigen schließt die
               // Entf-Taste auf dem fokussierten Tab (Roving-Tabindex).
               tabIndex={active ? 0 : -1}
-              className={`focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
+              className={`focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
             >
-              <Icon name="x" />
+              <Icon name="x" size={12} />
             </Button>
           </div>
         );
       })}
+      <Button
+        variant="bare"
+        type="button"
+        {...stopProps("+")}
+        onClick={onOpenConnect}
+        aria-label={t("sessionTabs.newConnection")}
+        title={t("sessionTabs.newConnection")}
+        className="focus-ring inline-flex h-full w-10 shrink-0 items-center justify-center border-l border-l-border text-fg-subtle hover:bg-surface-raised hover:text-fg"
+      >
+        <Icon name="plus" size={14} />
+      </Button>
       {menu && onNewSession && (
         <NewSessionMenu
           x={menu.x}

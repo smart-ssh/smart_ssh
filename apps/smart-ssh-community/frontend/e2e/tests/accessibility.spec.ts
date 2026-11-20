@@ -125,7 +125,7 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
   "session view": async (app) => {
     await app.launch(populated());
     await openSession(app, "db-primary");
-    await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+    await app.page.getByRole("button", { name: "Connect", exact: true }).click();
     await openSession(app, "web-1");
   },
   "mcp session view": async (app) => {

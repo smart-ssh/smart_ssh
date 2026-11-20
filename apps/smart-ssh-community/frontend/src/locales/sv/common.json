@@ -477,7 +477,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
     "menu": {
@@ -492,7 +491,9 @@
       "pendingBadge": "Behöver bekräftelse",
       "readOnlyHint": "Den här sessionen tillhör ett externt verktyg (MCP). Den visar bara verktygets åtgärder att bekräfta eller avvisa samt deras resultat; här finns ingen chattinmatning eller terminal. Stängs den avslutas MCP-sessionen och väntande bekräftelser avvisas."
     },
-    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad."
+    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad.",
+    "pendingBadge": "Väntar",
+    "newConnection": "Ny anslutning"
   },
   "aiProvider": {
     "openLogs": "Öppna diagnostikloggar i filhanteraren",
@@ -1090,6 +1091,7 @@
     "parentDirectory": "Överordnad katalog",
     "newFolderButton": "+ Mapp",
     "fileActionsGroup": "Filåtgärder",
+    "directoryActions": "Katalogåtgärder",
     "upload": "Ladda upp",
     "uploadDialogTitle": "Ladda upp fil(er)",
     "uploadFolder": "Ladda upp mapp",
@@ -1293,8 +1295,9 @@
     "queued": "Skickas med nästa begäran",
     "responseCancelled": "Svaret avbröts.",
     "contextCompactedNotice": "Äldre delar av den här chatten har sammanfattats för att rymmas i modellens kontext.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Äldre delar av chatten sammanfattas automatiskt när kontexten blir full.",
+    "messageLabel": "Meddelande",
+    "headerProviderTooltip": "Leverantör: {{provider}}",
     "webResearchUnavailable": "Webbsökning är inte tillgänglig för det här leverantörskontot (webbsökning är avstängd där). Den här sessionen svarar utan webbsökning. Så stänger du av den permanent: Inställningar → AI-leverantör → “Webbsökning”.",
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
     "refusedResponse": "Modellen avvisade begäran. Formulera om den eller starta en ny chatt.",

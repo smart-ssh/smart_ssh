@@ -478,7 +478,6 @@
   },
   "sessionTabs": {
     "newSession": "Sesiune nouă",
-    "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
     "menu": {
@@ -493,7 +492,9 @@
       "pendingBadge": "Necesită confirmare",
       "readOnlyHint": "Această sesiune aparține unui instrument extern (MCP). Arată doar acțiunile instrumentului de confirmat sau respins și rezultatele lor; aici nu există intrare de chat sau terminal. Închiderea ei încheie sesiunea MCP și respinge confirmările în așteptare."
     },
-    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă."
+    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă.",
+    "pendingBadge": "În așteptare",
+    "newConnection": "Conexiune nouă"
   },
   "aiProvider": {
     "openLogs": "Deschide jurnalele de diagnosticare în managerul de fișiere",
@@ -1096,6 +1097,7 @@
     "parentDirectory": "Director părinte",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Acțiuni pe fișiere",
+    "directoryActions": "Acțiuni director",
     "upload": "Încarcă",
     "uploadDialogTitle": "Încarcă fișiere",
     "uploadFolder": "Încarcă folder",
@@ -1301,8 +1303,9 @@
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
     "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
-    "contextUsage": "Context utilizat {{used}} / {{window}}",
     "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Furnizor: {{provider}}",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "refusedResponse": "Modelul a refuzat această cerere. Reformulați-o sau începeți o conversație nouă.",

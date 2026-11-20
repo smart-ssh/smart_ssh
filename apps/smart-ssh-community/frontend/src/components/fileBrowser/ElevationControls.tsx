@@ -2,6 +2,11 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Icon } from "../ui";
 
+/** Warning-tone outline button (32 px) of the elevated-rights control. */
+const WARNING_OUTLINE =
+  "label-condensed inline-flex h-8 items-center justify-center rounded border border-warning-border-strong text-[13px] text-warning-fg " +
+  "transition-colors hover:bg-warning-subtle focus-ring-flush disabled:cursor-not-allowed disabled:opacity-50";
+
 interface ElevationControlsProps {
   groupRef: RefObject<HTMLFieldSetElement | null>;
   menuButtonRef: RefObject<HTMLButtonElement | null>;
@@ -47,15 +52,17 @@ export function ElevationControls({
       className="relative m-0 flex min-w-0 items-center gap-0.5 border-0 border-l border-border p-0 pl-2"
     >
       <Button
-        size="sm"
+        variant="bare"
         onClick={() => onToggleElevation("root")}
         disabled={enablingElevation}
         title={t("fileElevation.toggleTitle")}
+        className={`${WARNING_OUTLINE} gap-1.5 px-3.5`}
       >
-        {enablingElevation ? t("fileElevation.enabling") : <><Icon name="lock-open" className="mr-1 inline align-text-bottom" />{t("fileElevation.toggle")}</>}
+        {enablingElevation ? t("fileElevation.enabling") : <><Icon name="lock" />{t("fileElevation.toggle")}</>}
       </Button>
       <Button
-        size="sm"
+        variant="bare"
+        className={`${WARNING_OUTLINE} w-8`}
         ref={menuButtonRef}
         onClick={() => {
           setOtherUserOpen(false);

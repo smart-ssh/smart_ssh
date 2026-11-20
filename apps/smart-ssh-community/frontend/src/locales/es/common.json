@@ -478,7 +478,6 @@
   },
   "sessionTabs": {
     "newSession": "Nueva sesión",
-    "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
     "menu": {
@@ -493,7 +492,9 @@
       "pendingBadge": "Requiere confirmación",
       "readOnlyHint": "Esta sesión pertenece a una herramienta externa (MCP). Solo muestra las acciones de la herramienta para confirmar o rechazar y sus resultados; aquí no hay entrada de chat ni terminal. Al cerrarla finaliza la sesión MCP y se rechazan las confirmaciones pendientes."
     },
-    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada."
+    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada.",
+    "pendingBadge": "Pendiente",
+    "newConnection": "Nueva conexión"
   },
   "aiProvider": {
     "openLogs": "Abrir registros de diagnóstico en el administrador de archivos",
@@ -1096,6 +1097,7 @@
     "parentDirectory": "Directorio superior",
     "newFolderButton": "+ Carpeta",
     "fileActionsGroup": "Acciones de archivos",
+    "directoryActions": "Acciones del directorio",
     "upload": "Subir",
     "uploadDialogTitle": "Subir archivo(s)",
     "uploadFolder": "Subir carpeta",
@@ -1301,8 +1303,9 @@
     "queued": "Se enviará con la siguiente solicitud",
     "responseCancelled": "Respuesta cancelada.",
     "contextCompactedNotice": "Las partes más antiguas de este chat se resumieron para caber en el contexto del modelo.",
-    "contextUsage": "Contexto {{used}} / {{window}}",
     "contextUsageTooltip": "Las partes más antiguas del chat se resumen automáticamente cuando el contexto se llena.",
+    "messageLabel": "Mensaje",
+    "headerProviderTooltip": "Proveedor: {{provider}}",
     "webResearchUnavailable": "La investigación web no está disponible para esta cuenta de proveedor (la búsqueda web está desactivada allí). Esta sesión responde sin investigación web. Para desactivarla de forma permanente: Ajustes → Proveedor de IA → “Investigación web”.",
     "emptyResponse": "El modelo no devolvió ninguna respuesta. En modelos con fase de razonamiento, ayuda un límite de salida mayor en los ajustes del proveedor.",
     "refusedResponse": "El modelo rechazó esta solicitud. Reformúlala o inicia un chat nuevo.",
