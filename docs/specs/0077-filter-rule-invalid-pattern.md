@@ -96,9 +96,10 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   Der Fehler trägt den Fehlertext der Bibliothek.
 - **3.1.2** Anlegen und Ändern einer Regel prüfen das Muster, **bevor**
   geschrieben wird. Bei einem Fehler wird nichts gespeichert (Anlegen), und die
-  gespeicherte Regel bleibt unverändert (Ändern). Die Schnellregel läuft über
-  dieselbe Prüfung. Bei ihr gilt: Die Bestätigung wird trotzdem aufgelöst, und
-  der Fehler kommt getrennt zurück. Dieselbe Prüfung gilt zusätzlich im
+  gespeicherte Regel bleibt unverändert (Ändern). Die Schnellregel (Regeln speichern im Bestätigungsdialog) läuft über
+  dieselbe Prüfung. Bei ihr gilt: Das Speichern wirkt ganz oder gar nicht, die
+  Bestätigung bleibt offen, und der Fehler kommt getrennt zurück; die
+  vorgemerkten Regeln bleiben erhalten. Dieselbe Prüfung gilt zusätzlich im
   Regelspeicher selbst: Anlegen und Ändern lehnen ein nicht übersetzbares
   Muster auch dann ab, wenn der Aufrufer nicht geprüft hat. Die Prüfung
   davor bleibt bestehen.

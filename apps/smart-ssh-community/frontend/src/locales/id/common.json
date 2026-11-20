@@ -409,9 +409,6 @@
     "editableCommand": "Perintah — dapat diubah",
     "execute": "Jalankan",
     "deny": "Tolak",
-    "quickRule": "Terima + Aturan",
-    "quickRuleDropdownAria": "Tampilkan saran aturan",
-    "newRulePatternHeading": "Pola untuk aturan izin baru",
     "scopeThisServer": "Server Ini",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "tetap akan bertanya: {{reasons}}",
       "notice": "Aturan dibuat. Perintah ini tetap akan bertanya lain kali: {{reasons}}",
       "reasonOther": "pemeriksaan keamanan lain",
-      "loadFailed": "Cakupan aturan tidak dapat dimuat"
+      "loadFailed": "Cakupan aturan tidak dapat dimuat",
+      "summaryHeading": "Sudah diizinkan",
+      "toDecideHeading": "Masih perlu diputuskan",
+      "expandAria": "Saran aturan untuk {{segment}}",
+      "stagedBadge": "belum disimpan",
+      "removeStaged": "Hapus",
+      "saveRules": "Simpan aturan ({{count}})",
+      "saveFailed": "Aturan tidak dapat disimpan: {{message}}",
+      "unsavedHint": "Aturan belum disimpan: {{count}}",
+      "segmentCovered": "mencakup bagian ini; perintah tetap akan bertanya: {{reasons}}"
     }
   },
   "authPrompt": {

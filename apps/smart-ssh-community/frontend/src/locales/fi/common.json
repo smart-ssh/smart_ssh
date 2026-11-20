@@ -409,9 +409,6 @@
     "editableCommand": "Komento – muokattavissa",
     "execute": "Suorita",
     "deny": "Estä",
-    "quickRule": "Hyväksy + sääntö",
-    "quickRuleDropdownAria": "Näytä sääntöehdotukset",
-    "newRulePatternHeading": "Uuden sallimissäännön kuvio",
     "scopeThisServer": "Tämä palvelin",
     "scopeGlobal": "Yleinen",
     "scopeTag": "Tunniste",
@@ -439,7 +436,16 @@
       "verdictAsk": "kysyy edelleen: {{reasons}}",
       "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
       "reasonOther": "toinen turvatarkistus",
-      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
+      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata",
+      "summaryHeading": "Jo sallittu",
+      "toDecideHeading": "Vielä päätettävä",
+      "expandAria": "Sääntöehdotukset kohteelle {{segment}}",
+      "stagedBadge": "ei vielä tallennettu",
+      "removeStaged": "Poista",
+      "saveRules": "Tallenna säännöt ({{count}})",
+      "saveFailed": "Sääntöjä ei voitu tallentaa: {{message}}",
+      "unsavedHint": "Tallentamattomat säännöt: {{count}}",
+      "segmentCovered": "kattaa tämän osan; komento kysyy silti: {{reasons}}"
     }
   },
   "authPrompt": {

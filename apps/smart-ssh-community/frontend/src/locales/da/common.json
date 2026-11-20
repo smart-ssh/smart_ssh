@@ -409,9 +409,6 @@
     "editableCommand": "Kommando – kan redigeres",
     "execute": "Udfør",
     "deny": "Forbyd",
-    "quickRule": "Acceptér + regel",
-    "quickRuleDropdownAria": "Vis regelforslag",
-    "newRulePatternHeading": "Mønster til den nye tillad-regel",
     "scopeThisServer": "Denne server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
@@ -439,7 +436,16 @@
       "verdictAsk": "spørger stadig: {{reasons}}",
       "notice": "Regel oprettet. Denne kommando spørger stadig næste gang: {{reasons}}",
       "reasonOther": "endnu en sikkerhedskontrol",
-      "loadFailed": "Regeldækningen kunne ikke indlæses"
+      "loadFailed": "Regeldækningen kunne ikke indlæses",
+      "summaryHeading": "Allerede tilladt",
+      "toDecideHeading": "Mangler at blive afgjort",
+      "expandAria": "Regelforslag til {{segment}}",
+      "stagedBadge": "endnu ikke gemt",
+      "removeStaged": "Fjern",
+      "saveRules": "Gem regler ({{count}})",
+      "saveFailed": "Reglerne kunne ikke gemmes: {{message}}",
+      "unsavedHint": "Ikke gemte regler: {{count}}",
+      "segmentCovered": "dækker denne del; kommandoen spørger stadig: {{reasons}}"
     }
   },
   "authPrompt": {

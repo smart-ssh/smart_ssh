@@ -6,7 +6,6 @@ import { useActionDecisions } from "./useActionDecisions";
 vi.mock("../../api/api", async () =>
   (await import("../../test/apiMock")).createApiMock({
     respondToAction: vi.fn(),
-    acceptAndCreateRule: vi.fn(),
   }),
 );
 

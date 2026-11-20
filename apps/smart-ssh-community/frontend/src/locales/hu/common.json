@@ -409,9 +409,6 @@
     "editableCommand": "Parancs – szerkeszthető",
     "execute": "Végrehajtás",
     "deny": "Tiltás",
-    "quickRule": "Elfogadás + szabály",
-    "quickRuleDropdownAria": "Szabályjavaslatok megjelenítése",
-    "newRulePatternHeading": "Az új engedélyező szabály mintája",
     "scopeThisServer": "Ez a szerver",
     "scopeGlobal": "Globális",
     "scopeTag": "Címke",
@@ -439,7 +436,16 @@
       "verdictAsk": "továbbra is rákérdez: {{reasons}}",
       "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
       "reasonOther": "másik biztonsági ellenőrzés",
-      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
+      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni",
+      "summaryHeading": "Már engedélyezett",
+      "toDecideHeading": "Még döntésre vár",
+      "expandAria": "Szabályjavaslatok ehhez: {{segment}}",
+      "stagedBadge": "még nincs mentve",
+      "removeStaged": "Eltávolítás",
+      "saveRules": "Szabályok mentése ({{count}})",
+      "saveFailed": "A szabályokat nem sikerült menteni: {{message}}",
+      "unsavedHint": "Nem mentett szabályok: {{count}}",
+      "segmentCovered": "lefedi ezt a részt; a parancs ennek ellenére rákérdez: {{reasons}}"
     }
   },
   "authPrompt": {

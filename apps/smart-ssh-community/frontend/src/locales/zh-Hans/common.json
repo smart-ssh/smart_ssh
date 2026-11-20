@@ -409,9 +409,6 @@
     "editableCommand": "命令——可编辑",
     "execute": "执行",
     "deny": "拒绝",
-    "quickRule": "接受并添加规则",
-    "quickRuleDropdownAria": "显示规则建议",
-    "newRulePatternHeading": "新允许规则的模式",
     "scopeThisServer": "此服务器",
     "scopeGlobal": "全局",
     "scopeTag": "标签",
@@ -439,7 +436,16 @@
       "verdictAsk": "仍会询问：{{reasons}}",
       "notice": "规则已创建。此命令下次仍会询问：{{reasons}}",
       "reasonOther": "另一项安全检查",
-      "loadFailed": "无法加载规则覆盖情况"
+      "loadFailed": "无法加载规则覆盖情况",
+      "summaryHeading": "已允许",
+      "toDecideHeading": "待决定",
+      "expandAria": "{{segment}} 的规则建议",
+      "stagedBadge": "尚未保存",
+      "removeStaged": "移除",
+      "saveRules": "保存规则（{{count}}）",
+      "saveFailed": "无法保存规则：{{message}}",
+      "unsavedHint": "未保存的规则：{{count}}",
+      "segmentCovered": "已覆盖此部分；该命令仍会询问：{{reasons}}"
     }
   },
   "authPrompt": {

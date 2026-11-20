@@ -247,7 +247,7 @@ describe("chatTranscriptReducer", () => {
     expect(s.items.map((i) => i.id)).toEqual(["old", "live"]);
   });
 
-  it("local actions: respond, rollback, rule accepting, truncated cleared, chat cleared", () => {
+  it("local actions: respond, rollback, truncated cleared, chat cleared", () => {
     let s = run({ ...base(), items: [actionItem("a")] }, { type: "actionResponded", actionId: "a", decision: "approve", startedAt: 9 });
     expect(s.items[0]).toMatchObject({ responded: true, userDecision: "approve", startedAt: 9 });
     s = run(s, { type: "actionRespondFailed", actionId: "a", unknown: false, errorItem: user("err") });
@@ -255,8 +255,6 @@ describe("chatTranscriptReducer", () => {
     expect(s.items[1].id).toBe("err");
     s = run(s, { type: "actionRespondFailed", actionId: "a", unknown: true, errorItem: user("err2") });
     expect(s.items[0]).toMatchObject({ responded: true, settled: "unknown" });
-    s = run(s, { type: "ruleAccepting", actionId: "a", startedAt: 4 });
-    expect(s.items[0]).toMatchObject({ startedAt: 4 });
     s = run({ ...s, items: [{ type: "assistant", id: "x", text: "t", truncated: true }] }, { type: "truncatedCleared", id: "x" });
     expect(s.items[0]).toMatchObject({ truncated: false });
     s = run({ ...s, contextUsage: { inputTokens: 5, windowTokens: 10 } }, { type: "chatCleared" });

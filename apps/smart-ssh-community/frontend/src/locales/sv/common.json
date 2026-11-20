@@ -409,9 +409,6 @@
     "editableCommand": "Kommando — redigerbart",
     "execute": "Kör",
     "deny": "Neka",
-    "quickRule": "Godkänn + regel",
-    "quickRuleDropdownAria": "Visa regelförslag",
-    "newRulePatternHeading": "Mönster för den nya tillåtregeln",
     "scopeThisServer": "Den här servern",
     "scopeGlobal": "Global",
     "scopeTag": "Tagg",
@@ -439,7 +436,16 @@
       "verdictAsk": "frågar fortfarande: {{reasons}}",
       "notice": "Regel skapad. Det här kommandot frågar fortfarande nästa gång: {{reasons}}",
       "reasonOther": "en annan säkerhetskontroll",
-      "loadFailed": "Regeltäckningen kunde inte läsas in"
+      "loadFailed": "Regeltäckningen kunde inte läsas in",
+      "summaryHeading": "Redan tillåtet",
+      "toDecideHeading": "Återstår att avgöra",
+      "expandAria": "Regelförslag för {{segment}}",
+      "stagedBadge": "inte sparad än",
+      "removeStaged": "Ta bort",
+      "saveRules": "Spara regler ({{count}})",
+      "saveFailed": "Reglerna kunde inte sparas: {{message}}",
+      "unsavedHint": "Osparade regler: {{count}}",
+      "segmentCovered": "täcker den här delen; kommandot frågar ändå: {{reasons}}"
     }
   },
   "authPrompt": {

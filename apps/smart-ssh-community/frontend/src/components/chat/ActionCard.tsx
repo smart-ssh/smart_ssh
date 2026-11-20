@@ -1,6 +1,5 @@
 import { type ChatItem, describeAction, splitInjectionReason, formatReason, truncateMcpClientName, decisionBadge, decisionCardTone } from "./chatItem";
-import { QuickRuleButton } from "./QuickRuleButton";
-import { CoverageList } from "./CoverageList";
+import { SegmentRules, useRuleStaging } from "./RuleStaging";
 import { RiskBadges, RiskHintFootnote } from "./RiskBadges";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,7 +8,7 @@ import { translateErrorCode } from "../../api/errorCodes";
 import { type LiveOutput } from "../../lib/liveOutput";
 import { LiveCommandOutput } from "../LiveCommandOutput";
 import { formatBytes } from "../../lib/format";
-import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
+import type { ActionResultPayload, ActionUserDecision, InjectionCheckState } from "../../api/types";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import { Button } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
@@ -23,7 +22,6 @@ export function ActionCard({
   waitingForInput = false,
   injectionCheck,
   onRespond,
-  onAcceptWithRule,
   serverId,
   sessionId,
 }: {
@@ -32,13 +30,6 @@ export function ActionCard({
   waitingForInput?: boolean;
   injectionCheck?: InjectionCheckState;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   serverId: string;
   sessionId: string;
 }) {
@@ -213,8 +204,7 @@ export function ActionCard({
           actionId={item.actionId}
           initialCommand={command}
           onRespond={onRespond}
-          onAcceptWithRule={onAcceptWithRule}
-          serverId={serverId}
+                    serverId={serverId}
           sessionId={sessionId}
         />
       )}
@@ -293,7 +283,6 @@ export function ConfirmActionForm({
   actionId,
   initialCommand,
   onRespond,
-  onAcceptWithRule,
   serverId,
   sessionId,
 }: {
@@ -301,17 +290,11 @@ export function ConfirmActionForm({
   sessionId: string;
   initialCommand?: string;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   serverId: string;
 }) {
   const { t } = useTranslation();
   const [edited, setEdited] = useState(initialCommand ?? "");
+  const staging = useRuleStaging(sessionId, edited, initialCommand !== undefined);
 
   const handleApprove = () => {
     if (initialCommand !== undefined && edited !== initialCommand) {
@@ -340,12 +323,8 @@ export function ConfirmActionForm({
           />
         </label>
       )}
-      {/* Reihenfolge/Gruppierung aus dem Design-Import (Abschnitt 1b,
-       * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
-       * daneben, der Regel-Schnellvorschlag als eigene, deutlich
-       * abgesetzte Aktionsgruppe rechts. */}
       {initialCommand !== undefined && (
-        <CoverageList sessionId={sessionId} command={edited} />
+        <SegmentRules staging={staging} sessionId={sessionId} command={edited} serverId={serverId} />
       )}
       <div className="flex flex-wrap items-center gap-2">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
@@ -365,17 +344,12 @@ export function ConfirmActionForm({
         >
           {t("confirmDialog.deny")}
         </Button>
-        {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
-         * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
-        {initialCommand !== undefined && (
-          <QuickRuleButton
-            sessionId={sessionId}
-            actionId={actionId}
-            command={edited}
-            wasEdited={edited !== initialCommand}
-            serverId={serverId}
-            onAccept={onAcceptWithRule}
-          />
+        {/* Issue #1357: unsaved staged rules are only a hint; Execute does
+         * not save them, Deny and Execute discard them. */}
+        {staging.unsavedCount > 0 && (
+          <span className="text-xs text-warning-fg-soft">
+            {t("confirmDialog.explain.unsavedHint", { count: staging.unsavedCount })}
+          </span>
         )}
       </div>
     </div>

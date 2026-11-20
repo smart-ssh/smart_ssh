@@ -43,10 +43,17 @@ export async function openChatWithMessages(app: AppDriver): Promise<string> {
 /** A pending red command with a long line, and a command that is shown
  * without an editor. */
 export async function openChatWithConfirmation(app: AppDriver): Promise<string> {
-  await app.launch({ ...populated(), commands: { explain_confirmation: { result: { segments: [], suggestions: [
-    { kind: "exact", verdict: { autoExec: true, reasons: [] }, names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
-    { kind: "subcommand", verdict: { autoExec: true, reasons: [] }, names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
-  ] } } } });
+  await app.launch({ ...populated(), commands: {
+    explain_confirmation: { result: { segments: [
+      { index: 0, text: "rm -rf /var/lib/app/cache", state: "needsRule", rule: null, reasons: [] },
+      { index: 1, text: "echo done", state: "covered", rule: { patternType: "glob", patternValue: "echo *" }, reasons: [] },
+    ], suggestions: [] } },
+    explain_segment_rules: { result: { segmentIndex: 0, segmentText: "rm -rf /var/lib/app/cache", blockedReasons: [], suggestions: [
+      { kind: "exact", segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: true, reasons: [] }, names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
+      { kind: "subcommand", segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: true, reasons: [] }, names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
+    ] } },
+    create_quick_rules_batch: { result: ["rule-1"] },
+  } });
   const sessionId = await openSession(app, "db-primary");
   await app.emit(
     "chat-action-proposed",

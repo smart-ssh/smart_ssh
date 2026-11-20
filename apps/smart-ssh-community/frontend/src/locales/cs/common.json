@@ -409,9 +409,6 @@
     "editableCommand": "Příkaz — lze upravit",
     "execute": "Provést",
     "deny": "Zamítnout",
-    "quickRule": "Přijmout + pravidlo",
-    "quickRuleDropdownAria": "Zobrazit návrhy pravidel",
-    "newRulePatternHeading": "Vzor pro nové povolující pravidlo",
     "scopeThisServer": "Tento server",
     "scopeGlobal": "Globální",
     "scopeTag": "Štítek",
@@ -439,7 +436,16 @@
       "verdictAsk": "bude se stále ptát: {{reasons}}",
       "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
       "reasonOther": "jiná bezpečnostní kontrola",
-      "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
+      "loadFailed": "Pokrytí pravidly se nepodařilo načíst",
+      "summaryHeading": "Již povoleno",
+      "toDecideHeading": "Zbývá rozhodnout",
+      "expandAria": "Návrhy pravidel pro {{segment}}",
+      "stagedBadge": "zatím neuloženo",
+      "removeStaged": "Odebrat",
+      "saveRules": "Uložit pravidla ({{count}})",
+      "saveFailed": "Pravidla se nepodařilo uložit: {{message}}",
+      "unsavedHint": "Neuložená pravidla: {{count}}",
+      "segmentCovered": "pokrývá tuto část; příkaz se přesto zeptá: {{reasons}}"
     }
   },
   "authPrompt": {

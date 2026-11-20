@@ -885,7 +885,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::explain_confirmation,
             commands::explain_segment_rules,
             commands::create_quick_rules_batch,
-            commands::accept_and_create_rule,
             commands::export_document,
             commands::read_credential_file,
             // Spec 0075, §3.1.11: Vorschau und Ausführung des

@@ -68,7 +68,6 @@ function renderItem(i: ChatItem) {
       <ChatItemView
         item={i}
         onRespond={vi.fn()}
-        onAcceptWithRule={vi.fn()}
         onExport={vi.fn()}
         onContinueTruncated={vi.fn()}
         serverId="srv-1"

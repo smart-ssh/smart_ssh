@@ -34,7 +34,6 @@ import type {
   NoteTarget,
   PatternDto,
   ConfirmationExplanationDto,
-  SuggestionPatternDto,
   SegmentRuleSuggestionsDto,
   StagedRuleDto,
   RemoteEntryDto,
@@ -504,30 +503,6 @@ export const explainSegmentRules = (
  * transaction, all or nothing. Does not resolve a pending confirmation. */
 export const createQuickRulesBatch = (rules: StagedRuleDto[]) =>
   invoke<string[]>("create_quick_rules_batch", { rules });
-
-/** `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
- * `undefined`/gleich dem ursprünglichen Kommando löst wie zuvor über
- * `Approve` auf; unterscheidet er sich, muss das Backend über
- * `EditThenApprove` erneut die Filter-Engine durchlaufen (sonst würde das
- * UNBEARBEITETE Kommando ausgeführt, während die Regel aus dem bearbeiteten
- * Text abgeleitet wird — genau der Bestätigungsdialog-Bypass, den
- * `EditThenApprove` beim normalen "Ausführen"-Button bereits verhindert). */
-export const acceptAndCreateRule = (
-  sessionId: string,
-  actionId: string,
-  patterns: SuggestionPatternDto[],
-  scope: Scope,
-  priority: number | undefined,
-  editedCommand: string | null,
-) =>
-  invoke<string[]>("accept_and_create_rule", {
-    sessionId,
-    actionId,
-    patterns,
-    scope,
-    priority: priority ?? null,
-    editedCommand,
-  });
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 

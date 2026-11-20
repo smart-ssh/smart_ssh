@@ -409,9 +409,6 @@
     "editableCommand": "Εντολή — επεξεργάσιμη",
     "execute": "Εκτέλεση",
     "deny": "Απόρριψη",
-    "quickRule": "Αποδοχή + κανόνας",
-    "quickRuleDropdownAria": "Εμφάνιση προτάσεων κανόνα",
-    "newRulePatternHeading": "Μοτίβο για τον νέο κανόνα επιτρεπόμενων",
     "scopeThisServer": "Αυτός ο διακομιστής",
     "scopeGlobal": "Καθολικά",
     "scopeTag": "Ετικέτα",
@@ -439,7 +436,16 @@
       "verdictAsk": "θα ρωτά ακόμη: {{reasons}}",
       "notice": "Ο κανόνας δημιουργήθηκε. Η εντολή θα ρωτά ξανά την επόμενη φορά: {{reasons}}",
       "reasonOther": "άλλος έλεγχος ασφαλείας",
-      "loadFailed": "Δεν ήταν δυνατή η φόρτωση της κάλυψης κανόνων"
+      "loadFailed": "Δεν ήταν δυνατή η φόρτωση της κάλυψης κανόνων",
+      "summaryHeading": "Ήδη επιτρεπόμενα",
+      "toDecideHeading": "Εκκρεμεί απόφαση",
+      "expandAria": "Προτάσεις κανόνα για {{segment}}",
+      "stagedBadge": "δεν έχει αποθηκευτεί ακόμη",
+      "removeStaged": "Αφαίρεση",
+      "saveRules": "Αποθήκευση κανόνων ({{count}})",
+      "saveFailed": "Δεν ήταν δυνατή η αποθήκευση των κανόνων: {{message}}",
+      "unsavedHint": "Μη αποθηκευμένοι κανόνες: {{count}}",
+      "segmentCovered": "καλύπτει αυτό το τμήμα· η εντολή θα ρωτήσει παρ' όλα αυτά: {{reasons}}"
     }
   },
   "authPrompt": {

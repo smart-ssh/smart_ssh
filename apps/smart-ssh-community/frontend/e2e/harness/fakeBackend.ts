@@ -206,6 +206,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     list_unusable_servers: () => [],
     list_known_tags: () => [...new Set(model.servers.flatMap((s) => s.tags))].sort(),
     explain_confirmation: () => ({ segments: [], suggestions: [] }),
+    create_quick_rules_batch: () => [],
     move_server_to_group: ({ id, groupId }) => {
       findServer(id).groupId = (groupId as string | null) ?? null;
       persist();

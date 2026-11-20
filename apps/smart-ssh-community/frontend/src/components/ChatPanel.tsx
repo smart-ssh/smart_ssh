@@ -19,7 +19,6 @@ import { useActionDecisions } from "./chat/useActionDecisions";
 // Re-exported so existing importers (tests, `chatResync`) keep working.
 export { ChatItemView } from "./chat/ChatItemView";
 export type { ChatItem } from "./chat/chatItem";
-export { QuickRuleButton } from "./chat/QuickRuleButton";
 export { splitInjectionReason } from "./chat/chatItem";
 
 interface ChatPanelProps {
@@ -147,14 +146,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     confirmationOpen,
   });
 
-  const { respond: respondRaw, acceptWithRule: acceptWithRuleRaw } = useActionDecisions(
+  const { respond: respondRaw } = useActionDecisions(
     sessionId,
     dispatch,
     onActionSettled,
   );
   // Stable identities for the memoised item views.
   const respond = useStableCallback(respondRaw);
-  const acceptWithRule = useStableCallback(acceptWithRuleRaw);
   const handleContinueTruncated = useStableCallback(continueTruncatedRaw);
   const handleRetryTurn = useStableCallback(retryTurnRaw);
   const handleQuestionAnswerStable = useStableCallback(handleQuestionAnswer);
@@ -227,7 +225,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   : undefined
             }
             onRespond={respond}
-            onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             onContinueTruncated={handleContinueTruncated}
             onRetryTurn={handleRetryTurn}

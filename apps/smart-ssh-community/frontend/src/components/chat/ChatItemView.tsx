@@ -3,11 +3,11 @@ import { type ChatItem } from "./chatItem";
 import { ActionCard, TakeIntoNoteButton } from "./ActionCard";
 import { AssistantMessageView } from "./AssistantMessageView";
 import { errorCardText, ErrorCardExtras } from "./ErrorCard";
-import { reasonList } from "./CoverageList";
+import { reasonList } from "./reasonList";
 import { useTranslation } from "react-i18next";
 import { type LiveOutput } from "../../lib/liveOutput";
 import { type ComposerAttachment } from "../../extensions/registry";
-import type { ActionUserDecision, DocumentFormat, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
+import type { ActionUserDecision, DocumentFormat, InjectionCheckState } from "../../api/types";
 import { DocumentCard } from "./DocumentCard";
 import { WebActivityCard } from "../WebActivityCard";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
@@ -20,7 +20,6 @@ export const ChatItemView = memo(function ChatItemView({
   waitingForInput = false,
   injectionCheck,
   onRespond,
-  onAcceptWithRule,
   onExport,
   onContinueTruncated,
   onRetryTurn,
@@ -40,13 +39,6 @@ export const ChatItemView = memo(function ChatItemView({
   /** Issue #693: state of the injection check of this item, if any. */
   injectionCheck?: InjectionCheckState;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
@@ -238,8 +230,7 @@ export const ChatItemView = memo(function ChatItemView({
       waitingForInput={waitingForInput}
       injectionCheck={injectionCheck}
       onRespond={onRespond}
-      onAcceptWithRule={onAcceptWithRule}
-      serverId={serverId}
+            serverId={serverId}
       sessionId={sessionId}
     />
   );

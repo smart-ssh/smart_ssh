@@ -38,7 +38,7 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
 - Nachrichten nutzen fast die ganze Breite. Code-Blöcke scrollen innen seitlich (per Tastatur erreichbar), nie die Seite. Das Kopiersymbol oben rechts im Block bleibt dabei stehen und ist im schmalen Layout mindestens 44 px hoch.
 - Das Eingabefeld steht unten und füllt die Breite. Darunter liegt eine kompakte Zeile mit Sprachaufnahme und Senden; die Aktionen von Erweiterungen liegen hinter einer Schaltfläche „+“ (je eine Berührung mehr, gleiche Aktionen, gleiche Reihenfolge).
-- Die Bestätigungskarte für Kommandos zeigt den vollständigen Befehl umgebrochen, nie gekürzt; Ausführen und Ablehnen sind mindestens 44 px hoch. „Akzeptieren + Regel“ öffnet die Regelvorschläge als Fläche am unteren Fensterrand über die volle Breite.
+- Die Bestätigungskarte für Kommandos zeigt den vollständigen Befehl umgebrochen, nie gekürzt; Ausführen und Ablehnen sind mindestens 44 px hoch. Die Regelvorschläge je Teilkommando klappen im Bestätigungsdialog inline unter der jeweiligen Zeile auf (kein Popup, Spec 0011); „Regeln speichern (N)“ ist ebenfalls mindestens 44 px hoch.
 - Rückfrage-, Web-, Ausgabe-, Notiz-Diff- und Dokumentkarten samt Aktionszeile passen in die Breite. Die Anzeige „Automatik läuft“ und ihre Stopp-Schaltfläche bleiben sichtbar.
 
 ## 5. Dialoge und Zwei-Spalten-Ansichten
