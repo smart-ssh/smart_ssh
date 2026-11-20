@@ -318,6 +318,9 @@ export function ConfirmActionForm({
     }
   };
 
+  const canSaveRules =
+    initialCommand !== undefined &&
+    (staging.explanation?.segments.some((s) => s.state === "needsRule") ?? false);
   return (
     <div className="mt-3 space-y-3">
       {initialCommand !== undefined && (
@@ -341,23 +344,17 @@ export function ConfirmActionForm({
         <SegmentRules staging={staging} sessionId={sessionId} command={edited} serverId={serverId} />
       )}
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
-         * look stays hand-written; the focus ring is the shared one. */}
-        <Button variant="bare"
-          type="button"
-          onClick={handleApprove}
-          className="text-label bg-success px-4 py-1.5 narrow:min-h-11 text-success-subtle hover:bg-success-strong focus-ring"
-        >
-          {t("confirmDialog.execute")}
-        </Button>
-        <Button
-          variant="danger"
-          size="sm"
-          className="px-4 py-1.5 narrow:min-h-11"
-          onClick={() => onRespond(actionId, { decision: "deny" })}
-        >
-          {t("confirmDialog.deny")}
-        </Button>
+        {canSaveRules && (
+          <Button
+            size="sm"
+            className="narrow:min-h-11"
+            disabled={staging.unsavedCount < 1 || staging.saving}
+            onClick={staging.save}
+          >
+            <Icon name="shield" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.explain.saveRules", { count: staging.unsavedCount })}
+          </Button>
+        )}
         {/* Issue #1357: unsaved staged rules are only a hint; Execute does
          * not save them, Deny and Execute discard them. */}
         {staging.unsavedCount > 0 && (
@@ -365,6 +362,27 @@ export function ConfirmActionForm({
             {t("confirmDialog.explain.unsavedHint", { count: staging.unsavedCount })}
           </span>
         )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
+            size="sm"
+            className="px-4 py-1.5 narrow:min-h-11"
+            onClick={() => onRespond(actionId, { decision: "deny" })}
+          >
+            <Icon name="x" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.deny")}
+          </Button>
+          {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
+           * look stays hand-written; the focus ring is the shared one. */}
+          <Button variant="bare"
+            type="button"
+            onClick={handleApprove}
+            className="text-label bg-success px-4 py-1.5 narrow:min-h-11 text-success-subtle hover:bg-success-strong focus-ring"
+          >
+            <Icon name="play" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.execute")}
+          </Button>
+        </div>
       </div>
     </div>
   );

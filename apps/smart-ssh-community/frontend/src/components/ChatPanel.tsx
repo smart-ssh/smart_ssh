@@ -210,7 +210,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         onScroll={handleChatScroll}
         className="flex-1 overflow-y-auto p-4"
       >
-      <div ref={contentRef} className="space-y-3">
+      <div ref={contentRef} data-testid="chat-transcript" className="space-y-3">
         {items.map((item) => (
           <ChatItemView
             key={item.id}
@@ -242,7 +242,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         {retrying ? (
           <output
             data-testid="chat-ai-retrying"
-            className="flex items-center gap-2 rounded-lg border border-warning-border-strong/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
+            className="flex items-center gap-2 border border-warning-border-strong/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
           >
             <span className="flex-1">
               {t("chat.aiRetrying", {
@@ -260,9 +260,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           (!aiWait.gotContent || waitNow - aiWait.since > 10_000) ? (
           <output
             data-testid="chat-ai-waiting"
-            className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
+            className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
           >
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+            <span className="inline-block h-2 w-2 animate-ping bg-accent-fg" />
             <span className="flex-1">
               {t("chat.aiWaiting", {
                 provider: aiWait.provider,
@@ -274,8 +274,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </Button>
           </output>
         ) : autoContinuing ? (
-          <div className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+          <div className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
+            <span className="inline-block h-2 w-2 animate-ping bg-accent-fg" />
             <span className="flex-1">
               <Icon name="spark" className="mr-1 inline align-text-bottom" /> {t("chat.autoContinuing")}
             </span>
@@ -285,8 +285,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </div>
         ) : (
           sending && (
-            <div className="flex items-center gap-2 rounded-lg bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
-              <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
+            <div className="flex items-center gap-2 bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
+              <span className="inline-block h-2 w-2 animate-ping bg-accent-fg" />
               <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
               <Button size="sm" onClick={handleStopAutoContinuation}>

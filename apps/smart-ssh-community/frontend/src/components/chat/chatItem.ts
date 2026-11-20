@@ -251,12 +251,12 @@ export function truncateMcpClientName(name: string): string {
 export function decisionBadge(
   t: TranslateFn,
   decision: Decision,
-): { text: string; className: string; icon: "bolt" | "check" | "x" } {
+): { text: string; className: string; icon: "bolt" | "shield" | "x" } {
   if (decision === "AutoExec") {
     return { text: t("actionCard.autoExecuted"), className: "text-success-fg", icon: "bolt" };
   }
   if ("Confirm" in decision) {
-    return { text: t("actionCard.confirmationNeeded"), className: "text-warning-fg", icon: "check" };
+    return { text: t("actionCard.confirmationNeeded"), className: "text-warning-fg", icon: "shield" };
   }
   return { text: t("actionCard.blocked"), className: "text-danger-fg", icon: "x" };
 }

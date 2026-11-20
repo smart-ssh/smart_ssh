@@ -147,7 +147,7 @@ export function SegmentRules({
             {allowed.map((s) => (
               <li
                 key={rowKey(s)}
-                className="flex flex-wrap gap-x-2"
+                className="flex flex-wrap items-baseline gap-x-2"
                 title={
                   s.rule
                     ? t("confirmDialog.explain.covered", { rule: s.rule.patternValue })
@@ -156,6 +156,11 @@ export function SegmentRules({
               >
                 <Icon name="check" className="text-success-fg-soft" />
                 <code className="font-mono break-all text-fg-soft">{s.text}</code>
+                <span className="ml-auto text-fg-subtle">
+                  {s.rule
+                    ? t("confirmDialog.explain.covered", { rule: s.rule.patternValue })
+                    : t("confirmDialog.explain.coveredUnknown")}
+                </span>
               </li>
             ))}
           </ul>
@@ -189,21 +194,9 @@ export function SegmentRules({
               );
             })}
           </ul>
-          {rows.some((s) => s.state === "needsRule") && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-              <Button
-                size="sm"
-                className="narrow:min-h-11"
-                disabled={staging.unsavedCount < 1 || staging.saving}
-                onClick={staging.save}
-              >
-                {t("confirmDialog.explain.saveRules", { count: staging.unsavedCount })}
-              </Button>
-              {staging.saveError && (
-                <span role="alert" className="text-danger-fg">
-                  {t("confirmDialog.explain.saveFailed", { message: staging.saveError })}
-                </span>
-              )}
+          {staging.saveError && (
+            <div role="alert" className="text-danger-fg">
+              {t("confirmDialog.explain.saveFailed", { message: staging.saveError })}
             </div>
           )}
         </div>
@@ -321,11 +314,19 @@ function SegmentRow({
       </div>
       {needsRule && open && (
         <div id={panelId} className="space-y-2 border border-border bg-surface-sunken p-2">
-          <div className="flex flex-wrap gap-3 text-fg-muted">
+          <div className="flex flex-wrap text-fg-muted" role="radiogroup">
             {(["server", "global", "tag"] as const).map((kind) => (
-              <label key={kind} className="flex items-center gap-1 narrow:min-h-11">
+              <label
+                key={kind}
+                className={`text-label flex cursor-pointer items-center border px-3 py-1 focus-within:outline focus-within:outline-2 focus-within:outline-accent-fg narrow:min-h-11 ${
+                  scopeKind === kind
+                    ? "border-accent-border-strong bg-accent text-accent-subtle"
+                    : "border-border-strong hover:bg-border"
+                }`}
+              >
                 <input
                   type="radio"
+                  className="sr-only"
                   name={`${panelId}-scope`}
                   checked={scopeKind === kind}
                   onChange={() => setScopeKind(kind)}
