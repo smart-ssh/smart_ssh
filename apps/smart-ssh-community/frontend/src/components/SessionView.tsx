@@ -402,7 +402,7 @@ export function SessionView({
       <header className="relative flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4 narrow:h-auto narrow:min-h-11 narrow:py-1">
         <div className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
           <span className="flex shrink-0"><StatusSquare tone={statusTone} /></span>
-          <span title={serverName} className="font-heading text-title min-w-0 shrink truncate font-semibold tracking-wide">
+          <span title={serverName} className="font-heading text-title min-w-[6ch] shrink truncate font-semibold tracking-wide">
             {serverName}
           </span>
           {serverInfo && !narrow && (
@@ -433,11 +433,6 @@ export function SessionView({
             </output>
           )}
           <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
-          {reconnectError && (
-            <span role="alert" className="font-mono text-xs text-danger-fg-soft">
-              {reconnectError}
-            </span>
-          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!narrow && (
@@ -516,6 +511,11 @@ export function SessionView({
           </Menu>
         )}
       </header>
+      {reconnectError && (
+        <div role="alert" className="shrink-0 border-b border-border px-4 py-1 font-mono text-xs text-danger-fg-soft break-words">
+          {reconnectError}
+        </div>
+      )}
       {narrow && (
         <Tabs
           tabs={narrowTabs}

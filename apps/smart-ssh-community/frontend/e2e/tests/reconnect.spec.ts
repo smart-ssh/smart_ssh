@@ -110,7 +110,20 @@ test("a failed reconnect shows the error and keeps the button", async ({
   await (await reconnectEntry(app.page))
     .click();
 
-  await expect(app.page.getByRole("alert")).toBeVisible();
+  const alert = app.page.getByRole("alert");
+  await expect(alert).toBeVisible();
+  // The error sits in its own strip: it must not overlap the title bar or panes.
+  const box = (await alert.boundingBox())!;
+  const header = (await app.page.locator("header").last().boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+  for (const sel of ["[role=tablist]", "main"]) {
+    const el = app.page.locator(sel).first();
+    if (!(await el.count())) continue;
+    const b = await el.boundingBox();
+    if (!b || b.y + b.height <= box.y || b.y >= box.y + box.height) continue;
+    // Overlap only allowed if the element contains the alert (a wrapper).
+    expect(await el.evaluate((n, a) => n.contains(a), await alert.elementHandle())).toBe(true);
+  }
   await expect(
     (await reconnectEntry(app.page)),
   ).toBeEnabled();
