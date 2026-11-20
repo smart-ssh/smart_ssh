@@ -27,6 +27,7 @@ vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
     disconnect: vi.fn(() => Promise.resolve()),
     getServer: vi.fn(() => Promise.resolve({ id: "server-1", name: "prod-db" } as never)),
+    listServers: vi.fn(() => Promise.resolve([])),
     listSessions: vi.fn(() => Promise.resolve([])),
     respondToAction: vi.fn(() => Promise.resolve()),
   }),

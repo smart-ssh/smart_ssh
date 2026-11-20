@@ -53,7 +53,22 @@ vi.mock("./lib/firstRunNotice", () => ({
 }));
 
 vi.mock("./components/AppHeader", () => ({
-  AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
+  AppHeader: ({
+    children,
+    mainNav,
+  }: {
+    children: React.ReactNode;
+    mainNav?: { onSelect: (tab: "connect" | "manage" | "rules") => void };
+  }) => (
+    <header>
+      <nav>
+        <button type="button" onClick={() => mainNav?.onSelect("connect")}>Verbinden</button>
+        <button type="button" onClick={() => mainNav?.onSelect("manage")}>Verwalten</button>
+        <button type="button" onClick={() => mainNav?.onSelect("rules")}>Filter-Regeln</button>
+      </nav>
+      {children}
+    </header>
+  ),
 }));
 vi.mock("./components/ManagementView", () => ({
   ManagementView: () => (
@@ -251,7 +266,7 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
     const sessionTab = await screen.findByTestId("session-44444444-4444-4444-8444-444444444444");
     await waitFor(() => expect(sessionTab).toBeVisible());
     const mainScreenBranch = screen
-      .getByRole("button", { name: "Verbinden", hidden: true })
+      .getByRole("heading", { name: testI18n.t("mainScreen.serversHeading"), hidden: true })
       .closest(".hidden");
     expect(mainScreenBranch).not.toBeNull();
     expect(mainScreenBranch).not.toBeVisible();

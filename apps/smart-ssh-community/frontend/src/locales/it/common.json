@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nuova sessione",
-    "overview": "Panoramica",
     "pendingAction": "In attesa di conferma",
     "closeTab": "Chiudi scheda \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Richiede conferma",
       "readOnlyHint": "Questa sessione appartiene a uno strumento esterno (MCP). Mostra solo le azioni dello strumento da confermare o rifiutare e i relativi risultati; qui non ci sono input di chat né terminale. Chiuderla termina la sessione MCP e rifiuta le conferme in sospeso."
     },
-    "confirmClosePending": "Per \"{{name}}\" è ancora in sospeso una conferma. Chiudere comunque la scheda? L'azione in sospeso verrà considerata rifiutata."
+    "confirmClosePending": "Per \"{{name}}\" è ancora in sospeso una conferma. Chiudere comunque la scheda? L'azione in sospeso verrà considerata rifiutata.",
+    "pendingBadge": "In sospeso",
+    "newConnection": "Nuova connessione"
   },
   "aiProvider": {
     "openLogs": "Apri i log diagnostici nel gestore di file",

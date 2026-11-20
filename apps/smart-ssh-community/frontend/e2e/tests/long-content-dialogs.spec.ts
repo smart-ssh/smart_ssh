@@ -149,8 +149,8 @@ test("connection step log: a long log scrolls with the page, the navigation stay
   await expect(failedStep).toBeVisible();
 
   // Issue #548: the failure now lives in the connection tab, so the stable
-  // chrome is the tab strip's Overview button.
-  const overview = page.getByRole("button", { name: "Overview", exact: true });
+  // chrome is the title bar's Connect tab.
+  const overview = page.getByRole("button", { name: "Connect", exact: true });
   const scroller = page.locator("main:visible");
   await expectUsable(overview);
   await expectOnlyContentScrolls(scroller, [overview]);

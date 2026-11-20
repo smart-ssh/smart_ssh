@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nowa sesja",
-    "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Wymaga potwierdzenia",
       "readOnlyHint": "Ta sesja należy do narzędzia zewnętrznego (MCP). Pokazuje tylko jego działania do potwierdzenia lub odrzucenia oraz ich wyniki; nie ma tu pola czatu ani terminala. Zamknięcie kończy sesję MCP i odrzuca oczekujące potwierdzenia."
     },
-    "confirmClosePending": "Dla „{{name}}” nadal oczekuje potwierdzenie. Zamknąć kartę mimo to? Oczekujące działanie zostanie wtedy uznane za odrzucone."
+    "confirmClosePending": "Dla „{{name}}” nadal oczekuje potwierdzenie. Zamknąć kartę mimo to? Oczekujące działanie zostanie wtedy uznane za odrzucone.",
+    "pendingBadge": "Oczekuje",
+    "newConnection": "Nowe połączenie"
   },
   "aiProvider": {
     "openLogs": "Otwórz dzienniki diagnostyczne w menedżerze plików",

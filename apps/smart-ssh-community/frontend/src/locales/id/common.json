@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Sesi baru",
-    "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Perlu konfirmasi",
       "readOnlyHint": "Sesi ini milik alat eksternal (MCP). Sesi hanya menampilkan tindakan alat yang perlu dikonfirmasi atau ditolak beserta hasilnya; tidak ada input obrolan atau terminal di sini. Menutupnya mengakhiri sesi MCP dan menolak konfirmasi yang tertunda."
     },
-    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak."
+    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak.",
+    "pendingBadge": "Tertunda",
+    "newConnection": "Koneksi baru"
   },
   "aiProvider": {
     "openLogs": "Buka log diagnostik di pengelola berkas",

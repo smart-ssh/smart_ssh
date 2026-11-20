@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Yeni oturum",
-    "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Onay gerekli",
       "readOnlyHint": "Bu oturum harici bir araca (MCP) aittir. Yalnızca aracın onaylanacak veya reddedilecek eylemlerini ve sonuçlarını gösterir; burada sohbet girişi veya terminal yoktur. Kapatmak MCP oturumunu sonlandırır ve bekleyen onayları reddeder."
     },
-    "confirmClosePending": "\"{{name}}\" için hâlâ bekleyen bir onay var. Sekme yine de kapatılsın mı? Bekleyen eylem reddedilmiş sayılır."
+    "confirmClosePending": "\"{{name}}\" için hâlâ bekleyen bir onay var. Sekme yine de kapatılsın mı? Bekleyen eylem reddedilmiş sayılır.",
+    "pendingBadge": "Bekliyor",
+    "newConnection": "Yeni bağlantı"
   },
   "aiProvider": {
     "openLogs": "Tanılama günlüklerini dosya yöneticisinde aç",

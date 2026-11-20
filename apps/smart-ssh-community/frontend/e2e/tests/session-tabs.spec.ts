@@ -11,14 +11,14 @@ function tab(page: Page, label: string) {
     .filter({ has: page.getByRole("button", { name: `Close tab "${label}"`, exact: true }) });
 }
 
-const ACTIVE = /bg-accent\/16/;
+const ACTIVE = /border-t-accent/;
 
 test("an MCP session gets its own tab, and closing the active user tab never activates it", async ({ app }) => {
   await app.launch(populated());
   const page = app.page;
 
   await openSession(app, "db-primary");
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   const webSession = await openSession(app, "web-1");
   await expect(tab(page, "web-1")).toHaveClass(ACTIVE);
 
@@ -48,7 +48,7 @@ test("title bar: the version text yields to the tab strip in a narrow window, th
   await app.launch(populated());
   const page = app.page;
   await openSession(app, "db-primary");
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await openSession(app, "web-1");
 
   const full = page.getByTestId("titlebar-version-full");
@@ -73,4 +73,28 @@ test("title bar: the version text yields to the tab strip in a narrow window, th
     return brand.right > strip.left + 0.5 && brand.left < strip.right - 0.5;
   });
   expect(overlaps, "title-bar brand area overlaps the tab strip area").toBe(false);
+});
+
+// Issue #1365: the main navigation stays in the title bar during a session.
+test("title bar: navigation tabs stay visible in a session, Connect and + lead back to the overview, no Overview tile", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await openSession(app, "db-primary");
+
+  for (const name of ["Connect", "Manage", "Filter Rules"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("button", { name: "Overview", exact: true })).toHaveCount(0);
+
+  const plus = page.getByRole("button", { name: "New connection", exact: true });
+  await plus.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
+
+  await openSession(app, "web-1");
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Manage", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 });

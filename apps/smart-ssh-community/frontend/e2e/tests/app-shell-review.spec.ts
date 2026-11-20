@@ -35,9 +35,9 @@ async function showToasts(page: Page) {
 
 async function openSeveral(app: AppDriver) {
   await openSession(app, "db-primary");
-  await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+  await app.page.getByRole("button", { name: "Connect", exact: true }).click();
   await openSession(app, "web-1");
-  await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+  await app.page.getByRole("button", { name: "Connect", exact: true }).click();
   await openSession(app, LONG_NAME);
 }
 
