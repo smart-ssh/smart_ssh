@@ -252,16 +252,16 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
 
 ## 7. Grenzen
 
-- **Symbolische Links** werden mit einer Markierung (kleines Symbol hinter
-  dem Namen, für Screenreader als „symbolic link" beschriftet) aufgelistet; der
+- **Symbolische Links** werden mit einem Link-Symbol vor dem Namen
+  (für Screenreader als „symbolic link" beschriftet) aufgelistet; der
   Hover-Text zeigt das Linkziel (`-> <Ziel>`), sofern es lesbar ist. Die
   Liste löst pro Link das Ziel mit einem `stat` auf:
-  - Ein Link auf einen **Ordner** erscheint mit dem Ordnersymbol, sortiert
+  - Ein Link auf einen **Ordner** erscheint mit dem Ordner-Link-Symbol, sortiert
     unter den Ordnern, ist wie ein Ordner anklickbar und hat das
     Ordner-Kontextmenü. Geöffnet wird der **logische Pfad** des Links (wie
     `cd` in der Shell): Das Pfadfeld zeigt den Linkpfad, „Nach oben" geht
     zum logischen Elternordner.
-  - Ein Link auf eine **Datei** erscheint wie eine Datei (mit Markierung)
+  - Ein Link auf eine **Datei** erscheint mit dem Link-Symbol
     und ist nicht navigierbar.
   - Ein **defekter** Link (Ziel fehlt oder ist nicht zugänglich) wird
     abgeblendet dargestellt, ist nicht navigierbar und lässt die Liste nicht

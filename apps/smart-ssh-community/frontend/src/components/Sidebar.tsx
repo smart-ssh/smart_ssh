@@ -244,7 +244,7 @@ export function Sidebar({
           isSelected("group", node.group.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
         }`}
       >
-        <Icon name="folder" className="mr-1 inline align-text-bottom" /> {node.group.name}
+        <Icon name="folder-open" className="mr-1 inline align-text-bottom" /> {node.group.name}
       </div>
       {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
       </div>

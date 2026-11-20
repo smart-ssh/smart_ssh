@@ -182,8 +182,8 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     renderList();
 
     await screen.findByText("Noch kein Server angelegt");
-    // Issue #49: the Gruppenzeile hat jetzt
-    // zusätzlich einen „+"-Button, dessen Name den Gruppennamen enthält.
+    // Issue #49: the group row additionally has a "+" button whose name
+    // contains the group name.
     expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
   });
 

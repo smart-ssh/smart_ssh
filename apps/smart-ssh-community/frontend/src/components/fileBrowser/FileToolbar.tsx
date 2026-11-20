@@ -89,7 +89,7 @@ export function FileToolbar({
             title={t("fileBrowser.parentDirectory")}
             aria-label={t("fileBrowser.parentDirectory")}
           >
-            ↑
+            <Icon name="parent" />
           </Button>
           <form
             className="min-w-0 flex-1"
@@ -206,7 +206,7 @@ export function FileToolbar({
           title={t("fileBrowser.parentDirectory")}
           aria-label={t("fileBrowser.parentDirectory")}
         >
-          ↑
+          <Icon name="parent" />
         </Button>
         <form
           className="min-w-32 flex-1"

@@ -68,7 +68,7 @@ senkrechter Ziehgriff.
   und per Tastatur bedienbar. Ein Klick sortiert die Liste nach dieser
   Spalte aufsteigend; ein zweiter Klick auf dieselbe Spalte kehrt die
   Reihenfolge um, eine andere Spalte beginnt wieder aufsteigend.
-- Die aktive Spalte zeigt einen Pfeil (▲ aufsteigend, ▼ absteigend) und
+- Die aktive Spalte zeigt einen Winkel (nach oben aufsteigend, nach unten absteigend) und
   trägt `aria-sort`; alle anderen Köpfe `aria-sort="none"`.
 - **Ordner stehen immer oben**; beide Gruppen werden nach der gewählten
   Spalte sortiert. Name: natürliche Reihenfolge ohne Beachtung der
