@@ -24,7 +24,7 @@ Ansichten dürfen sich in Darstellung und Interaktion unterscheiden.
   entsprechend ihrer Tiefe eingerückt. Die Kopfzeile zeigt einen deutlichen
   Pfeil (nach rechts, wenn zugeklappt, nach unten, wenn aufgeklappt; 16 px, im
   schmalen Layout 20 px); die ganze Kopfzeile klappt auf und zu. Server und
-  Untergruppen beginnen waagerecht dort, wo das 📁-Symbol ihrer Gruppe beginnt.
+  Untergruppen beginnen waagerecht dort, wo das Ordner-Symbol ihrer Gruppe beginnt.
   Die Kopfzeile hat kein „+": neue Server legt man in der Verwalten-Ansicht an
   (dort in der gewählten Gruppe) oder über die Aktion des leeren Zustands.
 - Ein Abschnitt **„Ohne Gruppe"** für Server ohne Gruppe, am Ende der Liste. Er

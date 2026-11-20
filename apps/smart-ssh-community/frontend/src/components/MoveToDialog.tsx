@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
 import { classifyDrop, type DragItem, type DropTarget } from "../lib/treeDrag";
 import type { GroupDto, ServerDto } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 interface Props {
   item: DragItem;
@@ -74,7 +74,7 @@ export function MoveToDialog({ item, groups, servers, onMove, onKeepAsRegular, o
               disabled={disabledFor({ kind: "group", id: group.id })}
               onClick={() => choose({ kind: "group", id: group.id })}
             >
-              <span className="min-w-0 break-words">📁 {group.name}</span>
+              <span className="min-w-0 break-words"><Icon name="folder" className="inline align-text-bottom" /> {group.name}</span>
             </Button>
           </li>
         ))}

@@ -8,7 +8,7 @@ import {
   type FileTypeAppSettings,
 } from "../settings/fileTypeSettings";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface Row {
   /** Stabiler React-`key`, unabhängig vom (während der Bearbeitung
@@ -144,7 +144,7 @@ export function FileTypeSettings() {
               aria-label={t("fileTypes.remove")}
               className="shrink-0"
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
         ))}

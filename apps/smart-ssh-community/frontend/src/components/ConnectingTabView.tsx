@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { SessionTab } from "../hooks/useSessionTabs";
 import { ConnectProgressList } from "./ConnectProgressList";
 import { ConnectStepLog } from "./ConnectStepLog";
-import { Button, Spinner } from "./ui";
+import { Button, Spinner, Icon } from "./ui";
 
 interface Props {
   tab: SessionTab;
@@ -29,7 +29,7 @@ export function ConnectingTabView({ tab, isActiveTab, onRetry, onClose }: Props)
       <h2 className="flex items-center gap-2 break-words text-lg font-semibold">
         {failed ? (
           <span aria-hidden="true" className="text-danger-fg">
-            ✗
+            <Icon name="x" />
           </span>
         ) : (
           <Spinner />

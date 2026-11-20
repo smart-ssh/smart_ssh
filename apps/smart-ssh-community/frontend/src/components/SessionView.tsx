@@ -10,7 +10,7 @@ import { useDragResize } from "../hooks/useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button, Tabs, useTabsIdBase, type TabItem } from "./ui";
+import { Button, Tabs, useTabsIdBase, type TabItem, Icon } from "./ui";
 import { panelId, tabId } from "./ui/Tabs";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView, type TerminalLink } from "./TerminalView";
@@ -341,7 +341,7 @@ export function SessionView({
       label: (
         <>
           {t("session.filesTab")}
-          {filesElevatedUser && <span className="ml-1 text-warning-fg">⚠</span>}
+          {filesElevatedUser && <Icon name="warn" className="ml-1 inline align-text-bottom text-warning-fg" />}
         </>
       ),
     },
@@ -413,7 +413,7 @@ export function SessionView({
               aria-label={t("session.moreActions")}
               className="min-h-11 min-w-11 shrink-0"
             >
-              ⋯
+              <Icon name="more" />
             </Button>
             {menuOpen && (
               <div
@@ -505,7 +505,7 @@ export function SessionView({
                   // Spec 0067, A5: erhöhter Modus bleibt auch bei verborgener
                   // Dateien-Ansicht sichtbar.
                   <span className="ml-1.5 normal-case tracking-normal text-warning-fg">
-                    ⚠ {filesElevatedUser}
+                    <Icon name="warn" className="mr-1 inline align-text-bottom" /> {filesElevatedUser}
                   </span>
                 )}
               </Button>

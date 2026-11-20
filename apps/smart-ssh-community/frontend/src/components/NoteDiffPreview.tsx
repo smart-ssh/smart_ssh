@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "./ui";
 import { formatBytes } from "../lib/format";
 import { isDiffTooLargeToCompute, shortNoteDiff } from "../lib/textDiff";
 
@@ -30,6 +31,7 @@ export function NoteDiffPreview({
     const byteLength = (s: string) => new TextEncoder().encode(s).length;
     return (
       <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+        <Icon name="warn" className="mr-1 inline align-text-bottom" />
         {t("confirmDialog.diffTooLargeHint", {
           oldSize: formatBytes(byteLength(before)),
           newSize: formatBytes(byteLength(newContent)),

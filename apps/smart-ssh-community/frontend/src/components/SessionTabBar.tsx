@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { numberedServerName, type SessionTab } from "../hooks/useSessionTabs";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 
 interface SessionTabBarProps {
@@ -152,7 +152,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
               tabIndex={active ? 0 : -1}
               className={`focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
         );

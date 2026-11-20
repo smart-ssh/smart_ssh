@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Icon } from "../ui";
 import { type ChatItem } from "./chatItem";
 import { ActionCard, TakeIntoNoteButton } from "./ActionCard";
 import { AssistantMessageView } from "./AssistantMessageView";
@@ -78,7 +79,7 @@ export const ChatItemView = memo(function ChatItemView({
           </p>
         )}
         {item.queued && (
-          <p className="mt-1 text-xs text-accent-fg-softer/80">⏳ {t("chat.queued")}</p>
+          <p className="mt-1 text-xs text-accent-fg-softer/80"><Icon name="clock" className="mr-1 inline align-text-bottom" /> {t("chat.queued")}</p>
         )}
       </div>
     );
@@ -97,7 +98,7 @@ export const ChatItemView = memo(function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-danger-border-strong/50 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
-        ⚠ {errorCardText(t, item)}
+        <Icon name="warn" className="mr-1 inline align-text-bottom" /> {errorCardText(t, item)}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}
@@ -124,7 +125,7 @@ export const ChatItemView = memo(function ChatItemView({
     return <div className="px-1 text-xs text-fg-subtle">{t("chat.contextCompactedNotice")}</div>;
   }
   if (item.type === "responseCancelled") {
-    return <div className="px-1 text-xs text-fg-subtle">⏹ {t("chat.responseCancelled")}</div>;
+    return <div className="px-1 text-xs text-fg-subtle"><Icon name="stop" className="mr-1 inline align-text-bottom" /> {t("chat.responseCancelled")}</div>;
   }
   if (item.type === "emptyResponse") {
     // Spec 0080, A3: kein „Weiter"-Knopf (der Fortsetzungstext meint eine
@@ -174,10 +175,10 @@ export const ChatItemView = memo(function ChatItemView({
           <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
         </div>
         {item.cancelled && (
-          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandCancelledNotice")}</p>
         )}
         {item.truncated && (
-          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandTruncatedNotice")}</p>
         )}
         {item.stdout && (
           <pre className="mt-1 whitespace-pre-wrap text-fg-subtle">{item.stdout}</pre>

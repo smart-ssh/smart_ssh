@@ -9,12 +9,13 @@ import {
   formatStepLogText,
   groupByHop,
   recordDetails,
+  statusIconName,
   statusMarker,
   stepLabel,
   stepStatusText,
 } from "../lib/connectStepLog";
 import type { ConnectStepRecord } from "../api/types";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
   const { t } = useTranslation();
@@ -64,7 +65,10 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                   >
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span aria-hidden="true">
-                        {statusMarker(record.status.state)}
+                        {(() => {
+                          const icon = statusIconName(record.status.state);
+                          return icon ? <Icon name={icon} className="inline align-text-bottom" /> : statusMarker(record.status.state);
+                        })()}
                       </span>
                       <span className="min-w-0 font-medium">{stepLabel(t, record.step, record.status.state)}</span>
                       <span>{stepStatusText(t, record)}</span>

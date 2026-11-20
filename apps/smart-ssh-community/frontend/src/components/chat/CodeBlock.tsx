@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { clipboardWriteText } from "../../api/api";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 /** How long the check mark / error state stays before the copy icon returns. */
@@ -83,28 +83,7 @@ export function CodeBlock({
         title={label}
         className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:text-fg focus-ring-flush narrow:min-h-11 narrow:min-w-11 ${state === "failed" ? "text-danger-fg-soft" : ""}`}
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          {state === "copied" ? (
-            <path d="M3 8.5l3 3 7-7" />
-          ) : state === "failed" ? (
-            <path d="M4 4l8 8M12 4l-8 8" />
-          ) : (
-            <>
-              <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
-              <path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
-            </>
-          )}
-        </svg>
+        <Icon name={state === "copied" ? "check" : state === "failed" ? "x" : "copy"} />
       </Button>
     </div>
   );

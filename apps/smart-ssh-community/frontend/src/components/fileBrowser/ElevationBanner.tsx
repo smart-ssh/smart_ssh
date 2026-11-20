@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { ElevationNotice } from "./ElevationNotice";
 
 interface ElevationBannerProps {
@@ -23,7 +23,7 @@ export function ElevationBanner({ elevatedUser, warningPath, serverLogging = fal
         role="alert"
         className="flex items-center gap-2 bg-warning px-2 py-1.5 text-xs font-semibold text-surface-sunken"
       >
-        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}
+        <span className="flex-1"><Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("fileElevation.banner", { user: elevatedUser })}
           {serverLogging && ` ${t("fileElevation.bannerLogged")}`}
         </span>
         <Button variant="bare"

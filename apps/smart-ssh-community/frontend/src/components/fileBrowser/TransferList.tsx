@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { sftpCancelTransfer } from "../../api/api";
 import { formatBytes } from "../../lib/format";
 import { formatDuration, formatSpeed } from "../../lib/transferRate";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import type { Transfer } from "./shared";
 import { StatusSquare } from "../ui/StatusSquare";
 
@@ -23,7 +23,7 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
         <div key={transfer.id} className="flex items-center gap-2 text-xs">
           {transfer.doneElevationEnded ? (
             <>
-              <span className="text-success-fg">✓</span>
+              <Icon name="check" className="shrink-0 text-success-fg" />
               <span className="min-w-0 flex-1 truncate text-fg-muted">
                 {t("fileBrowser.transferDone", { name: transfer.fileName })}{" "}
                 <span className="text-fg-subtle">{t("fileBrowser.transferElevationEnded")}</span>
@@ -35,12 +35,12 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
                 aria-label={t("common.close")}
                 title={t("common.close")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </>
           ) : transfer.stopped ? (
             <>
-              <span className="text-warning-fg">■</span>
+              <Icon name="stop" className="shrink-0 text-warning-fg" />
               <span className="min-w-0 flex-1 truncate text-fg-muted">
                 {t(
                   transfer.stopped === "cancelled"
@@ -68,12 +68,12 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
                 aria-label={t("common.close")}
                 title={t("common.close")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </>
           ) : transfer.error ? (
             <>
-              <span className="text-danger-fg">✗</span>
+              <Icon name="x" className="shrink-0 text-danger-fg" />
               <span className="min-w-0 flex-1 truncate text-danger-fg-soft">
                 {transfer.fileName}: {transfer.error}
                 {transfer.entriesDone !== undefined &&
@@ -86,7 +86,7 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
                 aria-label={t("common.close")}
                 title={t("common.close")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </>
           ) : (
@@ -162,7 +162,7 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
                 aria-label={t("fileBrowser.transferCancel")}
                 title={t("fileBrowser.transferCancel")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </>
           )}

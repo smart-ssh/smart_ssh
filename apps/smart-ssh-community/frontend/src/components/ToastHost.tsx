@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 import { subscribeToasts, type Toast } from "../buses/toastBus";
 
 /** Erfolgsmeldungen verschwinden von selbst, Fehler (und Hinweise, Issue
@@ -48,7 +48,7 @@ export function ToastHost() {
           }`}
         >
           <p className="min-w-0 break-words">
-            {toast.kind === "success" ? "✓ " : toast.kind === "info" ? "ℹ " : "⚠ "}
+            <Icon name={toast.kind === "success" ? "check" : toast.kind === "info" ? "info" : "warn"} className="mr-1 inline align-text-bottom" />
             {toast.message}
           </p>
           <div className="flex shrink-0 gap-1">
@@ -69,7 +69,7 @@ export function ToastHost() {
               onClick={() => dismiss(toast.id)}
               aria-label={t("toast.dismiss")}
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
         </div>

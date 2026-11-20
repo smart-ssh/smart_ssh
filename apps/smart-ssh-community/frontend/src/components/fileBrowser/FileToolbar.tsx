@@ -2,7 +2,7 @@ import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { parentPath } from "../../lib/remotePath";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "../ui";
+import { Button, FIELD_CONTROL_CLASS, Icon } from "../ui";
 
 interface FileToolbarProps {
   narrow: boolean;
@@ -80,7 +80,7 @@ export function FileToolbar({
             title={t("fileBrowser.toStartDirectory")}
             aria-label={t("fileBrowser.toStartDirectory")}
           >
-            ⌂
+            <Icon name="home" />
           </Button>
           <Button
             className="min-h-11 min-w-11"
@@ -121,7 +121,7 @@ export function FileToolbar({
               aria-label={t("fileBrowser.fileActionsGroup")}
               title={t("fileBrowser.fileActionsGroup")}
             >
-              ⋯
+              <Icon name="more" />
             </Button>
             {overflowOpen && (
               <div
@@ -151,7 +151,7 @@ export function FileToolbar({
                           key: "elevate",
                           label: enablingElevation
                             ? t("fileElevation.enabling")
-                            : `🔓 ${t("fileElevation.toggle")}`,
+                            : <><Icon name="lock-open" className="mr-1 inline align-text-bottom" />{t("fileElevation.toggle")}</>,
                           run: () => onToggleElevation("root"),
                           disabled: enablingElevation,
                         },
@@ -197,7 +197,7 @@ export function FileToolbar({
           title={t("fileBrowser.toStartDirectory")}
           aria-label={t("fileBrowser.toStartDirectory")}
         >
-          ⌂
+          <Icon name="home" />
         </Button>
         <Button
           size="sm"
@@ -260,7 +260,7 @@ export function FileToolbar({
               title={t("fileBrowser.cancelCut")}
               aria-label={t("fileBrowser.cancelCut")}
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </>
         )}

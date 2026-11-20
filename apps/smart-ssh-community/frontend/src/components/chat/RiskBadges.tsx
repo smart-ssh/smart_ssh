@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { RiskAssessment } from "../../api/types";
-import { Tooltip } from "../ui";
+import { Tooltip, Icon } from "../ui";
 import { StatusSquare } from "../ui/StatusSquare";
 
 export const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none">, string> = {
@@ -33,9 +33,7 @@ export function RiskBadge({
   return (
     <Tooltip content={reason} className={cls}>
       {label}
-      <span aria-hidden="true" className="ml-1 normal-case">
-        ⓘ
-      </span>
+      <Icon name="info" className="ml-1 inline align-text-bottom" />
     </Tooltip>
   );
 }

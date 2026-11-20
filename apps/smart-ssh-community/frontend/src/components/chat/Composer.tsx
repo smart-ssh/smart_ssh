@@ -2,7 +2,7 @@ import { type KeyboardEvent, type RefObject, type FormEvent, useState } from "re
 import { useTranslation } from "react-i18next";
 import { ContextUsageIndicator } from "../ContextUsageIndicator";
 import { VoiceInputControl } from "../VoiceInputControl";
-import { Button, ErrorBoundary } from "../ui";
+import { Button, ErrorBoundary, Icon } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { formatBytes } from "../../lib/format";
 import type { ComposerAction, ComposerAttachment, ComposerContext } from "../../extensions/registry";
@@ -76,7 +76,7 @@ export function Composer({
                     onClick={() => composerCtx.removeAttachment(a.id)}
                     className="text-fg-muted hover:text-fg-bright focus-ring-flush"
                   >
-                    ×
+                    <Icon name="x" />
                   </Button>
                 </li>
               ))}
@@ -115,7 +115,7 @@ export function Composer({
                   onClick={() => setComposerMenuOpen((o) => !o)}
                   className="min-h-11 min-w-11"
                 >
-                  +
+                  <Icon name="plus" />
                 </Button>
                 {composerMenuOpen && (
                   <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-border bg-surface p-2 shadow-lg">

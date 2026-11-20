@@ -1,4 +1,4 @@
-import { entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
+import { EntryIcon, entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../lib/formatDateTime";
 import { formatOwner } from "../../lib/fileOwner";
@@ -8,7 +8,7 @@ import type { FileManagerColumnWidths, HideableFileColumn } from "../../settings
 import type { RemoteEntryDto } from "../../api/types";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { ACTIONS_COLUMN_WIDTH, COLUMN_ORDER, NAME_MIN_WIDTH, STICKY_TH, type OpenEntryMenu } from "./shared";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 
 interface FileTableProps {
   entries: RemoteEntryDto[];
@@ -55,7 +55,7 @@ export function FileTable({
     >
       <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
       {fileSort.column === column && (
-        <span aria-hidden="true">{fileSort.direction === "asc" ? "▲" : "▼"}</span>
+        <Icon name={fileSort.direction === "asc" ? "chev-u" : "chev-d"} />
       )}
     </Button>
   );
@@ -156,12 +156,12 @@ export function FileTable({
                   className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-ring-flush"
                   title={entryTitle(entry)}
                 >
-                  📁 {entry.name}
+                  <EntryIcon entry={entry} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </Button>
               ) : (
                 <span className={`block truncate text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
-                  {isBrokenLink(entry) ? "⚠️" : "📄"} {entry.name}
+                  <EntryIcon entry={entry} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </span>
               )}
@@ -217,7 +217,7 @@ export function FileTable({
                 aria-expanded={openMenu?.anchor === "row" && openMenu.entry.path === entry.path}
                 className="rounded px-1.5 text-fg-subtle hover:text-fg focus-ring-flush"
               >
-                ⋮
+                <Icon name="more" />
               </Button>
               {openMenu?.anchor === "row" && openMenu.entry.path === entry.path &&
                 renderEntryMenu(entry, "fixed z-10")}

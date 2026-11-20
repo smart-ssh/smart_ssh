@@ -1,7 +1,7 @@
 // Parts of a session tab shared by the wide tab bar and the narrow burger
 // menu (issue #579), so label, state indicator and badges stay identical.
 import type { TFunction } from "i18next";
-import { Spinner } from "./ui";
+import { Spinner, Icon } from "./ui";
 import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
 import { StatusSquare, type StatusTone } from "./ui/StatusSquare";
 
@@ -27,7 +27,7 @@ export function TabStateIndicator({ tab }: { tab: SessionTab }) {
     <Spinner className="h-2.5 w-2.5 shrink-0" />
   ) : tab.phase === "failed" ? (
     <span aria-hidden="true" className="shrink-0 text-danger-fg">
-      ✗
+      <Icon name="x" />
     </span>
   ) : (
     <StatusSquare tone={STATUS_TONE[tab.status]} />

@@ -17,7 +17,7 @@ import type {
 } from "../../api/types";
 import type { TranslateFn } from "../../i18nTypes";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { reasonList } from "./reasonList";
 
 /** Issue #1357: a rule picked for one sub-command; `saved` once the batch
@@ -154,7 +154,7 @@ export function SegmentRules({
                     : t("confirmDialog.explain.coveredUnknown")
                 }
               >
-                <span className="text-success-fg-soft">✓</span>
+                <Icon name="check" className="text-success-fg-soft" />
                 <code className="font-mono break-all text-fg-soft">{s.text}</code>
               </li>
             ))}
@@ -291,7 +291,7 @@ function SegmentRow({
             onClick={() => setOpen((o) => !o)}
             className="focus-ring w-5 shrink-0 font-mono text-fg-subtle narrow:min-h-11 narrow:w-11"
           >
-            {open ? "▾" : "▸"}
+            <Icon name={open ? "chev-d" : "chev-r"} />
           </Button>
         )}
         <code className="font-mono break-all text-fg-soft">{segment.text}</code>
@@ -306,7 +306,7 @@ function SegmentRow({
         {entry && !entry.saved && (
           <>
             <span className="text-accent" data-testid="staged-rule">
-              ✓ {ruleText(t, entry.rule)} ({t("confirmDialog.explain.stagedBadge")})
+              <Icon name="check" className="mr-1 inline align-text-bottom" /> {ruleText(t, entry.rule)} ({t("confirmDialog.explain.stagedBadge")})
             </span>
             <Button variant="ghost" size="sm" onClick={onUnstage}>
               {t("confirmDialog.explain.removeStaged")}
@@ -315,7 +315,7 @@ function SegmentRow({
         )}
         {entry?.saved && (
           <span className="text-success-fg-soft" data-testid="saved-rule">
-            ✓ {t("confirmDialog.explain.covered", { rule: ruleText(t, entry.rule) })}
+            <Icon name="check" className="mr-1 inline align-text-bottom" /> {t("confirmDialog.explain.covered", { rule: ruleText(t, entry.rule) })}
           </span>
         )}
       </div>

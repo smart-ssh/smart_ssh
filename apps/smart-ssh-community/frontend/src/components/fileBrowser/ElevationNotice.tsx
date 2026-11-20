@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissElevationNotice, loadElevationNoticeDismissed } from "../../settings/elevationNoticeSettings";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 
 interface ElevationNoticeProps {
   /** `undefined`: the server is unknown, nothing is shown or stored. */
@@ -60,7 +60,7 @@ export function ElevationNotice({ serverId, elevatedUser, serverLogging, passwor
         onClick={() => setExpanded((e) => !e)}
         className="focus-ring font-semibold"
       >
-        {expanded ? "▾" : "▸"} {t("fileElevation.notice.title")}
+        <Icon name={expanded ? "chev-d" : "chev-r"} className="inline align-text-bottom" /> {t("fileElevation.notice.title")}
       </Button>
       <output id={panelId} hidden={!expanded} className="mt-1 block space-y-1">
         <p>{t("fileElevation.notice.intro", { user: elevatedUser })}</p>

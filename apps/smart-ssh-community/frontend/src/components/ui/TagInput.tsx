@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "./Icon";
 import { useTranslation } from "react-i18next";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
@@ -63,7 +64,7 @@ export function TagInput({
             className="rounded text-fg-subtle hover:text-fg-bright focus-ring-flush"
             aria-label={t("serverForm.removeTagAria", { tag })}
           >
-            ✕
+            <Icon name="x" />
           </button>
         </span>
       ))}
