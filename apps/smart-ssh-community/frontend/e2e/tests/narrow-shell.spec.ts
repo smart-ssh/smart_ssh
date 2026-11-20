@@ -4,12 +4,13 @@ import { expect, test } from "../support/app";
 import { populated } from "../support/data";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { expectFullyInViewport, expectNoHorizontalPageScroll, expectTopmostAtCenter } from "../support/layout";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 
 test.describe("narrow shell @phone", () => {
   test("title bar shows burger and title; the menu lists navigation and sessions", async ({ app }, info) => {
     await app.launch(populated());
     const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
     const burger = page.getByRole("button", { name: "Open navigation menu" });
     await expect(burger).toBeVisible();
     await expectFullyInViewport(burger);
@@ -36,7 +37,7 @@ test.describe("narrow shell @phone", () => {
     await expect(menu.getByRole("button", { name: "db-primary", exact: true })).toHaveAttribute("aria-current", "page");
     await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow menu");
-    await captureScreen(page, `narrow-shell-menu-${info.project.name}`);
+    await captureCurrent(page, `narrow-shell-menu-${info.project.name}`);
   });
 
   test("title bar is 56 px at 639 px and 44 px at 640 px", async ({ app }) => {
