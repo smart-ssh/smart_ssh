@@ -130,11 +130,11 @@ describe("ServerList Connect tree: chevrons, indentation, no row actions (Issue 
   it.each([
     ["narrow", 20, setNarrow],
     ["wide", 16, setWide],
-  ])("%s: children start at the 📁 icon of their parent (depth 1 and 2)", async (_n, chevron, set) => {
+  ])("%s: children start at the icon of their parent (depth 1 and 2)", async (_n, chevron, set) => {
     set();
     renderList();
-    const alpha = await screen.findByRole("button", { name: /📁 Alpha/ });
-    const beta = await screen.findByRole("button", { name: /📁 Beta/ });
+    const alpha = await screen.findByRole("button", { name: /Alpha/ });
+    const beta = await screen.findByRole("button", { name: /Beta/ });
     const inAlpha = (await screen.findByText("in-alpha")).closest("button")!;
     const inBeta = (await screen.findByText("in-beta")).closest("button")!;
     const step = chevron + 8; // chevron plus the gap-2 after it

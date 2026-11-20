@@ -8,7 +8,7 @@ import { useVoiceComposer } from "./chat/useVoiceComposer";
 import { loadRiskClassifierSettings } from "../settings/riskSettings";
 import type { DocumentFormat } from "../api/types";
 import { freshId } from "../lib/chatResync";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 import { deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { useChatTranscript } from "./chat/useChatTranscript";
 import { ChatItemView } from "./chat/ChatItemView";
@@ -277,7 +277,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           <div className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
             <span className="flex-1">
-              🤖 {t("chat.autoContinuing")}
+              <Icon name="spark" className="mr-1 inline align-text-bottom" /> {t("chat.autoContinuing")}
             </span>
             <Button size="sm" onClick={handleStopAutoContinuation}>
               {t("chat.stopAutoContinuation")}
@@ -315,9 +315,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           data-testid="chat-jump-to-latest"
           className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-fg shadow-lg hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fg${atBottom ? " invisible" : ""}`}
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 4v12M5 11l5 5 5-5" />
-          </svg>
+          <Icon name="chev-d" size={20} />
         </Button>
       )}
       </div>

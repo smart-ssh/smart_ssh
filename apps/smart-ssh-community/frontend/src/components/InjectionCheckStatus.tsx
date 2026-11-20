@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "./ui";
 import { translateErrorCode } from "../api/errorCodes";
 import type { InjectionCheckState } from "../api/types";
 
@@ -35,7 +36,7 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
       role="alert"
       data-testid="injection-check-suspected"
     >
-      <p>⚠ {t("chat.injectionSuspected")}</p>
+      <p><Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("chat.injectionSuspected")}</p>
       {check.reason && (
         <p className="mt-0.5 break-words whitespace-pre-wrap">
           {t("chat.injectionSuspectedReason", { reason: check.reason })}

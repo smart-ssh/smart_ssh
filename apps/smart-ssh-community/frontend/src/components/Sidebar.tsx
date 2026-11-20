@@ -20,7 +20,7 @@ import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../lib/unusableServer";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 export type Selection =
   | { kind: "group"; id: string }
@@ -157,7 +157,7 @@ export function Sidebar({
       aria-label={t("treeDrag.moveTo", { name: item.label })}
       className="mr-1 min-h-11 min-w-11 shrink-0"
     >
-      ⋯
+      <Icon name="more" />
     </Button>
   );
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
@@ -244,7 +244,7 @@ export function Sidebar({
           isSelected("group", node.group.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
         }`}
       >
-        📁 {node.group.name}
+        <Icon name="folder-open" className="mr-1 inline align-text-bottom" /> {node.group.name}
       </div>
       {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
       </div>
@@ -273,7 +273,7 @@ export function Sidebar({
         isSelected("server", server.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
       }`}
     >
-      🖥️ {server.name}
+      <Icon name={server.isLocal ? "local" : "server"} className="mr-1 inline align-text-bottom" /> {server.name}
     </div>
     {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
     </div>
@@ -297,7 +297,7 @@ export function Sidebar({
         isSelected("unusableServer", server.id) ? "bg-surface-raised text-warning-fg-softer" : "text-warning-fg-soft/80"
       }`}
     >
-      <span aria-hidden="true">⚠️</span> {server.name}{" "}
+      <Icon name="warn" className="mr-1 inline align-text-bottom" /> {server.name}{" "}
       <span className="text-xs not-italic text-fg-subtle">({t("unusableServer.badge")})</span>
     </div>
     </div>
@@ -431,7 +431,7 @@ export function Sidebar({
             </>
           }
         >
-          <p className="break-words text-sm text-fg-soft">📁 {keepGroup.group.name}</p>
+          <p className="break-words text-sm text-fg-soft"><Icon name="folder" className="inline align-text-bottom" /> {keepGroup.group.name}</p>
           <p className="mt-2 text-sm text-fg-muted">
             {t("copyMarker.groupConfirmBody", {
               groups: keepGroup.scope.groups,

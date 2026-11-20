@@ -45,7 +45,7 @@ test.describe("smoke", () => {
       await expect(page.getByRole("button", { name: new RegExp(`^${name}\\b`) })).toBeVisible();
     }
     await expectNavigationUsable(page);
-    await expectSidebar(app, ["📁 Production", "📁 Web", "📁 Lab", "🖥️ standalone"]);
+    await expectSidebar(app, ["Production", "Web", "Lab", "standalone"]);
 
     // Session area: chat with its input, and the terminal.
     await openSession(app, "db-primary");

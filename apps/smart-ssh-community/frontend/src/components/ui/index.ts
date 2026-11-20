@@ -22,3 +22,5 @@ export { Menu, MenuItem, MenuSeparator } from "./Menu";
 export type { MenuItemProps, MenuProps } from "./Menu";
 export { TagInput } from "./TagInput";
 export type { TagInputProps } from "./TagInput";
+export { Icon, ICON_NAMES } from "./Icon";
+export type { IconName, IconProps } from "./Icon";

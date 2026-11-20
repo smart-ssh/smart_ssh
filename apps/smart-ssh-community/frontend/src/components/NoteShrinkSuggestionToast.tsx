@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { commandErrorMessage, requestNoteShrink } from "../api/api";
 import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../api/events";
 import { publishRequestServerNoteEdit } from "../buses/navigationBus";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 interface PendingShrinkSuggestion {
   serverId: string;
@@ -136,7 +136,7 @@ export function NoteShrinkSuggestionToast() {
               aria-label={t("noteShrink.dismissHint")}
               className="shrink-0"
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
           <p className="mt-1 text-xs text-fg-subtle">
@@ -175,7 +175,7 @@ export function NoteShrinkSuggestionToast() {
             aria-label={t("noteShrink.dismissError")}
             className="shrink-0"
           >
-            ✕
+            <Icon name="x" />
           </Button>
         </div>
       ))}

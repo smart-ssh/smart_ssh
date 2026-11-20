@@ -38,7 +38,7 @@ import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../lib/unusableServer";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 /** Spec 0103: marks a server or group that the backup import moved into
  * "Previous data"; the tooltip (and screen-reader text) explains it. */
@@ -240,7 +240,7 @@ export function ServerList({
     touchDrag: !narrow,
   });
   // Issue #978: chevron size plus the gap after it (gap-2 = 8 px) is the
-  // per-level step, so a child starts exactly where its parent's 📁 icon starts.
+  // per-level step, so a child starts exactly where its parent's folder icon starts.
   const chevronPx = narrow ? 20 : 16;
   const indent = (depth: number) => (narrow ? 12 : 16) + depth * (chevronPx + 8);
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
@@ -491,11 +491,9 @@ export function ServerList({
            * er abgeschnitten wird. */}
           {server.identityFilePath && (
             <p className="truncate text-xs text-fg-subtle" title={server.identityFilePath}>
-              {/* spec-reviewer-Fund (Review dieses Schritts): das Emoji
-               * allein trägt keine barrierefreie Bedeutung — `aria-hidden`
-               * nimmt es aus dem Accessibility-Baum, der sichtbare Pfad
-               * daneben bleibt der eigentliche Inhalt der Zeile. */}
-              <span aria-hidden="true">🔑</span> {server.identityFilePath}
+              {/* The icon is decorative (aria-hidden); the visible path is
+               * the row's actual content. */}
+              <Icon name="key" className="inline align-text-bottom" /> {server.identityFilePath}
             </p>
           )}
           {server.identityFilePath && <KeyFileMissingNote path={server.identityFilePath} />}
@@ -525,7 +523,7 @@ export function ServerList({
       >
         <div className="min-w-0 break-words">
           <p className="font-medium text-fg-muted">
-            <span aria-hidden="true">⚠️</span> {server.name}
+            <Icon name="warn" className="inline align-text-bottom" /> {server.name}
           </p>
           <p className="text-sm text-fg-subtle">{server.host}</p>
           <p className="text-xs text-warning-fg-soft">{unusableReasonText(t, server.reason)}</p>
@@ -589,7 +587,7 @@ export function ServerList({
               <path d={collapsed ? "M6 3.5 10.5 8 6 12.5" : "M3.5 6 8 10.5 12.5 6"} />
             </svg>
             <span className="truncate" title={node.group.name}>
-              📁 {node.group.name}
+              <Icon name={collapsed ? "folder" : "folder-open"} className="inline align-text-bottom" /> {node.group.name}
             </span>
             {node.group.isCopy && <CopyBadge />}
           </Button>
@@ -755,7 +753,7 @@ export function ServerList({
             </>
           }
         >
-          <p className="break-words text-sm text-fg-soft">📁 {keepGroup.group.name}</p>
+          <p className="break-words text-sm text-fg-soft"><Icon name="folder" className="inline align-text-bottom" /> {keepGroup.group.name}</p>
           <p className="mt-2 text-sm text-fg-muted">
             {t("copyMarker.groupConfirmBody", {
               groups: keepGroup.scope.groups,

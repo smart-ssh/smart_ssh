@@ -376,10 +376,10 @@ describe("App host key prompt closes when the backend ends it (Issue #37)", () =
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     const toast = await screen.findByText(/Host-Key-Abfrage für prod-1\.internal:2222 ist abgelaufen/);
     expect(toast).toBeVisible();
-    expect(toast.textContent).toMatch(/^ℹ /);
+    expect(toast.querySelector('[data-icon="info"]')).not.toBeNull();
     const region = screen.getByRole("status");
     expect(region).toContainElement(toast);
-    expect(region.textContent).not.toContain("⚠");
+    expect(region.querySelector('[data-icon="warn"]')).toBeNull();
     expect(region.querySelector(".bg-danger-subtle")).toBeNull();
     expect(confirmHostKey).not.toHaveBeenCalled();
   });

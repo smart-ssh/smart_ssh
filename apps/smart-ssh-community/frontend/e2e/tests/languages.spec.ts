@@ -66,7 +66,7 @@ async function checkMainScreens(page: Page, c: Catalog) {
   await expectNoRawKeys(page, "Connect");
 
   await page.getByRole("button", { name: tr(c, "nav.manage"), exact: true }).click();
-  await page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
+  await page.getByRole("treeitem", { name: "db-primary", exact: true }).click();
   for (const tab of ["general", "connection", "security"]) {
     await page.getByRole("tab", { name: tr(c, `serverForm.tabs.${tab}`), exact: true }).click();
     await expectNoRawKeys(page, `Manage (server form, ${tab})`);

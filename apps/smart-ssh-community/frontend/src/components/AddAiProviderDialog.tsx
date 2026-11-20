@@ -9,7 +9,7 @@ import {
   testAiProviderCredentials,
   updateAiProvider,
 } from "../api/api";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
 import { commandErrorText, translateErrorCode } from "../api/errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL } from "../lib/ollama";
@@ -493,6 +493,7 @@ export function AddAiProviderDialog({
               role="alert"
               className="rounded border border-danger-border bg-danger-subtle/40 px-2.5 py-1.5 text-xs text-danger-fg"
             >
+              <Icon name="x" className="mr-1 inline align-text-bottom" />
               {t("aiProvider.modelDiscoveryAuthFailed")}
             </p>
           )}
@@ -552,6 +553,10 @@ export function AddAiProviderDialog({
                     : "border-danger-border bg-danger-subtle/40 text-danger-fg"
                 }`}
               >
+                <Icon
+                  name={credentialTestResult.kind === "valid" ? "check" : "x"}
+                  className="mr-1 inline align-text-bottom"
+                />
                 {credentialTestResult.kind === "valid" && t("aiProvider.testResultValid")}
                 {credentialTestResult.kind === "authenticationFailed" &&
                   t("aiProvider.testResultAuthFailed")}
@@ -615,7 +620,7 @@ export function AddAiProviderDialog({
               onClick={() => setShowAdvanced((prev) => !prev)}
               className="font-heading tracking-wide uppercase"
             >
-              <span aria-hidden="true">{showAdvanced ? "▾" : "▸"}</span>
+              <Icon name={showAdvanced ? "chev-d" : "chev-r"} className="mr-1 inline align-text-bottom" />
               {t("aiProvider.advanced")}
             </Button>
 
@@ -651,7 +656,7 @@ export function AddAiProviderDialog({
                           aria-label={t("aiProvider.extraHeaderRemoveAria")}
                           className="shrink-0"
                         >
-                          <span aria-hidden="true">✕</span>
+                          <Icon name="x" />
                         </Button>
                       </div>
                     ))}

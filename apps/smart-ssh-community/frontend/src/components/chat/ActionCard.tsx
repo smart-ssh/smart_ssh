@@ -10,7 +10,7 @@ import { LiveCommandOutput } from "../LiveCommandOutput";
 import { formatBytes } from "../../lib/format";
 import type { ActionResultPayload, ActionUserDecision, InjectionCheckState } from "../../api/types";
 import { NoteDiffPreview } from "../NoteDiffPreview";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
@@ -116,6 +116,7 @@ export function ActionCard({
         // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher
         // Fallback nach einem Rechte-Fehler — vorab angekündigt, nie still.
         <p className="mt-1 text-xs text-warning-fg-soft">
+          <Icon name="key" className="mr-1 inline align-text-bottom" />
           {"WriteRemoteFile" in item.action
             ? t("actionCard.writeMayUseStoredSudoPassword")
             : t("actionCard.usesStoredSudoPassword")}
@@ -365,6 +366,7 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
   const newSize = new TextEncoder().encode(newContent).length;
   return (
     <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+      <Icon name="warn" className="mr-1 inline align-text-bottom" />
       {t("confirmDialog.binaryFileHint", {
         oldSize: formatBytes(oldSize),
         newSize: formatBytes(newSize),
@@ -399,10 +401,10 @@ export function ActionResultView({
   if (result.kind === "fileWrite") {
     return (
       <div className="mt-2 space-y-1 text-xs text-success-fg-soft">
-        <p>✓ {t("chat.fileWritten", { path: result.path })}</p>
+        <p><Icon name="check" className="mr-1 inline align-text-bottom" /> {t("chat.fileWritten", { path: result.path })}</p>
         {result.backupPath && <p className="text-fg-subtle">Backup: {result.backupPath}</p>}
         {result.usedSudoPassword && (
-          <p className="text-warning-fg-soft">🔑 {t("chat.writtenWithSudoPassword")}</p>
+          <p className="text-warning-fg-soft"><Icon name="key" className="mr-1 inline align-text-bottom" /> {t("chat.writtenWithSudoPassword")}</p>
         )}
       </div>
     );
@@ -414,10 +416,10 @@ export function ActionResultView({
        * expliziter Hinweis — ein fehlender Exit-Code allein sähe sonst wie
        * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
       {result.cancelled ? (
-        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
+        <p className="font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandCancelledNotice")}</p>
       ) : null}
       {result.truncated ? (
-        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
+        <p className="font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandTruncatedNotice")}</p>
       ) : null}
       {noteContent && (
         <div className="flex items-start justify-between gap-2 font-sans">

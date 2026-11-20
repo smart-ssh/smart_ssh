@@ -5,7 +5,7 @@ import { commandErrorCode, commandErrorMessage, respondToAction } from "../api/a
 import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../api/events";
 import type { NoteUpdateSuggestedEvent } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 interface PendingSuggestion {
   sessionId: string;
@@ -168,7 +168,7 @@ export function NoteSuggestionToast() {
                 onClick={() => close(suggestion)}
                 aria-label={t("noteSuggestion.dismiss")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </div>
           ) : !suggestion.expanded ? (
@@ -190,7 +190,7 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
-                  ✕
+                  <Icon name="x" />
                 </Button>
               </div>
             </div>
@@ -206,7 +206,7 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
-                  ✕
+                  <Icon name="x" />
                 </Button>
               </div>
               {suggestion.summaryIncomplete && (

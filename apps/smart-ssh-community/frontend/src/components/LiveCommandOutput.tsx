@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { Icon } from "./ui";
 import { useTranslation } from "react-i18next";
 import type { LiveOutput } from "../lib/liveOutput";
 
@@ -40,7 +41,7 @@ export function LiveCommandOutput({ output }: { output: LiveOutput }) {
       {output.stdout && <pre className="whitespace-pre-wrap text-fg-muted">{output.stdout}</pre>}
       {output.stderr && <pre className="whitespace-pre-wrap text-danger-fg-soft">{output.stderr}</pre>}
       {output.truncated && (
-        <p className="font-sans text-warning-fg-soft">{t("actionCard.liveOutputTruncatedNotice")}</p>
+        <p className="font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.liveOutputTruncatedNotice")}</p>
       )}
     </div>
   );

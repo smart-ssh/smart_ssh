@@ -282,3 +282,15 @@ describe("Sidebar tree arrow-key navigation (issue #425)", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Sidebar row icons (issue #1363)", () => {
+  it("shows the folder icon for groups, the server icon for servers and the local icon for the local pseudo-server", () => {
+    renderSidebar();
+    const iconOf = (text: string) => row(text).querySelector("svg")?.getAttribute("data-icon");
+    expect(iconOf("Prod")).toBe("folder-open");
+    expect(iconOf("prod-1")).toBe("server");
+    expect(iconOf("Localhost")).toBe("local");
+    // Decorative: the row's accessible name is just the text.
+    expect(row("Localhost").querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+});

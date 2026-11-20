@@ -12,7 +12,7 @@ import {
 import type { InterruptedRow } from "../../api/activitiesApi";
 import { formatBytes } from "../../lib/format";
 import { voiceErrorKey } from "../../settings/voiceInputSettings";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 
 const RING_R = 9;
 const RING_C = 2 * Math.PI * RING_R;
@@ -85,14 +85,10 @@ function ActivityRow({ activity }: { activity: Activity }) {
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 break-words font-semibold text-fg">
           {a.state === "succeeded" && (
-            <span aria-hidden="true" className="mr-1 text-success-fg">
-              ✓
-            </span>
+            <Icon name="check" className="mr-1 inline align-text-bottom text-success-fg" />
           )}
           {a.state === "failed" && (
-            <span aria-hidden="true" className="mr-1 text-danger-fg-soft">
-              !
-            </span>
+            <Icon name="warn" className="mr-1 inline align-text-bottom text-danger-fg-soft" />
           )}
           {title}
         </span>
@@ -259,13 +255,9 @@ export function ActivityCenter() {
         {running.length > 0 ? (
           <Ring fraction={fraction}>{running.length}</Ring>
         ) : failed || interrupted.length > 0 ? (
-          <span aria-hidden="true" className="text-sm font-bold text-danger-fg-soft">
-            !
-          </span>
+          <Icon name="warn" className="text-danger-fg-soft" />
         ) : (
-          <span aria-hidden="true" className="text-sm font-bold text-success-fg">
-            ✓
-          </span>
+          <Icon name="check" className="text-success-fg" />
         )}
       </Button>
       {open && (

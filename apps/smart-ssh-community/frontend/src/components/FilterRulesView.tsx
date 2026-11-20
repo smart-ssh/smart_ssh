@@ -25,7 +25,7 @@ import type {
   ServerDto,
 } from "../api/types";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS, TagInput } from "./ui";
+import { Button, FIELD_CONTROL_CLASS, TagInput, Icon } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
 
 type ScopeKind = "global" | "server" | "tag";
@@ -234,7 +234,7 @@ export function FilterRulesView({
                       title={moveBlockedTitle(rule, group.rules[index - 1])}
                       aria-label={t("filterRules.increasePriority")}
                     >
-                      <span aria-hidden="true">↑</span>
+                      <Icon name="parent" />
                     </Button>
                     <Button
                       size="sm"
@@ -248,7 +248,7 @@ export function FilterRulesView({
                       title={moveBlockedTitle(rule, group.rules[index + 1])}
                       aria-label={t("filterRules.decreasePriority")}
                     >
-                      <span aria-hidden="true">↓</span>
+                      <Icon name="arrow-down" />
                     </Button>
                     <Button size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={() => setSelection({ kind: "rule", id: rule.id })}>
                       {t("common.edit")}
@@ -264,7 +264,7 @@ export function FilterRulesView({
                         ein gültiges Muster. */}
                     {rule.patternError && (
                       <p className="mt-1.5 text-xs text-warning-fg-soft" role="alert">
-                        ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
+                        <Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
                         <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
                       </p>
                     )}
@@ -747,7 +747,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
                 <code className="text-fg-soft">
                   {rule.patternType}: {rule.patternValue}
                 </code>{" "}
-                ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
+                <Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
                 <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
               </li>
             ))}

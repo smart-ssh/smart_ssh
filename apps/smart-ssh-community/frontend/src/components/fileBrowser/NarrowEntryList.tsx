@@ -1,10 +1,10 @@
-import { entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
+import { EntryIcon, entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../lib/formatDateTime";
 import { formatBytes } from "../../lib/format";
 import type { RemoteEntryDto } from "../../api/types";
 import type { OpenEntryMenu } from "./shared";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 
 interface NarrowEntryListProps {
   entries: RemoteEntryDto[];
@@ -56,12 +56,12 @@ export function NarrowEntryList({
                   className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-ring-flush"
                   title={entryTitle(entry)}
                 >
-                  📁 {entry.name}
+                  <EntryIcon entry={entry} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </Button>
               ) : (
                 <span className={`block truncate text-sm text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
-                  {isBrokenLink(entry) ? "⚠️" : "📄"} {entry.name}
+                  <EntryIcon entry={entry} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </span>
               )}
@@ -81,7 +81,7 @@ export function NarrowEntryList({
               aria-expanded={rowMenuOpen}
               className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-ring-flush"
             >
-              ⋯
+              <Icon name="more" />
             </Button>
             {rowMenuOpen && renderEntryMenu(entry, "")}
           </li>

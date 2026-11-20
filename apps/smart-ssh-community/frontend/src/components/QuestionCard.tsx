@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { QuestionOption } from "../api/types";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 /** Issue #547 (Spec 0111 §5): lock state of a question card, derived from
  * the chat item list by `deriveQuestionStates`. */
@@ -94,12 +94,10 @@ export function QuestionCard({
                   <span aria-hidden="true" className="w-4 shrink-0 text-center">
                     {locked
                       ? isMarked
-                        ? "✓"
+                        ? <Icon name="check" />
                         : ""
                       : multiSelect
-                        ? isMarked
-                          ? "☑"
-                          : "☐"
+                        ? <Icon name={isMarked ? "square-check" : "square"} />
                         : i + 1}
                   </span>
                   <span className="min-w-0">

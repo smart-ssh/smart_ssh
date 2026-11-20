@@ -4,7 +4,7 @@
 // step completions and failures, not every detail change.
 import { useTranslation } from "react-i18next";
 import type { ConnectStepDetail, ConnectStepSnapshot } from "../api/types";
-import { Spinner } from "./ui";
+import { Spinner, Icon } from "./ui";
 import type { TranslateFn } from "../i18nTypes";
 
 type T = TranslateFn;
@@ -67,9 +67,9 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
                 ) : step.status === "skipped" ? (
                   "–"
                 ) : step.status === "ok" ? (
-                  <span className="text-success-fg">✓</span>
+                  <Icon name="check" className="text-success-fg" />
                 ) : (
-                  "✗"
+                  <Icon name="x" />
                 )}
               </span>
               <span className="font-medium">

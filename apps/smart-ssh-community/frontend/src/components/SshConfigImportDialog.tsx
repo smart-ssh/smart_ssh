@@ -10,7 +10,7 @@ import type {
   SshConfigPreviewEntryDto,
   SshConfigPreviewTagDto,
 } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 interface SshConfigImportDialogProps {
@@ -237,7 +237,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                   <ul className="space-y-0.5 text-xs">
                     {preview.groups.map((g, i) => (
                       <li key={`${g.sourcePath}-${g.name}`} style={{ paddingLeft: `${groupDepth(preview.groups, i) * 14}px` }}>
-                        📁 {g.name}
+                        <Icon name="folder" className="inline align-text-bottom" /> {g.name}
                       </li>
                     ))}
                   </ul>
@@ -431,7 +431,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                     checked={!dropped}
                                     onChange={() => toggleTag(e.index, tag.tag)}
                                   />
-                                  {tag.isLiteral && <span aria-hidden>⚠</span>}
+                                  {tag.isLiteral && <Icon name="warn" />}
                                   {tag.tag}
                                   {flagged && <span>({actionLabels})</span>}
                                 </label>

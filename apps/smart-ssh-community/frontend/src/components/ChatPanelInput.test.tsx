@@ -203,7 +203,7 @@ describe("ChatPanel stop (Spec 0066, §1)", () => {
     handler!({ sessionId: "session-1" });
 
     expect(
-      await screen.findByText("⏹ Antwort abgebrochen."),
+      await screen.findByText("Antwort abgebrochen."),
     ).toBeInTheDocument();
   });
 });
@@ -241,13 +241,13 @@ describe("ChatPanel queued messages (Spec 0066, §2)", () => {
     );
     expect(field).toHaveValue("");
     expect(
-      screen.getByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+      screen.getByText("Wird mit der nächsten Anfrage gesendet"),
     ).toBeInTheDocument();
 
     queuedHandler!({ sessionId: "session-1" });
     await waitFor(() =>
       expect(
-        screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+        screen.queryByText("Wird mit der nächsten Anfrage gesendet"),
       ).not.toBeInTheDocument(),
     );
     resolveFirst();
@@ -273,13 +273,13 @@ describe("ChatPanel send state edge cases (Spec 0066, review)", () => {
     await screen.findByRole("button", { name: "Stopp" });
     fireEvent.change(field, { target: { value: "zweite" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    await screen.findByText("⏳ Wird mit der nächsten Anfrage gesendet");
+    await screen.findByText("Wird mit der nächsten Anfrage gesendet");
 
     resolveFirst();
 
     await waitFor(() =>
       expect(
-        screen.queryByText("⏳ Wird mit der nächsten Anfrage gesendet"),
+        screen.queryByText("Wird mit der nächsten Anfrage gesendet"),
       ).not.toBeInTheDocument(),
     );
     expect(
@@ -404,7 +404,7 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
 
     expect(
       await screen.findByText(
-        "✂ Antwort wurde abgeschnitten (Längenlimit erreicht).",
+        "Antwort wurde abgeschnitten (Längenlimit erreicht).",
       ),
     ).toBeInTheDocument();
     expect(

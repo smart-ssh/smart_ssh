@@ -16,7 +16,7 @@ import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button, DialogFrame, ErrorBoundary } from "./ui";
+import { Button, DialogFrame, ErrorBoundary, Icon } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -174,7 +174,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             </h2>
             {narrow && (
               <Button variant="ghost" size="sm" className="mr-2 min-h-11 min-w-11" onClick={onClose} aria-label={t("common.close")}>
-                ✕
+                <Icon name="x" />
               </Button>
             )}
           </div>
@@ -218,7 +218,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                   className="min-h-11 shrink-0"
                   onClick={() => setNarrowView("list")}
                 >
-                  ← {t("settings.backToList")}
+                  <Icon name="arrow-left" className="mr-1 inline align-text-bottom" /> {t("settings.backToList")}
                 </Button>
               </>
             )}
@@ -226,7 +226,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
               {active?.label}
             </h3>
             <Button variant="ghost" size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={onClose} aria-label={t("common.close")}>
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
           <div className="min-w-0 flex-1 overflow-y-auto p-6 narrow:p-3">

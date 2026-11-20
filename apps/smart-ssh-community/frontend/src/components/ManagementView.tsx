@@ -13,7 +13,7 @@ import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button, ErrorBoundary } from "./ui";
+import { Button, ErrorBoundary, Icon } from "./ui";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
@@ -208,7 +208,7 @@ export function ManagementView({
         {narrow && selection && (
           <div className="sticky top-0 z-10 border-b border-surface-raised bg-surface px-2 py-1">
             <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11">
-              <span aria-hidden="true">←</span> {t("management.back")}
+              <Icon name="arrow-left" className="mr-1 inline align-text-bottom" /> {t("management.back")}
             </Button>
           </div>
         )}

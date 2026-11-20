@@ -128,6 +128,12 @@ export function stepStatusText(t: T, record: ConnectStepRecord): string {
   }
 }
 
+/** Icon for the UI counterpart of `statusMarker`; null for states that keep a text marker. */
+export function statusIconName(state: string): "x" | "check" | "warn" | null {
+  return state === "failed" ? "x" : state === "ok" ? "check" : state === "warning" ? "warn" : null;
+}
+
+/** Plain-text marker, used in the copied connection log only. */
 export function statusMarker(state: string): string {
   return state === "failed" ? "✗" : state === "ok" ? "✓" : state === "skipped" ? "–" : state === "warning" ? "⚠" : "…";
 }

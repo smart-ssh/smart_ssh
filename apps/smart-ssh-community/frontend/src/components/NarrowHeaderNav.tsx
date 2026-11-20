@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { MAIN_TAB_ENTRIES, type MainTab } from "../lib/navEntries";
 import type { SessionTab } from "../hooks/useSessionTabs";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 const ENTRY_BASE = `focus-ring font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
 const entryTone = (current: boolean) =>
@@ -152,7 +152,7 @@ function NarrowMenu({
                       aria-label={t("sessionTabs.closeTab", { name: label })}
                       className={`focus-ring flex h-11 w-11 shrink-0 items-center justify-center text-fg-subtle hover:text-fg-soft`}
                     >
-                      ✕
+                      <Icon name="x" />
                     </Button>
                   </li>
                 );

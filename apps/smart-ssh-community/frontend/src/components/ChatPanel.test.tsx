@@ -133,7 +133,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
     ]) {
       const badge = screen.getByText(label).closest("button");
       expect(badge).not.toBeNull();
-      expect(badge?.textContent).toContain("ⓘ");
+      expect(badge?.querySelector('[data-icon="info"]')).not.toBeNull();
       expect(badge).toHaveAccessibleDescription(reason);
       expect(badge?.hasAttribute("title")).toBe(false);
     }
@@ -146,7 +146,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
       }),
     );
     const badge = screen.getByText("Daten");
-    expect(badge.textContent).not.toContain("ⓘ");
+    expect(badge.querySelector('[data-icon="info"]')).toBeNull();
     expect(badge.closest("button")).toBeNull();
     expect(badge.hasAttribute("title")).toBe(false);
   });
@@ -539,26 +539,26 @@ describe("chat notices follow the UI language (issue #116)", () => {
 
   it("renders the English texts with an English UI", () => {
     renderItemIn("en", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Response cancelled.")).toBeInTheDocument();
+    expect(screen.getByText("Response cancelled.")).toBeInTheDocument();
 
     renderItemIn("en", { type: "user", id: "u-1", text: "hi", queued: true });
-    expect(screen.getByText("⏳ Will be sent with the next request")).toBeInTheDocument();
+    expect(screen.getByText("Will be sent with the next request")).toBeInTheDocument();
 
     renderItemIn("en", { type: "emptyResponse", id: "e-1" });
     expect(screen.getByText(/^The model returned no response\./)).toBeInTheDocument();
 
     renderItemIn("en", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Response was cut off (length limit reached).")).toBeInTheDocument();
+    expect(screen.getByText("Response was cut off (length limit reached).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "📄 As Markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "As Markdown" })).toBeInTheDocument();
   });
 
   it("keeps the German wording with a German UI", () => {
     renderItemIn("de", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
+    expect(screen.getByText("Antwort abgebrochen.")).toBeInTheDocument();
 
     renderItemIn("de", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
+    expect(screen.getByText("Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 
 interface ElevationControlsProps {
   groupRef: RefObject<HTMLFieldSetElement | null>;
@@ -52,7 +52,7 @@ export function ElevationControls({
         disabled={enablingElevation}
         title={t("fileElevation.toggleTitle")}
       >
-        {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
+        {enablingElevation ? t("fileElevation.enabling") : <><Icon name="lock-open" className="mr-1 inline align-text-bottom" />{t("fileElevation.toggle")}</>}
       </Button>
       <Button
         size="sm"
@@ -67,7 +67,7 @@ export function ElevationControls({
         aria-label={t("fileElevation.moreOptions")}
         title={t("fileElevation.moreOptions")}
       >
-        ▾
+        <Icon name="chev-d" />
       </Button>
       {elevationMenuOpen && (
         <div

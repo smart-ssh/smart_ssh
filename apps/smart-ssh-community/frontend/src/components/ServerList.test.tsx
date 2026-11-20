@@ -182,9 +182,9 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     renderList();
 
     await screen.findByText("Noch kein Server angelegt");
-    // Issue #49: `/📁 Prod/` statt `/Prod/` — die Gruppenzeile hat jetzt
-    // zusätzlich einen „+"-Button, dessen Name den Gruppennamen enthält.
-    expect(screen.getByRole("button", { name: /📁 Prod/ })).toBeInTheDocument();
+    // Issue #49: the group row additionally has a "+" button whose name
+    // contains the group name.
+    expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
   });
 
   it('clicking "Ersten Server anlegen" invokes the callback', async () => {
@@ -300,11 +300,34 @@ describe("ServerList new server in a group (issue #49)", () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
   });
 
+  it("shows the open-folder icon for an expanded group and the folder icon for a collapsed one (issue #1363)", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
+    const { unmount } = renderList();
+    const open = await screen.findByRole("button", { name: /Prod/ });
+    expect(open.querySelector('[data-icon="folder-open"]')).not.toBeNull();
+    unmount();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerList
+          onStartConnect={startConnectMock}
+          connectingServerIds={new Set()}
+          findExistingSessionId={() => undefined}
+          onSwitchToExistingTab={vi.fn()}
+          collapsedGroupIds={new Set(["group-1"])}
+          onToggleGroup={vi.fn()}
+          onCreateFirstServer={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    const closed = await screen.findByRole("button", { name: /Prod/ });
+    expect(closed.querySelector('[data-icon="folder"]')).not.toBeNull();
+  });
+
   it("group rows have no + action and expose aria-expanded (Issue #978)", async () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     const onToggleGroup = vi.fn();
     renderList(vi.fn(), onToggleGroup);
-    const header = await screen.findByRole("button", { name: /📁/ });
+    const header = await screen.findByRole("button", { name: /Prod/ });
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(screen.queryByRole("button", { name: /^(New server in|Neuer Server in)/ })).toBeNull();
     expect(header.textContent).not.toMatch(/[▸▾]/);

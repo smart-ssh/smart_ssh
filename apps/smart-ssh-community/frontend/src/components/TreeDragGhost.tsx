@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "./ui";
 import type { DropKind } from "../lib/treeDrag";
 import type { TreeDragState } from "../hooks/useTreeDrag";
 
@@ -8,7 +9,7 @@ import type { TreeDragState } from "../hooks/useTreeDrag";
  * findet. */
 export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropKind | null }) {
   const { t } = useTranslation();
-  const icon = drag.item.kind === "group" ? "📁" : "🖥️";
+  const icon = <Icon name={drag.item.kind === "group" ? "folder" : "server"} className="inline align-text-bottom" />;
   const hint =
     kind === "valid"
       ? drag.target?.kind === "root"

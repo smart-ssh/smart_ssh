@@ -13,7 +13,7 @@ import {
 import { commandErrorText } from "../api/errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface NotesPanelProps {
   target: NoteTarget;
@@ -232,7 +232,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     aria-expanded={expanded}
                     className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-fg-subtle hover:text-fg-soft focus-ring-flush"
                   >
-                    <span className="select-none">{expanded ? "▾" : "▸"}</span>
+                    <Icon name={expanded ? "chev-d" : "chev-r"} />
                     {formatDateTime(r.createdAt, i18n.language)} ·{" "}
                     {r.editedBy.kind === "user"
                       ? t("notes.editedByUser")

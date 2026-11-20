@@ -101,7 +101,7 @@ function groupSelect(): HTMLSelectElement {
   return select as HTMLSelectElement;
 }
 
-const sidebarRow = (text: string) => screen.getByText(new RegExp(`^\\S+ ${text}$`));
+const sidebarRow = (text: string) => screen.getByText(new RegExp(`^${text}$`));
 const addServer = () =>
   fireEvent.click(screen.getByRole("button", { name: testI18n.t("sidebar.addServer") }));
 const addGroup = () =>
