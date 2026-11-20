@@ -53,11 +53,11 @@ Drei Punkte (plus die Plugin-Crate unten), ohne die die App unter Android beim S
 
 ## Launcher icon
 
-The launcher icons (adaptive icon and legacy PNGs) are generated from the desktop logo; `apps/smart-ssh-community/icons/android/` is the single source of truth and `apps/smart-ssh-community/gen/android/app/src/main/res/` holds a byte-identical copy (checked by `apps/smart-ssh-community/tests/android_launcher_icons.rs`). To regenerate after changing `apps/smart-ssh-community/icons/icon.png` or `icon-source.png` (flat background colour of the adaptive icon):
+The launcher icons (adaptive icon and legacy PNGs) are generated from the "Trace" logo SVGs; `apps/smart-ssh-community/icons/android/` is the single source of truth and `apps/smart-ssh-community/gen/android/app/src/main/res/` holds a byte-identical copy (checked by `apps/smart-ssh-community/tests/android_launcher_icons.rs`). To regenerate after changing `apps/smart-ssh-community/icons/logo.svg` (dark tile: legacy and round icons, and its fill is the adaptive background colour, `ic_launcher_background.xml`) or `icons/logo-mark.svg` (glyph only, stroke 9 u: adaptive foreground, scaled into the 66 dp safe zone):
 
 ```bash
 (cd apps/smart-ssh-community/frontend && npm ci)   # once, provides Playwright/Chromium
 node scripts/generate-android-icons.mjs
 ```
 
-No manual step is needed; commit both output directories. Do not run `tauri icon` for Android: it overwrites these files with its template set.
+No manual step is needed; commit both output directories. Do not run `tauri icon` for Android: it overwrites these files with its template set. For the desktop and iOS icons run `cargo tauri icon icons/logo.svg -o <tmp dir>` and copy everything except `android/` into `icons/`.
