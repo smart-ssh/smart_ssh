@@ -51,7 +51,7 @@ test("Connect switches to the open tab of the server", async ({ app }) => {
   const page = app.page;
   await page.getByRole("button", { name: /^alpha\b/ }).click();
   await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await openForm(page);
   await page.locator("form").getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();

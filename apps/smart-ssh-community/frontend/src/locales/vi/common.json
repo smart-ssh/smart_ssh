@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Phiên mới",
-    "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Cần xác nhận",
       "readOnlyHint": "Phiên này thuộc về một công cụ bên ngoài (MCP). Nó chỉ hiển thị các hành động của công cụ để xác nhận hoặc từ chối cùng kết quả của chúng; ở đây không có ô nhập trò chuyện hay terminal. Đóng phiên sẽ kết thúc phiên MCP và từ chối các xác nhận đang chờ."
     },
-    "confirmClosePending": "Vẫn còn một yêu cầu xác nhận đang chờ cho \"{{name}}\". Vẫn đóng tab? Hành động đang chờ khi đó sẽ được tính là bị từ chối."
+    "confirmClosePending": "Vẫn còn một yêu cầu xác nhận đang chờ cho \"{{name}}\". Vẫn đóng tab? Hành động đang chờ khi đó sẽ được tính là bị từ chối.",
+    "pendingBadge": "Đang chờ",
+    "newConnection": "Kết nối mới"
   },
   "aiProvider": {
     "openLogs": "Mở nhật ký chẩn đoán trong trình quản lý tệp",

@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny økt",
-    "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Krever bekreftelse",
       "readOnlyHint": "Denne økten tilhører et eksternt verktøy (MCP). Den viser bare verktøyets handlinger som skal bekreftes eller avvises, og resultatene av dem; her finnes verken chattefelt eller terminal. Lukkes den, avsluttes MCP-økten og ventende bekreftelser avvises."
     },
-    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist."
+    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist.",
+    "pendingBadge": "Venter",
+    "newConnection": "Ny tilkobling"
   },
   "aiProvider": {
     "openLogs": "Åpne diagnoselogger i filbehandleren",

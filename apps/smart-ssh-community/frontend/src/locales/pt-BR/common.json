@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nova sessão",
-    "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Requer confirmação",
       "readOnlyHint": "Esta sessão pertence a uma ferramenta externa (MCP). Ela só mostra as ações da ferramenta para confirmar ou rejeitar e seus resultados; não há entrada de chat nem terminal aqui. Fechá-la encerra a sessão MCP e rejeita as confirmações pendentes."
     },
-    "confirmClosePending": "Ainda há uma confirmação pendente para \"{{name}}\". Fechar a aba mesmo assim? A ação pendente será considerada rejeitada."
+    "confirmClosePending": "Ainda há uma confirmação pendente para \"{{name}}\". Fechar a aba mesmo assim? A ação pendente será considerada rejeitada.",
+    "pendingBadge": "Pendente",
+    "newConnection": "Nova conexão"
   },
   "aiProvider": {
     "openLogs": "Abrir logs de diagnóstico no gerenciador de arquivos",

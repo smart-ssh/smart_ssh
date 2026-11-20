@@ -24,3 +24,5 @@ export { TagInput } from "./TagInput";
 export type { TagInputProps } from "./TagInput";
 export { Icon, ICON_NAMES } from "./Icon";
 export type { IconName, IconProps } from "./Icon";
+export { Logo } from "./Logo";
+export type { LogoProps } from "./Logo";

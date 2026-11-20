@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nueva sesión",
-    "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Requiere confirmación",
       "readOnlyHint": "Esta sesión pertenece a una herramienta externa (MCP). Solo muestra las acciones de la herramienta para confirmar o rechazar y sus resultados; aquí no hay entrada de chat ni terminal. Al cerrarla finaliza la sesión MCP y se rechazan las confirmaciones pendientes."
     },
-    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada."
+    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada.",
+    "pendingBadge": "Pendiente",
+    "newConnection": "Nueva conexión"
   },
   "aiProvider": {
     "openLogs": "Abrir registros de diagnóstico en el administrador de archivos",

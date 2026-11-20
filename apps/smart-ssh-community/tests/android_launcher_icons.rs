@@ -99,6 +99,6 @@ fn adaptive_icon_uses_dark_background_and_mark_foreground() {
         assert!(x.contains("@mipmap/ic_launcher_foreground"), "{name}");
     }
     let bg = fs::read_to_string(res.join("values/ic_launcher_background.xml")).unwrap();
-    assert!(bg.contains("#1e293b"), "{bg}");
+    assert!(bg.contains("#0e1116"), "{bg}");
     assert!(!bg.to_lowercase().contains("#3dda84") && !bg.contains("#fff<"));
 }

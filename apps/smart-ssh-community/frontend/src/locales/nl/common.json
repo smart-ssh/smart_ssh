@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nieuwe sessie",
-    "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Bevestiging nodig",
       "readOnlyHint": "Deze sessie hoort bij een extern hulpmiddel (MCP). Ze toont alleen de te bevestigen of te weigeren acties van het hulpmiddel en hun resultaten; er is hier geen chatinvoer of terminal. Sluiten beëindigt de MCP-sessie en weigert openstaande bevestigingen."
     },
-    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd."
+    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd.",
+    "pendingBadge": "In behandeling",
+    "newConnection": "Nieuwe verbinding"
   },
   "aiProvider": {
     "openLogs": "Diagnostische logboeken openen in bestandsbeheer",

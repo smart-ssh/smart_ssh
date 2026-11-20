@@ -79,7 +79,7 @@ export const ICON_NAMES = Object.keys(ICON_PATHS) as IconName[];
 export interface IconProps {
   name: IconName;
   /** Rendered size in px; default 16. */
-  size?: 16 | 20 | 24;
+  size?: 12 | 14 | 16 | 20 | 24;
   className?: string;
   style?: CSSProperties;
   /** Accessible name. Without it the icon is decorative (`aria-hidden`). */
@@ -97,7 +97,7 @@ export function Icon({ name, size = 16, className, style, label }: IconProps) {
       height={size}
       fill="none"
       stroke="currentColor"
-      strokeWidth={size === 16 ? 1.5 : 2}
+      strokeWidth={size <= 16 ? 1.5 : 2}
       strokeLinecap="square"
       strokeLinejoin="miter"
       className={["shrink-0", className].filter(Boolean).join(" ")}

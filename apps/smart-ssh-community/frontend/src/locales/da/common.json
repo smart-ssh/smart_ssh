@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Kræver bekræftelse",
       "readOnlyHint": "Denne session tilhører et eksternt værktøj (MCP). Den viser kun værktøjets handlinger, der skal bekræftes eller afvises, og deres resultater; her er hverken chatinput eller terminal. Lukkes den, afsluttes MCP-sessionen, og ventende bekræftelser afvises."
     },
-    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist."
+    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist.",
+    "pendingBadge": "Afventer",
+    "newConnection": "Ny forbindelse"
   },
   "aiProvider": {
     "openLogs": "Åbn diagnoselogfiler i filhåndtering",

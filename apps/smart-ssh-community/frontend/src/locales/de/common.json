@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Neue Sitzung",
-    "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Bestätigung nötig",
       "readOnlyHint": "Diese Sitzung gehört einem externen Tool (MCP). Hier erscheinen nur seine Aktionen zum Bestätigen oder Ablehnen und deren Ergebnis; eigene Eingaben und Terminal gibt es hier nicht. Schließen beendet die MCP-Sitzung und lehnt offene Bestätigungen ab."
     },
-    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt."
+    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt.",
+    "pendingBadge": "Ausstehend",
+    "newConnection": "Neue Verbindung"
   },
   "aiProvider": {
     "openLogs": "Diagnose-Logs im Dateimanager öffnen",

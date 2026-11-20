@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Behöver bekräftelse",
       "readOnlyHint": "Den här sessionen tillhör ett externt verktyg (MCP). Den visar bara verktygets åtgärder att bekräfta eller avvisa samt deras resultat; här finns ingen chattinmatning eller terminal. Stängs den avslutas MCP-sessionen och väntande bekräftelser avvisas."
     },
-    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad."
+    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad.",
+    "pendingBadge": "Väntar",
+    "newConnection": "Ny anslutning"
   },
   "aiProvider": {
     "openLogs": "Öppna diagnostikloggar i filhanteraren",

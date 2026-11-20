@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Uusi istunto",
-    "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Vaatii vahvistuksen",
       "readOnlyHint": "Tämä istunto kuuluu ulkoiselle työkalulle (MCP). Se näyttää vain työkalun vahvistettavat tai hylättävät toiminnot ja niiden tulokset; keskustelukenttää tai päätettä ei ole. Sulkeminen päättää MCP-istunnon ja hylkää odottavat vahvistukset."
     },
-    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi."
+    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi.",
+    "pendingBadge": "Odottaa",
+    "newConnection": "Uusi yhteys"
   },
   "aiProvider": {
     "openLogs": "Avaa diagnostiikkalokit tiedostonhallinnassa",

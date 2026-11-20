@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Sesiune nouă",
-    "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Necesită confirmare",
       "readOnlyHint": "Această sesiune aparține unui instrument extern (MCP). Arată doar acțiunile instrumentului de confirmat sau respins și rezultatele lor; aici nu există intrare de chat sau terminal. Închiderea ei încheie sesiunea MCP și respinge confirmările în așteptare."
     },
-    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă."
+    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă.",
+    "pendingBadge": "În așteptare",
+    "newConnection": "Conexiune nouă"
   },
   "aiProvider": {
     "openLogs": "Deschide jurnalele de diagnosticare în managerul de fișiere",

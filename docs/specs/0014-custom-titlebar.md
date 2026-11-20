@@ -39,9 +39,17 @@ macOS-Ampel, bleibt die eigene Titelleiste aktiv (ADR 0040).
 
 ## 4. Eigener Header-Inhalt und Layout
 
-Die Kopfzeile zeigt links das App-Icon und den Schriftzug „Smart SSH"
-(Versions- und Editionszusatz: Spec 0052), in der Mitte Platz für die Tab-Leiste
-(Spec 0017).
+Die Kopfzeile ist eine einzige, 44 px hohe Leiste (breites Layout). Links steht
+das Logo mit dem Schriftzug „SMART SSH“, danach in kleiner Schrift Version,
+Edition, Early-Access-, Datenverzeichnis- und Dev-Kennzeichnung (Spec 0052).
+Es folgen die Hauptnavigation „Verbinden“, „Verwalten“ und „Filterregeln“ als
+flache Reiter (der aktive Reiter trägt oben eine Akzentlinie; „Filterregeln“
+zeigt ein Schild-Symbol) und die Tab-Leiste der Sitzungen (Spec 0017). Die
+Navigationsreiter bleiben auch sichtbar, während eine Sitzung angezeigt wird;
+dann ist keiner von ihnen aktiv. Rechts stehen der Aktivitäten-Auslöser
+(Spec 0116) und die Einstellungen als reine Symbol-Schaltfläche mit dem Namen
+„Einstellungen“. Die Übersicht hat keine zweite Kopfzeile. Das schmale Layout
+bleibt unverändert (44 px, Spec 0113).
 
 - **macOS:** Die Ampel sitzt oben links, der Header-Inhalt beginnt mit
   entsprechendem Abstand links.
