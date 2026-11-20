@@ -169,11 +169,19 @@ Spec 0054.
 Der Dateibrowser ist eine umschaltbare Ansicht im rechten Bereich neben dem
 Terminal, mit dem Umschalter „Terminal | Dateien“. Der rechte Bereich ist der
 „direkte Zugriff auf den Server“, links liegt der KI-Chat. Der Browser zeigt
-eine Pfadleiste mit Navigation und eine Dateiliste (Name, Größe, Rechte,
+eine Werkzeugleiste (Aufwärts, Ausgangsverzeichnis, Aktualisieren,
+Neuer Ordner, Hochladen, Spaltenmenü, Rechteerhöhung), eine Pfadleiste und eine Dateiliste (Name, Größe, Rechte,
 Änderungsdatum). Aktionen stehen im Kontextmenü und im Drei-Punkte-Menü
 (Spec 0054), Upload geht per Button oder Drag-and-Drop aus dem
 Betriebssystem. Spaltenbreiten und Bereichsaufteilung sind verstellbar
 (Spec 0053).
+
+Die **Pfadleiste** zeigt den aktuellen Pfad als Brotkrumen-Leiste in
+Festbreitenschrift: Jedes übergeordnete Segment ist eine Schaltfläche, die
+dieses Verzeichnis lädt; das letzte Segment ist hervorgehoben. Ein Klick auf
+den leeren Teil der Leiste, auf das letzte Segment oder Strg/Cmd+L (bei Fokus
+im Dateibrowser) wechselt zum bearbeitbaren Pfadfeld: Enter lädt den Pfad,
+Escape oder Fokusverlust stellt die Brotkrumen-Leiste wieder her.
 
 ### 5.2 Welche lokalen Dateien gelesen werden dürfen
 
@@ -253,8 +261,11 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
 ## 7. Grenzen
 
 - **Symbolische Links** werden mit einem Link-Symbol vor dem Namen
-  (für Screenreader als „symbolic link" beschriftet) aufgelistet; der
-  Hover-Text zeigt das Linkziel (`-> <Ziel>`), sofern es lesbar ist. Die
+  (für Screenreader als „symbolic link" beschriftet) aufgelistet; hinter
+  dem Namen steht das Linkziel als blasses „→ Ziel“ in Festbreitenschrift
+  (gekürzt; der Hover-Text enthält das Ziel bis 200 Zeichen, längere Ziele
+  werden dort mit „…“ abgeschnitten), sofern es lesbar ist; der Text bleibt
+  reiner, maskierter Text. Die
   Liste löst pro Link das Ziel mit einem `stat` auf:
   - Ein Link auf einen **Ordner** erscheint mit dem Ordner-Link-Symbol, sortiert
     unter den Ordnern, ist wie ein Ordner anklickbar und hat das

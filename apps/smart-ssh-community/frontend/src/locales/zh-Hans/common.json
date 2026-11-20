@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "新建会话",
-    "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "需要确认",
       "readOnlyHint": "此会话属于外部工具（MCP）。这里只显示该工具待确认或待拒绝的操作及其结果，没有聊天输入框或终端。关闭它会结束该 MCP 会话，并拒绝所有待确认的操作。"
     },
-    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。"
+    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。",
+    "pendingBadge": "待处理",
+    "newConnection": "新建连接"
   },
   "aiProvider": {
     "openLogs": "在文件管理器中打开诊断日志",
@@ -1081,6 +1082,7 @@
     "parentDirectory": "上级目录",
     "newFolderButton": "+ 文件夹",
     "fileActionsGroup": "文件操作",
+    "directoryActions": "目录操作",
     "upload": "上传",
     "uploadDialogTitle": "上传文件",
     "uploadFolder": "上传文件夹",
@@ -1282,8 +1284,9 @@
     "queued": "将随下一次请求一并发送",
     "responseCancelled": "回复已取消。",
     "contextCompactedNotice": "此聊天较早的部分已被总结，以适应模型的上下文。",
-    "contextUsage": "上下文 {{used}} / {{window}}",
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
+    "messageLabel": "消息",
+    "headerProviderTooltip": "提供商：{{provider}}",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
     "refusedResponse": "模型拒绝了此请求。请换一种说法，或开始新的聊天。",

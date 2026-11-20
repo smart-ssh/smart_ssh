@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nieuwe sessie",
-    "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Bevestiging nodig",
       "readOnlyHint": "Deze sessie hoort bij een extern hulpmiddel (MCP). Ze toont alleen de te bevestigen of te weigeren acties van het hulpmiddel en hun resultaten; er is hier geen chatinvoer of terminal. Sluiten beëindigt de MCP-sessie en weigert openstaande bevestigingen."
     },
-    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd."
+    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd.",
+    "pendingBadge": "In behandeling",
+    "newConnection": "Nieuwe verbinding"
   },
   "aiProvider": {
     "openLogs": "Diagnostische logboeken openen in bestandsbeheer",
@@ -1086,6 +1087,7 @@
     "parentDirectory": "Bovenliggende map",
     "newFolderButton": "+ Map",
     "fileActionsGroup": "Bestandsacties",
+    "directoryActions": "Mapacties",
     "upload": "Uploaden",
     "uploadDialogTitle": "Bestand(en) uploaden",
     "uploadFolder": "Map uploaden",
@@ -1289,8 +1291,9 @@
     "queued": "Wordt met het volgende verzoek verzonden",
     "responseCancelled": "Antwoord geannuleerd.",
     "contextCompactedNotice": "Oudere delen van deze chat zijn samengevat zodat ze in de context van het model passen.",
-    "contextUsage": "Contextgrootte {{used}} / {{window}}",
     "contextUsageTooltip": "Oudere delen van de chat worden automatisch samengevat als de context vol raakt.",
+    "messageLabel": "Bericht",
+    "headerProviderTooltip": "Aanbieder: {{provider}}",
     "webResearchUnavailable": "Webonderzoek is voor dit provideraccount niet beschikbaar (webzoeken is daar uitgeschakeld). Deze sessie antwoordt zonder webonderzoek. Om het permanent uit te schakelen: Instellingen → AI-provider → “Webonderzoek”.",
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
     "refusedResponse": "Het model heeft dit verzoek geweigerd. Formuleer het anders of begin een nieuwe chat.",

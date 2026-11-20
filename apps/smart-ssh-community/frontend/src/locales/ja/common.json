@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "新しいセッション",
-    "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "確認が必要",
       "readOnlyHint": "このセッションは外部ツール（MCP）のものです。確認または拒否するツールの操作とその結果のみが表示され、チャット入力やターミナルはありません。閉じるとMCPセッションが終了し、保留中の確認は拒否されます。"
     },
-    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。"
+    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。",
+    "pendingBadge": "保留中",
+    "newConnection": "新しい接続"
   },
   "aiProvider": {
     "openLogs": "診断ログをファイルマネージャーで開く",
@@ -1081,6 +1082,7 @@
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
     "fileActionsGroup": "ファイル操作",
+    "directoryActions": "ディレクトリ操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",
@@ -1282,8 +1284,9 @@
     "queued": "次のリクエストと一緒に送信されます",
     "responseCancelled": "応答をキャンセルしました。",
     "contextCompactedNotice": "このチャットの古い部分は、モデルのコンテキストに収めるために要約されました。",
-    "contextUsage": "コンテキスト {{used}} / {{window}}",
     "contextUsageTooltip": "コンテキストがいっぱいになると、チャットの古い部分は自動的に要約されます。",
+    "messageLabel": "メッセージ",
+    "headerProviderTooltip": "プロバイダー: {{provider}}",
     "webResearchUnavailable": "このプロバイダーのアカウントではWebリサーチを利用できません（Web検索が無効になっています）。このセッションはWebリサーチなしで回答します。恒久的にオフにするには、設定 → AIプロバイダー → 「Webリサーチ」を開いてください。",
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",

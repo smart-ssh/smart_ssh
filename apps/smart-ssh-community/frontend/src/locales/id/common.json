@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Sesi baru",
-    "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Perlu konfirmasi",
       "readOnlyHint": "Sesi ini milik alat eksternal (MCP). Sesi hanya menampilkan tindakan alat yang perlu dikonfirmasi atau ditolak beserta hasilnya; tidak ada input obrolan atau terminal di sini. Menutupnya mengakhiri sesi MCP dan menolak konfirmasi yang tertunda."
     },
-    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak."
+    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak.",
+    "pendingBadge": "Tertunda",
+    "newConnection": "Koneksi baru"
   },
   "aiProvider": {
     "openLogs": "Buka log diagnostik di pengelola berkas",
@@ -1081,6 +1082,7 @@
     "parentDirectory": "Direktori induk",
     "newFolderButton": "+ Folder baru",
     "fileActionsGroup": "Aksi berkas",
+    "directoryActions": "Tindakan direktori",
     "upload": "Unggah",
     "uploadDialogTitle": "Unggah berkas",
     "uploadFolder": "Unggah folder",
@@ -1282,8 +1284,9 @@
     "queued": "Akan dikirim bersama permintaan berikutnya",
     "responseCancelled": "Respons dibatalkan.",
     "contextCompactedNotice": "Bagian lama obrolan ini diringkas agar muat dalam konteks model.",
-    "contextUsage": "Konteks {{used}} / {{window}}",
     "contextUsageTooltip": "Bagian lama obrolan diringkas secara otomatis saat konteks penuh.",
+    "messageLabel": "Pesan",
+    "headerProviderTooltip": "Penyedia: {{provider}}",
     "webResearchUnavailable": "Riset web tidak tersedia untuk akun penyedia ini (pencarian web dinonaktifkan di sana). Sesi ini menjawab tanpa riset web. Untuk mematikannya secara permanen: Pengaturan → Penyedia AI → “Riset web”.",
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",

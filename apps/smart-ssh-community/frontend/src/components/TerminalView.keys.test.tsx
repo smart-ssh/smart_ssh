@@ -105,7 +105,11 @@ describe("TerminalView key row", () => {
     fireEvent.click(screen.getByRole("button", { name: "Alt" }));
     act(() => onDataCb("b"));
     expect(sent()).toEqual(["\x1bb"]);
-    expect(screen.getByRole("button", { name: "Alt" }).className).toContain("min-h-11");
+    expect(screen.getByTestId("terminal-key-alt")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar").querySelectorAll("button")).toHaveLength(16);
+    expect(
+      Array.from(screen.getByRole("toolbar").querySelectorAll("button")).slice(0, 8).map((b) => b.getAttribute("data-testid")),
+    ).toEqual(["esc", "tab", "ctrl", "alt", "up", "down", "left", "right"].map((k) => `terminal-key-${k}`));
     restore();
   });
 });

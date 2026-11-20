@@ -51,11 +51,13 @@ export function FileTable({
       type="button"
       onClick={() => onSort(column)}
       data-testid={`column-sort-${column}`}
-      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-fg-soft focus-ring-flush"
+      className="inline-flex max-w-full items-center gap-1 rounded font-normal uppercase hover:text-fg-soft focus-ring-flush"
     >
       <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
-      {fileSort.column === column && (
+      {fileSort.column === column ? (
         <Icon name={fileSort.direction === "asc" ? "chev-u" : "chev-d"} />
+      ) : (
+        <Icon name="chev-r" className="text-fg-faint" />
       )}
     </Button>
   );
@@ -99,9 +101,9 @@ export function FileTable({
         ))}
         <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
       </colgroup>
-      <thead className="text-fg-subtle">
+      <thead className="text-label text-fg-subtle">
         <tr
-          className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal"
+          className="[&>th]:h-8 [&>th]:border-r [&>th]:border-border [&>th]:px-3 [&>th]:font-normal [&>th:last-child]:border-r-0"
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -135,7 +137,7 @@ export function FileTable({
           <tr
             key={entry.path}
             data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
-            className="group hover:bg-border/60 focus-within:bg-border/80 data-[active=true]:bg-border/80 [&>td]:border-t [&>td]:border-surface-raised/70"
+            className="group h-8 hover:bg-surface-hover focus-within:bg-surface-hover data-[active=true]:bg-surface-hover [&>td]:border-b [&>td]:border-border"
             // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
             // das Drei-Punkte-Symbol, nur an der Klickposition statt
             // in der Aktionsspalte verankert (s. `openMenu`-Doc-
@@ -148,20 +150,22 @@ export function FileTable({
               setOpenMenu({ entry, anchor: { x: e.clientX, y: e.clientY } });
             }}
           >
-            <td className="max-w-0 px-2 py-1">
+            <td className="max-w-0 px-3 py-0">
               {entry.isDir ? (
                 <Button variant="bare"
                   type="button"
                   onClick={() => load(entry.path)}
-                  className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-ring-flush"
+                  className="flex max-w-full items-center rounded text-left text-fg-soft hover:underline focus-ring-flush"
                   title={entryTitle(entry)}
                 >
-                  <EntryIcon entry={entry} /> {entry.name}
+                  <EntryIcon entry={entry} />
+                  <span className="min-w-0 truncate" title={entry.name}>{entry.name}</span>
                   <LinkMarker entry={entry} />
                 </Button>
               ) : (
-                <span className={`block truncate text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
-                  <EntryIcon entry={entry} /> {entry.name}
+                <span className={`flex items-center text-fg-soft${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
+                  <EntryIcon entry={entry} />
+                  <span className="min-w-0 truncate" title={entry.name}>{entry.name}</span>
                   <LinkMarker entry={entry} />
                 </span>
               )}
@@ -169,7 +173,7 @@ export function FileTable({
             {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
               <td
                 key={c}
-                className={`px-2 py-1 whitespace-nowrap text-fg-subtle${c === "permissions" ? " font-mono" : ""}${c === "owner" ? " truncate" : ""}`}
+                className={`px-3 py-0 whitespace-nowrap font-mono text-xs text-fg-subtle${c === "size" ? " text-right" : ""}${c === "owner" ? " truncate" : ""}`}
                 title={c === "owner" ? formatOwner(entry) : undefined}
               >
                 {c === "size" && (entry.isDir ? "—" : formatBytes(entry.size))}
@@ -179,8 +183,8 @@ export function FileTable({
                   (entry.modified ? formatDateTime(entry.modified, language) : "—")}
               </td>
             ))}
-            <td className="relative px-2 py-1 text-right">
-              <Button variant="bare"
+            <td className="relative px-1 py-0 text-center">
+              <Button variant="ghost"
                 type="button"
                 onClick={(e) => {
                   // Bug-Fix (Spec 0054, Teil 0): das "Klick-außerhalb
@@ -215,7 +219,9 @@ export function FileTable({
                 aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
                 aria-haspopup="true"
                 aria-expanded={openMenu?.anchor === "row" && openMenu.entry.path === entry.path}
-                className="rounded px-1.5 text-fg-subtle hover:text-fg focus-ring-flush"
+                iconOnly
+                size="sm"
+                className="text-fg-subtle hover:text-fg"
               >
                 <Icon name="more" />
               </Button>

@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Ny økt",
-    "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Krever bekreftelse",
       "readOnlyHint": "Denne økten tilhører et eksternt verktøy (MCP). Den viser bare verktøyets handlinger som skal bekreftes eller avvises, og resultatene av dem; her finnes verken chattefelt eller terminal. Lukkes den, avsluttes MCP-økten og ventende bekreftelser avvises."
     },
-    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist."
+    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist.",
+    "pendingBadge": "Venter",
+    "newConnection": "Ny tilkobling"
   },
   "aiProvider": {
     "openLogs": "Åpne diagnoselogger i filbehandleren",
@@ -1086,6 +1087,7 @@
     "parentDirectory": "Overordnet katalog",
     "newFolderButton": "+ Mappe",
     "fileActionsGroup": "Filhandlinger",
+    "directoryActions": "Mappehandlinger",
     "upload": "Last opp",
     "uploadDialogTitle": "Last opp fil(er)",
     "uploadFolder": "Last opp mappe",
@@ -1289,8 +1291,9 @@
     "queued": "Sendes med neste forespørsel",
     "responseCancelled": "Svaret ble avbrutt.",
     "contextCompactedNotice": "Eldre deler av denne chatten ble oppsummert for å passe inn i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
+    "messageLabel": "Melding",
+    "headerProviderTooltip": "Leverandør: {{provider}}",
     "webResearchUnavailable": "Nettsøk er ikke tilgjengelig for denne leverandørkontoen (nettsøk er slått av der). Denne økten svarer uten nettsøk. For å slå det av permanent: Innstillinger → AI-leverandør → “Nettsøk”.",
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
     "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",

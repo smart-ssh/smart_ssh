@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nowa sesja",
-    "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Wymaga potwierdzenia",
       "readOnlyHint": "Ta sesja należy do narzędzia zewnętrznego (MCP). Pokazuje tylko jego działania do potwierdzenia lub odrzucenia oraz ich wyniki; nie ma tu pola czatu ani terminala. Zamknięcie kończy sesję MCP i odrzuca oczekujące potwierdzenia."
     },
-    "confirmClosePending": "Dla „{{name}}” nadal oczekuje potwierdzenie. Zamknąć kartę mimo to? Oczekujące działanie zostanie wtedy uznane za odrzucone."
+    "confirmClosePending": "Dla „{{name}}” nadal oczekuje potwierdzenie. Zamknąć kartę mimo to? Oczekujące działanie zostanie wtedy uznane za odrzucone.",
+    "pendingBadge": "Oczekuje",
+    "newConnection": "Nowe połączenie"
   },
   "aiProvider": {
     "openLogs": "Otwórz dzienniki diagnostyczne w menedżerze plików",
@@ -1096,6 +1097,7 @@
     "parentDirectory": "Katalog nadrzędny",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Operacje na plikach",
+    "directoryActions": "Akcje katalogu",
     "upload": "Wyślij",
     "uploadDialogTitle": "Wyślij pliki",
     "uploadFolder": "Wyślij folder",
@@ -1303,8 +1305,9 @@
     "queued": "Zostanie wysłane z następnym żądaniem",
     "responseCancelled": "Odpowiedź anulowana.",
     "contextCompactedNotice": "Starsze części tego czatu zostały streszczone, aby zmieściły się w kontekście modelu.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Starsze części czatu są automatycznie streszczane, gdy kontekst się zapełnia.",
+    "messageLabel": "Wiadomość",
+    "headerProviderTooltip": "Dostawca: {{provider}}",
     "webResearchUnavailable": "Wyszukiwanie w sieci jest niedostępne dla konta u tego dostawcy (wyszukiwanie wyłączone). Ta sesja odpowiada bez wyszukiwania w sieci. Aby wyłączyć na stałe: Ustawienia → Dostawca AI → „Wyszukiwanie w sieci”.",
     "emptyResponse": "Model nie zwrócił odpowiedzi. Przy modelach z fazą myślenia pomaga wyższy limit wyjścia w ustawieniach dostawcy.",
     "refusedResponse": "Model odrzucił to żądanie. Sformułuj je inaczej lub zacznij nowy czat.",

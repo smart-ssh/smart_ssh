@@ -8,6 +8,7 @@ import {
   saveFileManagerSort,
   saveHiddenFileColumns,
 } from "../../settings/layoutSettings";
+import { COLUMN_ORDER } from "./shared";
 import { useFileColumns } from "./useFileColumns";
 
 vi.mock("../../settings/layoutSettings", () => ({
@@ -38,6 +39,16 @@ describe("useFileColumns", () => {
     a.unmount();
     act(() => b.result.current.handleSortClick("name"));
     expect(b.result.current.fileSort).toEqual({ column: "name", direction: "asc" });
+  });
+
+  it("uses the design's default widths without a saved layout and keeps saved widths", async () => {
+    const fresh = renderHook(() => useFileColumns());
+    expect(fresh.result.current.columnWidths).toEqual({ size: 110, permissions: 130, modified: 170, owner: 150 });
+    expect(COLUMN_ORDER).toEqual(["size", "permissions", "modified", "owner"]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({ size: 200 });
+    const saved = renderHook(() => useFileColumns());
+    await waitFor(() => expect(saved.result.current.columnWidths.size).toBe(200));
+    expect(saved.result.current.columnWidths.owner).toBe(150);
   });
 
   it("applies the stored sort on mount", async () => {

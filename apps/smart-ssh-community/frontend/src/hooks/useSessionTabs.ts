@@ -9,7 +9,7 @@
 // `event.sessionId` aus den jeweiligen Events, nie implizit über den
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   cancelConnect,
@@ -19,6 +19,7 @@ import {
   connect,
   disconnect,
   getServer,
+  listServers,
   listSessions,
   respondToAction,
   resumeChatSession,
@@ -84,6 +85,8 @@ export interface SessionTab {
   /** Issue #657: ordinal among the open user tabs of the same server
    * (1 = the first one); `undefined` for MCP tabs. */
   serverNumber?: number;
+  /** Local pseudo-server tab (marker colour); filled from the server list. */
+  isLocal?: boolean;
   /** Issue #548. */
   phase: TabPhase;
   /** Issue #548: id of the running connect attempt (`connecting` only). */
@@ -174,6 +177,17 @@ export function useSessionTabs() {
   // Zuletzt gerenderter Tab-Stand für Callbacks, die erst nach einem `await`
   // weiterlaufen (`requestCloseTab`) und sonst einen veralteten `tabs`-Wert
   // aus ihrer Closure lesen würden.
+  // Ids of the local pseudo-server(s), from the server list (marker colour only).
+  const [localServerIds, setLocalServerIds] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    listServers()
+      .then((servers) => setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id))))
+      .catch((err) => console.warn("list_servers failed:", commandErrorMessage(err)));
+  }, []);
+  const tabsWithLocal = useMemo(
+    () => (localServerIds.size === 0 ? tabs : tabs.map((x) => (localServerIds.has(x.serverId) ? { ...x, isLocal: true } : x))),
+    [tabs, localServerIds],
+  );
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
@@ -561,7 +575,7 @@ export function useSessionTabs() {
   };
 
   return {
-    tabs,
+    tabs: tabsWithLocal,
     activeSessionId,
     openTab,
     startConnect,

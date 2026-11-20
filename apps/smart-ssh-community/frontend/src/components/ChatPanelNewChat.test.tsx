@@ -4,7 +4,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendChatMessage, startNewChat } from "../api/api";
+import { getSessionAiProvider, listAiProviders, sendChatMessage, startNewChat } from "../api/api";
 import { onChatActionProposed, onChatContextUsage } from "../api/events";
 import type { ChatActionProposedEvent } from "../api/types";
 import { renderChatPanel } from "../test/renderChatPanel";
@@ -16,6 +16,8 @@ vi.mock("../api/api", async () => {
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+    // The session's pinned provider (not the currently active one).
+    getSessionAiProvider: vi.fn(() => Promise.resolve({ displayName: "Claude", model: "claude" })),
   });
 });
 
@@ -173,5 +175,30 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
     expect(
       screen.queryByRole("button", { name: "Neuer Chat" }),
     ).not.toBeInTheDocument();
+  });
+
+  // Issue #1372: header shows "AI · <model>" of the active provider and the
+  // meter sits in the header; no meter before the first answer.
+  it("shows the active provider's model in the header and the meter only after the first answer", async () => {
+    renderChatPanel();
+    const title = await screen.findByTestId("chat-header-title");
+    expect(title.textContent).toBe("AI · claude");
+    expect(title.getAttribute("title")).toContain("Claude");
+    expect(screen.queryByTestId("context-usage")).not.toBeInTheDocument();
+    const handler = vi.mocked(onChatContextUsage).mock.calls[0][0];
+    act(() => handler({ sessionId: "session-1", inputTokens: 12_400, windowTokens: 200_000 }));
+    const meter = await screen.findByTestId("context-usage");
+    expect(meter.textContent).toBe("12.4k / 200k");
+    expect(meter.closest("[data-testid='chat-header-title']")).toBeNull();
+    expect(screen.getByTestId("chat-header-title").parentElement).toContainElement(meter);
+  });
+
+  it("shows the session's pinned provider, not the currently active one", async () => {
+    const { anthropicProvider } = await import("../test/fixtures");
+    vi.mocked(listAiProviders).mockResolvedValue([anthropicProvider({ model: "active-model" })]);
+    vi.mocked(getSessionAiProvider).mockResolvedValue({ displayName: "Pinned", model: "pinned-model" });
+    renderChatPanel();
+    expect(await screen.findByText("AI · pinned-model")).toBeInTheDocument();
+    expect(screen.queryByText("AI · active-model")).not.toBeInTheDocument();
   });
 });

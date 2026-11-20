@@ -807,6 +807,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::stop_auto_continuation,
             commands::stop_auto_reconnect,
             commands::start_new_chat,
+            commands::get_session_ai_provider,
             commands::disconnect,
             commands::reconnect_session,
             commands::list_chat_sessions,

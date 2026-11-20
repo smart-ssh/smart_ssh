@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "New session",
-    "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Needs confirmation",
       "readOnlyHint": "This session belongs to an external tool (MCP). It only shows the tool's actions to confirm or reject and their results; there is no chat input or terminal here. Closing it ends the MCP session and rejects pending confirmations."
     },
-    "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected."
+    "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected.",
+    "pendingBadge": "Pending",
+    "newConnection": "New connection"
   },
   "aiProvider": {
     "openLogs": "Open diagnostic logs in file manager",
@@ -1086,6 +1087,7 @@
     "parentDirectory": "Parent directory",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "File actions",
+    "directoryActions": "Directory actions",
     "upload": "Upload",
     "uploadDialogTitle": "Upload file(s)",
     "uploadFolder": "Upload folder",
@@ -1289,8 +1291,9 @@
     "queued": "Will be sent with the next request",
     "responseCancelled": "Response cancelled.",
     "contextCompactedNotice": "Older parts of this chat were summarized to fit the model's context.",
-    "contextUsage": "Context {{used}} / {{window}}",
     "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
+    "messageLabel": "Message",
+    "headerProviderTooltip": "Provider: {{provider}}",
     "webResearchUnavailable": "Web research is not available for this provider account (web search is disabled there). This session answers without web research. To turn it off permanently: Settings → AI Provider → “Web research”.",
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
     "refusedResponse": "The model declined this request. Rephrase it or start a new chat.",
