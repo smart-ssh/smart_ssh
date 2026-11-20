@@ -254,6 +254,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
     // --- Settings screens ------------------------------------------------
     list_ai_providers: () => model.aiProviders,
+    get_session_ai_provider: () => {
+      const active = model.aiProviders.find((p) => p.isActive);
+      if (!active) throw commandError("no active provider");
+      return { displayName: active.displayName, model: active.model };
+    },
     discover_models: () => [],
     get_data_paths: () => [
       { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },

@@ -58,7 +58,7 @@ test("note diff preview: the diff scrolls, title and decision buttons stay usabl
   await page.getByRole("button", { name: "Show", exact: true }).click();
 
   const title = page.getByText('Note suggestion for server "db-primary"');
-  const card = page.locator("div.rounded-lg", { has: title });
+  const card = page.locator("div.bg-surface-raised", { has: title });
   const reject = card.getByRole("button", { name: "Reject", exact: true });
   const apply = card.getByRole("button", { name: "Apply", exact: true });
   const diffLine = card.getByText("line 119: changed");
