@@ -30,7 +30,12 @@
     "emptyStateTitle": "Noch kein Server angelegt",
     "emptyStateHint": "Lege deinen ersten Server an, um dich per SSH zu verbinden.",
     "emptyStateCreateFirstServer": "Ersten Server anlegen",
-    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server."
+    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server.",
+    "localBadge": "Lokal",
+    "thisDevice": "dieses Gerät",
+    "sessionOpen": "Sitzung offen",
+    "sessionPending": "Wartet auf Bestätigung",
+    "sessionDisconnected": "Sitzung getrennt"
   },
   "settings": {
     "title": "Einstellungen",

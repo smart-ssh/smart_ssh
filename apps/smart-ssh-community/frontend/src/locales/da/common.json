@@ -30,7 +30,12 @@
     "emptyStateTitle": "Ingen server tilføjet endnu",
     "emptyStateHint": "Tilføj din første server for at oprette forbindelse via SSH.",
     "emptyStateCreateFirstServer": "Tilføj første server",
-    "emptyStateTryLocalhost": "Prøv uden en server: \"Localhost\" ovenfor åbner en session på denne maskine – med de samme bekræftelser som på en rigtig server."
+    "emptyStateTryLocalhost": "Prøv uden en server: \"Localhost\" ovenfor åbner en session på denne maskine – med de samme bekræftelser som på en rigtig server.",
+    "localBadge": "Lokal",
+    "thisDevice": "denne enhed",
+    "sessionOpen": "Session åben",
+    "sessionPending": "Venter på bekræftelse",
+    "sessionDisconnected": "Session afbrudt"
   },
   "settings": {
     "title": "Indstillinger",

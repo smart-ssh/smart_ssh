@@ -30,7 +30,12 @@
     "emptyStateTitle": "Ingen server har lagts till ännu",
     "emptyStateHint": "Lägg till din första server för att ansluta via SSH.",
     "emptyStateCreateFirstServer": "Lägg till första servern",
-    "emptyStateTryLocalhost": "Prova utan server: \"Localhost\" ovan öppnar en session på den här datorn — med samma bekräftelser som på en riktig server."
+    "emptyStateTryLocalhost": "Prova utan server: \"Localhost\" ovan öppnar en session på den här datorn — med samma bekräftelser som på en riktig server.",
+    "localBadge": "Lokal",
+    "thisDevice": "den här enheten",
+    "sessionOpen": "Session öppen",
+    "sessionPending": "Väntar på bekräftelse",
+    "sessionDisconnected": "Session frånkopplad"
   },
   "settings": {
     "title": "Inställningar",

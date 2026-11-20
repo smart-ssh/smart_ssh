@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nenhum servidor adicionado ainda",
     "emptyStateHint": "Adicione o seu primeiro servidor para conectar via SSH.",
     "emptyStateCreateFirstServer": "Adicionar primeiro servidor",
-    "emptyStateTryLocalhost": "Experimente sem um servidor: \"Localhost\", acima, abre uma sessão nesta máquina — com as mesmas confirmações de um servidor real."
+    "emptyStateTryLocalhost": "Experimente sem um servidor: \"Localhost\", acima, abre uma sessão nesta máquina — com as mesmas confirmações de um servidor real.",
+    "localBadge": "Local",
+    "thisDevice": "este dispositivo",
+    "sessionOpen": "Sessão aberta",
+    "sessionPending": "Aguardando confirmação",
+    "sessionDisconnected": "Sessão desconectada"
   },
   "settings": {
     "title": "Configurações",

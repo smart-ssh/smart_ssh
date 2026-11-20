@@ -30,7 +30,12 @@
     "emptyStateTitle": "Серверы ещё не добавлены",
     "emptyStateHint": "Добавьте первый сервер для подключения по SSH.",
     "emptyStateCreateFirstServer": "Добавить первый сервер",
-    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере."
+    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере.",
+    "localBadge": "Локальный",
+    "thisDevice": "это устройство",
+    "sessionOpen": "Сеанс открыт",
+    "sessionPending": "Ожидает подтверждения",
+    "sessionDisconnected": "Сеанс отключён"
   },
   "settings": {
     "title": "Настройки",
