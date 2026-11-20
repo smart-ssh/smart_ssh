@@ -441,8 +441,7 @@ export function SessionView({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!narrow && (
-            <fieldset className="m-0 flex min-w-0 border border-border-strong p-0">
-              <legend className="sr-only">{t("session.paneSwitch")}</legend>
+            <fieldset aria-label={t("session.paneSwitch")} className="m-0 flex min-w-0 border border-border-strong p-0">
               <span aria-current="true" className={segmentClass(true)}>
                 <Icon name="spark" />
                 {t("session.aiTab")}
