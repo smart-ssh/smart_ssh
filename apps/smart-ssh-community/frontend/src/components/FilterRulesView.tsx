@@ -11,6 +11,7 @@ import {
 } from "../api/api";
 import type { PatternDto, RuleDto, ServerDto } from "../api/types";
 import { useIsNarrow } from "../hooks/useIsNarrow";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { HardBlacklistSection } from "./filterRules/HardBlacklistSection";
 import { RuleForm } from "./filterRules/RuleForm";
 import { RuleTable, type RuleGroup } from "./filterRules/RuleTable";
@@ -31,6 +32,8 @@ export function FilterRulesView({
 } = {}) {
   const { t } = useTranslation();
   const narrow = useIsNarrow();
+  // Same query as the `min-[1100px]` layout switch: below it the tester is stacked under the list.
+  const sideBySide = useMediaQuery("(min-width: 1100px)");
   const testerRef = useRef<HTMLElement>(null);
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
@@ -140,8 +143,8 @@ export function FilterRulesView({
             {t("filterRules.ruleCount", { count: rules.length })}
           </span>
           <div className="ml-auto flex items-center gap-2">
-            {narrow && (
-              <Button className="min-h-11" onClick={() => testerRef.current?.focus()}>
+            {(narrow || !sideBySide) && (
+              <Button className="narrow:min-h-11" onClick={() => testerRef.current?.focus()}>
                 {t("filterRules.testRules")}
               </Button>
             )}

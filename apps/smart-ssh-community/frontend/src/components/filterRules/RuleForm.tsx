@@ -4,7 +4,7 @@ import { commandErrorCode, commandErrorMessage, createRule, updateRule } from ".
 import { translateErrorCode } from "../../api/errorCodes";
 import type { PatternType, RuleAction, RuleDto, RuleInput, Scope, ServerDto } from "../../api/types";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "../ui";
+import { Button, FIELD_CONTROL_CLASS, Field } from "../ui";
 import { DialogFrame } from "../ui/DialogFrame";
 import { type ScopeKind, scopeKind, scopeServerId, scopeTag } from "./scope";
 
@@ -104,62 +104,70 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
     >
       <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.patternType")}
-          <select
-            ref={patternTypeRef}
-            value={patternType}
-            onChange={(e) => setPatternType(e.target.value as PatternType)}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="glob">Glob</option>
-            <option value="regex">Regex</option>
-            <option value="exact">Exact</option>
-          </select>
-        </label>
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.pattern")}
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            type="text"
-            required
-            value={patternValue}
-            onChange={(e) => setPatternValue(e.target.value)}
-            placeholder={patternPlaceholder}
-            className={`mt-1 w-full font-mono ${FIELD_CONTROL_CLASS}`}
-          />
-        </label>
+        <Field label={t("filterRules.patternType")}>
+          {(c) => (
+            <select
+              {...c}
+              ref={patternTypeRef}
+              value={patternType}
+              onChange={(e) => setPatternType(e.target.value as PatternType)}
+              className={`w-full ${FIELD_CONTROL_CLASS}`}
+            >
+              <option value="glob">Glob</option>
+              <option value="regex">Regex</option>
+              <option value="exact">Exact</option>
+            </select>
+          )}
+        </Field>
+        <Field label={t("filterRules.pattern")}>
+          {(c) => (
+            <input
+              {...c}
+              {...TECHNICAL_INPUT_PROPS}
+              type="text"
+              required
+              value={patternValue}
+              onChange={(e) => setPatternValue(e.target.value)}
+              placeholder={patternPlaceholder}
+              className={`w-full font-mono ${FIELD_CONTROL_CLASS}`}
+            />
+          )}
+        </Field>
       </div>
 
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.action")}
-          <select
-            value={action}
-            onChange={(e) => setAction(e.target.value as RuleAction)}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          >
-            <option value="Allow">Allow</option>
-            <option value="Confirm">Confirm</option>
-            <option value="Deny">Deny</option>
-          </select>
-        </label>
-        <label className="block text-sm text-fg-muted">
-          {t("filterRules.priorityLabel")}
-          <input
-            type="number"
-            value={priority}
-            onChange={(e) => setPriority(Number(e.target.value))}
-            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
-          />
-        </label>
+        <Field label={t("filterRules.action")}>
+          {(c) => (
+            <select
+              {...c}
+              value={action}
+              onChange={(e) => setAction(e.target.value as RuleAction)}
+              className={`w-full ${FIELD_CONTROL_CLASS}`}
+            >
+              <option value="Allow">Allow</option>
+              <option value="Confirm">Confirm</option>
+              <option value="Deny">Deny</option>
+            </select>
+          )}
+        </Field>
+        <Field label={t("filterRules.priorityLabel")}>
+          {(c) => (
+            <input
+              {...c}
+              type="number"
+              value={priority}
+              onChange={(e) => setPriority(Number(e.target.value))}
+              className={`w-full ${FIELD_CONTROL_CLASS}`}
+            />
+          )}
+        </Field>
       </div>
 
       <div className="space-y-2">
-        <span id="filter-rule-scope-label" className="block text-sm text-fg-muted">
+        <span id="filter-rule-scope-label" className="block text-label">
           {t("filterRules.scope")}
         </span>
-        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted">
+        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg">
           <label className="flex items-center gap-1">
             <input
               type="radio"
@@ -216,7 +224,7 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
 
       {error && (
         <div className="space-y-1">
-          <p className="text-sm text-danger-fg">{error}</p>
+          <p role="alert" className="text-sm text-danger-fg">{error}</p>
           {/* Spec 0077, 3.1.4: der Fehlertext der Bibliothek als Detail — er
               nennt die Stelle im Muster. */}
           {patternErrorDetail && (

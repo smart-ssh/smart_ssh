@@ -82,8 +82,8 @@ sich nur, dass Nutzerregeln greifen.
   Dialog, der dabei offen bleibt. Escape und „Abbrechen" schließen ohne zu
   speichern; der Fokus kehrt zur auslösenden Schaltfläche zurück.
 - **Testen-Panel:** Bei breitem Fenster (ab 1100 px) als Seitenleiste
-  rechts neben der Liste, sonst unter der Liste; bei schmalem Layout setzt
-  die Schaltfläche „Regeln testen“ in der Kopfzeile den Fokus auf das Panel.
+  rechts neben der Liste, sonst unter der Liste; solange das Panel unter der Liste steht (unter
+  1100 px, auch im schmalen Layout), setzt die Schaltfläche „Regeln testen“ in der Kopfzeile den Fokus auf das Panel.
   Einzeiliges Eingabefeld für ein Beispielkommando (Enter testet; eingefügte
   mehrzeilige Kommandos bleiben erhalten), optional ein simulierter Server und
   simulierte Tags (Tags eines gewählten Servers werden übernommen; der Hinweis

@@ -4,6 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { EvaluationTraceDto, RuleDto } from "../api/types";
+import { installMatchMediaMock, setViewportWidth } from "../test/matchMedia";
 import { FilterRulesView } from "./FilterRulesView";
 
 const narrowMock = vi.hoisted(() => ({ value: false }));
@@ -52,6 +53,8 @@ const seg = (index: number, matchedRule: string | null): EvaluationTraceDto => (
 
 beforeEach(() => {
   narrowMock.value = false;
+  installMatchMediaMock();
+  setViewportWidth(1280);
   evaluateExplainedMock.mockReset();
 });
 
@@ -116,5 +119,13 @@ describe("FilterRulesView layout (issue #1375)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Test Rules|Regeln testen/i }));
     const panel = screen.getByRole("region", { name: /Test Rules|Regeln testen/i });
     expect(panel).toHaveFocus();
+  });
+
+  it("between 640 and 1099 px (stacked tester): the Test rules button moves focus to the tester", async () => {
+    setViewportWidth(800);
+    renderView();
+    await screen.findByText("ls *");
+    fireEvent.click(screen.getByRole("button", { name: /Test Rules|Regeln testen/i }));
+    expect(screen.getByRole("region", { name: /Test Rules|Regeln testen/i })).toHaveFocus();
   });
 });
