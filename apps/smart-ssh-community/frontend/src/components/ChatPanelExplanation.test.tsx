@@ -267,6 +267,20 @@ describe("confirmation card explanation (issue #596)", () => {
     expect(screen.getByRole("button", { name: "Save rules (1)" })).toBeEnabled();
   });
 
+  it("a coded save error is shown translated, without the library text", async () => {
+    vi.mocked(createQuickRulesBatch).mockRejectedValue({
+      code: "FILTER_RULE_PATTERN_INVALID",
+      message: "regex parse error at 3",
+    });
+    await renderCard(EXPLANATION);
+    fireEvent.click(await screen.findByRole("button", { name: "Rule suggestions for wc -l" }));
+    fireEvent.click(await screen.findByText(/All `wc` calls/));
+    fireEvent.click(await screen.findByRole("button", { name: "Save rules (1)" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Invalid pattern in a filter rule/);
+    expect(alert).not.toHaveTextContent(/regex parse error/);
+  });
+
   it("Deny with staged rules saves nothing", async () => {
     await renderCard(EXPLANATION);
     fireEvent.click(await screen.findByRole("button", { name: "Rule suggestions for wc -l" }));

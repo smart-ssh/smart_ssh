@@ -71,8 +71,7 @@ Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formula
 „Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
 rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
 und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
-das Menü. Beim Ändern der Fenstergröße wird neu platziert. Dasselbe gilt für
-das Dropdown der Schnellregel im Chat. Im schmalen Layout bleiben die Menüs
+das Menü. Beim Ändern der Fenstergröße wird neu platziert. Im schmalen Layout bleiben die Menüs
 unten angedockt.
 
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)

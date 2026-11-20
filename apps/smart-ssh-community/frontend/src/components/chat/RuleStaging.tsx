@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  commandErrorCode,
   commandErrorMessage,
   createQuickRulesBatch,
   explainConfirmation,
   explainSegmentRules,
 } from "../../api/api";
+import { translateErrorCode } from "../../api/errorCodes";
 import type {
   ConfirmationExplanationDto,
   Scope,
@@ -31,6 +33,7 @@ const rowKey = (s: SegmentCoverageDto) => `${s.index}:${s.text}`;
  * holds the rules staged per sub-command. Nothing here approves or runs the
  * command; the staged rules are only saved through `save()`. */
 export function useRuleStaging(sessionId: string, command: string, enabled = true) {
+  const { t } = useTranslation();
   const [explanation, setExplanation] = useState<ConfirmationExplanationDto | null>(null);
   const [failed, setFailed] = useState(false);
   const [staged, setStaged] = useState<Record<string, StagedEntry>>({});
@@ -91,7 +94,10 @@ export function useRuleStaging(sessionId: string, command: string, enabled = tru
         ),
       )
       // All or nothing in the backend: the staging stays as it was.
-      .catch((err) => setSaveError(commandErrorMessage(err)))
+      .catch((err) =>
+        // Spec 0077, 3.1.4: a coded error is shown translated, without the library text.
+        setSaveError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))),
+      )
       .finally(() => setSaving(false));
   };
 
