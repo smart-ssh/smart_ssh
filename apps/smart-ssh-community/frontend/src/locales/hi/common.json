@@ -1375,6 +1375,8 @@
     "aiTab": "एआई",
     "paneTabs": "सत्र पैनल",
     "moreActions": "अधिक क्रियाएँ",
+    "thisDevice": "यह डिवाइस",
+    "paneSwitch": "पैनल स्विच",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
     "extraKeys": {
       "group": "अतिरिक्त कुंजियाँ",

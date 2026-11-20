@@ -1367,6 +1367,8 @@
     "aiTab": "AI",
     "paneTabs": "Các ngăn của phiên",
     "moreActions": "Thêm hành động",
+    "thisDevice": "thiết bị này",
+    "paneSwitch": "Chuyển đổi khung",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "extraKeys": {
       "group": "Phím bổ sung",

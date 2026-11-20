@@ -1383,6 +1383,8 @@
     "aiTab": "IA",
     "paneTabs": "Painéis da sessão",
     "moreActions": "Mais ações",
+    "thisDevice": "este dispositivo",
+    "paneSwitch": "Alternador de painéis",
     "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
     "extraKeys": {
       "group": "Teclas extras",

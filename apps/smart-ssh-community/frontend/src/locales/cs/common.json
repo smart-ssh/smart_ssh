@@ -1391,6 +1391,8 @@
     "aiTab": "AI",
     "paneTabs": "Části relace",
     "moreActions": "Další akce",
+    "thisDevice": "toto zařízení",
+    "paneSwitch": "Přepínač panelů",
     "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
     "extraKeys": {
       "group": "Další klávesy",

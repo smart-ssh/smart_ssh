@@ -1371,6 +1371,8 @@
     "aiTab": "YZ",
     "paneTabs": "Oturum bölmeleri",
     "moreActions": "Diğer işlemler",
+    "thisDevice": "bu cihaz",
+    "paneSwitch": "Panel anahtarı",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
     "extraKeys": {
       "group": "Ek tuşlar",

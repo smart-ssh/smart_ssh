@@ -74,8 +74,18 @@ test.describe("file browser", () => {
   test("Tab follows the visual order and every stop shows a focus indicator", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
-    // Focus is on the "Files" tab after opening it; every further stop is
-    // reached with the keyboard, so :focus-visible applies.
+    // Focus is on the "Files" segment of the session header after opening it;
+    // every further stop is reached with the keyboard, so :focus-visible
+    // applies. The header and the AI chat come first in the DOM (issue
+    // #1366): skip to the first stop inside the file pane, then check it.
+    const sep = (await page.getByRole("separator").boundingBox())!;
+    for (let skipped = 0; ; skipped++) {
+      expect(skipped, "never reached the file pane").toBeLessThan(40);
+      await page.keyboard.press("Tab");
+      const box = (await page.locator(":focus").boundingBox())!;
+      if (box.x > sep.x && box.y > 50) break;
+    }
+    await page.keyboard.press("Shift+Tab");
     const seen: { x: number; y: number }[] = [];
     for (let i = 0; i < 9; i++) {
       await page.keyboard.press("Tab");

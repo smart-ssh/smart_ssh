@@ -1375,6 +1375,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessiedelen",
     "moreActions": "Meer acties",
+    "thisDevice": "dit apparaat",
+    "paneSwitch": "Paneelschakelaar",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
     "extraKeys": {
       "group": "Extra toetsen",

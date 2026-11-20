@@ -1375,6 +1375,8 @@
     "aiTab": "Tekoäly",
     "paneTabs": "Istunnon osat",
     "moreActions": "Lisää toimintoja",
+    "thisDevice": "tämä laite",
+    "paneSwitch": "Paneelin vaihto",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
     "extraKeys": {
       "group": "Lisänäppäimet",

@@ -1371,6 +1371,8 @@
     "aiTab": "MI",
     "paneTabs": "Munkamenet-panelek",
     "moreActions": "További műveletek",
+    "thisDevice": "ez az eszköz",
+    "paneSwitch": "Panelváltó",
     "terminalOpenFailed": "A terminál nem nyitható meg: {{error}}",
     "extraKeys": {
       "group": "Extra billentyűk",

@@ -1375,6 +1375,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdele",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enhed",
+    "paneSwitch": "Panelskift",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
     "extraKeys": {
       "group": "Ekstra taster",

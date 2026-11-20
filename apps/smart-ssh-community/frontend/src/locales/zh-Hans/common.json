@@ -1367,6 +1367,8 @@
     "aiTab": "AI",
     "paneTabs": "会话面板",
     "moreActions": "更多操作",
+    "thisDevice": "本设备",
+    "paneSwitch": "面板切换",
     "terminalOpenFailed": "无法打开终端：{{error}}",
     "extraKeys": {
       "group": "附加按键",

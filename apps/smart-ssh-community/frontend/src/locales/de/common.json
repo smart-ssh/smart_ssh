@@ -1375,6 +1375,8 @@
     "aiTab": "KI",
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
+    "thisDevice": "dieses Gerät",
+    "paneSwitch": "Bereichsumschalter",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "extraKeys": {
       "group": "Zusatztasten",

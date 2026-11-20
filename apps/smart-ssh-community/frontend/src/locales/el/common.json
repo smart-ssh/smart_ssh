@@ -1371,6 +1371,8 @@
     "aiTab": "ΤΝ",
     "paneTabs": "Τμήματα συνεδρίας",
     "moreActions": "Περισσότερες ενέργειες",
+    "thisDevice": "αυτή η συσκευή",
+    "paneSwitch": "Εναλλαγή πάνελ",
     "terminalOpenFailed": "Δεν ήταν δυνατό το άνοιγμα τερματικού: {{error}}",
     "extraKeys": {
       "group": "Επιπλέον πλήκτρα",

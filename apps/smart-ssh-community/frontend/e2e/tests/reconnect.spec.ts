@@ -12,6 +12,17 @@ async function pressInTerminal(
   await app.page.keyboard.press(key);
 }
 
+/** Issue #1366: Reconnect lives in the header's "More actions" menu. Opens the
+ * menu (unless open) and returns the entry. */
+async function reconnectEntry(page: import("@playwright/test").Page, name = "Reconnect") {
+  const menu = page.getByRole("menu", { name: "More actions" });
+  if (!(await menu.isVisible())) {
+    await page.getByRole("button", { name: "More actions" }).click();
+    await expect(menu).toBeVisible();
+  }
+  return menu.getByRole("menuitem", { name, exact: true });
+}
+
 test("a lost session is reconnected in the same tab with the button", async ({
   app,
 }) => {
@@ -23,21 +34,16 @@ test("a lost session is reconnected in the same tab with the button", async ({
     status: "disconnected",
     reason: "network down",
   });
-  const button = app.page.getByRole("button", {
-    name: "Reconnect",
-    exact: true,
-  });
-  await expect(button).toBeVisible();
+  await expect(await reconnectEntry(app.page)).toBeVisible();
   await expect(app.page.getByText("Disconnected: network down")).toBeVisible();
 
   const shellsBefore = (await app.calls("open_terminal")).length;
 
   // The reconnect runs until the backend answers: the button is disabled.
   await app.setCommand("reconnect_session", { hold: true });
-  await button.click();
-  await expect(
-    app.page.getByRole("button", { name: "Reconnecting…" }),
-  ).toBeDisabled();
+  await (await reconnectEntry(app.page)).click();
+  await expect(app.page.locator("header output").getByText("Reconnecting…")).toBeVisible();
+  await expect(await reconnectEntry(app.page, "Reconnecting…")).toBeDisabled();
   await app.release("reconnect_session", { result: null });
   await app.emit("connection-status-changed", {
     sessionId,
@@ -46,7 +52,7 @@ test("a lost session is reconnected in the same tab with the button", async ({
   });
 
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeHidden();
   await expect(chatInput(app.page)).toBeVisible();
   const calls = await app.calls("reconnect_session");
@@ -75,7 +81,7 @@ test("R in the dead terminal reconnects, other keys do not, R in a live terminal
     reason: null,
   });
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeVisible();
   await pressInTerminal(app, "x");
   expect(await app.calls("reconnect_session")).toHaveLength(0);
@@ -101,13 +107,12 @@ test("a failed reconnect shows the error and keeps the button", async ({
     error: { message: "boom", code: "SSH_HOST_KEY_NOT_TRUSTED" },
   });
 
-  await app.page
-    .getByRole("button", { name: "Reconnect", exact: true })
+  await (await reconnectEntry(app.page))
     .click();
 
   await expect(app.page.getByRole("alert")).toBeVisible();
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeEnabled();
 });
 
@@ -130,7 +135,7 @@ test("automatic attempts show the progress, Stop ends them and the button return
   });
   await expect(app.page.getByText("Reconnecting… (attempt 1)")).toBeVisible();
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeHidden();
 
   await app.emit("auto-reconnect-changed", {
@@ -150,7 +155,7 @@ test("automatic attempts show the progress, Stop ends them and the button return
     attempt: 0,
   });
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeVisible();
 });
 
@@ -180,7 +185,7 @@ test("when the time runs out the header says so and the button appears", async (
     app.page.getByText("Connection could not be restored."),
   ).toBeVisible();
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeVisible();
 });
 
@@ -219,7 +224,7 @@ test("a successful automatic reconnect needs no click", async ({ app }) => {
 
   await expect(app.page.getByText("Reconnecting… (attempt 1)")).toBeHidden();
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeHidden();
   expect(await app.calls("reconnect_session")).toHaveLength(0);
 });
@@ -257,7 +262,7 @@ test("a second loss after an automatic reconnect is shown again", async ({
     reason: "again",
   });
   await expect(
-    app.page.getByRole("button", { name: "Reconnect", exact: true }),
+    (await reconnectEntry(app.page)),
   ).toBeVisible();
   await expect(app.page.getByText("Disconnected: again")).toBeVisible();
 });
