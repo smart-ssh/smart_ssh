@@ -3,6 +3,9 @@ export interface LogoProps {
   variant?: "mark" | "lockup";
   /** Height of the glyph in px. */
   size?: number;
+  /** Wordmark of the `lockup`: `"compact"` (header: "SMART SSH", one colour) or
+   * `"full"` (unlock screens: "SMART" + accent "SSH", no space). */
+  wordmark?: "compact" | "full";
   /** Set when visible text next to the logo already names the app: the logo is then decorative. */
   decorative?: boolean;
   className?: string;
@@ -12,7 +15,7 @@ export interface LogoProps {
  * terminals. The stroke follows the text colour (`currentColor`, set it to
  * `text-fg-strong`), the squares use the accent token, so it follows both
  * themes. Without `decorative` it is an image named "Smart SSH". */
-export function Logo({ variant = "mark", size = 20, decorative = false, className = "" }: LogoProps) {
+export function Logo({ variant = "mark", size = 20, decorative = false, wordmark = "compact", className = "" }: LogoProps) {
   const a11y = decorative ? { "aria-hidden": true as const } : { role: "img", "aria-label": "Smart SSH" };
   const glyph = (
     <>
@@ -51,10 +54,16 @@ export function Logo({ variant = "mark", size = 20, decorative = false, classNam
       </svg>
       <span
         aria-hidden="true"
-        className="font-['Barlow_Condensed'] font-bold uppercase tracking-[0.12em]"
-        style={{ fontSize: size * 0.88, lineHeight: 1 }}
+        className={`font-['Barlow_Condensed'] font-bold uppercase ${wordmark === "full" ? "tracking-[0.12em]" : "tracking-[0.1em]"}`}
+        style={{ fontSize: size * (wordmark === "full" ? 0.88 : 0.75), lineHeight: 1 }}
       >
-        SMART<span className="text-accent">SSH</span>
+        {wordmark === "full" ? (
+          <>
+            SMART<span className="text-accent">SSH</span>
+          </>
+        ) : (
+          "SMART SSH"
+        )}
       </span>
     </span>
   );

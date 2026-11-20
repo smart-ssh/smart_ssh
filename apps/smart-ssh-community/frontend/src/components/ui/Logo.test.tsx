@@ -25,8 +25,15 @@ describe("Logo", () => {
   it("lockup: glyph and wordmark, named Smart SSH once", () => {
     const { container } = render(<Logo variant="lockup" />);
     expect(screen.getAllByRole("img", { name: "Smart SSH" })).toHaveLength(1);
-    expect(container.textContent).toBe("SMARTSSH");
+    expect(container.textContent).toBe("SMART SSH");
+    expect(container.querySelector(".text-accent")).toBeNull();
     expect(container.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("lockup: full wordmark is SMARTSSH with accent SSH", () => {
+    const { container } = render(<Logo variant="lockup" wordmark="full" />);
+    expect(container.textContent).toBe("SMARTSSH");
+    expect(container.querySelector("span.text-accent")!.textContent).toBe("SSH");
   });
 
   it("lockup: decorative has no role", () => {
