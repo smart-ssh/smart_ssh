@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "新しいセッション",
-    "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "確認が必要",
       "readOnlyHint": "このセッションは外部ツール（MCP）のものです。確認または拒否するツールの操作とその結果のみが表示され、チャット入力やターミナルはありません。閉じるとMCPセッションが終了し、保留中の確認は拒否されます。"
     },
-    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。"
+    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。",
+    "pendingBadge": "保留中",
+    "newConnection": "新しい接続"
   },
   "aiProvider": {
     "openLogs": "診断ログをファイルマネージャーで開く",

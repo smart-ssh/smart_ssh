@@ -164,7 +164,17 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
     all.forEach((el, i) => el.setAttribute("data-e2e-stop", String(i)));
     return all.map((el, i) => {
       const r = el.getBoundingClientRect();
-      return { index: i, top: r.top, left: r.left, bottom: r.bottom, name: `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` };
+      // A control inside a horizontal scroller (the tab strip) is reached by
+      // scrolling: for the visual order only its place inside the scroller counts.
+      let left = r.left;
+      for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+        const ox = getComputedStyle(p).overflowX;
+        if (ox === "auto" || ox === "scroll") {
+          const pr = p.getBoundingClientRect();
+          left = Math.min(Math.max(left, pr.left), pr.right);
+        }
+      }
+      return { index: i, top: r.top, left, bottom: r.bottom, name: `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` };
     });
   });
   expect(stops.length, "no focusable controls in scope").toBeGreaterThan(0);
@@ -215,7 +225,14 @@ export async function expectNoClippedText(scope: Locator): Promise<void> {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || !el.textContent?.trim()) continue;
       const describe = `<${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`;
-      if (r.right > box.right + 1 || r.left < box.left - 1) out.push(`${describe} sticks out sideways`);
+      // Content inside a horizontal scroller (e.g. the tab strip) may extend
+      // past the box: the user reaches it by scrolling.
+      let inScroller = false;
+      for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+        const ox = getComputedStyle(p).overflowX;
+        if ((ox === "auto" || ox === "scroll") && p.scrollWidth > p.clientWidth + 1) inScroller = true;
+      }
+      if (!inScroller && (r.right > box.right + 1 || r.left < box.left - 1)) out.push(`${describe} sticks out sideways`);
       const cs = getComputedStyle(el);
       if (
         cs.textOverflow === "ellipsis" ||

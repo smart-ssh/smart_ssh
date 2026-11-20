@@ -1,7 +1,7 @@
 // Parts of a session tab shared by the wide tab bar and the narrow burger
 // menu (issue #579), so label, state indicator and badges stay identical.
 import type { TFunction } from "i18next";
-import { Spinner, Icon } from "./ui";
+import { Spinner, Icon, Badge } from "./ui";
 import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
 import { StatusSquare, type StatusTone } from "./ui/StatusSquare";
 
@@ -30,7 +30,7 @@ export function TabStateIndicator({ tab }: { tab: SessionTab }) {
       <Icon name="x" />
     </span>
   ) : (
-    <StatusSquare tone={STATUS_TONE[tab.status]} />
+    <StatusSquare tone={tab.isLocal && tab.status === "connected" ? "local" : STATUS_TONE[tab.status]} />
   );
 }
 
@@ -63,7 +63,9 @@ export function SessionTabContent({
             {t("sessionTabs.mcp.pendingBadge")}
           </span>
         ) : (
-          <StatusSquare tone="warning" pulse title={t("sessionTabs.pendingAction")} />
+          <span title={t("sessionTabs.pendingAction")} className="shrink-0">
+            <Badge tone="warning">{t("sessionTabs.pendingBadge")}</Badge>
+          </span>
         ))}
     </>
   );

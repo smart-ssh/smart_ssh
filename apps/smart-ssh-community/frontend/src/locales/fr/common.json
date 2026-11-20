@@ -473,7 +473,6 @@
   },
   "sessionTabs": {
     "newSession": "Nouvelle session",
-    "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
     "menu": {
@@ -488,7 +487,9 @@
       "pendingBadge": "Confirmation requise",
       "readOnlyHint": "Cette session appartient à un outil externe (MCP). Elle n’affiche que les actions de l’outil à confirmer ou rejeter et leurs résultats ; il n’y a ni saisie de chat ni terminal ici. La fermer met fin à la session MCP et rejette les confirmations en attente."
     },
-    "confirmClosePending": "Une confirmation est encore en attente pour « {{name}} ». Fermer l’onglet malgré tout ? L’action en attente sera alors considérée comme rejetée."
+    "confirmClosePending": "Une confirmation est encore en attente pour « {{name}} ». Fermer l’onglet malgré tout ? L’action en attente sera alors considérée comme rejetée.",
+    "pendingBadge": "En attente",
+    "newConnection": "Nouvelle connexion"
   },
   "aiProvider": {
     "openLogs": "Ouvrir les journaux de diagnostic dans le gestionnaire de fichiers",
