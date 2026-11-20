@@ -30,7 +30,12 @@
     "emptyStateTitle": "Zatím nebyl přidán žádný server",
     "emptyStateHint": "Přidejte svůj první server a připojte se přes SSH.",
     "emptyStateCreateFirstServer": "Přidat první server",
-    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru."
+    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru.",
+    "localBadge": "Místní",
+    "thisDevice": "toto zařízení",
+    "sessionOpen": "Relace otevřena",
+    "sessionPending": "Čeká na potvrzení",
+    "sessionDisconnected": "Relace odpojena"
   },
   "settings": {
     "title": "Nastavení",
