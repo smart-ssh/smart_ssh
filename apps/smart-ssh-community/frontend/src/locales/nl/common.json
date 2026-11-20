@@ -486,7 +486,8 @@
       "close": "Navigatiemenu sluiten",
       "needsConfirmation": "Bevestiging nodig",
       "activities": "Activiteiten",
-      "activitiesRunning": "{{count}} bezig"
+      "activitiesRunning_one": "{{count}} bezig",
+      "activitiesRunning_other": "{{count}} bezig"
     },
     "mcp": {
       "badge": "MCP",

@@ -487,7 +487,9 @@
       "close": "Închide meniul de navigare",
       "needsConfirmation": "Necesită confirmare",
       "activities": "Activități",
-      "activitiesRunning": "{{count}} în curs"
+      "activitiesRunning_one": "{{count}} în curs",
+      "activitiesRunning_few": "{{count}} în curs",
+      "activitiesRunning_other": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",

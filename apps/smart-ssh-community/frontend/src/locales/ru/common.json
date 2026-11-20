@@ -488,7 +488,10 @@
       "close": "Закрыть меню навигации",
       "needsConfirmation": "Требуется подтверждение",
       "activities": "Активности",
-      "activitiesRunning": "выполняется: {{count}}"
+      "activitiesRunning_one": "выполняется: {{count}}",
+      "activitiesRunning_few": "выполняется: {{count}}",
+      "activitiesRunning_many": "выполняется: {{count}}",
+      "activitiesRunning_other": "выполняется: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

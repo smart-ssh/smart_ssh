@@ -488,7 +488,10 @@
       "close": "Закрити меню навігації",
       "needsConfirmation": "Потрібне підтвердження",
       "activities": "Активності",
-      "activitiesRunning": "виконується: {{count}}"
+      "activitiesRunning_one": "виконується: {{count}}",
+      "activitiesRunning_few": "виконується: {{count}}",
+      "activitiesRunning_many": "виконується: {{count}}",
+      "activitiesRunning_other": "виконується: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

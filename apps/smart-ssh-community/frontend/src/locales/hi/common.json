@@ -486,7 +486,8 @@
       "close": "नेविगेशन मेनू बंद करें",
       "needsConfirmation": "पुष्टि आवश्यक",
       "activities": "गतिविधियाँ",
-      "activitiesRunning": "{{count}} चल रही हैं"
+      "activitiesRunning_one": "{{count}} चल रही है",
+      "activitiesRunning_other": "{{count}} चल रही हैं"
     },
     "mcp": {
       "badge": "MCP",

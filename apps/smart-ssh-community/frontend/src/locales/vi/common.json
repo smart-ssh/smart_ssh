@@ -485,7 +485,7 @@
       "close": "Đóng menu điều hướng",
       "needsConfirmation": "Cần xác nhận",
       "activities": "Hoạt động",
-      "activitiesRunning": "{{count}} đang chạy"
+      "activitiesRunning_other": "{{count}} đang chạy"
     },
     "mcp": {
       "badge": "MCP",

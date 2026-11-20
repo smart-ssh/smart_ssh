@@ -486,7 +486,8 @@
       "close": "Κλείσιμο μενού πλοήγησης",
       "needsConfirmation": "Απαιτείται επιβεβαίωση",
       "activities": "Δραστηριότητες",
-      "activitiesRunning": "{{count}} σε εκτέλεση"
+      "activitiesRunning_one": "{{count}} σε εκτέλεση",
+      "activitiesRunning_other": "{{count}} σε εκτέλεση"
     },
     "mcp": {
       "badge": "MCP",

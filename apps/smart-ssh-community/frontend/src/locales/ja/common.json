@@ -485,7 +485,7 @@
       "close": "ナビゲーションメニューを閉じる",
       "needsConfirmation": "確認が必要",
       "activities": "アクティビティ",
-      "activitiesRunning": "{{count}}件実行中"
+      "activitiesRunning_other": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",

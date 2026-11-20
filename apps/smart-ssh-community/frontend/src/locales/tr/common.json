@@ -486,7 +486,8 @@
       "close": "Gezinme menüsünü kapat",
       "needsConfirmation": "Onay gerekiyor",
       "activities": "Etkinlikler",
-      "activitiesRunning": "{{count}} çalışıyor"
+      "activitiesRunning_one": "{{count}} çalışıyor",
+      "activitiesRunning_other": "{{count}} çalışıyor"
     },
     "mcp": {
       "badge": "MCP",

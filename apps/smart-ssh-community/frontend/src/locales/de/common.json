@@ -486,7 +486,8 @@
       "close": "Navigationsmenü schließen",
       "needsConfirmation": "Bestätigung nötig",
       "activities": "Aktivitäten",
-      "activitiesRunning": "{{count}} laufen"
+      "activitiesRunning_one": "{{count}} läuft",
+      "activitiesRunning_other": "{{count}} laufen"
     },
     "mcp": {
       "badge": "MCP",

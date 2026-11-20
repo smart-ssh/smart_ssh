@@ -486,7 +486,8 @@
       "close": "Stäng navigeringsmenyn",
       "needsConfirmation": "Kräver bekräftelse",
       "activities": "Aktiviteter",
-      "activitiesRunning": "{{count}} pågår"
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",

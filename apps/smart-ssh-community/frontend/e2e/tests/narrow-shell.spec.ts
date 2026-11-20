@@ -39,6 +39,18 @@ test.describe("narrow shell @phone", () => {
     await captureScreen(page, `narrow-shell-menu-${info.project.name}`);
   });
 
+  test("title bar is 56 px at 639 px and 44 px at 640 px", async ({ app }) => {
+    await app.launch(populated());
+    const page = app.page;
+    for (const [width, height] of [
+      [639, 56],
+      [640, 44],
+    ] as const) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect.poll(async () => (await page.locator("header").boundingBox())?.height).toBe(height);
+    }
+  });
+
   test("selecting closes the menu and returns focus; Escape and a tap outside close it", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;

@@ -485,7 +485,7 @@
       "close": "탐색 메뉴 닫기",
       "needsConfirmation": "확인 필요",
       "activities": "활동",
-      "activitiesRunning": "{{count}}개 실행 중"
+      "activitiesRunning_other": "{{count}}개 실행 중"
     },
     "mcp": {
       "badge": "MCP",

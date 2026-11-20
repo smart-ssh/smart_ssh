@@ -486,7 +486,8 @@
       "close": "Sulje navigointivalikko",
       "needsConfirmation": "Vaatii vahvistuksen",
       "activities": "Toiminnot",
-      "activitiesRunning": "{{count}} käynnissä"
+      "activitiesRunning_one": "{{count}} käynnissä",
+      "activitiesRunning_other": "{{count}} käynnissä"
     },
     "mcp": {
       "badge": "MCP",

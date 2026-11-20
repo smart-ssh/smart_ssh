@@ -485,7 +485,7 @@
       "close": "Tutup menu navigasi",
       "needsConfirmation": "Perlu konfirmasi",
       "activities": "Aktivitas",
-      "activitiesRunning": "{{count}} berjalan"
+      "activitiesRunning_other": "{{count}} berjalan"
     },
     "mcp": {
       "badge": "MCP",

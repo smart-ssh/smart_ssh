@@ -487,7 +487,9 @@
       "close": "Fechar o menu de navegação",
       "needsConfirmation": "Requer confirmação",
       "activities": "Atividades",
-      "activitiesRunning": "{{count}} em andamento"
+      "activitiesRunning_one": "{{count}} em andamento",
+      "activitiesRunning_many": "{{count}} em andamento",
+      "activitiesRunning_other": "{{count}} em andamento"
     },
     "mcp": {
       "badge": "MCP",

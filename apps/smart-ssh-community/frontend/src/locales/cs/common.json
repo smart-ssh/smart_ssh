@@ -488,7 +488,10 @@
       "close": "Zavřít navigační menu",
       "needsConfirmation": "Čeká na potvrzení",
       "activities": "Aktivity",
-      "activitiesRunning": "běží: {{count}}"
+      "activitiesRunning_one": "běží: {{count}}",
+      "activitiesRunning_few": "běží: {{count}}",
+      "activitiesRunning_many": "běží: {{count}}",
+      "activitiesRunning_other": "běží: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

@@ -488,7 +488,10 @@
       "close": "Zamknij menu nawigacji",
       "needsConfirmation": "Wymaga potwierdzenia",
       "activities": "Aktywności",
-      "activitiesRunning": "{{count}} w toku"
+      "activitiesRunning_one": "{{count}} w toku",
+      "activitiesRunning_few": "{{count}} w toku",
+      "activitiesRunning_many": "{{count}} w toku",
+      "activitiesRunning_other": "{{count}} w toku"
     },
     "mcp": {
       "badge": "MCP",

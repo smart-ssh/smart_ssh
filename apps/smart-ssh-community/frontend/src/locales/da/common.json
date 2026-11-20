@@ -486,7 +486,8 @@
       "close": "Luk navigationsmenuen",
       "needsConfirmation": "Kræver bekræftelse",
       "activities": "Aktiviteter",
-      "activitiesRunning": "{{count}} kører"
+      "activitiesRunning_one": "{{count}} kører",
+      "activitiesRunning_other": "{{count}} kører"
     },
     "mcp": {
       "badge": "MCP",
