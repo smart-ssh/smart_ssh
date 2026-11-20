@@ -22,7 +22,7 @@ async function proposeLongRedCommand(app: AppDriver) {
   await app.emit("chat-action-proposed", redCommandProposal(sessionId, LONG_COMMAND));
   // The action card: the bordered block in the chat that holds the buttons.
   const card = app.page
-    .locator("div.border.p-3.text-sm")
+    .locator("div.border.bg-surface-sunken.text-sm")
     .filter({ has: app.page.getByRole("button", { name: "Execute", exact: true }) })
     .filter({ visible: true });
   await expect(card).toBeVisible();
