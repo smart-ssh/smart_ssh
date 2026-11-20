@@ -1291,6 +1291,8 @@
     "contextCompactedNotice": "Bu sohbetin eski bölümleri, modelin bağlamına sığması için özetlendi.",
     "contextUsage": "Bağlam {{used}} / {{window}}",
     "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Sağlayıcı: {{provider}}",
     "webResearchUnavailable": "Web araştırması bu sağlayıcı hesabı için kullanılamıyor (orada web araması devre dışı). Bu oturum web araştırması olmadan yanıt verir. Kalıcı olarak kapatmak için: Ayarlar → Yapay zeka sağlayıcısı → “Web araştırması”.",
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
     "refusedResponse": "Model bu isteği reddetti. İsteği yeniden ifade edin veya yeni bir sohbet başlatın.",

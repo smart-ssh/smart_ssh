@@ -162,9 +162,11 @@ kompaktiert die nächste Anfrage in jedem Fall, was auch die Schätzung sagt.
 Das gilt für Anthropic ebenso wie für OpenAI-kompatible Anbieter (Chat Completions, Responses, Ollama), sofern sie Usage melden; die gemeldete Größe ist dabei immer die volle Prompt-Größe (Cache-Anteile werden weder doppelt gezählt noch weggelassen). Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
 nur im Speicher der Sitzung.
 
-**Anzeige im Chat.** Nach jeder Antwort zeigt der Chat über dem Eingabefeld
-die zuletzt gemeldete Eingabegröße und das Fenster, z. B. „Kontext 120k /
-200k“ — ab 75 % farbig hervorgehoben; ein Tooltip erklärt, dass ältere Teile
+**Anzeige im Chat.** Nach jeder Antwort zeigt der Chat in der Kopfzeile
+(neben „KI · <Modell>“ und „Neuer Chat“) die zuletzt gemeldete Eingabegröße
+und das Fenster als Balken aus 8 Segmenten (gefüllt: aufgerundeter Anteil
+× 8) samt Zahlen, z. B. „120k / 200k“ — ab 75 % in der Warnfarbe; vor der
+ersten Antwort erscheint nichts; ein Tooltip erklärt, dass ältere Teile
 automatisch zusammengefasst werden. Es werden nur Zahlen angezeigt, nie
 Inhalte. Wurden für eine Anfrage ältere Teile zusammengefasst oder gekürzt,
 erscheint einmal pro Kompaktierungsschritt (nicht je Anfrage) der Hinweis

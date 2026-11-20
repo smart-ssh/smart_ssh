@@ -1298,6 +1298,8 @@
     "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
     "contextUsage": "Context utilizat {{used}} / {{window}}",
     "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Furnizor: {{provider}}",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "refusedResponse": "Modelul a refuzat această cerere. Reformulați-o sau începeți o conversație nouă.",

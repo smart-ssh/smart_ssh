@@ -1,6 +1,5 @@
 import { type KeyboardEvent, type RefObject, type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ContextUsageIndicator } from "../ContextUsageIndicator";
 import { VoiceInputControl } from "../VoiceInputControl";
 import { Button, ErrorBoundary, Icon } from "../ui";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
@@ -15,7 +14,6 @@ interface ComposerProps {
   composerCtx: ComposerContext;
   composerActions: ComposerAction[];
   invokeComposerAction: (action: ComposerAction) => void;
-  contextUsage: { inputTokens: number; windowTokens: number } | null | undefined;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   chatAreaRef: RefObject<HTMLElement | null>;
   onSubmit: (event: FormEvent) => void;
@@ -35,7 +33,6 @@ export function Composer({
   composerCtx,
   composerActions,
   invokeComposerAction,
-  contextUsage,
   inputRef,
   chatAreaRef,
   onSubmit,
@@ -82,30 +79,26 @@ export function Composer({
               ))}
             </ul>
           )}
-        {contextUsage && (
-          <ContextUsageIndicator
-            inputTokens={contextUsage.inputTokens}
-            windowTokens={contextUsage.windowTokens}
-          />
-        )}
-        <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2 p-3 narrow:[&>textarea]:order-first narrow:[&>textarea]:basis-full">
-          <span className="self-start narrow:hidden py-1.5 font-mono text-sm leading-5 text-accent-strong">&gt;</span>
+        <form onSubmit={onSubmit} className="p-3">
+          <label htmlFor="chat-composer-input" className="text-label mb-1 block">
+            {t("chat.messageLabel")}
+          </label>
+          <div className="border border-border-strong bg-surface-sunken">
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
-              Zeilenumbruch ein (s. `onKeyDown`); `rows={1}` +
-              `resize-none` + die Höhen-Effekt oben ergeben das
-              Auto-Grow-bis-`max-h-40`-dann-scrollbar-Verhalten, `align`
-              bleibt sonst wie beim bisherigen `<input>`. */}
+              Zeilenumbruch ein (s. `onKeyDown`); 2 Zeilen, wächst bis `max-h-40`. */}
           <textarea
+            id="chat-composer-input"
             ref={inputRef}
-            rows={1}
+            rows={2}
             value={draft}
             readOnly={voiceLocked}
             data-provisional={voiceLocked ? "true" : undefined}
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-ring-flush`}
+            className={`block max-h-40 min-h-11 w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-ring-flush`}
           />
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-2 py-1.5">
           {narrow ? (
             composerActions.length > 0 && (
               <div className="relative">
@@ -161,11 +154,14 @@ export function Composer({
           <Button
             type="submit"
             variant="primary"
-            className="narrow:ml-auto narrow:min-h-11 narrow:min-w-20"
+            className="ml-auto narrow:min-h-11 narrow:min-w-20"
             disabled={draft.trim().length === 0 || voiceLocked}
           >
+            <Icon name="send" />
             {t("chat.send")}
           </Button>
+          </div>
+          </div>
         </form>
     </div>
   );

@@ -9,6 +9,7 @@ import { loadRiskClassifierSettings } from "../settings/riskSettings";
 import type { DocumentFormat } from "../api/types";
 import { freshId } from "../lib/chatResync";
 import { Button, Icon } from "./ui";
+import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import { deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { useChatTranscript } from "./chat/useChatTranscript";
 import { ChatItemView } from "./chat/ChatItemView";
@@ -46,6 +47,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const composer = useChatComposer(sessionId, serverId, inputRef, chatAreaRef);
   const { hasDropHandler, dropOver } = composer;
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
+  // The chat resolves the active provider per request, so the header shows it.
+  const [activeProvider, setActiveProvider] = useState<{ displayName: string; model: string } | null>(null);
   /** Spec 0026, Abschnitt 4: nur bei aktivierter Zweitmeinung überhaupt
    * einen Lade-Indikator zeigen — sonst käme (bis ein `risk-assessment-
    * updated`-Event ausbliebe) fälschlich ein Spinner, der nie verschwindet.
@@ -95,8 +98,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   useEffect(() => {
     listAiProviders()
-      .then((providers) => setHasActiveProvider(providers.some((p) => p.isActive)))
-      .catch(() => setHasActiveProvider(null));
+      .then((providers) => {
+        setHasActiveProvider(providers.some((p) => p.isActive));
+        const active = providers.find((p) => p.isActive);
+        setActiveProvider(active ? { displayName: active.displayName, model: active.model } : null);
+      })
+      .catch(() => {
+        setHasActiveProvider(null);
+        setActiveProvider(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -188,9 +198,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         />
       )}
       {readOnlyHint === undefined && (
-        <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-1.5">
+        <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border px-3">
+          <span
+            data-testid="chat-header-title"
+            className="text-label min-w-0 truncate"
+            title={activeProvider ? t("chat.headerProviderTooltip", { provider: activeProvider.displayName }) : undefined}
+          >
+            {activeProvider && activeProvider.model ? `AI · ${activeProvider.model}` : "AI"}
+          </span>
+          {contextUsage && (
+            <ContextUsageIndicator
+              inputTokens={contextUsage.inputTokens}
+              windowTokens={contextUsage.windowTokens}
+            />
+          )}
+          <span className="flex-1" />
           {newChatError !== null && (
-            <span role="alert" className="flex-1 text-xs text-danger-fg-soft">
+            <span role="alert" className="text-xs text-danger-fg-soft">
               {newChatError}
             </span>
           )}
@@ -200,6 +224,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             disabled={newChatDisabled}
             title={newChatDisabled ? t("chat.newChatDisabledHint") : undefined}
           >
+            <Icon name="plus" />
             {t("chat.newChat")}
           </Button>
         </div>
@@ -242,7 +267,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         {retrying ? (
           <output
             data-testid="chat-ai-retrying"
-            className="flex items-center gap-2 rounded-lg border border-warning-border-strong/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
+            className="flex items-center gap-2 border border-warning-border-strong/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
           >
             <span className="flex-1">
               {t("chat.aiRetrying", {
@@ -260,7 +285,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           (!aiWait.gotContent || waitNow - aiWait.since > 10_000) ? (
           <output
             data-testid="chat-ai-waiting"
-            className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
+            className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
           >
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
             <span className="flex-1">
@@ -274,7 +299,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </Button>
           </output>
         ) : autoContinuing ? (
-          <div className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
+          <div className="flex items-center gap-2 border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
             <span className="flex-1">
               <Icon name="spark" className="mr-1 inline align-text-bottom" /> {t("chat.autoContinuing")}
@@ -285,7 +310,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </div>
         ) : (
           sending && (
-            <div className="flex items-center gap-2 rounded-lg bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
+            <div className="flex items-center gap-2 bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
               <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
               <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
@@ -313,7 +338,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           aria-label={t("chat.jumpToLatest")}
           title={t("chat.jumpToLatest")}
           data-testid="chat-jump-to-latest"
-          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-fg shadow-lg hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fg${atBottom ? " invisible" : ""}`}
+          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center border border-border-strong bg-surface-raised text-fg hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fg${atBottom ? " invisible" : ""}`}
         >
           <Icon name="chev-d" size={20} />
         </Button>
@@ -336,7 +361,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           composerCtx={composer.composerCtx}
           composerActions={composer.composerActions}
           invokeComposerAction={composer.invokeComposerAction}
-          contextUsage={contextUsage}
           inputRef={inputRef}
           chatAreaRef={chatAreaRef}
           onSubmit={handleSubmit}

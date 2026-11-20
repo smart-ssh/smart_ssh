@@ -174,4 +174,20 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
       screen.queryByRole("button", { name: "Neuer Chat" }),
     ).not.toBeInTheDocument();
   });
+
+  // Issue #1372: header shows "AI · <model>" of the active provider and the
+  // meter sits in the header; no meter before the first answer.
+  it("shows the active provider's model in the header and the meter only after the first answer", async () => {
+    renderChatPanel();
+    const title = await screen.findByTestId("chat-header-title");
+    expect(title.textContent).toBe("AI · claude");
+    expect(title.getAttribute("title")).toContain("Claude");
+    expect(screen.queryByTestId("context-usage")).not.toBeInTheDocument();
+    const handler = vi.mocked(onChatContextUsage).mock.calls[0][0];
+    act(() => handler({ sessionId: "session-1", inputTokens: 12_400, windowTokens: 200_000 }));
+    const meter = await screen.findByTestId("context-usage");
+    expect(meter.textContent).toContain("12.4k");
+    expect(meter.closest("[data-testid='chat-header-title']")).toBeNull();
+    expect(screen.getByTestId("chat-header-title").parentElement).toContainElement(meter);
+  });
 });
