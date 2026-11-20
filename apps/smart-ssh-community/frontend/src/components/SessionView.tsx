@@ -511,7 +511,7 @@ export function SessionView({
               </Button>
             </div>
           )}
-          <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1 p-2" : "hidden"}>
+          <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1" : "hidden"}>
             <TerminalView
               sessionId={sessionId}
               link={autoAttempt !== null ? "reconnecting" : link}

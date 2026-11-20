@@ -212,7 +212,11 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
+      {/* Full-bleed terminal background; the padding lives on this wrapper so the
+          fit addon measures the padding-free inner container. */}
+      <div className="min-h-0 flex-1 overflow-hidden bg-[var(--term-bg)] p-4 narrow:p-2.5" data-testid="terminal-surface">
+        <div ref={containerRef} className="h-full w-full overflow-hidden" />
+      </div>
       {showKeyRow && (
         <TerminalKeyRow
           ctrl={mods.ctrl}
