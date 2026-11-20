@@ -1,3 +1,4 @@
+import { Button } from "./ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sortEntries } from "../lib/fileSort";
@@ -405,6 +406,20 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
           </div>
         )}
       </div>
+
+      {narrow && (
+        <div
+          data-testid="narrow-action-bar"
+          className="flex shrink-0 gap-2 border-t border-border bg-surface-sunken px-3 py-2"
+        >
+          <Button className="flex-1" onClick={ops.openMkdir}>
+            {t("fileBrowser.newFolderButton")}
+          </Button>
+          <Button variant="primary" className="flex-1" onClick={xfer.handleUploadButton}>
+            {t("fileBrowser.upload")}
+          </Button>
+        </div>
+      )}
 
       {/* Spec 0054, Teil 1: Kontextmenü (Rechtsklick) — dieselbe
           `FileEntryMenu`-Instanz wie das Drei-Punkte-Menü, nur `fixed` an

@@ -1,6 +1,6 @@
 // Issue #679 / Spec 0114: auf Android kein Drag&Drop, Download über den
 // Speichern-Dialog, „Lokal öffnen" im App-Editor statt in einem externen Programm.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, within, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 
 import {
   localFileMtime,
+  pickUploadFiles,
   readEditCopyText,
   sftpDownload,
   sftpDownloadDefault,
@@ -39,6 +40,7 @@ vi.mock("../api/api", async () =>
     sftpReadText: vi.fn(),
     sftpRename: vi.fn(),
     sftpUpload: vi.fn(),
+    pickUploadFiles: vi.fn(() => Promise.resolve(null)),
     sftpExists: vi.fn(),
     sftpChmod: vi.fn(),
     readLocalTextPreview: vi.fn(),
@@ -151,5 +153,25 @@ describe("FileBrowserPanel on Android (issue #679)", () => {
     fireEvent.click(screen.getByText("Lokal öffnen…"));
     await waitFor(() => expect(readEditCopyText).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt"));
     expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("narrow rows show permissions, owner and a date without time; the bottom bar has + Folder and Upload", async () => {
+    vi.mocked(sftpList).mockResolvedValue([
+      { ...fileEntry, name: "www", path: "www", isDir: true, permissions: "drwxr-xr-x", owner: "www-data", modified: "2026-11-18T10:30:00" },
+      { ...fileEntry, modified: "2026-11-18T10:30:00", size: 2048, permissions: "-rw-r--r--" },
+    ]);
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={true} />
+      </I18nextProvider>,
+    );
+    await screen.findByText(/a\.txt/);
+    const metas = screen.getAllByTestId("narrow-entry-meta").map((n) => n.textContent);
+    expect(metas).toEqual(["drwxr-xr-x · www-data · 2026-11-18", "-rw-r--r-- · 2.0 KB · 2026-11-18"]);
+    const bar = within(screen.getByTestId("narrow-action-bar"));
+    fireEvent.click(bar.getByRole("button", { name: "+ Ordner" }));
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    fireEvent.click(bar.getByRole("button", { name: "Hochladen" }));
+    await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledWith("session-1", expect.any(String)));
   });
 });

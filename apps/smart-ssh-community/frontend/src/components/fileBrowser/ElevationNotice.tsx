@@ -51,14 +51,14 @@ export function ElevationNotice({ serverId, elevatedUser, serverLogging, passwor
   };
 
   return (
-    <div className="border-b border-warning-strong bg-surface-raised px-2 py-1.5 text-xs text-fg">
+    <div className="border-b border-warning-strong bg-surface-raised px-3 py-1.5 text-xs text-fg">
       <Button
         variant="bare"
         type="button"
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((e) => !e)}
-        className="focus-ring font-semibold"
+        className="focus-ring text-label !text-warning-fg min-h-11"
       >
         <Icon name={expanded ? "chev-d" : "chev-r"} className="inline align-text-bottom" /> {t("fileElevation.notice.title")}
       </Button>
