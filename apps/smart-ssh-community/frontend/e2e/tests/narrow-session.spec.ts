@@ -19,6 +19,8 @@ test.describe("narrow session view @phone", () => {
 
     await tab("Terminal").click();
     await expect(page.locator(".xterm-screen").locator("visible=true")).toBeVisible();
+    // Narrow layout: 10 px inner padding on the terminal surface (issue #1370).
+    await expect(page.getByTestId("terminal-surface").locator("visible=true")).toHaveCSS("padding-left", "10px");
     await captureScreen(page, "session-narrow-terminal");
     await tab("Files").click();
     await captureScreen(page, "session-narrow-files");
