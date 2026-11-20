@@ -209,7 +209,8 @@ export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps)
           Kind des `<header>`: dessen `backdrop-blur` macht ihn zum
           Bezugsrahmen für `fixed`-Nachfahren und zu einem eigenen
           Stapelkontext, die Schicht käme dann nicht über die Backdrops. */}
-      {anyModalOpen && (
+      {/* Android has no window to drag; there the narrow navigation sheet reaches the top edge. */}
+      {anyModalOpen && platform !== "android" && (
         <div
           data-tauri-drag-region
           data-testid="titlebar-drag-layer"

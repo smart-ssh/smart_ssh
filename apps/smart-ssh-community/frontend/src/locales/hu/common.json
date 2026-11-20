@@ -487,7 +487,12 @@
     "menu": {
       "open": "Navigációs menü megnyitása",
       "title": "Navigációs menü",
-      "sessions": "Megnyitott munkamenetek"
+      "sessions": "Megnyitott munkamenetek",
+      "close": "Navigációs menü bezárása",
+      "needsConfirmation": "Megerősítés szükséges",
+      "activities": "Tevékenységek",
+      "activitiesRunning_one": "{{count}} fut",
+      "activitiesRunning_other": "{{count}} fut"
     },
     "mcp": {
       "badge": "MCP",

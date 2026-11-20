@@ -487,7 +487,12 @@
     "menu": {
       "open": "Άνοιγμα μενού πλοήγησης",
       "title": "Μενού πλοήγησης",
-      "sessions": "Ανοιχτές συνεδρίες"
+      "sessions": "Ανοιχτές συνεδρίες",
+      "close": "Κλείσιμο μενού πλοήγησης",
+      "needsConfirmation": "Απαιτείται επιβεβαίωση",
+      "activities": "Δραστηριότητες",
+      "activitiesRunning_one": "{{count}} σε εκτέλεση",
+      "activitiesRunning_other": "{{count}} σε εκτέλεση"
     },
     "mcp": {
       "badge": "MCP",

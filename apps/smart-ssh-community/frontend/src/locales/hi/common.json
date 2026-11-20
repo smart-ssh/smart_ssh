@@ -487,7 +487,12 @@
     "menu": {
       "open": "नेविगेशन मेनू खोलें",
       "title": "नेविगेशन मेनू",
-      "sessions": "खुले सत्र"
+      "sessions": "खुले सत्र",
+      "close": "नेविगेशन मेनू बंद करें",
+      "needsConfirmation": "पुष्टि आवश्यक",
+      "activities": "गतिविधियाँ",
+      "activitiesRunning_one": "{{count}} चल रही है",
+      "activitiesRunning_other": "{{count}} चल रही हैं"
     },
     "mcp": {
       "badge": "MCP",

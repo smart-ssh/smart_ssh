@@ -487,7 +487,12 @@
     "menu": {
       "open": "Gezinme menüsünü aç",
       "title": "Gezinme menüsü",
-      "sessions": "Açık oturumlar"
+      "sessions": "Açık oturumlar",
+      "close": "Gezinme menüsünü kapat",
+      "needsConfirmation": "Onay gerekiyor",
+      "activities": "Etkinlikler",
+      "activitiesRunning_one": "{{count}} çalışıyor",
+      "activitiesRunning_other": "{{count}} çalışıyor"
     },
     "mcp": {
       "badge": "MCP",

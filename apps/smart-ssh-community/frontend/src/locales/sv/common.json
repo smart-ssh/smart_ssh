@@ -487,7 +487,12 @@
     "menu": {
       "open": "Öppna navigeringsmenyn",
       "title": "Navigeringsmeny",
-      "sessions": "Öppna sessioner"
+      "sessions": "Öppna sessioner",
+      "close": "Stäng navigeringsmenyn",
+      "needsConfirmation": "Kräver bekräftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",

@@ -486,7 +486,11 @@
     "menu": {
       "open": "Buka menu navigasi",
       "title": "Menu navigasi",
-      "sessions": "Sesi terbuka"
+      "sessions": "Sesi terbuka",
+      "close": "Tutup menu navigasi",
+      "needsConfirmation": "Perlu konfirmasi",
+      "activities": "Aktivitas",
+      "activitiesRunning_other": "{{count}} berjalan"
     },
     "mcp": {
       "badge": "MCP",
