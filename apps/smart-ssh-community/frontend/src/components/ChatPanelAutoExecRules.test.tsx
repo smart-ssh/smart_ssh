@@ -181,8 +181,32 @@ describe("auto-exec rule line (issue #696)", () => {
       }),
     );
     const code = screen.getByText("exit code: 3");
-    expect(code.parentElement?.parentElement?.textContent).toContain("Automatisch ausgeführt");
+    const header = code.closest("div.border-b");
+    expect(header).not.toBeNull();
+    expect(header?.textContent).toContain("Automatisch ausgeführt");
+    expect(header?.textContent).toContain("exit code: 3");
     expect(screen.getAllByText(/exit code/)).toHaveLength(1);
     await screen.findByRole("button", { name: "uptime" });
+  });
+
+  // Issue #1371: status tone + icon in the header, flat frame.
+  it.each([
+    ["confirmed", { decision: { Confirm: { reason: "r" } }, responded: true, userDecision: "approve" as const }, "Bestätigung nötig", "text-warning-fg"],
+    ["denied by user", { decision: { Confirm: { reason: "r" } }, responded: true, userDecision: "deny" as const }, "abgelehnt", "text-danger-fg"],
+    ["blocked", { decision: { Deny: { code: "x", reason: "r" } } }, "blockiert", "text-danger-fg"],
+  ])("shows the %s status in the header with colour and icon", (_n, overrides, text, tone) => {
+    const { container } = renderItem(item(overrides as never));
+    const header = container.querySelector("div.border-b");
+    const badge = header?.querySelector(`span.${tone}`);
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toMatch(new RegExp(text, "i"));
+    expect(badge?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders the executed card without rounded corners or shadows", () => {
+    const { container } = renderItem(item({ autoExecRules: [globalRule] }));
+    const cls = Array.from(container.querySelectorAll("*")).map((e) => e.getAttribute("class") ?? "").join(" ");
+    expect(cls).not.toMatch(/(^|\s)rounded(-|\s|$)/);
+    expect(cls).not.toMatch(/(^|\s)shadow(-|\s|$)/);
   });
 });

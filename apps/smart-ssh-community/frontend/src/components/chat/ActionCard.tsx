@@ -325,7 +325,7 @@ export function ConfirmActionForm({
         // accessible name (without it screen readers announce an unnamed
         // text field in the confirmation dialog).
         <label className="flex flex-col gap-1">
-          <span className="font-heading text-xs font-semibold tracking-wide text-fg-subtle uppercase">
+          <span className="text-label text-fg-subtle">
             {t("confirmDialog.editableCommand")}
           </span>
           <textarea
@@ -340,13 +340,13 @@ export function ConfirmActionForm({
       {initialCommand !== undefined && (
         <SegmentRules staging={staging} sessionId={sessionId} command={edited} serverId={serverId} />
       )}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
          * look stays hand-written; the focus ring is the shared one. */}
         <Button variant="bare"
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-ring"
+          className="text-label bg-success px-4 py-1.5 narrow:min-h-11 text-success-subtle hover:bg-success-strong focus-ring"
         >
           {t("confirmDialog.execute")}
         </Button>

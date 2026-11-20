@@ -140,7 +140,7 @@ export function SegmentRules({
     <div className="space-y-2 text-xs">
       {allowed.length > 0 && (
         <div className="space-y-1">
-          <div className="font-heading font-semibold tracking-wide text-fg-subtle uppercase">
+          <div className="text-label text-fg-subtle">
             {t("confirmDialog.explain.summaryHeading")}
           </div>
           <ul className="space-y-0.5">
@@ -163,12 +163,12 @@ export function SegmentRules({
       )}
       {rows.length > 0 && (
         <div className="space-y-1">
-          <div className="font-heading font-semibold tracking-wide text-fg-subtle uppercase">
+          <div className="text-label text-fg-subtle">
             {rows.length === explanation.segments.length
               ? t("confirmDialog.explain.heading")
               : t("confirmDialog.explain.toDecideHeading")}
           </div>
-          <ul className="space-y-1">
+          <ul className="divide-y divide-border border-y border-border">
             {rows.map((s) => {
               const key = rowKey(s);
               const others = Object.entries(staged)
@@ -190,7 +190,7 @@ export function SegmentRules({
             })}
           </ul>
           {rows.some((s) => s.state === "needsRule") && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
               <Button
                 size="sm"
                 className="narrow:min-h-11"
@@ -279,7 +279,7 @@ function SegmentRow({
 
   const needsRule = segment.state === "needsRule";
   return (
-    <li className="space-y-1">
+    <li className="space-y-1 px-1 py-1.5">
       <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
         {needsRule && (
           <Button
