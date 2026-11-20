@@ -30,10 +30,7 @@ export function ContextUsageIndicator({
         ))}
       </span>
       <span className="font-mono">
-        {t("chat.contextUsage", {
-          used: formatTokensK(inputTokens),
-          window: formatTokensK(windowTokens),
-        })}
+        {`${formatTokensK(inputTokens)} / ${formatTokensK(windowTokens)}`}
       </span>
     </div>
   );

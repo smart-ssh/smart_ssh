@@ -1282,7 +1282,6 @@
     "queued": "Sẽ được gửi cùng yêu cầu tiếp theo",
     "responseCancelled": "Đã hủy phản hồi.",
     "contextCompactedNotice": "Các phần cũ hơn của cuộc trò chuyện này đã được tóm tắt để vừa với ngữ cảnh của mô hình.",
-    "contextUsage": "Ngữ cảnh {{used}} / {{window}}",
     "contextUsageTooltip": "Các phần cũ hơn của cuộc trò chuyện được tự động tóm tắt khi ngữ cảnh đầy.",
     "messageLabel": "Tin nhắn",
     "headerProviderTooltip": "Nhà cung cấp: {{provider}}",

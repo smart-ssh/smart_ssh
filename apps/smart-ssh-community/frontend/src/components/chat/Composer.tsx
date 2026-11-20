@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type RefObject, type FormEvent, useState } from "react";
+import { type KeyboardEvent, type RefObject, type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { VoiceInputControl } from "../VoiceInputControl";
 import { Button, ErrorBoundary, Icon } from "../ui";
@@ -44,6 +44,7 @@ export function Composer({
   onVoicePhaseChange,
 }: ComposerProps) {
   const { t } = useTranslation();
+  const inputId = useId();
   // Spec 0113 §6a: below 640 px the composer actions sit behind a "+" menu.
   const narrow = useIsNarrow();
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
@@ -80,14 +81,14 @@ export function Composer({
             </ul>
           )}
         <form onSubmit={onSubmit} className="p-3">
-          <label htmlFor="chat-composer-input" className="text-label mb-1 block">
+          <label htmlFor={inputId} className="text-label mb-1 block">
             {t("chat.messageLabel")}
           </label>
           <div className="border border-border-strong bg-surface-sunken">
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `onKeyDown`); 2 Zeilen, wächst bis `max-h-40`. */}
           <textarea
-            id="chat-composer-input"
+            id={inputId}
             ref={inputRef}
             rows={2}
             value={draft}

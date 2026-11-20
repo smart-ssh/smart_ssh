@@ -1289,7 +1289,6 @@
     "queued": "Lähetetään seuraavan pyynnön mukana",
     "responseCancelled": "Vastaus peruttu.",
     "contextCompactedNotice": "Tämän keskustelun vanhempia osia tiivistettiin, jotta ne mahtuvat mallin kontekstiin.",
-    "contextUsage": "Konteksti {{used}} / {{window}}",
     "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
     "messageLabel": "Viesti",
     "headerProviderTooltip": "Palveluntarjoaja: {{provider}}",

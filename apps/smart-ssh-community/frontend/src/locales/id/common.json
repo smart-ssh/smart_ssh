@@ -1282,7 +1282,6 @@
     "queued": "Akan dikirim bersama permintaan berikutnya",
     "responseCancelled": "Respons dibatalkan.",
     "contextCompactedNotice": "Bagian lama obrolan ini diringkas agar muat dalam konteks model.",
-    "contextUsage": "Konteks {{used}} / {{window}}",
     "contextUsageTooltip": "Bagian lama obrolan diringkas secara otomatis saat konteks penuh.",
     "messageLabel": "Pesan",
     "headerProviderTooltip": "Penyedia: {{provider}}",

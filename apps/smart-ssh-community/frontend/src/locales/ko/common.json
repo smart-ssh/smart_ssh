@@ -1282,7 +1282,6 @@
     "queued": "다음 요청과 함께 전송됩니다",
     "responseCancelled": "응답이 취소되었습니다.",
     "contextCompactedNotice": "모델의 컨텍스트에 맞추기 위해 이 채팅의 오래된 부분을 요약했습니다.",
-    "contextUsage": "컨텍스트 {{used}} / {{window}}",
     "contextUsageTooltip": "컨텍스트가 가득 차면 채팅의 오래된 부분이 자동으로 요약됩니다.",
     "messageLabel": "메시지",
     "headerProviderTooltip": "제공자: {{provider}}",

@@ -1282,7 +1282,6 @@
     "queued": "将随下一次请求一并发送",
     "responseCancelled": "回复已取消。",
     "contextCompactedNotice": "此聊天较早的部分已被总结，以适应模型的上下文。",
-    "contextUsage": "上下文 {{used}} / {{window}}",
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
     "messageLabel": "消息",
     "headerProviderTooltip": "提供商：{{provider}}",

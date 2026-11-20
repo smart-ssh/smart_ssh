@@ -1296,7 +1296,6 @@
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
     "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
-    "contextUsage": "Context utilizat {{used}} / {{window}}",
     "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
     "messageLabel": "Mesaj",
     "headerProviderTooltip": "Furnizor: {{provider}}",

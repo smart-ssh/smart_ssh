@@ -1289,7 +1289,6 @@
     "queued": "A következő kéréssel lesz elküldve",
     "responseCancelled": "A válasz megszakítva.",
     "contextCompactedNotice": "A csevegés régebbi részeit összefoglaltuk, hogy beleférjenek a modell kontextusába.",
-    "contextUsage": "Kontextus {{used}} / {{window}}",
     "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
     "messageLabel": "Üzenet",
     "headerProviderTooltip": "Szolgáltató: {{provider}}",

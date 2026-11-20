@@ -1296,7 +1296,6 @@
     "queued": "Sera envoyé avec la prochaine requête",
     "responseCancelled": "Réponse annulée.",
     "contextCompactedNotice": "Les parties plus anciennes de ce chat ont été résumées pour tenir dans le contexte du modèle.",
-    "contextUsage": "Contexte {{used}} / {{window}}",
     "contextUsageTooltip": "Les parties plus anciennes du chat sont résumées automatiquement lorsque le contexte est plein.",
     "messageLabel": "Message",
     "headerProviderTooltip": "Fournisseur : {{provider}}",

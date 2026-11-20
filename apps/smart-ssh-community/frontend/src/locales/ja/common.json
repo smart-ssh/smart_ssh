@@ -1282,7 +1282,6 @@
     "queued": "次のリクエストと一緒に送信されます",
     "responseCancelled": "応答をキャンセルしました。",
     "contextCompactedNotice": "このチャットの古い部分は、モデルのコンテキストに収めるために要約されました。",
-    "contextUsage": "コンテキスト {{used}} / {{window}}",
     "contextUsageTooltip": "コンテキストがいっぱいになると、チャットの古い部分は自動的に要約されます。",
     "messageLabel": "メッセージ",
     "headerProviderTooltip": "プロバイダー: {{provider}}",

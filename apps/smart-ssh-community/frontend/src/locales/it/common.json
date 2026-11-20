@@ -1296,7 +1296,6 @@
     "queued": "Verrà inviato con la prossima richiesta",
     "responseCancelled": "Risposta annullata.",
     "contextCompactedNotice": "Le parti più vecchie di questa chat sono state riassunte per rientrare nel contesto del modello.",
-    "contextUsage": "Contesto {{used}} / {{window}}",
     "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
     "messageLabel": "Messaggio",
     "headerProviderTooltip": "Provider: {{provider}}",

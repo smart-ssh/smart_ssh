@@ -307,6 +307,11 @@ export const stopAutoReconnect = (sessionId: string) =>
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Issue #1372: the provider name and model this session was pinned to at
+ * connect time (shown in the chat header). */
+export const getSessionAiProvider = (sessionId: string) =>
+  invoke<{ displayName: string; model: string }>("get_session_ai_provider", { sessionId });
+
 /** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
  * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
  * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */

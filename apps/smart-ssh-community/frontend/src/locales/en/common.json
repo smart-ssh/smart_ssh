@@ -1289,7 +1289,6 @@
     "queued": "Will be sent with the next request",
     "responseCancelled": "Response cancelled.",
     "contextCompactedNotice": "Older parts of this chat were summarized to fit the model's context.",
-    "contextUsage": "Context {{used}} / {{window}}",
     "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
     "messageLabel": "Message",
     "headerProviderTooltip": "Provider: {{provider}}",

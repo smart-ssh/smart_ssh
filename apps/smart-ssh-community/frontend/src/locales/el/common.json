@@ -1289,7 +1289,6 @@
     "queued": "Θα σταλεί με το επόμενο αίτημα",
     "responseCancelled": "Η απάντηση ακυρώθηκε.",
     "contextCompactedNotice": "Παλαιότερα μέρη αυτής της συνομιλίας συνοψίστηκαν ώστε να χωρούν στο πλαίσιο του μοντέλου.",
-    "contextUsage": "Πλαίσιο {{used}} / {{window}}",
     "contextUsageTooltip": "Τα παλαιότερα μέρη της συνομιλίας συνοψίζονται αυτόματα όταν γεμίζει το πλαίσιο.",
     "messageLabel": "Μήνυμα",
     "headerProviderTooltip": "Πάροχος: {{provider}}",

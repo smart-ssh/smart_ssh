@@ -163,7 +163,7 @@ Das gilt für Anthropic ebenso wie für OpenAI-kompatible Anbieter (Chat Complet
 nur im Speicher der Sitzung.
 
 **Anzeige im Chat.** Nach jeder Antwort zeigt der Chat in der Kopfzeile
-(neben „KI · <Modell>“ und „Neuer Chat“) die zuletzt gemeldete Eingabegröße
+(neben „AI · <Modell>“ und „Neuer Chat“) die zuletzt gemeldete Eingabegröße
 und das Fenster als Balken aus 8 Segmenten (gefüllt: aufgerundeter Anteil
 × 8) samt Zahlen, z. B. „120k / 200k“ — ab 75 % in der Warnfarbe; vor der
 ersten Antwort erscheint nichts; ein Tooltip erklärt, dass ältere Teile

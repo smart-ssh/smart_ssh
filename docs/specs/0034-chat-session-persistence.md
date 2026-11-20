@@ -138,7 +138,7 @@ Spec 0104).
 ## 11. Neuer Chat innerhalb einer Verbindung
 
 Im Chat-Panel eines verbundenen Tabs gibt es in der Kopfzeile — links die
-Beschriftung „AI · <Modell>“ des aktiven KI-Anbieters (Anbieter-Name im
+Beschriftung „AI · <Modell>“ des KI-Anbieters, an den diese Sitzung beim Verbinden gebunden wurde (Anbieter-Name im
 Tooltip; nur „AI“, wenn unbekannt) — eine Schaltfläche „Neuer
 Chat". Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
 Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein

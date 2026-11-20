@@ -1289,7 +1289,6 @@
     "queued": "Sendes med neste forespørsel",
     "responseCancelled": "Svaret ble avbrutt.",
     "contextCompactedNotice": "Eldre deler av denne chatten ble oppsummert for å passe inn i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
     "messageLabel": "Melding",
     "headerProviderTooltip": "Leverandør: {{provider}}",

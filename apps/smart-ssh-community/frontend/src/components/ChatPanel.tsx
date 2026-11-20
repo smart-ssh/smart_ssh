@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, exportDocument, listAiProviders } from "../api/api";
+import { commandErrorMessage, exportDocument, getSessionAiProvider, listAiProviders } from "../api/api";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import { Composer } from "./chat/Composer";
 import { useChatComposer } from "./chat/useChatComposer";
@@ -47,7 +47,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const composer = useChatComposer(sessionId, serverId, inputRef, chatAreaRef);
   const { hasDropHandler, dropOver } = composer;
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
-  // The chat resolves the active provider per request, so the header shows it.
+  // The header shows the provider this session was pinned to at connect.
   const [activeProvider, setActiveProvider] = useState<{ displayName: string; model: string } | null>(null);
   /** Spec 0026, Abschnitt 4: nur bei aktivierter Zweitmeinung überhaupt
    * einen Lade-Indikator zeigen — sonst käme (bis ein `risk-assessment-
@@ -100,14 +100,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     listAiProviders()
       .then((providers) => {
         setHasActiveProvider(providers.some((p) => p.isActive));
-        const active = providers.find((p) => p.isActive);
-        setActiveProvider(active ? { displayName: active.displayName, model: active.model } : null);
+      })
+      .catch(() => setHasActiveProvider(null));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSessionAiProvider(sessionId)
+      .then((p) => {
+        if (!cancelled) setActiveProvider(p);
       })
       .catch(() => {
-        setHasActiveProvider(null);
-        setActiveProvider(null);
+        if (!cancelled) setActiveProvider(null);
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     loadRiskClassifierSettings()

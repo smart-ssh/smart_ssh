@@ -1303,7 +1303,6 @@
     "queued": "Zostanie wysłane z następnym żądaniem",
     "responseCancelled": "Odpowiedź anulowana.",
     "contextCompactedNotice": "Starsze części tego czatu zostały streszczone, aby zmieściły się w kontekście modelu.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Starsze części czatu są automatycznie streszczane, gdy kontekst się zapełnia.",
     "messageLabel": "Wiadomość",
     "headerProviderTooltip": "Dostawca: {{provider}}",

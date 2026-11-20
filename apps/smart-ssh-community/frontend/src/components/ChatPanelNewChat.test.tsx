@@ -16,6 +16,8 @@ vi.mock("../api/api", async () => {
   const { createApiMock } = await import("../test/apiMock");
   return createApiMock({
     listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+    // The session's pinned provider (not the currently active one).
+    getSessionAiProvider: vi.fn(() => Promise.resolve({ displayName: "Claude", model: "claude" })),
   });
 });
 
@@ -186,7 +188,7 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
     const handler = vi.mocked(onChatContextUsage).mock.calls[0][0];
     act(() => handler({ sessionId: "session-1", inputTokens: 12_400, windowTokens: 200_000 }));
     const meter = await screen.findByTestId("context-usage");
-    expect(meter.textContent).toContain("12.4k");
+    expect(meter.textContent).toBe("12.4k / 200k");
     expect(meter.closest("[data-testid='chat-header-title']")).toBeNull();
     expect(screen.getByTestId("chat-header-title").parentElement).toContainElement(meter);
   });

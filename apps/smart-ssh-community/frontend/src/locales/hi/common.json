@@ -1289,7 +1289,6 @@
     "queued": "अगले अनुरोध के साथ भेजा जाएगा",
     "responseCancelled": "उत्तर रद्द किया गया।",
     "contextCompactedNotice": "इस चैट के पुराने हिस्सों का सारांश बनाया गया ताकि वे मॉडल के संदर्भ में समा सकें।",
-    "contextUsage": "संदर्भ {{used}} / {{window}}",
     "contextUsageTooltip": "संदर्भ भर जाने पर चैट के पुराने हिस्सों का सारांश अपने-आप बन जाता है।",
     "messageLabel": "संदेश",
     "headerProviderTooltip": "प्रदाता: {{provider}}",

@@ -1303,7 +1303,6 @@
     "queued": "Bude odesláno s dalším požadavkem",
     "responseCancelled": "Odpověď zrušena.",
     "contextCompactedNotice": "Starší části tohoto chatu byly shrnuty, aby se vešly do kontextu modelu.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
     "messageLabel": "Zpráva",
     "headerProviderTooltip": "Poskytovatel: {{provider}}",

@@ -1289,7 +1289,6 @@
     "queued": "Sendes med næste anmodning",
     "responseCancelled": "Svaret blev annulleret.",
     "contextCompactedNotice": "Ældre dele af denne chat er blevet opsummeret, så de passer ind i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
     "messageLabel": "Besked",
     "headerProviderTooltip": "Udbyder: {{provider}}",

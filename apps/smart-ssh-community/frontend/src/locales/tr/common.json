@@ -1289,7 +1289,6 @@
     "queued": "Bir sonraki istekle gönderilecek",
     "responseCancelled": "Yanıt iptal edildi.",
     "contextCompactedNotice": "Bu sohbetin eski bölümleri, modelin bağlamına sığması için özetlendi.",
-    "contextUsage": "Bağlam {{used}} / {{window}}",
     "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
     "messageLabel": "Mesaj",
     "headerProviderTooltip": "Sağlayıcı: {{provider}}",

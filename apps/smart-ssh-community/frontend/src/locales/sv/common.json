@@ -1289,7 +1289,6 @@
     "queued": "Skickas med nästa begäran",
     "responseCancelled": "Svaret avbröts.",
     "contextCompactedNotice": "Äldre delar av den här chatten har sammanfattats för att rymmas i modellens kontext.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Äldre delar av chatten sammanfattas automatiskt när kontexten blir full.",
     "messageLabel": "Meddelande",
     "headerProviderTooltip": "Leverantör: {{provider}}",
