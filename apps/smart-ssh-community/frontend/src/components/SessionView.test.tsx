@@ -178,11 +178,12 @@ describe("SessionView header (Issue #1366)", () => {
     await waitFor(() => expect(apiMocks.reconnectSession).toHaveBeenCalledWith("session-1"));
   });
 
-  it("has no Reconnect entry while connected", async () => {
+  it("has Disconnect but no Reconnect entry while connected", async () => {
     apiMocks.getServer.mockResolvedValue(SERVER);
     renderSessionView();
     fireEvent.click(screen.getByRole("button", { name: "Weitere Aktionen" }));
     await screen.findByRole("menu");
+    expect(screen.getByRole("menuitem", { name: "Trennen" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Neu verbinden" })).toBeNull();
   });
 });

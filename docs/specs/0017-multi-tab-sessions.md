@@ -108,6 +108,15 @@ und wird strikt dieser Sitzung zugeordnet — nie dem gerade sichtbaren Tab.
 Ausgabe einer Hintergrund-Sitzung landet also nie im Terminal oder Chat einer
 anderen.
 
+## 4a. Kopfzeile der Sitzung
+
+Jede Sitzung hat über Chat und Terminal/Dateien eine feste Kopfzeile in einer Zeile:
+
+- eine quadratische Statusmarkierung (verbunden, verbindet neu, verloren; für den lokalen Pseudo-Server eine eigene Farbe),
+- den Servernamen, auf breiten Fenstern dahinter `user@host:port` (beim lokalen Pseudo-Server „this device“) und, falls vorhanden, die Gruppe als Badge. Lange Namen werden abgeschnitten (mit Tooltip mit dem vollen Text); die Zeile umbricht nie.
+- rechts auf breiten Fenstern den Umschalter KI / Terminal / Dateien, die Schaltfläche „Trennen“ und die Schaltfläche „Weitere Aktionen“.
+- Das Menü „Weitere Aktionen“ enthält immer „Trennen“ und, solange die Sitzung nicht verbunden ist und kein automatisches Neuverbinden läuft, „Neu verbinden“ (Spec 0107). Im schmalen Layout (Spec 0113) ist „Trennen“ nur im Menü.
+
 ## 5. Wartende Bestätigungen in Hintergrund-Tabs
 
 Legt eine Hintergrund-Sitzung ein Kommando zur Bestätigung vor, erscheint

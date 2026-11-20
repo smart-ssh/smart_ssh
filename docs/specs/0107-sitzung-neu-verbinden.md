@@ -14,7 +14,7 @@ Spec 0104 (MCP-Sitzungen), ADR 0007 (Host-Key-Bestätigung), ADR 0132, ADR 0133.
 ## 1. Auslöser
 
 **1.1** Ein getrennter Sitzungs-Tab zeigt im Kopf neben dem Hinweis
-„Verbindung getrennt“ den Knopf „Neu verbinden“. Er ist mit Tab erreichbar.
+„Verbindung getrennt“ den Eintrag „Neu verbinden“ im Menü „Weitere Aktionen“ des Kopfs (Schaltfläche mit drei Punkten, mit Tab erreichbar; Spec 0017, Abschnitt 4a).
 
 **1.2** Im Terminal steht die Zeile „Verbindung verloren. R drücken, um neu
 zu verbinden.“ Drückt der Nutzer R oder r, während das tote Terminal den
@@ -22,7 +22,7 @@ Fokus hat, startet der Neuverbindungsvorgang. Alle anderen Tasten tun nichts
 und gehen nicht an den Server. In einem lebenden Terminal geht R wie jede
 andere Taste an die Shell.
 
-**1.3** Läuft ein Neuverbinden, zeigt der Knopf „Verbinde neu …“ und ist
+**1.3** Läuft ein Neuverbinden, zeigt der Eintrag „Verbinde neu …“ und ist
 gesperrt. Ein zweiter Auslöser (Doppelklick, gehaltene Taste) startet keinen
 zweiten Verbindungsversuch. Eine nicht getrennte Sitzung lässt sich nicht
 neu verbinden.
@@ -112,18 +112,18 @@ starten keine Versuche und beenden laufende.
 immer 15 Sekunden, gerechnet bis zum Ablauf der eingestellten Zeit. Es läuft
 höchstens ein Versuch je Sitzung. Der Kopf zeigt „Verbinde neu … (Versuch N)“
 und einen Link „Stopp“, der die Versuche sofort beendet; danach erscheint der
-Knopf „Neu verbinden“. Im Terminal steht die Zeile „R drücken“ erst, wenn die
-Versuche enden. Ein Klick auf den Knopf oder R während der Versuche tut
+Menüeintrag „Neu verbinden“. Im Terminal steht die Zeile „R drücken“ erst, wenn die
+Versuche enden. Ein Klick auf den Eintrag oder R während der Versuche tut
 nichts.
 
-**8.4 Ende ohne Erfolg.** Die Versuche enden sofort, und der Knopf erscheint,
+**8.4 Ende ohne Erfolg.** Die Versuche enden sofort, und der Menüeintrag erscheint,
 wenn ein Versuch den Nutzer braucht oder Warten nicht hilft: unbekannter oder
 geänderter Host-Key, fehlende Zugangsdaten oder gesperrter Schlüsselbund,
 abgelehnte Anmeldung (jeder andere Fehler außer Netz- und Zeitüberschreitungs-
 fehlern ebenso). Ein automatischer Versuch öffnet nie den Host-Key-Dialog und
 vertraut nie einem Schlüssel; der Dialog erscheint erst, wenn der Nutzer
-„Neu verbinden“ klickt (Abschnitt 3). Läuft die Zeit ab, zeigt der Kopf
-„Verbindung konnte nicht wiederhergestellt werden.“ mit dem Knopf, das
+„Neu verbinden“ wählt (Abschnitt 3). Läuft die Zeit ab, zeigt der Kopf
+„Verbindung konnte nicht wiederhergestellt werden.“ mit dem Menüeintrag, das
 Terminal die Zeile „R drücken“.
 
 **8.5 Erfolg.** Gelingt ein Versuch, ist der Tab ohne Zutun wieder verbunden

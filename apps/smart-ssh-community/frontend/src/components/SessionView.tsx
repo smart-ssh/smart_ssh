@@ -400,13 +400,13 @@ export function SessionView({
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
       <header className="relative flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4 narrow:h-auto narrow:min-h-11 narrow:py-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <StatusSquare tone={statusTone} />
-          <span title={serverName} className="font-heading text-title min-w-0 truncate font-semibold tracking-wide">
+        <div className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
+          <span className="flex shrink-0"><StatusSquare tone={statusTone} /></span>
+          <span title={serverName} className="font-heading text-title min-w-0 shrink truncate font-semibold tracking-wide">
             {serverName}
           </span>
           {serverInfo && !narrow && (
-            <span className="truncate font-mono text-xs text-fg-faint">{serverInfo.line}</span>
+            <span title={serverInfo.line} className="min-w-0 truncate font-mono text-xs text-fg-faint">{serverInfo.line}</span>
           )}
           {serverInfo?.group && !narrow && <Badge>{serverInfo.group}</Badge>}
           {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
@@ -510,11 +510,9 @@ export function SessionView({
                 {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
               </MenuItem>
             )}
-            {narrow && (
-              <MenuItem narrow danger onClick={onRequestClose}>
-                {t("session.disconnect")}
-              </MenuItem>
-            )}
+            <MenuItem narrow={narrow} danger onClick={onRequestClose}>
+              {t("session.disconnect")}
+            </MenuItem>
           </Menu>
         )}
       </header>
