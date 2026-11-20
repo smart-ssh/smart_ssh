@@ -231,7 +231,6 @@ export function FileToolbar({
           className="m-0 flex min-w-0 items-center gap-1.5 border-0 border-l border-border p-0 pl-2"
         >
         <Button onClick={onNewFolder}>
-          <Icon name="plus" />
           {t("fileBrowser.newFolderButton")}
         </Button>
         <Button onClick={onUpload}>

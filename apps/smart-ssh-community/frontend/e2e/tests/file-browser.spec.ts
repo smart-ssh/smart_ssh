@@ -203,6 +203,7 @@ test.describe("file browser", () => {
   test("screenshots for the review", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
     await captureScreen(page, "file-browser-list");
     await rowMenu(page, "notes.txt").click();
     await page.getByRole("menuitem", { name: "Delete", exact: true }).click();

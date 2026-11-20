@@ -263,7 +263,8 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
 - **Symbolische Links** werden mit einem Link-Symbol vor dem Namen
   (für Screenreader als „symbolic link" beschriftet) aufgelistet; hinter
   dem Namen steht das Linkziel als blasses „→ Ziel“ in Festbreitenschrift
-  (gekürzt, der volle Wert im Hover-Text), sofern es lesbar ist; der Text bleibt
+  (gekürzt; der Hover-Text enthält das Ziel bis 200 Zeichen, längere Ziele
+  werden dort mit „…“ abgeschnitten), sofern es lesbar ist; der Text bleibt
   reiner, maskierter Text. Die
   Liste löst pro Link das Ziel mit einem `stat` auf:
   - Ein Link auf einen **Ordner** erscheint mit dem Ordner-Link-Symbol, sortiert
