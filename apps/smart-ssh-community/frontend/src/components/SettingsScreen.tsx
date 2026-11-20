@@ -191,7 +191,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                   aria-current={category.id === active?.id ? "page" : undefined}
                   className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-ring-inset ${
                     category.id === active?.id
-                      ? "bg-accent text-on-accent"
+                      ? "bg-accent-subtle text-accent-fg"
                       : "text-fg-muted hover:bg-surface-raised"
                   }`}
                 >

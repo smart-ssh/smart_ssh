@@ -45,7 +45,7 @@ Ausführen eines bearbeiteten Vorschlags oder dem Akzeptieren mit Regel —
 läuft in der Oberfläche ein Zähler. Liegt nach 5 Sekunden noch kein Ergebnis
 vor, erscheint an der Aktionskarte:
 
-- ein pulsierender Punkt und der Text „läuft seit {n}s…" (Sekunden, sekündlich
+- ein pulsierendes Quadrat und der Text „läuft seit {n}s…" (Sekunden, sekündlich
   aktualisiert),
 - die Schaltfläche **„Verbindung zu diesem Kommando trennen"**.
 

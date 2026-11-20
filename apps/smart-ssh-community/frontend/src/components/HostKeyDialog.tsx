@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, CornerTicks, DialogFrame } from "./ui";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -72,10 +72,13 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
       onClose={() => decide("reject")}
       initialFocusRef={rejectButtonRef}
       resetKey={event}
-      panelClassName={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 ${
+      panelClassName={`relative flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none ${
         isMismatch ? "border-danger bg-danger-subtle/95" : "border-border-strong bg-surface-raised"
       }`}
     >
+        <div className="narrow:hidden" data-testid="dialog-ticks">
+          <CornerTicks tone="danger" corners="top" />
+        </div>
         {isMismatch ? (
           <>
             {/* Gefahren-Warnstreifen — Design-Import, Abschnitt "HOST-KEY
