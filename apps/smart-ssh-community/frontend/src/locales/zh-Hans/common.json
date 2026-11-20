@@ -356,7 +356,10 @@
     "matchedRuleLabel": "规则：",
     "segmentLabel": "片段 {{index}}",
     "checksLabel": "检查：",
-    "hardBlacklistLabel": "硬性黑名单："
+    "hardBlacklistLabel": "硬性黑名单：",
+    "invalidPattern": "无效的模式",
+    "rowActions": "行操作",
+    "ruleCount_other": "{{count}} 条规则"
   },
   "actionCard": {
     "autoContinuationLimitReached": "在 {{limit}} 步内未经您确认，自动继续已暂停——发送一条消息即可继续。",

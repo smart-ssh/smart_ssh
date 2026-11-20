@@ -356,7 +356,10 @@
     "matchedRuleLabel": "ルール:",
     "segmentLabel": "セグメント {{index}}",
     "checksLabel": "チェック:",
-    "hardBlacklistLabel": "ハードブラックリスト:"
+    "hardBlacklistLabel": "ハードブラックリスト:",
+    "invalidPattern": "無効なパターン",
+    "rowActions": "行の操作",
+    "ruleCount_other": "{{count}} 件のルール"
   },
   "actionCard": {
     "autoContinuationLimitReached": "確認なしで{{limit}}ステップが続いたため、自動継続を一時停止しました。メッセージを送信すると続行します。",

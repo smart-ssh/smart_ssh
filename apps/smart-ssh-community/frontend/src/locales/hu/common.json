@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Szabály:",
     "segmentLabel": "{{index}}. szakasz",
     "checksLabel": "Ellenőrzések:",
-    "hardBlacklistLabel": "Szigorú feketelista:"
+    "hardBlacklistLabel": "Szigorú feketelista:",
+    "invalidPattern": "Érvénytelen minta",
+    "rowActions": "Sor műveletei",
+    "ruleCount_one": "{{count}} szabály",
+    "ruleCount_other": "{{count}} szabály"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után a jóváhagyása nélkül szünetel – a folytatáshoz küldjön üzenetet.",

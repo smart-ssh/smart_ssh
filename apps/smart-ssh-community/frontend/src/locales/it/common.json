@@ -356,7 +356,12 @@
     "matchedRuleLabel": "Regola:",
     "segmentLabel": "Segmento {{index}}",
     "checksLabel": "Controlli:",
-    "hardBlacklistLabel": "Blacklist fissa:"
+    "hardBlacklistLabel": "Blacklist fissa:",
+    "invalidPattern": "Pattern non valido",
+    "rowActions": "Azioni della riga",
+    "ruleCount_one": "{{count}} regola",
+    "ruleCount_many": "{{count}} regole",
+    "ruleCount_other": "{{count}} regole"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Continuazione automatica in pausa dopo {{limit}} passaggi senza la sua conferma: invii un messaggio per continuare.",

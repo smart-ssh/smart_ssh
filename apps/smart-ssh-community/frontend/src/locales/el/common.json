@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Κανόνας:",
     "segmentLabel": "Τμήμα {{index}}",
     "checksLabel": "Έλεγχοι:",
-    "hardBlacklistLabel": "Αυστηρή μαύρη λίστα:"
+    "hardBlacklistLabel": "Αυστηρή μαύρη λίστα:",
+    "invalidPattern": "Μη έγκυρο μοτίβο",
+    "rowActions": "Ενέργειες γραμμής",
+    "ruleCount_one": "{{count}} κανόνας",
+    "ruleCount_other": "{{count}} κανόνες"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Η αυτόματη συνέχιση σταμάτησε μετά από {{limit}} βήματα χωρίς την επιβεβαίωσή σας — στείλτε ένα μήνυμα για να συνεχίσετε.",

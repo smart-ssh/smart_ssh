@@ -356,7 +356,10 @@
     "matchedRuleLabel": "규칙:",
     "segmentLabel": "세그먼트 {{index}}",
     "checksLabel": "검사:",
-    "hardBlacklistLabel": "하드 블랙리스트:"
+    "hardBlacklistLabel": "하드 블랙리스트:",
+    "invalidPattern": "잘못된 패턴",
+    "rowActions": "행 작업",
+    "ruleCount_other": "규칙 {{count}}개"
   },
   "actionCard": {
     "autoContinuationLimitReached": "확인 없이 {{limit}}단계가 진행되어 자동 계속이 일시 중지되었습니다. 계속하려면 메시지를 보내십시오.",

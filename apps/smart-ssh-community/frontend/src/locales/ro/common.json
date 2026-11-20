@@ -356,7 +356,12 @@
     "matchedRuleLabel": "Regulă:",
     "segmentLabel": "Segmentul {{index}}",
     "checksLabel": "Verificări:",
-    "hardBlacklistLabel": "Listă neagră fixă:"
+    "hardBlacklistLabel": "Listă neagră fixă:",
+    "invalidPattern": "Model nevalid",
+    "rowActions": "Acțiuni rând",
+    "ruleCount_one": "{{count}} regulă",
+    "ruleCount_few": "{{count}} reguli",
+    "ruleCount_other": "{{count}} de reguli"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",

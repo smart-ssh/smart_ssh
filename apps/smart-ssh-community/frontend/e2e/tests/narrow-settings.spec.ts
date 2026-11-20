@@ -121,6 +121,9 @@ test.describe("narrow settings @phone", () => {
       }
     }
     await expectNoHorizontalPageScroll(page, view);
+    // Issue #1375: the header button moves focus to the tester below the list.
+    await page.getByRole("button", { name: "Test Rules", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Test Rules" })).toBeFocused();
     await expectNoSeriousA11yViolations(page, "filter rules");
     await captureScreen(page, `narrow-rules-${info.project.name}`);
 

@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Del {{index}}",
     "checksLabel": "Kontroller:",
-    "hardBlacklistLabel": "Hård svartlista:"
+    "hardBlacklistLabel": "Hård svartlista:",
+    "invalidPattern": "Ogiltigt mönster",
+    "rowActions": "Radåtgärder",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regler"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisk fortsättning pausad efter {{limit}} steg utan din bekräftelse — skicka ett meddelande för att fortsätta.",

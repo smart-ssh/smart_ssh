@@ -356,7 +356,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Teilkommando {{index}}",
     "checksLabel": "Prüfungen:",
-    "hardBlacklistLabel": "Hard-Blacklist:"
+    "hardBlacklistLabel": "Hard-Blacklist:",
+    "invalidPattern": "Ungültiges Muster",
+    "rowActions": "Zeilenaktionen",
+    "ruleCount_one": "{{count}} Regel",
+    "ruleCount_other": "{{count}} Regeln"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten ohne deine Bestätigung angehalten — schreib weiter, um fortzufahren.",
