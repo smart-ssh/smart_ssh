@@ -90,6 +90,7 @@ pub mod owner_names;
 /// `#[cfg(test)]`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod policy;
+pub mod quick_rules_batch;
 pub mod rule_suggestions;
 pub mod second_opinion;
 /// Spec 0101, A10/A11: der einmalige Umzug der Secrets aus dem

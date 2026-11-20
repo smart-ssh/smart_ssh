@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186 34" width="186" height="34" role="img" aria-label="Smart SSH">
+  <svg x="0" y="0" width="34" height="34" viewBox="0 0 64 64">
+    <path d="M48 14H16v18h32v18H16" fill="none" stroke="#f2f4f7" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M42 8h12v12H42z M10 44h12v12H10z" fill="#2cc6e8"/>
+  </svg>
+  <text x="46" y="28" font-family="'Barlow Condensed', sans-serif" font-weight="700" font-size="30" letter-spacing="3.6" fill="#f2f4f7">SMART<tspan fill="#2cc6e8">SSH</tspan></text>
+</svg>

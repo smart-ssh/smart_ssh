@@ -191,3 +191,34 @@ Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
   die von einem externen Werkzeug (MCP) angefragt wurden.
 - Die Zeile ist reine Anzeige: Sie stammt aus derselben Auswertung, die die
   Entscheidung getroffen hat, und ändert diese nicht.
+
+## 8. Vorschläge je Teilkommando und Sammel-Speichern
+
+Zwei zusätzliche Befehle der Schnittstelle (bestehende Befehle bleiben
+unverändert). Beide ändern die Entscheidung der Engine nicht; jedes Urteil
+stammt aus der Kandidaten-Auswertung der Engine (Abschnitt 6).
+
+- **Vorschläge für ein Teilkommando.** Gegeben Sitzung, Kommando, Index des
+  Teilkommandos (derselbe Index wie in der Abdeckung, Abschnitt 6), Geltungsbereich
+  (dieser Server, global, Tag) und die bisher vorgemerkten Regeln (Muster mit je
+  eigenem Geltungsbereich), liefert er höchstens sechs Vorschläge für genau dieses
+  Teilkommando, vom Spezifischen zum Allgemeinen, in den Arten aus Abschnitt 2
+  (exakt, pfad-begrenzt, letztes Argument offen, Unterkommando, Programm). Kein
+  Muster bezieht sich auf ein anderes Teilkommando. Nur lesend; nichts wird
+  gespeichert.
+- **Zwei Urteile je Vorschlag.** *Teilkommando:* abgedeckt (läuft mit den
+  vorgemerkten Regeln plus diesem Vorschlag automatisch) oder „fragt weiter“
+  mit Gründen (Regel verlangt Bestätigung, nachgelagerte Eskalation, keine Regel,
+  oder der Geltungsbereich trifft die Sitzung nicht — z. B. ein Tag, den der
+  Server nicht hat). *Kommando:* ob das ganze Kommando automatisch läuft; „ja“
+  nur, wenn die Engine für das ganze Kommando AutoExec liefert und keine
+  Eskalation greift.
+- **Teilkommando, das immer fragt** (Zustand „blockiert“, z. B. harte
+  Blacklist, Umleitung, Eskalation, undurchsichtige Syntax): keine Vorschläge,
+  stattdessen die Gründe.
+- **Sammel-Speichern.** Speichert eine Liste vorgemerkter Regeln, jede mit eigenen
+  Mustern und eigenem Geltungsbereich, in einem Schritt: alles oder nichts. Ist
+  ein Muster ungültig (leer oder nicht übersetzbar, Spec 0077) oder eine
+  vorgemerkte Regel ohne jedes Muster, wird nichts
+  gespeichert und ein Fehler geliefert. Eine wartende Bestätigung bleibt offen;
+  das Speichern löst sie nicht auf. Rückgabe: die neuen Regel-Kennungen.
