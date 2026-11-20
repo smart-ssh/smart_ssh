@@ -529,20 +529,14 @@ export function ServerList({
             e.preventDefault();
             setNewSessionMenu({ x: e.clientX, y: e.clientY, server });
           }}
-          className={`flex w-full min-w-0 select-none items-center justify-between gap-2 border-b border-border py-1.5 pr-3 text-left min-h-[30px] narrow:min-h-[52px] narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-ring-inset aria-disabled:opacity-60 ${depth > 0 ? "pl-5" : "pl-3"}`}
+          className={`flex w-full min-w-0 select-none items-center justify-between gap-2 border-b border-border py-1 narrow:py-1.5 pr-3 text-left min-h-[30px] narrow:min-h-[52px] narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-ring-inset aria-disabled:opacity-60 ${depth > 0 ? "pl-5" : "pl-3"}`}
         >
           <div className="flex min-w-0 items-start gap-2">
             <Icon name={server.isLocal ? "local" : "server"} className="mt-0.5 text-fg-muted" />
             <div className="min-w-0">
+             <div className="flex min-w-0 items-baseline gap-3 narrow:block">
               <p className="flex items-center gap-2">
                 <span className="break-words font-mono text-sm text-fg">{server.name}</span>
-                {server.isLocal && <Badge tone="local">{t("mainScreen.localBadge")}</Badge>}
-                {marker && (
-                  <>
-                    <StatusSquare tone={MARKER_TONE[marker]} />
-                    <span className="sr-only">{t(MARKER_TEXT[marker])}</span>
-                  </>
-                )}
               </p>
               {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
                * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
@@ -558,6 +552,7 @@ export function ServerList({
                     ? `${server.username}@${server.host}`
                     : `${server.username}@${server.host}:${server.port}`}
               </p>
+             </div>
               {/* Spec 0076, B-4: erkennbar, dass die Anmeldung an einer Datei
                * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
                * er abgeschnitten wird. */}
@@ -572,6 +567,13 @@ export function ServerList({
             </div>
           </div>
           <div className="flex items-center gap-2 narrow:flex-wrap">
+            {server.isLocal && <Badge tone="local">{t("mainScreen.localBadge")}</Badge>}
+            {marker && (
+              <>
+                <StatusSquare tone={MARKER_TONE[marker]} />
+                <span className="sr-only">{t(MARKER_TEXT[marker])}</span>
+              </>
+            )}
             {server.tags.map((tag) => (
               <span key={tag} className="border border-border px-1.5 font-mono text-[11px] text-fg-soft">
                 {tag}
@@ -650,7 +652,7 @@ export function ServerList({
             <span className="truncate" title={node.group.name}>
               {node.group.name}
             </span>
-            <span data-testid="group-count" className="shrink-0 font-mono text-xs font-normal text-fg-faint">
+            <span data-testid="group-count" className="ml-auto shrink-0 font-mono text-xs font-normal text-fg-faint">
               {groupItemCount(node)}
             </span>
             {node.group.isCopy && <CopyBadge />}
