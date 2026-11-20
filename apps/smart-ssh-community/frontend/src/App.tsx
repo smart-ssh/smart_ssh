@@ -429,6 +429,8 @@ function MainScreen({
           initialSelection={pendingNoteEditSelection}
           onInitialSelectionConsumed={onNoteEditSelectionConsumed}
           onConnect={onRequestConnect}
+          collapsedGroupIds={collapsedGroupIds}
+          onToggleGroup={toggleGroup}
         />
       ) : (
         <FilterRulesView

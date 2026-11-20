@@ -141,7 +141,10 @@
     "importSshConfig": "导入…",
     "importSshConfigHint": "从 OpenSSH ssh_config 文件导入服务器",
     "exportSshConfig": "导出…",
-    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config"
+    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config",
+    "title": "服务器",
+    "collapseGroup": "折叠分组“{{name}}”",
+    "expandGroup": "展开分组“{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",

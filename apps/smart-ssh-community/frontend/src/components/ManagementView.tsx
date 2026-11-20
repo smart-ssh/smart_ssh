@@ -36,6 +36,10 @@ interface ManagementViewProps {
   onInitialSelectionConsumed?: () => void;
   /** Issue #692: "Connect" in a saved server's settings. */
   onConnect?: (serverId: string) => void;
+  /** Issue #1368: collapsed groups of the sidebar tree, kept by `App` for the
+   * session (shared with the Connect tree). */
+  collapsedGroupIds?: ReadonlySet<string>;
+  onToggleGroup?: (groupId: string) => void;
 }
 
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
@@ -43,6 +47,8 @@ export function ManagementView({
   initialSelection = null,
   onInitialSelectionConsumed,
   onConnect,
+  collapsedGroupIds,
+  onToggleGroup,
 }: ManagementViewProps) {
   const { t } = useTranslation();
   const manageViews = useManageViews();
@@ -153,6 +159,23 @@ export function ManagementView({
   const showList = !narrow || !selection;
   const showDetail = !narrow || Boolean(selection);
 
+  // Narrow header: icon and name of the open item (as in the design).
+  const selectedHeader = ((): { icon: "server" | "folder" | "warn"; name: string } | null => {
+    if (selection?.kind === "server") {
+      const s = servers.find((x) => x.id === selection.id);
+      return s ? { icon: "server", name: s.name } : null;
+    }
+    if (selection?.kind === "unusableServer") {
+      const s = unusableServers.find((x) => x.id === selection.id);
+      return s ? { icon: "warn", name: s.name } : null;
+    }
+    if (selection?.kind === "group") {
+      const g = groups.find((x) => x.id === selection.id);
+      return g ? { icon: "folder", name: g.name } : null;
+    }
+    return null;
+  })();
+
   const findListScroller = () =>
     listRef.current?.querySelector<HTMLElement>('[data-drop-target="root"]') ?? null;
   const goBack = () => {
@@ -190,6 +213,8 @@ export function ManagementView({
         onExportSshConfig={() => setExportOpen(true)}
         onMove={(item, target) => void handleMove(item, target)}
         onKeptAsRegular={reload}
+        collapsedGroupIds={collapsedGroupIds}
+        onToggleGroup={onToggleGroup}
       />
       </div>
       )}
@@ -206,10 +231,16 @@ export function ManagementView({
       {showDetail && (
       <div className="min-w-0 flex-1 overflow-y-auto">
         {narrow && selection && (
-          <div className="sticky top-0 z-10 border-b border-surface-raised bg-surface px-2 py-1">
-            <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11">
-              <Icon name="arrow-left" className="mr-1 inline align-text-bottom" /> {t("management.back")}
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface px-2 py-1">
+            <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11 shrink-0">
+              <Icon name="chev-l" className="mr-1 inline align-text-bottom" /> {t("management.back")}
             </Button>
+            {selectedHeader && (
+              <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+                <Icon name={selectedHeader.icon} className="shrink-0 text-fg-muted" />
+                <span className="truncate font-mono">{selectedHeader.name}</span>
+              </span>
+            )}
           </div>
         )}
         {error && <p className="p-4 text-sm text-danger-fg">{error}</p>}

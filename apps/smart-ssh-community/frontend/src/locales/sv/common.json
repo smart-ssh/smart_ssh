@@ -141,7 +141,10 @@
     "importSshConfig": "Importera …",
     "importSshConfigHint": "Importera servrar från en OpenSSH-ssh_config-fil",
     "exportSshConfig": "Exportera …",
-    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config"
+    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config",
+    "title": "Servrar",
+    "collapseGroup": "Fäll ihop gruppen ”{{name}}”",
+    "expandGroup": "Expandera gruppen ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",

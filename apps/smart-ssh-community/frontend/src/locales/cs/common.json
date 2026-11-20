@@ -141,7 +141,10 @@
     "importSshConfig": "Importovat …",
     "importSshConfigHint": "Importovat servery ze souboru ssh_config OpenSSH",
     "exportSshConfig": "Exportovat …",
-    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH",
+    "title": "Servery",
+    "collapseGroup": "Sbalit skupinu „{{name}}“",
+    "expandGroup": "Rozbalit skupinu „{{name}}“"
   },
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",

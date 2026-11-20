@@ -141,7 +141,10 @@
     "importSshConfig": "가져오기 …",
     "importSshConfigHint": "OpenSSH ssh_config 파일에서 서버 가져오기",
     "exportSshConfig": "내보내기 …",
-    "exportSshConfigHint": "서버를 OpenSSH ssh_config로 내보내기"
+    "exportSshConfigHint": "서버를 OpenSSH ssh_config로 내보내기",
+    "title": "서버",
+    "collapseGroup": "그룹 “{{name}}” 접기",
+    "expandGroup": "그룹 “{{name}}” 펼치기"
   },
   "treeDrag": {
     "rootDropZone": "여기에 놓으면 최상위(그룹 없음)로 이동합니다",

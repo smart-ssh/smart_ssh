@@ -141,7 +141,10 @@
     "importSshConfig": "Nhập …",
     "importSshConfigHint": "Nhập máy chủ từ tệp ssh_config của OpenSSH",
     "exportSshConfig": "Xuất …",
-    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH"
+    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH",
+    "title": "Máy chủ",
+    "collapseGroup": "Thu gọn nhóm “{{name}}”",
+    "expandGroup": "Mở rộng nhóm “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",

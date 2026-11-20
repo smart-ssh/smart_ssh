@@ -28,8 +28,13 @@ export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropK
           : "border-border-strong bg-surface-raised text-fg"
       }`}
     >
-      {icon} {drag.item.label}
-      {hint && <span className="ml-2 text-fg-subtle">{hint}</span>}
+      {icon} <span className="font-mono">{drag.item.label}</span>
+      {hint && (
+        <span className="ml-2 text-fg-subtle">
+          {kind === "valid" && <Icon name="move" size={12} className="mr-1 inline align-text-bottom" />}
+          {hint}
+        </span>
+      )}
     </div>
   );
 }
