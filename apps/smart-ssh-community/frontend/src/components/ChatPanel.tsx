@@ -244,7 +244,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         onScroll={handleChatScroll}
         className="flex-1 overflow-y-auto p-4"
       >
-      <div ref={contentRef} className="space-y-3">
+      <div ref={contentRef} data-testid="chat-transcript" className="space-y-3">
         {items.map((item) => (
           <ChatItemView
             key={item.id}

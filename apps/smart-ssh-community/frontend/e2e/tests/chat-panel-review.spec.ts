@@ -128,6 +128,29 @@ test.describe("chat panel review", () => {
     await captureScreen(app.page, "chat-messages");
   });
 
+  // Issue #1371: the transcript is flat — no rounded corners, no shadows on any
+  // item (shared button and tooltip primitives are restyled in their own issues).
+  for (const [name, open] of [
+    ["messages", openChatWithMessages],
+    ["confirmation", openChatWithConfirmation],
+  ] as const) {
+    test(`transcript items have square corners and no shadows (${name})`, async ({ app }) => {
+      await open(app);
+      const transcript = app.page.getByTestId("chat-transcript");
+      await expect(transcript).toBeVisible();
+      const offenders = await transcript.evaluate((root) =>
+        Array.from(root.querySelectorAll("*"))
+          .filter((el) => !el.closest("button, [role=tooltip]"))
+          .filter((el) => {
+            const cs = getComputedStyle(el);
+            return cs.borderTopLeftRadius !== "0px" || cs.boxShadow !== "none";
+          })
+          .map((el) => el.tagName + "." + el.className),
+      );
+      expect(offenders).toEqual([]);
+    });
+  }
+
   test("screenshot of the command confirmation and its expanded rule row", async ({ app }) => {
     await openChatWithConfirmation(app);
     await captureScreen(app.page, "chat-confirmation");

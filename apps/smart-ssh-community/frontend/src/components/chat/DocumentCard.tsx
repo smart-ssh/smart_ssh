@@ -39,17 +39,17 @@ export function DocumentCard({
   };
 
   return (
-    <div className="rounded-lg border border-accent-border-strong/60 bg-surface-raised/80 p-3.5 text-sm shadow-md">
+    <div className="border border-border bg-surface-sunken p-3.5 text-sm">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Icon name="file-text" size={20} />
           <span className="min-w-0 break-words font-semibold text-fg">{title}</span>
         </div>
-        <span className="rounded bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
+        <span className="bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
           {t("chat.documentGenerated")}
         </span>
       </div>
-      <div className="prose prose-sm prose-invert max-w-none rounded bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+      <div className="prose prose-sm prose-invert max-w-none bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{contentMarkdown}</ReactMarkdown>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 narrow:[&_button]:min-h-11">
