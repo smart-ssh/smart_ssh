@@ -1,4 +1,0 @@
-PasswordAuthentication yes
-PubkeyAuthentication yes
-PermitRootLogin no
-LogLevel DEBUG3

@@ -1,6 +1,0 @@
-PasswordAuthentication yes
-AllowTcpForwarding yes
-KbdInteractiveAuthentication no
-PermitRootLogin no
-LogLevel VERBOSE
-Subsystem sftp internal-sftp

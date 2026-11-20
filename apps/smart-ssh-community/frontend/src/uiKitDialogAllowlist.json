@@ -1,3 +1,0 @@
-{
-  "components/activities/ActivityCenter.tsx": "Non-modal popover anchored to the header icon (no backdrop, no focus trap); a modal DialogFrame does not fit."
-}

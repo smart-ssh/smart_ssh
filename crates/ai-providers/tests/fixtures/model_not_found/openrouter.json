@@ -1,9 +1,0 @@
-{
-  "status": 400,
-  "body": {
-    "error": {
-      "message": "no-such-model-xyz is not a valid model ID",
-      "code": 400
-    }
-  }
-}

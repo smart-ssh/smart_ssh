@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "io-nopty"
-networks = ["io-net"]
-publish = true
