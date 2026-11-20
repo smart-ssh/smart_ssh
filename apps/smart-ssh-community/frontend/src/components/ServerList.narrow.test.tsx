@@ -110,9 +110,7 @@ function folder(id: string, name: string, parentId: string | null): GroupDto {
   return { isCopy: false, id, name, parentId, notes: "" };
 }
 
-const pad = (el: HTMLElement) => parseFloat(el.style.paddingLeft);
-
-describe("ServerList Connect tree: chevrons, indentation, no row actions (Issue #978)", () => {
+describe("ServerList Connect tree: chevrons, connector lines, no row actions (Issue #978, #1367)", () => {
   beforeEach(() => {
     vi.mocked(listGroups).mockResolvedValue([folder("g-a", "Alpha", null), folder("g-b", "Beta", "g-a")]);
     vi.mocked(listServers).mockResolvedValue([
@@ -130,18 +128,28 @@ describe("ServerList Connect tree: chevrons, indentation, no row actions (Issue 
   it.each([
     ["narrow", 20, setNarrow],
     ["wide", 16, setWide],
-  ])("%s: children start at the icon of their parent (depth 1 and 2)", async (_n, chevron, set) => {
+  ])("%s: children sit in a ruled container at every depth, with aria-hidden ticks", async (_n, chevron, set) => {
     set();
     renderList();
     const alpha = await screen.findByRole("button", { name: /Alpha/ });
     const beta = await screen.findByRole("button", { name: /Beta/ });
-    const inAlpha = (await screen.findByText("in-alpha")).closest("button")!;
-    const inBeta = (await screen.findByText("in-beta")).closest("button")!;
-    const step = chevron + 8; // chevron plus the gap-2 after it
+    const inAlpha = (await screen.findByText("in-alpha")).closest("li")!;
+    const inBeta = (await screen.findByText("in-beta")).closest("li")!;
     expect(alpha.querySelector("svg")).toHaveAttribute("width", String(chevron));
-    expect(pad(beta) - pad(alpha)).toBe(step);
-    expect(pad(inAlpha) - pad(alpha)).toBe(step);
-    expect(pad(inBeta) - pad(beta)).toBe(step);
+    // depth 1: Beta and in-alpha share Alpha's container; depth 2: in-beta sits in Beta's.
+    const alphaBox = alpha.closest("li")!.querySelector(":scope > [data-testid=tree-children]")!;
+    const betaBox = beta.closest("li")!.querySelector(":scope > [data-testid=tree-children]")!;
+    expect(alphaBox).toHaveClass("border-l");
+    expect(alphaBox).toContainElement(beta);
+    expect(alphaBox).toContainElement(inAlpha);
+    expect(betaBox).toContainElement(inBeta);
+    expect(betaBox.parentElement!.closest("[data-testid=tree-children]")).toBe(alphaBox);
+    for (const row of [beta.closest("li")!, inAlpha, inBeta]) {
+      const tick = row.querySelector(":scope > [data-testid=tree-tick]");
+      expect(tick).toHaveAttribute("aria-hidden", "true");
+    }
+    // Root-level rows (Alpha, the local server) have no tick.
+    expect(alpha.closest("li")!.querySelector(":scope > [data-testid=tree-tick]")).toBeNull();
   });
 
   it("has no ⋯ / Move to… and no + buttons in either layout", async () => {

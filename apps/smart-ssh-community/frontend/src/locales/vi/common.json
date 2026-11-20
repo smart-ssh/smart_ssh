@@ -30,7 +30,12 @@
     "emptyStateTitle": "Chưa thêm máy chủ nào",
     "emptyStateHint": "Thêm máy chủ đầu tiên để kết nối qua SSH.",
     "emptyStateCreateFirstServer": "Thêm máy chủ đầu tiên",
-    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật."
+    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật.",
+    "localBadge": "Cục bộ",
+    "thisDevice": "thiết bị này",
+    "sessionOpen": "Phiên đang mở",
+    "sessionPending": "Đang chờ xác nhận",
+    "sessionDisconnected": "Phiên đã ngắt kết nối"
   },
   "settings": {
     "title": "Cài đặt",
