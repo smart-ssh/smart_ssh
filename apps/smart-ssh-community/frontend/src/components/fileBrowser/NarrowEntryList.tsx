@@ -33,7 +33,6 @@ export function NarrowEntryList({
           entry.permissions || null,
           entry.isDir ? (entry.owner ?? null) : formatBytes(entry.size),
           entry.modified ? formatIsoDate(entry.modified) : null,
-          entry.isSymlink && entry.linkTarget ? `→ ${entry.linkTarget}` : null,
         ]
           .filter((part): part is string => part !== null)
           .join(" · ");
@@ -55,7 +54,7 @@ export function NarrowEntryList({
                 <Button variant="bare"
                   type="button"
                   onClick={() => load(entry.path)}
-                  className="block max-w-full truncate rounded text-left text-[15px] text-accent-fg-soft group-hover:underline focus-ring-flush"
+                  className="block max-w-full truncate rounded text-left text-[15px] text-fg-soft group-hover:underline focus-ring-flush"
                   title={entryTitle(entry)}
                 >
                   <EntryIcon entry={entry} size={20} /> {entry.name}

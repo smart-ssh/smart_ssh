@@ -1,4 +1,4 @@
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sortEntries } from "../lib/fileSort";
@@ -415,7 +415,8 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
           <Button className="flex-1" onClick={ops.openMkdir}>
             {t("fileBrowser.newFolderButton")}
           </Button>
-          <Button variant="primary" className="flex-1" onClick={xfer.handleUploadButton}>
+          <Button variant="primary" className="flex flex-1 items-center justify-center gap-1.5" onClick={xfer.handleUploadButton}>
+            <Icon name="upload" />
             {t("fileBrowser.upload")}
           </Button>
         </div>

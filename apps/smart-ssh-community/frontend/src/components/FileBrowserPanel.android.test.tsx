@@ -174,4 +174,18 @@ describe("FileBrowserPanel on Android (issue #679)", () => {
     fireEvent.click(bar.getByRole("button", { name: "Hochladen" }));
     await waitFor(() => expect(pickUploadFiles).toHaveBeenCalledWith("session-1", expect.any(String)));
   });
+
+  it("a symlink row shows its target once, after the name, not in the meta line", async () => {
+    vi.mocked(sftpList).mockResolvedValue([
+      { ...fileEntry, isSymlink: true, linkTarget: "/etc/real.txt", linkKind: "file", permissions: "lrwxrwxrwx" },
+    ]);
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <FileBrowserPanel sessionId="session-1" isVisible={true} />
+      </I18nextProvider>,
+    );
+    await screen.findByText(/a\.txt/);
+    expect(document.querySelectorAll("[data-link-target]")).toHaveLength(1);
+    expect(screen.getByTestId("narrow-entry-meta").textContent).not.toContain("/etc/real.txt");
+  });
 });

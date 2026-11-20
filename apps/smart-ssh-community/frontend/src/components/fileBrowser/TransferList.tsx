@@ -209,13 +209,12 @@ export function TransferList({ transfers, sessionId, onDismiss }: TransferListPr
                 </span>
               ) : (
                 <>
-                  <span>
+                  <span className="inline-block min-w-[9rem]">
                     {formatBytes(transfer.bytesDone ?? 0)}
                     {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
-                    {" · "}
-                    <span>{formatSpeed(transfer.rate?.speed ?? null)}</span>
                   </span>
-                  <span>
+                  <span className="inline-block min-w-[5.5rem]">{formatSpeed(transfer.rate?.speed ?? null)}</span>
+                  <span className="inline-block min-w-[6.5rem]">
                     {transfer.rate?.etaSeconds != null
                       ? t("fileBrowser.transferRemaining", { time: formatDuration(transfer.rate.etaSeconds) })
                       : formatDuration(null)}

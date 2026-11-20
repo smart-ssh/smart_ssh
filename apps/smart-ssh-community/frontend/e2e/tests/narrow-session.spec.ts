@@ -24,6 +24,10 @@ test.describe("narrow session view @phone", () => {
     await captureScreen(page, "session-narrow-terminal");
     await tab("Files").click();
     await captureScreen(page, "session-narrow-files");
+    const bar = page.getByTestId("narrow-action-bar");
+    await expectUsable(bar.getByRole("button", { name: "Upload" }));
+    await expectUsable(bar.getByRole("button", { name: "+ Folder" }));
+    await expectNoSeriousA11yViolations(page, "session narrow files");
     await tab("AI").click();
     await expectNoHorizontalPageScroll(page);
 
