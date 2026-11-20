@@ -7,7 +7,7 @@ import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
 import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
 const LONG_NAME = `${"very-long-directory-name-".repeat(6)}end.log`;
@@ -218,6 +218,7 @@ test.describe("file browser, narrow layout @phone", () => {
     await openSession(app, "db-primary");
     await app.page.getByRole("tab", { name: "Files", exact: true }).click();
     await expect(app.page.getByText("notes.txt")).toBeVisible();
+    if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   }
   test("two-line rows, no horizontal scroll, toolbar actions behind the overflow menu", async ({ app }) => {
     await openNarrow(app);
@@ -239,7 +240,7 @@ test.describe("file browser, narrow layout @phone", () => {
       await expectFullyInViewport(item.first());
     }
     await expectNoSeriousA11yViolations(page, "file browser narrow: overflow menu");
-    await captureScreen(page, "file-browser-narrow-overflow");
+    await captureCurrent(page, "file-browser-narrow-overflow");
     // The screenshot helper resizes through wide sizes, which drops the menu.
     await more.click();
     await page.getByRole("menuitem", { name: /As another user/ }).click();
@@ -258,7 +259,7 @@ test.describe("file browser, narrow layout @phone", () => {
     const del = page.getByRole("menuitem", { name: "Delete", exact: true });
     await expectFullyInViewport(del);
     await expectNoSeriousA11yViolations(page, "file browser narrow: entry menu");
-    await captureScreen(page, "file-browser-narrow-menu");
+    await captureCurrent(page, "file-browser-narrow-menu");
     await expect(del).toBeVisible();
     await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     const dialog = page.getByRole("dialog");
