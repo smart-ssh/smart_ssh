@@ -1086,6 +1086,7 @@
     "parentDirectory": "Overordnet mappe",
     "newFolderButton": "+ Mappe",
     "fileActionsGroup": "Filhandlinger",
+    "directoryActions": "Mappehandlinger",
     "upload": "Upload",
     "uploadDialogTitle": "Upload fil(er)",
     "uploadFolder": "Upload mappe",

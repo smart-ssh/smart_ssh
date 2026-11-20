@@ -1081,6 +1081,7 @@
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
     "fileActionsGroup": "ファイル操作",
+    "directoryActions": "ディレクトリ操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",

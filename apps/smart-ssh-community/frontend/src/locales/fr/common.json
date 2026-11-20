@@ -1091,6 +1091,7 @@
     "parentDirectory": "Répertoire parent",
     "newFolderButton": "+ Dossier",
     "fileActionsGroup": "Actions sur les fichiers",
+    "directoryActions": "Actions du dossier",
     "upload": "Téléverser",
     "uploadDialogTitle": "Téléverser des fichiers",
     "uploadFolder": "Téléverser un dossier",

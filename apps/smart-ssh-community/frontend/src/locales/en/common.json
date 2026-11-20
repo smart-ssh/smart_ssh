@@ -1086,6 +1086,7 @@
     "parentDirectory": "Parent directory",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "File actions",
+    "directoryActions": "Directory actions",
     "upload": "Upload",
     "uploadDialogTitle": "Upload file(s)",
     "uploadFolder": "Upload folder",

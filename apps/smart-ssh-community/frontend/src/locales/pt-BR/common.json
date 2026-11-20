@@ -1091,6 +1091,7 @@
     "parentDirectory": "Diretório pai",
     "newFolderButton": "+ Pasta",
     "fileActionsGroup": "Ações de arquivos",
+    "directoryActions": "Ações do diretório",
     "upload": "Enviar",
     "uploadDialogTitle": "Enviar arquivo(s)",
     "uploadFolder": "Enviar pasta",

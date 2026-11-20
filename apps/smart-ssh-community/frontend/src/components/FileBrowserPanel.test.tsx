@@ -237,7 +237,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     const ths = container.querySelectorAll("thead th");
     expect(ths.length).toBe(6);
     ths.forEach((th) => {
-      expect(th).toHaveClass("sticky", "top-0", "bg-surface");
+      expect(th).toHaveClass("sticky", "top-0", "bg-surface-sunken");
     });
     const table = container.querySelector("table");
     expect(table).toHaveClass("border-separate", "border-spacing-0");
@@ -258,11 +258,11 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
 
     await waitFor(() => {
       const sizeCol = container.querySelectorAll("colgroup col")[1] as HTMLElement;
-      // Default 90px + 40px Delta = 130px.
-      expect(sizeCol.style.width).toBe("130px");
+      // Default 110px + 40px Delta = 150px.
+      expect(sizeCol.style.width).toBe("150px");
     });
     expect(saveFileManagerColumnWidths).toHaveBeenCalledWith(
-      expect.objectContaining({ size: 130 }),
+      expect.objectContaining({ size: 150 }),
     );
   });
 
@@ -309,10 +309,10 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
 
     const { container } = renderPanel();
     await screen.findByText(/readme\.md/);
-    // 600px Container; andere Spalten (Rechte 90 + Besitzer 130 + Geändert
-    // 150 + Aktionen 36) + Name-Minimum (120) = 526px stehen fest, für
-    // "Größe" bleiben maximal 600 - 526 = 74px.
-    stubContainerWidth(container, 600);
+    // 800px Container; andere Spalten (Rechte 130 + Geändert 170 + Besitzer
+    // 150 + Aktionen 44) + Name-Minimum (120) = 614px stehen fest, für
+    // "Größe" bleiben maximal 800 - 614 = 186px.
+    stubContainerWidth(container, 800);
 
     const handle = screen.getByTestId("column-resize-size");
     fireEvent.pointerDown(handle, { clientX: 100 });
@@ -321,7 +321,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
 
     await waitFor(() => {
       const sizeCol = container.querySelectorAll("colgroup col")[1] as HTMLElement;
-      expect(sizeCol.style.width).toBe("74px");
+      expect(sizeCol.style.width).toBe("186px");
     });
   });
 
@@ -391,12 +391,12 @@ describe("FileBrowserPanel Owner column and column visibility (issue #653)", () 
     expect(items).toHaveLength(4);
     expect(within(menu).queryByRole("menuitemcheckbox", { name: /^Name$/ })).toBeNull();
 
-    fireEvent.click(items[2]);
+    fireEvent.click(items[3]);
     await waitFor(() => expect(container.querySelectorAll("thead th").length).toBe(5));
     expect(screen.queryByText("1000:1000")).toBeNull();
     expect(saveHiddenFileColumns).toHaveBeenCalledWith(["owner"]);
 
-    fireEvent.click(within(screen.getByRole("menu")).getAllByRole("menuitemcheckbox")[2]);
+    fireEvent.click(within(screen.getByRole("menu")).getAllByRole("menuitemcheckbox")[3]);
     await waitFor(() => expect(container.querySelectorAll("thead th").length).toBe(6));
     expect(screen.getByText("1000:1000")).toBeTruthy();
     expect(saveHiddenFileColumns).toHaveBeenLastCalledWith([]);
@@ -425,8 +425,8 @@ describe("FileBrowserPanel Owner column and column visibility (issue #653)", () 
     fireEvent.pointerUp(handle, { clientX: 130 });
 
     await waitFor(() => {
-      // order: name, size, owner, modified, actions; default owner 130 + 30
-      expect((container.querySelectorAll("colgroup col")[2] as HTMLElement).style.width).toBe("160px");
+      // order: name, size, modified, owner, actions; default owner 150 + 30
+      expect((container.querySelectorAll("colgroup col")[3] as HTMLElement).style.width).toBe("180px");
     });
     expect(screen.queryByTestId("column-resize-permissions")).toBeNull();
   });
@@ -529,10 +529,8 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     const other = screen.getByText(/logs/).closest("tr")!;
     expect(row).not.toHaveAttribute("data-active");
 
-    // hover: stronger background and underlined name
-    expect(row.className).toContain("hover:bg-border/60");
-    expect(row.className).toContain("group");
-    expect(screen.getByText(/a\.txt/).className).toContain("group-hover:underline");
+    // hover: the row uses the surface-hover token
+    expect(row.className).toContain("hover:bg-surface-hover");
 
     // right-click
     fireEvent.contextMenu(row);
@@ -1824,7 +1822,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
     fireEvent.click(dirButton);
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "logs", null));
-    expect(await screen.findByDisplayValue("logs")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "logs"));
 
     act(() => handlerBeforeNavigation({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 

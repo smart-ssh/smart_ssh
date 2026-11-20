@@ -1081,6 +1081,7 @@
     "parentDirectory": "Thư mục cha",
     "newFolderButton": "+ Thư mục",
     "fileActionsGroup": "Thao tác tệp",
+    "directoryActions": "Thao tác thư mục",
     "upload": "Tải lên",
     "uploadDialogTitle": "Tải tệp lên",
     "uploadFolder": "Tải thư mục lên",

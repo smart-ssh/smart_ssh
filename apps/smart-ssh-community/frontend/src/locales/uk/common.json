@@ -1096,6 +1096,7 @@
     "parentDirectory": "Батьківська тека",
     "newFolderButton": "+ Тека",
     "fileActionsGroup": "Дії з файлами",
+    "directoryActions": "Дії з каталогом",
     "upload": "Вивантажити",
     "uploadDialogTitle": "Вивантажити файл(и)",
     "uploadFolder": "Вивантажити теку",

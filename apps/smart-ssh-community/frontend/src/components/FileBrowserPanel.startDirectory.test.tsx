@@ -122,14 +122,14 @@ describe("FileBrowserPanel start directory (Spec 0102)", () => {
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "/srv/app", null));
     expect(sftpList).not.toHaveBeenCalledWith("session-1", ".", null);
-    await screen.findByDisplayValue("/srv/app");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv/app"));
 
     fireEvent.click(screen.getByTitle("Übergeordnetes Verzeichnis"));
-    await screen.findByDisplayValue("/srv");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv"));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", "/srv", null);
 
     fireEvent.click(screen.getByTitle("Zum Startverzeichnis"));
-    await screen.findByDisplayValue("/srv/app");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv/app"));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", "/srv/app", null);
     expect(showToast).not.toHaveBeenCalled();
   });
@@ -141,10 +141,10 @@ describe("FileBrowserPanel start directory (Spec 0102)", () => {
     });
 
     renderPanel();
-    await screen.findByDisplayValue("./projects");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "./projects"));
 
     fireEvent.click(screen.getByTitle("Übergeordnetes Verzeichnis"));
-    await screen.findByDisplayValue(".");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "."));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null);
   });
 

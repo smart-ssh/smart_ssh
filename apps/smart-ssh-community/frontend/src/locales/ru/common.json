@@ -1096,6 +1096,7 @@
     "parentDirectory": "Родительский каталог",
     "newFolderButton": "+ Папка",
     "fileActionsGroup": "Действия с файлами",
+    "directoryActions": "Действия с каталогом",
     "upload": "Загрузить",
     "uploadDialogTitle": "Загрузка файлов",
     "uploadFolder": "Загрузить папку",

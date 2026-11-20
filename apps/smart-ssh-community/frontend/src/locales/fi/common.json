@@ -1086,6 +1086,7 @@
     "parentDirectory": "Ylempi hakemisto",
     "newFolderButton": "+ Kansio",
     "fileActionsGroup": "Tiedostotoiminnot",
+    "directoryActions": "Hakemiston toiminnot",
     "upload": "Lähetä",
     "uploadDialogTitle": "Lähetä tiedostoja",
     "uploadFolder": "Lähetä kansio",

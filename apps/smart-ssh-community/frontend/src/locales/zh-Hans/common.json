@@ -1081,6 +1081,7 @@
     "parentDirectory": "上级目录",
     "newFolderButton": "+ 文件夹",
     "fileActionsGroup": "文件操作",
+    "directoryActions": "目录操作",
     "upload": "上传",
     "uploadDialogTitle": "上传文件",
     "uploadFolder": "上传文件夹",

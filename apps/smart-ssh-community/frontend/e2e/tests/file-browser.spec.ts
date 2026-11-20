@@ -229,10 +229,10 @@ test.describe("file browser, narrow layout @phone", () => {
     await expectUsable(rowMenu(page, "notes.txt"));
     await captureScreen(page, "file-browser-narrow-list");
 
-    const more = page.getByRole("button", { name: "File actions", exact: true });
+    const more = page.getByRole("button", { name: "Directory actions", exact: true });
     await expectUsable(more);
     await more.click();
-    for (const name of ["+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
+    for (const name of ["Go to start directory", "+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
       const item = page.getByRole("menuitem", { name });
       await expect(item.first()).toBeVisible();
       await expectFullyInViewport(item.first());
@@ -247,7 +247,7 @@ test.describe("file browser, narrow layout @phone", () => {
     await expect(page.getByRole("button", { name: "Elevate", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(field).toBeHidden();
-    await expect(page.getByRole("button", { name: "File actions", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Directory actions", exact: true })).toBeFocused();
   });
 
   test("row menu opens inside the viewport, Properties shows owner, group and permissions", async ({ app }) => {
@@ -273,6 +273,6 @@ test.describe("file browser, narrow layout @phone", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator("table")).toBeVisible();
     const widths = await page.locator("col").evaluateAll((cols) => cols.map((c) => (c as HTMLElement).style.width));
-    expect(widths).toEqual(["", "90px", "90px", "130px", "150px", "36px"]);
+    expect(widths).toEqual(["", "110px", "130px", "170px", "150px", "44px"]);
   });
 });

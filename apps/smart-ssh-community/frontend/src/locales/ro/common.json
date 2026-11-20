@@ -1091,6 +1091,7 @@
     "parentDirectory": "Director părinte",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Acțiuni pe fișiere",
+    "directoryActions": "Acțiuni director",
     "upload": "Încarcă",
     "uploadDialogTitle": "Încarcă fișiere",
     "uploadFolder": "Încarcă folder",

@@ -1086,6 +1086,7 @@
     "parentDirectory": "Överordnad katalog",
     "newFolderButton": "+ Mapp",
     "fileActionsGroup": "Filåtgärder",
+    "directoryActions": "Katalogåtgärder",
     "upload": "Ladda upp",
     "uploadDialogTitle": "Ladda upp fil(er)",
     "uploadFolder": "Ladda upp mapp",

@@ -1086,6 +1086,7 @@
     "parentDirectory": "Bovenliggende map",
     "newFolderButton": "+ Map",
     "fileActionsGroup": "Bestandsacties",
+    "directoryActions": "Mapacties",
     "upload": "Uploaden",
     "uploadDialogTitle": "Bestand(en) uploaden",
     "uploadFolder": "Map uploaden",

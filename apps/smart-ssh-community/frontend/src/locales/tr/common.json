@@ -1086,6 +1086,7 @@
     "parentDirectory": "Üst dizin",
     "newFolderButton": "+ Klasör",
     "fileActionsGroup": "Dosya işlemleri",
+    "directoryActions": "Dizin işlemleri",
     "upload": "Yükle",
     "uploadDialogTitle": "Dosya(ları) yükle",
     "uploadFolder": "Klasör yükle",

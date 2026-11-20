@@ -8,19 +8,26 @@ const MAX_TARGET_TITLE = 200;
  * symbolic link whose target could be read. The target is server-controlled
  * text: it is only ever used as plain text and truncated here. */
 export function entryTitle(entry: RemoteEntryDto): string {
-  if (!entry.isSymlink || entry.linkTarget === null) return entry.name;
-  const target =
-    entry.linkTarget.length > MAX_TARGET_TITLE ? `${entry.linkTarget.slice(0, MAX_TARGET_TITLE)}…` : entry.linkTarget;
-  return `${entry.name} -> ${target}`;
+  const target = truncatedTarget(entry);
+  return target === null ? entry.name : `${entry.name} -> ${target}`;
 }
 
-/** Marker after the name (the entry icon shows the link; this adds the text) of a symbolic link, with an accessible label. */
+/** The link target, cut to `MAX_TARGET_TITLE` characters; `null` for a non-link or an unreadable target. */
+function truncatedTarget(entry: RemoteEntryDto): string | null {
+  if (!entry.isSymlink || entry.linkTarget === null) return null;
+  return entry.linkTarget.length > MAX_TARGET_TITLE ? `${entry.linkTarget.slice(0, MAX_TARGET_TITLE)}…` : entry.linkTarget;
+}
+
+/** Marker after the name of a symbolic link: the target inline as faint mono
+ * "→ target" (truncated by CSS, full value in `title`), with an accessible
+ * label. The target is server-controlled text and only rendered as text. */
 export function LinkMarker({ entry }: { entry: RemoteEntryDto }) {
   const { t } = useTranslation();
   if (!entry.isSymlink) return null;
   return (
-    <span title={entryTitle(entry)} data-link-marker>
+    <span title={truncatedTarget(entry) ?? undefined} data-link-marker className="ml-2 min-w-0 shrink truncate font-mono text-xs text-fg-faint">
       <span className="sr-only">{" "}{t("fileBrowser.linkMarker")}</span>
+      {entry.linkTarget !== null && <span aria-hidden="true" data-link-target>{`→ ${entry.linkTarget}`}</span>}
     </span>
   );
 }
@@ -40,5 +47,5 @@ export function entryIconName(entry: RemoteEntryDto): IconName {
 }
 
 export function EntryIcon({ entry }: { entry: RemoteEntryDto }) {
-  return <Icon name={entryIconName(entry)} className="mr-1 inline align-text-bottom" />;
+  return <Icon name={entryIconName(entry)} className={`mr-1.5 inline shrink-0 align-text-bottom ${entry.isDir ? "text-accent-fg" : "text-fg-subtle"}`} />;
 }
