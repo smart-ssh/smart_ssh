@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Desktop – Dialogs sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#080a0d}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--danger:#f04848;--danger-fg:#ff8a85;--danger-subtle:#2a0d0e;--danger-border:#5c1c1d;--warning:#f5a524;--warning-fg:#ffc266;--warning-subtle:#2a1d06;--warning-border:#5a3e0e;--success:#3dd68c;--success-fg:#7be5ae;font-family:Barlow,system-ui,sans-serif;font-size:14px;line-height:1.45;color:var(--fg)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint)}
+.mono{font-family:"JetBrains Mono",monospace}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;height:32px;padding:0 12px;border:1px solid var(--border-strong);background:transparent;color:var(--fg-soft);display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.dngs{background:var(--danger);border-color:var(--danger);color:#ffffff}
+.btn.ghost{border-color:transparent;color:var(--fg-muted)}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.dlg{position:relative;background:var(--surface-raised);border:1px solid var(--border-strong);box-shadow:8px 8px 0 #000000;display:flex;flex-direction:column}
+.dh{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.db{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.df{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:var(--surface)}
+.tick{position:absolute;width:12px;height:12px;border-style:solid;border-width:0}
+.tr{height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13.5px;color:var(--fg-soft);position:relative}
+.cap{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--fg-faint);margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 1440px; height: 1000px; background-color: #080a0d; background-image: linear-gradient(#11151b 1px, transparent 1px), linear-gradient(90deg, #11151b 1px, transparent 1px); background-size: 24px 24px; padding: 40px 48px; display: grid; grid-template-columns: 470px 400px minmax(0, 1fr); grid-template-rows: auto auto; gap: 40px 40px; align-content: start">
+
+  <div>
+    <div class="cap">HostKeyDialog · mismatch</div>
+    <section class="dlg" role="alertdialog" aria-label="Host key changed" style="border-color: var(--danger-border)">
+      <span class="tick" style="top: -7px; left: -7px; border-top-width: 2px; border-left-width: 2px; border-color: var(--danger)"></span><span class="tick" style="top: -7px; right: -7px; border-top-width: 2px; border-right-width: 2px; border-color: var(--danger)"></span>
+      <div class="dh" style="background: var(--danger-subtle); border-color: var(--danger-border)"><svg class="ico" viewBox="0 0 24 24" style="color: var(--danger)" aria-hidden="true"><path d="M12 3l10 18H2z M12 10v5 M12 18v.5"></path></svg><span class="lbl" style="color: var(--danger-fg)">Security Warning · Host Key Changed</span></div>
+      <div class="db">
+        <h2 class="h" style="margin: 0; font-size: 20px; color: var(--fg-strong)">This server's key is no longer the same.</h2>
+        <p style="margin: 0; font-size: 13.5px; color: var(--fg-muted)">The server <span class="mono" style="font-size: 12.5px; color: var(--fg)">db-prod (10.0.6.12:22)</span> is presenting a different key than the one stored last time. This can indicate a man-in-the-middle attack. Only continue if you are sure the server key changed legitimately (e.g. server reinstallation).</p>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); border: 1px solid var(--border); font-size: 12.5px">
+          <span class="lbl" style="padding: 8px 10px; border-bottom: 1px solid var(--border)">Known</span><span class="mono" style="padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 11.5px; color: var(--fg-muted); word-break: break-all">SHA256:Xn3vV0pQkB9yJ1aR4tW6mZc8eLhG2sDfU7oPiK5qN0A</span>
+          <span class="lbl" style="padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--danger-fg)">Offered Now</span><span class="mono" style="padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 11.5px; color: var(--danger-fg); background: var(--danger-subtle); word-break: break-all">SHA256:q8Hc1RzT0mYv5NwE3kLb7aJ2sPdX9fGuQ4iO6tZeC1M</span>
+          <span class="lbl" style="padding: 8px 10px">Key type</span><span class="mono" style="padding: 8px 10px; font-size: 11.5px">ssh-ed25519</span>
+        </div>
+      </div>
+      <div class="df"><button class="btn ghost" type="button" style="color: var(--danger-fg)">Trust Anyway</button><button class="btn pri" type="button">Cancel Connection</button></div>
+    </section>
+  </div>
+
+  <div>
+    <div class="cap">MoveToDialog</div>
+    <section class="dlg" role="dialog" aria-label="Move to">
+      <div class="dh"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M8 14h7 M12 11l3 3-3 3"></path></svg><h2 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Move “db-prod” to…</h2></div>
+      <div class="db" style="padding: 10px 10px">
+        <div role="listbox" aria-label="Target group" style="border: 1px solid var(--border); background: var(--surface-sunken); padding: 4px">
+          <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v18H3z M3 9h18"></path></svg>→ top level (no group)</div>
+          <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 20V5h6l2 2h8v3 M3 20l3-10h16l-3 10z"></path></svg>production<span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">current</span></div>
+          <div style="margin-left: 17px; border-left: 1px solid var(--border-strong)">
+            <div class="tr" style="padding-left: 14px"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>databases</div>
+          </div>
+          <div class="tr" style="background: var(--accent-subtle); box-shadow: inset 0 0 0 1px var(--accent); color: var(--fg-strong)"><svg class="ico" viewBox="0 0 24 24" style="color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>staging<svg class="ico" viewBox="0 0 24 24" style="margin-left: auto; color: var(--accent-fg)" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg></div>
+          <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>customers</div>
+          <div class="tr" style="color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>k8s-nodes</div>
+        </div>
+      </div>
+      <div class="df"><button class="btn ghost" type="button">Cancel</button><button class="btn pri" type="button">Move</button></div>
+    </section>
+
+    <div class="cap" style="margin-top: 28px">Tree drag ghost + drop hint</div>
+    <div style="background: var(--surface-sunken); border: 1px solid var(--border); padding: 6px; position: relative; height: 110px">
+      <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg><b>production</b></div>
+      <div class="tr" style="background: var(--accent-subtle); box-shadow: inset 0 0 0 1px var(--accent)"><svg class="ico" viewBox="0 0 24 24" style="color: var(--accent-fg)" aria-hidden="true"><path d="M3 20V5h6l2 2h8v3 M3 20l3-10h16l-3 10z"></path></svg><b>staging</b><span style="margin-left: auto; font-size: 12px; color: var(--accent-fg)">→ move into this group</span></div>
+      <div style="position: absolute; left: 140px; top: 62px; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-raised); border: 1px solid var(--accent); box-shadow: 4px 4px 0 #000000"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">db-prod</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cap">QuitConfirmDialog</div>
+    <section class="dlg" role="alertdialog" aria-label="Quit while activities are running">
+      <div class="dh"><svg class="ico" viewBox="0 0 24 24" style="color: var(--warning)" aria-hidden="true"><path d="M12 3l10 18H2z M12 10v5 M12 18v.5"></path></svg><h2 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Quit while activities are running?</h2></div>
+      <div class="db">
+        <p style="margin: 0; font-size: 13.5px; color: var(--fg-muted)">These activities are still running and will be stopped:</p>
+        <ul style="margin: 0; padding: 0; list-style: none; border: 1px solid var(--border)">
+          <li class="tr" style="border-bottom: 1px solid var(--border)"><svg class="ico" viewBox="0 0 24 24" style="color: var(--accent-fg)" aria-hidden="true"><path d="M12 4v12 M6 10l6 6 6-6 M4 20h16"></path></svg>Downloading: access.log.2.gz</li>
+          <li class="tr"><svg class="ico" viewBox="0 0 24 24" style="color: var(--accent-fg)" aria-hidden="true"><path d="M9 3h6v10H9z M5 10v3l3 4h8l3-4v-3 M12 17v4 M8 21h8"></path></svg>Speech model Parakeet TDT 0.6B</li>
+        </ul>
+        <p style="margin: 0; font-size: 12.5px; color: var(--fg-faint)">Interrupted downloads can be resumed the next time you start the app.</p>
+      </div>
+      <div class="df"><button class="btn" type="button" style="border-color: var(--danger-border); color: var(--danger-fg)">Quit anyway</button><button class="btn pri" type="button">Keep running</button></div>
+    </section>
+
+    <div class="cap" style="margin-top: 28px">File browser · delete folder</div>
+    <section class="dlg" role="alertdialog" aria-label="Delete folder">
+      <div class="dh"><svg class="ico" viewBox="0 0 24 24" style="color: var(--danger)" aria-hidden="true"><path d="M4 6h16 M9 6V3h6v3 M6 6l1 15h10l1-15 M10 10v7 M14 10v7"></path></svg><h2 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Delete folder?</h2></div>
+      <div class="db">
+        <p style="margin: 0; font-size: 13.5px; color: var(--fg-muted)"><span class="mono" style="font-size: 12.5px; color: var(--fg)">/var/www/shop/releases/2026-10-02</span> will be deleted from the server permanently.</p>
+        <p style="margin: 0; font-size: 13px; color: var(--fg-subtle)">Contains <strong style="color: var(--fg)">1,284</strong> files and <strong style="color: var(--fg)">212</strong> folders.</p>
+      </div>
+      <div class="df"><button class="btn ghost" type="button">Cancel</button><button class="btn dngs" type="button">Delete</button></div>
+    </section>
+  </div>
+
+  <div style="grid-column: 1 / span 3">
+    <div class="cap">SshConfigImportDialog</div>
+    <section class="dlg" role="dialog" aria-label="Import ssh_config">
+      <div class="dh"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M12 3v11 M7 9l5 5 5-5 M3 15v6h18v-6"></path></svg><h2 class="h" style="margin: 0; font-size: 16px; color: var(--fg-strong)">Import ssh_config</h2></div>
+      <div style="display: grid; grid-template-columns: 300px 280px minmax(0, 1fr)">
+        <div class="db" style="border-right: 1px solid var(--border)">
+          <span class="lbl">Files read</span>
+          <div style="display: flex; flex-direction: column; gap: 2px; font-size: 12.5px">
+            <div style="display: flex; align-items: center; gap: 8px"><svg class="ico" viewBox="0 0 24 24" style="color: var(--success)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M8 15l2.5 2.5L16 12"></path></svg><span class="mono" style="font-size: 12px">~/.ssh/config</span><span style="margin-left: auto; color: var(--success-fg)">read</span></div>
+            <div style="display: flex; align-items: center; gap: 8px"><svg class="ico" viewBox="0 0 24 24" style="color: var(--success)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M8 15l2.5 2.5L16 12"></path></svg><span class="mono" style="font-size: 12px">~/.ssh/config.d/work</span><span style="margin-left: auto; color: var(--success-fg)">read</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M9 12l6 6 M15 12l-6 6"></path></svg><span class="mono" style="font-size: 12px">~/.ssh/known_hosts</span><span style="margin-left: auto">skipped</span></div>
+          </div>
+        </div>
+        <div class="db" style="border-right: 1px solid var(--border)">
+          <span class="lbl">Resulting folder structure</span>
+          <div style="font-size: 13px">
+            <div class="tr" style="height: 26px; padding: 0"><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 20V5h6l2 2h8v3 M3 20l3-10h16l-3 10z"></path></svg>work</div>
+            <div style="margin-left: 7px; border-left: 1px solid var(--border-strong); padding-left: 12px">
+              <div class="tr" style="height: 26px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12px">gitlab-runner</span></div>
+              <div class="tr" style="height: 26px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12px">jenkins</span></div>
+            </div>
+            <div class="tr" style="height: 26px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12px">bastion</span></div>
+            <div class="tr" style="height: 26px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12px">pi-garage</span></div>
+          </div>
+        </div>
+        <div class="db">
+          <span class="lbl">4 servers</span>
+          <div style="display: grid; grid-template-columns: 140px 120px 60px 90px minmax(0, 1fr); font-size: 12.5px; border: 1px solid var(--border)">
+            <span class="lbl" style="padding: 6px 8px; border-bottom: 1px solid var(--border-strong)">Name</span><span class="lbl" style="padding: 6px 8px; border-bottom: 1px solid var(--border-strong)">Address</span><span class="lbl" style="padding: 6px 8px; border-bottom: 1px solid var(--border-strong)">Port</span><span class="lbl" style="padding: 6px 8px; border-bottom: 1px solid var(--border-strong)">User</span><span class="lbl" style="padding: 6px 8px; border-bottom: 1px solid var(--border-strong)">Jump host</span>
+            <span class="mono" style="padding: 6px 8px; font-size: 12px">gitlab-runner</span><span class="mono" style="padding: 6px 8px; font-size: 12px">10.20.0.31</span><span class="mono" style="padding: 6px 8px; font-size: 12px">22</span><span class="mono" style="padding: 6px 8px; font-size: 12px">ci</span><span style="padding: 6px 8px">bastion <span style="color: var(--fg-faint)">· created in this import</span></span>
+            <span class="mono" style="padding: 6px 8px; font-size: 12px; background: var(--warning-subtle)">bastion</span><span class="mono" style="padding: 6px 8px; font-size: 12px; background: var(--warning-subtle)">203.0.113.10</span><span class="mono" style="padding: 6px 8px; font-size: 12px; background: var(--warning-subtle)">2222</span><span class="mono" style="padding: 6px 8px; font-size: 12px; background: var(--warning-subtle)">ops</span><span style="padding: 6px 8px; background: var(--warning-subtle); color: var(--warning-fg)">name “bastion” already taken</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-subtle)">
+            <label for="rn">Create under a new name:</label>
+            <input id="rn" placeholder="new name" value="bastion-ext" style="height: 30px; width: 180px; border: 1px solid var(--border-strong); background: var(--surface-sunken); color: var(--fg); padding: 0 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+          </div>
+        </div>
+      </div>
+      <div class="df"><button class="btn ghost" type="button">Cancel</button><button class="btn pri" type="button">Import 4 servers</button></div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

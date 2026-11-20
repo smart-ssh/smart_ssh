@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Mobile – Settings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.it{display:flex;align-items:center;gap:14px;width:100%;min-height:54px;padding:0 12px 0 16px;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.n{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--fg-faint);width:20px}
+.v{margin-left:auto;font-size:13px;color:var(--fg-faint)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 390px; height: 844px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <button type="button" aria-label="Close" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-soft); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+    <span class="h" style="font-size: 17px; color: var(--fg-strong)">Settings</span>
+  </header>
+  <nav aria-label="Settings sections" style="flex: 1; overflow: hidden">
+    
+      <button class="it" type="button"><span class="n">01</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"></path></svg><span>AI Provider</span><span class="v">Anthropic</span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">02</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 4h18v13H3z M8 21h8 M12 17v4"></path></svg><span>Display &amp; Language</span><span class="v">Dark · English</span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">03</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M2 12h5l3-8 4 16 3-8h5"></path></svg><span>Diagnostics</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">04</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5"></path></svg><span>Files</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">05</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M5 11h14v10H5z M8 11V6l2-3h4l2 3v5 M12 15v2"></path></svg><span>Master password</span><span class="v">On</span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">06</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M12 4v12 M6 10l6 6 6-6 M4 20h16"></path></svg><span>Data and backup</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">07</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M9 3h6v10H9z M5 10v3l3 4h8l3-4v-3 M12 17v4 M8 21h8"></path></svg><span>Voice input</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">08</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 3h18v18H3z M12 11v6 M12 7v.5"></path></svg><span>About</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">09</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M3 4h18v13H10l-5 4v-4H3z"></path></svg><span>Sessions &amp; Data</span><span class="v">30 days</span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+      <button class="it" type="button"><span class="n">10</span><svg class="ico" viewBox="0 0 24 24" style="color: var(--fg-muted)" aria-hidden="true"><path d="M9 2v5 M15 2v5 M6 7h12v5l-3 4H9l-3-4z M12 16v6"></path></svg><span>MCP Server</span><span class="v"></span><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--fg-faint); margin-left: 6px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    
+  </nav>
+</div>
+</body>
+</html>
