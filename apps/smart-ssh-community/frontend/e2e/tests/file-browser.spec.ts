@@ -241,8 +241,7 @@ test.describe("file browser, narrow layout @phone", () => {
     }
     await expectNoSeriousA11yViolations(page, "file browser narrow: overflow menu");
     await captureCurrent(page, "file-browser-narrow-overflow");
-    // The screenshot helper resizes through wide sizes, which drops the menu.
-    await more.click();
+    // captureCurrent does not resize, so the menu is still open.
     await page.getByRole("menuitem", { name: /As another user/ }).click();
     const field = page.getByLabel("Target user");
     await expectFullyInViewport(field);
