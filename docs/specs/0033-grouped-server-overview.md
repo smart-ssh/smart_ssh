@@ -36,10 +36,13 @@ Ansichten dürfen sich in Darstellung und Interaktion unterscheiden.
   Screenreadern nicht vorgelesen. Die Kopfzeile hat kein „+": neue Server legt
   man in der Verwalten-Ansicht an (dort in der gewählten Gruppe) oder über die
   Aktion des leeren Zustands.
-- Eine Serverzeile zeigt das Server-Symbol, den Namen in Festbreitenschrift und
-  darunter in kleiner, gedämpfter Festbreitenschrift `Benutzer@Host`; der Port
-  erscheint nur, wenn er nicht 22 ist. Tags, die Schlüsseldatei-Zeile und die
-  Kopie-Marke (Spec 0103) stehen in derselben Zeile bzw. darunter im selben Stil.
+- Eine Serverzeile zeigt das Server-Symbol und den Namen in Festbreitenschrift
+  sowie `Benutzer@Host` in kleiner, gedämpfter Festbreitenschrift. Im breiten
+  Layout steht `Benutzer@Host` neben dem Namen in derselben Zeile, im schmalen
+  Layout darunter; der Port erscheint nur, wenn er nicht 22 ist. Tags, die
+  Schlüsseldatei-Zeile und die Kopie-Marke (Spec 0103) stehen im selben Stil in
+  derselben Zeile bzw. darunter. Die Marke „Lokal“ und das Statuszeichen stehen
+  am Ende der Zeile.
 - Hat ein Server eine offene Sitzung, zeigt seine Zeile ein quadratisches
   Statuszeichen: grün bei bestehender Verbindung, gelb bei wartender
   Bestätigung oder wartender Host-Schlüssel-Abfrage, neutral bei getrennter
