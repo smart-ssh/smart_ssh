@@ -132,3 +132,22 @@ test("with many open tabs every tab keeps a readable width and the strip scrolls
   await tabs.last().locator("button").first().click();
   await expect(tabs.last().locator("button").first()).toHaveAttribute("aria-current", "page");
 });
+
+test("the tab context menu is not clipped by the fade mask while the strip overflows", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await openSession(app, "db-primary");
+  for (let i = 1; i <= 5; i++) {
+    await app.emit("mcp-action-tab-requested", { sessionId: `mcp-session-${i}`, serverId: "s-lab", clientName: `Client ${i}` });
+  }
+  const strip = page.getByRole("toolbar").first();
+  await expect.poll(() => strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(strip).toHaveAttribute("data-overflow-end", "");
+  await page.locator("header div.group").first().click({ button: "right" });
+  const item = page.getByRole("menuitem", { name: "New session" });
+  await expect(item).toBeVisible();
+  // The menu must live outside the masked strip, otherwise the mask clips it at the strip's bottom edge.
+  await expect(strip.getByRole("menuitem", { name: "New session" })).toHaveCount(0);
+  await item.click();
+  await expect(item).toHaveCount(0);
+});

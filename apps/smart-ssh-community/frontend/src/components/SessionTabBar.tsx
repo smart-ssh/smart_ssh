@@ -113,7 +113,9 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
   });
 
   return (
-    // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/interactive-supports-focus -- Werkzeugleiste mit Roving-Tabindex; die Pfeiltasten werden hier abgefangen, der Fokus liegt auf den Buttons darin.
+    <>
+    {/* The menu is a sibling, not a child, of the masked strip so the mask cannot clip it. */}
+    {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/interactive-supports-focus -- Werkzeugleiste mit Roving-Tabindex; die Pfeiltasten werden hier abgefangen, der Fokus liegt auf den Buttons darin. */}
     <div
       data-tauri-drag-region
       role="toolbar"
@@ -197,6 +199,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       >
         <Icon name="plus" size={14} />
       </Button>
+    </div>
       {menu && onNewSession && (
         <NewSessionMenu
           x={menu.x}
@@ -209,6 +212,6 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
           }}
         />
       )}
-    </div>
+    </>
   );
 }
