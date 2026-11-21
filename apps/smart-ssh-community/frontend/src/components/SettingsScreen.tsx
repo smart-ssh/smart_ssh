@@ -233,7 +233,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                       : "border-transparent text-fg-muted hover:bg-surface-raised"
                   }`}
                 >
-                  <span aria-hidden="true" className={`font-mono text-xs ${isActive ? "text-accent" : "text-fg-faint"}`}>{indexOf(category.id)}</span>
+                  <span aria-hidden="true" className="font-mono text-xs text-fg-faint">{indexOf(category.id)}</span>
                   <Icon name={category.icon ?? CATEGORY_ICONS[category.id] ?? "sliders"} className="hidden shrink-0 narrow:inline" />
                   <span className="min-w-0 flex-1 truncate">{category.label}</span>
                   <Icon name="chev-r" className="hidden shrink-0 text-fg-faint narrow:inline" />
