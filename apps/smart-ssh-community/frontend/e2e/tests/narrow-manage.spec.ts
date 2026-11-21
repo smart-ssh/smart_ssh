@@ -67,6 +67,18 @@ test.describe("narrow Manage area @phone", () => {
     await expect(page.getByRole("button", { name: "db-primary", exact: true })).toBeVisible();
   });
 
+  test("the narrow header shows the local icon for the local pseudo-server", async ({ app }) => {
+    const fixture = populated();
+    fixture.servers = [...fixture.servers!, server({ id: "s-local", name: "This computer", isLocal: true })];
+    await app.launch(fixture);
+    const page = app.page;
+    await openManage(app);
+    await page.getByRole("button", { name: "This computer Local", exact: true }).click();
+    const header = back(app).locator("xpath=..");
+    await expect(header.getByText("This computer", { exact: true })).toBeVisible();
+    await expect(header.locator('svg[data-icon="local"]')).toBeVisible();
+  });
+
   test("Back keeps the list scroll position", async ({ app }) => {
     const many = Array.from({ length: 40 }, (_, i) => server({ id: `s-${i}`, name: `server-${String(i).padStart(2, "0")}` }));
     await app.launch({ settings: { ...ACKNOWLEDGED }, servers: many });

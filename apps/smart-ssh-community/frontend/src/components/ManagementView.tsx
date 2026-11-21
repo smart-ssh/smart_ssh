@@ -160,10 +160,10 @@ export function ManagementView({
   const showDetail = !narrow || Boolean(selection);
 
   // Narrow header: icon and name of the open item (as in the design).
-  const selectedHeader = ((): { icon: "server" | "folder" | "warn"; name: string } | null => {
+  const selectedHeader = ((): { icon: "server" | "local" | "folder" | "warn"; name: string } | null => {
     if (selection?.kind === "server") {
       const s = servers.find((x) => x.id === selection.id);
-      return s ? { icon: "server", name: s.name } : null;
+      return s ? { icon: s.isLocal ? "local" : "server", name: s.name } : null;
     }
     if (selection?.kind === "unusableServer") {
       const s = unusableServers.find((x) => x.id === selection.id);
