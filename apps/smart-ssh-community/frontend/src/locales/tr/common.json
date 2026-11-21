@@ -141,7 +141,10 @@
     "importSshConfig": "İçe aktar …",
     "importSshConfigHint": "Sunucuları bir OpenSSH ssh_config dosyasından içe aktar",
     "exportSshConfig": "Dışa aktar …",
-    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar"
+    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar",
+    "title": "Sunucular",
+    "collapseGroup": "“{{name}}” grubunu daralt",
+    "expandGroup": "“{{name}}” grubunu genişlet"
   },
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",

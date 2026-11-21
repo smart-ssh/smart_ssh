@@ -67,12 +67,12 @@ test.describe("narrow settings @phone", () => {
 
     for (let i = 0; i < count; i++) {
       const item = dialog.locator("nav ul button").nth(i);
-      const label = (await item.innerText()).trim();
+      const label = (await item.locator("span").last().innerText()).trim();
       await item.click();
       const back = dialog.getByRole("button", { name: /Sections/ });
       await expectUsable(back);
       await expectFullyInViewport(dialog.getByRole("button", { name: "Close", exact: true }));
-      await expect(dialog.getByRole("heading", { level: 3, name: label })).toBeVisible();
+      await expect(dialog.getByRole("heading", { level: 2, name: label })).toBeVisible();
       await expectNoHorizontalPageScroll(page, dialog);
       await expectNoSeriousA11yViolations(page, `settings: ${label}`);
       if (label === "Extension section") await expect(dialog.getByTestId("ext-section")).toBeVisible();

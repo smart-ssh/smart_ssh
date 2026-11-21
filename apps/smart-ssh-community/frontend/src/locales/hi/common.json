@@ -141,7 +141,10 @@
     "importSshConfig": "आयात करें …",
     "importSshConfigHint": "OpenSSH ssh_config फ़ाइल से सर्वर आयात करें",
     "exportSshConfig": "निर्यात करें …",
-    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें"
+    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें",
+    "title": "सर्वर",
+    "collapseGroup": "समूह “{{name}}” समेटें",
+    "expandGroup": "समूह “{{name}}” फैलाएँ"
   },
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",

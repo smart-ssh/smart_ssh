@@ -17,6 +17,7 @@ import { testI18n } from "../testI18n";
 import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
 import { SettingsScreen } from "./SettingsScreen";
+import { SettingsSectionAction } from "./SettingsSectionAction";
 
 vi.mock("../api/api", async () =>
   (await import("../test/apiMock")).createApiMock({
@@ -224,7 +225,7 @@ describe("SettingsScreen section headings (Spec 0055, Teil 3)", () => {
     fireEvent.click(await screen.findByText(categoryLabel));
     await waitForSectionContent();
     const headings = screen.getAllByRole("heading");
-    expect(headings).toHaveLength(2); // "Einstellungen" (h2) + Kategorie-Titel (h3)
+    expect(headings).toHaveLength(2); // "Einstellungen" (h1) + Kategorie-Titel (h2)
   };
 
   it("'Anzeige & Sprache' (LanguageSettings) shows the category title exactly once", async () => {
@@ -395,5 +396,40 @@ describe("SettingsScreen keyboard behaviour (issue #385)", () => {
     view.unmount();
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+});
+
+describe("SettingsScreen shell (Issue #1376)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("numbers the categories by position and shows the index in the section header", async () => {
+    renderSettingsScreen();
+    const nav = await screen.findByRole("navigation");
+    const rows = within(nav).getAllByRole("button");
+    expect(rows[0]).toHaveTextContent("01");
+    expect(rows[1]).toHaveTextContent("02");
+    fireEvent.click(rows[1]);
+    const h2 = screen.getByRole("heading", { level: 2 });
+    expect(h2.previousElementSibling).toHaveTextContent("02");
+  });
+
+  it("renders an action passed by a section into the section header", async () => {
+    registerSettingsSection({
+      id: "ext-action",
+      label: "Ext action",
+      component: () => <SettingsSectionAction><button type="button">+ Add thing</button></SettingsSectionAction>,
+    });
+    renderSettingsScreen();
+    fireEvent.click(await screen.findByText("Ext action"));
+    const slot = await screen.findByTestId("settings-section-actions");
+    expect(await within(slot).findByRole("button", { name: "+ Add thing" })).toBeInTheDocument();
+  });
+
+  it("is not a modal frame: no dimmed backdrop class", async () => {
+    renderSettingsScreen();
+    await screen.findByRole("navigation");
+    const backdrop = document.querySelector("[data-modal-backdrop]")!;
+    expect(backdrop.className).not.toMatch(/bg-overlay/);
   });
 });

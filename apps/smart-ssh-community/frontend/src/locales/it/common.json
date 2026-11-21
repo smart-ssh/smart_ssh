@@ -141,7 +141,10 @@
     "importSshConfig": "Importa …",
     "importSshConfigHint": "Importa server da un file ssh_config di OpenSSH",
     "exportSshConfig": "Esporta …",
-    "exportSshConfigHint": "Esporta server in ssh_config di OpenSSH"
+    "exportSshConfigHint": "Esporta server in ssh_config di OpenSSH",
+    "title": "Server",
+    "collapseGroup": "Comprimi il gruppo «{{name}}»",
+    "expandGroup": "Espandi il gruppo «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Rilasci qui per spostare al livello superiore (nessun gruppo)",
