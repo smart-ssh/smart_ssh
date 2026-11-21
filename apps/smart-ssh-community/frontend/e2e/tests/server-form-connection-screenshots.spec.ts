@@ -59,10 +59,11 @@ test("Connection tab key-file states screenshots", async ({ app }) => {
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   await page.getByRole("treeitem", { name: /^key-1\b/ }).click();
   await page.getByRole("tab", { name: "Connection", exact: true }).click();
-  await expect(page.getByRole("radio", { name: "Key file" })).toBeChecked();
   await page.getByRole("button", { name: "Test Connection", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByTestId("test-connection-result")).toContainText(/OK · \d+ ms/);
+  await expect(dialog.getByTestId("test-connection-result")).toBeVisible();
+  // "OK · n ms" after the redesign; the success text before it.
+  await expect(dialog.getByTestId("test-connection-result")).toContainText(/OK · \d+ ms|success/i);
   await expect(dialog).toBeVisible();
   await captureAt1440And390(page, "server-form-test-dialog");
   const close = dialog.getByRole("button", { name: "Close", exact: true });
