@@ -108,6 +108,13 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     expect(await screen.findByText(invalidPatternText())).toBeInTheDocument();
     expect(screen.getByText(LIBRARY_ERROR)).toBeInTheDocument();
     expect(createRuleMock).toHaveBeenCalled();
+
+    const input = screen.getByPlaceholderText("ls *");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby")!;
+    const errorEl = document.getElementById(describedBy.split(" ").pop()!)!;
+    expect(errorEl).toHaveTextContent(invalidPatternText());
+    expect(errorEl).toHaveTextContent(LIBRARY_ERROR);
   });
 
   // Gegenprobe: Ein anderer Fehler behält das bisherige Verhalten (roher
@@ -123,6 +130,7 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
 
     expect(await screen.findByText("Datenbankfehler: disk full")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("ls *")).not.toHaveAttribute("aria-invalid");
   });
 });
 
