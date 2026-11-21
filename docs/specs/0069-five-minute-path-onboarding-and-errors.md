@@ -300,21 +300,23 @@ oder Verbinden.
 | `SSH_HOST_KEY_NOT_TRUSTED` | Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen. | Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint. |
 | `SSH_HOST_KEY_CONFIRM_TIMEOUT` | Die Host-Key-Abfrage wurde nicht rechtzeitig beantwortet; der Key wurde nicht übernommen. Erneut verbinden. | The host key prompt wasn't answered in time; the key was not trusted. Connect again. |
 
-Weitere Texte im Pfad (keine `errors.*`-Codes):
+Weitere Texte im Pfad (keine `errors.*`-Codes). Die Ergebnisse der
+Prüfungen zeigen vor dem Text ein Status-Symbol (Icon); der Text selbst
+enthält kein Zeichen davor:
 
-- Zugangsdatenprüfung „Authentifizierung fehlgeschlagen": „✗ Authentifizierung
-  fehlgeschlagen – API-Key prüfen" / „✗ Authentication failed – check the API
+- Zugangsdatenprüfung „Authentifizierung fehlgeschlagen": „Authentifizierung
+  fehlgeschlagen – API-Key prüfen" / „Authentication failed – check the API
   key".
 - Zugangsdatenprüfung bei Rate-Limit: „Zugangsdaten vermutlich gültig, der
   Anbieter drosselt aber gerade. In einer Minute erneut testen." / „Credentials
   look valid, but the provider is rate-limiting right now. Test again in a
   minute."
-- Verbindungstest im Server-Formular: „✗ Anmeldung abgelehnt. Benutzername und
-  Passwort bzw. Schlüssel prüfen." / „✗ Login rejected. Check the user name and
-  password or key." sowie „✗ Der Server antwortet nicht. Adresse, Port und
-  Firewall prüfen." / „✗ The server isn't responding. Check address, port and
-  firewall." Ohne Code erscheint „✗ Netzwerkfehler: {Text}" /
-  „✗ Network error: {text}".
+- Verbindungstest im Server-Formular: „Anmeldung abgelehnt. Benutzername und
+  Passwort bzw. Schlüssel prüfen." / „Login rejected. Check the user name and
+  password or key." sowie „Der Server antwortet nicht. Adresse, Port und
+  Firewall prüfen." / „The server isn't responding. Check address, port and
+  firewall." Ohne Code erscheint „Netzwerkfehler: {Text}" /
+  „Network error: {text}".
 
 Die Host-Key-Dialoge selbst bleiben unverändert; sie nennen bereits Ursache
 und Entscheidung (Fingerprint prüfen, Hinweis auf Man-in-the-Middle).

@@ -27,8 +27,8 @@ der Zusammenfassung selbst oder an der Kontext-Kürzung.
 
 ## 3. Anforderungen
 
-**A1 — Schließen.** Jede Karte hat oben rechts einen Knopf ✕ mit der
-Bezeichnung „Hinweis schließen", gestaltet wie der ✕-Knopf der
+**A1 — Schließen.** Jede Karte hat oben rechts einen Knopf mit Schließen-Symbol (Icon) mit der
+Bezeichnung „Hinweis schließen", gestaltet wie der Schließen-Knopf der
 Fehler-Karten. Ein Klick entfernt nur diese Karte. Beim nächsten
 Verbindungsende desselben Servers darf sie wieder erscheinen.
 
