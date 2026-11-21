@@ -1609,9 +1609,12 @@
     "quitResumeHint": "Afbrudte downloads kan genoptages, næste gang du starter appen.",
     "quitAnyway": "Afslut alligevel",
     "keepRunning": "Lad dem køre",
-    "summaryRunning": "{{count}} kører",
-    "summaryInterrupted": "{{count}} afbrudt",
-    "summaryFailed": "{{count}} mislykkedes",
+    "summaryRunning_one": "{{count}} kører",
+    "summaryRunning_other": "{{count}} kører",
+    "summaryInterrupted_one": "{{count}} afbrudt",
+    "summaryInterrupted_other": "{{count}} afbrudt",
+    "summaryFailed_one": "{{count}} mislykkedes",
+    "summaryFailed_other": "{{count}} mislykkedes",
     "remaining": "{{time}} tilbage"
   }
 }

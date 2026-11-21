@@ -1609,9 +1609,12 @@
     "quitResumeHint": "Avbrutna nedladdningar kan återupptas nästa gång du startar appen.",
     "quitAnyway": "Avsluta ändå",
     "keepRunning": "Låt dem fortsätta",
-    "summaryRunning": "{{count}} pågår",
-    "summaryInterrupted": "{{count}} avbrutna",
-    "summaryFailed": "{{count}} misslyckade",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbrutna",
+    "summaryInterrupted_other": "{{count}} avbrutna",
+    "summaryFailed_one": "{{count}} misslyckade",
+    "summaryFailed_other": "{{count}} misslyckade",
     "remaining": "{{time}} kvar"
   }
 }

@@ -1609,9 +1609,12 @@
     "quitResumeHint": "Yarıda kalan indirmeler uygulamayı bir sonraki açışınızda sürdürülebilir.",
     "quitAnyway": "Yine de çık",
     "keepRunning": "Çalışmaya devam etsin",
-    "summaryRunning": "{{count}} çalışıyor",
-    "summaryInterrupted": "{{count}} kesintiye uğradı",
-    "summaryFailed": "{{count}} başarısız",
+    "summaryRunning_one": "{{count}} çalışıyor",
+    "summaryRunning_other": "{{count}} çalışıyor",
+    "summaryInterrupted_one": "{{count}} kesintiye uğradı",
+    "summaryInterrupted_other": "{{count}} kesintiye uğradı",
+    "summaryFailed_one": "{{count}} başarısız",
+    "summaryFailed_other": "{{count}} başarısız",
     "remaining": "{{time}} kaldı"
   }
 }

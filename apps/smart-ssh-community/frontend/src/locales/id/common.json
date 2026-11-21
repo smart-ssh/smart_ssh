@@ -1599,9 +1599,9 @@
     "quitResumeHint": "Unduhan yang terhenti dapat dilanjutkan saat Anda memulai aplikasi lagi.",
     "quitAnyway": "Tetap keluar",
     "keepRunning": "Biarkan berjalan",
-    "summaryRunning": "{{count}} berjalan",
-    "summaryInterrupted": "{{count}} terhenti",
-    "summaryFailed": "{{count}} gagal",
+    "summaryRunning_other": "{{count}} berjalan",
+    "summaryInterrupted_other": "{{count}} terhenti",
+    "summaryFailed_other": "{{count}} gagal",
     "remaining": "sisa {{time}}"
   }
 }

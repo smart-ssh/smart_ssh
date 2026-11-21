@@ -163,6 +163,19 @@ describe("ActivityCenter", () => {
     await waitFor(() => expect(screen.queryByTestId("activity-center-button")).toBeNull());
   });
 
+  it("marks finished rows with check (succeeded) and warn (failed), running rows with the kind icon", async () => {
+    renderCenter();
+    await emit(activity({ id: "ok", state: "succeeded", done: 9, total: 9 }));
+    await emit(activity({ id: "bad", state: "failed", startedAt: 2 }));
+    await emit(activity({ id: "run", kind: "speech-model", state: "running", startedAt: 3 }));
+    fireEvent.click(await screen.findByTestId("activity-center-button"));
+    const dialog = await screen.findByRole("dialog");
+    const items = within(dialog).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    const icons = items.map((li) => li.querySelector("svg[data-icon]")?.getAttribute("data-icon"));
+    expect([...icons].sort()).toEqual(["check", "mic", "warn"]);
+  });
+
   it("shows the translated message for a speech model error code (issue #1326)", async () => {
     renderCenter();
     await emit(

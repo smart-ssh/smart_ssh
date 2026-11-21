@@ -1629,9 +1629,18 @@
     "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
     "quitAnyway": "Přesto ukončit",
     "keepRunning": "Nechat běžet",
-    "summaryRunning": "{{count}} běží",
-    "summaryInterrupted": "{{count}} přerušeno",
-    "summaryFailed": "{{count}} selhalo",
+    "summaryRunning_one": "běží: {{count}}",
+    "summaryRunning_few": "běží: {{count}}",
+    "summaryRunning_many": "běží: {{count}}",
+    "summaryRunning_other": "běží: {{count}}",
+    "summaryInterrupted_one": "přerušeno: {{count}}",
+    "summaryInterrupted_few": "přerušeno: {{count}}",
+    "summaryInterrupted_many": "přerušeno: {{count}}",
+    "summaryInterrupted_other": "přerušeno: {{count}}",
+    "summaryFailed_one": "selhalo: {{count}}",
+    "summaryFailed_few": "selhalo: {{count}}",
+    "summaryFailed_many": "selhalo: {{count}}",
+    "summaryFailed_other": "selhalo: {{count}}",
     "remaining": "zbývá {{time}}"
   }
 }

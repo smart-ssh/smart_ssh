@@ -1619,9 +1619,15 @@
     "quitResumeHint": "Las descargas interrumpidas se pueden reanudar la próxima vez que inicies la aplicación.",
     "quitAnyway": "Salir de todos modos",
     "keepRunning": "Seguir en ejecución",
-    "summaryRunning": "{{count}} en curso",
-    "summaryInterrupted": "{{count}} interrumpidas",
-    "summaryFailed": "{{count}} fallidas",
+    "summaryRunning_one": "{{count}} en curso",
+    "summaryRunning_many": "{{count}} en curso",
+    "summaryRunning_other": "{{count}} en curso",
+    "summaryInterrupted_one": "{{count}} interrumpidas",
+    "summaryInterrupted_many": "{{count}} interrumpidas",
+    "summaryInterrupted_other": "{{count}} interrumpidas",
+    "summaryFailed_one": "{{count}} fallidas",
+    "summaryFailed_many": "{{count}} fallidas",
+    "summaryFailed_other": "{{count}} fallidas",
     "remaining": "quedan {{time}}"
   }
 }

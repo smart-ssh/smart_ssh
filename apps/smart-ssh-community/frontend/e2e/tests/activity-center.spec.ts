@@ -85,6 +85,30 @@ test.describe("activity center redesign", () => {
   });
 });
 
+test.describe("activity center redesign, full fixture", () => {
+  test("every row kind is shown, screenshot", async ({ app }) => {
+    const interrupted = {
+      id: "int-1", kind: "speech-model", key: "small", titleKey: "activities.title",
+      titleParams: {}, done: 262144, total: 1048576, native: true,
+    };
+    await app.launch({ ...populated(), commands: { activities_interrupted: { result: [interrupted] } } });
+    const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
+    const speech = { ...base, kind: "speech-model", id: "sp" };
+    await app.emit("activity-changed", speech);
+    await app.emit("activity-changed", { ...base, id: "verify", total: null, done: 0, startedAt: 2 });
+    await app.emit("activity-changed", { ...base, id: "ok", state: "succeeded", done: 1048576, cancellable: false, startedAt: 3 });
+    await app.emit("activity-changed", { ...base, id: "bad", state: "failed", errorMessage: "Disk full", cancellable: false, startedAt: 4 });
+    await page.getByTestId("activity-center-button").click();
+    const popover = page.getByRole("dialog", { name: "Activities" });
+    await expect(popover.getByRole("listitem")).toHaveCount(5);
+    await expect(popover.locator('[data-icon="mic"]')).toHaveCount(2);
+    await expect(popover.locator('[data-icon="check"]')).toHaveCount(1);
+    await expect(popover.locator('[data-icon="warn"]')).toHaveCount(1);
+    await captureCurrent(page, "activity-center-full");
+  });
+});
+
 test.describe("activity center narrow @phone", () => {
   test("icon and popover fit the phone layout and Escape closes", async ({ app }) => {
     await app.launch(populated());

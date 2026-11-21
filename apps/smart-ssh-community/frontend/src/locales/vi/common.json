@@ -1599,9 +1599,9 @@
     "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
     "quitAnyway": "Vẫn thoát",
     "keepRunning": "Tiếp tục chạy",
-    "summaryRunning": "{{count}} đang chạy",
-    "summaryInterrupted": "{{count}} bị gián đoạn",
-    "summaryFailed": "{{count}} thất bại",
+    "summaryRunning_other": "{{count}} đang chạy",
+    "summaryInterrupted_other": "{{count}} bị gián đoạn",
+    "summaryFailed_other": "{{count}} thất bại",
     "remaining": "còn {{time}}"
   }
 }

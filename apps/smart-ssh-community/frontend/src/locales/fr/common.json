@@ -1619,9 +1619,15 @@
     "quitResumeHint": "Les téléchargements interrompus peuvent être repris au prochain démarrage.",
     "quitAnyway": "Quitter quand même",
     "keepRunning": "Laisser continuer",
-    "summaryRunning": "{{count}} en cours",
-    "summaryInterrupted": "{{count}} interrompues",
-    "summaryFailed": "{{count}} en échec",
+    "summaryRunning_one": "{{count}} en cours",
+    "summaryRunning_many": "{{count}} en cours",
+    "summaryRunning_other": "{{count}} en cours",
+    "summaryInterrupted_one": "{{count}} interrompues",
+    "summaryInterrupted_many": "{{count}} interrompues",
+    "summaryInterrupted_other": "{{count}} interrompues",
+    "summaryFailed_one": "{{count}} en échec",
+    "summaryFailed_many": "{{count}} en échec",
+    "summaryFailed_other": "{{count}} en échec",
     "remaining": "{{time}} restantes"
   }
 }

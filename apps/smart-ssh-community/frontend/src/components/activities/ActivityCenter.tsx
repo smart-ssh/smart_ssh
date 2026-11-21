@@ -134,7 +134,13 @@ function ActivityRow({ activity, rate }: { activity: Activity; rate: RateState |
   return (
     <li className="border-b border-border px-4 py-3 last:border-b-0" aria-label={title}>
       <div className="flex items-start gap-2">
-        <Icon name={kindIcon(a.kind)} className="mt-0.5 shrink-0 text-fg-muted" />
+        {a.state === "succeeded" ? (
+          <Icon name="check" className="mt-0.5 shrink-0 text-success-fg" />
+        ) : a.state === "failed" ? (
+          <Icon name="warn" className="mt-0.5 shrink-0 text-danger-fg-soft" />
+        ) : (
+          <Icon name={kindIcon(a.kind)} className="mt-0.5 shrink-0 text-fg-muted" />
+        )}
         <span className="min-w-0 flex-1 break-words text-sm font-bold text-fg">{title}</span>
         <span className={`label-condensed shrink-0 uppercase ${statusTone}`}>{statusText}</span>
       </div>

@@ -1609,9 +1609,12 @@
     "quitResumeHint": "बाधित डाउनलोड अगली बार ऐप शुरू करने पर फिर शुरू किए जा सकते हैं।",
     "quitAnyway": "फिर भी बंद करें",
     "keepRunning": "चलने दें",
-    "summaryRunning": "{{count}} चल रही",
-    "summaryInterrupted": "{{count}} बाधित",
-    "summaryFailed": "{{count}} विफल",
+    "summaryRunning_one": "{{count}} चल रही",
+    "summaryRunning_other": "{{count}} चल रही",
+    "summaryInterrupted_one": "{{count}} बाधित",
+    "summaryInterrupted_other": "{{count}} बाधित",
+    "summaryFailed_one": "{{count}} विफल",
+    "summaryFailed_other": "{{count}} विफल",
     "remaining": "{{time}} शेष"
   }
 }

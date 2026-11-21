@@ -1609,9 +1609,12 @@
     "quitResumeHint": "Οι διακοπείσες λήψεις μπορούν να συνεχιστούν στην επόμενη εκκίνηση της εφαρμογής.",
     "quitAnyway": "Έξοδος παρ' όλα αυτά",
     "keepRunning": "Να συνεχιστεί η εκτέλεση",
-    "summaryRunning": "{{count}} σε εξέλιξη",
-    "summaryInterrupted": "{{count}} διακόπηκαν",
-    "summaryFailed": "{{count}} απέτυχαν",
+    "summaryRunning_one": "{{count}} σε εξέλιξη",
+    "summaryRunning_other": "{{count}} σε εξέλιξη",
+    "summaryInterrupted_one": "{{count}} διακόπηκαν",
+    "summaryInterrupted_other": "{{count}} διακόπηκαν",
+    "summaryFailed_one": "{{count}} απέτυχαν",
+    "summaryFailed_other": "{{count}} απέτυχαν",
     "remaining": "απομένουν {{time}}"
   }
 }
