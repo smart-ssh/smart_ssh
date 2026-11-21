@@ -8,7 +8,7 @@
 // wartende Bestätigung nicht ablehnen.
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { disconnect, listSessions, respondToAction } from "../api/api";
+import { disconnect, listServers, listSessions, respondToAction } from "../api/api";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
@@ -398,5 +398,34 @@ describe("useSessionTabs / chat session id (Issue #611)", () => {
     expect(getChatSessionId("session-1")).toBe("chat-b");
     act(() => handler!({ sessionId: "not-a-tab-yet", chatSessionId: "chat-c" }));
     expect(getChatSessionId("not-a-tab-yet")).toBe("chat-c");
+  });
+});
+
+describe("useSessionTabs / local tab marker (#1409)", () => {
+  const server = (id: string, isLocal: boolean) => ({ id, name: id, isLocal }) as never;
+
+  it("marks a local tab even if the first listServers() call failed", async () => {
+    vi.mocked(listServers).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(listServers).mockResolvedValue([server("server-1", true)]);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = await renderWithOneTab();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.tabs[0].isLocal).toBe(true);
+  });
+
+  it("marks a local server added after startup when its tab opens", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false)]);
+    const { result } = await renderWithOneTab();
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false), server("local-2", true)]);
+    act(() => {
+      result.current.openTab("session-9", "local-2", "Local");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true);
   });
 });
