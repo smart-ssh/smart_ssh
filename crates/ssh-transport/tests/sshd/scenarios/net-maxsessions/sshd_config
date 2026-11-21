@@ -1,5 +1,0 @@
-PasswordAuthentication yes
-KbdInteractiveAuthentication no
-PermitRootLogin no
-Subsystem sftp internal-sftp
-MaxSessions 1

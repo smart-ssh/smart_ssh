@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "hop-chain-1"
-networks = ["hop-chain-a"]
-publish = true
