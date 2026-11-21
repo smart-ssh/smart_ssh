@@ -406,6 +406,40 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
   );
 }
 
+/** Finished output longer than this many lines is shown as a preview. */
+export const OUTPUT_PREVIEW_LINES = 8;
+
+/** Output block with an 8-line preview and a per-card "Show all" toggle (not persisted). */
+export function CollapsibleOutput({ text, className, cut = false }: { text: string; className: string; cut?: boolean }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  // Real output ends with a newline; it is not an extra line.
+  const body = text.endsWith("\n") ? text.slice(0, -1) : text;
+  const lines = body.split("\n");
+  const hidden = lines.length - OUTPUT_PREVIEW_LINES;
+  const cutNotice = cut ? <p className="text-fg-subtle">… {t("chat.outputTruncated")}</p> : null;
+  if (hidden <= 0) {
+    return (
+      <div>
+        <pre className={`whitespace-pre-wrap ${className}`}>{body}</pre>
+        {cutNotice}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <pre className={`whitespace-pre-wrap ${className}`}>
+        {expanded ? body : lines.slice(0, OUTPUT_PREVIEW_LINES).join("\n")}
+      </pre>
+      {(expanded || hidden > 0) && cutNotice}
+      {!expanded && <p className="text-fg-subtle">{t("chat.outputMoreLines", { count: hidden })}</p>}
+      <Button size="sm" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+        {expanded ? t("chat.outputShowLess") : t("chat.outputShowAll")}
+      </Button>
+    </div>
+  );
+}
+
 export function ActionResultView({
   result,
   sessionId,
@@ -421,6 +455,7 @@ export function ActionResultView({
   }
   const truncate = (s: string, max = 2000) =>
     s.length > max ? `${s.slice(0, max)}\n… ${t("chat.outputTruncated")}` : s;
+  const cap = (s: string, max = 2000) => s.slice(0, max);
   if (result.kind === "fileRead") {
     return (
       <div className="mt-2 space-y-1 border-t border-border pt-2 font-mono text-xs">
@@ -460,10 +495,10 @@ export function ActionResultView({
         </div>
       )}
       {result.stdout && (
-        <pre className="whitespace-pre-wrap text-fg-subtle">{truncate(result.stdout)}</pre>
+        <CollapsibleOutput text={cap(result.stdout)} cut={result.stdout.length > 2000} className="text-fg-subtle" />
       )}
       {result.stderr && (
-        <pre className="whitespace-pre-wrap text-danger-fg-soft">{truncate(result.stderr)}</pre>
+        <CollapsibleOutput text={cap(result.stderr)} cut={result.stderr.length > 2000} className="text-danger-fg-soft" />
       )}
       {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
     </div>

@@ -167,7 +167,10 @@ Spec 0054.
 ### 5.1 Oberfläche
 
 Der Dateibrowser ist eine umschaltbare Ansicht im rechten Bereich neben dem
-Terminal, mit dem Umschalter „Terminal | Dateien“. Der rechte Bereich ist der
+Terminal. Der Umschalter „KI | Terminal | Dateien“ sitzt in der Kopfzeile der
+Sitzung (ein Segment-Schalter mit Symbolen; der KI-Chat bleibt immer sichtbar,
+Terminal und Dateien schließen sich im rechten Bereich aus, und die Markierung
+der Rechteerhöhung bleibt am Segment „Dateien“). Der rechte Bereich ist der
 „direkte Zugriff auf den Server“, links liegt der KI-Chat. Der Browser zeigt
 eine Werkzeugleiste (Aufwärts, Ausgangsverzeichnis, Aktualisieren,
 Neuer Ordner, Hochladen, Spaltenmenü, Rechteerhöhung), eine Pfadleiste und eine Dateiliste (Name, Größe, Rechte,
