@@ -82,6 +82,11 @@ Bedienelemente sind nach WCAG ausgenommen. Die automatischen
 Barrierefreiheits-Scans der Browser-Tests prüfen das ohne Ausnahme für das
 Hauptfenster, jede Einstellungskategorie und die Befehlsbestätigung.
 
+Im erzwungenen Farbmodus des Systems (Windows-Kontrastdesign, „forced colors“)
+bleibt der Ein/Aus-Schalter lesbar: Ein, Aus und Deaktiviert erscheinen in
+Systemfarben (Spur und Knopf unterscheiden sich je Zustand), und der
+Fokusrahmen bleibt sichtbar.
+
 ## Farbgebung als austauschbares Theme
 
 Die Oberfläche bezieht jede Farbe aus benannten Rollen (Flächen, Text,
