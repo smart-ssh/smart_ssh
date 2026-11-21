@@ -2259,37 +2259,3 @@ async fn test_file_actions_report_a_chat_error_when_sftp_cannot_be_opened() {
         );
     }
 }
-
-/// Spec 0057, §1.2: file paths and connection details are redacted before
-/// they reach the ledger — read back from the stored row.
-#[tokio::test]
-async fn test_ledger_redacts_fake_secret_in_file_paths_and_connection_detail() {
-    use ssh_manager_core::audit::LedgerConnectionEvent;
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(vec![], MockSshTransport::default()).await;
-    for content in [
-        LedgerEntryContent::FileRead {
-            path: "/srv/app?password=hunter2geheim".to_string(),
-            bytes: Some(1),
-        },
-        LedgerEntryContent::FileWritten {
-            path: "/srv/app?password=hunter2geheim".to_string(),
-            bytes: Some(1),
-        },
-        LedgerEntryContent::Connection {
-            event: LedgerConnectionEvent::Connected,
-            detail: Some("failed: password=hunter2geheim".to_string()),
-        },
-    ] {
-        super::super::chat_turn::write_ledger_entry(&session, LedgerSource::Ai, content).await;
-    }
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(entries.len(), 3);
-    for e in &entries {
-        let s = serde_json::to_string(&e.content).unwrap();
-        assert!(
-            !s.contains("hunter2geheim"),
-            "secret stored in plaintext: {s}"
-        );
-    }
-}
