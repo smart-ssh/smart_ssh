@@ -205,18 +205,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
       <div className="flex min-h-0 flex-1">
         {showList && (
         <nav className="flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-          <ul
-            className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-              const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
-              const at = items.indexOf(document.activeElement as HTMLButtonElement);
-              if (at < 0) return;
-              e.preventDefault();
-              const next = e.key === "ArrowDown" ? Math.min(at + 1, items.length - 1) : Math.max(at - 1, 0);
-              items[next]?.focus();
-            }}
-          >
+          <ul className="flex-1">
             {categories.map((category) => {
               const isActive = category.id === active?.id;
               return (
@@ -229,6 +218,13 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                     setNarrowView("detail");
                   }}
                   aria-current={isActive ? "page" : undefined}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+                    e.preventDefault();
+                    const li = e.currentTarget.closest("li");
+                    const sibling = e.key === "ArrowDown" ? li?.nextElementSibling : li?.previousElementSibling;
+                    sibling?.querySelector("button")?.focus();
+                  }}
                   className={`flex h-[38px] w-full items-center gap-3 border-l-2 px-4 text-left text-sm narrow:h-[54px] focus-ring-inset ${
                     isActive
                       ? "border-accent bg-surface-raised text-fg-strong"
