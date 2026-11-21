@@ -86,6 +86,7 @@ const step = (
   status,
   errorCode,
   detail: null,
+  durationMs: null,
 });
 
 async function startTest(): Promise<string> {

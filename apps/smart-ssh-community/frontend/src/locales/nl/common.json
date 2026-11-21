@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " presenteert een andere sleutel dan de vorige keer is opgeslagen. Dit kan wijzen op een man-in-the-middle-aanval. Ga alleen door als u zeker weet dat de serversleutel legitiem is gewijzigd (bijv. herinstallatie van de server).",
     "known": "Bekend",
     "offeredNow": "Nu aangeboden",
+    "offered": "Aangeboden",
     "keyType": "Sleuteltype",
     "cancelConnection": "Verbinding annuleren",
     "trustAnyway": "Toch vertrouwen",

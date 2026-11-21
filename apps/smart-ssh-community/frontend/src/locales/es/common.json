@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " presenta una clave distinta de la guardada la última vez. Esto puede indicar un ataque de intermediario (man-in-the-middle). Continúe solo si está seguro de que la clave del servidor cambió legítimamente (p. ej. por una reinstalación del servidor).",
     "known": "Conocida",
     "offeredNow": "Ofrecida ahora",
+    "offered": "Ofrecida",
     "keyType": "Tipo de clave",
     "cancelConnection": "Cancelar conexión",
     "trustAnyway": "Confiar de todos modos",

@@ -112,7 +112,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           ) : null}
           <div className={`${rowClass} ${isMismatch ? "bg-danger-subtle" : ""}`}>
             <dt className={`${labelClass} ${isMismatch ? "text-danger-fg" : ""}`}>
-              {t("hostKeyDialog.offeredNow")}
+              {t(isMismatch ? "hostKeyDialog.offeredNow" : "hostKeyDialog.offered")}
             </dt>
             <dd className={`break-all select-text ${isMismatch ? "text-danger-fg" : "text-fg"}`}>{event.fingerprint}</dd>
           </div>

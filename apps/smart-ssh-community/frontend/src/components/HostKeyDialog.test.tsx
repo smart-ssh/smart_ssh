@@ -71,6 +71,17 @@ describe.each(branches)("HostKeyDialog ($name)", ({ event, role, rejectLabel, tr
     }
   });
 
+  it("labels the fingerprint row 'Offered Now' for a mismatch and 'Offered' for an unknown host", () => {
+    renderDialog(event);
+    const labels = screen.getAllByRole("term").map((n) => n.textContent);
+    if (role === "alertdialog") {
+      expect(labels).toContain("Jetzt angeboten");
+    } else {
+      expect(labels).toContain("Angeboten");
+      expect(labels).not.toContain("Jetzt angeboten");
+    }
+  });
+
   it("draws the danger corner ticks, hidden in the narrow layout, with an offset shadow", () => {
     if (role !== "alertdialog") return;
     renderDialog(event);

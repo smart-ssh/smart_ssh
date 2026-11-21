@@ -8,8 +8,9 @@ export function snapshotStep(
   status: ConnectStepSnapshot["status"],
   detail: ConnectStepSnapshot["detail"] = null,
   errorCode: string | null = null,
+  durationMs: number | null = null,
 ): ConnectStepSnapshot {
-  return { kind, hopIndex: 0, hop: "deploy@h.example.test:22", status, errorCode, detail };
+  return { kind, hopIndex: 0, hop: "deploy@h.example.test:22", status, errorCode, detail, durationMs };
 }
 
 /** The attempt id of the latest `connect` call, once it was made. */

@@ -55,7 +55,7 @@ function emitProgress(event: ConnectProgressEvent) {
 const step = (
   kind: ConnectProgressEvent["steps"][number]["kind"],
   status: "running" | "ok" | "failed",
-) => ({ kind, hopIndex: 0, hop: "u@h:22", status, errorCode: null, detail: null });
+) => ({ kind, hopIndex: 0, hop: "u@h:22", status, errorCode: null, detail: null, durationMs: null });
 
 beforeEach(() => {
   vi.clearAllMocks();

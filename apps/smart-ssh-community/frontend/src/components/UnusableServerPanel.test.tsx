@@ -43,6 +43,15 @@ function renderPanel(onDeleted = vi.fn()) {
 describe("UnusableServerPanel", () => {
   beforeEach(() => vi.mocked(deleteUnusableServer).mockReset());
 
+  it("renders the warning block with a warn icon", () => {
+    renderPanel();
+    const panel = screen.getByTestId("unusable-server-panel");
+    const icon = panel.querySelector('[data-icon="warn"]');
+    expect(icon).not.toBeNull();
+    const block = icon!.parentElement!;
+    expect(block).toHaveClass("border", "border-warning-border-strong", "bg-warning-subtle");
+  });
+
   it("shows the reason and offers no edit or connect action", () => {
     renderPanel();
     expect(screen.getByText("Nicht nutzbar")).toBeInTheDocument();

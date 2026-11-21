@@ -475,6 +475,7 @@
     "mismatchBodyAfterHost": " předkládá jiný klíč, než který byl uložen naposledy. To může naznačovat útok typu man-in-the-middle. Pokračujte, pouze pokud jste si jisti, že se klíč serveru změnil oprávněně (např. přeinstalací serveru).",
     "known": "Známý",
     "offeredNow": "Nyní nabídnutý",
+    "offered": "Nabídnutý",
     "keyType": "Typ klíče",
     "cancelConnection": "Zrušit připojení",
     "trustAnyway": "Přesto důvěřovat",

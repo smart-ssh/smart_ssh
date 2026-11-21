@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " presenterar en annan nyckel än den som sparades senast. Det kan tyda på en man-in-the-middle-attack. Fortsätt bara om du är säker på att servernyckeln ändrats på legitimt sätt (t.ex. ominstallation av servern).",
     "known": "Känd",
     "offeredNow": "Erbjuds nu",
+    "offered": "Erbjuds",
     "keyType": "Nyckeltyp",
     "cancelConnection": "Avbryt anslutning",
     "trustAnyway": "Lita på ändå",

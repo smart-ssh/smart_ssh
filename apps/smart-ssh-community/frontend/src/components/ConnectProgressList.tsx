@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { ConnectStepDetail, ConnectStepSnapshot } from "../api/types";
 import { Spinner, Icon } from "./ui";
 import type { TranslateFn } from "../i18nTypes";
+import { formatDuration } from "../lib/connectStepLog";
 
 type T = TranslateFn;
 
@@ -81,6 +82,11 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
               </span>
               {multiHop && <span className="text-fg-subtle">{step.hop}</span>}
               {detail && <span className="font-mono text-xs break-all text-fg-subtle">{detail}</span>}
+              {step.durationMs !== null && (
+                <span className="ml-auto shrink-0 font-mono text-xs text-fg-subtle" data-testid="step-duration">
+                  {formatDuration(step.durationMs)}
+                </span>
+              )}
             </li>
           );
         })}

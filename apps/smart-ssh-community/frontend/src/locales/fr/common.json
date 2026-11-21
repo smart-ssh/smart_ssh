@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " présente une clé différente de celle enregistrée la dernière fois. Cela peut indiquer une attaque de l’homme du milieu. Ne continuez que si vous êtes certain que la clé du serveur a changé légitimement (p. ex. réinstallation du serveur).",
     "known": "Connue",
     "offeredNow": "Présentée maintenant",
+    "offered": "Présentée",
     "keyType": "Type de clé",
     "cancelConnection": "Annuler la connexion",
     "trustAnyway": "Faire confiance malgré tout",
