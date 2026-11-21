@@ -35,7 +35,8 @@
     "thisDevice": "цей пристрій",
     "sessionOpen": "Сеанс відкрито",
     "sessionPending": "Очікує підтвердження",
-    "sessionDisconnected": "Сеанс від’єднано"
+    "sessionDisconnected": "Сеанс від’єднано",
+    "sessionReconnecting": "Перепідключення"
   },
   "settings": {
     "title": "Параметри",
@@ -404,6 +405,7 @@
     "riskSecondOpinionUnavailableHint": "Не вдалося отримати другу думку ШІ. Показано ризик за правилами.",
     "riskHint": "Оцінка на основі відомих шаблонів — без гарантій.",
     "runningSince": "виконується {{seconds}} с…",
+    "exitCode": "код завершення: {{code}}",
     "waitingForInputHint": "Ця команда, імовірно, чекає на введення. Зупиніть її, і ШІ запропонує неінтерактивний варіант.",
     "cancelCommand": "Відключити цю команду",
     "cancellingCommand": "Відключення…",

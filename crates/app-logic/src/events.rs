@@ -43,6 +43,10 @@ fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {
 
 pub use crate::status::ConnectionStatus;
 pub mod connect_warnings;
+mod host_key;
+#[cfg(feature = "ts-export")]
+pub(crate) use host_key::HostKeyVerificationNeededPayload;
+pub use host_key::{emit_host_key_verification_needed, HostKeyKind};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,67 +113,6 @@ pub fn emit_chat_session_changed(
         &ChatSessionChangedPayload {
             session_id,
             chat_session_id: chat_session_id.map(|id| id.to_string()),
-        },
-    );
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
-pub enum HostKeyKind {
-    Unknown,
-    Mismatch,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
-pub(crate) struct HostKeyVerificationNeededPayload {
-    session_id: SessionId,
-    /// Issue #37: Kennung genau dieser Abfrage (Generation der
-    /// Registrierung in `pending_host_key_confirmations`). Ein
-    /// `connect()`-Retry kann unter derselben `session_id` eine neue Abfrage
-    /// anlegen; `host-key-verification-ended` trägt dieselbe Kennung, damit
-    /// das Frontend nur die passende Abfrage schließt.
-    prompt_id: u64,
-    host: String,
-    port: u16,
-    kind: HostKeyKind,
-    fingerprint: String,
-    /// Nur bei `kind: Mismatch` gesetzt. Für den Mismatch-Fall (Spec 0005
-    /// Abschnitt 6.3, Warnung „Bekannt"/„Jetzt angeboten") reicht ein
-    /// einzelnes `fingerprint`-Feld nicht, um dem Frontend alten und neuen
-    /// Fingerprint nebeneinander zeigen zu lassen.
-    expected_fingerprint: Option<String>,
-    /// Algorithm name of the key the server offers now (e.g.
-    /// `ssh-ed25519`); `null` when it cannot be determined. Display-only.
-    key_type: Option<String>,
-}
-
-#[expect(clippy::too_many_arguments, reason = "one argument per input")]
-pub fn emit_host_key_verification_needed(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    prompt_id: u64,
-    host: String,
-    port: u16,
-    kind: HostKeyKind,
-    fingerprint: String,
-    expected_fingerprint: Option<String>,
-    key_type: Option<String>,
-) {
-    emit(
-        emitter,
-        names::HOST_KEY_VERIFICATION_NEEDED,
-        &HostKeyVerificationNeededPayload {
-            session_id,
-            prompt_id,
-            host,
-            port,
-            kind,
-            fingerprint,
-            expected_fingerprint,
-            key_type,
         },
     );
 }

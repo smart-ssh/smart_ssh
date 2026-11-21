@@ -107,7 +107,7 @@ export function ActionCard({
             </span>
           )}
           {autoExecHeader && exitCode !== null && (
-            <span className="font-mono text-xs text-fg-subtle">exit code: {exitCode}</span>
+            <span className="font-mono text-xs text-fg-subtle">{t("actionCard.exitCode", { code: exitCode })}</span>
           )}
         </div>
       </div>
@@ -115,12 +115,13 @@ export function ActionCard({
       <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
-          className={`block font-mono text-xs break-words whitespace-pre-wrap before:content-['$_'] ${
+          className={`block font-mono text-xs break-words whitespace-pre-wrap ${
             settled || rejectedByUser || blockedByFilter
               ? "text-fg-subtle line-through decoration-danger-strong/60"
               : "text-fg-soft"
           }`}
         >
+          <span aria-hidden="true" className="select-none">$ </span>
           {command}
         </code>
       )}
@@ -500,7 +501,7 @@ export function ActionResultView({
       {result.stderr && (
         <CollapsibleOutput text={cap(result.stderr)} cut={result.stderr.length > 2000} className="text-danger-fg-soft" />
       )}
-      {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
+      {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">{t("actionCard.exitCode", { code: result.exitCode ?? "—" })}</p>}
     </div>
   );
 }

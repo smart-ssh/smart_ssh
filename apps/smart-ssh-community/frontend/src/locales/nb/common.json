@@ -35,7 +35,8 @@
     "thisDevice": "denne enheten",
     "sessionOpen": "Økt åpen",
     "sessionPending": "Venter på bekreftelse",
-    "sessionDisconnected": "Økt frakoblet"
+    "sessionDisconnected": "Økt frakoblet",
+    "sessionReconnecting": "Kobler til på nytt"
   },
   "settings": {
     "title": "Innstillinger",
@@ -402,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "AI-andremeningen kunne ikke hentes. Risikoen som vises er den regelbaserte.",
     "riskHint": "Vurdering basert på kjente mønstre – ingen garanti.",
     "runningSince": "kjører i {{seconds}} s…",
+    "exitCode": "avslutningskode: {{code}}",
     "waitingForInputHint": "Denne kommandoen venter sannsynligvis på inndata. Stopp den, så foreslår AI-en en ikke-interaktiv variant.",
     "cancelCommand": "Koble fra denne kommandoen",
     "cancellingCommand": "Kobler fra…",
@@ -583,7 +585,7 @@
     "ollamaProbeRetry": "Søk igjen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama funnet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installer Ollama fra ollama.com, start den og last en modell (f.eks. `ollama pull llama3`), og søk deretter igjen.",
-    "typeLabel": "Sort",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

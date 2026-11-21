@@ -35,7 +35,8 @@
     "thisDevice": "αυτή η συσκευή",
     "sessionOpen": "Συνεδρία ανοιχτή",
     "sessionPending": "Αναμονή επιβεβαίωσης",
-    "sessionDisconnected": "Συνεδρία αποσυνδέθηκε"
+    "sessionDisconnected": "Συνεδρία αποσυνδέθηκε",
+    "sessionReconnecting": "Επανασύνδεση"
   },
   "settings": {
     "title": "Ρυθμίσεις",
@@ -402,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "Δεν ήταν δυνατή η λήψη της δεύτερης γνώμης AI. Ο κίνδυνος που εμφανίζεται βασίζεται σε κανόνες.",
     "riskHint": "Εκτίμηση βάσει γνωστών μοτίβων — χωρίς εγγύηση.",
     "runningSince": "εκτελείται εδώ και {{seconds}}s…",
+    "exitCode": "κωδικός εξόδου: {{code}}",
     "cancelCommand": "Αποσύνδεση από αυτή την εντολή",
     "cancellingCommand": "Αποσύνδεση…",
     "commandCancelledNotice": "Ακυρώθηκε χειροκίνητα — η έξοδος μπορεί να είναι ελλιπής, χωρίς κανονικό κωδικό εξόδου.",

@@ -62,7 +62,9 @@ describe("useRemoteDirectory", () => {
     });
     await waitFor(() => expect(result.current.path).toBe("/home/u"));
     vi.mocked(sftpList).mockRejectedValueOnce("boom");
-    act(() => result.current.load("/nope"));
+    act(() => {
+      void result.current.load("/nope");
+    });
     await waitFor(() => expect(result.current.error).toBe("boom"));
     expect(result.current.path).toBe("/home/u");
     expect(result.current.loading).toBe(false);
@@ -75,7 +77,9 @@ describe("useRemoteDirectory", () => {
     });
     await waitFor(() => expect(result.current.path).toBe("/home/u"));
     vi.mocked(sftpList).mockResolvedValueOnce([entry("a.txt"), entry("b.txt")]);
-    act(() => result.current.load(result.current.path));
+    act(() => {
+      void result.current.load(result.current.path);
+    });
     await waitFor(() => expect(result.current.entries).toHaveLength(2));
     expect(result.current.path).toBe("/home/u");
   });
@@ -88,7 +92,9 @@ describe("useRemoteDirectory", () => {
     await waitFor(() =>
       expect(sftpList).toHaveBeenCalledWith("s1", "/home/u", "root"),
     );
-    act(() => result.current.load("/etc", null));
+    act(() => {
+      void result.current.load("/etc", null);
+    });
     await waitFor(() =>
       expect(sftpList).toHaveBeenCalledWith("s1", "/etc", null),
     );

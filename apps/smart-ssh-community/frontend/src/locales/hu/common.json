@@ -35,7 +35,8 @@
     "thisDevice": "ez az eszköz",
     "sessionOpen": "Munkamenet nyitva",
     "sessionPending": "Megerősítésre vár",
-    "sessionDisconnected": "Munkamenet megszakadt"
+    "sessionDisconnected": "Munkamenet megszakadt",
+    "sessionReconnecting": "Újracsatlakozás"
   },
   "settings": {
     "title": "Beállítások",
@@ -402,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "Az AI második vélemény nem szerezhető be. A megjelenített kockázat a szabályalapú.",
     "riskHint": "Ismert mintákon alapuló értékelés – nem garancia.",
     "runningSince": "{{seconds}} mp-e fut…",
+    "exitCode": "kilépési kód: {{code}}",
     "cancelCommand": "A parancs megszakítása",
     "cancellingCommand": "Megszakítás…",
     "commandCancelledNotice": "Kézzel megszakítva – a kimenet hiányos lehet, nincs szabályos kilépési kód.",

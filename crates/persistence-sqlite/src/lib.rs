@@ -6,6 +6,7 @@
 //! `ssh-manager-core` — siehe Spec 0004 Abschnitt 1: `core` bleibt frei von
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
+mod activity_session_store;
 mod ai_provider_store;
 mod backup_store;
 mod chat_session_store;
@@ -45,6 +46,8 @@ pub mod test_support;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_activity_record;
+#[cfg(test)]
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
@@ -83,6 +86,9 @@ mod tests_runtime_bridge_guard;
 #[cfg(test)]
 mod tests_server_columns;
 
+pub use activity_session_store::{
+    ActivitySession, ActivitySessionKind, SqliteActivitySessionStore,
+};
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };

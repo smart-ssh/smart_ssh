@@ -35,7 +35,8 @@
     "thisDevice": "este dispositivo",
     "sessionOpen": "Sesión abierta",
     "sessionPending": "Esperando confirmación",
-    "sessionDisconnected": "Sesión desconectada"
+    "sessionDisconnected": "Sesión desconectada",
+    "sessionReconnecting": "Reconectando"
   },
   "settings": {
     "title": "Ajustes",
@@ -403,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "No se pudo obtener la segunda opinión de la IA. El riesgo mostrado es el basado en reglas.",
     "riskHint": "Evaluación basada en patrones conocidos: sin garantía.",
     "runningSince": "en ejecución desde hace {{seconds}} s…",
+    "exitCode": "código de salida: {{code}}",
     "waitingForInputHint": "Este comando probablemente está esperando una entrada. Deténlo y la IA propondrá una variante no interactiva.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",

@@ -21,11 +21,14 @@ test("review screenshots: AI provider settings and add dialog", async ({ app }) 
   await expect(dialog.getByText("Primary").first()).toBeVisible();
   const second = dialog.getByRole("checkbox", { name: /second opinion/i }).first();
   await second.check({ force: true });
+  await expect(second).toBeChecked();
   await captureScreen(page, `settings-aiprovider-${scheme}`);
 
   await dialog.getByRole("button", { name: "Add Provider", exact: true }).click();
   const add = page.getByRole("dialog", { name: "Add Provider" });
   await expect(add).toBeVisible();
-  await add.getByRole("button", { name: /Advanced/ }).click();
+  const advanced = add.getByRole("button", { name: /Advanced/ });
+  await advanced.click();
+  await expect(advanced).toHaveAttribute("aria-expanded", "true");
   await captureScreen(page, `add-provider-dialog-${scheme}`);
 });
