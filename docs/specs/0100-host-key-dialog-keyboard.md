@@ -22,6 +22,13 @@ anderer Sitzungs-Tab aktiv ist); er ist nie unsichtbar oder unerreichbar. Er
 wird aus der Server-Liste (Verbindungsaufbau) und aus dem Server-Formular
 (Verbindungstest) geöffnet.
 
+Gehört die Verbindung zu einem gespeicherten Server, steht dessen Name (so,
+wie der Nutzer ihn vergeben hat) als erste Zeile im Dialog, darunter wie
+gewohnt Host und Port. Beim Verbindungstest eines noch nicht gespeicherten
+Servers gibt es keinen Namen; der Dialog zeigt dann nur Host und Port. Der
+Name dient allein der Anzeige und fließt nie in die Vertrauensentscheidung
+oder den Eintrag in der Liste bekannter Hosts ein.
+
 Ein Klick auf den Hintergrund entscheidet nichts.
 
 ## 2. Anforderungen

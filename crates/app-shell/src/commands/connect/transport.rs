@@ -201,6 +201,7 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         app_logic::connect::host_key_flow::HostKeyFlowContext {
                             session_id,
                             server_id,
+                            server_name: Some(server.name.clone()),
                             host_key_store: state.host_key_store.as_ref(),
                             confirmations: &state.pending_host_key_confirmations,
                             sessions: &state.sessions,

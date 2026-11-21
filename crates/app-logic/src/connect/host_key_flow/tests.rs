@@ -265,6 +265,7 @@ impl Fixture {
         let ctx = HostKeyFlowContext {
             session_id: self.session_id,
             server_id: ServerId(Uuid::new_v4()),
+            server_name: None,
             host_key_store: &self.store,
             confirmations: &self.confirmations,
             sessions: &self.sessions,

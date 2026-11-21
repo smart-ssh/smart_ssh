@@ -28,6 +28,8 @@ pub fn connect_cancelled_error() -> CommandError {
 pub struct HostKeyFlowContext<'a> {
     pub session_id: SessionId,
     pub server_id: ServerId,
+    /// Name of the saved server, shown in the dialog (display-only).
+    pub server_name: Option<String>,
     pub host_key_store: &'a dyn HostKeyStore,
     pub confirmations: &'a ConfirmationRegistry<SessionId, HostKeyUserDecision>,
     pub sessions: &'a SessionManager,
@@ -61,6 +63,7 @@ pub async fn resolve_pending_host_key(
     let HostKeyFlowContext {
         session_id,
         server_id,
+        server_name,
         host_key_store,
         confirmations,
         sessions,
@@ -134,6 +137,7 @@ pub async fn resolve_pending_host_key(
         fingerprint,
         expected_fingerprint,
         key_type,
+        server_name,
     );
 
     let wait = tokio::select! {

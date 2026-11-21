@@ -144,6 +144,12 @@ pub(crate) struct HostKeyVerificationNeededPayload {
     /// Algorithm name of the key the server offers now (e.g.
     /// `ssh-ed25519`); `null` when it cannot be determined. Display-only.
     key_type: Option<String>,
+    /// Name the user gave the saved server this connection belongs to;
+    /// `None` when there is none. Display-only: never used for the trust
+    /// decision or the known-hosts entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    server_name: Option<String>,
 }
 
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
@@ -157,6 +163,7 @@ pub fn emit_host_key_verification_needed(
     fingerprint: String,
     expected_fingerprint: Option<String>,
     key_type: Option<String>,
+    server_name: Option<String>,
 ) {
     emit(
         emitter,
@@ -170,6 +177,7 @@ pub fn emit_host_key_verification_needed(
             fingerprint,
             expected_fingerprint,
             key_type,
+            server_name,
         },
     );
 }
