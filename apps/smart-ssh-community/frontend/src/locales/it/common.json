@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " presenta una chiave diversa da quella memorizzata l'ultima volta. Ciò può indicare un attacco man-in-the-middle. Proceda solo se è certo/a che la chiave del server sia cambiata legittimamente (ad es. reinstallazione del server).",
     "known": "Nota",
     "offeredNow": "Offerta ora",
+    "offered": "Offerta",
     "keyType": "Tipo di chiave",
     "cancelConnection": "Annulla connessione",
     "trustAnyway": "Considera attendibile comunque",

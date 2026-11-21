@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " presenterer en annen nøkkel enn den som ble lagret sist. Dette kan tyde på et man-in-the-middle-angrep. Fortsett bare hvis du er sikker på at servernøkkelen er endret med rette (f.eks. ved ominstallering av serveren).",
     "known": "Kjent",
     "offeredNow": "Tilbudt nå",
+    "offered": "Tilbudt",
     "keyType": "Nøkkeltype",
     "cancelConnection": "Avbryt tilkobling",
     "trustAnyway": "Stol på likevel",

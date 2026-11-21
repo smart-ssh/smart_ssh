@@ -11,7 +11,7 @@ const snap = (
   kind: ConnectStepSnapshot["kind"],
   status: ConnectStepSnapshot["status"],
   detail: ConnectStepSnapshot["detail"] = null,
-): ConnectStepSnapshot => ({ kind, hopIndex: 0, hop: "u@h:22", status, errorCode: null, detail });
+): ConnectStepSnapshot => ({ kind, hopIndex: 0, hop: "u@h:22", status, errorCode: null, detail, durationMs: null });
 
 function tab(overrides: Partial<SessionTab>): SessionTab {
   return {
@@ -40,6 +40,25 @@ function view(t: SessionTab, onRetry = vi.fn(), onClose = vi.fn()) {
 }
 
 describe("ConnectingTabView", () => {
+  it("shows status icons per step (incl. warning) and mono durations only for finished steps", () => {
+    view(
+      tab({
+        progress: [
+          { ...snap("dnsResolution", "ok"), durationMs: 42 },
+          { ...snap("outdatedAlgorithms", "warning"), durationMs: 1530 },
+          snap("hostKeyCheck", "running"),
+        ],
+      }),
+    );
+    const items = screen.getAllByRole("listitem");
+    expect(items[0].querySelector('[data-icon="check"]')).not.toBeNull();
+    expect(items[1].querySelector('[data-icon="warn"]')).not.toBeNull();
+    expect(items[0].querySelector('[data-testid="step-duration"]')).toHaveTextContent("42 ms");
+    expect(items[0].querySelector('[data-testid="step-duration"]')).toHaveClass("font-mono");
+    expect(items[1].querySelector('[data-testid="step-duration"]')).toHaveTextContent("1.5 s");
+    expect(items[2].querySelector('[data-testid="step-duration"]')).toBeNull();
+  });
+
   it("lists the steps with detail texts and offers Cancel while running", () => {
     const { onClose } = view(
       tab({

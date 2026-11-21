@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": " 出示的密钥与上次保存的不同。这可能意味着存在中间人攻击。仅当您确定服务器密钥是合理更改（例如服务器重装）时，才可继续。",
     "known": "已知",
     "offeredNow": "当前出示",
+    "offered": "出示",
     "keyType": "密钥类型",
     "cancelConnection": "取消连接",
     "trustAnyway": "仍然信任",

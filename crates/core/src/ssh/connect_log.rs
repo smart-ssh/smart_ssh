@@ -588,6 +588,8 @@ pub struct ConnectStepSnapshot {
     /// Error code when `failed`.
     pub error_code: Option<String>,
     pub detail: Option<StepDetail>,
+    /// Elapsed milliseconds of a finished step; `None` while it runs.
+    pub duration_ms: Option<u64>,
 }
 
 impl ConnectStepSnapshot {
@@ -650,6 +652,7 @@ impl ConnectStepSnapshot {
                     status: status.to_string(),
                     error_code,
                     detail,
+                    duration_ms: if running { None } else { r.duration_ms },
                 }
             })
             .collect()
@@ -991,6 +994,18 @@ mod tests {
             }
         );
         assert!(steps[1].duration_ms.is_some());
+    }
+
+    #[test]
+    fn snapshot_carries_duration_only_for_finished_steps() {
+        let log = ConnectLog::new();
+        let done = log.start(0, "u@a:22", ConnectStep::SessionReady);
+        log.succeed(done);
+        log.start(0, "u@a:22", ConnectStep::SessionReady);
+        let snaps = log.progress_snapshot();
+        assert!(snaps[0].duration_ms.is_some());
+        assert_eq!(snaps[1].status, "running");
+        assert_eq!(snaps[1].duration_ms, None);
     }
 
     #[test]

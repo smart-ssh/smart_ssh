@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " esittää eri avaimen kuin viimeksi tallennettu. Tämä voi viitata väliinhyökkäykseen (man-in-the-middle). Jatka vain, jos olet varma, että palvelimen avain on muuttunut oikeutetusti (esim. palvelimen uudelleenasennus).",
     "known": "Tunnettu",
     "offeredNow": "Nyt tarjottu",
+    "offered": "Tarjottu",
     "keyType": "Avaintyyppi",
     "cancelConnection": "Peruuta yhteys",
     "trustAnyway": "Luota silti",
