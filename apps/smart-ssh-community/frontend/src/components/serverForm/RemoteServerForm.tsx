@@ -12,7 +12,8 @@ import type { GroupDto, ServerDto } from "../../api/types";
 import { HostKeyDialog } from "../HostKeyDialog";
 import { NotesPanel } from "../NotesPanel";
 import { TestConnectionDialog } from "../TestConnectionDialog";
-import { Button, Tabs, tabId } from "../ui";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
+import { Button, Icon, Tabs, tabId } from "../ui";
 import { ConnectionTab } from "./ConnectionTab";
 import { DeleteServerSection } from "./DeleteServerSection";
 import { ExtensionTabPanels } from "./ExtensionTabPanels";
@@ -182,11 +183,31 @@ export function RemoteServerForm({
 
   // Spec 0032, Abschnitt 3/5: host/port/username/auth/jump-host sind für
 
+  const narrow = useIsNarrow();
+  const showConnect = !isCreate && !!serverId && !!loaded && !!onConnect;
+  // One Connect button: in the title row on wide screens, next to Save on narrow ones.
+  const connectButton = showConnect ? (
+    <Button
+      variant={narrow ? "secondary" : "primary"}
+      type="button"
+      disabled={dirty || saving}
+      title={dirty ? t("serverForm.connectSaveFirst") : undefined}
+      onClick={() => onConnect(serverId)}
+      className="shrink-0 narrow:min-h-11 narrow:w-32"
+    >
+      {t("serverForm.connect")}
+    </Button>
+  ) : null;
+
   return (
     <div className="max-w-5xl space-y-6 p-4">
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">
-        {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
-      </h2>
+      <div className="flex items-center gap-3">
+        <Icon name="server" size={24} className="shrink-0 text-fg-muted" />
+        <h2 className="min-w-0 flex-1 break-words font-heading text-2xl font-semibold uppercase tracking-wide text-fg-strong">
+          {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
+        </h2>
+        {showConnect && !narrow && connectButton}
+      </div>
 
       <Tabs
         tabs={tabItems}
@@ -194,6 +215,7 @@ export function RemoteServerForm({
         onChange={setActiveTab}
         ariaLabel={t("serverForm.tabs.label")}
         idBase={tabsIdBase}
+        tabClassName="narrow:min-h-11 narrow:flex-1"
       />
 
       <form
@@ -237,24 +259,14 @@ export function RemoteServerForm({
         {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         {activeTab !== "notes" && (
-          <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-surface-raised narrow:bg-surface narrow:px-4 narrow:py-2">
-            <div className="flex flex-wrap items-center gap-2 narrow:flex-col narrow:items-stretch">
-              <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
+          <div className="border-t border-border pt-4 narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-surface-raised narrow:bg-surface narrow:px-4 narrow:py-2">
+            <div className="flex flex-wrap items-center gap-2 narrow:flex-nowrap">
+              <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:flex-1">
                 {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
               </Button>
-              {!isCreate && serverId && loaded && onConnect && (
-                <Button
-                  type="button"
-                  disabled={dirty || saving}
-                  title={dirty ? t("serverForm.connectSaveFirst") : undefined}
-                  onClick={() => onConnect(serverId)}
-                  className="narrow:min-h-11 narrow:w-full"
-                >
-                  {t("serverForm.connect")}
-                </Button>
-              )}
+              {showConnect && narrow && connectButton}
               {!isCreate && dirty && onConnect && (
-                <span className="text-xs text-fg-subtle" data-testid="connect-save-first-hint">
+                <span className="text-xs text-fg-subtle narrow:sr-only" data-testid="connect-save-first-hint">
                   {t("serverForm.connectSaveFirst")}
                 </span>
               )}
