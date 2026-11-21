@@ -74,7 +74,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       ro?.disconnect();
     };
   }, [hasTabs, tabs.length]);
-  const fade = `${overflow.start ? "transparent, #000 1.5rem" : "#000, #000"}, ${overflow.end ? "#000 calc(100% - 1.5rem), transparent" : "#000, #000"}`;
+  const fade = `${overflow.start ? "transparent, currentColor 1.5rem" : "currentColor, currentColor"}, ${overflow.end ? "currentColor calc(100% - 1.5rem), transparent" : "currentColor, currentColor"}`;
   const mask = overflow.start || overflow.end ? `linear-gradient(to right, ${fade})` : undefined;
   if (tabs.length === 0) return null;
   const stopId =
