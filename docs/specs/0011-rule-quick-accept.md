@@ -196,13 +196,6 @@ derselben Kopfzeile (nicht mehr unter der Ausgabe). Bei wiederhergestellten
 Chats ohne Regeldaten zeigt die Kopfzeile nur „Automatisch ausgeführt“. Der
 Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
 
-Die Ausgabe eines beendeten Kommandos (stdout und stderr getrennt) zeigt in der
-Karte nur die ersten 8 Zeilen, wenn sie länger ist, dazu „… N weitere Zeilen“ und
-eine Schaltfläche „Alle anzeigen“ / „Weniger anzeigen“ (`aria-expanded`, per
-Tastatur bedienbar). Der Zustand gilt je Karte und wird nicht gespeichert; „In Notiz
-übernehmen“ übernimmt immer den vollen Text. Ausgabe mit höchstens 8 Zeilen hat
-keine Schaltfläche. Laufende Ausgabe bleibt unverändert.
-
 - Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel
   jedes Teilkommandos; deckt eine Regel mehrere Teilkommandos ab, erscheint sie
   nur einmal.
@@ -215,6 +208,20 @@ keine Schaltfläche. Laufende Ausgabe bleibt unverändert.
   die von einem externen Werkzeug (MCP) angefragt wurden.
 - Die Zeile ist reine Anzeige: Sie stammt aus derselben Auswertung, die die
   Entscheidung getroffen hat, und ändert diese nicht.
+
+## 7a. Ausgabe ausgeführter Kommandos in der Karte
+
+Gilt für jede Karte eines ausgeführten Kommandos, ob automatisch oder nach
+Bestätigung ausgeführt.
+
+Die Ausgabe eines beendeten Kommandos (stdout und stderr getrennt) zeigt in der
+Karte nur die ersten 8 Zeilen, wenn sie länger ist, dazu „… N weitere Zeilen“ und
+eine Schaltfläche „Alle anzeigen“ / „Weniger anzeigen“ (`aria-expanded`, per
+Tastatur bedienbar). Der Zustand gilt je Karte und wird nicht gespeichert; „In Notiz
+übernehmen“ übernimmt immer den vollen Text. Ausgabe mit höchstens 8 Zeilen hat
+keine Schaltfläche. Laufende Ausgabe bleibt unverändert.
+Die Obergrenze von 2000 Zeichen und der Hinweis „abgeschnitten“ bleiben auch in der
+eingeklappten Ansicht sichtbar.
 
 ## 8. Vorschläge je Teilkommando und Sammel-Speichern
 
