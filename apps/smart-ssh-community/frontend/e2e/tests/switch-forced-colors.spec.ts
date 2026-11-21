@@ -2,7 +2,7 @@
 // mode (Windows high contrast): on/off differ in knob colour and track fill,
 // disabled uses GrayText, and the focus ring stays visible.
 import type { Locator } from "@playwright/test";
-import { expect, openSettings, test } from "../support/app";
+import { type AppDriver, expect, openSettings, test } from "../support/app";
 import { populated } from "../support/data";
 
 type Look = { track: string; knob: string; border: string; outline: string; outlineStyle: string; opacity: string };
@@ -21,7 +21,7 @@ const look = (sw: Locator) =>
     };
   });
 
-async function openSwitch(app: { page: import("@playwright/test").Page; launch: (c: unknown) => Promise<void> }) {
+async function openSwitch(app: AppDriver) {
   await app.launch(populated());
   const dialog = await openSettings(app.page, "Sessions & Data");
   return dialog.locator("input.switch");
