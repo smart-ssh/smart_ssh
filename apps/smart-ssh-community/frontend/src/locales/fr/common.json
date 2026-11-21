@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
+    "current": "actuel",
     "hintGroup": "→ déplacer dans ce groupe",
     "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
     "moveTo": "Déplacer « {{name}} » vers…"
@@ -885,6 +886,8 @@
     "groupsHeading": "Structure de dossiers obtenue",
     "entriesHeading": "{{count}} serveurs",
     "field": {
+      "name": "Nom",
+      "include": "Inclure",
       "host": "Adresse",
       "port": "Port",
       "username": "Utilisateur",
@@ -960,6 +963,9 @@
       "proxyJumpLocalPseudoServer": "pointe vers le pseudo-serveur local"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} serveur",
+    "confirmCount_many": "Importer {{count}} de serveurs",
+    "confirmCount_other": "Importer {{count}} serveurs",
     "applying": "Import …",
     "result": {
       "success": "{{created}} serveurs créés, {{groups}} dossiers, {{skipped}} conflit(s) ignoré(s).",

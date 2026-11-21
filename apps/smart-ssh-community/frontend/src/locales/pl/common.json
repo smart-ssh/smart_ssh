@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
+    "current": "bieżąca",
     "hintGroup": "→ przenieś do tej grupy",
     "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
     "moveTo": "Przenieś „{{name}}” do…"
@@ -892,6 +893,8 @@
     "groupsHeading": "Wynikowa struktura folderów",
     "entriesHeading": "Serwery: {{count}}",
     "field": {
+      "name": "Nazwa",
+      "include": "Uwzględnij",
       "host": "Adres",
       "port": "Port",
       "username": "Użytkownik",
@@ -967,6 +970,10 @@
       "proxyJumpLocalPseudoServer": "wskazuje na lokalny pseudoserwer"
     },
     "confirm": "Importuj",
+    "confirmCount_one": "Importuj {{count}} serwer",
+    "confirmCount_few": "Importuj {{count}} serwery",
+    "confirmCount_many": "Importuj {{count}} serwerów",
+    "confirmCount_other": "Importuj {{count}} serwera",
     "applying": "Importowanie …",
     "result": {
       "success": "Utworzono serwerów: {{created}}, folderów: {{groups}}, pominięto konfliktów: {{skipped}}.",

@@ -374,6 +374,7 @@
     "notes.editedByAi": "same word in this language"
   },
   "ro": {
+    "sshConfigImport.field.include": "same word in this language",
     "common.ok": "same word in this language",
     "sidebar.addServer": "same word in this language",
     "serverForm.titleExisting": "same word in this language",

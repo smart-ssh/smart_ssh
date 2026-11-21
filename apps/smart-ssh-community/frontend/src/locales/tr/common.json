@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
     "hintRoot": "→ üst düzey (grupsuz)",
+    "current": "geçerli",
     "hintGroup": "→ bu gruba taşı",
     "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
     "moveTo": "“{{name}}” öğesini taşı…"
@@ -878,6 +879,8 @@
     "groupsHeading": "Ortaya çıkan klasör yapısı",
     "entriesHeading": "{{count}} sunucu",
     "field": {
+      "name": "Ad",
+      "include": "Dahil et",
       "host": "Adres",
       "port": "Bağlantı noktası",
       "username": "Kullanıcı",
@@ -953,6 +956,8 @@
       "proxyJumpLocalPseudoServer": "yerel sahte sunucuyu işaret ediyor"
     },
     "confirm": "İçe aktar",
+    "confirmCount_one": "{{count}} sunucuyu içe aktar",
+    "confirmCount_other": "{{count}} sunucuyu içe aktar",
     "applying": "İçe aktarılıyor …",
     "result": {
       "success": "{{created}} sunucu oluşturuldu, {{groups}} klasör, {{skipped}} çakışma atlandı.",

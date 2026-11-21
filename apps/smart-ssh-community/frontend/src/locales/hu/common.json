@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
     "hintRoot": "→ legfelső szint (csoport nélkül)",
+    "current": "jelenlegi",
     "hintGroup": "→ áthelyezés ebbe a csoportba",
     "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
     "moveTo": "„{{name}}” áthelyezése ide…"
@@ -878,6 +879,8 @@
     "groupsHeading": "Létrejövő mappaszerkezet",
     "entriesHeading": "{{count}} szerver",
     "field": {
+      "name": "Név",
+      "include": "Felvétel",
       "host": "Cím",
       "port": "Port",
       "username": "Felhasználó",
@@ -953,6 +956,8 @@
       "proxyJumpLocalPseudoServer": "a helyi áltszerverre mutat"
     },
     "confirm": "Importálás",
+    "confirmCount_one": "{{count}} szerver importálása",
+    "confirmCount_other": "{{count}} szerver importálása",
     "applying": "Importálás …",
     "result": {
       "success": "{{created}} szerver létrehozva, {{groups}} mappa, {{skipped}} ütközés kihagyva.",

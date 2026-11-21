@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Slip her for at flytte til øverste niveau (ingen gruppe)",
     "hintRoot": "→ øverste niveau (ingen gruppe)",
+    "current": "nuværende",
     "hintGroup": "→ flyt ind i denne gruppe",
     "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
     "moveTo": "Flyt “{{name}}” til…"
@@ -878,6 +879,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Medtag",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruger",
@@ -953,6 +956,8 @@
       "proxyJumpLocalPseudoServer": "peger på den lokale pseudoserver"
     },
     "confirm": "Importér",
+    "confirmCount_one": "Importér {{count}} server",
+    "confirmCount_other": "Importér {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere oprettet, {{groups}} mapper, {{skipped}} konflikt(er) sprunget over.",
