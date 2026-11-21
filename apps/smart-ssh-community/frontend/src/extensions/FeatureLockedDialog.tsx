@@ -21,7 +21,7 @@ import { tierLabel } from "./tiers";
 
 import type { FeatureLockedPayload } from "./entitlements";
 import { subscribeFeatureLocked } from "./featureLockedBus";
-import { Button, DialogFrame } from "../components/ui";
+import { Button, DialogFrame, Icon } from "../components/ui";
 
 export function FeatureLockedDialog() {
   const { t } = useTranslation();
@@ -36,6 +36,7 @@ export function FeatureLockedDialog() {
     <DialogFrame
       layer="app"
       size="sm"
+      icon={<Icon name="lock" />}
       title={t("featureLocked.title")}
       onClose={() => setLocked(null)}
       initialFocusRef={closeRef}

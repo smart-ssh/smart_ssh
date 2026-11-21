@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
     "hintRoot": "→ oberste Ebene (ohne Gruppe)",
+    "current": "aktuell",
     "hintGroup": "→ in diese Gruppe verschieben",
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
       "success": "Verbindung erfolgreich",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
       "hostKeyUnknown": "Host-Key unbekannt — Bestätigung nötig",
       "hostKeyMismatch": "Host-Key hat sich geändert",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " präsentiert einen anderen Schlüssel als beim letzten Mal gespeichert. Das kann auf einen Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).",
     "known": "Bekannt",
     "offeredNow": "Jetzt angeboten",
+    "offered": "Angeboten",
     "keyType": "Schlüsseltyp",
     "cancelConnection": "Verbindung abbrechen",
     "trustAnyway": "Trotzdem vertrauen",
@@ -877,6 +880,8 @@
     "groupsHeading": "Entstehende Ordnerstruktur",
     "entriesHeading": "{{count}} Server",
     "field": {
+      "name": "Name",
+      "include": "Übernehmen",
       "host": "Adresse",
       "port": "Port",
       "username": "Benutzer",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "zeigt auf den lokalen Pseudo-Server"
     },
     "confirm": "Importieren",
+    "confirmCount_one": "{{count}} Server importieren",
+    "confirmCount_other": "{{count}} Server importieren",
     "applying": "Importiert …",
     "result": {
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
     "refusedResponse": "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
     "outputTruncated": "(gekürzt)",
+    "outputMoreLines_one": "… {{count}} weitere Zeile",
+    "outputMoreLines_other": "… {{count}} weitere Zeilen",
+    "outputShowAll": "Alle anzeigen",
+    "outputShowLess": "Weniger anzeigen",
     "fileWritten": "Datei '{{path}}' geschrieben.",
     "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
     "documentGenerated": "Dokument generiert",
@@ -1393,6 +1404,8 @@
     "aiTab": "KI",
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
+    "thisDevice": "dieses Gerät",
+    "paneSwitch": "Bereichsumschalter",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "extraKeys": {
       "group": "Zusatztasten",

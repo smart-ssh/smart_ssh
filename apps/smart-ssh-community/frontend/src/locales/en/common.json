@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Drop here to move to the top level (no group)",
     "hintRoot": "→ top level (no group)",
+    "current": "current",
     "hintGroup": "→ move into this group",
     "hintCycle": "A group cannot be moved into its own subgroup",
     "moveTo": "Move “{{name}}” to…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Delete permanently",
     "testResult": {
       "success": "Connection successful",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login rejected. Check the user name and password or key.",
       "hostKeyUnknown": "Host key unknown — confirmation required",
       "hostKeyMismatch": "Host key has changed",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " is presenting a different key than the one stored last time. This can indicate a man-in-the-middle attack. Only continue if you are sure the server key changed legitimately (e.g. server reinstallation).",
     "known": "Known",
     "offeredNow": "Offered Now",
+    "offered": "Offered",
     "keyType": "Key type",
     "cancelConnection": "Cancel Connection",
     "trustAnyway": "Trust Anyway",
@@ -877,6 +880,8 @@
     "groupsHeading": "Resulting folder structure",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Name",
+      "include": "Include",
       "host": "Address",
       "port": "Port",
       "username": "User",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "points to the local pseudo server"
     },
     "confirm": "Import",
+    "confirmCount_one": "Import {{count}} server",
+    "confirmCount_other": "Import {{count}} servers",
     "applying": "Importing …",
     "result": {
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
     "refusedResponse": "The model declined this request. Rephrase it or start a new chat.",
     "outputTruncated": "(truncated)",
+    "outputMoreLines_one": "… {{count}} more line",
+    "outputMoreLines_other": "… {{count}} more lines",
+    "outputShowAll": "Show all",
+    "outputShowLess": "Show less",
     "fileWritten": "File '{{path}}' written.",
     "writtenWithSudoPassword": "Written using the stored sudo password.",
     "documentGenerated": "Document generated",
@@ -1393,6 +1404,8 @@
     "aiTab": "AI",
     "paneTabs": "Session panes",
     "moreActions": "More actions",
+    "thisDevice": "this device",
+    "paneSwitch": "Pane switch",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "extraKeys": {
       "group": "Extra keys",

@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
+    "current": "gjeldende",
     "hintGroup": "→ flytt inn i denne gruppen",
     "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
     "moveTo": "Flytt «{{name}}» til…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Slett permanent",
     "testResult": {
       "success": "Tilkobling vellykket",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Pålogging avvist. Sjekk brukernavn og passord eller nøkkel.",
       "hostKeyUnknown": "Vertsnøkkel ukjent – bekreftelse kreves",
       "hostKeyMismatch": "Vertsnøkkelen er endret",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " presenterer en annen nøkkel enn den som ble lagret sist. Dette kan tyde på et man-in-the-middle-angrep. Fortsett bare hvis du er sikker på at servernøkkelen er endret med rette (f.eks. ved ominstallering av serveren).",
     "known": "Kjent",
     "offeredNow": "Tilbudt nå",
+    "offered": "Tilbudt",
     "keyType": "Nøkkeltype",
     "cancelConnection": "Avbryt tilkobling",
     "trustAnyway": "Stol på likevel",
@@ -877,6 +880,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Ta med",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruker",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "peker til den lokale pseudoserveren"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} server",
+    "confirmCount_other": "Importer {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere opprettet, {{groups}} mapper, {{skipped}} konflikt(er) hoppet over.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
     "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(avkortet)",
+    "outputMoreLines_one": "… {{count}} linje til",
+    "outputMoreLines_other": "… {{count}} linjer til",
+    "outputShowAll": "Vis alle",
+    "outputShowLess": "Vis færre",
     "fileWritten": "Filen «{{path}}» er skrevet.",
     "writtenWithSudoPassword": "Skrevet med det lagrede sudo-passordet.",
     "documentGenerated": "Dokument laget",
@@ -1393,6 +1404,8 @@
     "aiTab": "KI",
     "paneTabs": "Øktdeler",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enheten",
+    "paneSwitch": "Panelbryter",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
     "extraKeys": {
       "group": "Ekstra taster",

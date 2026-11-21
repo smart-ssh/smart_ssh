@@ -51,7 +51,11 @@ ein Warten hinweg gehalten.
   auf Host-Key oder verbindet neu, bei der lokalen Shell die Farbe des
   lokalen Servers) und eine Schließen-Schaltfläche (12-px-Kreuz). Die
   Tabs sind flach, mit Akzentlinie oben beim aktiven Tab; passen sie nicht
-  nebeneinander, werden die Namen gekürzt. Pfeiltasten, Pos1 und Ende bewegen
+  nebeneinander, werden die Namen bis zu einer Mindestbreite gekürzt; darüber
+  hinaus scrollt die Leiste waagerecht. Verdeckte Tabs kündigt ein
+  Ausblenden am betreffenden Rand an, und das Mausrad scrollt die Leiste
+  waagerecht. Passen alle Tabs, gibt es weder Ausblenden noch Umlenken des
+  Mausrads. Pfeiltasten, Pos1 und Ende bewegen
   den Fokus zwischen den Tabs und der „+“-Schaltfläche.
 - Ein Tab, dessen Verbindung gerade aufgebaut wird oder gescheitert ist, trägt
   statt des Statuszeichens ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
@@ -107,6 +111,15 @@ aufgenommen, KI-Antworten laufen zu Ende, Bestätigungen bleiben erhalten.
 und wird strikt dieser Sitzung zugeordnet — nie dem gerade sichtbaren Tab.
 Ausgabe einer Hintergrund-Sitzung landet also nie im Terminal oder Chat einer
 anderen.
+
+## 4a. Kopfzeile der Sitzung
+
+Jede Sitzung hat über Chat und Terminal/Dateien eine feste Kopfzeile in einer Zeile:
+
+- eine quadratische Statusmarkierung (verbunden, verbindet neu, verloren; für den lokalen Pseudo-Server eine eigene Farbe),
+- den Servernamen, auf breiten Fenstern dahinter `user@host:port` (beim lokalen Pseudo-Server `<Benutzer> · dieses Gerät`) und, falls vorhanden, die Gruppe als Badge. Lange Namen werden abgeschnitten (mit Tooltip mit dem vollen Text); die Zeile umbricht nie. Lässt sich der Server nicht laden, entfallen Zeile und Gruppen-Badge. Alle Statushinweise (Verbindung getrennt mit Grund, „Verbinde neu …“, automatischer Versuch mit „Stopp“, „Verbindung konnte nicht wiederhergestellt werden.“) und ein Fehler beim Neuverbinden stehen vollständig lesbar in einem Streifen unter der Kopfzeile, nicht in ihr; die Kopfzeile hält ihre feste Höhe.
+- rechts auf breiten Fenstern den Umschalter KI / Terminal / Dateien, die Schaltfläche „Trennen“ und die Schaltfläche „Weitere Aktionen“.
+- Das Menü „Weitere Aktionen“ enthält immer „Trennen“ und, solange die Sitzung nicht verbunden ist und kein automatisches Neuverbinden läuft, „Neu verbinden“ (Spec 0107). Im schmalen Layout (Spec 0113) ist „Trennen“ nur im Menü.
 
 ## 5. Wartende Bestätigungen in Hintergrund-Tabs
 

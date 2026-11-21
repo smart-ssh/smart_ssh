@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Slip her for at flytte til øverste niveau (ingen gruppe)",
     "hintRoot": "→ øverste niveau (ingen gruppe)",
+    "current": "nuværende",
     "hintGroup": "→ flyt ind i denne gruppe",
     "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
     "moveTo": "Flyt “{{name}}” til…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Slet permanent",
     "testResult": {
       "success": "Forbindelse oprettet",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login afvist. Kontrollér brugernavn og adgangskode eller nøgle.",
       "hostKeyUnknown": "Værtsnøgle ukendt – bekræftelse kræves",
       "hostKeyMismatch": "Værtsnøglen er ændret",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " fremviser en anden nøgle end den, der blev gemt sidst. Det kan tyde på et man-in-the-middle-angreb. Fortsæt kun, hvis du er sikker på, at servernøglen er ændret legitimt (f.eks. ved ominstallation af serveren).",
     "known": "Kendt",
     "offeredNow": "Tilbudt nu",
+    "offered": "Tilbudt",
     "keyType": "Nøgletype",
     "cancelConnection": "Annuller forbindelse",
     "trustAnyway": "Stol på alligevel",
@@ -877,6 +880,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Medtag",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruger",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "peger på den lokale pseudoserver"
     },
     "confirm": "Importér",
+    "confirmCount_one": "Importér {{count}} server",
+    "confirmCount_other": "Importér {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere oprettet, {{groups}} mapper, {{skipped}} konflikt(er) sprunget over.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
     "refusedResponse": "Modellen afviste denne anmodning. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(afkortet)",
+    "outputMoreLines_one": "… {{count}} flere linje",
+    "outputMoreLines_other": "… {{count}} flere linjer",
+    "outputShowAll": "Vis alle",
+    "outputShowLess": "Vis færre",
     "fileWritten": "Filen '{{path}}' er skrevet.",
     "writtenWithSudoPassword": "Skrevet med den gemte sudo-adgangskode.",
     "documentGenerated": "Dokument genereret",
@@ -1393,6 +1404,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdele",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enhed",
+    "paneSwitch": "Panelskift",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
     "extraKeys": {
       "group": "Ekstra taster",

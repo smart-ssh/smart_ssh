@@ -185,6 +185,13 @@ Werte (3.1.3), gelesenen Dateien (3.1.4), nicht übernommenen Direktiven
 (3.1.5), entstehender Gruppenstruktur (§4.5) und Konflikten (3.1.8),
 **bevor** irgendetwas geschrieben wird. Er kann einzelne Einträge
 abwählen. Bricht er ab, entsteht nichts.
+Im breiten Fenster stehen drei Bereiche nebeneinander: gelesene Dateien
+(mit Statussymbol und Pfad in Festbreitenschrift), die entstehende
+Ordnerstruktur samt Servern und die Server als Tabelle (Auswahl, Name,
+Adresse, Port, Benutzer, Jump-Host); im schmalen Fenster stehen sie
+untereinander. Konfliktzeilen sind als Warnung hervorgehoben, das Feld
+für den neuen Namen steht unter der Tabelle. Die Schaltfläche zum
+Bestätigen nennt die Zahl der angewählten Server („N Server importieren“).
 
 **3.1.8 Kein Überschreiben.** Existiert bereits ein Server mit gleichem
 Name **oder** gleicher Kombination aus Adresse, Port und Benutzername,

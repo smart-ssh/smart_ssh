@@ -287,9 +287,15 @@ function collectRustNotices(aboutJson) {
 // Crate.
 const VENDORED_LICENSE_FILES = [
   {
-    crateName: "libsqlite3-sys",
-    relativePath: "sqlcipher/LICENSE",
-    label: "SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)",
+    // Since libsqlite3-sys 0.40 the SQLCipher source lives in `sqlcipher-src`.
+    crateName: "sqlcipher-src",
+    relativePath: "sqlcipher/LICENSE-sqlcipher",
+    label: "SQLCipher (gebündelt in sqlcipher-src, Spec 0101 A1)",
+  },
+  {
+    crateName: "sqlcipher-src",
+    relativePath: "sqlcipher/LICENSE-libtomcrypt",
+    label: "LibTomCrypt (gebündelt in sqlcipher-src, Spec 0101 A1)",
   },
   {
     crateName: "openssl-src",

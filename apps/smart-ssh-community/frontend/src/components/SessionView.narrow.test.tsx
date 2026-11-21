@@ -1,7 +1,7 @@
 import type { TranslationKey } from "../i18nTypes";
 // Issue #580, Spec 0113 §4: below 640 px the session view shows one pane at a
 // time behind an AI / Terminal / Files tab strip.
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -23,6 +23,14 @@ vi.mock("../api/events", () => ({
   onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
   onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
 }));
+const reconnectSession = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getServer: () => Promise.reject(new Error("no server")) as never,
+    listGroups: () => Promise.resolve([]) as never,
+    reconnectSession: (...a: unknown[]) => reconnectSession(...(a as [])) as never,
+  }),
+);
 vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
@@ -38,7 +46,13 @@ vi.stubGlobal(
 
 const t = (key: TranslationKey) => testI18n.t(key);
 
-function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void } = {}) {
+function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void; slot?: boolean } = {}) {
+  // Issue #1387: the title bar of `NarrowHeaderNav` provides the slot.
+  if (props.slot !== false) {
+    const slot = document.createElement("div");
+    slot.dataset.testid = "narrow-session-actions";
+    document.body.appendChild(slot);
+  }
   return render(
     <I18nextProvider i18n={testI18n}>
       <SessionView
@@ -59,7 +73,10 @@ describe("SessionView narrow layout (#580)", () => {
     setNarrow();
     fileBrowserVisible.mockClear();
   });
-  afterEach(() => setWide());
+  afterEach(() => {
+    setWide();
+    document.querySelectorAll('[data-testid="narrow-session-actions"]').forEach((n) => n.remove());
+  });
 
   it("shows the tab strip with AI active and no separator", () => {
     renderView();
@@ -102,6 +119,25 @@ describe("SessionView narrow layout (#580)", () => {
     fireEvent.click(screen.getByRole("button", { name: t("session.moreActions") }));
     fireEvent.click(screen.getByText(t("session.disconnect")));
     expect(close).toHaveBeenCalled();
+  });
+
+  it("renders the ⋯ button in the title bar slot and no second header row (#1387)", () => {
+    renderView();
+    const slot = document.querySelector('[data-testid="narrow-session-actions"]') as HTMLElement;
+    expect(slot).toContainElement(screen.getByRole("button", { name: t("session.moreActions") }));
+    expect(document.querySelector("header")).toBeNull();
+  });
+
+  it("offers a Reconnect button in the status strip after a disconnect (#1387)", async () => {
+    const events = await import("../api/events");
+    renderView();
+    const handler = vi.mocked(events.onConnectionStatusChanged).mock.calls.at(-1)![0];
+    act(() => handler({ sessionId: "s1", status: "disconnected", reason: null } as never));
+    const strip = await screen.findByTestId("session-status-strip");
+    const button = within(strip).getByRole("button", { name: t("session.reconnect") });
+    fireEvent.click(button);
+    await waitFor(() => expect(reconnectSession).toHaveBeenCalledWith("s1"));
+    await waitFor(() => expect(screen.queryByTestId("session-status-strip")).toBeNull());
   });
 
   it("shows no tab strip for an MCP session", () => {

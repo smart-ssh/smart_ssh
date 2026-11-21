@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
     "hintRoot": "→ शीर्ष स्तर (बिना समूह)",
+    "current": "वर्तमान",
     "hintGroup": "→ इस समूह में ले जाएँ",
     "hintCycle": "किसी समूह को उसके ही उप-समूह में नहीं ले जाया जा सकता",
     "moveTo": "“{{name}}” को यहाँ ले जाएँ…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "स्थायी रूप से हटाएँ",
     "testResult": {
       "success": "कनेक्शन सफल",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "लॉगिन अस्वीकृत। उपयोगकर्ता नाम और पासवर्ड या कुंजी जाँचें।",
       "hostKeyUnknown": "होस्ट कुंजी अज्ञात — पुष्टि आवश्यक",
       "hostKeyMismatch": "होस्ट कुंजी बदल गई है",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " पिछली बार संग्रहीत कुंजी से अलग कुंजी प्रस्तुत कर रहा है। यह मैन-इन-द-मिडल हमले का संकेत हो सकता है। केवल तभी आगे बढ़ें जब आपको भरोसा हो कि सर्वर की कुंजी वैध कारण से बदली है (जैसे सर्वर का पुनः इंस्टॉलेशन)।",
     "known": "ज्ञात",
     "offeredNow": "अभी प्रस्तुत",
+    "offered": "प्रस्तुत",
     "keyType": "कुंजी प्रकार",
     "cancelConnection": "कनेक्शन रद्द करें",
     "trustAnyway": "फिर भी भरोसा करें",
@@ -877,6 +880,8 @@
     "groupsHeading": "परिणामी फ़ोल्डर संरचना",
     "entriesHeading": "{{count}} सर्वर",
     "field": {
+      "name": "नाम",
+      "include": "शामिल करें",
       "host": "पता",
       "port": "पोर्ट",
       "username": "उपयोगकर्ता",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "स्थानीय छद्म-सर्वर की ओर इशारा करता है"
     },
     "confirm": "आयात करें",
+    "confirmCount_one": "{{count}} सर्वर आयात करें",
+    "confirmCount_other": "{{count}} सर्वर आयात करें",
     "applying": "आयात हो रहा है …",
     "result": {
       "success": "{{created}} सर्वर बनाए गए, {{groups}} फ़ोल्डर, {{skipped}} टकराव छोड़े गए।",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "मॉडल ने कोई उत्तर नहीं लौटाया। सोचने के चरण वाले मॉडलों के लिए प्रदाता सेटिंग्स में ऊँची आउटपुट सीमा मदद करती है।",
     "refusedResponse": "मॉडल ने इस अनुरोध को अस्वीकार कर दिया। इसे दूसरे शब्दों में लिखें या नई चैट शुरू करें।",
     "outputTruncated": "(छोटा किया गया)",
+    "outputMoreLines_one": "… {{count}} और पंक्ति",
+    "outputMoreLines_other": "… {{count}} और पंक्तियाँ",
+    "outputShowAll": "सभी दिखाएँ",
+    "outputShowLess": "कम दिखाएँ",
     "fileWritten": "फ़ाइल '{{path}}' लिखी गई।",
     "writtenWithSudoPassword": "संग्रहीत sudo पासवर्ड से लिखा गया।",
     "documentGenerated": "दस्तावेज़ बना",
@@ -1393,6 +1404,8 @@
     "aiTab": "एआई",
     "paneTabs": "सत्र पैनल",
     "moreActions": "अधिक क्रियाएँ",
+    "thisDevice": "यह डिवाइस",
+    "paneSwitch": "पैनल स्विच",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
     "extraKeys": {
       "group": "अतिरिक्त कुंजियाँ",

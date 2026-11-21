@@ -111,10 +111,10 @@ test("SSH config import with many hosts: the list scrolls, title and buttons sta
 
   const title = page.getByRole("heading", { name: "Import ssh_config" });
   const dialog = page.locator("div.flex-col", { has: title }).last();
-  const lastHost = dialog.getByText("host-79.example.test");
+  const lastHost = dialog.getByRole("cell", { name: "host-79.example.test", exact: true });
   await expect(lastHost).toBeAttached();
   const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
-  const confirm = dialog.getByRole("button", { name: "Import", exact: true });
+  const confirm = dialog.getByRole("button", { name: "Import 80 servers", exact: true });
 
   await expectUsable(title);
   await expectUsable(cancel);

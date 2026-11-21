@@ -47,15 +47,15 @@ export function ImportKeyDialog({ model, identity, saving, importPrimaryRef, can
               </>
             }
           >
-            <p className="mb-2 font-mono text-xs break-all text-fg-muted">{auth.kind === "identityFile" ? auth.path : ""}</p>
-            <ul className="mb-3 space-y-1 text-sm text-fg-muted">
-              <li>{t("serverForm.importKey.importHint")}</li>
+            <p className="mb-3 rounded border border-border-strong bg-surface-sunken px-3 py-2 font-mono text-xs break-all text-fg-soft">{auth.kind === "identityFile" ? auth.path : ""}</p>
+            <ul className="mb-3 space-y-2 text-sm text-fg-muted">
+              <li className="flex items-start gap-2 border-l-2 border-accent-border pl-3">{t("serverForm.importKey.importHint")}</li>
               {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
-                <li>{t("serverForm.importKey.keepHint")}</li>
+                <li className="flex items-start gap-2 border-l-2 border-border-strong pl-3">{t("serverForm.importKey.keepHint")}</li>
               )}
             </ul>
             {importError && (
-              <p role="alert" className="mb-2 text-xs text-danger-fg">
+              <p role="alert" className="mb-2 border-l-2 border-danger-border-strong bg-danger-subtle/40 px-3 py-2 text-xs text-danger-fg">
                 {importError}
               </p>
             )}

@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
+    "current": "nuvarande",
     "hintGroup": "→ flytta in i den här gruppen",
     "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
     "moveTo": "Flytta ”{{name}}” till…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Ta bort permanent",
     "testResult": {
       "success": "Anslutningen lyckades",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inloggningen avvisades. Kontrollera användarnamn och lösenord eller nyckel.",
       "hostKeyUnknown": "Värdnyckeln är okänd — bekräftelse krävs",
       "hostKeyMismatch": "Värdnyckeln har ändrats",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " presenterar en annan nyckel än den som sparades senast. Det kan tyda på en man-in-the-middle-attack. Fortsätt bara om du är säker på att servernyckeln ändrats på legitimt sätt (t.ex. ominstallation av servern).",
     "known": "Känd",
     "offeredNow": "Erbjuds nu",
+    "offered": "Erbjuds",
     "keyType": "Nyckeltyp",
     "cancelConnection": "Avbryt anslutning",
     "trustAnyway": "Lita på ändå",
@@ -877,6 +880,8 @@
     "groupsHeading": "Resulterande mappstruktur",
     "entriesHeading": "{{count}} servrar",
     "field": {
+      "name": "Namn",
+      "include": "Inkludera",
       "host": "Adress",
       "port": "Port",
       "username": "Användare",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "pekar på den lokala pseudoservern"
     },
     "confirm": "Importera",
+    "confirmCount_one": "Importera {{count}} server",
+    "confirmCount_other": "Importera {{count}} servrar",
     "applying": "Importerar …",
     "result": {
       "success": "{{created}} servrar skapade, {{groups}} mappar, {{skipped}} konflikt(er) överhoppade.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
     "refusedResponse": "Modellen avvisade begäran. Formulera om den eller starta en ny chatt.",
     "outputTruncated": "(kapad)",
+    "outputMoreLines_one": "… {{count}} rad till",
+    "outputMoreLines_other": "… {{count}} rader till",
+    "outputShowAll": "Visa alla",
+    "outputShowLess": "Visa färre",
     "fileWritten": "Filen '{{path}}' skriven.",
     "writtenWithSudoPassword": "Skriven med det sparade sudo-lösenordet.",
     "documentGenerated": "Dokument skapat",
@@ -1393,6 +1404,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdelar",
     "moreActions": "Fler åtgärder",
+    "thisDevice": "den här enheten",
+    "paneSwitch": "Panelväxlare",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "extraKeys": {
       "group": "Extra tangenter",
