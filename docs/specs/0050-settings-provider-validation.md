@@ -22,6 +22,10 @@ gewählten Kategorie unter einer Bereichskopfzeile mit Nummer, Titel (die
 einzige Überschrift des Bereichs) und rechts einem Platz für eine Aktion,
 die der Bereich selbst vorgibt.
 
+In der Kategorienliste bewegen Pfeil-nach-oben und Pfeil-nach-unten den Fokus
+zur vorigen bzw. nächsten Kategorie, Enter öffnet die fokussierte Kategorie;
+am ersten und am letzten Eintrag bleibt der Fokus stehen.
+
 ### 1.1 Kategorien
 
 Eingebaut sind (in dieser Reihenfolge): KI-Provider, Anzeige & Sprache,
