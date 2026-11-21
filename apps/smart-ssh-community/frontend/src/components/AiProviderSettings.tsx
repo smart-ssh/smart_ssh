@@ -424,7 +424,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               data-active={provider.isActive ? "true" : undefined}
               className={`px-4 py-3 ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
             >
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_17rem]">
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_21rem]">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-fg" title={provider.displayName}>
                     {provider.displayName}

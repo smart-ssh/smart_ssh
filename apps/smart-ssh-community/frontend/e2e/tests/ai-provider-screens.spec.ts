@@ -42,4 +42,13 @@ test("provider rows share column x positions", async ({ app }) => {
   const a = await dialog.getByText("model-a", { exact: true }).boundingBox();
   const b = await dialog.getByText("model-b", { exact: true }).boundingBox();
   expect(a && b && Math.abs(a.x - b.x) < 1).toBe(true);
+  // Names, models and action buttons must stay readable (no ellipsis, no overflow) at every size.
+  const clipped = await dialog.locator("ul li").evaluateAll((rows) =>
+    rows.flatMap((row) =>
+      Array.from(row.querySelectorAll<HTMLElement>("p.truncate, div.justify-end")).filter(
+        (el) => el.scrollWidth > el.clientWidth,
+      ).map((el) => el.textContent),
+    ),
+  );
+  expect(clipped).toEqual([]);
 });
