@@ -15,6 +15,7 @@ test("first-run notice: Continue needs the checkbox, and the confirmation persis
   await serverButton.click();
   const notice = page.getByRole("heading", { name: "Before you start" });
   await expect(notice).toBeVisible();
+  await expect(page.getByTestId("dialog-ticks").locator("[data-corner-tick]")).toHaveCount(2);
 
   const checkbox = page.getByRole("checkbox", { name: "I've read and understood this." });
   const continueButton = page.getByRole("button", { name: "Continue", exact: true });

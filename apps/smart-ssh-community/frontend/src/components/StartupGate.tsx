@@ -245,7 +245,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       <StartupTitleBarDragStrip />
       <div
         data-testid="startup-card"
-        className="relative my-auto w-full max-w-[460px] border border-border-strong bg-surface-raised p-8 narrow:p-5"
+        className="relative my-auto flex w-full max-w-[460px] flex-col border border-border-strong bg-surface-raised p-8 narrow:my-0 narrow:flex-1 narrow:p-5"
       >
         <CornerTicks tone="accent" corners="all" />
         <Logo variant="lockup" wordmark="full" size={40} className="mb-6" />
@@ -264,6 +264,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
           </>
         ) : state.screen === "unlock" ? (
           <form
+            className="flex flex-1 flex-col"
             onSubmit={(e) => {
               e.preventDefault();
               void run(() => unlockWithMasterPassword(password));
@@ -309,11 +310,14 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             {/* Way-out area: Quit is always there (Spec 0101 A16). Klarstellung
              * 11: Start over only after the third failed attempt — and never
              * for a file that merely cannot be read. The backend decides. */}
-            <div className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
+            <div
+              data-testid="unlock-way-out"
+              className="mt-6 flex flex-col gap-3 border-t border-border pt-4 narrow:mt-auto narrow:[&_button]:w-full"
+            >
               {state.offersStartOver && (
                 <p className="text-xs text-fg-subtle">{t("startup.wayOutHint")}</p>
               )}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 narrow:flex-col">
                 {state.offersStartOver && (
                   <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
                 )}

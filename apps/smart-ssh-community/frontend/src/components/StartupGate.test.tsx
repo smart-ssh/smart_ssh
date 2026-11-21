@@ -121,6 +121,10 @@ describe("StartupGate", () => {
     expect(warning.querySelector("svg")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Neu anfangen" })).toBeNull();
+    // Narrow: the way-out area is pushed to the bottom and its buttons are full width.
+    const wayOut = screen.getByTestId("unlock-way-out");
+    expect(wayOut.className).toContain("narrow:mt-auto");
+    expect(wayOut.className).toContain("narrow:[&_button]:w-full");
   });
 
   it("bietet „Neu anfangen“ nur an, wenn das Backend es anbietet (Klarstellung 11)", async () => {
