@@ -7,7 +7,7 @@ import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } fro
 import { captureScreen } from "../support/screenshots";
 
 test.describe("narrow Connect area @phone", () => {
-  test("nested server tree has no horizontal scroll; no row actions, rows are 44 px high", async ({ app }) => {
+  test("nested server tree has no horizontal scroll; no row actions, rows are at least 52 px high", async ({ app }) => {
     await app.launch({
       ...populated(),
       groups: [
@@ -24,24 +24,30 @@ test.describe("narrow Connect area @phone", () => {
     await expect(page.getByRole("button", { name: /^Move “.*” to…$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^New server in/ })).toHaveCount(0);
     for (const row of await page.getByRole("button", { name: /^(db-primary|web-1|lab-box|standalone|an-extremely)/ }).all()) {
-      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(52);
     }
     await expectNoSeriousA11yViolations(page, "narrow server tree");
     await captureScreen(page, "connect-narrow-tree");
   });
 
-  test("servers start at the 📁 icon of their folder (three levels, 28 px step)", async ({ app }) => {
+  test("the connector rule runs under the folder chevron at three levels", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
-    const pad = async (loc: import("@playwright/test").Locator) =>
-      parseFloat(await loc.evaluate((el) => (el as HTMLElement).style.paddingLeft));
-    const prod = page.getByRole("button", { name: /^📁 Production/ });
-    const web = page.getByRole("button", { name: /^📁 Web/ });
+    const prod = page.getByRole("button", { name: /^Production/ });
+    const web = page.getByRole("button", { name: /^Web/ });
     const web1 = page.getByRole("button", { name: /^web-1\b/ });
     await expect(web1).toBeVisible();
-    expect((await prod.locator("svg").boundingBox())!.width).toBe(20);
-    expect((await pad(web)) - (await pad(prod))).toBe(28);
-    expect((await pad(web1)) - (await pad(web))).toBe(28);
+    expect((await prod.locator("svg").first().boundingBox())!.width).toBe(20);
+    // A group's children container has a 1 px left rule at the parent's chevron centre.
+    for (const group of [prod, web]) {
+      const chevron = (await group.locator("svg").first().boundingBox())!;
+      const box = (await group.locator("xpath=ancestor::li[1]/ul").boundingBox())!;
+      expect(Math.abs(box.x - (chevron.x + chevron.width / 2))).toBeLessThanOrEqual(1.5);
+    }
+    // Each level sits to the right of its parent.
+    const x = async (l: import("@playwright/test").Locator) => (await l.boundingBox())!.x;
+    expect(await x(web)).toBeGreaterThan(await x(prod));
+    expect(await x(web1)).toBeGreaterThan(await x(web));
     await expectNoHorizontalPageScroll(page);
   });
 
@@ -64,9 +70,9 @@ test.describe("narrow Connect area @phone", () => {
     await page.getByRole("button", { name: /^alpha\b/ }).click();
     const dialog = page.getByRole("dialog");
     await expectFullyInViewport(dialog);
-    await expectUsable(dialog.getByRole("button", { name: "New conversation" }));
+    await expectUsable(dialog.getByRole("button", { name: "New conversation", exact: true }));
     await expectUsable(dialog.getByRole("button", { name: "Cancel", exact: true }));
-    await expectUsable(dialog.getByRole("button", { name: "Rename" }).first());
+    await expectUsable(dialog.getByRole("button", { name: "Rename", exact: true }).first());
     await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow session picker");
     await captureScreen(page, "connect-narrow-session-picker");

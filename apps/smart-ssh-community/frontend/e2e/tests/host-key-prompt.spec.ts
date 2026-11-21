@@ -22,6 +22,9 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   await expect(dialog).toContainText("fresh.example.test:2222");
   await expect(dialog).toContainText(FINGERPRINT);
   await expect(dialog).toContainText("ssh-ed25519");
+  // Unknown variant: plain "Offered" row, no danger band or ticks.
+  await expect(dialog.getByRole("term").filter({ hasText: /^Offered$/ })).toHaveCount(1);
+  await expect(dialog.getByTestId("host-key-header")).toHaveCount(0);
 
   // Nothing is decided while the dialog is open.
   expect(await app.calls("confirm_host_key")).toEqual([]);
@@ -64,6 +67,11 @@ test("host key prompt: a changed key shows both fingerprints, accepts nothing wi
   await expect(dialog).toContainText(KNOWN);
   await expect(dialog).toContainText(FINGERPRINT);
   await expect(dialog).toContainText("ssh-ed25519");
+  // Mismatch variant: danger header band with warn icon, ticks, label/value rows.
+  await expect(dialog.getByTestId("host-key-header")).toHaveClass(/bg-danger-subtle/);
+  await expect(dialog.getByTestId("host-key-header").locator('[data-icon="warn"]')).toHaveCount(1);
+  await expect(page.getByTestId("dialog-ticks")).toHaveCount(1);
+  await expect(dialog.getByRole("term")).toHaveText(["Known", "Offered Now", "Key type"]);
 
   expect(await app.calls("confirm_host_key")).toEqual([]);
 

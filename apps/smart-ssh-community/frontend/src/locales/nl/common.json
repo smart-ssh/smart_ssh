@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nog geen server toegevoegd",
     "emptyStateHint": "Voeg uw eerste server toe om via SSH te verbinden.",
     "emptyStateCreateFirstServer": "Eerste server toevoegen",
-    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server."
+    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server.",
+    "localBadge": "Lokaal",
+    "thisDevice": "dit apparaat",
+    "sessionOpen": "Sessie open",
+    "sessionPending": "Wacht op bevestiging",
+    "sessionDisconnected": "Sessie verbroken"
   },
   "settings": {
     "title": "Instellingen",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importeren …",
     "importSshConfigHint": "Servers importeren uit een OpenSSH ssh_config-bestand",
     "exportSshConfig": "Exporteren …",
-    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config"
+    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config",
+    "title": "Servers",
+    "collapseGroup": "Groep “{{name}}” samenvouwen",
+    "expandGroup": "Groep “{{name}}” uitvouwen"
   },
   "treeDrag": {
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
@@ -277,12 +285,12 @@
     "deleteAlwaysRemovesHistory": "Hiermee worden ook de chatgeschiedenis, notities en labels van deze server definitief verwijderd.",
     "confirmDeleteServer": "Definitief verwijderen",
     "testResult": {
-      "success": "✓ Verbinding geslaagd",
-      "authFailed": "✗ Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
+      "success": "Verbinding geslaagd",
+      "authFailed": "Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
       "hostKeyUnknown": "Hostsleutel onbekend — bevestiging vereist",
-      "hostKeyMismatch": "⚠ Hostsleutel is gewijzigd",
-      "networkError": "✗ Netwerkfout: {{message}}",
-      "timeout": "✗ De server reageert niet. Controleer adres, poort en firewall."
+      "hostKeyMismatch": "Hostsleutel is gewijzigd",
+      "networkError": "Netwerkfout: {{message}}",
+      "timeout": "De server reageert niet. Controleer adres, poort en firewall."
     },
     "largeNoteHint": "Deze notitie is erg groot en kan tijdens lange sessies worden ingekort voor de AI-context. De opgeslagen notitie blijft volledig intact.",
     "summarizeNow": "Nu samenvatten",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Deel {{index}}",
     "checksLabel": "Controles:",
-    "hardBlacklistLabel": "Vaste blokkeerlijst:"
+    "hardBlacklistLabel": "Vaste blokkeerlijst:",
+    "invalidPattern": "Ongeldig patroon",
+    "rowActions": "Rijacties",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regels"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",
@@ -377,8 +389,8 @@
     "discardedAfterReconnect": "Verworpen nadat de verbinding opnieuw was opgebouwd. Er is niets uitgevoerd.",
     "expiredTimeout": "Niet op tijd beantwoord en verworpen. Er is niets uitgevoerd.",
     "expiredUnknown": "Dit verzoek staat niet meer open. Er is niets uitgevoerd.",
-    "usesStoredSudoPassword": "🔑 Wordt uitgevoerd met het opgeslagen sudo-wachtwoord.",
-    "writeMayUseStoredSudoPassword": "🔑 Ontbreekt de schrijfrechten, dan schrijft de app met het opgeslagen sudo-wachtwoord (sudo).",
+    "usesStoredSudoPassword": "Wordt uitgevoerd met het opgeslagen sudo-wachtwoord.",
+    "writeMayUseStoredSudoPassword": "Ontbreekt de schrijfrechten, dan schrijft de app met het opgeslagen sudo-wachtwoord (sudo).",
     "takeIntoNote": "In notitie opnemen",
     "takeIntoNoteFailed": "Mislukt — probeer opnieuw",
     "riskServerLabel": "Server",
@@ -391,10 +403,10 @@
     "waitingForInputHint": "Dit commando wacht waarschijnlijk op invoer. Stop het, dan stelt de AI een niet-interactieve variant voor.",
     "cancelCommand": "Deze opdracht loskoppelen",
     "cancellingCommand": "Loskoppelen…",
-    "commandCancelledNotice": "⚠ Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",
-    "commandTruncatedNotice": "⚠ Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
+    "commandCancelledNotice": "Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",
+    "commandTruncatedNotice": "Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
     "liveOutputLabel": "Live-uitvoer",
-    "liveOutputTruncatedNotice": "⚠ Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
+    "liveOutputTruncatedNotice": "Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
     "autoRanLead": "Automatisch uitgevoerd",
     "autoRanRule": "regel",
     "autoRanScopeGlobal": "globaal",
@@ -409,17 +421,14 @@
     "editableCommand": "Opdracht — bewerkbaar",
     "execute": "Uitvoeren",
     "deny": "Weigeren",
-    "quickRule": "Accepteren + regel",
-    "quickRuleDropdownAria": "Regelsuggesties tonen",
-    "newRulePatternHeading": "Patroon voor de nieuwe toestaan-regel",
     "scopeThisServer": "Deze server",
     "scopeGlobal": "Globaal",
     "scopeTag": "Label",
     "tagNamePlaceholder": "Labelnaam",
     "loadingSuggestions": "Suggesties laden…",
     "noSuggestions": "Geen suggesties.",
-    "binaryFileHint": "⚠ Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
+    "binaryFileHint": "Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
+    "diffTooLargeHint": "Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
     "noContentChange": "(geen inhoudswijziging)",
     "quickRuleLabel": {
       "exact": "Precies: {{patterns}}",
@@ -437,9 +446,17 @@
       "blocked": "vraagt altijd, welke regels er ook zijn: {{reasons}}",
       "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
       "verdictAsk": "vraagt nog steeds: {{reasons}}",
-      "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
       "reasonOther": "een andere veiligheidscontrole",
-      "loadFailed": "Regeldekking kon niet worden geladen"
+      "loadFailed": "Regeldekking kon niet worden geladen",
+      "summaryHeading": "Al toegestaan",
+      "toDecideHeading": "Nog te beslissen",
+      "expandAria": "Regelsuggesties voor {{segment}}",
+      "stagedBadge": "nog niet opgeslagen",
+      "removeStaged": "Verwijderen",
+      "saveRules": "Regels opslaan ({{count}})",
+      "saveFailed": "Regels konden niet worden opgeslagen: {{message}}",
+      "unsavedHint": "Niet-opgeslagen regels: {{count}}",
+      "segmentCovered": "dekt dit deel; het commando vraagt nog steeds: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +473,7 @@
     "mismatchBodyAfterHost": " presenteert een andere sleutel dan de vorige keer is opgeslagen. Dit kan wijzen op een man-in-the-middle-aanval. Ga alleen door als u zeker weet dat de serversleutel legitiem is gewijzigd (bijv. herinstallatie van de server).",
     "known": "Bekend",
     "offeredNow": "Nu aangeboden",
+    "offered": "Aangeboden",
     "keyType": "Sleuteltype",
     "cancelConnection": "Verbinding annuleren",
     "trustAnyway": "Toch vertrouwen",
@@ -468,13 +486,17 @@
   },
   "sessionTabs": {
     "newSession": "Nieuwe sessie",
-    "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
     "menu": {
       "open": "Navigatiemenu openen",
       "title": "Navigatiemenu",
-      "sessions": "Open sessies"
+      "sessions": "Open sessies",
+      "close": "Navigatiemenu sluiten",
+      "needsConfirmation": "Bevestiging nodig",
+      "activities": "Activiteiten",
+      "activitiesRunning_one": "{{count}} bezig",
+      "activitiesRunning_other": "{{count}} bezig"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +505,9 @@
       "pendingBadge": "Bevestiging nodig",
       "readOnlyHint": "Deze sessie hoort bij een extern hulpmiddel (MCP). Ze toont alleen de te bevestigen of te weigeren acties van het hulpmiddel en hun resultaten; er is hier geen chatinvoer of terminal. Sluiten beëindigt de MCP-sessie en weigert openstaande bevestigingen."
     },
-    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd."
+    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd.",
+    "pendingBadge": "In behandeling",
+    "newConnection": "Nieuwe verbinding"
   },
   "aiProvider": {
     "openLogs": "Diagnostische logboeken openen in bestandsbeheer",
@@ -505,16 +529,16 @@
     "apiKeyFormatHint": "Lijkt niet op een {{providerLabel}}-sleutel – verwacht wordt een voorvoegsel als \"{{expectedPrefix}}\". U kunt de sleutel toch opslaan; providers wijzigen hun formaten soms.",
     "testCredentials": "Inloggegevens testen",
     "testingCredentials": "Testen…",
-    "testResultValid": "✓ Inloggegevens geldig",
-    "testResultAuthFailed": "✗ Authenticatie mislukt – controleer de API-sleutel",
-    "testResultUnreachable": "✗ Provider onbereikbaar: {{message}}",
+    "testResultValid": "Inloggegevens geldig",
+    "testResultAuthFailed": "Authenticatie mislukt – controleer de API-sleutel",
+    "testResultUnreachable": "Provider onbereikbaar: {{message}}",
     "testResultRateLimited": "De inloggegevens lijken geldig, maar de provider beperkt nu het aantal verzoeken. Test over een minuut opnieuw.",
     "nativeToolCalling": "Ondersteunt native toolaanroepen",
     "discoverModels": "Modellen laden",
     "discoveringModels": "Modellen laden…",
     "modelDiscoveryFailedHint": "Modellen konden niet automatisch worden geladen — voer de modelnaam handmatig in.",
     "modelDiscoveryEmptyHint": "De provider gaf geen modellen terug. Voer de modelnaam handmatig in.",
-    "modelDiscoveryAuthFailed": "✗ De provider heeft deze inloggegevens geweigerd – controleer de API-sleutel",
+    "modelDiscoveryAuthFailed": "De provider heeft deze inloggegevens geweigerd – controleer de API-sleutel",
     "advanced": "Geavanceerd",
     "extraHeadersLabel": "Extra headers",
     "extraHeadersHint": "Wordt aan elk verzoek aan deze provider toegevoegd (bijv. HTTP-Referer/X-Title van OpenRouter).",
@@ -557,6 +581,7 @@
     "ollamaProbeRetry": "Opnieuw zoeken",
     "ollamaProbeNotFoundHeading": "Geen lokale Ollama gevonden (standaardpoort 11434).",
     "ollamaProbeNotFoundInstructions": "Installeer Ollama van ollama.com, start het en laad een model (bijv. `ollama pull llama3`), en zoek daarna opnieuw.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1081,6 +1106,7 @@
     "parentDirectory": "Bovenliggende map",
     "newFolderButton": "+ Map",
     "fileActionsGroup": "Bestandsacties",
+    "directoryActions": "Mapacties",
     "upload": "Uploaden",
     "uploadDialogTitle": "Bestand(en) uploaden",
     "uploadFolder": "Map uploaden",
@@ -1284,8 +1310,9 @@
     "queued": "Wordt met het volgende verzoek verzonden",
     "responseCancelled": "Antwoord geannuleerd.",
     "contextCompactedNotice": "Oudere delen van deze chat zijn samengevat zodat ze in de context van het model passen.",
-    "contextUsage": "Contextgrootte {{used}} / {{window}}",
     "contextUsageTooltip": "Oudere delen van de chat worden automatisch samengevat als de context vol raakt.",
+    "messageLabel": "Bericht",
+    "headerProviderTooltip": "Aanbieder: {{provider}}",
     "webResearchUnavailable": "Webonderzoek is voor dit provideraccount niet beschikbaar (webzoeken is daar uitgeschakeld). Deze sessie antwoordt zonder webonderzoek. Om het permanent uit te schakelen: Instellingen → AI-provider → “Webonderzoek”.",
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
     "refusedResponse": "Het model heeft dit verzoek geweigerd. Formuleer het anders of begin een nieuwe chat.",
@@ -1586,6 +1613,13 @@
     "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
     "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
     "quitAnyway": "Toch afsluiten",
-    "keepRunning": "Blijven doorlopen"
+    "keepRunning": "Blijven doorlopen",
+    "summaryRunning_one": "{{count}} bezig",
+    "summaryRunning_other": "{{count}} bezig",
+    "summaryInterrupted_one": "{{count}} onderbroken",
+    "summaryInterrupted_other": "{{count}} onderbroken",
+    "summaryFailed_one": "{{count}} mislukt",
+    "summaryFailed_other": "{{count}} mislukt",
+    "remaining": "nog {{time}}"
   }
 }

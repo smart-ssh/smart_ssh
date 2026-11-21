@@ -10,7 +10,7 @@ import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
 import { AuthPromptHost } from "./components/AuthPromptHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
-import { ServerList } from "./components/ServerList";
+import { ServerList, serverSessionMarkers, type ServerMarker } from "./components/ServerList";
 import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { ConnectingTabView } from "./components/ConnectingTabView";
@@ -26,7 +26,7 @@ import {
   type ResumeChatSessionRequest,
 } from "./buses/navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
-import { MAIN_TAB_ENTRIES, type MainTab } from "./lib/navEntries";
+import { type MainTab } from "./lib/navEntries";
 import { useSessionTabs } from "./hooks/useSessionTabs";
 
 
@@ -187,6 +187,8 @@ function App() {
     sessionTabs.filter((t) => t.phase === "connecting").map((t) => t.serverId),
   );
 
+  const serverMarkers = serverSessionMarkers(sessionTabs);
+
   return (
     // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
     // noch ankommen, wenn der Nutzer den Session-Screen bereits verlassen
@@ -202,7 +204,16 @@ function App() {
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
     <div className="flex h-[var(--app-vh,100vh)] flex-col bg-surface text-fg overflow-hidden">
-      <AppHeader>
+      <AppHeader
+        mainNav={{
+          active: activeSessionId === null ? tab : null,
+          onSelect: (next) => {
+            switchTo(null);
+            setTab(next);
+          },
+        }}
+        onOpenSettings={openSettingsFrom}
+      >
         {narrow ? (
           <NarrowHeaderNav
             tabs={sessionTabs}
@@ -222,6 +233,10 @@ function App() {
             activeSessionId={activeSessionId}
             onSwitch={switchTo}
             onRequestClose={requestCloseTab}
+            onOpenConnect={() => {
+              switchTo(null);
+              setTab("connect");
+            }}
             onNewSession={startConnect}
           />
         )}
@@ -273,18 +288,13 @@ function App() {
       <div className={activeSessionId === null ? "flex flex-1 min-h-0 flex-col" : "hidden"}>
         <MainScreen
           tab={tab}
-          setTab={setTab}
-          narrow={narrow}
-          settingsOpen={settingsOpen}
-          settingsOpener={settingsOpener}
-          setSettingsOpen={setSettingsOpen}
           openSettingsFrom={openSettingsFrom}
           hasActiveProvider={hasActiveProvider}
-          refreshProviderStatus={refreshProviderStatus}
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
+          serverMarkers={serverMarkers}
           resumeRequest={resumeRequest}
           onResumeRequestConsumed={() => setResumeRequest(null)}
           connectRequest={connectRequest}
@@ -297,17 +307,20 @@ function App() {
           onCreateFirstServer={handleCreateFirstServer}
         />
       </div>
+
+      {settingsOpen && (
+        <SettingsScreen
+          returnFocusTo={settingsOpener}
+          onClose={() => setSettingsOpen(false)}
+          onProvidersChanged={refreshProviderStatus}
+        />
+      )}
     </div>
   );
 }
 
 interface MainScreenProps {
   tab: Tab;
-  setTab: (tab: Tab) => void;
-  narrow: boolean;
-  settingsOpen: boolean;
-  settingsOpener: HTMLElement | null;
-  setSettingsOpen: (open: boolean) => void;
   openSettingsFrom: (opener: HTMLElement) => void;
   hasActiveProvider: boolean | null;
   /** Spec 0057, §4.2 (Etappe 4) — s. `App`s Doc-Kommentar zum
@@ -324,10 +337,11 @@ interface MainScreenProps {
   connectRequest: { serverId: string } | null;
   onConnectRequestConsumed: () => void;
   onRequestConnect: (serverId: string) => void;
-  refreshProviderStatus: () => void;
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
   connectingServerIds: ReadonlySet<string>;
+  /** Issue #1367: status marker per server with an open session. */
+  serverMarkers: ReadonlyMap<string, ServerMarker>;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
@@ -336,16 +350,11 @@ interface MainScreenProps {
 
 function MainScreen({
   tab,
-  setTab,
-  narrow,
-  settingsOpen,
-  settingsOpener,
-  setSettingsOpen: setSettingsOpenRaw,
   openSettingsFrom: openSettingsRaw,
   hasActiveProvider,
-  refreshProviderStatus,
   onStartConnect,
   connectingServerIds,
+  serverMarkers,
   findExistingSessionId,
   onSwitchToExistingTab,
   pendingNoteEditSelection,
@@ -379,32 +388,6 @@ function MainScreen({
   };
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
-      {!narrow && (
-      <header className="flex items-center justify-between border-b border-surface-raised px-6 py-4">
-        <div className="flex items-center gap-6">
-          <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
-          <nav className="flex gap-1">
-            {MAIN_TAB_ENTRIES.map((entry) => (
-              <Button variant="bare"
-                key={entry.id}
-                type="button"
-                onClick={() => setTab(entry.id)}
-                aria-current={tab === entry.id ? "page" : undefined}
-                className={`focus-ring font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
-                  tab === entry.id
-                    ? "border-accent/55 bg-accent/16 text-accent-fg"
-                    : "border-transparent text-fg-subtle hover:bg-surface-raised"
-                }`}
-              >
-                {t(entry.labelKey)}
-              </Button>
-            ))}
-          </nav>
-        </div>
-        <Button onClick={openSettingsFrom}>{t("settings.title")}</Button>
-      </header>
-      )}
-
       {tab === "connect" ? (
         <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
           {hasActiveProvider === false && (
@@ -428,6 +411,7 @@ function MainScreen({
             <ServerList
               onStartConnect={onStartConnect}
               connectingServerIds={connectingServerIds}
+              serverMarkers={serverMarkers}
               findExistingSessionId={findExistingSessionId}
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
@@ -445,19 +429,13 @@ function MainScreen({
           initialSelection={pendingNoteEditSelection}
           onInitialSelectionConsumed={onNoteEditSelectionConsumed}
           onConnect={onRequestConnect}
+          collapsedGroupIds={collapsedGroupIds}
+          onToggleGroup={toggleGroup}
         />
       ) : (
         <FilterRulesView
           initialRuleId={pendingRuleSelection}
           onInitialRuleConsumed={onRuleSelectionConsumed}
-        />
-      )}
-
-      {settingsOpen && (
-        <SettingsScreen
-          returnFocusTo={settingsOpener}
-          onClose={() => setSettingsOpenRaw(false)}
-          onProvidersChanged={refreshProviderStatus}
         />
       )}
 

@@ -30,7 +30,12 @@
     "emptyStateTitle": "Жодного сервера ще не додано",
     "emptyStateHint": "Додайте свій перший сервер, щоб підключитися через SSH.",
     "emptyStateCreateFirstServer": "Додати перший сервер",
-    "emptyStateTryLocalhost": "Спробуйте без сервера: «Localhost» угорі відкриває сеанс на цьому комп'ютері — з тими самими підтвердженнями, що й на справжньому сервері."
+    "emptyStateTryLocalhost": "Спробуйте без сервера: «Localhost» угорі відкриває сеанс на цьому комп'ютері — з тими самими підтвердженнями, що й на справжньому сервері.",
+    "localBadge": "Локальний",
+    "thisDevice": "цей пристрій",
+    "sessionOpen": "Сеанс відкрито",
+    "sessionPending": "Очікує підтвердження",
+    "sessionDisconnected": "Сеанс від’єднано"
   },
   "settings": {
     "title": "Параметри",
@@ -136,7 +141,10 @@
     "importSshConfig": "Імпорт …",
     "importSshConfigHint": "Імпортувати сервери з файлу ssh_config OpenSSH",
     "exportSshConfig": "Експорт …",
-    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH"
+    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH",
+    "title": "Сервери",
+    "collapseGroup": "Згорнути групу «{{name}}»",
+    "expandGroup": "Розгорнути групу «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Скиньте сюди, щоб перемістити на верхній рівень (без групи)",
@@ -277,12 +285,12 @@
     "deleteAlwaysRemovesHistory": "Це також назавжди видаляє історію чату, нотатки й теги цього сервера.",
     "confirmDeleteServer": "Видалити назавжди",
     "testResult": {
-      "success": "✓ Підключення успішне",
-      "authFailed": "✗ Вхід відхилено. Перевірте ім'я користувача та пароль або ключ.",
+      "success": "Підключення успішне",
+      "authFailed": "Вхід відхилено. Перевірте ім'я користувача та пароль або ключ.",
       "hostKeyUnknown": "Ключ хоста невідомий — потрібне підтвердження",
-      "hostKeyMismatch": "⚠ Ключ хоста змінився",
-      "networkError": "✗ Помилка мережі: {{message}}",
-      "timeout": "✗ Сервер не відповідає. Перевірте адресу, порт і брандмауер."
+      "hostKeyMismatch": "Ключ хоста змінився",
+      "networkError": "Помилка мережі: {{message}}",
+      "timeout": "Сервер не відповідає. Перевірте адресу, порт і брандмауер."
     },
     "largeNoteHint": "Ця нотатка дуже велика й під час довгих сеансів може бути скорочена для контексту ШІ. Збережена нотатка залишається повною.",
     "summarizeNow": "Стиснути зараз",
@@ -356,7 +364,13 @@
     "matchedRuleLabel": "Правило:",
     "segmentLabel": "Частина {{index}}",
     "checksLabel": "Перевірки:",
-    "hardBlacklistLabel": "Жорсткий чорний список:"
+    "hardBlacklistLabel": "Жорсткий чорний список:",
+    "invalidPattern": "Недійсний шаблон",
+    "rowActions": "Дії рядка",
+    "ruleCount_one": "{{count}} правило",
+    "ruleCount_few": "{{count}} правила",
+    "ruleCount_many": "{{count}} правил",
+    "ruleCount_other": "{{count}} правила"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Автоматичне продовження призупинено після {{limit}} кроків без вашого підтвердження — надішліть повідомлення, щоб продовжити.",
@@ -377,8 +391,8 @@
     "discardedAfterReconnect": "Скасовано після відновлення з’єднання. Нічого не виконано.",
     "expiredTimeout": "Не підтверджено вчасно, скасовано. Нічого не виконано.",
     "expiredUnknown": "Цей запит більше не очікує. Нічого не виконано.",
-    "usesStoredSudoPassword": "🔑 Виконується зі збереженим паролем sudo.",
-    "writeMayUseStoredSudoPassword": "🔑 Якщо бракує дозволу на запис, програма записує зі збереженим паролем sudo (sudo).",
+    "usesStoredSudoPassword": "Виконується зі збереженим паролем sudo.",
+    "writeMayUseStoredSudoPassword": "Якщо бракує дозволу на запис, програма записує зі збереженим паролем sudo (sudo).",
     "takeIntoNote": "Додати до нотатки",
     "takeIntoNoteFailed": "Не вдалося — спробуйте ще раз",
     "riskServerLabel": "Сервер",
@@ -391,10 +405,10 @@
     "waitingForInputHint": "Ця команда, імовірно, чекає на введення. Зупиніть її, і ШІ запропонує неінтерактивний варіант.",
     "cancelCommand": "Відключити цю команду",
     "cancellingCommand": "Відключення…",
-    "commandCancelledNotice": "⚠ Скасовано вручну — вивід може бути неповним, звичайного коду завершення немає.",
-    "commandTruncatedNotice": "⚠ Вивід обрізано на межі розміру — він може бути неповним.",
+    "commandCancelledNotice": "Скасовано вручну — вивід може бути неповним, звичайного коду завершення немає.",
+    "commandTruncatedNotice": "Вивід обрізано на межі розміру — він може бути неповним.",
     "liveOutputLabel": "Вивід наживо",
-    "liveOutputTruncatedNotice": "⚠ Досягнуто межі розміру — подальший вивід більше не показується.",
+    "liveOutputTruncatedNotice": "Досягнуто межі розміру — подальший вивід більше не показується.",
     "autoRanLead": "Виконано автоматично",
     "autoRanRule": "правило",
     "autoRanScopeGlobal": "глобальне",
@@ -409,17 +423,14 @@
     "editableCommand": "Команда — можна редагувати",
     "execute": "Виконати",
     "deny": "Заборонити",
-    "quickRule": "Прийняти + правило",
-    "quickRuleDropdownAria": "Показати пропозиції правил",
-    "newRulePatternHeading": "Шаблон нового правила «Дозволити»",
     "scopeThisServer": "Цей сервер",
     "scopeGlobal": "Глобально",
     "scopeTag": "Тег",
     "tagNamePlaceholder": "Назва тега",
     "loadingSuggestions": "Завантаження пропозицій…",
     "noSuggestions": "Немає пропозицій.",
-    "binaryFileHint": "⚠ Двійковий файл — текстове порівняння неможливе. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Вміст завеликий для порівняння рядків. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
+    "binaryFileHint": "Двійковий файл — текстове порівняння неможливе. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
+    "diffTooLargeHint": "Вміст завеликий для порівняння рядків. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
     "noContentChange": "(вміст не змінено)",
     "quickRuleLabel": {
       "exact": "Точно: {{patterns}}",
@@ -437,9 +448,17 @@
       "blocked": "завжди питає, незалежно від правил: {{reasons}}",
       "verdictAuto": "наступного разу виконається автоматично",
       "verdictAsk": "і далі питатиме: {{reasons}}",
-      "notice": "Правило створено. Ця команда й наступного разу питатиме: {{reasons}}",
       "reasonOther": "інша перевірка безпеки",
-      "loadFailed": "Не вдалося завантажити покриття правил"
+      "loadFailed": "Не вдалося завантажити покриття правил",
+      "summaryHeading": "Уже дозволено",
+      "toDecideHeading": "Ще потрібно вирішити",
+      "expandAria": "Пропозиції правил для {{segment}}",
+      "stagedBadge": "ще не збережено",
+      "removeStaged": "Прибрати",
+      "saveRules": "Зберегти правила ({{count}})",
+      "saveFailed": "Не вдалося зберегти правила: {{message}}",
+      "unsavedHint": "Незбережені правила: {{count}}",
+      "segmentCovered": "охоплює цю частину; команда все одно питатиме: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +475,7 @@
     "mismatchBodyAfterHost": " пред'являє інший ключ, ніж збережений востаннє. Це може вказувати на атаку «людина посередині». Продовжуйте, лише якщо ви впевнені, що ключ сервера змінився правомірно (наприклад, після перевстановлення сервера).",
     "known": "Відомий",
     "offeredNow": "Запропоновано зараз",
+    "offered": "Запропоновано",
     "keyType": "Тип ключа",
     "cancelConnection": "Скасувати підключення",
     "trustAnyway": "Все одно довіряти",
@@ -468,13 +488,19 @@
   },
   "sessionTabs": {
     "newSession": "Новий сеанс",
-    "overview": "Огляд",
     "pendingAction": "Очікує підтвердження",
     "closeTab": "Закрити вкладку «{{name}}»",
     "menu": {
       "open": "Відкрити меню навігації",
       "title": "Меню навігації",
-      "sessions": "Відкриті сеанси"
+      "sessions": "Відкриті сеанси",
+      "close": "Закрити меню навігації",
+      "needsConfirmation": "Потрібне підтвердження",
+      "activities": "Активності",
+      "activitiesRunning_one": "виконується: {{count}}",
+      "activitiesRunning_few": "виконується: {{count}}",
+      "activitiesRunning_many": "виконується: {{count}}",
+      "activitiesRunning_other": "виконується: {{count}}"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +509,9 @@
       "pendingBadge": "Потрібне підтвердження",
       "readOnlyHint": "Цей сеанс належить зовнішньому інструменту (MCP). Тут лише показано дії інструмента для підтвердження чи відхилення та їхні результати; поля введення чату й терміналу немає. Закриття завершує сеанс MCP і відхиляє очікувані підтвердження."
     },
-    "confirmClosePending": "Для «{{name}}» ще очікується підтвердження. Закрити вкладку попри це? Очікувана дія вважатиметься відхиленою."
+    "confirmClosePending": "Для «{{name}}» ще очікується підтвердження. Закрити вкладку попри це? Очікувана дія вважатиметься відхиленою.",
+    "pendingBadge": "Очікує",
+    "newConnection": "Нове з’єднання"
   },
   "aiProvider": {
     "openLogs": "Відкрити діагностичні журнали у файловому менеджері",
@@ -505,16 +533,16 @@
     "apiKeyFormatHint": "Не схоже на ключ {{providerLabel}} – очікується префікс на кшталт «{{expectedPrefix}}». Зберегти все одно можна; провайдери іноді змінюють формати.",
     "testCredentials": "Перевірити облікові дані",
     "testingCredentials": "Перевірка…",
-    "testResultValid": "✓ Облікові дані дійсні",
-    "testResultAuthFailed": "✗ Автентифікація не вдалася – перевірте ключ API",
-    "testResultUnreachable": "✗ Провайдер недосяжний: {{message}}",
+    "testResultValid": "Облікові дані дійсні",
+    "testResultAuthFailed": "Автентифікація не вдалася – перевірте ключ API",
+    "testResultUnreachable": "Провайдер недосяжний: {{message}}",
     "testResultRateLimited": "Облікові дані схожі на дійсні, але провайдер зараз обмежує частоту запитів. Повторіть перевірку за хвилину.",
     "nativeToolCalling": "Підтримує нативний виклик інструментів",
     "discoverModels": "Завантажити моделі",
     "discoveringModels": "Завантаження моделей…",
     "modelDiscoveryFailedHint": "Не вдалося завантажити моделі автоматично — введіть назву моделі вручну.",
     "modelDiscoveryEmptyHint": "Провайдер не повернув жодної моделі. Введіть назву моделі вручну.",
-    "modelDiscoveryAuthFailed": "✗ Провайдер відхилив ці облікові дані – перевірте ключ API",
+    "modelDiscoveryAuthFailed": "Провайдер відхилив ці облікові дані – перевірте ключ API",
     "advanced": "Додатково",
     "extraHeadersLabel": "Додаткові заголовки",
     "extraHeadersHint": "Додаються до кожного запиту до цього провайдера (напр. HTTP-Referer/X-Title для OpenRouter).",
@@ -557,6 +585,7 @@
     "ollamaProbeRetry": "Шукати знову",
     "ollamaProbeNotFoundHeading": "Локальної Ollama не знайдено (типовий порт 11434).",
     "ollamaProbeNotFoundInstructions": "Встановіть Ollama з ollama.com, запустіть її та завантажте модель (напр. `ollama pull llama3`), потім шукайте знову.",
+    "typeLabel": "Тип",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1091,6 +1120,7 @@
     "parentDirectory": "Батьківська тека",
     "newFolderButton": "+ Тека",
     "fileActionsGroup": "Дії з файлами",
+    "directoryActions": "Дії з каталогом",
     "upload": "Вивантажити",
     "uploadDialogTitle": "Вивантажити файл(и)",
     "uploadFolder": "Вивантажити теку",
@@ -1298,8 +1328,9 @@
     "queued": "Буде надіслано з наступним запитом",
     "responseCancelled": "Відповідь скасовано.",
     "contextCompactedNotice": "Давніші частини цього чату було стиснуто в підсумок, щоб вони вмістилися в контекст моделі.",
-    "contextUsage": "Контекст {{used}} / {{window}}",
     "contextUsageTooltip": "Давніші частини чату автоматично стискаються, коли контекст заповнюється.",
+    "messageLabel": "Повідомлення",
+    "headerProviderTooltip": "Провайдер: {{provider}}",
     "webResearchUnavailable": "Веб-дослідження недоступне для облікового запису цього провайдера (веб-пошук там вимкнено). Цей сеанс відповідає без веб-дослідження. Щоб вимкнути його назавжди: Параметри → ШІ-провайдер → «Веб-дослідження».",
     "emptyResponse": "Модель не повернула відповіді. Для моделей із фазою міркування допомагає вищий ліміт виводу в параметрах провайдера.",
     "refusedResponse": "Модель відхилила цей запит. Переформулюйте його або почніть новий чат.",
@@ -1602,6 +1633,19 @@
     "quitBody": "Ці дії ще виконуються і будуть зупинені:",
     "quitResumeHint": "Перервані завантаження можна відновити під час наступного запуску застосунку.",
     "quitAnyway": "Усе одно вийти",
-    "keepRunning": "Залишити виконання"
+    "keepRunning": "Залишити виконання",
+    "summaryRunning_one": "виконується: {{count}}",
+    "summaryRunning_few": "виконується: {{count}}",
+    "summaryRunning_many": "виконується: {{count}}",
+    "summaryRunning_other": "виконується: {{count}}",
+    "summaryInterrupted_one": "перервано: {{count}}",
+    "summaryInterrupted_few": "перервано: {{count}}",
+    "summaryInterrupted_many": "перервано: {{count}}",
+    "summaryInterrupted_other": "перервано: {{count}}",
+    "summaryFailed_one": "з помилкою: {{count}}",
+    "summaryFailed_few": "з помилкою: {{count}}",
+    "summaryFailed_many": "з помилкою: {{count}}",
+    "summaryFailed_other": "з помилкою: {{count}}",
+    "remaining": "залишилось {{time}}"
   }
 }

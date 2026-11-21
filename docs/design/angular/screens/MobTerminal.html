@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Mobile – Terminal + key row</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--danger-fg:#ff8a85;--warning-fg:#ffc266;--success:#3dd68c;--success-fg:#7be5ae;--term-bg:#07090c;--term-fg:#d8dee6;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.mono{font-family:"JetBrains Mono",monospace}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.sq{width:8px;height:8px;display:inline-block;flex:none}
+.pt{flex:1;height:44px;display:flex;align-items:center;justify-content:center;gap:7px;background:transparent;border:0;border-right:1px solid var(--border);border-bottom:2px solid transparent;color:var(--fg-muted);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.pt.on{color:var(--fg-strong);border-bottom-color:var(--accent);background:var(--surface-raised)}
+.k{min-width:48px;height:44px;padding:0 10px;display:flex;align-items:center;justify-content:center;background:var(--surface-raised);border:0;border-right:1px solid var(--border);color:var(--fg-soft);font-family:"JetBrains Mono",monospace;font-size:13px;flex:none;cursor:pointer}
+.k.mod{color:var(--fg-muted);font-family:"Barlow Condensed",sans-serif;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:14px}
+.k.on{background:var(--accent);color:var(--on-accent)}
+.t{color:var(--term-fg);font-size:11.5px;line-height:1.6;white-space:pre}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 390px; height: 844px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <button type="button" aria-label="Open navigation menu" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-soft); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16 M4 12h16 M4 18h16"></path></svg></button>
+    <span class="sq" style="background: var(--success)"></span>
+    <span class="mono" style="font-size: 15px; font-weight: 500; color: var(--fg-strong)">web-01</span>
+    <div style="flex: 1"></div>
+    <button type="button" aria-label="More actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-soft); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+  </header>
+  <div role="tablist" aria-label="Session panes" style="display: flex; border-bottom: 1px solid var(--border); flex: none">
+    <button class="pt" type="button" role="tab"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"></path></svg>AI</button>
+    <button class="pt on" type="button" role="tab" aria-selected="true"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M3 4h18v16H3z M7 9l3 3-3 3 M12 15h5"></path></svg>Terminal</button>
+    <button class="pt" type="button" role="tab" style="border-right: 0"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>Files</button>
+  </div>
+  <section aria-label="Terminal" style="flex: 1; background: var(--term-bg); padding: 10px 10px; overflow: hidden">
+<div class="mono t"><span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ uptime
+ 10:58:21 up 41 days,  3:12,  1 user,
+ load average: 0.42, 0.51, 0.47
+<span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ free -h
+       total   used   free  avail
+Mem:   3.8Gi  2.1Gi  312Mi  1.4Gi
+Swap:  1.0Gi   88Mi  936Mi
+<span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ systemctl --failed
+  UNIT               LOAD   ACTIVE SUB
+<span style="color: var(--danger-fg)">● php8.3-fpm.service loaded failed failed</span>
+
+1 loaded units listed.
+<span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ sudo systemctl restart php8.3-fpm
+[sudo] password for deploy:
+<span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ systemctl is-active php8.3-fpm
+<span style="color: var(--success-fg)">active</span>
+<span style="color: var(--success-fg)">deploy@web-01</span>:<span style="color: var(--accent-fg)">~</span>$ tail -f /var/log/nginx/ac<span style="background: var(--accent); color: var(--term-bg)"> </span></div>
+  </section>
+  <div role="group" aria-label="Extra keys" style="border-top: 1px solid var(--border-strong); background: var(--surface-raised); flex: none">
+    <div style="display: flex; overflow: hidden; border-bottom: 1px solid var(--border)">
+      <button class="k mod" type="button">Esc</button><button class="k mod" type="button">Tab</button><button class="k mod on" type="button" aria-pressed="true">Ctrl</button><button class="k mod" type="button">Alt</button>
+      <button class="k" type="button" aria-label="Up arrow"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg></button><button class="k" type="button" aria-label="Down arrow"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button><button class="k" type="button" aria-label="Left arrow"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button><button class="k" type="button" aria-label="Right arrow" style="border-right: 0"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+    </div>
+    <div style="display: flex; overflow: hidden">
+      <button class="k mod" type="button">Home</button><button class="k mod" type="button">End</button><button class="k mod" type="button">PgUp</button><button class="k mod" type="button">PgDn</button><button class="k" type="button">|</button><button class="k" type="button">~</button><button class="k" type="button">/</button><button class="k" type="button" style="border-right: 0">-</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -47,6 +47,15 @@ function renderSection() {
 }
 
 describe("DataPathsSection (Issue #16)", () => {
+  it("renders the copy buttons icon-only, keeping the accessible name", async () => {
+    vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
+    renderSection();
+    await screen.findByText("/data/smart-ssh.db");
+    const button = screen.getByRole("button", { name: "Kopieren: Datenbank" });
+    expect(button.textContent?.trim()).toBe("");
+    expect(button.querySelector("svg")).not.toBeNull();
+  });
+
   it("zeigt alle eingebauten Pfade mit übersetzter Beschriftung und Sitzungen als 'in der Datenbank'", async () => {
     vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
 

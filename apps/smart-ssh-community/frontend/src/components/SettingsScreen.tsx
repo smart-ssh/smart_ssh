@@ -16,7 +16,8 @@ import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button, DialogFrame, ErrorBoundary } from "./ui";
+import { SettingsActionSlotContext } from "./SettingsSectionAction";
+import { Button, DialogFrame, ErrorBoundary, Icon, type IconName } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -35,6 +36,18 @@ const MASTER_PASSWORD_CATEGORY_ID = "master-password";
 const DATA_BACKUP_CATEGORY_ID = "data-backup";
 const VOICE_INPUT_CATEGORY_ID = "voice-input";
 const ABOUT_CATEGORY_ID = "about";
+
+/** Narrow list icons (docs/design/angular/icons); unknown/registered categories fall back to `sliders`. */
+const CATEGORY_ICONS: Record<string, IconName> = {
+  [AI_PROVIDER_CATEGORY_ID]: "spark",
+  [DISPLAY_LANGUAGE_CATEGORY_ID]: "globe",
+  [DIAGNOSTICS_CATEGORY_ID]: "activity",
+  [FILE_TYPES_CATEGORY_ID]: "folder",
+  [MASTER_PASSWORD_CATEGORY_ID]: "lock",
+  [DATA_BACKUP_CATEGORY_ID]: "download",
+  [VOICE_INPUT_CATEGORY_ID]: "mic",
+  [ABOUT_CATEGORY_ID]: "info",
+};
 
 interface NavCategory {
   id: string;
@@ -153,82 +166,106 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   // Tab wrap and focus return; focus starts on the active category. It yields to
   // the dialogs opened from inside the settings (licenses, master password).
   const titleId = useId();
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const activeNavRef = useRef<HTMLButtonElement>(null);
 
+  const indexOf = (id: string) => String(categories.findIndex((c) => c.id === id) + 1).padStart(2, "0");
+  const closeButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="min-h-11 min-w-11 shrink-0"
+      onClick={onClose}
+      aria-label={t("common.close")}
+    >
+      <Icon name="x" />
+    </Button>
+  );
+
+  // Issue #1376: the settings are a full window below the title bar (no modal
+  // frame, no backdrop): header bar, numbered category list left, section right.
   return (
     <DialogFrame
       layer="app"
+      layout="page"
       bare
       yieldToNested
       labelledBy={titleId}
       onClose={onClose}
       returnFocusTo={returnFocusTo}
       initialFocusRef={activeNavRef}
-      panelClassName="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-surface-raised shadow-xl narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-surface"
     >
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4 narrow:flex-row-reverse narrow:justify-end narrow:px-1">
+        <h1 id={titleId} className="text-title min-w-0 flex-1 truncate text-fg-strong narrow:px-2">
+          {t("settings.title")}
+        </h1>
+        {closeButton}
+      </header>
+      <div className="flex min-h-0 flex-1">
         {showList && (
-        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-          <div className="flex items-center justify-between">
-            <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-fg">
-              {t("settings.title")}
-            </h2>
-            {narrow && (
-              <Button variant="ghost" size="sm" className="mr-2 min-h-11 min-w-11" onClick={onClose} aria-label={t("common.close")}>
-                ✕
-              </Button>
-            )}
-          </div>
+        <nav className="flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
           <ul className="flex-1">
-            {categories.map((category) => (
+            {categories.map((category) => {
+              const isActive = category.id === active?.id;
+              return (
               <li key={category.id}>
                 <Button variant="bare"
                   type="button"
-                  ref={category.id === active?.id ? activeNavRef : undefined}
+                  ref={isActive ? activeNavRef : undefined}
                   onClick={() => {
                     setActiveId(category.id);
                     setNarrowView("detail");
                   }}
-                  aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-ring-inset ${
-                    category.id === active?.id
-                      ? "bg-accent text-surface-sunken"
-                      : "text-fg-muted hover:bg-surface-raised"
+                  aria-current={isActive ? "page" : undefined}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+                    e.preventDefault();
+                    const li = e.currentTarget.closest("li");
+                    const sibling = e.key === "ArrowDown" ? li?.nextElementSibling : li?.previousElementSibling;
+                    sibling?.querySelector("button")?.focus();
+                  }}
+                  className={`flex h-[38px] w-full items-center gap-3 border-l-2 px-4 text-left text-sm narrow:h-[54px] focus-ring-inset ${
+                    isActive
+                      ? "border-accent bg-surface-raised text-fg-strong"
+                      : "border-transparent text-fg-muted hover:bg-surface-raised"
                   }`}
                 >
-                  {category.label}
+                  <span aria-hidden="true" className="font-mono text-xs text-fg-faint">{indexOf(category.id)}</span>
+                  <Icon name={CATEGORY_ICONS[category.id] ?? "sliders"} className="hidden shrink-0 narrow:inline" />
+                  <span className="min-w-0 flex-1 truncate">{category.label}</span>
+                  <Icon name="chev-r" className="hidden shrink-0 text-fg-faint narrow:inline" />
                 </Button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </nav>
         )}
 
         {showDetail && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-6 py-4 narrow:px-2 narrow:py-2">
+          <div className="flex items-center gap-3 border-b border-border px-6 py-4 narrow:px-2 narrow:py-2">
             {narrow && (
-              <>
-                <h2 id={titleId} className="sr-only">
-                  {t("settings.title")}
-                </h2>
-                <Button
-                  ref={backRef}
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-11 shrink-0"
-                  onClick={() => setNarrowView("list")}
-                >
-                  ← {t("settings.backToList")}
-                </Button>
-              </>
+              <Button
+                ref={backRef}
+                variant="ghost"
+                size="sm"
+                className="min-h-11 min-w-11 shrink-0"
+                onClick={() => setNarrowView("list")}
+                aria-label={t("settings.backToList")}
+              >
+                <Icon name="chev-r" className="rotate-180" />
+              </Button>
             )}
-            <h3 className="font-heading min-w-0 flex-1 truncate text-base font-semibold tracking-wide text-fg narrow:text-center">
+            <span aria-hidden="true" className="font-mono text-sm text-fg-faint">{active ? indexOf(active.id) : ""}</span>
+            <h2 className="text-display min-w-0 flex-1 truncate text-fg-strong narrow:text-title">
               {active?.label}
-            </h3>
-            <Button variant="ghost" size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={onClose} aria-label={t("common.close")}>
-              ✕
-            </Button>
+            </h2>
+            {/* Action slot: a section renders `SettingsSectionAction`. */}
+            <div ref={setActionSlot} data-testid="settings-section-actions" className="flex shrink-0 items-center gap-2" />
           </div>
+          <SettingsActionSlotContext.Provider value={actionSlot}>
           <div className="min-w-0 flex-1 overflow-y-auto p-6 narrow:p-3">
             {active?.id === AI_PROVIDER_CATEGORY_ID && (
               <AiProviderSettings onProvidersChanged={onProvidersChanged} />
@@ -257,8 +294,10 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                 ),
             )}
           </div>
+          </SettingsActionSlotContext.Provider>
         </div>
         )}
+      </div>
     </DialogFrame>
   );
 }

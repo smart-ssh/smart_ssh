@@ -33,7 +33,9 @@
     "elevatedIdle.minutes5": "same word in this language (number plus \"minutes\")",
     "elevatedIdle.minutes15": "same word in this language (number plus \"minutes\")",
     "elevatedIdle.minutes30": "same word in this language (number plus \"minutes\")",
-    "elevatedIdle.minutes60": "same word in this language (number plus \"minutes\")"
+    "elevatedIdle.minutes60": "same word in this language (number plus \"minutes\")",
+    "chat.messageLabel": "same word in this language",
+    "mainScreen.localBadge": "same word in this language"
   },
   "es": {
     "common.ok": "same word in this language",
@@ -54,7 +56,8 @@
     "session.terminalTab": "same word in this language",
     "unusableServer.host": "same word in this language",
     "serverForm.tabs.general": "same word in this language",
-    "actionCard.autoRanScopeGlobal": "same word in this language"
+    "actionCard.autoRanScopeGlobal": "same word in this language",
+    "mainScreen.localBadge": "same word in this language"
   },
   "it": {
     "authPrompt.password": "same word in this language",
@@ -92,7 +95,8 @@
     "actionCard.autoRanScopeTag": "same word in this language",
     "backup.passphrase.label": "same word in this language",
     "backup.import.usePassphrase": "same word in this language",
-    "backup.import.passphraseLabel": "same word in this language"
+    "backup.import.passphraseLabel": "same word in this language",
+    "chat.headerProviderTooltip": "same word in this language"
   },
   "pl": {
     "common.ok": "same word in this language",
@@ -404,6 +408,7 @@
     "session.terminalTab": "same word in this language",
     "unusableServer.host": "same word in this language",
     "serverForm.tabs.general": "same word in this language",
-    "actionCard.autoRanScopeServer": "same word in this language"
+    "actionCard.autoRanScopeServer": "same word in this language",
+    "mainScreen.localBadge": "same word in this language"
   }
 }

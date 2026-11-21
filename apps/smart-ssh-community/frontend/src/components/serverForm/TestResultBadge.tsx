@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "../ui";
 import { translateErrorCode } from "../../api/errorCodes";
 import type { TestConnectionResult } from "../../api/types";
 
@@ -9,20 +10,21 @@ export function TestResultBadge({ result }: { result: TestConnectionResult }) {
   const { t } = useTranslation();
   switch (result.kind) {
     case "success":
-      return <span className="text-sm text-success-fg">{t("serverForm.testResult.success")}</span>;
+      return <span className="text-sm text-success-fg"><Icon name="check" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.success")}</span>;
     case "authenticationFailed":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.authFailed")}</span>;
+      return <span className="text-sm text-danger-fg"><Icon name="x" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.authFailed")}</span>;
     case "hostKeyUnknown":
       return (
-        <span className="text-sm text-warning-fg">{t("serverForm.testResult.hostKeyUnknown")}</span>
+        <span className="text-sm text-warning-fg"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.hostKeyUnknown")}</span>
       );
     case "hostKeyMismatch":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.hostKeyMismatch")}</span>;
+      return <span className="text-sm text-danger-fg"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.hostKeyMismatch")}</span>;
     case "networkError":
       // Spec 0069, Teil A5: bekannter Code → übersetzte Meldung; ohne
       // Code → wie bisher der rohe Backend-Text.
       return (
         <span className="text-sm text-danger-fg">
+          <Icon name="x" className="mr-1 inline align-text-bottom" />
           {translateErrorCode(
             t,
             result.code,
@@ -31,6 +33,6 @@ export function TestResultBadge({ result }: { result: TestConnectionResult }) {
         </span>
       );
     case "timeout":
-      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.timeout")}</span>;
+      return <span className="text-sm text-danger-fg"><Icon name="x" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.timeout")}</span>;
   }
 }

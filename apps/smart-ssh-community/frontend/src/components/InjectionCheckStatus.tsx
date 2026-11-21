@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "./ui";
 import { translateErrorCode } from "../api/errorCodes";
 import type { InjectionCheckState } from "../api/types";
 
@@ -15,7 +16,7 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
         data-testid="injection-check-running"
       >
         <span
-          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-faint border-t-transparent"
+          className="inline-block h-3 w-3 animate-spin border-2 border-fg-faint border-t-transparent"
           aria-hidden="true"
         />
         {t("chat.injectionChecking")}
@@ -31,11 +32,11 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
   }
   return (
     <div
-      className="mt-1 rounded border border-warning-border-strong/60 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
+      className="mt-1 border border-warning-border-strong/60 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
       role="alert"
       data-testid="injection-check-suspected"
     >
-      <p>⚠ {t("chat.injectionSuspected")}</p>
+      <p><Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("chat.injectionSuspected")}</p>
       {check.reason && (
         <p className="mt-0.5 break-words whitespace-pre-wrap">
           {t("chat.injectionSuspectedReason", { reason: check.reason })}

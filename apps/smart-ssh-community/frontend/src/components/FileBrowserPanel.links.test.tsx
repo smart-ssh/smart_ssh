@@ -122,14 +122,13 @@ describe("symbolic links in the file browser (#1291)", () => {
     );
     const rows = await screen.findAllByRole("row");
     expect(rows.length).toBeGreaterThan(5);
-    const names = Array.from(document.querySelectorAll("tbody tr td:first-child")).map((td) =>
-      td.textContent?.replace(/\s+/g, " ").trim(),
-    );
+    const cells = Array.from(document.querySelectorAll("tbody tr td:first-child"));
+    const names = cells.map((td) => td.textContent?.replace(/\s+/g, " ").trim());
+    const iconOf = (td: Element) => td.querySelector("svg")?.getAttribute("data-icon");
     // Folders first (link-dir < zfolder), then files by name.
-    expect(names.map((n) => n?.split(" ")[1])).toEqual(["link-dir", "zfolder", "afile", "dangling", "link-file"]);
-    expect(names[0]).toContain("📁");
-    expect(names[2]).not.toContain("↪");
-    expect(names[4]).toContain("📄");
+    expect(names.map((n) => n?.split(" ")[0])).toEqual(["link-dir", "zfolder", "afile", "dangling", "link-file"]);
+    // Icons: link to a folder, folder, plain file, broken link, link to a file.
+    expect(cells.map(iconOf)).toEqual(["folder-link", "folder", "file", "file-x", "symlink"]);
     // Every link has the accessible marker; ordinary entries have none.
     expect(screen.getAllByText(MARKER)).toHaveLength(3);
     // Hover shows the target; an unreadable target is omitted.
@@ -137,14 +136,14 @@ describe("symbolic links in the file browser (#1291)", () => {
     expect(screen.getAllByTitle("link-file -> afile").length).toBeGreaterThan(0);
     expect(screen.getAllByTitle("dangling").length).toBeGreaterThan(0);
     // Only folder-like entries are buttons.
-    expect(screen.getByRole("button", { name: /^📁 link-dir/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^📄 link-file/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^⚠️ dangling/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /^link-dir/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^link-file/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^dangling/ })).toBeNull();
     // The broken link is de-emphasised.
     expect(screen.getAllByTitle("dangling")[0].closest("span.opacity-50")).not.toBeNull();
 
     vi.mocked(sftpList).mockClear();
-    fireEvent.click(screen.getByRole("button", { name: /^📁 link-dir/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^link-dir/ }));
     await waitFor(() => expect(sftpList).toHaveBeenCalledWith("s1", "/h/link-dir", null));
   });
 
@@ -164,9 +163,9 @@ describe("symbolic links in the file browser (#1291)", () => {
     );
     expect(screen.getAllByText(MARKER)).toHaveLength(3);
     expect(screen.getAllByTitle("link-dir -> /srv/releases/42").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /^📄 link-file/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^⚠️ dangling/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^📁 link-dir/ }));
+    expect(screen.queryByRole("button", { name: /^link-file/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^dangling/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^link-dir/ }));
     expect(load).toHaveBeenCalledWith("/h/link-dir");
   });
 

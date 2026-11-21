@@ -1,5 +1,11 @@
 // Shared UI primitives (docs/ui-guidelines.md). Exported as one barrel so
 // editions and extensions can use them too.
+export { Badge } from "./Badge";
+export type { BadgeTone } from "./Badge";
+export { CornerTicks } from "./CornerTicks";
+export type { CornerTicksProps } from "./CornerTicks";
+export { StatusSquare } from "./StatusSquare";
+export type { StatusTone } from "./StatusSquare";
 export { Button } from "./Button";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./Button";
 export { DialogFrame } from "./DialogFrame";
@@ -16,3 +22,7 @@ export { Menu, MenuItem, MenuSeparator } from "./Menu";
 export type { MenuItemProps, MenuProps } from "./Menu";
 export { TagInput } from "./TagInput";
 export type { TagInputProps } from "./TagInput";
+export { Icon, ICON_NAMES } from "./Icon";
+export type { IconName, IconProps } from "./Icon";
+export { Logo } from "./Logo";
+export type { LogoProps } from "./Logo";

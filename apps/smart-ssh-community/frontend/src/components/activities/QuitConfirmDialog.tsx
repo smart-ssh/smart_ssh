@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import type { TranslateFn, TranslationKey } from "../../i18nTypes";
 import { confirmQuit, type Activity } from "../../api/activitiesApi";
 import { onQuitRequested } from "../../api/events";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
+import { kindIcon } from "./activityKind";
 
 export function QuitConfirmDialog() {
   const { t } = useTranslation();
@@ -38,7 +39,12 @@ export function QuitConfirmDialog() {
       layer="app"
       size="sm"
       role="alertdialog"
-      title={t("activities.quitTitle")}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Icon name="warn" className="text-warning-fg" />
+          {t("activities.quitTitle")}
+        </span>
+      }
       onClose={close}
       initialFocusRef={keepRef}
       actions={
@@ -61,9 +67,10 @@ export function QuitConfirmDialog() {
       }
     >
       <p>{t("activities.quitBody")}</p>
-      <ul className="mt-2 list-disc pl-5">
+      <ul className="mt-2 space-y-1">
         {running.map((a) => (
-          <li key={a.id} className="break-words">
+          <li key={a.id} className="flex items-start gap-2 break-words">
+            <Icon name={kindIcon(a.kind)} className="mt-0.5 shrink-0 text-fg-muted" />
             {tx(a.titleKey as TranslationKey, { ...a.titleParams })}
           </li>
         ))}

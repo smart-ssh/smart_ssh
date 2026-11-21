@@ -206,6 +206,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     list_unusable_servers: () => [],
     list_known_tags: () => [...new Set(model.servers.flatMap((s) => s.tags))].sort(),
     explain_confirmation: () => ({ segments: [], suggestions: [] }),
+    create_quick_rules_batch: () => [],
     move_server_to_group: ({ id, groupId }) => {
       findServer(id).groupId = (groupId as string | null) ?? null;
       persist();
@@ -253,6 +254,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
     // --- Settings screens ------------------------------------------------
     list_ai_providers: () => model.aiProviders,
+    get_session_ai_provider: () => {
+      const active = model.aiProviders.find((p) => p.isActive);
+      if (!active) throw commandError("no active provider");
+      return { displayName: active.displayName, model: active.model };
+    },
     discover_models: () => [],
     get_data_paths: () => [
       { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },

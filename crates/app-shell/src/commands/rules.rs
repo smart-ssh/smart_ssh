@@ -1,16 +1,13 @@
 //! Spec 0009/0011: Filter-Regel-Verwaltung und Regel-Schnellvorschlag — Teil
 //! der Spec-0083-Aufteilung von `commands.rs`.
 
-use app_logic::error::ResultCodeExt;
 use tauri::State;
 
 use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
 
-use app_logic::dto::{
-    ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, RuleDto, RuleInput,
-};
+use app_logic::dto::{EvalContextInput, EvaluationTraceDto, PatternDto, RuleDto, RuleInput};
 use app_logic::error::CommandResult;
-use app_logic::state::{ActionId, AppState, SessionId};
+use app_logic::state::{AppState, SessionId};
 
 // --- Spec 0009: Filter-Regel-Verwaltung ------------------------------------
 
@@ -128,83 +125,48 @@ pub async fn explain_confirmation(
     .await)
 }
 
-/// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
-/// delegiert an [`app_logic::filter_rules::create_rule`] über
-/// [`app_logic::rule_suggestions::create_quick_rule`]), löst **danach** die
-/// wartende `Confirm`-Entscheidung für `action_id` auf (Schritt 2).
-///
-/// Schlägt Schritt 1 fehl, wird Schritt 2 trotzdem erreicht: Das Ergebnis
-/// von Schritt 1 wird zwischengespeichert und erst am Ende zurückgegeben,
-/// damit ein Fehlschlag beim Anlegen der Regel die Bestätigung nicht
-/// mitreißt (Spec 0021, Abschnitt 7 — Begründung im Kommentar an der
-/// `resolve`-Stelle weiter unten). Der Nutzer bekommt dann den Fehler der
-/// Regel-Erstellung, und die bestätigte Aktion läuft trotzdem.
-///
-/// `edited_command`: unabhängiger Review-Pass (Spec 0007/0008) — das
-/// Frontend zeigt/verwendet zur Muster-Ableitung den vom Nutzer im
-/// Bearbeiten-Feld editierten Text (`ConfirmActionForm`s `edited`-State),
-/// aber diese Funktion löste die Bestätigung bislang immer mit
-/// `ActionUserDecision::Approve` auf — das führt die **ursprüngliche,
-/// unbearbeitete** `AiAction` aus. Ein Nutzer, der z. B. `rm -rf
-/// /var/log/*` zu `ls /var/log` bearbeitet und dann "Regel anlegen &
-/// ausführen" klickt, bekäme eine Regel für `ls /var/log`, während
-/// tatsächlich `rm -rf /var/log/*` ausgeführt würde — exakt der
-/// Bestätigungsdialog-Bypass, gegen den `EditThenApprove` (Aufgabenstellung
-/// Teil 1, Punkt 4) eigentlich schützt. `Some(cmd)` (Text unterscheidet
-/// sich vom ursprünglich vorgeschlagenen Kommando) löst deshalb jetzt mit
-/// `EditThenApprove { command: cmd }` auf — dieselbe erneute
-/// Filter-Engine-Prüfung wie beim regulären "Ausführen"-Button
-/// (`app_logic::orchestration::handle_user_decision`). `None` (Text
-/// unverändert) verhält sich wie zuvor.
+/// Issue #1356, Spec 0011: rule suggestions for ONE segment of the pending
+/// `command` (index as in `SegmentCoverageDto.index`) in `scope`, with a
+/// segment verdict and a command verdict per suggestion, given the rules the
+/// user has staged. Read-only: nothing is stored. Server and tags come from
+/// the session.
 #[tauri::command]
-pub async fn accept_and_create_rule(
+pub async fn explain_segment_rules(
     state: State<'_, AppState>,
-    // Wie bei `respond_to_action` (Spec 0010) Teil der Signatur, aber nicht
-    // die Grundlage für eine Gültigkeitsprüfung — `pending_action_confirmations
-    // .resolve()` prüft `action_id` bereits selbst ausreichend (s. dortiger
-    // Kommentar).
     session_id: SessionId,
-    action_id: ActionId,
-    patterns: Vec<app_logic::dto::SuggestionPatternDto>,
+    command: String,
+    segment_index: usize,
     scope: Scope,
-    priority: Option<i32>,
-    edited_command: Option<String>,
-) -> CommandResult<Vec<RuleId>> {
-    let _ = session_id;
-    // Spec 0011, Abschnitt 3: alle Regeln des Vorschlags atomar.
-    let rule_result = app_logic::rule_suggestions::create_quick_rules(
-        &state.policy_store,
-        patterns,
+    staged: Vec<app_logic::dto::StagedRuleDto>,
+) -> CommandResult<app_logic::dto::SegmentRuleSuggestionsDto> {
+    let session = app_logic::confirmation_explain::session_for_explain(
+        &state.sessions,
+        session_id,
+        &command,
+    )?;
+    app_logic::confirmation_explain::explain_segment_rules_for_session(
+        &session,
+        state.profile_store.as_ref(),
+        &command,
+        segment_index,
         scope,
-        priority,
+        &staged,
     )
-    .await;
+    .await
+    .inspect_err(|e| {
+        app_logic::confirmation_explain::log_explain_failure(e, session_id, &command);
+    })
+}
 
-    // Unabhängiger Review-Pass (Spec 0021, Abschnitt 7): die Bestätigung
-    // muss UNABHÄNGIG vom Erfolg der Regel-Erstellung aufgelöst werden.
-    // Vorher lief `create_quick_rule(...).await?` zuerst — schlug das fehl
-    // (DB-Fehler, gesperrte Datei), kehrte der Command mit `Err` zurück,
-    // OHNE die Bestätigung je aufzulösen. Das Frontend hatte die Karte zu
-    // diesem Zeitpunkt aber schon optimistisch als beantwortet markiert
-    // (kein erneuter Versuch möglich) — `handle_action_proposed` wartete
-    // dann für den Rest der Session ergebnislos auf `rx.await`, Eingabefeld
-    // und Senden-Button blieben dauerhaft gesperrt. Genau der Fail-Safe-
-    // Verstoß, den Abschnitt 7 verhindern sollte. Die Aktion selbst wird
-    // jetzt immer aufgelöst (der Nutzer hat sie explizit bestätigt); ein
-    // Fehlschlag der Regel-Erstellung wird separat als Fehler zurückgegeben,
-    // statt die Bestätigung mitzureißen.
-    let decision = match edited_command {
-        Some(command) => ActionUserDecision::EditThenApprove { command },
-        None => ActionUserDecision::Approve,
-    };
-    state
-        .pending_action_confirmations
-        .resolve(&action_id, decision)
-        .or_code("CONFIRMATION_NOT_PENDING")?;
-
-    // Spec 0077, 3.1.3: auch hier ausdrücklich umwandeln, damit die
-    // Schnellregel denselben Code liefert wie das Formular. Der Fehlerweg
-    // bleibt wie bisher: Die Bestätigung ist oben schon aufgelöst, der
-    // Fehler der Regel-Erstellung kommt getrennt zurück (3.1.2).
-    rule_result.map_err(Into::into)
+/// Issue #1356, Spec 0011: saves the staged rules (each with its own
+/// patterns and scope) in one transaction, all or nothing. Does not touch
+/// the pending confirmation.
+#[tauri::command]
+pub async fn create_quick_rules_batch(
+    state: State<'_, AppState>,
+    rules: Vec<app_logic::dto::StagedRuleDto>,
+) -> CommandResult<Vec<RuleId>> {
+    app_logic::quick_rules_batch::create_quick_rules_batch(&state.policy_store, rules)
+        .await
+        .map_err(Into::into)
 }

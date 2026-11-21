@@ -1,15 +1,16 @@
 # Spec 0011 — Regel-Schnellvorschlag im Bestätigungsdialog
 
 Status: umgesetzt
-Zweck: Im Bestätigungsdialog führt ein Klick das Kommando aus und legt zugleich eine passende Allow-Regel an, damit ähnliche Kommandos künftig nicht erneut bestätigt werden müssen.
+Zweck: Im Bestätigungsdialog legt der Nutzer je Teilkommando passende Allow-Regeln fest und speichert sie gesammelt, damit ähnliche Kommandos künftig nicht erneut bestätigt werden müssen.
 Bezüge: Spec 0002 (Filter-Engine), Spec 0009 (Regelverwaltung), Spec 0007 (Bestätigungsdialog), Spec 0077 (ungültige Muster), ADR 0002 (Abgleich mit und ohne `sudo`).
 
 ## 1. Ziel
 
 Im Bestätigungsdialog für `Confirm`-Kommandos (weder Hard-Blacklist noch
-Allow-Regel hat gegriffen) gibt es neben „Ausführen" und „Ablehnen" die
-Schaltfläche **„Akzeptieren + Regel"** mit einem Aufklappmenü sinnvoller
-Muster-Vorschläge.
+Allow-Regel hat gegriffen) kann der Nutzer je Teilkommando, das noch eine Regel braucht, einen Muster-Vorschlag
+auswählen (Abschnitt 4) und die gewählten Regeln mit **„Regeln speichern (N)"**
+anlegen. Eine Schaltfläche „Akzeptieren + Regel" für das ganze Kommando gibt es
+nicht mehr.
 
 ## 2. Muster-Vorschläge
 
@@ -79,34 +80,52 @@ Die Beschriftung ist übersetzt: Das Backend liefert nur die Art des Vorschlags
 und Parameter (Programme bzw. Unterkommandos); die Oberfläche baut den Text
 in der gewählten Sprache und zeigt die Muster dahinter.
 
-## 3. Akzeptieren und Regel anlegen
+## 3. Regeln anlegen
 
-Der Klick auf einen Vorschlag tut zwei Dinge:
+Das Speichern vorgemerkter Regeln (Abschnitt 4, Abschnitt 8) legt für **jedes**
+Muster jeder vorgemerkten Regel eine Regel mit der Aktion **Allow** an, je
+vorgemerkter Regel mit deren Geltungsbereich, **atomar**: Ist ein Muster
+ungültig oder scheitert das Speichern, wird keine der Regeln gespeichert. Die
+Aktion ist fest, weil eine Confirm-Regel gegenüber dem Standardfall nichts
+bringt. Die Priorität ist 0. Die Anlage läuft über dieselbe Prüfung wie das
+Regel-Formular (Spec 0009, Spec 0077).
 
-1. Er legt für **jedes** Muster des Vorschlags eine Regel mit der Aktion
-   **Allow** an, alle mit demselben Geltungsbereich, **atomar**: Ist ein
-   Muster ungültig oder scheitert das Speichern, wird keine der Regeln
-   gespeichert. Die Aktion ist fest, weil eine Confirm-Regel gegenüber dem
-   Standardfall nichts bringt. Die Priorität ist 0, sofern nicht anders
-   angegeben. Die Anlage läuft über dieselbe Prüfung wie das Regel-Formular
-   (Spec 0009, Spec 0077).
-2. Er löst die wartende Bestätigung auf, exakt wie ein normales „Ausführen".
-
-Die Bestätigung wird auch dann aufgelöst, wenn die Regeln nicht angelegt
-werden konnten (z. B. ungültiges Muster); der Fehler kommt getrennt zurück
-und wird übersetzt angezeigt.
-
-Die neuen Regeln wirken nicht rückwirkend auf das gerade laufende Kommando. Es
-läuft aufgrund der ausdrücklichen Bestätigung in diesem Moment, nicht wegen
-der neuen Regeln. Erst künftige, ähnliche Vorschläge profitieren.
+Das Speichern löst die wartende Bestätigung **nicht** auf: Der Nutzer entscheidet
+danach mit „Ausführen" oder „Ablehnen". Die neuen Regeln wirken nicht
+rückwirkend auf das gerade wartende Kommando; es läuft nur aufgrund der
+ausdrücklichen Bestätigung. Erst künftige, ähnliche Kommandos profitieren.
 
 ## 4. Oberfläche
 
-Das Aufklappmenü zeigt die Vorschläge mit übersetzter Beschriftung und den
-Mustern des Vorschlags (bei mehreren, durch Komma getrennt). Daneben wählt der
-Nutzer den Geltungsbereich: **„Dieser Server"** (Vorgabe, die sicherere Wahl),
-„Global" oder „Tag" (mit Tag-Name). Die Auswahl entspricht der im
-Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den Dialog.
+Die Teilkommando-Liste (Abschnitt 6) steht immer im Bestätigungsdialog, auch bei
+einem einzelnen Kommando. Oben fasst sie die Teilkommandos, die beim Öffnen schon
+erlaubt sind, kompakt zusammen: eine kurze Zeile je Teilkommando mit grünem
+Haken, die abdeckende Regel als sichtbarer Text in der Zeile (zusätzlich als Tooltip). Darunter steht jedes Teilkommando, das
+noch entschieden werden muss, als eigene Zeile.
+
+- Eine Zeile „braucht eine Regel" hat einen Umschalter mit Chevron-Symbol (nach rechts = zugeklappt, nach unten = aufgeklappt; `aria-expanded`,
+  per Tastatur bedienbar). Aufgeklappt (direkt in der Zeile, kein Popup, auch
+  auf schmalen Bildschirmen) zeigt sie den Geltungsbereich und die Vorschläge
+  für dieses Teilkommando mit ihren Urteilen (Abschnitt 8). Der Geltungsbereich
+  gilt je Teilkommando: **„Dieser Server"** (Vorgabe, die sicherere Wahl),
+  „Global" oder „Tag" (mit Tag-Name), wie im Regel-Formular (Spec 0009).
+- Ein Klick auf einen Vorschlag **merkt** die Regel vor: Die Zeile klappt zu und
+  zeigt Haken, Muster und Geltungsbereich, als „noch nicht gespeichert"
+  erkennbar. Die Zeile bleibt an ihrer Stelle, der Umschalter bleibt; die
+  Vormerkung lässt sich ändern oder über „Entfernen" zurücknehmen. Die Urteile
+  der Vorschläge anderer Zeilen berücksichtigen die vorgemerkten Regeln.
+- Zeilen „fragt unabhängig von Regeln nach" und bereits erlaubte Teilkommandos
+  haben keinen Umschalter.
+- **„Regeln speichern (N)"** steht in der Fußzeile neben Ablehnen/Ausführen und ist ab N ≥ 1 bedienbar und speichert die
+  vorgemerkten Regeln (Abschnitt 3); es führt das Kommando nicht aus und lehnt
+  es nicht ab. Bei Erfolg wird aus der Vormerkung ein grüner Haken „abgedeckt
+  durch Regel …"; die Zeilen bleiben in diesem Dialog an ihrer Stelle, der
+  Umschalter bleibt (eine andere Regel lässt sich weiter vormerken). Erst beim
+  nächsten Kommando mit einem solchen Teilkommando steht es in der Zusammenfassung
+  oben. Bei einem Fehler erscheint eine Meldung, die Vormerkungen bleiben.
+- „Ausführen" und „Ablehnen" bleiben unverändert. Bei nicht gespeicherten
+  Vormerkungen steht daneben „Nicht gespeicherte Regeln: N". „Ausführen" speichert
+  sie nicht; „Ablehnen" und „Ausführen" verwerfen die Vormerkungen.
 
 ## 5. Grenzen
 
@@ -120,8 +139,7 @@ Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den Dialog.
 
 ## 6. Abdeckung je Teilkommando und Urteil je Vorschlag
 
-**Abdeckung.** Besteht das Kommando aus mehr als einem Teilkommando
-(Verkettung, Pipeline), listet die Bestätigungskarte jedes Teilkommando in
+**Abdeckung.** Die Bestätigungskarte listet jedes Teilkommando (auch ein einzelnes) in
 der Reihenfolge des Kommandos mit seinem Zustand:
 
 - **abgedeckt** – eine bestehende Allow-Regel lässt das Teilkommando
@@ -131,8 +149,7 @@ der Reihenfolge des Kommandos mit seinem Zustand:
   nicht analysierbare Eingabe, Blacklist, eine Regel verlangt Bestätigung,
   eine Regel verbietet es.
 
-Bei einem einzelnen Teilkommando erscheint diese Zeile nur, wenn ein
-regelunabhängiger Grund greift. Dazu zählt auch eine Eskalation nach der
+Zu den regelunabhängigen Gründen zählt auch eine Eskalation nach der
 Engine (z. B. Lesen einer Datei mit Zugangsdaten, `sftp-server`, rotes
 Risiko, eingelesener Serverinhalt, nicht prüfbares Kommando): Sie wird dem
 Teilkommando zugeordnet, auf das sie zutrifft (in `cd /etc && cat shadow`
@@ -168,15 +185,15 @@ Geltungsbereichs oder des bearbeiteten Kommandotexts wertet die Urteile neu
 aus. Die Auswertung ist rein lesend: Es wird nichts gespeichert, bevor der
 Nutzer einen Vorschlag annimmt.
 
-**Hinweis nach dem Annehmen.** Genügen die angelegten Regeln nicht, damit
-das Kommando automatisch läuft, erscheint im Chat ein kurzer Hinweis mit den
-Gründen. Bei „läuft automatisch" erscheint keiner.
-
 ## 7. Hinweis zur Regel bei automatischer Ausführung
 
 Läuft ein Kommando automatisch (Entscheidung „automatisch ausführen“, ohne
-Bestätigung), zeigt seine Karte im Chat unter dem Kommando eine gedämpfte
-Zeile: „Automatisch ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Der
+Bestätigung), zeigt seine Karte im Chat in der Kopfzeile (statt des Labels „Vorgeschlagenes
+Kommando“ und eines Entscheidungs-Badges) ein Blitz-Symbol und: „Automatisch
+ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Das Muster steht als Chip
+mit Rahmen. Liegt das Ergebnis vor, steht der Exit-Code rechtsbündig in
+derselben Kopfzeile (nicht mehr unter der Ausgabe). Bei wiederhergestellten
+Chats ohne Regeldaten zeigt die Kopfzeile nur „Automatisch ausgeführt“. Der
 Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
 
 - Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel
@@ -191,3 +208,34 @@ Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
   die von einem externen Werkzeug (MCP) angefragt wurden.
 - Die Zeile ist reine Anzeige: Sie stammt aus derselben Auswertung, die die
   Entscheidung getroffen hat, und ändert diese nicht.
+
+## 8. Vorschläge je Teilkommando und Sammel-Speichern
+
+Zwei zusätzliche Befehle der Schnittstelle (bestehende Befehle bleiben
+unverändert). Beide ändern die Entscheidung der Engine nicht; jedes Urteil
+stammt aus der Kandidaten-Auswertung der Engine (Abschnitt 6).
+
+- **Vorschläge für ein Teilkommando.** Gegeben Sitzung, Kommando, Index des
+  Teilkommandos (derselbe Index wie in der Abdeckung, Abschnitt 6), Geltungsbereich
+  (dieser Server, global, Tag) und die bisher vorgemerkten Regeln (Muster mit je
+  eigenem Geltungsbereich), liefert er höchstens sechs Vorschläge für genau dieses
+  Teilkommando, vom Spezifischen zum Allgemeinen, in den Arten aus Abschnitt 2
+  (exakt, pfad-begrenzt, letztes Argument offen, Unterkommando, Programm). Kein
+  Muster bezieht sich auf ein anderes Teilkommando. Nur lesend; nichts wird
+  gespeichert.
+- **Zwei Urteile je Vorschlag.** *Teilkommando:* abgedeckt (läuft mit den
+  vorgemerkten Regeln plus diesem Vorschlag automatisch) oder „fragt weiter“
+  mit Gründen (Regel verlangt Bestätigung, nachgelagerte Eskalation, keine Regel,
+  oder der Geltungsbereich trifft die Sitzung nicht — z. B. ein Tag, den der
+  Server nicht hat). *Kommando:* ob das ganze Kommando automatisch läuft; „ja“
+  nur, wenn die Engine für das ganze Kommando AutoExec liefert und keine
+  Eskalation greift.
+- **Teilkommando, das immer fragt** (Zustand „blockiert“, z. B. harte
+  Blacklist, Umleitung, Eskalation, undurchsichtige Syntax): keine Vorschläge,
+  stattdessen die Gründe.
+- **Sammel-Speichern.** Speichert eine Liste vorgemerkter Regeln, jede mit eigenen
+  Mustern und eigenem Geltungsbereich, in einem Schritt: alles oder nichts. Ist
+  ein Muster ungültig (leer oder nicht übersetzbar, Spec 0077) oder eine
+  vorgemerkte Regel ohne jedes Muster, wird nichts
+  gespeichert und ein Fehler geliefert. Eine wartende Bestätigung bleibt offen;
+  das Speichern löst sie nicht auf. Rückgabe: die neuen Regel-Kennungen.

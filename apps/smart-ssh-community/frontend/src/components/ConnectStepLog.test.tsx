@@ -59,6 +59,12 @@ describe("ConnectStepLog (issue #51)", () => {
     expect(failed[0].textContent).toContain("12 ms");
   });
 
+  it("shows status icons in the UI while the copied text keeps its markers (issue #1363)", () => {
+    const { container } = renderLog();
+    expect(container.querySelector('[data-icon="x"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("✗");
+  });
+
   it("copies the text version to the clipboard", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

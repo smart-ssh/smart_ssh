@@ -807,6 +807,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::stop_auto_continuation,
             commands::stop_auto_reconnect,
             commands::start_new_chat,
+            commands::get_session_ai_provider,
             commands::disconnect,
             commands::reconnect_session,
             commands::list_chat_sessions,
@@ -883,7 +884,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_known_tags,
             commands::evaluate_explained,
             commands::explain_confirmation,
-            commands::accept_and_create_rule,
+            commands::explain_segment_rules,
+            commands::create_quick_rules_batch,
             commands::export_document,
             commands::read_credential_file,
             // Spec 0075, §3.1.11: Vorschau und Ausführung des

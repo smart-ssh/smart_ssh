@@ -1610,128 +1610,16 @@ async fn test_generate_document_emits_event_without_filter_engine_or_confirmatio
     )));
 }
 
-// --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------
+// --- Approve mit bearbeitetem Kommando (Spec 0007/0008) ----------------
 
-/// Spec 0011, Abschnitt 3: "legt die Regel an ... löst danach die
-/// wartende Confirm-Entscheidung ... auf, exakt wie ein
-/// `respond_to_action`-Aufruf mit `Approve`". Der eigentliche
-/// `accept_and_create_rule`-Tauri-Command (`app_shell::commands`) ist ein
-/// dünner Wrapper genau um diese zwei Aufrufe
-/// (`crate::rule_suggestions::create_quick_rule` +
-/// `ConfirmationRegistry::resolve(..., Approve)`) — dieser Test bildet
-/// exakt diese Kombination nach und prüft beide Effekte: die Regel
-/// landet in einer echten `SqlitePolicyStore`, **und** das ursprünglich
-/// vorgeschlagene Kommando wird tatsächlich über `MockSshTransport`
-/// ausgeführt (nicht nur "irgendwie aufgelöst").
+/// Spec 0007/0008: bearbeitet der Nutzer im Bestätigungsdialog das
+/// Kommando und führt es aus (`EditThenApprove`), muss tatsächlich das
+/// bearbeitete Kommando ausgeführt werden — nicht das ursprüngliche.
+/// Der `MockSshTransport` antwortet NUR auf das bearbeitete Kommando;
+/// würde das ursprüngliche ausgeführt, schlüge es am unkonfigurierten
+/// Mock-Eintrag fehl statt einen `chat-action-result` zu liefern.
 #[tokio::test]
-async fn test_accept_and_create_rule_creates_rule_and_resolves_confirm_like_approve() {
-    let session = test_session(
-        vec![
-            AiEvent::ActionProposed(AiAction::SuggestCommand {
-                command: "systemctl status nginx".to_string(),
-            }),
-            AiEvent::Done,
-        ],
-        MockSshTransport::default().with_response("systemctl status nginx", output("active")),
-    );
-    // `test_session`s Standard `NoRulesPolicyStore` landet für jedes
-    // Kommando auf `Confirm` (kein Allow-Match) — genau der Pfad, den
-    // dieser Test braucht.
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-    let session_id = Uuid::new_v4();
-
-    let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store =
-        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
-            .await
-            .expect(
-                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
-            )
-            .policy_store();
-
-    let turn = run_chat_turn(
-        &session,
-        session_id,
-        &emitter,
-        &profile_store,
-        &confirmations,
-    );
-    let responder = async {
-        loop {
-            let action_id = {
-                let events = emitter.events.lock().unwrap();
-                events.iter().find_map(|(name, payload)| {
-                    (name == "chat-action-proposed")
-                        .then(|| payload["actionId"].as_str().unwrap().to_string())
-                })
-            };
-            if let Some(action_id) = action_id {
-                let action_id: ActionId = action_id.parse().unwrap();
-                // Nachbau von `commands::accept_and_create_rule`:
-                // zuerst die Regel anlegen, dann exakt wie `Approve`
-                // auflösen.
-                crate::rule_suggestions::create_quick_rule(
-                    &policy_store,
-                    crate::dto::PatternType::Glob,
-                    "systemctl status *".to_string(),
-                    ssh_manager_core::filter::Scope::Global,
-                    None,
-                )
-                .await
-                .unwrap();
-                confirmations
-                    .resolve(&action_id, ActionUserDecision::Approve)
-                    .unwrap();
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    };
-
-    tokio::join!(turn, responder);
-
-    let events = emitter.events.lock().unwrap().clone();
-    let event_names = event_names_excluding_auto_continuation(&events);
-    assert_eq!(
-        event_names,
-        vec!["chat-action-proposed", "chat-action-result"],
-        "die Regel-Erstellung muss die Ausführung des ursprünglichen \
-         Kommandos wie ein normales Approve auslösen"
-    );
-
-    let rules = policy_store.list_all().await.unwrap();
-    assert_eq!(rules.len(), 1);
-    assert_eq!(
-        rules[0].pattern,
-        ssh_manager_core::filter::Pattern::Glob("systemctl status *".to_string())
-    );
-    assert_eq!(rules[0].action, ssh_manager_core::filter::RuleAction::Allow);
-    assert_eq!(rules[0].scope, ssh_manager_core::filter::Scope::Global);
-    assert_eq!(
-        rules[0].priority, 0,
-        "keine Priorität angegeben -> Default 0"
-    );
-}
-
-/// Regressionstest für den unabhängigen Review-Pass (Spec 0007/0008/
-/// 0011): akzeptiert der Nutzer eine Schnellregel für ein im
-/// Bestätigungsdialog BEARBEITETES Kommando, muss tatsächlich das
-/// bearbeitete Kommando ausgeführt werden — nicht das ursprüngliche,
-/// unbearbeitete. Vorher löste `commands::accept_and_create_rule` immer
-/// mit `ActionUserDecision::Approve` auf, was IMMER die ursprüngliche
-/// `AiAction` ausführt, unabhängig davon, was der Nutzer im
-/// Bearbeiten-Feld sah/anpasste. Bildet `commands::accept_and_create_rule`
-/// mit gesetztem `edited_command` nach (Auflösung über
-/// `EditThenApprove`, wie beim regulären "Ausführen"-Button) und beweist
-/// über einen `MockSshTransport`, der NUR auf das bearbeitete Kommando
-/// antwortet, dass tatsächlich dieses ausgeführt wird — würde
-/// stattdessen (der Bug) das ursprüngliche Kommando ausgeführt, schlägt
-/// es am unkonfigurierten `MockSshTransport`-Eintrag fehl statt einen
-/// `chat-action-result` zu liefern.
-#[tokio::test]
-async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_command() {
+async fn test_edit_then_approve_executes_the_edited_command() {
     let session = test_session(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -1749,15 +1637,6 @@ async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_com
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
 
-    let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store =
-        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
-            .await
-            .expect(
-                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
-            )
-            .policy_store();
-
     let turn = run_chat_turn(
         &session,
         session_id,
@@ -1776,17 +1655,6 @@ async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_com
             };
             if let Some(action_id) = action_id {
                 let action_id: ActionId = action_id.parse().unwrap();
-                // Nachbau von `commands::accept_and_create_rule` MIT
-                // gesetztem `edited_command`.
-                crate::rule_suggestions::create_quick_rule(
-                    &policy_store,
-                    crate::dto::PatternType::Glob,
-                    "ls /var/log".to_string(),
-                    ssh_manager_core::filter::Scope::Global,
-                    None,
-                )
-                .await
-                .unwrap();
                 confirmations
                     .resolve(
                         &action_id,

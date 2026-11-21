@@ -10,7 +10,7 @@ import {
   switchToOsKeychain,
 } from "../api/api";
 import { commandErrorText } from "../api/errorCodes";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon, StatusSquare } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
@@ -133,7 +133,7 @@ export function MasterPasswordSettings() {
   return (
     <section className="space-y-6">
       <div>
-        <h4 className="font-heading mb-1 text-sm font-semibold tracking-wide text-fg-soft">
+        <h4 className="text-label mb-1">
           {t("masterPassword.modeHeading")}
         </h4>
         <p className="text-sm text-fg-muted">
@@ -166,7 +166,7 @@ export function MasterPasswordSettings() {
             ).catch(() => clearSecrets());
           }}
         >
-          <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
+          <h4 className="text-label">
             {t("masterPassword.setUpHeading")}
           </h4>
           <p className="text-sm text-fg-muted">{t("masterPassword.setUpIntro")}</p>
@@ -188,12 +188,12 @@ export function MasterPasswordSettings() {
           {repeated.length > 0 && password !== repeated && (
             <p role="alert" className="text-sm text-warning-fg-soft">{t("masterPassword.passwordsDiffer")}</p>
           )}
-          <label className="flex items-start gap-2 text-sm text-fg-soft">
+          <label className="flex items-start gap-3 text-sm text-fg-soft narrow:min-h-11">
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1"
+              className="mt-1 h-4 w-4"
             />
             {t("masterPassword.noRecoveryWarning")}
           </label>
@@ -221,7 +221,7 @@ export function MasterPasswordSettings() {
               ).catch(() => clearSecrets());
             }}
           >
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
+            <h4 className="text-label">
               {t("masterPassword.changeHeading")}
             </h4>
             <PasswordField
@@ -250,7 +250,7 @@ export function MasterPasswordSettings() {
           </form>
 
           <div className="space-y-3 border-t border-border pt-4">
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
+            <h4 className="text-label">
               {t("masterPassword.switchHeading")}
             </h4>
             <p className="text-sm text-fg-muted">{t("masterPassword.switchIntro")}</p>
@@ -273,6 +273,8 @@ export function MasterPasswordSettings() {
         <DialogFrame
           layer="app"
           size="sm"
+          tone="danger"
+          icon={<Icon name="warn" />}
           title={t("masterPassword.anotherKeyTitle")}
           onClose={() => {
             setAskAboutAnotherKey(false);
@@ -303,13 +305,15 @@ export function MasterPasswordSettings() {
       {error && (
         <p
           role="alert"
-          className="rounded border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
+          className="flex items-center gap-2 border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
         >
+          <StatusSquare tone="danger" />
           {error}
         </p>
       )}
       {done && (
-        <p className="rounded border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-fg-softer">
+        <p className="flex items-center gap-2 border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-fg-softer">
+          <StatusSquare tone="success" />
           {done}
         </p>
       )}

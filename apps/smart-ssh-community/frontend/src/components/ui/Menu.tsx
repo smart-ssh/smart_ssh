@@ -126,7 +126,7 @@ export function Menu({
       className={
         narrow
           ? "fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-border bg-surface py-1 text-left text-xs shadow-lg"
-          : `fixed ${className} border border-border bg-surface py-1 text-left text-xs shadow-lg`
+          : `fixed ${className} border border-border bg-surface py-1 text-left text-xs shadow-offset-sm`
       }
       style={narrow ? undefined : style}
     >
@@ -174,7 +174,7 @@ export function MenuItem({
       onClick={onClick}
       className={`flex w-full items-center gap-2 px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left ${tone} focus-ring-inset disabled:cursor-not-allowed disabled:opacity-50`}
     >
-      {icon !== undefined && <span aria-hidden="true" className="w-3">{icon}</span>}
+      {icon !== undefined && <span aria-hidden="true" className="w-4">{icon}</span>}
       <span className="flex-1">{children}</span>
       {shortcut && <span className="text-fg-muted">{shortcut}</span>}
     </button>

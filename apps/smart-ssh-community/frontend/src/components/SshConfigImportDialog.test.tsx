@@ -148,9 +148,9 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     // Das buchstäbliche Schlagwort ist deutlicher markiert als das
     // Muster-Schlagwort (§5.2a) — hier: das Warnsymbol.
     const literalTagLabel = screen.getByText("prod").closest("label");
-    expect(literalTagLabel?.textContent).toContain("⚠");
+    expect(literalTagLabel?.querySelector('[data-icon="warn"]')).not.toBeNull();
     const patternTagLabel = screen.getByText("*.prod.de").closest("label");
-    expect(patternTagLabel?.textContent).not.toContain("⚠");
+    expect(patternTagLabel?.querySelector('[data-icon="warn"]')).toBeNull();
   });
 
   // spec-reviewer-Fund, Runde 2: die Action einer getroffenen Regel

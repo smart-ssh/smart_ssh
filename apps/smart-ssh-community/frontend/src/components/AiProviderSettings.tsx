@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addAiProvider,
@@ -10,9 +10,10 @@ import {
   setActiveAiProvider,
   updateAiProvider,
 } from "../api/api";
-import { Button } from "./ui";
+import { Badge, Button, Field, Icon } from "./ui";
+import { SettingsActionSlotContext, SettingsSectionAction } from "./SettingsSectionAction";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
-import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
+import { CARD_CLASS, FIELD_CLASS } from "./aiProviderFormStyles";
 import { commandErrorText } from "../api/errorCodes";
 import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../lib/ollama";
 import {
@@ -37,6 +38,39 @@ type OllamaProbeState =
   | { status: "unreachable" }
   | { status: "otherError" };
 
+
+/** Switch visual on a native checkbox: the input keeps its checkbox
+ * semantics (name, checked state, keyboard), the track is decoration. */
+function SwitchRow({
+  checked,
+  disabled,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 text-sm text-fg-muted">
+      <span className="relative inline-block h-4 w-8 shrink-0">
+        <input
+          type="checkbox"
+          className="focus-ring peer absolute inset-0 m-0 cursor-pointer appearance-none border border-border-strong bg-surface-sunken checked:border-accent-border checked:bg-accent-subtle disabled:opacity-50"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-[3px] left-[3px] h-2.5 w-2.5 bg-fg-muted transition-transform peer-checked:translate-x-4 peer-checked:bg-accent"
+        />
+      </span>
+      {children}
+    </label>
+  );
+}
 
 interface AiProviderSettingsProps {
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
@@ -334,6 +368,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   // statt der Bedingung direkt im JSX, damit der leere-Rahmen-Fall
   // strukturell ausgeschlossen ist (derselbe `<section>` wird nur
   // gerendert, wenn er auch Inhalt hat).
+  const settingsSlot = useContext(SettingsActionSlotContext);
+  const inSettingsSlot = settingsSlot !== null;
+  const addButton = (
+    <Button
+      ref={addButtonRef}
+      variant="primary"
+      size="sm"
+      onClick={() => setAddDialogOpen(true)}
+    >
+      <Icon name="plus" className="mr-1 inline align-text-bottom" />
+      {t("aiProvider.addProvider")}
+    </Button>
+  );
+
   const showOllamaCard =
     ollamaProbe !== null &&
     !ollamaDismissed &&
@@ -345,8 +393,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
   return (
     <div>
+      <SettingsSectionAction>{addButton}</SettingsSectionAction>
       {error && (
-        <p className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>
+        <p className="mb-4 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>
       )}
 
       {/* Spec 0056, Teil 3: eigene Karte statt freistehender Liste — macht
@@ -360,58 +409,66 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
-        <ul className="divide-y divide-border rounded-md border border-border bg-surface-sunken/40">
+        <ul className="divide-y divide-border border border-border bg-surface-sunken/40">
           {providers.length === 0 && (
             <li className="px-4 py-3 text-sm text-fg-subtle">{t("aiProvider.noProviders")}</li>
           )}
-          {providers.map((provider) => (
-            <li key={provider.id} className="px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+          {providers.map((provider) => {
+            const typeLabel = t(`aiProvider.providerTypes.${provider.providerType}`);
+            const connection = provider.baseUrl
+              ? `${t("aiProvider.typeLabel")}: ${typeLabel} · ${provider.baseUrl}`
+              : `${t("aiProvider.typeLabel")}: ${typeLabel}`;
+            return (
+            <li
+              key={provider.id}
+              data-active={provider.isActive ? "true" : undefined}
+              className={`px-4 py-3 ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
+            >
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_auto]">
                 <div className="min-w-0">
-                  <p className="flex items-center font-medium text-fg">
-                    <span className="truncate" title={provider.displayName}>
-                      {provider.displayName}
-                    </span>
-                    {provider.isActive && (
-                      <span className="ml-2 shrink-0 rounded bg-success-subtle-hover px-2 py-0.5 text-xs text-success-fg-soft">
-                        {t("aiProvider.active")}
-                      </span>
-                    )}
+                  <p className="truncate font-medium text-fg" title={provider.displayName}>
+                    {provider.displayName}
                   </p>
-                  <p
-                    className="truncate text-sm text-fg-subtle"
-                    title={`${t(`aiProvider.providerTypes.${provider.providerType}`)} · ${provider.model}`}
-                  >
-                    {t(`aiProvider.providerTypes.${provider.providerType}`)} · {provider.model}
+                  <p className="truncate text-sm text-fg-subtle" title={connection}>
+                    {connection}
                   </p>
+                </div>
+                <p className="truncate font-mono text-sm text-fg-muted" title={provider.model}>
+                  {provider.model}
+                </p>
+                <div>
+                  {provider.isActive && (
+                    <Badge tone="success" square>
+                      {t("aiProvider.active")}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex shrink-0 gap-2">
                   {!provider.isActive && (
-                    <Button size="sm"
-                      onClick={() => handleSetActive(provider.id)}
-                      
-                    >
+                    <Button size="sm" onClick={() => handleSetActive(provider.id)}>
                       {t("aiProvider.setActive")}
                     </Button>
                   )}
                   <Button size="sm" onClick={() => setEditingProvider(provider)}>
+                    <Icon name="edit" className="mr-1 inline align-text-bottom" />
                     {t("common.edit")}
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)} >
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)}>
+                    <Icon name="trash" className="mr-1 inline align-text-bottom" />
                     {t("common.delete")}
                   </Button>
                 </div>
               </div>
 
               {supportsWebResearch(provider.providerType, provider.baseUrl) && (
-                <label className="mt-2 flex items-center gap-2 text-sm text-fg-muted">
-                  <input
-                    type="checkbox"
+                <div className="mt-2">
+                  <SwitchRow
                     checked={provider.webResearchEnabled}
-                    onChange={(e) => handleWebResearchChange(provider, e.target.checked)}
-                  />
-                  {t("aiProvider.webResearch")}
-                </label>
+                    onChange={(checked) => handleWebResearchChange(provider, checked)}
+                  >
+                    {t("aiProvider.webResearch")}
+                  </SwitchRow>
+                </div>
               )}
 
               {provider.attestationUrl && (
@@ -438,7 +495,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       <p className="text-xs font-semibold text-fg-subtle">
                         {t("aiProvider.attestationResultLabel")}
                       </p>
-                      <pre className="max-h-40 overflow-auto rounded border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
+                      <pre className="max-h-40 overflow-auto border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
                         {attestationResults[provider.id]}
                       </pre>
                     </div>
@@ -446,17 +503,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
-        <Button
-          ref={addButtonRef}
-          variant={providers.length === 0 ? "primary" : "secondary"}
-          size="sm"
-          className="mt-3"
-          onClick={() => setAddDialogOpen(true)}
-        >
-          {t("aiProvider.addProvider")}
-        </Button>
+        {!inSettingsSlot && addButton}
       </section>
 
       {/* Spec 0026, Abschnitt 3, Punkt 1: eigener Abschnitt für die
@@ -469,25 +519,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.riskClassifierTitle")}
         </h3>
-        <p className="mb-2 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            checked={riskClassifierEnabled}
-            onChange={(e) =>
-              handleRiskClassifierChange(e.target.checked, riskClassifierProviderId)
-            }
-          />
+        <p className="mb-3 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
+        <SwitchRow
+          checked={riskClassifierEnabled}
+          onChange={(checked) => handleRiskClassifierChange(checked, riskClassifierProviderId)}
+        >
           {t("aiProvider.riskClassifierEnable")}
-        </label>
+        </SwitchRow>
         {riskClassifierEnabled && (
-          <label className={LABEL_CLASS}>
-            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.riskClassifierProvider")}</span>
+          <Field label={t("aiProvider.riskClassifierProvider")} className="mt-3 pl-11">
+            {(control) => (
             <select
+              {...control}
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
               disabled={riskSettingsSaving}
-              className={`mt-1 w-full ${FIELD_CLASS}`}
+              className={`w-full ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -496,29 +543,24 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </option>
               ))}
             </select>
-          </label>
+            )}
+          </Field>
         )}
-      </section>
 
-      {/* Spec 0092, A1.4: eigener Abschnitt, unabhängig von der
-       * KI-Zweitmeinung oben bedienbar — bewusst eine eigene Karte statt
-       * eines weiteren Feldes in der Zweitmeinungs-Karte, weil die
-       * Einstellung ohne aktivierte Zweitmeinung genauso wirkt
-       * (regelbasiertes Rot). */}
-      <section className={`mb-6 ${CARD_CLASS}`}>
+        {/* Spec 0092, A1.4: independent of the second opinion above (rule-based
+         * red works without it), separated by a 1 px rule inside the card. */}
+        <div className="my-4 border-t border-border" />
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.redRiskAlwaysConfirmTitle")}
         </h3>
-        <p className="mb-2 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            checked={redRiskAlwaysConfirm}
-            disabled={redRiskSettingSaving}
-            onChange={(e) => handleRedRiskAlwaysConfirmChange(e.target.checked)}
-          />
+        <p className="mb-3 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
+        <SwitchRow
+          checked={redRiskAlwaysConfirm}
+          disabled={redRiskSettingSaving}
+          onChange={handleRedRiskAlwaysConfirmChange}
+        >
           {t("aiProvider.redRiskAlwaysConfirmEnable")}
-        </label>
+        </SwitchRow>
       </section>
 
       {/* Spec 0069, Teil B3: eine Karte oberhalb von "Provider
@@ -538,12 +580,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeFoundHeading")}
               </p>
-              <label className={LABEL_CLASS}>
-                <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
+              <Field label={t("aiProvider.model")}>
+                {(control) => (
                 <select
+                  {...control}
                   value={ollamaSelectedModel}
                   onChange={(e) => setOllamaSelectedModel(e.target.value)}
-                  className={`mt-1 w-full ${FIELD_CLASS}`}
+                  className={`w-full ${FIELD_CLASS}`}
                 >
                   {ollamaProbe.models.map((model) => (
                     <option key={model} value={model}>
@@ -551,7 +594,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     </option>
                   ))}
                 </select>
-              </label>
+                )}
+              </Field>
               <p className="text-xs text-fg-subtle">
                 {providers.some((p) => p.isActive)
                   ? t("aiProvider.ollamaProbeFoundHintInactive")

@@ -59,6 +59,42 @@ describe.each(branches)("HostKeyDialog ($name)", ({ event, role, rejectLabel, tr
     expect(description?.textContent?.length ?? 0).toBeGreaterThan(0);
   });
 
+  it("renders label/value rows and the danger header band only for the mismatch", () => {
+    renderDialog(event);
+    expect(screen.getByTestId("host-key-address")).toHaveClass("font-mono");
+    if (role === "alertdialog") {
+      expect(screen.getByTestId("host-key-header")).toHaveClass("bg-danger-subtle");
+      expect(screen.getByText("Bekannt")).toBeInTheDocument();
+    } else {
+      expect(screen.queryByTestId("host-key-header")).toBeNull();
+      expect(screen.queryByTestId("dialog-ticks")).toBeNull();
+    }
+  });
+
+  it("labels the fingerprint row 'Offered Now' for a mismatch and 'Offered' for an unknown host", () => {
+    renderDialog(event);
+    const labels = screen.getAllByRole("term").map((n) => n.textContent);
+    if (role === "alertdialog") {
+      expect(labels).toContain("Jetzt angeboten");
+    } else {
+      expect(labels).toContain("Angeboten");
+      expect(labels).not.toContain("Jetzt angeboten");
+    }
+  });
+
+  it("draws the danger corner ticks, hidden in the narrow layout, with an offset shadow", () => {
+    if (role !== "alertdialog") return;
+    renderDialog(event);
+    const wrapper = screen.getByTestId("dialog-ticks");
+    expect(wrapper).toHaveClass("narrow:hidden");
+    const ticks = wrapper.querySelectorAll("[data-corner-tick]");
+    expect(ticks).toHaveLength(2);
+    ticks.forEach((tick) => expect(tick).toHaveClass("border-danger"));
+    const dialog = screen.getByRole(role);
+    expect(dialog).toHaveClass("relative", "shadow-offset-lg", "narrow:shadow-none");
+    expect(dialog.className).not.toContain("shadow-xl");
+  });
+
   it("T2: fokussiert die ablehnende Schaltfläche nach dem Rendern (A2)", () => {
     renderDialog(event);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: rejectLabel }));
@@ -400,8 +436,9 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
 
     expect(unknown.className).toContain("border-border-strong");
     expect(unknown.className).not.toContain("red");
-    expect(mismatch.className).toContain("border-danger");
-    expect(mismatch.className).toContain("bg-danger-subtle/95");
+    expect(mismatch.className).toContain("border-danger-border");
+    expect(unknown.className).not.toContain("border-danger-border");
+    expect(mismatch.className).toContain("bg-surface-raised");
 
     expect(unknown.buttons).toEqual(["Ablehnen", "Vertrauen"]);
     expect(mismatch.buttons).toEqual(["Verbindung abbrechen", "Trotzdem vertrauen"]);
@@ -420,7 +457,8 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
 describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
   it("shows the key type of the offered key", () => {
     renderDialog({ ...event, keyType: "ssh-ed25519" });
-    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltyp: ssh-ed25519");
+    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltypssh-ed25519");
+    expect(screen.getByText("ssh-ed25519")).toHaveClass("select-text");
     expect(screen.getByText("example.com:22")).toBeInTheDocument();
     expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
   });

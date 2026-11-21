@@ -143,7 +143,7 @@ export function McpServerSettings() {
     <div>
       <p className="mb-2 text-xs text-fg-subtle">{t("mcpServer.hint")}</p>
 
-      {error && <p className="mb-2 rounded bg-danger-subtle px-2 py-1 text-xs text-danger-fg-soft">{error}</p>}
+      {error && <p className="mb-2 border-l-2 border-danger bg-danger-subtle px-2 py-1 text-xs text-danger-fg-soft">{error}</p>}
 
       {settings && (
         <>
@@ -157,17 +157,17 @@ export function McpServerSettings() {
             {t("mcpServer.enable")}
           </label>
 
-          <div className="mb-3 space-y-2 rounded border border-border bg-surface p-3">
+          <div className="mb-3 space-y-2 border border-border bg-surface-sunken p-3">
             <div>
               <p className="text-xs text-fg-subtle">{t("mcpServer.endpointLabel")}</p>
-              <code className="block text-xs break-all text-fg-soft select-all">
+              <code className="block font-mono text-xs break-all text-fg-soft select-all">
                 {settings.endpoint}
               </code>
             </div>
             <div>
               <p className="text-xs text-fg-subtle">{t("mcpServer.tokenLabel")}</p>
               <code
-                className={`block text-xs break-all text-fg-soft ${tokenRevealed ? "select-all" : "select-none"}`}
+                className={`block font-mono text-xs break-all text-fg-soft ${tokenRevealed ? "select-all" : "select-none"}`}
               >
                 {tokenRevealed ? settings.token : MASKED_TOKEN}
               </code>
@@ -207,7 +207,7 @@ export function McpServerSettings() {
             {servers.length === 0 ? (
               <p className="text-xs text-fg-subtle">{t("mcpServer.noServers")}</p>
             ) : (
-              <ul className="max-h-40 divide-y divide-border overflow-y-auto rounded border border-border">
+              <ul className="max-h-40 divide-y divide-border overflow-y-auto border border-border">
                 {servers.map((server) => (
                   <li key={server.id} className="px-2 py-1.5">
                     <label className="flex items-center gap-2 text-sm text-fg-muted">
@@ -229,7 +229,7 @@ export function McpServerSettings() {
 
           <p className="mb-1 text-xs text-fg-subtle">{t("mcpServer.exampleConfigHint")}</p>
           <pre
-            className={`rounded border border-border bg-surface-sunken p-2 text-xs break-all whitespace-pre-wrap text-fg-muted ${tokenRevealed ? "" : "select-none"}`}
+            className={`border border-border bg-surface-sunken p-2 font-mono text-xs break-all whitespace-pre-wrap text-fg-muted ${tokenRevealed ? "" : "select-none"}`}
           >
             {exampleConfig(settings, tokenRevealed ? settings.token : MASKED_TOKEN)}
           </pre>

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { ElevationNotice } from "./ElevationNotice";
 
 interface ElevationBannerProps {
@@ -21,15 +21,15 @@ export function ElevationBanner({ elevatedUser, warningPath, serverLogging = fal
     <>
       <div
         role="alert"
-        className="flex items-center gap-2 bg-warning px-2 py-1.5 text-xs font-semibold text-surface-sunken"
+        className="text-label flex items-center gap-2 border-b border-warning-strong bg-warning px-3 py-1.5 !text-surface-sunken"
       >
-        <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}
+        <span className="flex-1"><Icon name="warn" className="mr-1 inline align-text-bottom" /> {t("fileElevation.banner", { user: elevatedUser })}
           {serverLogging && ` ${t("fileElevation.bannerLogged")}`}
         </span>
         <Button variant="bare"
           type="button"
           onClick={onToggleOff}
-          className="rounded border border-surface-sunken/40 px-2 py-0.5 hover:bg-warning-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-surface-sunken"
+          className="min-h-11 border border-surface-sunken/40 px-3 py-0.5 narrow:min-h-11 hover:bg-warning-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-surface-sunken"
         >
           {t("fileElevation.toggleOff")}
         </Button>
@@ -42,7 +42,7 @@ export function ElevationBanner({ elevatedUser, warningPath, serverLogging = fal
         passwordless={passwordless}
       />
       {warningPath && (
-        <div role="alert" className="bg-danger-subtle px-2 py-1.5 text-xs text-danger-fg-softer">
+        <div role="alert" className="border-b border-danger-border bg-danger-subtle px-3 py-1.5 text-xs text-danger-fg-softer">
           {t("fileElevation.failure.sftpServerUnsafe", { path: warningPath })}
         </div>
       )}

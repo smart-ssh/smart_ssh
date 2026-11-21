@@ -30,7 +30,12 @@
     "emptyStateTitle": "Niciun server adăugat încă",
     "emptyStateHint": "Adăugați primul server pentru a vă conecta prin SSH.",
     "emptyStateCreateFirstServer": "Adaugă primul server",
-    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real."
+    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real.",
+    "localBadge": "Local",
+    "thisDevice": "acest dispozitiv",
+    "sessionOpen": "Sesiune deschisă",
+    "sessionPending": "Așteaptă confirmarea",
+    "sessionDisconnected": "Sesiune deconectată"
   },
   "settings": {
     "title": "Setări",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importă …",
     "importSshConfigHint": "Importă servere dintr-un fișier OpenSSH ssh_config",
     "exportSshConfig": "Exportă …",
-    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config"
+    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Restrânge grupul „{{name}}”",
+    "expandGroup": "Extinde grupul „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
@@ -277,12 +285,12 @@
     "deleteAlwaysRemovesHistory": "Aceasta șterge definitiv și istoricul conversațiilor, notițele și etichetele acestui server.",
     "confirmDeleteServer": "Șterge definitiv",
     "testResult": {
-      "success": "✓ Conectare reușită",
-      "authFailed": "✗ Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
+      "success": "Conectare reușită",
+      "authFailed": "Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
       "hostKeyUnknown": "Cheie de host necunoscută — este necesară confirmarea",
-      "hostKeyMismatch": "⚠ Cheia de host s-a schimbat",
-      "networkError": "✗ Eroare de rețea: {{message}}",
-      "timeout": "✗ Serverul nu răspunde. Verificați adresa, portul și firewall-ul."
+      "hostKeyMismatch": "Cheia de host s-a schimbat",
+      "networkError": "Eroare de rețea: {{message}}",
+      "timeout": "Serverul nu răspunde. Verificați adresa, portul și firewall-ul."
     },
     "largeNoteHint": "Această notiță este foarte mare și poate fi scurtată pentru contextul IA în sesiunile lungi. Notița stocată rămâne complet intactă.",
     "summarizeNow": "Rezumă acum",
@@ -356,7 +364,12 @@
     "matchedRuleLabel": "Regulă:",
     "segmentLabel": "Segmentul {{index}}",
     "checksLabel": "Verificări:",
-    "hardBlacklistLabel": "Listă neagră fixă:"
+    "hardBlacklistLabel": "Listă neagră fixă:",
+    "invalidPattern": "Model nevalid",
+    "rowActions": "Acțiuni rând",
+    "ruleCount_one": "{{count}} regulă",
+    "ruleCount_few": "{{count}} reguli",
+    "ruleCount_other": "{{count}} de reguli"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",
@@ -377,8 +390,8 @@
     "discardedAfterReconnect": "Eliminată după restabilirea conexiunii. Nu s-a executat nimic.",
     "expiredTimeout": "Fără răspuns la timp, eliminată. Nu s-a executat nimic.",
     "expiredUnknown": "Cererea nu mai este în așteptare. Nu s-a executat nimic.",
-    "usesStoredSudoPassword": "🔑 Rulează cu parola sudo stocată.",
-    "writeMayUseStoredSudoPassword": "🔑 Dacă lipsește permisiunea de scriere, aplicația scrie cu parola sudo stocată (sudo).",
+    "usesStoredSudoPassword": "Rulează cu parola sudo stocată.",
+    "writeMayUseStoredSudoPassword": "Dacă lipsește permisiunea de scriere, aplicația scrie cu parola sudo stocată (sudo).",
     "takeIntoNote": "Preia în notiță",
     "takeIntoNoteFailed": "Eșuat — încercați din nou",
     "riskServerLabel": "Server",
@@ -390,10 +403,10 @@
     "runningSince": "rulează de {{seconds}}s…",
     "cancelCommand": "Deconectează această comandă",
     "cancellingCommand": "Se deconectează…",
-    "commandCancelledNotice": "⚠ Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",
-    "commandTruncatedNotice": "⚠ Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
+    "commandCancelledNotice": "Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",
+    "commandTruncatedNotice": "Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
     "liveOutputLabel": "Rezultat în timp real",
-    "liveOutputTruncatedNotice": "⚠ Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
+    "liveOutputTruncatedNotice": "Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
     "autoRanLead": "Rulat automat",
     "autoRanRule": "regulă",
     "autoRanScopeGlobal": "globală",
@@ -409,17 +422,14 @@
     "editableCommand": "Comandă — editabilă",
     "execute": "Execută",
     "deny": "Refuză",
-    "quickRule": "Acceptă + regulă",
-    "quickRuleDropdownAria": "Afișează sugestiile de reguli",
-    "newRulePatternHeading": "Modelul pentru noua regulă de permitere",
     "scopeThisServer": "Acest server",
     "scopeGlobal": "Global",
     "scopeTag": "Etichetă",
     "tagNamePlaceholder": "Numele etichetei",
     "loadingSuggestions": "Se încarcă sugestiile…",
     "noSuggestions": "Nicio sugestie.",
-    "binaryFileHint": "⚠ Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
+    "binaryFileHint": "Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
+    "diffTooLargeHint": "Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
     "noContentChange": "(conținut nemodificat)",
     "quickRuleLabel": {
       "exact": "Identic: {{patterns}}",
@@ -437,9 +447,17 @@
       "blocked": "întreabă mereu, indiferent de reguli: {{reasons}}",
       "verdictAuto": "data viitoare rulează automat",
       "verdictAsk": "va întreba în continuare: {{reasons}}",
-      "notice": "Regulă creată. Această comandă va întreba și data viitoare: {{reasons}}",
       "reasonOther": "altă verificare de securitate",
-      "loadFailed": "Acoperirea regulilor nu a putut fi încărcată"
+      "loadFailed": "Acoperirea regulilor nu a putut fi încărcată",
+      "summaryHeading": "Deja permis",
+      "toDecideHeading": "De hotărât",
+      "expandAria": "Sugestii de reguli pentru {{segment}}",
+      "stagedBadge": "încă nesalvată",
+      "removeStaged": "Elimină",
+      "saveRules": "Salvează regulile ({{count}})",
+      "saveFailed": "Regulile nu au putut fi salvate: {{message}}",
+      "unsavedHint": "Reguli nesalvate: {{count}}",
+      "segmentCovered": "acoperă această parte; comanda tot va cere confirmare: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +474,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",
@@ -468,13 +487,18 @@
   },
   "sessionTabs": {
     "newSession": "Sesiune nouă",
-    "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
     "menu": {
       "open": "Deschide meniul de navigare",
       "title": "Meniu de navigare",
-      "sessions": "Sesiuni deschise"
+      "sessions": "Sesiuni deschise",
+      "close": "Închide meniul de navigare",
+      "needsConfirmation": "Necesită confirmare",
+      "activities": "Activități",
+      "activitiesRunning_one": "{{count}} în curs",
+      "activitiesRunning_few": "{{count}} în curs",
+      "activitiesRunning_other": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +507,9 @@
       "pendingBadge": "Necesită confirmare",
       "readOnlyHint": "Această sesiune aparține unui instrument extern (MCP). Arată doar acțiunile instrumentului de confirmat sau respins și rezultatele lor; aici nu există intrare de chat sau terminal. Închiderea ei încheie sesiunea MCP și respinge confirmările în așteptare."
     },
-    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă."
+    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă.",
+    "pendingBadge": "În așteptare",
+    "newConnection": "Conexiune nouă"
   },
   "aiProvider": {
     "openLogs": "Deschide jurnalele de diagnosticare în managerul de fișiere",
@@ -505,16 +531,16 @@
     "apiKeyFormatHint": "Nu pare o cheie {{providerLabel}} – se aștepta un prefix precum „{{expectedPrefix}}”. O puteți salva oricum; furnizorii își schimbă ocazional formatele.",
     "testCredentials": "Testează datele de autentificare",
     "testingCredentials": "Se testează…",
-    "testResultValid": "✓ Date de autentificare valide",
-    "testResultAuthFailed": "✗ Autentificare eșuată – verificați cheia API",
-    "testResultUnreachable": "✗ Furnizor inaccesibil: {{message}}",
+    "testResultValid": "Date de autentificare valide",
+    "testResultAuthFailed": "Autentificare eșuată – verificați cheia API",
+    "testResultUnreachable": "Furnizor inaccesibil: {{message}}",
     "testResultRateLimited": "Datele de autentificare par valide, dar furnizorul limitează acum cererile. Testați din nou peste un minut.",
     "nativeToolCalling": "Acceptă apelarea nativă a instrumentelor",
     "discoverModels": "Încarcă modelele",
     "discoveringModels": "Se încarcă modelele…",
     "modelDiscoveryFailedHint": "Modelele nu au putut fi încărcate automat — introduceți manual numele modelului.",
     "modelDiscoveryEmptyHint": "Furnizorul nu a returnat niciun model. Introduceți numele modelului manual.",
-    "modelDiscoveryAuthFailed": "✗ Furnizorul a respins aceste date de autentificare – verificați cheia API",
+    "modelDiscoveryAuthFailed": "Furnizorul a respins aceste date de autentificare – verificați cheia API",
     "advanced": "Avansat",
     "extraHeadersLabel": "Anteturi suplimentare",
     "extraHeadersHint": "Atașate fiecărei cereri către acest furnizor (de ex. HTTP-Referer/X-Title de la OpenRouter).",
@@ -557,6 +583,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1086,6 +1113,7 @@
     "parentDirectory": "Director părinte",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Acțiuni pe fișiere",
+    "directoryActions": "Acțiuni director",
     "upload": "Încarcă",
     "uploadDialogTitle": "Încarcă fișiere",
     "uploadFolder": "Încarcă folder",
@@ -1291,8 +1319,9 @@
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
     "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
-    "contextUsage": "Context utilizat {{used}} / {{window}}",
     "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Furnizor: {{provider}}",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "refusedResponse": "Modelul a refuzat această cerere. Reformulați-o sau începeți o conversație nouă.",
@@ -1594,6 +1623,16 @@
     "quitBody": "Aceste activități încă rulează și vor fi oprite:",
     "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
     "quitAnyway": "Ieși oricum",
-    "keepRunning": "Lasă să ruleze"
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning_one": "{{count}} în curs",
+    "summaryRunning_few": "{{count}} în curs",
+    "summaryRunning_other": "{{count}} în curs",
+    "summaryInterrupted_one": "{{count}} întreruptă",
+    "summaryInterrupted_few": "{{count}} întrerupte",
+    "summaryInterrupted_other": "{{count}} întrerupte",
+    "summaryFailed_one": "{{count}} eșuată",
+    "summaryFailed_few": "{{count}} eșuate",
+    "summaryFailed_other": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

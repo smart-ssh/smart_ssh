@@ -17,7 +17,10 @@ const SPECIAL = new Set(["README.md", "INDEX.md"]);
 const FIELD_RE = /^[\p{Lu}][\p{L}]*:/u;
 
 /** Value of a header field (`Status:`, `Zweck:`), with continuation lines joined; null when missing/empty. */
-function field(lines, key) {
+function field(allLines, key) {
+  // Only the header block counts: everything before the first `## ` heading.
+  const end = allLines.findIndex((l) => l.startsWith("## "));
+  const lines = end < 0 ? allLines : allLines.slice(0, end);
   const i = lines.findIndex((l) => l.startsWith(`${key}:`));
   if (i < 0) return null;
   const parts = [lines[i].slice(key.length + 1).trim()];

@@ -162,7 +162,7 @@ Schaden lässt sich gut musterbasiert erfassen.
    im Bestätigungsdialog, nur sichtbar, wenn die Stufe nicht „keine" ist.
    Der Tooltip zeigt die Begründung (das gegriffene Muster bzw. die
    KI-Begründung). Ein Badge mit Begründung zeigt nach dem Label ein kleines
-   „ⓘ"; ein Badge ohne Begründung zeigt es nicht. Das Badge ist per Tab
+   Info-Symbol; ein Badge ohne Begründung zeigt es nicht. Das Badge ist per Tab
    erreichbar; der Tooltip erscheint bei Mausüberfahrt und bei Tastaturfokus
    und verschwindet bei Escape oder Fokusverlust. Die Begründung ist für
    Screenreader als Beschreibung des Badges verfügbar. Der Tooltip ändert die

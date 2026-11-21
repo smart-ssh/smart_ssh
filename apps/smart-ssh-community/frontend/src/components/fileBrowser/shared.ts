@@ -5,7 +5,7 @@ import type { PreviewReadFailure } from "../../lib/previewReadFailure";
 import type { LocalFilePreviewDto, RemoteEntryDto } from "../../api/types";
 
 /** Issue #653: display order of the hideable columns (Name comes first). */
-export const COLUMN_ORDER: readonly HideableFileColumn[] = ["size", "permissions", "owner", "modified"];
+export const COLUMN_ORDER: readonly HideableFileColumn[] = ["size", "permissions", "modified", "owner"];
 
 export const currentCaps = () => platformCapabilities(detectFallbackPlatform());
 
@@ -34,7 +34,7 @@ export function isValidEntryName(name: string): boolean {
 }
 
 /** Fixed, non-resizable actions column (⋮ menu) of the entry table, in px. */
-export const ACTIONS_COLUMN_WIDTH = 36;
+export const ACTIONS_COLUMN_WIDTH = 44;
 
 /** Minimum width the name column keeps when other columns are dragged wider, in px. */
 export const NAME_MIN_WIDTH = 120;
@@ -42,7 +42,7 @@ export const NAME_MIN_WIDTH = 120;
 // Header cells (not the thead) are sticky with their own opaque background and
 // the table uses `border-separate`: a sticky thead under `border-collapse`
 // leaves a seam in WebKit through which scrolled rows showed (#650).
-export const STICKY_TH = "sticky top-0 z-10 bg-surface";
+export const STICKY_TH = "sticky top-0 z-10 border-b border-border bg-surface-sunken";
 
 /** The open per-entry menu: anchored to the row's ⋮ button or at a point (context menu). */
 export type OpenEntryMenu = {

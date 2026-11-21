@@ -1,13 +1,13 @@
 import { memo } from "react";
+import { Icon } from "../ui";
 import { type ChatItem } from "./chatItem";
 import { ActionCard, TakeIntoNoteButton } from "./ActionCard";
 import { AssistantMessageView } from "./AssistantMessageView";
 import { errorCardText, ErrorCardExtras } from "./ErrorCard";
-import { reasonList } from "./CoverageList";
 import { useTranslation } from "react-i18next";
 import { type LiveOutput } from "../../lib/liveOutput";
 import { type ComposerAttachment } from "../../extensions/registry";
-import type { ActionUserDecision, DocumentFormat, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
+import type { ActionUserDecision, DocumentFormat, InjectionCheckState } from "../../api/types";
 import { DocumentCard } from "./DocumentCard";
 import { WebActivityCard } from "../WebActivityCard";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
@@ -20,7 +20,6 @@ export const ChatItemView = memo(function ChatItemView({
   waitingForInput = false,
   injectionCheck,
   onRespond,
-  onAcceptWithRule,
   onExport,
   onContinueTruncated,
   onRetryTurn,
@@ -40,13 +39,6 @@ export const ChatItemView = memo(function ChatItemView({
   /** Issue #693: state of the injection check of this item, if any. */
   injectionCheck?: InjectionCheckState;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
@@ -78,15 +70,15 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "user") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] break-words border border-accent-strong/60 bg-accent-border-strong px-3 py-2 text-sm text-accent-fg-faintest">
+      <div className="ml-auto max-w-[86%] narrow:max-w-[85%] break-words border border-border-strong bg-surface-raised px-3 py-2 text-sm text-fg">
         {item.text}
         {item.attachments && item.attachments.length > 0 && (
-          <p className="mt-1 text-xs text-accent-fg-softer/80">
+          <p className="mt-1 text-xs text-fg-subtle">
             {t("chat.historyAttached", { files: attachmentLine(t, item.attachments) })}
           </p>
         )}
         {item.queued && (
-          <p className="mt-1 text-xs text-accent-fg-softer/80">⏳ {t("chat.queued")}</p>
+          <p className="mt-1 text-xs text-fg-subtle"><Icon name="clock" className="mr-1 inline align-text-bottom" /> {t("chat.queued")}</p>
         )}
       </div>
     );
@@ -105,18 +97,11 @@ export const ChatItemView = memo(function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-danger-border-strong/50 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
-        ⚠ {errorCardText(t, item)}
+        <Icon name="warn" className="mr-1 inline align-text-bottom" /> {errorCardText(t, item)}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}
       </div>
-    );
-  }
-  if (item.type === "ruleNotice") {
-    return (
-      <output className="block border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
-        {t("confirmDialog.explain.notice", { reasons: reasonList(t, item.reasons) })}
-      </output>
     );
   }
   if (item.type === "autoContinuationLimitReached") {
@@ -132,7 +117,7 @@ export const ChatItemView = memo(function ChatItemView({
     return <div className="px-1 text-xs text-fg-subtle">{t("chat.contextCompactedNotice")}</div>;
   }
   if (item.type === "responseCancelled") {
-    return <div className="px-1 text-xs text-fg-subtle">⏹ {t("chat.responseCancelled")}</div>;
+    return <div className="px-1 text-xs text-fg-subtle"><Icon name="stop" className="mr-1 inline align-text-bottom" /> {t("chat.responseCancelled")}</div>;
   }
   if (item.type === "emptyResponse") {
     // Spec 0080, A3: kein „Weiter"-Knopf (der Fortsetzungstext meint eine
@@ -176,16 +161,16 @@ export const ChatItemView = memo(function ChatItemView({
       .filter(Boolean)
       .join("\n");
     return (
-      <div className="rounded border border-border bg-surface px-3 py-2 text-xs">
+      <div className="border border-border bg-surface-sunken px-3 py-2 text-xs">
         <div className="flex items-start justify-between gap-2">
           <p className="font-mono text-fg-muted">$ {item.command}</p>
           <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
         </div>
         {item.cancelled && (
-          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandCancelledNotice")}</p>
         )}
         {item.truncated && (
-          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandTruncatedNotice")}</p>
         )}
         {item.stdout && (
           <pre className="mt-1 whitespace-pre-wrap text-fg-subtle">{item.stdout}</pre>
@@ -199,7 +184,7 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "historyAttachments") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] border border-accent-strong/40 bg-accent-border/60 px-3 py-1 text-xs text-accent-fg-faint">
+      <div className="ml-auto max-w-[86%] narrow:max-w-[85%] border border-border-strong bg-surface-raised px-3 py-1 text-xs text-fg-subtle">
         {t("chat.historyAttached", { files: attachmentLine(t, item.items) })}
       </div>
     );
@@ -215,7 +200,7 @@ export const ChatItemView = memo(function ChatItemView({
   if (item.type === "historyActionResult") {
     return (
       <div
-        className="rounded border border-border bg-surface-sunken px-3 py-2 text-xs"
+        className="border border-border bg-surface-sunken px-3 py-2 text-xs"
         data-testid="history-action-result"
       >
         <p className="whitespace-pre-wrap break-words font-mono">{item.text}</p>
@@ -224,7 +209,7 @@ export const ChatItemView = memo(function ChatItemView({
   }
   if (item.type === "historyRejected") {
     return (
-      <div className="rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
+      <div className="border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
         <p className="font-mono">$ {item.command}</p>
         <p className="mt-1">{item.reason}</p>
       </div>
@@ -238,8 +223,7 @@ export const ChatItemView = memo(function ChatItemView({
       waitingForInput={waitingForInput}
       injectionCheck={injectionCheck}
       onRespond={onRespond}
-      onAcceptWithRule={onAcceptWithRule}
-      serverId={serverId}
+            serverId={serverId}
       sessionId={sessionId}
     />
   );

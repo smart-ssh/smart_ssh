@@ -7,7 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { EvaluationTraceDto, RuleDto, ServerDto } from "../api/types";
-import { TestPanel } from "./FilterRulesView";
+import { RuleTester as TestPanel } from "./filterRules/RuleTester";
 
 const evaluateExplainedMock = vi.fn<
   (command: string, ctx: { serverId: string | null; tags: string[] }) => Promise<EvaluationTraceDto>
@@ -66,7 +66,7 @@ const noRuleTrace: EvaluationTraceDto = {
 function renderPanel(servers: ServerDto[]) {
   return render(
     <I18nextProvider i18n={testI18n}>
-      <TestPanel servers={servers} rules={[] as RuleDto[]} />
+      <TestPanel servers={servers} rules={[] as RuleDto[]} scopeText={() => "Global"} />
     </I18nextProvider>,
   );
 }
@@ -157,6 +157,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
       <I18nextProvider i18n={testI18n}>
         <TestPanel
           servers={[]}
+          scopeText={() => "Global"}
           rules={[
             { id: "rule-1", patternValue: "ps *", action: "Allow" },
             { id: "rule-2", patternValue: "grep *", action: "Allow" },

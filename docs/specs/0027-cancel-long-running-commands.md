@@ -41,11 +41,11 @@ beendetes Kommando.
 
 **2.1 Wann.** Sobald ein vorgeschlagenes Kommando tatsächlich ausgeführt wird —
 sofort bei automatischer Ausführung, sonst nach „Ausführen" bzw. dem
-Ausführen eines bearbeiteten Vorschlags oder dem Akzeptieren mit Regel —
+Ausführen eines bearbeiteten Vorschlags —
 läuft in der Oberfläche ein Zähler. Liegt nach 5 Sekunden noch kein Ergebnis
 vor, erscheint an der Aktionskarte:
 
-- ein pulsierender Punkt und der Text „läuft seit {n}s…" (Sekunden, sekündlich
+- ein pulsierendes Quadrat und der Text „läuft seit {n}s…" (Sekunden, sekündlich
   aktualisiert),
 - die Schaltfläche **„Verbindung zu diesem Kommando trennen"**.
 
@@ -119,9 +119,10 @@ statt dauerhaft „läuft".
 ## 4. Darstellung
 
 - Der Indikator sitzt an der Aktionskarte.
-- Im Ergebnis steht bei Abbruch statt der Exit-Code-Zeile: „⚠ Manuell
-  abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer
-  Exit-Code." Die bis dahin gesammelte Ausgabe steht darunter.
+- Im Ergebnis steht bei Abbruch statt der Exit-Code-Zeile ein Warnsymbol
+  (Icon) und dahinter: „Manuell abgebrochen — Ausgabe möglicherweise
+  unvollständig, kein regulärer Exit-Code." Die bis dahin gesammelte Ausgabe
+  steht darunter.
 - Alle Texte laufen über das Übersetzungssystem (Spec 0024).
 
 ## 5. Abgrenzung

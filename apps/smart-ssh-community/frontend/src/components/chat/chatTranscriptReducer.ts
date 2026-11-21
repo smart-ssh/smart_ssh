@@ -91,7 +91,6 @@ export type ChatTranscriptAction =
   | { type: "truncatedCleared"; id: string }
   | { type: "actionResponded"; actionId: string; decision: ActionUserDecision["decision"]; startedAt: number | null }
   | { type: "actionRespondFailed"; actionId: string; unknown: boolean; errorItem: ChatItem }
-  | { type: "ruleAccepting"; actionId: string; startedAt: number }
   | { type: "autoContinuationStopped" }
   | { type: "turnStarted" }
   | { type: "turnSettled" }
@@ -335,15 +334,6 @@ export function chatTranscriptReducer(
           ),
           action.errorItem,
         ],
-      };
-    case "ruleAccepting":
-      return {
-        ...state,
-        items: mapAction(state.items, action.actionId, (item) => ({
-          ...item,
-          responded: true,
-          startedAt: action.startedAt,
-        })),
       };
     case "autoContinuationStopped":
       return { ...state, autoContinuing: false, aiWait: null };

@@ -23,7 +23,7 @@ test("opens a focused connecting tab before connect resolves and lists the steps
 
   await emitProgress(app, [
     snapshotStep("dnsResolution", "ok", { code: "contacting", target: "h.example.test:22" }),
-    snapshotStep("tcpConnect", "ok", { code: "contacting", target: "10.0.0.1:22" }),
+    snapshotStep("tcpConnect", "ok", { code: "contacting", target: "10.0.0.1:22" }, null, 1530),
     snapshotStep("hostKeyCheck", "running", { code: "waitingForDecision" }),
   ]);
   const rows = page.getByTestId("connect-progress-list").getByRole("listitem");
@@ -31,6 +31,11 @@ test("opens a focused connecting tab before connect resolves and lists the steps
   await expect(rows.nth(0)).toContainText("DNS resolution");
   await expect(rows.nth(0)).toContainText("h.example.test:22");
   await expect(rows.nth(2)).toContainText("waiting for your decision");
+  // Finished steps show a mono duration, a running step none.
+  await expect(rows.nth(1).getByTestId("step-duration")).toHaveText("1.5 s");
+  await expect(rows.nth(1).getByTestId("step-duration")).toHaveClass(/font-mono/);
+  await expect(rows.nth(2).getByTestId("step-duration")).toHaveCount(0);
+  await expect(rows.nth(1).locator('[data-icon="check"]')).toHaveCount(1);
   await expectNoSeriousA11yViolations(page, "connecting tab");
 });
 
@@ -77,7 +82,7 @@ test("a failed connect keeps the tab with the failed step, error, Retry and Clos
   await expect(page.getByRole("button", { name: /^(Connecting to|Connection to) alpha/ })).toHaveCount(1);
 
   // Overview shows no connect error above the list.
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText("Authentication failed")).toHaveCount(0);
 });
 
@@ -102,7 +107,7 @@ test("a second click on a connecting server focuses its tab without a second con
   await launchHeld(app);
   const page = app.page;
   await page.getByRole("button", { name: /^alpha\b/ }).click();
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.locator("span", { hasText: "Connecting…" })).toBeVisible();
   await page.getByRole("button", { name: /^alpha\b/ }).click();
   await expect(page.getByRole("heading", { name: "Connecting to alpha …" })).toBeVisible();

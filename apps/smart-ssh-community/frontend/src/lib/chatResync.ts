@@ -107,7 +107,6 @@ export function actionItemFromProposed(
  * transient and stays out. */
 const LIVE_ONLY_TYPES: ReadonlySet<ChatItem["type"]> = new Set([
   "error",
-  "ruleNotice",
   "contextCompacted",
   "autoContinuationLimitReached",
   "emptyResponse",

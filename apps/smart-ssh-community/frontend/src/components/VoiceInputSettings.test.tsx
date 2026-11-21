@@ -1,9 +1,9 @@
 // Issue #1299, Spec 0108 §2.1, §5.8: the settings list the models the backend offers.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import { listSpeechModels, setSpeechLanguage, setSelectedSpeechModel } from "../api/voiceApi";
+import { getSpeechModelStatus, listSpeechModels, setSpeechLanguage, setSelectedSpeechModel } from "../api/voiceApi";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { cancelSpeechModelDownload, startSpeechModelDownload } from "../api/voiceApi";
 import type { Activity } from "../api/activitiesApi";
@@ -123,5 +123,69 @@ describe("VoiceInputSettings running download (issue #1326)", () => {
     expect(startSpeechModelDownload).not.toHaveBeenCalled();
     fireEvent.click(within(row).getByRole("button", { name: "Abbrechen" }));
     await waitFor(() => expect(cancelSpeechModelDownload).toHaveBeenCalledWith("base"));
+  });
+});
+
+describe("VoiceInputSettings status square and progress bar (issue #1379)", () => {
+  const rowOf = () => screen.getByLabelText(/^Base/).closest("div") as HTMLElement;
+  const tone = (row: HTMLElement) => row.querySelector("[data-status-square]")?.getAttribute("data-status-square");
+  const bar = (row: HTMLElement) => row.querySelector("span.h-full.bg-accent") as HTMLElement | null;
+
+  beforeEach(async () => {
+    selected = "base";
+    activitiesNow = [];
+    await testI18n.changeLanguage("de");
+    vi.clearAllMocks();
+    vi.mocked(listSpeechModels).mockResolvedValue(WHISPER as never);
+  });
+  afterEach(() => {
+    cleanup();
+    activitiesNow = [];
+  });
+
+  it.each([
+    ["ready", { state: "ready" }, "success"],
+    ["error", { state: "error", key: "voice.error.download" }, "danger"],
+    ["not_downloaded", { state: "not_downloaded" }, "neutral"],
+  ])("uses the %s tone for the status square", async (_n, status, expected) => {
+    // Deferred status: the tone is only asserted after the load resolved inside act().
+    let resolveStatus: (v: unknown) => void = () => {};
+    const loaded = new Promise((r) => { resolveStatus = r; });
+    vi.mocked(getSpeechModelStatus).mockImplementation(((model: string) =>
+      loaded.then(() => ({ model, ...status }))) as never);
+    renderSettings();
+    await screen.findAllByRole("radio");
+    await waitFor(() => expect(getSpeechModelStatus).toHaveBeenCalledWith("base"));
+    await act(async () => { resolveStatus(null); await loaded; });
+    await waitFor(() => expect(tone(rowOf())).toBe(expected));
+    expect(bar(rowOf())).toBeNull();
+  });
+
+  it("uses the accent tone and a 50 % bar while downloading", async () => {
+    activitiesNow = [
+      {
+        id: "a1", kind: "speech-model", key: "base", titleKey: "activities.speechModelTitle",
+        titleParams: { name: "Base" }, state: "running", done: 50, total: 100, statusKey: null,
+        errorCode: null, errorMessage: null, cancellable: true, resumable: true, startedAt: 1, dismissed: false,
+      },
+    ];
+    renderSettings();
+    await screen.findAllByRole("radio");
+    await waitFor(() => expect(tone(rowOf())).toBe("accent"));
+    expect(bar(rowOf())?.style.width).toBe("50%");
+  });
+
+  it("shows no bar when the total size is 0", async () => {
+    activitiesNow = [
+      {
+        id: "a1", kind: "speech-model", key: "base", titleKey: "activities.speechModelTitle",
+        titleParams: { name: "Base" }, state: "running", done: 0, total: 0, statusKey: null,
+        errorCode: null, errorMessage: null, cancellable: true, resumable: true, startedAt: 1, dismissed: false,
+      },
+    ];
+    renderSettings();
+    await screen.findAllByRole("radio");
+    await waitFor(() => expect(tone(rowOf())).toBe("accent"));
+    expect(bar(rowOf())).toBeNull();
   });
 });

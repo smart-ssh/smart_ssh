@@ -30,7 +30,12 @@
     "emptyStateTitle": "Henüz sunucu eklenmedi",
     "emptyStateHint": "SSH ile bağlanmak için ilk sunucunuzu ekleyin.",
     "emptyStateCreateFirstServer": "İlk sunucuyu ekle",
-    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla."
+    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla.",
+    "localBadge": "Yerel",
+    "thisDevice": "bu cihaz",
+    "sessionOpen": "Oturum açık",
+    "sessionPending": "Onay bekliyor",
+    "sessionDisconnected": "Oturum kesildi"
   },
   "settings": {
     "title": "Ayarlar",
@@ -136,7 +141,10 @@
     "importSshConfig": "İçe aktar …",
     "importSshConfigHint": "Sunucuları bir OpenSSH ssh_config dosyasından içe aktar",
     "exportSshConfig": "Dışa aktar …",
-    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar"
+    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar",
+    "title": "Sunucular",
+    "collapseGroup": "“{{name}}” grubunu daralt",
+    "expandGroup": "“{{name}}” grubunu genişlet"
   },
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
@@ -277,12 +285,12 @@
     "deleteAlwaysRemovesHistory": "Bu işlem ayrıca bu sunucunun sohbet geçmişini, notlarını ve etiketlerini kalıcı olarak siler.",
     "confirmDeleteServer": "Kalıcı olarak sil",
     "testResult": {
-      "success": "✓ Bağlantı başarılı",
-      "authFailed": "✗ Oturum açma reddedildi. Kullanıcı adını ve parolayı ya da anahtarı denetleyin.",
+      "success": "Bağlantı başarılı",
+      "authFailed": "Oturum açma reddedildi. Kullanıcı adını ve parolayı ya da anahtarı denetleyin.",
       "hostKeyUnknown": "Ana makine anahtarı bilinmiyor — onay gerekli",
-      "hostKeyMismatch": "⚠ Ana makine anahtarı değişti",
-      "networkError": "✗ Ağ hatası: {{message}}",
-      "timeout": "✗ Sunucu yanıt vermiyor. Adresi, bağlantı noktasını ve güvenlik duvarını denetleyin."
+      "hostKeyMismatch": "Ana makine anahtarı değişti",
+      "networkError": "Ağ hatası: {{message}}",
+      "timeout": "Sunucu yanıt vermiyor. Adresi, bağlantı noktasını ve güvenlik duvarını denetleyin."
     },
     "largeNoteHint": "Bu not çok büyük ve uzun oturumlarda yapay zeka bağlamı için kısaltılabilir. Kayıtlı not tamamen korunur.",
     "summarizeNow": "Şimdi özetle",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Kural:",
     "segmentLabel": "Bölüm {{index}}",
     "checksLabel": "Denetimler:",
-    "hardBlacklistLabel": "Katı kara liste:"
+    "hardBlacklistLabel": "Katı kara liste:",
+    "invalidPattern": "Geçersiz desen",
+    "rowActions": "Satır eylemleri",
+    "ruleCount_one": "{{count}} kural",
+    "ruleCount_other": "{{count}} kural"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Otomatik devam, onayınız olmadan {{limit}} adımdan sonra duraklatıldı — devam etmek için bir mesaj gönderin.",
@@ -377,8 +389,8 @@
     "discardedAfterReconnect": "Bağlantı yeniden kurulduğu için atıldı. Hiçbir şey çalıştırılmadı.",
     "expiredTimeout": "Zamanında yanıtlanmadı ve atıldı. Hiçbir şey çalıştırılmadı.",
     "expiredUnknown": "Bu istek artık beklemede değil. Hiçbir şey çalıştırılmadı.",
-    "usesStoredSudoPassword": "🔑 Kayıtlı sudo parolasıyla çalışır.",
-    "writeMayUseStoredSudoPassword": "🔑 Yazma izni yoksa uygulama kayıtlı sudo parolasıyla (sudo) yazar.",
+    "usesStoredSudoPassword": "Kayıtlı sudo parolasıyla çalışır.",
+    "writeMayUseStoredSudoPassword": "Yazma izni yoksa uygulama kayıtlı sudo parolasıyla (sudo) yazar.",
     "takeIntoNote": "Nota ekle",
     "takeIntoNoteFailed": "Başarısız — yeniden deneyin",
     "riskServerLabel": "Sunucu",
@@ -390,10 +402,10 @@
     "runningSince": "{{seconds}} sn'dir çalışıyor…",
     "cancelCommand": "Bu komutla bağlantıyı kes",
     "cancellingCommand": "Bağlantı kesiliyor…",
-    "commandCancelledNotice": "⚠ Elle iptal edildi — çıktı eksik olabilir, normal çıkış kodu yok.",
-    "commandTruncatedNotice": "⚠ Çıktı boyut sınırında kesildi — eksik olabilir.",
+    "commandCancelledNotice": "Elle iptal edildi — çıktı eksik olabilir, normal çıkış kodu yok.",
+    "commandTruncatedNotice": "Çıktı boyut sınırında kesildi — eksik olabilir.",
     "liveOutputLabel": "Canlı çıktı",
-    "liveOutputTruncatedNotice": "⚠ Boyut sınırına ulaşıldı — sonraki çıktı artık gösterilmiyor.",
+    "liveOutputTruncatedNotice": "Boyut sınırına ulaşıldı — sonraki çıktı artık gösterilmiyor.",
     "autoRanLead": "Otomatik çalıştırıldı",
     "autoRanRule": "kural",
     "autoRanScopeGlobal": "genel",
@@ -409,17 +421,14 @@
     "editableCommand": "Komut — düzenlenebilir",
     "execute": "Çalıştır",
     "deny": "Reddet",
-    "quickRule": "Kabul et + kural",
-    "quickRuleDropdownAria": "Kural önerilerini göster",
-    "newRulePatternHeading": "Yeni izin kuralı için desen",
     "scopeThisServer": "Bu sunucu",
     "scopeGlobal": "Genel",
     "scopeTag": "Etiket",
     "tagNamePlaceholder": "Etiket adı",
     "loadingSuggestions": "Öneriler yükleniyor…",
     "noSuggestions": "Öneri yok.",
-    "binaryFileHint": "⚠ İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
-    "diffTooLargeHint": "⚠ İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
+    "binaryFileHint": "İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
+    "diffTooLargeHint": "İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
     "noContentChange": "(içerik değişikliği yok)",
     "quickRuleLabel": {
       "exact": "Tam: {{patterns}}",
@@ -437,9 +446,17 @@
       "blocked": "kurallardan bağımsız olarak her zaman sorar: {{reasons}}",
       "verdictAuto": "bir dahaki sefere otomatik çalışır",
       "verdictAsk": "yine de soracak: {{reasons}}",
-      "notice": "Kural oluşturuldu. Bu komut bir dahaki sefere yine soracak: {{reasons}}",
       "reasonOther": "başka bir güvenlik denetimi",
-      "loadFailed": "Kural kapsamı yüklenemedi"
+      "loadFailed": "Kural kapsamı yüklenemedi",
+      "summaryHeading": "Zaten izinli",
+      "toDecideHeading": "Karara bağlanacak",
+      "expandAria": "{{segment}} için kural önerileri",
+      "stagedBadge": "henüz kaydedilmedi",
+      "removeStaged": "Kaldır",
+      "saveRules": "Kuralları kaydet ({{count}})",
+      "saveFailed": "Kurallar kaydedilemedi: {{message}}",
+      "unsavedHint": "Kaydedilmemiş kurallar: {{count}}",
+      "segmentCovered": "bu bölümü kapsar; komut yine de soracak: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +473,7 @@
     "mismatchBodyAfterHost": " en son kaydedilenden farklı bir anahtar sunuyor. Bu, ortadaki adam saldırısına işaret edebilir. Yalnızca sunucu anahtarının meşru biçimde değiştiğinden eminseniz (örn. sunucunun yeniden kurulumu) devam edin.",
     "known": "Bilinen",
     "offeredNow": "Şimdi sunulan",
+    "offered": "Sunulan",
     "keyType": "Anahtar türü",
     "cancelConnection": "Bağlantıyı iptal et",
     "trustAnyway": "Yine de güven",
@@ -468,13 +486,17 @@
   },
   "sessionTabs": {
     "newSession": "Yeni oturum",
-    "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",
     "menu": {
       "open": "Gezinme menüsünü aç",
       "title": "Gezinme menüsü",
-      "sessions": "Açık oturumlar"
+      "sessions": "Açık oturumlar",
+      "close": "Gezinme menüsünü kapat",
+      "needsConfirmation": "Onay gerekiyor",
+      "activities": "Etkinlikler",
+      "activitiesRunning_one": "{{count}} çalışıyor",
+      "activitiesRunning_other": "{{count}} çalışıyor"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +505,9 @@
       "pendingBadge": "Onay gerekli",
       "readOnlyHint": "Bu oturum harici bir araca (MCP) aittir. Yalnızca aracın onaylanacak veya reddedilecek eylemlerini ve sonuçlarını gösterir; burada sohbet girişi veya terminal yoktur. Kapatmak MCP oturumunu sonlandırır ve bekleyen onayları reddeder."
     },
-    "confirmClosePending": "\"{{name}}\" için hâlâ bekleyen bir onay var. Sekme yine de kapatılsın mı? Bekleyen eylem reddedilmiş sayılır."
+    "confirmClosePending": "\"{{name}}\" için hâlâ bekleyen bir onay var. Sekme yine de kapatılsın mı? Bekleyen eylem reddedilmiş sayılır.",
+    "pendingBadge": "Bekliyor",
+    "newConnection": "Yeni bağlantı"
   },
   "aiProvider": {
     "openLogs": "Tanılama günlüklerini dosya yöneticisinde aç",
@@ -505,16 +529,16 @@
     "apiKeyFormatHint": "Bir {{providerLabel}} anahtarına benzemiyor – \"{{expectedPrefix}}\" gibi bir önek bekleniyordu. Yine de kaydedebilirsiniz; sağlayıcılar biçimleri zaman zaman değiştirir.",
     "testCredentials": "Kimlik bilgilerini test et",
     "testingCredentials": "Test ediliyor…",
-    "testResultValid": "✓ Kimlik bilgileri geçerli",
-    "testResultAuthFailed": "✗ Kimlik doğrulama başarısız – API anahtarını denetleyin",
-    "testResultUnreachable": "✗ Sağlayıcıya ulaşılamıyor: {{message}}",
+    "testResultValid": "Kimlik bilgileri geçerli",
+    "testResultAuthFailed": "Kimlik doğrulama başarısız – API anahtarını denetleyin",
+    "testResultUnreachable": "Sağlayıcıya ulaşılamıyor: {{message}}",
     "testResultRateLimited": "Kimlik bilgileri geçerli görünüyor, ancak sağlayıcı şu an istekleri sınırlıyor. Bir dakika sonra yeniden test edin.",
     "nativeToolCalling": "Yerel araç çağırmayı destekler",
     "discoverModels": "Modelleri yükle",
     "discoveringModels": "Modeller yükleniyor…",
     "modelDiscoveryFailedHint": "Modeller otomatik yüklenemedi — model adını elle girin.",
     "modelDiscoveryEmptyHint": "Sağlayıcı hiç model döndürmedi. Model adını elle girin.",
-    "modelDiscoveryAuthFailed": "✗ Sağlayıcı bu kimlik bilgilerini reddetti – API anahtarını denetleyin",
+    "modelDiscoveryAuthFailed": "Sağlayıcı bu kimlik bilgilerini reddetti – API anahtarını denetleyin",
     "advanced": "Gelişmiş",
     "extraHeadersLabel": "Ek başlıklar",
     "extraHeadersHint": "Bu sağlayıcıya yapılan her isteğe eklenir (örn. OpenRouter'ın HTTP-Referer/X-Title başlıkları).",
@@ -557,6 +581,7 @@
     "ollamaProbeRetry": "Yeniden ara",
     "ollamaProbeNotFoundHeading": "Yerel Ollama bulunamadı (varsayılan bağlantı noktası 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama'yı ollama.com'dan kurun, başlatın ve bir model yükleyin (örn. `ollama pull llama3`), sonra yeniden arayın.",
+    "typeLabel": "Tür",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1081,6 +1106,7 @@
     "parentDirectory": "Üst dizin",
     "newFolderButton": "+ Klasör",
     "fileActionsGroup": "Dosya işlemleri",
+    "directoryActions": "Dizin işlemleri",
     "upload": "Yükle",
     "uploadDialogTitle": "Dosya(ları) yükle",
     "uploadFolder": "Klasör yükle",
@@ -1284,8 +1310,9 @@
     "queued": "Bir sonraki istekle gönderilecek",
     "responseCancelled": "Yanıt iptal edildi.",
     "contextCompactedNotice": "Bu sohbetin eski bölümleri, modelin bağlamına sığması için özetlendi.",
-    "contextUsage": "Bağlam {{used}} / {{window}}",
     "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Sağlayıcı: {{provider}}",
     "webResearchUnavailable": "Web araştırması bu sağlayıcı hesabı için kullanılamıyor (orada web araması devre dışı). Bu oturum web araştırması olmadan yanıt verir. Kalıcı olarak kapatmak için: Ayarlar → Yapay zeka sağlayıcısı → “Web araştırması”.",
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
     "refusedResponse": "Model bu isteği reddetti. İsteği yeniden ifade edin veya yeni bir sohbet başlatın.",
@@ -1586,6 +1613,13 @@
     "quitBody": "Bu etkinlikler hâlâ çalışıyor ve durdurulacak:",
     "quitResumeHint": "Yarıda kalan indirmeler uygulamayı bir sonraki açışınızda sürdürülebilir.",
     "quitAnyway": "Yine de çık",
-    "keepRunning": "Çalışmaya devam etsin"
+    "keepRunning": "Çalışmaya devam etsin",
+    "summaryRunning_one": "{{count}} çalışıyor",
+    "summaryRunning_other": "{{count}} çalışıyor",
+    "summaryInterrupted_one": "{{count}} kesintiye uğradı",
+    "summaryInterrupted_other": "{{count}} kesintiye uğradı",
+    "summaryFailed_one": "{{count}} başarısız",
+    "summaryFailed_other": "{{count}} başarısız",
+    "remaining": "{{time}} kaldı"
   }
 }

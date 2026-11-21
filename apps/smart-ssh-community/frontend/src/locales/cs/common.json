@@ -30,7 +30,12 @@
     "emptyStateTitle": "Zatím nebyl přidán žádný server",
     "emptyStateHint": "Přidejte svůj první server a připojte se přes SSH.",
     "emptyStateCreateFirstServer": "Přidat první server",
-    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru."
+    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru.",
+    "localBadge": "Místní",
+    "thisDevice": "toto zařízení",
+    "sessionOpen": "Relace otevřena",
+    "sessionPending": "Čeká na potvrzení",
+    "sessionDisconnected": "Relace odpojena"
   },
   "settings": {
     "title": "Nastavení",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importovat …",
     "importSshConfigHint": "Importovat servery ze souboru ssh_config OpenSSH",
     "exportSshConfig": "Exportovat …",
-    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH",
+    "title": "Servery",
+    "collapseGroup": "Sbalit skupinu „{{name}}“",
+    "expandGroup": "Rozbalit skupinu „{{name}}“"
   },
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
@@ -277,12 +285,12 @@
     "deleteAlwaysRemovesHistory": "Tím se také trvale smaže historie chatu, poznámky a štítky tohoto serveru.",
     "confirmDeleteServer": "Smazat trvale",
     "testResult": {
-      "success": "✓ Připojení úspěšné",
-      "authFailed": "✗ Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
+      "success": "Připojení úspěšné",
+      "authFailed": "Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
       "hostKeyUnknown": "Klíč hostitele neznámý — vyžadováno potvrzení",
-      "hostKeyMismatch": "⚠ Klíč hostitele se změnil",
-      "networkError": "✗ Chyba sítě: {{message}}",
-      "timeout": "✗ Server neodpovídá. Zkontrolujte adresu, port a firewall."
+      "hostKeyMismatch": "Klíč hostitele se změnil",
+      "networkError": "Chyba sítě: {{message}}",
+      "timeout": "Server neodpovídá. Zkontrolujte adresu, port a firewall."
     },
     "largeNoteHint": "Tato poznámka je velmi rozsáhlá a může být při dlouhých relacích zkrácena v kontextu AI. Uložená poznámka zůstane zcela nedotčena.",
     "summarizeNow": "Shrnout nyní",
@@ -356,7 +364,13 @@
     "matchedRuleLabel": "Pravidlo:",
     "segmentLabel": "Část {{index}}",
     "checksLabel": "Kontroly:",
-    "hardBlacklistLabel": "Pevná černá listina:"
+    "hardBlacklistLabel": "Pevná černá listina:",
+    "invalidPattern": "Neplatný vzor",
+    "rowActions": "Akce řádku",
+    "ruleCount_one": "{{count}} pravidlo",
+    "ruleCount_few": "{{count}} pravidla",
+    "ruleCount_many": "{{count}} pravidla",
+    "ruleCount_other": "{{count}} pravidel"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích bez vašeho potvrzení — pokračujte odesláním zprávy.",
@@ -377,8 +391,8 @@
     "discardedAfterReconnect": "Zahozeno po obnovení spojení. Nic se nespustilo.",
     "expiredTimeout": "Včas nepotvrzeno a zahozeno. Nic se nespustilo.",
     "expiredUnknown": "Tento požadavek už nečeká na rozhodnutí. Nic se nespustilo.",
-    "usesStoredSudoPassword": "🔑 Běží s použitím uloženého hesla sudo.",
-    "writeMayUseStoredSudoPassword": "🔑 Chybí-li oprávnění k zápisu, aplikace zapíše s použitím uloženého hesla sudo (sudo).",
+    "usesStoredSudoPassword": "Běží s použitím uloženého hesla sudo.",
+    "writeMayUseStoredSudoPassword": "Chybí-li oprávnění k zápisu, aplikace zapíše s použitím uloženého hesla sudo (sudo).",
     "takeIntoNote": "Převzít do poznámky",
     "takeIntoNoteFailed": "Selhalo — zkuste to znovu",
     "riskServerLabel": "Server",
@@ -391,10 +405,10 @@
     "waitingForInputHint": "Tento příkaz pravděpodobně čeká na vstup. Zastavte ho a AI navrhne neinteraktivní variantu.",
     "cancelCommand": "Odpojit tento příkaz",
     "cancellingCommand": "Odpojování…",
-    "commandCancelledNotice": "⚠ Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",
-    "commandTruncatedNotice": "⚠ Výstup byl oříznut na limitu velikosti — může být neúplný.",
+    "commandCancelledNotice": "Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",
+    "commandTruncatedNotice": "Výstup byl oříznut na limitu velikosti — může být neúplný.",
     "liveOutputLabel": "Živý výstup",
-    "liveOutputTruncatedNotice": "⚠ Dosažen limit velikosti — další výstup se již nezobrazuje.",
+    "liveOutputTruncatedNotice": "Dosažen limit velikosti — další výstup se již nezobrazuje.",
     "autoRanLead": "Spuštěno automaticky",
     "autoRanRule": "pravidlo",
     "autoRanScopeGlobal": "globální",
@@ -409,17 +423,14 @@
     "editableCommand": "Příkaz — lze upravit",
     "execute": "Provést",
     "deny": "Zamítnout",
-    "quickRule": "Přijmout + pravidlo",
-    "quickRuleDropdownAria": "Zobrazit návrhy pravidel",
-    "newRulePatternHeading": "Vzor pro nové povolující pravidlo",
     "scopeThisServer": "Tento server",
     "scopeGlobal": "Globální",
     "scopeTag": "Štítek",
     "tagNamePlaceholder": "Název štítku",
     "loadingSuggestions": "Načítání návrhů…",
     "noSuggestions": "Žádné návrhy.",
-    "binaryFileHint": "⚠ Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
+    "binaryFileHint": "Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
+    "diffTooLargeHint": "Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
     "noContentChange": "(žádná změna obsahu)",
     "quickRuleLabel": {
       "exact": "Přesně: {{patterns}}",
@@ -437,9 +448,17 @@
       "blocked": "vždy se ptá, ať jsou pravidla jakákoli: {{reasons}}",
       "verdictAuto": "příště se spustí automaticky",
       "verdictAsk": "bude se stále ptát: {{reasons}}",
-      "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
       "reasonOther": "jiná bezpečnostní kontrola",
-      "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
+      "loadFailed": "Pokrytí pravidly se nepodařilo načíst",
+      "summaryHeading": "Již povoleno",
+      "toDecideHeading": "Zbývá rozhodnout",
+      "expandAria": "Návrhy pravidel pro {{segment}}",
+      "stagedBadge": "zatím neuloženo",
+      "removeStaged": "Odebrat",
+      "saveRules": "Uložit pravidla ({{count}})",
+      "saveFailed": "Pravidla se nepodařilo uložit: {{message}}",
+      "unsavedHint": "Neuložená pravidla: {{count}}",
+      "segmentCovered": "pokrývá tuto část; příkaz se přesto zeptá: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +475,7 @@
     "mismatchBodyAfterHost": " předkládá jiný klíč, než který byl uložen naposledy. To může naznačovat útok typu man-in-the-middle. Pokračujte, pouze pokud jste si jisti, že se klíč serveru změnil oprávněně (např. přeinstalací serveru).",
     "known": "Známý",
     "offeredNow": "Nyní nabídnutý",
+    "offered": "Nabídnutý",
     "keyType": "Typ klíče",
     "cancelConnection": "Zrušit připojení",
     "trustAnyway": "Přesto důvěřovat",
@@ -468,13 +488,19 @@
   },
   "sessionTabs": {
     "newSession": "Nová relace",
-    "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
     "menu": {
       "open": "Otevřít navigační nabídku",
       "title": "Navigační nabídka",
-      "sessions": "Otevřené relace"
+      "sessions": "Otevřené relace",
+      "close": "Zavřít navigační menu",
+      "needsConfirmation": "Čeká na potvrzení",
+      "activities": "Aktivity",
+      "activitiesRunning_one": "běží: {{count}}",
+      "activitiesRunning_few": "běží: {{count}}",
+      "activitiesRunning_many": "běží: {{count}}",
+      "activitiesRunning_other": "běží: {{count}}"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +509,9 @@
       "pendingBadge": "Vyžaduje potvrzení",
       "readOnlyHint": "Tato relace patří externímu nástroji (MCP). Zobrazuje pouze akce nástroje k potvrzení či zamítnutí a jejich výsledky; není zde vstup chatu ani terminál. Zavřením se relace MCP ukončí a čekající potvrzení se zamítnou."
     },
-    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou."
+    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou.",
+    "pendingBadge": "Čeká",
+    "newConnection": "Nové připojení"
   },
   "aiProvider": {
     "openLogs": "Otevřít diagnostické logy ve správci souborů",
@@ -505,16 +533,16 @@
     "apiKeyFormatHint": "Nevypadá to jako klíč {{providerLabel}} – očekává se předpona jako „{{expectedPrefix}}“. Přesto jej můžete uložit; poskytovatelé občas mění formáty.",
     "testCredentials": "Otestovat přihlašovací údaje",
     "testingCredentials": "Testování…",
-    "testResultValid": "✓ Přihlašovací údaje jsou platné",
-    "testResultAuthFailed": "✗ Ověření selhalo – zkontrolujte klíč API",
-    "testResultUnreachable": "✗ Poskytovatel není dosažitelný: {{message}}",
+    "testResultValid": "Přihlašovací údaje jsou platné",
+    "testResultAuthFailed": "Ověření selhalo – zkontrolujte klíč API",
+    "testResultUnreachable": "Poskytovatel není dosažitelný: {{message}}",
     "testResultRateLimited": "Přihlašovací údaje vypadají platně, ale poskytovatel právě omezuje počet požadavků. Zkuste test znovu za minutu.",
     "nativeToolCalling": "Podporuje nativní volání nástrojů",
     "discoverModels": "Načíst modely",
     "discoveringModels": "Načítání modelů…",
     "modelDiscoveryFailedHint": "Modely se nepodařilo načíst automaticky — zadejte název modelu ručně.",
     "modelDiscoveryEmptyHint": "Poskytovatel nevrátil žádné modely. Zadejte název modelu ručně.",
-    "modelDiscoveryAuthFailed": "✗ Poskytovatel tyto přihlašovací údaje odmítl – zkontrolujte klíč API",
+    "modelDiscoveryAuthFailed": "Poskytovatel tyto přihlašovací údaje odmítl – zkontrolujte klíč API",
     "advanced": "Pokročilé",
     "extraHeadersLabel": "Další hlavičky",
     "extraHeadersHint": "Připojí se ke každému požadavku na tohoto poskytovatele (např. HTTP-Referer/X-Title u OpenRouter).",
@@ -557,6 +585,7 @@
     "ollamaProbeRetry": "Hledat znovu",
     "ollamaProbeNotFoundHeading": "Lokální Ollama nenalezena (výchozí port 11434).",
     "ollamaProbeNotFoundInstructions": "Nainstalujte Ollamu z ollama.com, spusťte ji a načtěte model (např. `ollama pull llama3`), poté hledejte znovu.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1091,6 +1120,7 @@
     "parentDirectory": "Nadřazený adresář",
     "newFolderButton": "+ Složka",
     "fileActionsGroup": "Akce se soubory",
+    "directoryActions": "Akce adresáře",
     "upload": "Nahrát",
     "uploadDialogTitle": "Nahrát soubory",
     "uploadFolder": "Nahrát složku",
@@ -1298,8 +1328,9 @@
     "queued": "Bude odesláno s dalším požadavkem",
     "responseCancelled": "Odpověď zrušena.",
     "contextCompactedNotice": "Starší části tohoto chatu byly shrnuty, aby se vešly do kontextu modelu.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
+    "messageLabel": "Zpráva",
+    "headerProviderTooltip": "Poskytovatel: {{provider}}",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
     "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
@@ -1602,6 +1633,19 @@
     "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
     "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
     "quitAnyway": "Přesto ukončit",
-    "keepRunning": "Nechat běžet"
+    "keepRunning": "Nechat běžet",
+    "summaryRunning_one": "běží: {{count}}",
+    "summaryRunning_few": "běží: {{count}}",
+    "summaryRunning_many": "běží: {{count}}",
+    "summaryRunning_other": "běží: {{count}}",
+    "summaryInterrupted_one": "přerušeno: {{count}}",
+    "summaryInterrupted_few": "přerušeno: {{count}}",
+    "summaryInterrupted_many": "přerušeno: {{count}}",
+    "summaryInterrupted_other": "přerušeno: {{count}}",
+    "summaryFailed_one": "selhalo: {{count}}",
+    "summaryFailed_few": "selhalo: {{count}}",
+    "summaryFailed_many": "selhalo: {{count}}",
+    "summaryFailed_other": "selhalo: {{count}}",
+    "remaining": "zbývá {{time}}"
   }
 }

@@ -9,16 +9,17 @@
 //! is stored.
 
 use ssh_manager_core::filter::{
-    split_top_level_segments, Decision, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId,
-    RuleOrigin, Scope, TraceKind,
+    scope_applies, split_top_level_segments, Decision, EffectiveScope, EvalContext,
+    EvaluationTrace, Rule, RuleAction, RuleId, RuleOrigin, Scope, TraceKind,
 };
 
 use crate::dto::{
     AutoExecRuleDto, ConfirmationExplanationDto, CoveringRuleDto, ExplainedSuggestionDto, RuleDto,
-    SegmentCoverageDto, SegmentCoverageState, SuggestionVerdictDto, VerdictReasonDto,
+    SegmentCoverageDto, SegmentCoverageState, SegmentRuleSuggestionsDto, SegmentSuggestionDto,
+    SegmentVerdictDto, StagedRuleDto, SuggestionVerdictDto, VerdictReasonDto,
 };
 use crate::filter_rules::pattern_from_parts;
-use crate::rule_suggestions::suggest_rule_patterns_excluding;
+use crate::rule_suggestions::{suggest_rule_patterns_excluding, suggest_segment_patterns};
 use crate::session::CommandEvaluator;
 
 /// Reason codes that are not engine codes.
@@ -131,7 +132,6 @@ pub async fn explain(
     let trace = evaluator.evaluate_explained(command, ctx).await;
     let seg_traces = segment_traces(&trace);
     let texts = segment_texts(command, seg_traces.len());
-    let multi = seg_traces.len() > 1;
 
     // Post-engine escalation, attributed per segment text; if no segment
     // hits but the whole command does, it applies to every covered segment.
@@ -163,19 +163,18 @@ pub async fn explain(
             state = SegmentCoverageState::Blocked;
             reasons.push(code.to_string());
         }
-        if multi || state == SegmentCoverageState::Blocked {
-            segments.push(SegmentCoverageDto {
-                index: i,
-                text,
-                state,
-                rule: if state == SegmentCoverageState::Covered {
-                    rule
-                } else {
-                    None
-                },
-                reasons,
-            });
-        }
+        // Issue #1357: the list is shown for a single command too.
+        segments.push(SegmentCoverageDto {
+            index: i,
+            text,
+            state,
+            rule: if state == SegmentCoverageState::Covered {
+                rule
+            } else {
+                None
+            },
+            reasons,
+        });
     }
 
     let mut suggestions = Vec::new();
@@ -217,6 +216,182 @@ pub async fn explain(
         segments,
         suggestions,
     }
+}
+
+/// Reason code: the scope chosen for a suggestion does not apply to the
+/// session (a tag the server does not have, another server), so the rule
+/// would never match here.
+pub const REASON_SCOPE_NOT_APPLICABLE: &str = "RULE_SCOPE_NOT_APPLICABLE";
+
+/// Code of an unknown segment index.
+pub const SEGMENT_INDEX_OUT_OF_RANGE: &str = "SEGMENT_INDEX_OUT_OF_RANGE";
+
+fn candidate_rules(
+    prefix: &str,
+    patterns: &[crate::dto::SuggestionPatternDto],
+    scope: &Scope,
+    priority: i32,
+) -> Vec<Rule> {
+    patterns
+        .iter()
+        .enumerate()
+        .map(|(n, p)| Rule {
+            id: RuleId(format!("{prefix}-{n}")),
+            pattern: pattern_from_parts(p.pattern_type, p.pattern_value.clone()),
+            action: RuleAction::Allow,
+            scope: scope.clone(),
+            priority,
+            origin: RuleOrigin::User,
+        })
+        .collect()
+}
+
+/// Issue #1356, Spec 0011: suggestions for ONE segment of `command` (index as
+/// in [`SegmentCoverageDto::index`]) in `scope`, given the rules the user has
+/// staged. Read-only; verdicts come only from candidate evaluation by the
+/// engine plus the read-only post-engine escalations.
+///
+/// A segment that always asks (state `blocked`) gets no suggestions, only its
+/// reasons. `Err(())` if the index does not exist or a staged rule has an
+/// invalid pattern (nothing can be said then).
+#[allow(clippy::too_many_arguments)]
+pub async fn explain_segment_rules(
+    evaluator: &dyn CommandEvaluator,
+    ctx: &EvalContext,
+    command: &str,
+    segment_index: usize,
+    scope: Scope,
+    staged: &[StagedRuleDto],
+    escalation: &(dyn Fn(&str) -> Option<&'static str> + Sync),
+) -> Result<SegmentRuleSuggestionsDto, crate::error::CommandError> {
+    let mut staged_candidates: Vec<Rule> = Vec::new();
+    for (n, rule) in staged.iter().enumerate() {
+        let cands = candidate_rules(&format!("staged-{n}"), &rule.patterns, &rule.scope, 0);
+        for c in &cands {
+            if c.pattern.validate().is_err() {
+                return Err(crate::error::CommandError::with_code(
+                    "invalid pattern in a staged rule",
+                    "INVALID_PATTERN",
+                ));
+            }
+        }
+        staged_candidates.extend(cands.into_iter().enumerate().map(|(i, mut c)| {
+            c.id = RuleId(format!("staged-{n}-{i}"));
+            c
+        }));
+    }
+
+    let base = evaluator
+        .evaluate_explained_with_candidates(command, ctx, &staged_candidates)
+        .await;
+    let seg_traces = segment_traces(&base);
+    let texts = segment_texts(command, seg_traces.len());
+    let (Some(seg_trace), Some(text)) = (seg_traces.get(segment_index), texts.get(segment_index))
+    else {
+        return Err(crate::error::CommandError::with_code(
+            format!("segment index {segment_index} out of range"),
+            SEGMENT_INDEX_OUT_OF_RANGE,
+        ));
+    };
+
+    let (state, mut blocked) = classify(seg_trace);
+    // Escalation attributed to this segment text; if no segment hits but the
+    // whole command does, it applies to every covered segment (as in
+    // `explain`).
+    let seg_escalation = |t: &str| -> Option<&'static str> {
+        escalation(t).or_else(|| {
+            let any_segment_hit = texts.iter().any(|x| escalation(x).is_some());
+            if any_segment_hit {
+                None
+            } else {
+                escalation(command)
+            }
+        })
+    };
+    let mut is_blocked = state == SegmentCoverageState::Blocked;
+    if state == SegmentCoverageState::Covered {
+        if let Some(code) = seg_escalation(text) {
+            is_blocked = true;
+            blocked.push(code.to_string());
+        }
+    }
+    if is_blocked {
+        return Ok(SegmentRuleSuggestionsDto {
+            segment_index,
+            segment_text: text.clone(),
+            blocked_reasons: blocked,
+            suggestions: Vec::new(),
+        });
+    }
+
+    let effective = EffectiveScope::from(ctx);
+    let scope_ok = scope_applies(&scope, &effective);
+    let mut out = Vec::new();
+    for suggestion in suggest_segment_patterns(text) {
+        let mut candidates = staged_candidates.clone();
+        candidates.extend(candidate_rules(
+            "candidate",
+            &suggestion.patterns,
+            &scope,
+            0,
+        ));
+        let with = evaluator
+            .evaluate_explained_with_candidates(command, ctx, &candidates)
+            .await;
+
+        // Command verdict: only the engine's decision (plus escalation).
+        let mut reasons = reasons_of_verdict(&with);
+        let mut auto_exec = with.decision == Decision::AutoExec;
+        if auto_exec {
+            if let Some(code) = escalation(command) {
+                auto_exec = false;
+                reasons.push(VerdictReasonDto {
+                    code: code.to_string(),
+                    segment_index: None,
+                });
+            }
+        }
+
+        // Segment verdict.
+        let with_segs = segment_traces(&with);
+        let (covered, seg_reasons) = if !scope_ok {
+            (false, vec![REASON_SCOPE_NOT_APPLICABLE.to_string()])
+        } else {
+            match with_segs.get(segment_index) {
+                None => (false, vec![REASON_NO_RULE.to_string()]),
+                Some(t) => {
+                    let (st, mut rs) = classify(t);
+                    match st {
+                        SegmentCoverageState::Covered => match seg_escalation(text) {
+                            Some(code) => (false, vec![code.to_string()]),
+                            None => (true, Vec::new()),
+                        },
+                        SegmentCoverageState::NeedsRule => {
+                            (false, vec![REASON_NO_RULE.to_string()])
+                        }
+                        SegmentCoverageState::Blocked => {
+                            rs.dedup();
+                            (false, rs)
+                        }
+                    }
+                }
+            }
+        };
+        out.push(SegmentSuggestionDto {
+            suggestion,
+            segment_verdict: SegmentVerdictDto {
+                covered,
+                reasons: seg_reasons,
+            },
+            command_verdict: SuggestionVerdictDto { auto_exec, reasons },
+        });
+    }
+    Ok(SegmentRuleSuggestionsDto {
+        segment_index,
+        segment_text: text.clone(),
+        blocked_reasons: Vec::new(),
+        suggestions: out,
+    })
 }
 
 /// The rules that covered the segments of an auto-executed command (issue
@@ -329,6 +504,48 @@ pub async fn explain_confirmation(
         stored,
         scope,
         priority,
+        &|cmd| {
+            crate::orchestration::state_independent_escalation_code(
+                session,
+                cmd,
+                transform_scope.as_ref(),
+            )
+        },
+    )
+    .await
+}
+
+/// [`explain_segment_rules`] for a pending command of `session`. Server and
+/// tags come from the session, not from the frontend.
+pub async fn explain_segment_rules_for_session(
+    session: &crate::session::Session,
+    profile_store: &dyn ssh_manager_core::profiles::ProfileStore,
+    command: &str,
+    segment_index: usize,
+    scope: Scope,
+    staged: &[StagedRuleDto],
+) -> Result<SegmentRuleSuggestionsDto, crate::error::CommandError> {
+    let tags = profile_store
+        .get_server(&session.server_id)
+        .await
+        .map(|s| s.tags)
+        .unwrap_or_else(|_| session.tags.clone());
+    let ctx = EvalContext {
+        server_id: session.server_id,
+        tags,
+    };
+    let transform_scope = if session.safety.outgoing_transform.is_some() {
+        Some(crate::orchestration::outgoing_scope(session, profile_store).await)
+    } else {
+        None
+    };
+    explain_segment_rules(
+        session.safety.filter_engine.as_ref(),
+        &ctx,
+        command,
+        segment_index,
+        scope,
+        staged,
         &|cmd| {
             crate::orchestration::state_independent_escalation_code(
                 session,
@@ -480,9 +697,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn single_covered_segment_has_no_list_and_unrelated_rule_missing_says_no_rule() {
+    async fn single_needs_rule_segment_is_listed_and_unrelated_rule_missing_says_no_rule() {
         let r = run(vec![], "wc -l", Scope::Global, &none).await;
-        assert!(r.segments.is_empty());
+        assert_eq!(r.segments.len(), 1);
+        assert_eq!(r.segments[0].state, SegmentCoverageState::NeedsRule);
         let tool = r
             .suggestions
             .iter()
@@ -626,7 +844,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn single_covered_command_without_escalation_has_no_segments() {
+    async fn single_covered_command_without_escalation_is_listed_as_covered() {
         let r = run(
             vec![allow("r1", "cat *")],
             "cat /tmp/a",
@@ -634,7 +852,8 @@ mod tests {
             &none,
         )
         .await;
-        assert!(r.segments.is_empty());
+        assert_eq!(r.segments.len(), 1);
+        assert_eq!(r.segments[0].state, SegmentCoverageState::Covered);
     }
 
     async fn auto_rules(rules: Vec<Rule>, command: &str) -> (Decision, Vec<AutoExecRuleDto>) {
@@ -702,5 +921,167 @@ mod tests {
         let trace = engine.evaluate_explained("ls /tmp", &ctx()).await;
         let empty = FilterEngine::new(StaticStore(Vec::new()));
         assert!(auto_exec_rules(&empty, &ctx(), &trace).await.is_empty());
+    }
+
+    // --- Issue #1356: suggestions per segment ------------------------------
+
+    fn staged(globs: &[&str], scope: Scope) -> StagedRuleDto {
+        StagedRuleDto {
+            patterns: globs
+                .iter()
+                .map(|g| crate::dto::SuggestionPatternDto {
+                    pattern_type: PatternType::Glob,
+                    pattern_value: (*g).to_string(),
+                })
+                .collect(),
+            scope,
+        }
+    }
+
+    async fn seg(
+        rules: Vec<Rule>,
+        command: &str,
+        index: usize,
+        scope: Scope,
+        staged: &[StagedRuleDto],
+    ) -> Result<SegmentRuleSuggestionsDto, crate::error::CommandError> {
+        let engine = FilterEngine::new(StaticStore(rules));
+        explain_segment_rules(&engine, &ctx(), command, index, scope, staged, &none).await
+    }
+
+    const CHAIN: &str = "echo a && ls -la /tmp && git status";
+
+    #[tokio::test]
+    async fn segment_suggestions_stay_within_their_segment() {
+        let words = ["echo", "ls", "git"];
+        for (i, own) in words.iter().enumerate() {
+            let r = seg(vec![], CHAIN, i, Scope::Global, &[]).await.unwrap();
+            assert_eq!(r.segment_index, i);
+            assert!(r.blocked_reasons.is_empty());
+            assert!(!r.suggestions.is_empty(), "segment {i}");
+            assert!(r.suggestions.len() <= 6);
+            for s in &r.suggestions {
+                for p in &s.suggestion.patterns {
+                    assert!(p.pattern_value.starts_with(own), "{p:?} for segment {i}");
+                    for other in words.iter().filter(|w| *w != own) {
+                        assert!(!p.pattern_value.contains(other), "{p:?} for segment {i}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn command_verdict_counts_staged_rules() {
+        let with = seg(
+            vec![],
+            CHAIN,
+            2,
+            Scope::Global,
+            &[
+                staged(&["echo *"], Scope::Global),
+                staged(&["ls *"], Scope::Global),
+            ],
+        )
+        .await
+        .unwrap();
+        let tool = with
+            .suggestions
+            .iter()
+            .find(|s| {
+                s.suggestion
+                    .patterns
+                    .iter()
+                    .any(|p| p.pattern_value == "git *")
+            })
+            .expect("tool suggestion");
+        assert!(tool.command_verdict.auto_exec);
+        assert!(tool.segment_verdict.covered);
+
+        let without = seg(vec![], CHAIN, 2, Scope::Global, &[]).await.unwrap();
+        for s in &without.suggestions {
+            assert!(!s.command_verdict.auto_exec);
+            assert!(s.segment_verdict.covered);
+            assert!(!s.command_verdict.reasons.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn hard_blacklist_and_blocked_segments_get_no_suggestions() {
+        let r = seg(
+            vec![allow("r", "rm *")],
+            "echo a && rm -rf /",
+            1,
+            Scope::Global,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(r.suggestions.is_empty());
+        assert!(
+            r.blocked_reasons
+                .contains(&"FILTER_HARD_BLACKLIST".to_string()),
+            "{:?}",
+            r.blocked_reasons
+        );
+
+        let r = seg(vec![], "grep a f > /tmp/out", 0, Scope::Global, &[])
+            .await
+            .unwrap();
+        assert!(r.suggestions.is_empty());
+        assert!(r
+            .blocked_reasons
+            .contains(&"FILTER_OUTPUT_REDIRECTION".to_string()));
+    }
+
+    #[tokio::test]
+    async fn escalated_segment_is_blocked_and_never_auto() {
+        let engine = FilterEngine::new(StaticStore(vec![allow("r", "ls *")]));
+        let esc = |c: &str| c.starts_with("ls").then_some("ESCALATED");
+        let r = explain_segment_rules(
+            &engine,
+            &ctx(),
+            "echo a && ls /tmp",
+            1,
+            Scope::Global,
+            &[],
+            &esc,
+        )
+        .await
+        .unwrap();
+        assert!(r.suggestions.is_empty());
+        assert_eq!(r.blocked_reasons, vec!["ESCALATED".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn tag_scope_the_session_lacks_still_asks_with_scope_reason() {
+        let r = seg(vec![], CHAIN, 0, Scope::Tag("prod".into()), &[])
+            .await
+            .unwrap();
+        assert!(!r.suggestions.is_empty());
+        for s in &r.suggestions {
+            assert!(!s.segment_verdict.covered);
+            assert_eq!(
+                s.segment_verdict.reasons,
+                vec![REASON_SCOPE_NOT_APPLICABLE.to_string()]
+            );
+            assert!(!s.command_verdict.auto_exec);
+        }
+    }
+
+    #[tokio::test]
+    async fn out_of_range_index_and_invalid_staged_pattern_are_errors() {
+        let e = seg(vec![], CHAIN, 3, Scope::Global, &[]).await.unwrap_err();
+        assert_eq!(e.code, Some(SEGMENT_INDEX_OUT_OF_RANGE));
+        let e = seg(
+            vec![],
+            CHAIN,
+            0,
+            Scope::Global,
+            &[staged(&["ls [abc *"], Scope::Global)],
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, Some("INVALID_PATTERN"));
     }
 }
