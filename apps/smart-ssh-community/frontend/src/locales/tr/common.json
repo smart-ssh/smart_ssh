@@ -400,6 +400,7 @@
     "riskSecondOpinionUnavailableHint": "Yapay zeka ikinci görüşü alınamadı. Gösterilen risk kural tabanlı olandır.",
     "riskHint": "Bilinen desenlere dayalı değerlendirme — garanti değildir.",
     "runningSince": "{{seconds}} sn'dir çalışıyor…",
+    "exitCode": "çıkış kodu: {{code}}",
     "cancelCommand": "Bu komutla bağlantıyı kes",
     "cancellingCommand": "Bağlantı kesiliyor…",
     "commandCancelledNotice": "Elle iptal edildi — çıktı eksik olabilir, normal çıkış kodu yok.",

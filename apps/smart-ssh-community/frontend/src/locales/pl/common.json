@@ -402,6 +402,7 @@
     "riskSecondOpinionUnavailableHint": "Nie udało się uzyskać drugiej opinii AI. Pokazane ryzyko wynika z reguł.",
     "riskHint": "Ocena oparta na znanych wzorcach — bez gwarancji.",
     "runningSince": "trwa od {{seconds}} s…",
+    "exitCode": "kod wyjścia: {{code}}",
     "waitingForInputHint": "To polecenie prawdopodobnie czeka na dane wejściowe. Zatrzymaj je, a AI zaproponuje wariant nieinteraktywny.",
     "cancelCommand": "Odłącz to polecenie",
     "cancellingCommand": "Odłączanie…",
