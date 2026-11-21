@@ -584,6 +584,7 @@
     "ollamaProbeRetry": "Szukaj ponownie",
     "ollamaProbeNotFoundHeading": "Nie znaleziono lokalnej Ollamy (domyślny port 11434).",
     "ollamaProbeNotFoundInstructions": "Zainstaluj Ollamę z ollama.com, uruchom ją i pobierz model (np. `ollama pull llama3`), a potem wyszukaj ponownie.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

@@ -578,6 +578,7 @@
     "ollamaProbeRetry": "다시 검색",
     "ollamaProbeNotFoundHeading": "로컬 Ollama를 찾을 수 없습니다(기본 포트 11434).",
     "ollamaProbeNotFoundInstructions": "ollama.com에서 Ollama를 설치하고 실행한 뒤 모델을 받고(예: `ollama pull llama3`) 다시 검색하십시오.",
+    "typeLabel": "유형",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

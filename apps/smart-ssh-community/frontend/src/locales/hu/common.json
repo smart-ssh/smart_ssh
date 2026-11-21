@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Keresés újra",
     "ollamaProbeNotFoundHeading": "Nem található helyi Ollama (alapértelmezett port: 11434).",
     "ollamaProbeNotFoundInstructions": "Telepítse az Ollamát az ollama.com oldalról, indítsa el, töltsön be egy modellt (pl. `ollama pull llama3`), majd keressen újra.",
+    "typeLabel": "Típus",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

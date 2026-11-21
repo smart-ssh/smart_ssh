@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Opnieuw zoeken",
     "ollamaProbeNotFoundHeading": "Geen lokale Ollama gevonden (standaardpoort 11434).",
     "ollamaProbeNotFoundInstructions": "Installeer Ollama van ollama.com, start het en laad een model (bijv. `ollama pull llama3`), en zoek daarna opnieuw.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

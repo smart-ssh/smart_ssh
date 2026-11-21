@@ -578,6 +578,7 @@
     "ollamaProbeRetry": "Tìm lại",
     "ollamaProbeNotFoundHeading": "Không tìm thấy Ollama cục bộ (cổng mặc định 11434).",
     "ollamaProbeNotFoundInstructions": "Cài đặt Ollama từ ollama.com, khởi động và tải một mô hình (ví dụ `ollama pull llama3`), rồi tìm lại.",
+    "typeLabel": "Loại",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

@@ -582,6 +582,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

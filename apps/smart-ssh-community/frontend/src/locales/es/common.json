@@ -582,6 +582,7 @@
     "ollamaProbeRetry": "Buscar de nuevo",
     "ollamaProbeNotFoundHeading": "No se encontró ningún Ollama local (puerto predeterminado 11434).",
     "ollamaProbeNotFoundInstructions": "Instale Ollama desde ollama.com, inícielo y cargue un modelo (p. ej. `ollama pull llama3`); después vuelva a buscar.",
+    "typeLabel": "Tipo",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

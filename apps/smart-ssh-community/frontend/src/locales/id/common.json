@@ -578,6 +578,7 @@
     "ollamaProbeRetry": "Cari lagi",
     "ollamaProbeNotFoundHeading": "Ollama lokal tidak ditemukan (port default 11434).",
     "ollamaProbeNotFoundInstructions": "Instal Ollama dari ollama.com, jalankan, dan muat model (mis. `ollama pull llama3`), lalu cari lagi.",
+    "typeLabel": "Jenis",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

@@ -1495,3 +1495,36 @@ describe("AiProviderSettings edit saved provider (issue #690)", () => {
     expect(updateAiProvider).not.toHaveBeenCalled();
   });
 });
+
+describe("AiProviderSettings provider grid and risk switches (issue #1377)", () => {
+  it("shows type and base URL, the model and an active badge; the active row is highlighted", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      ollamaProvider({ isActive: true }),
+      ollamaProvider({ id: "b", displayName: "Other", baseUrl: null, model: "m2" }),
+    ]);
+    renderForm();
+    const row = (await screen.findByText("Ollama (lokal)")).closest("li")!;
+    expect(row.dataset.active).toBe("true");
+    expect(row.className).toMatch(/bg-accent-subtle/);
+    expect(within(row).getByText(/http:\/\/127\.0\.0\.1:11434\/v1/)).toBeTruthy();
+    expect(within(row).getByText("llama3").className).toMatch(/font-mono/);
+    expect(within(row).getByText("aktiv")).toBeTruthy();
+    const other = screen.getByText("Other").closest("li")!;
+    expect(other.dataset.active).toBeUndefined();
+  });
+
+  it("renders both risk options as labelled checkboxes in a single card that toggle", async () => {
+    renderForm();
+    const redRisk = await screen.findByRole("checkbox", {
+      name: testI18n.t("aiProvider.redRiskAlwaysConfirmEnable"),
+    });
+    const second = screen.getByRole("checkbox", {
+      name: testI18n.t("aiProvider.riskClassifierEnable"),
+    });
+    expect((redRisk as HTMLInputElement).checked).toBe(true);
+    expect((second as HTMLInputElement).checked).toBe(false);
+    expect(redRisk.closest("section")).toBe(second.closest("section"));
+    fireEvent.click(second);
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
+  });
+});
