@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Νέα αναζήτηση",
     "ollamaProbeNotFoundHeading": "Δεν βρέθηκε τοπικό Ollama (προεπιλεγμένη θύρα 11434).",
     "ollamaProbeNotFoundInstructions": "Εγκαταστήστε το Ollama από το ollama.com, ξεκινήστε το και φορτώστε ένα μοντέλο (π.χ. `ollama pull llama3`) και μετά αναζητήστε ξανά.",
+    "typeLabel": "Τύπος",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

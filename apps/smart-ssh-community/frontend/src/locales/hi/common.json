@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "फिर खोजें",
     "ollamaProbeNotFoundHeading": "कोई स्थानीय Ollama नहीं मिला (डिफ़ॉल्ट पोर्ट 11434)।",
     "ollamaProbeNotFoundInstructions": "ollama.com से Ollama इंस्टॉल करें, उसे शुरू करें और एक मॉडल लोड करें (जैसे `ollama pull llama3`), फिर दोबारा खोजें।",
+    "typeLabel": "प्रकार",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

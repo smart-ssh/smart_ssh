@@ -582,6 +582,7 @@
     "ollamaProbeRetry": "Rechercher à nouveau",
     "ollamaProbeNotFoundHeading": "Aucun Ollama local trouvé (port par défaut 11434).",
     "ollamaProbeNotFoundInstructions": "Installez Ollama depuis ollama.com, démarrez-le et chargez un modèle (p. ex. `ollama pull llama3`), puis relancez la recherche.",
+    "typeLabel": "Genre",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

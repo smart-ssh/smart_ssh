@@ -584,6 +584,7 @@
     "ollamaProbeRetry": "Hledat znovu",
     "ollamaProbeNotFoundHeading": "Lokální Ollama nenalezena (výchozí port 11434).",
     "ollamaProbeNotFoundInstructions": "Nainstalujte Ollamu z ollama.com, spusťte ji a načtěte model (např. `ollama pull llama3`), poté hledejte znovu.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

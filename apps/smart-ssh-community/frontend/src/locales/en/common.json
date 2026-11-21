@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Search again",
     "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
     "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

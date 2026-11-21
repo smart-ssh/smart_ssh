@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Etsi uudelleen",
     "ollamaProbeNotFoundHeading": "Paikallista Ollamaa ei löytynyt (oletusportti 11434).",
     "ollamaProbeNotFoundInstructions": "Asenna Ollama osoitteesta ollama.com, käynnistä se ja lataa malli (esim. `ollama pull llama3`), ja etsi sitten uudelleen.",
+    "typeLabel": "Tyyppi",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

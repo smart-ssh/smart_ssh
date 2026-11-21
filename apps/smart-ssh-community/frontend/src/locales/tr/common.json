@@ -580,6 +580,7 @@
     "ollamaProbeRetry": "Yeniden ara",
     "ollamaProbeNotFoundHeading": "Yerel Ollama bulunamadı (varsayılan bağlantı noktası 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama'yı ollama.com'dan kurun, başlatın ve bir model yükleyin (örn. `ollama pull llama3`), sonra yeniden arayın.",
+    "typeLabel": "Tür",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
