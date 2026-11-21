@@ -255,6 +255,7 @@
     "serverForm.testResult.successTimed": "status word and unit, same in every language"
   },
   "da": {
+    "aiProvider.typeLabel": "the word is spelled the same in Danish",
     "common.ok": "the word is spelled the same in Danish",
     "about.version": "the word is spelled the same in Danish",
     "diagnostics.dataPaths.database": "the word is spelled the same in Danish",
@@ -301,6 +302,7 @@
     "serverForm.testResult.successTimed": "status word and unit, same in every language"
   },
   "nb": {
+    "aiProvider.typeLabel": "the word is spelled the same in Norwegian",
     "common.ok": "the word is spelled the same in Norwegian",
     "diagnostics.dataPaths.database": "the word is spelled the same in Norwegian",
     "sidebar.addServer": "the word is spelled the same in Norwegian",
