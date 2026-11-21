@@ -156,7 +156,14 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
       return { ...prev, [index]: { ...cur, droppedTags: dropped } };
     });
 
-  const selectedCount = preview ? preview.entries.filter((e) => entryState[e.index]?.selected).length : 0;
+  // Entries that will actually be created: selected, and either free of a
+  // conflict or in conflict with a non-blank new name (others are skipped).
+  const importCount = preview
+    ? preview.entries.filter((e) => {
+        const st = entryState[e.index];
+        return st?.selected && (!e.conflict || st.renameTo.trim() !== "");
+      }).length
+    : 0;
 
   const handleConfirm = async () => {
     if (!preview) return;
@@ -225,11 +232,11 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
           <Button onClick={onClose} disabled={applying}>
             {t("common.cancel")}
           </Button>
-          <Button variant="primary" onClick={handleConfirm} disabled={!preview || applying || loading}>
+          <Button variant="primary" onClick={handleConfirm} disabled={!preview || applying || loading || importCount === 0}>
             {applying
               ? t("sshConfigImport.applying")
               : preview
-                ? t("sshConfigImport.confirmCount", { count: selectedCount })
+                ? t("sshConfigImport.confirmCount", { count: importCount })
                 : t("sshConfigImport.confirm")}
           </Button>
         </>

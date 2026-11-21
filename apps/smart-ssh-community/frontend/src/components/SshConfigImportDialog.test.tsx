@@ -410,4 +410,30 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     expect(vi.mocked(applySshConfigImport).mock.calls[0][0][1].renameTo).toBe("bastion-ext");
   });
+  it("counts only entries that will be created: conflicts need a non-blank new name (#1460)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+    const rename = screen.getByPlaceholderText("neuer Name");
+    fireEvent.change(rename, { target: { value: "bastion-ext" } });
+    expect(screen.getByRole("button", { name: "2 Server importieren" })).toBeEnabled();
+    fireEvent.change(rename, { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+    fireEvent.change(rename, { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+  });
+
+  it("disables the button when only conflicting entries without a new name are selected (#1460)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    const table = screen.getByTestId("entry-0-name").closest("table") as HTMLElement;
+    fireEvent.click(within(table).getByRole("checkbox", { name: "web1" }));
+    expect(screen.getByRole("button", { name: "0 Server importieren" })).toBeDisabled();
+  });
 });
