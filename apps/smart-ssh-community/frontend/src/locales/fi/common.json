@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
+    "current": "nykyinen",
     "hintGroup": "→ siirrä tähän ryhmään",
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Poista pysyvästi",
     "testResult": {
       "success": "Yhteys onnistui",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Kirjautuminen hylättiin. Tarkista käyttäjätunnus ja salasana tai avain.",
       "hostKeyUnknown": "Isäntäavain tuntematon – vahvistus tarvitaan",
       "hostKeyMismatch": "Isäntäavain on muuttunut",
@@ -401,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "Tekoälyn toista mielipidettä ei saatu. Näytetty riski perustuu sääntöihin.",
     "riskHint": "Arvio perustuu tunnettuihin kuvioihin – ei takuuta.",
     "runningSince": "käynnissä {{seconds}} s…",
+    "exitCode": "paluukoodi: {{code}}",
     "waitingForInputHint": "Tämä komento odottaa todennäköisesti syötettä. Pysäytä se, niin tekoäly ehdottaa ei-interaktiivista vaihtoehtoa.",
     "cancelCommand": "Katkaise tämä komento",
     "cancellingCommand": "Katkaistaan…",
@@ -879,6 +882,8 @@
     "groupsHeading": "Syntyvä kansiorakenne",
     "entriesHeading": "{{count}} palvelinta",
     "field": {
+      "name": "Nimi",
+      "include": "Sisällytä",
       "host": "Osoite",
       "port": "Portti",
       "username": "Käyttäjä",
@@ -954,6 +959,8 @@
       "proxyJumpLocalPseudoServer": "osoittaa paikalliseen näennäispalvelimeen"
     },
     "confirm": "Tuo",
+    "confirmCount_one": "Tuo {{count}} palvelin",
+    "confirmCount_other": "Tuo {{count}} palvelinta",
     "applying": "Tuodaan …",
     "result": {
       "success": "{{created}} palvelinta luotu, {{groups}} kansiota, {{skipped}} ristiriitaa ohitettu.",

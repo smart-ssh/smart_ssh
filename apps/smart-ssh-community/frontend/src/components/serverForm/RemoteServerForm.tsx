@@ -183,7 +183,7 @@ export function RemoteServerForm({
   // Spec 0032, Abschnitt 3/5: host/port/username/auth/jump-host sind für
 
   return (
-    <div className="max-w-2xl space-y-6 p-4">
+    <div className="max-w-5xl space-y-6 p-4">
       <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">
         {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>

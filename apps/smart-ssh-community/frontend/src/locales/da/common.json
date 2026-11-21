@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Slip her for at flytte til øverste niveau (ingen gruppe)",
     "hintRoot": "→ øverste niveau (ingen gruppe)",
+    "current": "nuværende",
     "hintGroup": "→ flyt ind i denne gruppe",
     "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
     "moveTo": "Flyt “{{name}}” til…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Slet permanent",
     "testResult": {
       "success": "Forbindelse oprettet",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login afvist. Kontrollér brugernavn og adgangskode eller nøgle.",
       "hostKeyUnknown": "Værtsnøgle ukendt – bekræftelse kræves",
       "hostKeyMismatch": "Værtsnøglen er ændret",
@@ -401,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "AI-anden vurdering kunne ikke indhentes. Den viste risiko er den regelbaserede.",
     "riskHint": "Vurdering baseret på kendte mønstre – ingen garanti.",
     "runningSince": "kører i {{seconds}} s…",
+    "exitCode": "exitkode: {{code}}",
     "waitingForInputHint": "Denne kommando venter sandsynligvis på input. Stop den, så foreslår AI'en en ikke-interaktiv variant.",
     "cancelCommand": "Afbryd forbindelsen til denne kommando",
     "cancellingCommand": "Afbryder…",
@@ -879,6 +882,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Medtag",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruger",
@@ -954,6 +959,8 @@
       "proxyJumpLocalPseudoServer": "peger på den lokale pseudoserver"
     },
     "confirm": "Importér",
+    "confirmCount_one": "Importér {{count}} server",
+    "confirmCount_other": "Importér {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere oprettet, {{groups}} mapper, {{skipped}} konflikt(er) sprunget over.",

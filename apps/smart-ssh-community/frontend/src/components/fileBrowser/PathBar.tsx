@@ -30,7 +30,8 @@ interface PathBarProps {
   path: string;
   pathInput: string;
   setPathInput: (value: string) => void;
-  load: (path: string) => void;
+  /** Resolves to whether the directory loaded. */
+  load: (path: string) => void | Promise<boolean>;
   editing: boolean;
   setEditing: (editing: boolean) => void;
 }
@@ -63,8 +64,10 @@ export function PathBar({ narrow, path, pathInput, setPathInput, load, editing, 
         className="min-w-32 flex-1"
         onSubmit={(e) => {
           e.preventDefault();
-          setEditing(false);
-          load(pathInput.trim() || ".");
+          // Stay in edit mode (typed text kept) until the load succeeded.
+          void Promise.resolve(load(pathInput.trim() || ".")).then((ok) => {
+            if (ok !== false) setEditing(false);
+          });
         }}
       >
         <input

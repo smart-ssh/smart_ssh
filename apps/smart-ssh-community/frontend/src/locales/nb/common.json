@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
+    "current": "gjeldende",
     "hintGroup": "→ flytt inn i denne gruppen",
     "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
     "moveTo": "Flytt «{{name}}» til…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Slett permanent",
     "testResult": {
       "success": "Tilkobling vellykket",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Pålogging avvist. Sjekk brukernavn og passord eller nøkkel.",
       "hostKeyUnknown": "Vertsnøkkel ukjent – bekreftelse kreves",
       "hostKeyMismatch": "Vertsnøkkelen er endret",
@@ -401,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "AI-andremeningen kunne ikke hentes. Risikoen som vises er den regelbaserte.",
     "riskHint": "Vurdering basert på kjente mønstre – ingen garanti.",
     "runningSince": "kjører i {{seconds}} s…",
+    "exitCode": "avslutningskode: {{code}}",
     "waitingForInputHint": "Denne kommandoen venter sannsynligvis på inndata. Stopp den, så foreslår AI-en en ikke-interaktiv variant.",
     "cancelCommand": "Koble fra denne kommandoen",
     "cancellingCommand": "Kobler fra…",
@@ -879,6 +882,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Ta med",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruker",
@@ -954,6 +959,8 @@
       "proxyJumpLocalPseudoServer": "peker til den lokale pseudoserveren"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} server",
+    "confirmCount_other": "Importer {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere opprettet, {{groups}} mapper, {{skipped}} konflikt(er) hoppet over.",

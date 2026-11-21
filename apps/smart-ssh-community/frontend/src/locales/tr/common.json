@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
     "hintRoot": "→ üst düzey (grupsuz)",
+    "current": "geçerli",
     "hintGroup": "→ bu gruba taşı",
     "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
     "moveTo": "“{{name}}” öğesini taşı…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Kalıcı olarak sil",
     "testResult": {
       "success": "Bağlantı başarılı",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Oturum açma reddedildi. Kullanıcı adını ve parolayı ya da anahtarı denetleyin.",
       "hostKeyUnknown": "Ana makine anahtarı bilinmiyor — onay gerekli",
       "hostKeyMismatch": "Ana makine anahtarı değişti",
@@ -401,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "Yapay zeka ikinci görüşü alınamadı. Gösterilen risk kural tabanlı olandır.",
     "riskHint": "Bilinen desenlere dayalı değerlendirme — garanti değildir.",
     "runningSince": "{{seconds}} sn'dir çalışıyor…",
+    "exitCode": "çıkış kodu: {{code}}",
     "cancelCommand": "Bu komutla bağlantıyı kes",
     "cancellingCommand": "Bağlantı kesiliyor…",
     "commandCancelledNotice": "Elle iptal edildi — çıktı eksik olabilir, normal çıkış kodu yok.",
@@ -879,6 +882,8 @@
     "groupsHeading": "Ortaya çıkan klasör yapısı",
     "entriesHeading": "{{count}} sunucu",
     "field": {
+      "name": "Ad",
+      "include": "Dahil et",
       "host": "Adres",
       "port": "Bağlantı noktası",
       "username": "Kullanıcı",
@@ -954,6 +959,8 @@
       "proxyJumpLocalPseudoServer": "yerel sahte sunucuyu işaret ediyor"
     },
     "confirm": "İçe aktar",
+    "confirmCount_one": "{{count}} sunucuyu içe aktar",
+    "confirmCount_other": "{{count}} sunucuyu içe aktar",
     "applying": "İçe aktarılıyor …",
     "result": {
       "success": "{{created}} sunucu oluşturuldu, {{groups}} klasör, {{skipped}} çakışma atlandı.",

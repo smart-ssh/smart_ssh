@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
+    "current": "curent",
     "hintGroup": "→ mută în acest grup",
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Șterge definitiv",
     "testResult": {
       "success": "Conectare reușită",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
       "hostKeyUnknown": "Cheie de host necunoscută — este necesară confirmarea",
       "hostKeyMismatch": "Cheia de host s-a schimbat",
@@ -402,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "A doua opinie a IA nu a putut fi obținută. Riscul afișat este cel bazat pe reguli.",
     "riskHint": "Evaluare bazată pe modele cunoscute — fără garanție.",
     "runningSince": "rulează de {{seconds}}s…",
+    "exitCode": "cod de ieșire: {{code}}",
     "cancelCommand": "Deconectează această comandă",
     "cancellingCommand": "Se deconectează…",
     "commandCancelledNotice": "Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",
@@ -886,6 +889,8 @@
     "groupsHeading": "Structura de foldere rezultată",
     "entriesHeading": "Servere: {{count}}",
     "field": {
+      "name": "Nume",
+      "include": "Include",
       "host": "Adresă",
       "port": "Port",
       "username": "Utilizator",
@@ -961,6 +966,9 @@
       "proxyJumpLocalPseudoServer": "indică spre pseudo-serverul local"
     },
     "confirm": "Importă",
+    "confirmCount_one": "Importă {{count}} server",
+    "confirmCount_few": "Importă {{count}} servere",
+    "confirmCount_other": "Importă {{count}} de servere",
     "applying": "Se importă …",
     "result": {
       "success": "Servere create: {{created}}, foldere: {{groups}}, conflicte omise: {{skipped}}.",

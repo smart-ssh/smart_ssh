@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
+    "current": "当前",
     "hintGroup": "→ 移入此分组",
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "永久删除",
     "testResult": {
       "success": "连接成功",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "登录被拒绝。请检查用户名以及密码或密钥。",
       "hostKeyUnknown": "主机密钥未知——需要确认",
       "hostKeyMismatch": "主机密钥已更改",
@@ -400,6 +402,7 @@
     "riskSecondOpinionUnavailableHint": "无法获取 AI 二次意见。所示风险为基于规则的评估。",
     "riskHint": "基于已知模式的评估——不作保证。",
     "runningSince": "已运行 {{seconds}} 秒…",
+    "exitCode": "退出码：{{code}}",
     "waitingForInputHint": "该命令可能正在等待输入。停止它后，AI 会建议一个非交互式的替代方案。",
     "cancelCommand": "断开此命令",
     "cancellingCommand": "正在断开…",
@@ -872,6 +875,8 @@
     "groupsHeading": "生成的文件夹结构",
     "entriesHeading": "{{count}} 台服务器",
     "field": {
+      "name": "名称",
+      "include": "包含",
       "host": "地址",
       "port": "端口",
       "username": "用户",
@@ -947,6 +952,7 @@
       "proxyJumpLocalPseudoServer": "指向本地伪服务器"
     },
     "confirm": "导入",
+    "confirmCount_other": "导入 {{count}} 台服务器",
     "applying": "正在导入…",
     "result": {
       "success": "已创建 {{created}} 台服务器、{{groups}} 个文件夹，跳过 {{skipped}} 个冲突。",

@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
     "hintRoot": "→ oberste Ebene (ohne Gruppe)",
+    "current": "aktuell",
     "hintGroup": "→ in diese Gruppe verschieben",
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
       "success": "Verbindung erfolgreich",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
       "hostKeyUnknown": "Host-Key unbekannt — Bestätigung nötig",
       "hostKeyMismatch": "Host-Key hat sich geändert",
@@ -401,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "Die KI-Zweitmeinung konnte nicht eingeholt werden. Angezeigt wird die regelbasierte Einstufung.",
     "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie.",
     "runningSince": "läuft seit {{seconds}}s…",
+    "exitCode": "Exit-Code: {{code}}",
     "waitingForInputHint": "Dieses Kommando wartet vermutlich auf eine Eingabe. Stoppe es, dann schlägt die KI eine nicht-interaktive Variante vor.",
     "cancelCommand": "Verbindung zu diesem Kommando trennen",
     "cancellingCommand": "Wird getrennt…",
@@ -879,6 +882,8 @@
     "groupsHeading": "Entstehende Ordnerstruktur",
     "entriesHeading": "{{count}} Server",
     "field": {
+      "name": "Name",
+      "include": "Übernehmen",
       "host": "Adresse",
       "port": "Port",
       "username": "Benutzer",
@@ -954,6 +959,8 @@
       "proxyJumpLocalPseudoServer": "zeigt auf den lokalen Pseudo-Server"
     },
     "confirm": "Importieren",
+    "confirmCount_one": "{{count}} Server importieren",
+    "confirmCount_other": "{{count}} Server importieren",
     "applying": "Importiert …",
     "result": {
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",

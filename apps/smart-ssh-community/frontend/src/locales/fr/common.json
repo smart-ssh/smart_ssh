@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
+    "current": "actuel",
     "hintGroup": "→ déplacer dans ce groupe",
     "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
     "moveTo": "Déplacer « {{name}} » vers…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Supprimer définitivement",
     "testResult": {
       "success": "Connexion réussie",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Connexion refusée. Vérifiez le nom d’utilisateur et le mot de passe ou la clé.",
       "hostKeyUnknown": "Clé d’hôte inconnue — confirmation requise",
       "hostKeyMismatch": "La clé d’hôte a changé",
@@ -402,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "Le second avis IA n’a pas pu être obtenu. Le risque affiché est celui fondé sur les règles.",
     "riskHint": "Évaluation fondée sur des motifs connus — sans garantie.",
     "runningSince": "en cours depuis {{seconds}} s…",
+    "exitCode": "code de sortie : {{code}}",
     "waitingForInputHint": "Cette commande attend probablement une saisie. Arrêtez-la et l'IA proposera une variante non interactive.",
     "cancelCommand": "Interrompre cette commande",
     "cancellingCommand": "Interruption…",
@@ -886,6 +889,8 @@
     "groupsHeading": "Structure de dossiers obtenue",
     "entriesHeading": "{{count}} serveurs",
     "field": {
+      "name": "Nom",
+      "include": "Inclure",
       "host": "Adresse",
       "port": "Port",
       "username": "Utilisateur",
@@ -961,6 +966,9 @@
       "proxyJumpLocalPseudoServer": "pointe vers le pseudo-serveur local"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} serveur",
+    "confirmCount_many": "Importer {{count}} de serveurs",
+    "confirmCount_other": "Importer {{count}} serveurs",
     "applying": "Import …",
     "result": {
       "success": "{{created}} serveurs créés, {{groups}} dossiers, {{skipped}} conflit(s) ignoré(s).",

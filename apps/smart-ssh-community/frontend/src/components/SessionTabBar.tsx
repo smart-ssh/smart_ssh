@@ -1,4 +1,4 @@
-import { useCallback, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { numberedServerName, type SessionTab } from "../hooks/useSessionTabs";
 import { NewSessionMenu } from "./NewSessionMenu";
@@ -42,6 +42,40 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
   const [focused, setFocused] = useState<string | null | undefined>(undefined);
   const [menu, setMenu] = useState<{ x: number; y: number; tab: SessionTab } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  // Overflow of the strip (Spec 0017, section 3): which edges hide tabs. Drives
+  // an edge fade and the vertical-wheel-to-horizontal remapping; both are off
+  // while everything fits.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ start: false, end: false });
+  const hasTabs = tabs.length > 0;
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const update = () => {
+      const start = el.scrollLeft > 1;
+      const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setOverflow((o) => (o.start === start && o.end === end ? o : { start, end }));
+    };
+    // React's onWheel is passive, so the remapping needs a native listener.
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    for (const child of Array.from(el.children)) ro?.observe(child);
+    return () => {
+      el.removeEventListener("scroll", update);
+      el.removeEventListener("wheel", onWheel);
+      ro?.disconnect();
+    };
+  }, [hasTabs, tabs.length]);
+  const fade = `${overflow.start ? "transparent, currentColor 1.5rem" : "currentColor, currentColor"}, ${overflow.end ? "currentColor calc(100% - 1.5rem), transparent" : "currentColor, currentColor"}`;
+  const mask = overflow.start || overflow.end ? `linear-gradient(to right, ${fade})` : undefined;
   if (tabs.length === 0) return null;
   const stopId =
     focused !== undefined && (focused === "+" || tabs.some((x) => x.sessionId === focused))
@@ -79,13 +113,19 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
   });
 
   return (
-    // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/interactive-supports-focus -- Werkzeugleiste mit Roving-Tabindex; die Pfeiltasten werden hier abgefangen, der Fokus liegt auf den Buttons darin.
+    <>
+    {/* The menu is a sibling, not a child, of the masked strip so the mask cannot clip it. */}
+    {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/interactive-supports-focus -- Werkzeugleiste mit Roving-Tabindex; die Pfeiltasten werden hier abgefangen, der Fokus liegt auf den Buttons darin. */}
     <div
       data-tauri-drag-region
       role="toolbar"
       aria-orientation="horizontal"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
+      ref={stripRef}
+      data-overflow-start={overflow.start ? "" : undefined}
+      data-overflow-end={overflow.end ? "" : undefined}
+      style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
       className="flex h-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
     >
       {tabs.map((tab) => {
@@ -159,6 +199,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
       >
         <Icon name="plus" size={14} />
       </Button>
+    </div>
       {menu && onNewSession && (
         <NewSessionMenu
           x={menu.x}
@@ -171,6 +212,6 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
           }}
         />
       )}
-    </div>
+    </>
   );
 }

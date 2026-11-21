@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
+    "current": "hiện tại",
     "hintGroup": "→ chuyển vào nhóm này",
     "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
     "moveTo": "Di chuyển “{{name}}” tới…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Xóa vĩnh viễn",
     "testResult": {
       "success": "Kết nối thành công",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Đăng nhập bị từ chối. Kiểm tra tên người dùng và mật khẩu hoặc khóa.",
       "hostKeyUnknown": "Khóa máy chủ chưa biết — cần xác nhận",
       "hostKeyMismatch": "Khóa máy chủ đã thay đổi",
@@ -400,6 +402,7 @@
     "riskSecondOpinionUnavailableHint": "Không thể lấy ý kiến thứ hai của AI. Mức rủi ro hiển thị là mức dựa trên quy tắc.",
     "riskHint": "Đánh giá dựa trên các mẫu đã biết — không đảm bảo.",
     "runningSince": "đang chạy {{seconds}} giây…",
+    "exitCode": "mã thoát: {{code}}",
     "waitingForInputHint": "Lệnh này có thể đang chờ nhập liệu. Hãy dừng nó, AI sẽ đề xuất một biến thể không tương tác.",
     "cancelCommand": "Ngắt kết nối lệnh này",
     "cancellingCommand": "Đang ngắt kết nối…",
@@ -872,6 +875,8 @@
     "groupsHeading": "Cấu trúc thư mục kết quả",
     "entriesHeading": "{{count}} máy chủ",
     "field": {
+      "name": "Tên",
+      "include": "Bao gồm",
       "host": "Địa chỉ",
       "port": "Cổng",
       "username": "Người dùng",
@@ -947,6 +952,7 @@
       "proxyJumpLocalPseudoServer": "trỏ đến máy chủ giả lập cục bộ"
     },
     "confirm": "Nhập",
+    "confirmCount_other": "Nhập {{count}} máy chủ",
     "applying": "Đang nhập …",
     "result": {
       "success": "Đã tạo {{created}} máy chủ, {{groups}} thư mục, bỏ qua {{skipped}} xung đột.",

@@ -31,10 +31,10 @@ export function useRemoteDirectory(
   const knownDirModes = useRef(new Map<string, number>());
 
   const load = useCallback(
-    (targetPath: string, userOverride?: string | null) => {
+    (targetPath: string, userOverride?: string | null): Promise<boolean> => {
       setLoading(true);
       setError(null);
-      sftpList(
+      return sftpList(
         sessionId,
         targetPath,
         userOverride === undefined ? channelUser : userOverride,
@@ -45,8 +45,12 @@ export function useRemoteDirectory(
           setEntries(result);
           setPath(targetPath);
           setPathInput(targetPath);
+          return true;
         })
-        .catch((err) => setError(commandErrorMessage(err)))
+        .catch((err) => {
+          setError(commandErrorMessage(err));
+          return false;
+        })
         .finally(() => setLoading(false));
       // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads state through refs; identity is irrelevant
     },

@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Suelte aquí para mover al nivel superior (sin grupo)",
     "hintRoot": "→ nivel superior (sin grupo)",
+    "current": "actual",
     "hintGroup": "→ mover a este grupo",
     "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
     "moveTo": "Mover «{{name}}» a…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Eliminar definitivamente",
     "testResult": {
       "success": "Conexión correcta",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inicio de sesión rechazado. Compruebe el usuario y la contraseña o la clave.",
       "hostKeyUnknown": "Clave de host desconocida: se requiere confirmación",
       "hostKeyMismatch": "La clave de host ha cambiado",
@@ -402,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "No se pudo obtener la segunda opinión de la IA. El riesgo mostrado es el basado en reglas.",
     "riskHint": "Evaluación basada en patrones conocidos: sin garantía.",
     "runningSince": "en ejecución desde hace {{seconds}} s…",
+    "exitCode": "código de salida: {{code}}",
     "waitingForInputHint": "Este comando probablemente está esperando una entrada. Deténlo y la IA propondrá una variante no interactiva.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",
@@ -886,6 +889,8 @@
     "groupsHeading": "Estructura de carpetas resultante",
     "entriesHeading": "{{count}} servidores",
     "field": {
+      "name": "Nombre",
+      "include": "Incluir",
       "host": "Dirección",
       "port": "Puerto",
       "username": "Usuario",
@@ -961,6 +966,9 @@
       "proxyJumpLocalPseudoServer": "apunta al seudoservidor local"
     },
     "confirm": "Importar",
+    "confirmCount_one": "Importar {{count}} servidor",
+    "confirmCount_many": "Importar {{count}} de servidores",
+    "confirmCount_other": "Importar {{count}} servidores",
     "applying": "Importando …",
     "result": {
       "success": "{{created}} servidores creados, {{groups}} carpetas, {{skipped}} conflicto(s) omitido(s).",

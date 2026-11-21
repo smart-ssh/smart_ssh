@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
+    "current": "bieżąca",
     "hintGroup": "→ przenieś do tej grupy",
     "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
     "moveTo": "Przenieś „{{name}}” do…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Usuń na stałe",
     "testResult": {
       "success": "Połączenie udane",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Logowanie odrzucone. Sprawdź nazwę użytkownika oraz hasło lub klucz.",
       "hostKeyUnknown": "Nieznany klucz hosta — wymagane potwierdzenie",
       "hostKeyMismatch": "Klucz hosta się zmienił",
@@ -403,6 +405,7 @@
     "riskSecondOpinionUnavailableHint": "Nie udało się uzyskać drugiej opinii AI. Pokazane ryzyko wynika z reguł.",
     "riskHint": "Ocena oparta na znanych wzorcach — bez gwarancji.",
     "runningSince": "trwa od {{seconds}} s…",
+    "exitCode": "kod wyjścia: {{code}}",
     "waitingForInputHint": "To polecenie prawdopodobnie czeka na dane wejściowe. Zatrzymaj je, a AI zaproponuje wariant nieinteraktywny.",
     "cancelCommand": "Odłącz to polecenie",
     "cancellingCommand": "Odłączanie…",
@@ -893,6 +896,8 @@
     "groupsHeading": "Wynikowa struktura folderów",
     "entriesHeading": "Serwery: {{count}}",
     "field": {
+      "name": "Nazwa",
+      "include": "Uwzględnij",
       "host": "Adres",
       "port": "Port",
       "username": "Użytkownik",
@@ -968,6 +973,10 @@
       "proxyJumpLocalPseudoServer": "wskazuje na lokalny pseudoserwer"
     },
     "confirm": "Importuj",
+    "confirmCount_one": "Importuj {{count}} serwer",
+    "confirmCount_few": "Importuj {{count}} serwery",
+    "confirmCount_many": "Importuj {{count}} serwerów",
+    "confirmCount_other": "Importuj {{count}} serwera",
     "applying": "Importowanie …",
     "result": {
       "success": "Utworzono serwerów: {{created}}, folderów: {{groups}}, pominięto konfliktów: {{skipped}}.",

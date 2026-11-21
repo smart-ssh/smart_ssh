@@ -150,6 +150,7 @@
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
+    "current": "aktuální",
     "hintGroup": "→ přesunout do této skupiny",
     "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
     "moveTo": "Přesunout „{{name}}“ do…"
@@ -287,6 +288,7 @@
     "confirmDeleteServer": "Smazat trvale",
     "testResult": {
       "success": "Připojení úspěšné",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
       "hostKeyUnknown": "Klíč hostitele neznámý — vyžadováno potvrzení",
       "hostKeyMismatch": "Klíč hostitele se změnil",
@@ -403,6 +405,7 @@
     "riskSecondOpinionUnavailableHint": "Druhý názor AI se nepodařilo získat. Zobrazené riziko vychází z pravidel.",
     "riskHint": "Posouzení na základě známých vzorů — bez záruky.",
     "runningSince": "běží {{seconds}} s…",
+    "exitCode": "návratový kód: {{code}}",
     "waitingForInputHint": "Tento příkaz pravděpodobně čeká na vstup. Zastavte ho a AI navrhne neinteraktivní variantu.",
     "cancelCommand": "Odpojit tento příkaz",
     "cancellingCommand": "Odpojování…",
@@ -893,6 +896,8 @@
     "groupsHeading": "Výsledná struktura složek",
     "entriesHeading": "Počet serverů: {{count}}",
     "field": {
+      "name": "Název",
+      "include": "Zahrnout",
       "host": "Adresa",
       "port": "Port",
       "username": "Uživatel",
@@ -968,6 +973,10 @@
       "proxyJumpLocalPseudoServer": "odkazuje na lokální pseudoserver"
     },
     "confirm": "Importovat",
+    "confirmCount_one": "Importovat {{count}} server",
+    "confirmCount_few": "Importovat {{count}} servery",
+    "confirmCount_many": "Importovat {{count}} serveru",
+    "confirmCount_other": "Importovat {{count}} serverů",
     "applying": "Importování …",
     "result": {
       "success": "Vytvořeno serverů: {{created}}, složek: {{groups}}, přeskočených konfliktů: {{skipped}}.",

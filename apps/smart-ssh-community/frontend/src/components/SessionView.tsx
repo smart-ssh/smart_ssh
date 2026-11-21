@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { getServer, listGroups, reconnectSession, stopAutoReconnect } from "../api/api";
 import { commandErrorText } from "../api/errorCodes";
@@ -139,6 +140,14 @@ export function SessionView({
   const [narrowTab, setNarrowTab] = useState<NarrowTab>("ai");
   const paneTabsBase = useTabsIdBase();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Issue #1387, Spec 0113 §4: in the narrow layout the ⋯ button and its menu
+  // live in the title bar (slot of `NarrowHeaderNav`) of the active session.
+  const [narrowSlot, setNarrowSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setNarrowSlot(
+      narrow && isActiveTab ? document.querySelector<HTMLElement>('[data-testid="narrow-session-actions"]') : null,
+    );
+  }, [narrow, isActiveTab]);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   // Issue #1366: server details for the header line. Loaded once per mount
   // without blocking the panes; a failure just leaves the line out.
@@ -397,9 +406,62 @@ export function SessionView({
       active ? "bg-surface-raised text-fg-strong" : "text-fg-subtle hover:text-fg-bright"
     }`;
 
+  const moreButton = (
+          <Button
+            ref={moreButtonRef}
+            variant="secondary"
+            iconOnly
+            onClick={(e) => {
+              // The menu closes on a click outside it; this click is not one.
+              e.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={t("session.moreActions")}
+            className="shrink-0"
+          >
+            <Icon name="more" />
+          </Button>
+  );
+  const moreMenu = (
+    <>
+        {menuOpen && (
+          <Menu
+            label={t("session.moreActions")}
+            anchor={() => moreButtonRef.current}
+            align="end"
+            narrow={narrow}
+            onClose={() => setMenuOpen(false)}
+            returnFocusTo={() => moreButtonRef.current}
+            className="z-30 w-48"
+          >
+            {showReconnect && (
+              <MenuItem narrow={narrow} onClick={handleReconnect} disabled={link === "reconnecting"}>
+                {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+              </MenuItem>
+            )}
+            <MenuItem narrow={narrow} danger onClick={onRequestClose}>
+              {t("session.disconnect")}
+            </MenuItem>
+          </Menu>
+        )}
+    </>
+  );
+
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
-      <header className="relative flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4 narrow:h-auto narrow:min-h-11 narrow:py-1">
+      {narrowSlot ? (
+        createPortal(
+          <>
+            <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
+            {moreButton}
+            {moreMenu}
+          </>,
+          narrowSlot,
+        )
+      ) : narrow ? null : (
+      <header className="relative flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
         <div className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
           <span className="flex shrink-0"><StatusSquare tone={statusTone} /></span>
           <span title={serverName} className="font-heading text-title min-w-[6ch] shrink truncate font-semibold tracking-wide">
@@ -450,44 +512,11 @@ export function SessionView({
               {t("session.disconnect")}
             </Button>
           )}
-          <Button
-            ref={moreButtonRef}
-            variant="secondary"
-            iconOnly
-            onClick={(e) => {
-              // The menu closes on a click outside it; this click is not one.
-              e.stopPropagation();
-              setMenuOpen((open) => !open);
-            }}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label={t("session.moreActions")}
-            className="shrink-0"
-          >
-            <Icon name="more" />
-          </Button>
+          {moreButton}
         </div>
-        {menuOpen && (
-          <Menu
-            label={t("session.moreActions")}
-            anchor={() => moreButtonRef.current}
-            align="end"
-            narrow={narrow}
-            onClose={() => setMenuOpen(false)}
-            returnFocusTo={() => moreButtonRef.current}
-            className="z-30 w-48"
-          >
-            {showReconnect && (
-              <MenuItem narrow={narrow} onClick={handleReconnect} disabled={link === "reconnecting"}>
-                {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
-              </MenuItem>
-            )}
-            <MenuItem narrow={narrow} danger onClick={onRequestClose}>
-              {t("session.disconnect")}
-            </MenuItem>
-          </Menu>
-        )}
+        {moreMenu}
       </header>
+      )}
       {(statusNote || link === "reconnecting" || autoAttempt !== null || gaveUp) && (
         <div data-testid="session-status-strip" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-1">
           {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
@@ -512,6 +541,16 @@ export function SessionView({
             <output className="font-mono text-xs text-warning-fg-soft">
               {t("session.reconnectGaveUp")}
             </output>
+          )}
+          {narrow && showReconnect && (
+            <Button variant="bare"
+              type="button"
+              onClick={handleReconnect}
+              disabled={link === "reconnecting"}
+              className="min-h-11 min-w-11 shrink-0 px-2 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush"
+            >
+              {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+            </Button>
           )}
         </div>
       )}

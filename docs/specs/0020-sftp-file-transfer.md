@@ -183,8 +183,12 @@ Die **Pfadleiste** zeigt den aktuellen Pfad als Brotkrumen-Leiste in
 Festbreitenschrift: Jedes übergeordnete Segment ist eine Schaltfläche, die
 dieses Verzeichnis lädt; das letzte Segment ist hervorgehoben. Ein Klick auf
 den leeren Teil der Leiste, auf das letzte Segment oder Strg/Cmd+L (bei Fokus
-im Dateibrowser) wechselt zum bearbeitbaren Pfadfeld: Enter lädt den Pfad,
-Escape oder Fokusverlust stellt die Brotkrumen-Leiste wieder her.
+im Dateibrowser) wechselt zum bearbeitbaren Pfadfeld: Enter lädt den Pfad;
+erst nach erfolgreichem Laden erscheint wieder die Brotkrumen-Leiste mit dem
+neuen Pfad. Scheitert das Laden, bleibt das Feld mit dem getippten Text offen
+und der Fehler wird angezeigt. Escape oder Fokusverlust stellt die
+Brotkrumen-Leiste mit dem zuletzt geladenen Pfad wieder her. Beim Überfahren
+des Namens eines symbolischen Links erscheint „Name -> Ziel“.
 
 ### 5.2 Welche lokalen Dateien gelesen werden dürfen
 

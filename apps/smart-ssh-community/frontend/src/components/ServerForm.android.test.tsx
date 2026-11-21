@@ -62,14 +62,14 @@ describe("ServerForm on Android (issue #679)", () => {
   it("does not offer 'Key file' for a new server but keeps 'Private key'", async () => {
     renderNew();
     fireEvent.click(await screen.findByRole("tab", { name: "Verbindung" }));
-    await screen.findByRole("option", { name: "Private Key" });
-    expect(screen.queryByRole("option", { name: "Schlüsseldatei" })).not.toBeInTheDocument();
+    await screen.findByRole("radio", { name: "Private Key" });
+    expect(screen.queryByRole("radio", { name: "Schlüsseldatei" })).not.toBeInTheDocument();
   });
 
   it("offers 'Key file' on desktop", async () => {
     vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (X11; Linux x86_64)");
     renderNew();
     fireEvent.click(await screen.findByRole("tab", { name: "Verbindung" }));
-    expect(await screen.findByRole("option", { name: "Schlüsseldatei" })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "Schlüsseldatei" })).toBeInTheDocument();
   });
 });
