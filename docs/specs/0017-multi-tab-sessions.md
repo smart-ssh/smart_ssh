@@ -51,7 +51,11 @@ ein Warten hinweg gehalten.
   auf Host-Key oder verbindet neu, bei der lokalen Shell die Farbe des
   lokalen Servers) und eine Schließen-Schaltfläche (12-px-Kreuz). Die
   Tabs sind flach, mit Akzentlinie oben beim aktiven Tab; passen sie nicht
-  nebeneinander, werden die Namen gekürzt. Pfeiltasten, Pos1 und Ende bewegen
+  nebeneinander, werden die Namen bis zu einer Mindestbreite gekürzt; darüber
+  hinaus scrollt die Leiste waagerecht. Verdeckte Tabs kündigt ein
+  Ausblenden am betreffenden Rand an, und das Mausrad scrollt die Leiste
+  waagerecht. Passen alle Tabs, gibt es weder Ausblenden noch Umlenken des
+  Mausrads. Pfeiltasten, Pos1 und Ende bewegen
   den Fokus zwischen den Tabs und der „+“-Schaltfläche.
 - Ein Tab, dessen Verbindung gerade aufgebaut wird oder gescheitert ist, trägt
   statt des Statuszeichens ein Lade- bzw. Fehlersymbol und den Titel „Verbinde

@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Скиньте сюди, щоб перемістити на верхній рівень (без групи)",
     "hintRoot": "→ верхній рівень (без групи)",
+    "current": "поточна",
     "hintGroup": "→ перемістити в цю групу",
     "hintCycle": "Групу не можна перемістити у власну підгрупу",
     "moveTo": "Перемістити «{{name}}» до…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Видалити назавжди",
     "testResult": {
       "success": "Підключення успішне",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Вхід відхилено. Перевірте ім'я користувача та пароль або ключ.",
       "hostKeyUnknown": "Ключ хоста невідомий — потрібне підтвердження",
       "hostKeyMismatch": "Ключ хоста змінився",
@@ -402,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "Не вдалося отримати другу думку ШІ. Показано ризик за правилами.",
     "riskHint": "Оцінка на основі відомих шаблонів — без гарантій.",
     "runningSince": "виконується {{seconds}} с…",
+    "exitCode": "код завершення: {{code}}",
     "waitingForInputHint": "Ця команда, імовірно, чекає на введення. Зупиніть її, і ШІ запропонує неінтерактивний варіант.",
     "cancelCommand": "Відключити цю команду",
     "cancellingCommand": "Відключення…",
@@ -892,6 +895,8 @@
     "groupsHeading": "Підсумкова структура тек",
     "entriesHeading": "Серверів: {{count}}",
     "field": {
+      "name": "Назва",
+      "include": "Включити",
       "host": "Адреса",
       "port": "Порт",
       "username": "Користувач",
@@ -967,6 +972,10 @@
       "proxyJumpLocalPseudoServer": "вказує на локальний псевдосервер"
     },
     "confirm": "Імпортувати",
+    "confirmCount_one": "Імпортувати {{count}} сервер",
+    "confirmCount_few": "Імпортувати {{count}} сервери",
+    "confirmCount_many": "Імпортувати {{count}} серверів",
+    "confirmCount_other": "Імпортувати {{count}} сервера",
     "applying": "Імпорт …",
     "result": {
       "success": "Створено серверів: {{created}}, тек: {{groups}}, пропущено конфліктів: {{skipped}}.",
@@ -1335,6 +1344,12 @@
     "emptyResponse": "Модель не повернула відповіді. Для моделей із фазою міркування допомагає вищий ліміт виводу в параметрах провайдера.",
     "refusedResponse": "Модель відхилила цей запит. Переформулюйте його або почніть новий чат.",
     "outputTruncated": "(обрізано)",
+    "outputMoreLines_one": "… ще рядків: {{count}}",
+    "outputMoreLines_few": "… ще рядків: {{count}}",
+    "outputMoreLines_many": "… ще рядків: {{count}}",
+    "outputMoreLines_other": "… ще рядків: {{count}}",
+    "outputShowAll": "Показати все",
+    "outputShowLess": "Показати менше",
     "fileWritten": "Файл '{{path}}' записано.",
     "writtenWithSudoPassword": "Записано зі збереженим паролем sudo.",
     "documentGenerated": "Документ створено",

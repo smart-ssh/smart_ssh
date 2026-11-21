@@ -9,7 +9,7 @@
 // `event.sessionId` aus den jeweiligen Events, nie implizit über den
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   cancelConnect,
@@ -179,11 +179,24 @@ export function useSessionTabs() {
   // aus ihrer Closure lesen würden.
   // Ids of the local pseudo-server(s), from the server list (marker colour only).
   const [localServerIds, setLocalServerIds] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
+  // Server ids seen in the last successful list; a tab for an id outside it
+  // (list failed, or the server was added later) triggers a refetch.
+  const knownServerIdsRef = useRef<ReadonlySet<string> | null>(null);
+  const serverListRequestRef = useRef(0);
+  const refreshServerList = useCallback(() => {
+    const request = ++serverListRequestRef.current;
     listServers()
-      .then((servers) => setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id))))
+      .then((servers) => {
+        if (request !== serverListRequestRef.current) return;
+        knownServerIdsRef.current = new Set(servers.map((s) => s.id));
+        setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id)));
+      })
       .catch((err) => console.warn("list_servers failed:", commandErrorMessage(err)));
   }, []);
+  useEffect(() => {
+    const known = knownServerIdsRef.current;
+    if (known === null || tabs.some((x) => !known.has(x.serverId))) refreshServerList();
+  }, [tabs, refreshServerList]);
   const tabsWithLocal = useMemo(
     () => (localServerIds.size === 0 ? tabs : tabs.map((x) => (localServerIds.has(x.serverId) ? { ...x, isLocal: true } : x))),
     [tabs, localServerIds],

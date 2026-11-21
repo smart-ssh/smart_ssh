@@ -24,7 +24,7 @@ export function ConvertToKeychainFieldset({ loaded, identity }: Props) {
   } = identity;
   return (
           <fieldset className="rounded border border-border p-3">
-            <legend className="px-1 text-sm text-fg-muted">
+            <legend className="px-1 text-label">
               {t("serverForm.convertToKeychain.legend")}
             </legend>
             <p className="mb-2 text-xs text-fg-subtle">{t("serverForm.convertToKeychain.hint")}</p>

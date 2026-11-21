@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Отпустите здесь, чтобы переместить на верхний уровень (без группы)",
     "hintRoot": "→ верхний уровень (без группы)",
+    "current": "текущая",
     "hintGroup": "→ переместить в эту группу",
     "hintCycle": "Группу нельзя переместить в её собственную подгруппу",
     "moveTo": "Переместить «{{name}}» в…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Удалить безвозвратно",
     "testResult": {
       "success": "Подключение успешно",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Вход отклонён. Проверьте имя пользователя и пароль или ключ.",
       "hostKeyUnknown": "Ключ хоста неизвестен — требуется подтверждение",
       "hostKeyMismatch": "Ключ хоста изменился",
@@ -402,6 +404,7 @@
     "riskSecondOpinionUnavailableHint": "Не удалось получить второе мнение ИИ. Показана оценка риска по правилам.",
     "riskHint": "Оценка по известным шаблонам — без гарантий.",
     "runningSince": "выполняется {{seconds}} с…",
+    "exitCode": "код завершения: {{code}}",
     "waitingForInputHint": "Эта команда, вероятно, ждёт ввода. Остановите её, и ИИ предложит неинтерактивный вариант.",
     "cancelCommand": "Отключиться от этой команды",
     "cancellingCommand": "Отключение…",
@@ -892,6 +895,8 @@
     "groupsHeading": "Итоговая структура папок",
     "entriesHeading": "Серверов: {{count}}",
     "field": {
+      "name": "Имя",
+      "include": "Включить",
       "host": "Адрес",
       "port": "Порт",
       "username": "Пользователь",
@@ -967,6 +972,10 @@
       "proxyJumpLocalPseudoServer": "указывает на локальный псевдосервер"
     },
     "confirm": "Импортировать",
+    "confirmCount_one": "Импортировать {{count}} сервер",
+    "confirmCount_few": "Импортировать {{count}} сервера",
+    "confirmCount_many": "Импортировать {{count}} серверов",
+    "confirmCount_other": "Импортировать {{count}} сервера",
     "applying": "Импорт …",
     "result": {
       "success": "Создано серверов: {{created}}, папок: {{groups}}, пропущено конфликтов: {{skipped}}.",
@@ -1335,6 +1344,12 @@
     "emptyResponse": "Модель не вернула ответа. Для моделей с этапом рассуждения поможет больший предел вывода в настройках провайдера.",
     "refusedResponse": "Модель отклонила этот запрос. Переформулируйте его или начните новый чат.",
     "outputTruncated": "(обрезано)",
+    "outputMoreLines_one": "… ещё строк: {{count}}",
+    "outputMoreLines_few": "… ещё строк: {{count}}",
+    "outputMoreLines_many": "… ещё строк: {{count}}",
+    "outputMoreLines_other": "… ещё строк: {{count}}",
+    "outputShowAll": "Показать все",
+    "outputShowLess": "Показать меньше",
     "fileWritten": "Файл '{{path}}' записан.",
     "writtenWithSudoPassword": "Записано с сохранённым паролем sudo.",
     "documentGenerated": "Документ создан",

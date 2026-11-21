@@ -180,13 +180,33 @@ describe("auto-exec rule line (issue #696)", () => {
         },
       }),
     );
-    const code = screen.getByText("exit code: 3");
+    const code = screen.getByText("Exit-Code: 3");
     const header = code.closest("div.border-b");
     expect(header).not.toBeNull();
     expect(header?.textContent).toContain("Automatisch ausgeführt");
-    expect(header?.textContent).toContain("exit code: 3");
-    expect(screen.getAllByText(/exit code/)).toHaveLength(1);
+    expect(header?.textContent).toContain("Exit-Code: 3");
+    expect(screen.getAllByText(/Exit-Code/)).toHaveLength(1);
     await screen.findByRole("button", { name: "uptime" });
+  });
+
+  it("hides the $ prompt from assistive tech and keeps it out of the command text", () => {
+    const { container } = renderItem(
+      item({
+        autoExecRules: [globalRule],
+        result: {
+          kind: "command",
+          command: "uptime",
+          stdout: "up",
+          stderr: "",
+          exitCode: 0,
+          cancelled: false,
+          truncated: false,
+        },
+      }),
+    );
+    const prompt = container.querySelector('code > span[aria-hidden="true"]');
+    expect(prompt?.textContent).toBe("$ ");
+    expect(container.querySelector("code")?.className).not.toContain("before:content");
   });
 
   // Issue #1371: status tone + icon in the header, flat frame.

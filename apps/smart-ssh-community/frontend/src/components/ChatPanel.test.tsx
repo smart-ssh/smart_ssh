@@ -580,19 +580,26 @@ describe("resumed command results (issue #167)", () => {
   it("shows exit code 0 instead of the placeholder", () => {
     renderItem(historyCommandResult(0));
 
-    expect(screen.getByText("exit code: 0")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 0")).toBeTruthy();
   });
 
   it("shows a non-zero exit code", () => {
     renderItem(historyCommandResult(1));
 
-    expect(screen.getByText("exit code: 1")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 1")).toBeTruthy();
   });
 
   it("falls back to the placeholder only when no exit code is known", () => {
     renderItem(historyCommandResult(null));
 
-    expect(screen.getByText("exit code: —")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: —")).toBeTruthy();
+  });
+
+  it("renders the translated (German) exit-code text, not the English one", () => {
+    renderItem(historyCommandResult(2));
+
+    expect(screen.queryByText(/exit code/i)).toBeNull();
+    expect(screen.getByText("Exit-Code: 2")).toBeTruthy();
   });
 });
 
