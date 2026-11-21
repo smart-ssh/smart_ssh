@@ -38,6 +38,7 @@ export function ChownDialog({
     <DialogFrame
       layer="sessionTab"
       size="sm"
+      icon={<Icon name="user" />}
       title={t("fileBrowser.chown.title")}
       onClose={onCancel}
       initialFocusRef={ownerRef}

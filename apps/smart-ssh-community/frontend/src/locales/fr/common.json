@@ -1168,8 +1168,7 @@
       "editing": "Modification locale de « {{name}} »…",
       "end": "Arrêter la modification",
       "uploadTitle": "Téléverser les modifications locales ?",
-      "remoteChanged": "Le fichier distant a été modifié depuis le téléchargement — le téléversement écraserait cette autre modification.",
-      "noDiff": "Comparaison de texte impossible (fichier binaire ou trop volumineux). Nouvelle taille : {{size}}."
+      "remoteChanged": "Le fichier distant a été modifié depuis le téléchargement — le téléversement écraserait cette autre modification."
     },
     "deleteDialog": {
       "fileTitle": "Supprimer le fichier ?",
@@ -1193,7 +1192,6 @@
       "conflictTitle": "Écraser les fichiers du dossier ?",
       "conflictBody": "Le téléversement de « {{name}} » écraserait ces {{count}} fichiers sur le serveur. Rien n’est écrasé sans votre confirmation.",
       "summaryTitle": "Téléversement du dossier : « {{name}} »",
-      "summary": "{{uploaded}} fichiers téléversés, {{skipped}} ignorés, {{failed}} en échec.",
       "notAttempted": "{{count}} fichiers n’ont pas été tentés car leur dossier n’a pas pu être créé.",
       "skipped": "Ignorés",
       "failed": "Échecs",
@@ -1204,12 +1202,14 @@
         "unsupported": "ni fichier ordinaire ni dossier",
         "notGranted": "non couvert par votre sélection",
         "overwriteNotConfirmed": "existe sur le serveur, écrasement non confirmé"
-      }
+      },
+      "uploaded": "Envoyés"
     },
     "uploadConflict": {
       "title": "Écraser le fichier ?",
       "body": "existe déjà sur le serveur.",
-      "noDiff": "Comparaison de texte impossible (fichier binaire ou trop volumineux). Taille actuelle : {{remoteSize}}, nouvelle taille : {{localSize}}."
+      "currentSize": "Taille actuelle",
+      "newSize": "Nouvelle taille"
     },
     "menu": {
       "download": "Télécharger",
@@ -1298,7 +1298,9 @@
       "recursive": "Appliquer au contenu",
       "recursiveWarning": "— change le propriétaire de TOUS les fichiers et sous-dossiers de ce dossier. Les liens symboliques ne sont pas suivis. Irréversible."
     },
-    "transferChown": "Changement du propriétaire de {{name}}"
+    "transferChown": "Changement du propriétaire de {{name}}",
+    "stopProgress": "Progression",
+    "noTextDiff": "Aucun diff texte possible (fichier binaire ou trop volumineux)."
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",

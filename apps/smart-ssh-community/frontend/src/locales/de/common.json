@@ -1160,8 +1160,7 @@
       "editing": "„{{name}}\" wird lokal bearbeitet…",
       "end": "Bearbeitung beenden",
       "uploadTitle": "Lokale Änderungen hochladen?",
-      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe: {{size}}."
+      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben."
     },
     "deleteDialog": {
       "fileTitle": "Datei löschen?",
@@ -1183,7 +1182,6 @@
       "conflictTitle": "Dateien im Ordner überschreiben?",
       "conflictBody": "Beim Hochladen von „{{name}}“ würden diese {{count}} Dateien auf dem Server überschrieben. Ohne deine Bestätigung wird nichts überschrieben.",
       "summaryTitle": "Ordner-Upload: „{{name}}“",
-      "summary": "{{uploaded}} Dateien hochgeladen, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
       "notAttempted": "{{count}} Dateien wurden nicht versucht, weil ihr Ordner nicht angelegt werden konnte.",
       "skipped": "Übersprungen",
       "failed": "Fehlgeschlagen",
@@ -1194,12 +1192,14 @@
         "unsupported": "keine normale Datei oder Ordner",
         "notGranted": "nicht von deiner Auswahl abgedeckt",
         "overwriteNotConfirmed": "existiert auf dem Server, Überschreiben nicht bestätigt"
-      }
+      },
+      "uploaded": "Hochgeladen"
     },
     "uploadConflict": {
       "title": "Datei überschreiben?",
       "body": "existiert bereits auf dem Server.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe: {{remoteSize}}, neue Größe: {{localSize}}."
+      "currentSize": "Bisherige Größe",
+      "newSize": "Neue Größe"
     },
     "menu": {
       "download": "Herunterladen",
@@ -1288,7 +1288,9 @@
       "recursive": "Auf Inhalt anwenden",
       "recursiveWarning": "— ändert den Besitzer ALLER Dateien und Unterordner in diesem Ordner. Symbolische Links werden nicht verfolgt. Nicht rückgängig zu machen."
     },
-    "transferChown": "Besitzer ändern: {{name}}"
+    "transferChown": "Besitzer ändern: {{name}}",
+    "stopProgress": "Fortschritt",
+    "noTextDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß)."
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
