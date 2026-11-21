@@ -1,6 +1,6 @@
 # Spec 0057 — Reiches Session-Modell (Ledger, Summary, Kompaktierung)
 
-Status: umgesetzt
+Status: umgesetzt, Aktivitätsprotokoll (§1.5–§1.8) in Umsetzung (Epic #1442): aufgezeichnete Sitzungen und Ledger-Tabelle vorhanden (#1443), Rest offen
 Zweck: Lange Sitzungen und große Notizen lassen den KI-Kontext nicht mehr anwachsen, bis die Sitzung hängt: Der an die KI gesendete Kontext wird vor jeder Anfrage bei Bedarf verkleinert (Zusammenfassung alter Runden, Kürzung einzelner Ausgaben, verkürzte Notiz), während ein dauerhaftes, redigiertes Ledger alle Vorgänge der Sitzung vollständig festhält.
 Bezüge: Spec 0004 (Persistenz und Migrationen), Spec 0034 (Chat-Sitzungen), Spec 0036 (Chat-Inhalte), Spec 0101 (verschlüsselte Datenbank), Spec 0039 (Fencing), Spec 0051 (Rate-Limit-Handling), Spec 0024 (Sprache), Spec 0003 und 0023 (Notiz-Vorschläge, Diff-Bestätigung), Spec 0058 und 0079 (Notiz-Oberfläche), ADR 0003 und 0004 (Notiz-Scopes), ADR 0047 (Ledger), ADR 0048 (Token-Schätzung, Kontextaufbau), ADR 0049 (Summary-Fallback), ADR 0050 (Notiz-Kürzungs-Dialog).
 Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
@@ -16,12 +16,16 @@ Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
    (server-spezifisch bleibt am längsten), und erst als letztes Mittel nach
    Chat-Verlauf und Ausgaben. Bei großen Notizen schlägt die Anwendung am
    Verbindungsende eine dauerhafte Kürzung vor, die der Nutzer bestätigt.
-3. **Ledger:** Kommandos, Entscheidungen, Ergebnisse und KI-Nachrichten,
-   **redigiert vor dem Schreiben**, nur anhängend, nie zusammengefasst.
+3. **Ledger:** Kommandos, Entscheidungen, Ergebnisse, KI-Nachrichten,
+   Dateizugriffe der KI und Verbindungsereignisse, **redigiert vor dem
+   Schreiben**, nur anhängend, nie zusammengefasst. Das Ledger ist das
+   **dauerhafte Aktivitätsprotokoll**: Es gehört zu einer aufgezeichneten
+   Sitzung (§1.5), nicht zum Chat, und überlebt das Löschen des Chats und
+   des Servers.
 4. **Summary:** Eigener KI-Aufruf beim Kompaktieren, **mit Fallback**: bei
    Ausfall werden die Runden abgeschnitten, die Sitzung hängt nie.
-5. **Migration:** Keine Daten-Migration. Additive Schema-Änderung, alte
-   Sitzungen bleiben unberührt.
+5. **Migration:** Bestehende Chats und Ledger-Einträge bleiben unverändert
+   erhalten (§5).
 
 ## 1. Das Ledger
 
@@ -31,8 +35,14 @@ von der Kompaktierung berührt (§3.3).
 
 ### 1.1 Was hineinkommt
 
-Pro Eintrag: Zeitstempel, Sitzung, eine in der Sitzung monoton wachsende
-Reihenfolge, **Quelle** (`user`, `ai` oder `mcp-agent`), Typ und Inhalt:
+Pro Eintrag: Zeitstempel, aufgezeichnete Sitzung (§1.5), eine in der Sitzung
+monoton wachsende Reihenfolge, **Quelle** (`user`, `ai` oder `mcp-agent`;
+bei `mcp-agent` nennt die Sitzung den MCP-Client), Typ und Inhalt, dazu zwei
+Felder, die jeder Eintrag trägt: eine **Aktions-Kennung**, die Vorschlag,
+Entscheidung und Ausführung derselben Aktion verbindet (leer, wo es keine
+Aktion gibt), und ein Kennzeichen **Redaction unvollständig** (Standard:
+nein). Ältere Einträge ohne diese Felder gelten mit den Standardwerten.
+Typen:
 
 - **Kommando vorgeschlagen** — das Kommando; die Quelle ist die Herkunft des
   Vorschlags (KI oder MCP-Agent). Ein im Bestätigungsdialog vom Nutzer
@@ -48,6 +58,17 @@ Reihenfolge, **Quelle** (`user`, `ai` oder `mcp-agent`), Typ und Inhalt:
   Exit-Code, ob die Ausgabe gekürzt oder das Kommando abgebrochen wurde),
   **redigiert**.
 - **KI-Nachricht** — Antworttext der KI, auch ein erzeugtes Dokument.
+- **Datei gelesen / Datei geschrieben** — Pfad und Größe eines Dateizugriffs
+  der KI, nie der Dateiinhalt (Umsetzung: #1446).
+- **Verbindung** — verbunden, getrennt, wiederverbunden oder fehlgeschlagen
+  (Umsetzung: #1447).
+- **Aktivitätsmarke** — ein Lebenszeichen einer laufenden Sitzung, ganz ohne
+  Inhalt (Umsetzung: #1447).
+
+Eine **Entscheidung** hält zusätzlich die entscheidende Regel so fest, wie
+sie zum Zeitpunkt der Entscheidung war (Muster, Wirkung, Geltungsbereich),
+damit das Protokoll auch nach einer späteren Änderung oder Löschung der
+Regel lesbar bleibt.
 
 Das Ledger erfasst auch MCP-Aktivität (Quelle `mcp-agent`), unabhängig davon,
 dass MCP-Aktionen nicht in die wiederaufnehmbare Chat-Historie gehen
@@ -71,14 +92,57 @@ ist dieser Schutz gemeint.
 
 ### 1.4 Persistenz
 
-Eigene Tabelle, die additiv angelegt wird. Einträge werden nie geändert oder
-gelöscht, außer zusammen mit der ganzen Sitzung (Löschen der Sitzung löscht
-ihr Ledger). Zwei gleichzeitige Schreibvorgänge derselben Sitzung (Chat und
-MCP) bekommen nie dieselbe Reihenfolgenummer.
+Eigene Tabelle. Einträge werden nie geändert; gelöscht werden sie
+ausschließlich durch das ausdrückliche Löschen des Protokolls und durch die
+Aufbewahrung des Protokolls (§1.7), **nie** durch das Löschen eines Chats,
+die Chat-Aufbewahrung oder das Löschen eines Servers. Zwei gleichzeitige
+Schreibvorgänge derselben Sitzung (Chat und MCP) bekommen nie dieselbe
+Reihenfolgenummer. Ein fehlgeschlagener Schreibvorgang wird an der
+aufgezeichneten Sitzung gezählt, damit die Lücke später sichtbar ist.
 
-Das Ledger gehört zur gespeicherten Chat-Sitzung: Wird für eine Verbindung
-keine Chat-Sitzung gespeichert (Chat-Historie aus, rein MCP-getriebene
-Sitzung, lokaler Pseudo-Server, Anlegefehler), entstehen auch keine Ledger-Einträge.
+### 1.5 Aufgezeichnete Sitzungen
+
+Eine **aufgezeichnete Sitzung** besteht unabhängig von einem Chat. Es gibt
+drei Arten: `chat`, `mcp` (vom MCP-Client getrieben, mit dem Namen des
+Clients) und `terminal` (nur Terminal, ohne Chat). Sie hält ihren Beginn,
+ihr Ende, den Zeitpunkt der letzten Aktivität, die Zeitzone des Geräts
+(IANA-Name, unbekannt bei Sitzungen aus der Zeit vor dem Protokoll) und
+einen **Schnappschuss des Servers** zum Zeitpunkt des Beginns: Name, Host,
+Port, Benutzer, Gruppenpfad (Namen und Kennungen) und Tags. Der Schnappschuss
+bleibt lesbar, auch wenn der Server oder die Gruppe später umbenannt oder
+gelöscht wird.
+
+Jede gespeicherte Chat-Sitzung hat genau eine aufgezeichnete Sitzung und
+schreibt ihr Ledger dorthin. Eine Chat-Sitzung, die leer verworfen wird (keine
+Nachricht, kein Ledger-Eintrag), nimmt ihre aufgezeichnete Sitzung mit.
+Sonst überleben aufgezeichnete Sitzungen das Löschen des Chats, der
+Chat-Aufbewahrung und das Löschen des Servers.
+
+Wird für eine Verbindung keine Chat-Sitzung gespeichert (Chat-Historie aus,
+lokaler Pseudo-Server, Anlegefehler), entsteht über den Chat keine
+aufgezeichnete Sitzung; MCP- und Terminal-Sitzungen bekommen ihre eigene
+(Umsetzung: #1444, #1447).
+
+### 1.6 Löschen
+
+Das ausdrückliche Löschen des Protokolls (einzelne Sitzung oder alles) ist
+eine eigene Handlung des Nutzers, getrennt vom Löschen eines Chats
+(Umsetzung: #1448). Beim Löschen eines Chats weist die Anwendung darauf hin,
+dass das Protokoll bestehen bleibt.
+
+### 1.7 Aufbewahrung
+
+Das Protokoll hat eine eigene Aufbewahrung, getrennt von der Chat-
+Aufbewahrung: Metadaten standardmäßig 3 Jahre, Kommandoausgaben
+standardmäßig 90 Tage; „unbegrenzt" ist wählbar, nie der Standard
+(Umsetzung: #1448).
+
+### 1.8 Lesezugriff für Erweiterungen
+
+Erweiterungen können das Protokoll über eine dokumentierte, nur lesende
+Schnittstelle abfragen (Umsetzung: #1449, #1450). Die Schnittstelle liefert
+die redigierten Einträge und die Schnappschüsse, nie mehr als im Protokoll
+steht.
 
 ## 2. Die Summary
 
@@ -257,17 +321,22 @@ selbst"** (öffnet die Notiz-Bearbeitung) und **„Später"**.
 
 ## 5. Migration
 
-**Keine Daten-Migration.** Neue Tabelle (Ledger) und zusätzliche Spalten
-(Summary) werden **additiv** angelegt (vorwärts, datenerhaltend, Spec 0004).
-Alte Sitzungen bleiben **unberührt und lesbar**; sie haben kein Ledger und
-keine Summary. Nur neue (und fortgesetzte, ab da) Sitzungen führen das
-Ledger. Kein Parsen oder Umschreiben alter Daten.
+Die Umstellung auf aufgezeichnete Sitzungen (vorwärts, datenerhaltend,
+Spec 0004) lässt jede bestehende Chat-Sitzung, jede Nachricht und jeden
+Ledger-Eintrag unverändert (gleiche Kennung, Reihenfolge, Inhalt und
+Zeitstempel). Zu jeder bestehenden Chat-Sitzung entsteht genau eine
+aufgezeichnete Sitzung mit dem Schnappschuss des heutigen Servers, seiner
+Gruppen und Tags; die Zeitzone ist unbekannt. Ältere Einträge, die mit
+Sitzungen entstanden, die vor dem Ledger lagen, bleiben ohne Ledger. Kein
+Parsen oder Umschreiben alter Daten.
 
 ## 6. Sicherheitszusagen
 
 - **Ledger redigiert vor dem Persistieren** — kein Klartext-Secret
   dauerhaft auf der Platte.
 - **Ledger liegt in der verschlüsselten Datenbankdatei** (§1.3).
+- **Das Protokoll überlebt Chat und Server** (§1.4, §1.5): Wer einen Chat
+  löscht, löscht nicht das Protokoll; es hat einen eigenen Löschweg (§1.6).
 - **Kompaktierung betrifft nur den KI-Kontext, nie das Ledger.**
 - **Die gespeicherte Notiz wird nie ohne Nutzer-Bestätigung verändert**
   (das verkürzte Senden ist verlustfrei; die dauerhafte Kürzung braucht den
@@ -279,7 +348,7 @@ Ledger. Kein Parsen oder Umschreiben alter Daten.
 - Eine Summary wird wie jeder KI-Inhalt behandelt: redigiert und nicht
   privilegiert; Hinweise der Anwendung stehen außerhalb von
   Ausgabe-Blöcken.
-- Die additive Migration bricht keine bestehende Sitzung.
+- Die Migration bricht keine bestehende Sitzung und verliert keine Zeile.
 
 ## 7. und 8. (entfallen)
 
@@ -289,12 +358,13 @@ nicht neu vergeben.
 
 ## 9. Grenzen
 
-- **Das Ledger erfasst nur Kommandovorschläge** als Aktionstyp. Dateilese-
-  und Schreibaktionen sowie Notiz-Änderungsvorschläge der KI erzeugen
-  derzeit keine Ledger-Einträge (Kommandos, Entscheidungen, Ergebnisse und
+- **Das Ledger erfasst derzeit nur Kommandovorschläge** als Aktionstyp.
+  Dateilese- und Schreibaktionen (#1446) und Verbindungsereignisse (#1447)
+  sind vorgesehen, aber noch nicht umgesetzt; Notiz-Änderungsvorschläge der
+  KI erzeugen keine Ledger-Einträge (Kommandos, Entscheidungen, Ergebnisse und
   KI-Nachrichten dagegen vollständig, ADR 0047).
-- **Das Ledger hat noch keine Oberfläche:** Es wird geschrieben und
-  gelöscht, aber nirgends angezeigt oder exportiert.
+- **Das Ledger hat noch keine Oberfläche in der Anwendung:** Es wird
+  geschrieben, aber nirgends angezeigt oder exportiert.
 - **Ledger-Schreiben ist bestmöglich:** Ein Schreibfehler wird protokolliert
   und bricht die Sitzung nicht ab; der Eintrag fehlt dann.
 - **Die Token-Schätzung ist eine Faustregel**, kein Tokenizer, und das

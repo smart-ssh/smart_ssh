@@ -34,7 +34,7 @@ use sqlx::Row;
 
 use uuid::Uuid;
 
-use ssh_manager_core::audit::LedgerEntryContent;
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerEntryMeta, LedgerRuleSnapshot};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LedgerStoreError {
@@ -69,19 +69,6 @@ fn backend_err(e: sqlx::Error) -> LedgerStoreError {
     LedgerStoreError::Database(e.into())
 }
 
-/// Spiegelt `LedgerEntryContent`s Varianten in der `entry_type`-Spalte
-/// (dieselbe Konvention wie `chat_session_store::content_type_for`) — rein
-/// für Filterung/Übersicht, die tatsächlichen Daten liegen ausschließlich
-/// in `content`.
-fn entry_type_for(content: &LedgerEntryContent) -> &'static str {
-    match content {
-        LedgerEntryContent::CommandProposed { .. } => "command_proposed",
-        LedgerEntryContent::Decision { .. } => "decision",
-        LedgerEntryContent::CommandExecuted { .. } => "command_executed",
-        LedgerEntryContent::AiMessage { .. } => "ai_message",
-    }
-}
-
 fn source_to_text(source: ssh_manager_core::audit::LedgerSource) -> &'static str {
     use ssh_manager_core::audit::LedgerSource;
     match source {
@@ -114,60 +101,93 @@ impl SqliteLedgerStore {
         Self { pool }
     }
 
-    /// Hängt einen neuen Eintrag an das Ledger einer Sitzung an (Spec 0057,
-    /// §1.4: append-only — kein Update-Pfad existiert). `content` MUSS
-    /// bereits redigiert sein (Spec 0057, §1.2 "Pflicht") — dieser Store
-    /// prüft/redigiert nicht selbst, s. Moduldoc.
-    ///
-    /// `sequence`-Vergabe analog zu `SqliteChatSessionStore::append_message`
-    /// ("ein höher als die bisher höchste Sequenznummer dieser Sitzung").
+    /// Appends an entry with default meta fields; see [`Self::append`].
+    /// `session_id` is the id of the recorded session (`activity_sessions`).
     pub async fn append_entry(
         &self,
         session_id: Uuid,
         source: ssh_manager_core::audit::LedgerSource,
         content: &LedgerEntryContent,
     ) -> Result<Uuid, LedgerStoreError> {
-        let session_id_str = session_id.to_string();
-
-        // Issue #903: read-max and insert in one `BEGIN IMMEDIATE` transaction.
-        let mut tx = self
-            .pool
-            .begin_with("BEGIN IMMEDIATE")
+        self.append(session_id, source, content, &LedgerEntryMeta::default())
             .await
-            .map_err(backend_err)?;
-        let next_sequence: i64 = sqlx::query(
-            "SELECT COALESCE(MAX(sequence), -1) + 1 AS next FROM ledger_entries \
-             WHERE session_id = ?",
-        )
-        .bind(&session_id_str)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(backend_err)?
-        .get("next");
+    }
 
+    /// Hängt einen neuen Eintrag an das Ledger einer aufgezeichneten Sitzung
+    /// an (Spec 0057, §1.4: append-only — kein Update-Pfad existiert).
+    /// `content` MUSS bereits redigiert sein (Spec 0057, §1.2 "Pflicht") —
+    /// dieser Store prüft/redigiert nicht selbst, s. Moduldoc.
+    ///
+    /// The sequence is assigned in the same single `INSERT … SELECT`
+    /// statement (one write, no read-then-write race between concurrent
+    /// writers). A failed append increments
+    /// `activity_sessions.failed_writes` (best effort, logged) and returns
+    /// the original error.
+    pub async fn append(
+        &self,
+        session_id: Uuid,
+        source: ssh_manager_core::audit::LedgerSource,
+        content: &LedgerEntryContent,
+        meta: &LedgerEntryMeta,
+    ) -> Result<Uuid, LedgerStoreError> {
+        match self.try_append(session_id, source, content, meta).await {
+            Ok(id) => Ok(id),
+            Err(err) => {
+                if let Err(count_err) = sqlx::query(
+                    "UPDATE activity_sessions SET failed_writes = failed_writes + 1 WHERE id = ?",
+                )
+                .bind(session_id.to_string())
+                .execute(&self.pool)
+                .await
+                {
+                    tracing::warn!(error = %count_err, "could not count the failed ledger write");
+                }
+                Err(err)
+            }
+        }
+    }
+
+    async fn try_append(
+        &self,
+        session_id: Uuid,
+        source: ssh_manager_core::audit::LedgerSource,
+        content: &LedgerEntryContent,
+        meta: &LedgerEntryMeta,
+    ) -> Result<Uuid, LedgerStoreError> {
         let content_json = serde_json::to_string(content).map_err(|e| {
             LedgerStoreError::Backend(format!(
                 "LedgerEntryContent-Serialisierung fehlgeschlagen: {e}"
             ))
         })?;
+        let rule_snapshot = meta
+            .rule_snapshot
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| {
+                LedgerStoreError::Backend(format!("rule snapshot serialization failed: {e}"))
+            })?;
 
         let entry_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO ledger_entries \
-             (id, session_id, sequence, source, entry_type, content, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+             (id, session_id, sequence, source, entry_type, content, created_at, \
+              action_id, redaction_incomplete, rule_snapshot) \
+             SELECT ?1, ?2, COALESCE(MAX(sequence), -1) + 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9 \
+             FROM ledger_entries WHERE session_id = ?2",
         )
         .bind(entry_id.to_string())
-        .bind(&session_id_str)
-        .bind(next_sequence)
+        .bind(session_id.to_string())
         .bind(source_to_text(source))
-        .bind(entry_type_for(content))
+        .bind(content.entry_type())
         .bind(&content_json)
         .bind(Utc::now().to_rfc3339())
-        .execute(&mut *tx)
+        .bind(meta.action_id.as_deref())
+        .bind(meta.redaction_incomplete)
+        .bind(rule_snapshot)
+        .execute(&self.pool)
         .await
         .map_err(backend_err)?;
-        tx.commit().await.map_err(backend_err)?;
 
         Ok(entry_id)
     }
@@ -181,7 +201,8 @@ impl SqliteLedgerStore {
         session_id: Uuid,
     ) -> Result<Vec<LedgerEntry>, LedgerStoreError> {
         let rows = sqlx::query(
-            "SELECT id, source, content, created_at FROM ledger_entries \
+            "SELECT id, source, content, created_at, action_id, redaction_incomplete, rule_snapshot \
+             FROM ledger_entries \
              WHERE session_id = ? ORDER BY sequence ASC",
         )
         .bind(session_id.to_string())
@@ -207,7 +228,20 @@ impl SqliteLedgerStore {
                     .map_err(|e| {
                         LedgerStoreError::Backend(format!("ungültiger Zeitstempel: {e}"))
                     })?;
+                let rule_snapshot_raw: Option<String> = row.get("rule_snapshot");
+                let rule_snapshot: Option<LedgerRuleSnapshot> = rule_snapshot_raw
+                    .map(|raw| serde_json::from_str(&raw))
+                    .transpose()
+                    .map_err(|e| LedgerStoreError::CorruptContent {
+                        entry_id: id.clone(),
+                        reason: format!("rule snapshot: {e}"),
+                    })?;
                 Ok(LedgerEntry {
+                    meta: LedgerEntryMeta {
+                        action_id: row.get("action_id"),
+                        redaction_incomplete: row.get::<i64, _>("redaction_incomplete") != 0,
+                        rule_snapshot,
+                    },
                     id,
                     source: source_from_text(&source_raw),
                     content,
@@ -229,6 +263,9 @@ pub struct LedgerEntry {
     pub source: ssh_manager_core::audit::LedgerSource,
     pub content: LedgerEntryContent,
     pub created_at: chrono::DateTime<Utc>,
+    /// `action_id`, `redaction_incomplete`, `rule_snapshot` (defaults for
+    /// rows written before the activity record).
+    pub meta: LedgerEntryMeta,
 }
 
 #[cfg(test)]
@@ -453,38 +490,6 @@ mod tests {
                 "Nachricht 4"
             ]
         );
-    }
-
-    /// Spec 0057, §1.4/§6: Cascade-Delete wie andere Session-Daten.
-    #[tokio::test]
-    async fn test_deleting_session_cascades_to_its_ledger_entries() {
-        let (profile_store, ledger_store) = in_memory_ledger_store().await;
-        let session_id = create_test_session(&profile_store).await;
-        ledger_store
-            .append_entry(
-                session_id,
-                LedgerSource::Ai,
-                &LedgerEntryContent::AiMessage {
-                    text: "wird verwaist".to_string(),
-                },
-            )
-            .await
-            .unwrap();
-
-        sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
-            .bind(session_id.to_string())
-            .execute(&profile_store.pool)
-            .await
-            .unwrap();
-
-        let count: i64 =
-            sqlx::query("SELECT COUNT(*) AS c FROM ledger_entries WHERE session_id = ?")
-                .bind(session_id.to_string())
-                .fetch_one(&profile_store.pool)
-                .await
-                .unwrap()
-                .get("c");
-        assert_eq!(count, 0);
     }
 
     /// Issue #113: Ein neuer Eintrag liegt als SQLite-`TEXT` mit genau dem

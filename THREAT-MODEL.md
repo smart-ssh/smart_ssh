@@ -129,7 +129,7 @@ into the chat, minus what the redactor recognises (section 2). Examples:
 Before content leaves the app towards an AI provider, it passes through the
 output redactor
 ([`crates/core/src/ai/redactor.rs`](crates/core/src/ai/redactor.rs)).
-Redaction also runs before ledger entries and note suggestions are stored,
+Redaction also runs before ledger entries and note suggestions are stored (the ledger is the activity record: it belongs to a recorded session, not to a chat, so it outlives deleting a chat or a server; a server snapshot stays with it),
 and before server notes are returned to an MCP client
 ([ADR 0103](docs/adr/0103-mcp-server-notes-redact-and-fence.md)).
 

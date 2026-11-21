@@ -497,6 +497,11 @@ impl SqliteProfileStore {
             .collect())
     }
 
+    /// Store for recorded sessions (Spec 0057, activity record).
+    pub fn activity_session_store(&self) -> crate::SqliteActivitySessionStore {
+        crate::SqliteActivitySessionStore::new(self.pool.clone())
+    }
+
     /// Wie [`Self::chat_session_store`], für das Session-Ledger (Spec
     /// 0057, §1).
     pub fn ledger_store(&self) -> crate::SqliteLedgerStore {
