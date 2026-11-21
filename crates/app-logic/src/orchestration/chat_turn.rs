@@ -232,6 +232,17 @@ pub(crate) async fn write_ledger_entry(
     source: LedgerSource,
     content: LedgerEntryContent,
 ) {
+    write_ledger_entry_for_action(session, source, content, None).await;
+}
+
+/// Like [`write_ledger_entry`], but links the entry to the action it belongs
+/// to (`action_id`, Spec 0057).
+pub(crate) async fn write_ledger_entry_for_action(
+    session: &Session,
+    source: LedgerSource,
+    content: LedgerEntryContent,
+    action_id: Option<ActionId>,
+) {
     let Some(store) = &session.persistence.ledger_store else {
         return;
     };
@@ -239,7 +250,14 @@ pub(crate) async fn write_ledger_entry(
         return;
     };
     let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
-    if let Err(err) = store.append_entry(chat_session_id, source, &redacted).await {
+    let meta = ssh_manager_core::audit::LedgerEntryMeta {
+        action_id: action_id.map(|id| id.to_string()),
+        ..Default::default()
+    };
+    if let Err(err) = store
+        .append(chat_session_id, source, &redacted, &meta)
+        .await
+    {
         tracing::warn!(error = %err, "ledger entry persistence failed");
     }
 }
