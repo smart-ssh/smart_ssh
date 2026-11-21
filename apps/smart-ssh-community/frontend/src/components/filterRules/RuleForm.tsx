@@ -53,6 +53,8 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const scope = buildScope();
+    setPatternErrorDetail(null);
+    setPatternError(null);
     if (!scope) {
       setError(kind === "server" ? t("filterRules.serverRequired") : t("filterRules.tagRequired"));
       return;
