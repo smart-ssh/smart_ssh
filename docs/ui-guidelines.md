@@ -19,6 +19,10 @@ counts in JetBrains Mono. Status is always an 8 px `StatusSquare`, never a
 dot. A `DialogFrame` can draw decorative `CornerTicks` (`ticks="danger"` for
 the host-key warning); the narrow layout has none.
 
+## Switches
+
+Use the shared `.switch` class on a native checkbox for on/off settings. It has its own forced-colors (high-contrast) rules in `index.css`; don't restyle it per use.
+
 ## Buttons
 
 | Variant | Use for | Look |
