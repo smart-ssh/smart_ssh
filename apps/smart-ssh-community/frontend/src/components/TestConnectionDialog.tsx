@@ -42,9 +42,11 @@ export function TestConnectionDialog({ steps, result, onCancel, onClose }: Props
     >
       <div className="space-y-3">
         {steps.length > 0 ? (
-          <ConnectProgressList steps={steps} />
+          <div className="rounded border border-border-strong bg-surface-sunken p-2">
+            <ConnectProgressList steps={steps} />
+          </div>
         ) : (
-          running && <p className="text-fg-subtle">{t("connectTab.stepsRunning")}</p>
+          running && <p className="text-label text-fg-subtle">{t("connectTab.stepsRunning")}</p>
         )}
         {result && (
           <output className="block" data-testid="test-connection-result">

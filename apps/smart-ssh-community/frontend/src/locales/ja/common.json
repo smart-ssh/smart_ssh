@@ -286,6 +286,7 @@
     "confirmDeleteServer": "完全に削除",
     "testResult": {
       "success": "接続に成功しました",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
       "hostKeyUnknown": "ホストキーが不明です — 確認が必要です",
       "hostKeyMismatch": "ホストキーが変更されました",
