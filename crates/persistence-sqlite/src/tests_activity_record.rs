@@ -366,3 +366,60 @@ async fn test_failed_append_counts_and_new_entry_types_round_trip() {
     assert_eq!(loaded[0].content, LedgerEntryContent::ActivityTick);
     assert_eq!(loaded[0].meta, meta);
 }
+
+/// A cyclic `groups.parent_id` chain must not hang the migration backfill.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_migration_0029_terminates_on_cyclic_group_chain() {
+    let (_dir, path) = database_at_0028().await;
+    let mut c = open_raw(&path, None).await;
+    exec(&mut c, "PRAGMA foreign_keys = OFF").await;
+    exec(&mut c, "UPDATE groups SET parent_id = 'g2' WHERE id = 'g1'").await;
+    c.close().await.unwrap();
+    let store = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        SqliteProfileStore::connect_plaintext(&path),
+    )
+    .await
+    .expect("migration must terminate")
+    .unwrap();
+    assert_eq!(count(&store, "activity_sessions").await, 3);
+}
+
+/// Creating a chat on a server below a cyclic group chain terminates.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_session_terminates_on_cyclic_group_chain() {
+    let store = SqliteProfileStore::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new().filename(":memory:"),
+    )
+    .await
+    .unwrap();
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO groups (id,name,parent_id,created_at,updated_at) VALUES ('g1','A','g2','t','t'),('g2','B','g1','t','t')")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    let mut server = test_server("Cyclic");
+    store.create_server(&server).await.unwrap();
+    server.group_id = None;
+    sqlx::query("UPDATE servers SET group_id = 'g1' WHERE id = ?")
+        .bind(server.id.0.to_string())
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    let chat = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        store.chat_session_store().create_session(&server.id, None),
+    )
+    .await
+    .expect("create_session must terminate")
+    .unwrap();
+    assert!(store
+        .activity_session_store()
+        .load(chat)
+        .await
+        .unwrap()
+        .is_some());
+}

@@ -43,6 +43,7 @@ WITH RECURSIVE path(server_id, gid, name, parent_id, depth) AS (
     UNION ALL
     SELECT p.server_id, g.id, g.name, g.parent_id, p.depth + 1
     FROM path p JOIN groups g ON g.id = p.parent_id
+    WHERE p.depth < 64
 )
 INSERT INTO activity_sessions (
     id, kind, mcp_client, server_id, server_name, server_host, server_port,

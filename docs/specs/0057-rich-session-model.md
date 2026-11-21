@@ -106,7 +106,9 @@ Eine **aufgezeichnete Sitzung** besteht unabhängig von einem Chat. Es gibt
 drei Arten: `chat`, `mcp` (vom MCP-Client getrieben, mit dem Namen des
 Clients) und `terminal` (nur Terminal, ohne Chat). Sie hält ihren Beginn,
 ihr Ende, den Zeitpunkt der letzten Aktivität, die Zeitzone des Geräts
-(IANA-Name, unbekannt bei Sitzungen aus der Zeit vor dem Protokoll) und
+(IANA-Name; solange die Anwendung sie noch nicht ermittelt, ist sie
+unbekannt – das gilt für Sitzungen aus der Zeit vor dem Protokoll und
+vorerst auch für neu angelegte) und
 einen **Schnappschuss des Servers** zum Zeitpunkt des Beginns: Name, Host,
 Port, Benutzer, Gruppenpfad (Namen und Kennungen) und Tags. Der Schnappschuss
 bleibt lesbar, auch wenn der Server oder die Gruppe später umbenannt oder
@@ -125,17 +127,22 @@ aufgezeichnete Sitzung; MCP- und Terminal-Sitzungen bekommen ihre eigene
 
 ### 1.6 Löschen
 
-Das ausdrückliche Löschen des Protokolls (einzelne Sitzung oder alles) ist
-eine eigene Handlung des Nutzers, getrennt vom Löschen eines Chats
-(Umsetzung: #1448). Beim Löschen eines Chats weist die Anwendung darauf hin,
-dass das Protokoll bestehen bleibt.
+Das ausdrückliche Löschen des Protokolls ist eine eigene Handlung des
+Nutzers, getrennt vom Löschen eines Chats: je einzelne Sitzung, je Server,
+je Gruppe (mit Untergruppen) und alles; jedes Mal mit Bestätigung. Beim
+Löschen eines Servers fragt die Anwendung, ob auch dessen Protokoll gelöscht
+werden soll; die Vorgabe ist „behalten" (Umsetzung: #1448).
 
 ### 1.7 Aufbewahrung
 
 Das Protokoll hat eine eigene Aufbewahrung, getrennt von der Chat-
 Aufbewahrung: Metadaten standardmäßig 3 Jahre, Kommandoausgaben
-standardmäßig 90 Tage; „unbegrenzt" ist wählbar, nie der Standard
-(Umsetzung: #1448).
+standardmäßig 90 Tage; „unbegrenzt" ist wählbar, nie der Standard. Ist beim
+ersten Start die bestehende Chat-Aufbewahrung gesetzt, ist deren Wert der
+Anfangswert der Protokoll-Aufbewahrung (es wird nie mehr aufbewahrt, als der
+Nutzer eingestellt hatte). Nach Ablauf der Ausgabefrist behält ein
+ausgeführtes Kommando seinen Befehl, Exit-Code und Zeitstempel; nur die
+Ausgabe entfällt (Umsetzung: #1448).
 
 ### 1.8 Lesezugriff für Erweiterungen
 

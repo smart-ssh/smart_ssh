@@ -71,7 +71,7 @@ pub(crate) async fn insert_snapshot(
                  JOIN groups g ON g.id = s.group_id WHERE s.id = ?1 \
              UNION ALL \
              SELECT g.id, g.name, g.parent_id, p.depth + 1 FROM path p \
-                 JOIN groups g ON g.id = p.parent_id \
+                 JOIN groups g ON g.id = p.parent_id WHERE p.depth < 64 \
          ) \
          INSERT INTO activity_sessions ( \
              id, kind, mcp_client, server_id, server_name, server_host, server_port, \
