@@ -13,8 +13,8 @@ Spec 0104 (MCP-Sitzungen), ADR 0007 (Host-Key-Bestätigung), ADR 0132, ADR 0133.
 
 ## 1. Auslöser
 
-**1.1** Ein getrennter Sitzungs-Tab zeigt im Kopf neben dem Hinweis
-„Verbindung getrennt“ den Eintrag „Neu verbinden“ im Menü „Weitere Aktionen“ des Kopfs (Schaltfläche mit drei Punkten, mit Tab erreichbar; Spec 0017, Abschnitt 4a).
+**1.1** Ein getrennter Sitzungs-Tab zeigt unter dem Kopf im Hinweisstreifen den Hinweis
+„Verbindung getrennt“ und im Kopf den Eintrag „Neu verbinden“ im Menü „Weitere Aktionen“ des Kopfs (Schaltfläche mit drei Punkten, mit Tab erreichbar; Spec 0017, Abschnitt 4a).
 
 **1.2** Im Terminal steht die Zeile „Verbindung verloren. R drücken, um neu
 zu verbinden.“ Drückt der Nutzer R oder r, während das tote Terminal den
@@ -69,7 +69,7 @@ wiederverwendbare, verbundene Sitzung (Spec 0104).
 
 ## 5. Fehler
 
-Scheitert das Neuverbinden, zeigt der kleine Hinweis im Tab-Kopf den
+Scheitert das Neuverbinden, zeigt der Hinweisstreifen unter dem Kopf den
 übersetzten Fehler (Spec 0024). Der Tab bleibt getrennt, der Knopf bleibt
 nutzbar, die R-Taste auch.
 
@@ -110,7 +110,7 @@ starten keine Versuche und beenden laufende.
 
 **8.3 Zeitplan.** Die Wartezeiten vor den Versuchen sind 2, 4, 8 und danach
 immer 15 Sekunden, gerechnet bis zum Ablauf der eingestellten Zeit. Es läuft
-höchstens ein Versuch je Sitzung. Der Kopf zeigt „Verbinde neu … (Versuch N)“
+höchstens ein Versuch je Sitzung. Der Streifen unter dem Kopf zeigt „Verbinde neu … (Versuch N)“
 und einen Link „Stopp“, der die Versuche sofort beendet; danach erscheint der
 Menüeintrag „Neu verbinden“. Im Terminal steht die Zeile „R drücken“ erst, wenn die
 Versuche enden. Ein Klick auf den Eintrag oder R während der Versuche tut
@@ -122,7 +122,7 @@ geänderter Host-Key, fehlende Zugangsdaten oder gesperrter Schlüsselbund,
 abgelehnte Anmeldung (jeder andere Fehler außer Netz- und Zeitüberschreitungs-
 fehlern ebenso). Ein automatischer Versuch öffnet nie den Host-Key-Dialog und
 vertraut nie einem Schlüssel; der Dialog erscheint erst, wenn der Nutzer
-„Neu verbinden“ wählt (Abschnitt 3). Läuft die Zeit ab, zeigt der Kopf
+„Neu verbinden“ wählt (Abschnitt 3). Läuft die Zeit ab, zeigt der Streifen unter dem Kopf
 „Verbindung konnte nicht wiederhergestellt werden.“ mit dem Menüeintrag, das
 Terminal die Zeile „R drücken“.
 

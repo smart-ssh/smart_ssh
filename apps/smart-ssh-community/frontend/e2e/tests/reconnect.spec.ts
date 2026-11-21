@@ -36,13 +36,15 @@ test("a lost session is reconnected in the same tab with the button", async ({
   });
   await expect(await reconnectEntry(app.page)).toBeVisible();
   await expect(app.page.getByText("Disconnected: network down")).toBeVisible();
+  await expect(app.page.getByTestId("session-status-strip")).toContainText("Disconnected: network down");
+  await expectStripBelowHeader(app.page);
 
   const shellsBefore = (await app.calls("open_terminal")).length;
 
   // The reconnect runs until the backend answers: the button is disabled.
   await app.setCommand("reconnect_session", { hold: true });
   await (await reconnectEntry(app.page)).click();
-  await expect(app.page.locator("header output").getByText("Reconnecting…")).toBeVisible();
+  await expect(app.page.getByTestId("session-status-strip").getByText("Reconnecting…")).toBeVisible();
   await expect(await reconnectEntry(app.page, "Reconnecting…")).toBeDisabled();
   await app.release("reconnect_session", { result: null });
   await app.emit("connection-status-changed", {
@@ -129,6 +131,21 @@ test("a failed reconnect shows the error and keeps the button", async ({
   ).toBeEnabled();
 });
 
+async function expectStripBelowHeader(page: import("@playwright/test").Page) {
+  const strip = page.getByTestId("session-status-strip");
+  await expect(strip).toBeVisible();
+  const box = (await strip.boundingBox())!;
+  const header = (await page.locator("header").last().boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+  for (const sel of ["[role=tablist]", "main"]) {
+    const el = page.locator(sel).first();
+    if (!(await el.count())) continue;
+    const b = await el.boundingBox();
+    if (!b || b.y + b.height <= box.y || b.y >= box.y + box.height) continue;
+    expect(await el.evaluate((n, a) => n.contains(a), await strip.elementHandle())).toBe(true);
+  }
+}
+
 // Issue #356: automatic reconnect — the header shows the attempts and "Stop".
 test("automatic attempts show the progress, Stop ends them and the button returns", async ({
   app,
@@ -147,6 +164,10 @@ test("automatic attempts show the progress, Stop ends them and the button return
     reason: null,
   });
   await expect(app.page.getByText("Reconnecting… (attempt 1)")).toBeVisible();
+  // Status texts sit in the strip under the header, not in the 44 px header.
+  const strip = app.page.getByTestId("session-status-strip");
+  await expect(strip).toContainText("Reconnecting… (attempt 1)");
+  await expectStripBelowHeader(app.page);
   await expect(
     (await reconnectEntry(app.page)),
   ).toBeHidden();

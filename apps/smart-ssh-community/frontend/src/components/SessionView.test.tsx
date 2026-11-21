@@ -149,6 +149,10 @@ describe("SessionView header (Issue #1366)", () => {
     apiMocks.getServer.mockRejectedValue(new Error("boom"));
     renderSessionView();
     expect(await screen.findByRole("button", { name: "Weitere Aktionen" })).toBeTruthy();
+    await waitFor(() => expect(apiMocks.getServer).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(screen.queryByText(/@/)).toBeNull();
   });
 

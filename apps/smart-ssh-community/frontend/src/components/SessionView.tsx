@@ -409,29 +409,6 @@ export function SessionView({
             <span title={serverInfo.line} className="min-w-0 truncate font-mono text-xs text-fg-faint">{serverInfo.line}</span>
           )}
           {serverInfo?.group && !narrow && <Badge>{serverInfo.group}</Badge>}
-          {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
-          {link === "reconnecting" && autoAttempt === null && (
-            <output className="font-mono text-xs text-warning-fg-soft">{t("session.reconnecting")}</output>
-          )}
-          {autoAttempt !== null && (
-            <>
-              <output className="font-mono text-xs text-warning-fg-soft">
-                {t("session.reconnectingAuto", { attempt: autoAttempt })}
-              </output>
-              <Button variant="bare"
-                type="button"
-                onClick={handleStopAutoReconnect}
-                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
-              >
-                {t("session.stopReconnect")}
-              </Button>
-            </>
-          )}
-          {gaveUp && autoAttempt === null && (
-            <output className="font-mono text-xs text-warning-fg-soft">
-              {t("session.reconnectGaveUp")}
-            </output>
-          )}
           <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -511,6 +488,33 @@ export function SessionView({
           </Menu>
         )}
       </header>
+      {(statusNote || link === "reconnecting" || autoAttempt !== null || gaveUp) && (
+        <div data-testid="session-status-strip" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-1">
+          {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
+          {link === "reconnecting" && autoAttempt === null && (
+            <output className="font-mono text-xs text-warning-fg-soft">{t("session.reconnecting")}</output>
+          )}
+          {autoAttempt !== null && (
+            <>
+              <output className="font-mono text-xs text-warning-fg-soft">
+                {t("session.reconnectingAuto", { attempt: autoAttempt })}
+              </output>
+              <Button variant="bare"
+                type="button"
+                onClick={handleStopAutoReconnect}
+                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
+              >
+                {t("session.stopReconnect")}
+              </Button>
+            </>
+          )}
+          {gaveUp && autoAttempt === null && (
+            <output className="font-mono text-xs text-warning-fg-soft">
+              {t("session.reconnectGaveUp")}
+            </output>
+          )}
+        </div>
+      )}
       {reconnectError && (
         <div role="alert" className="shrink-0 border-b border-border px-4 py-1 font-mono text-xs text-danger-fg-soft break-words">
           {reconnectError}
