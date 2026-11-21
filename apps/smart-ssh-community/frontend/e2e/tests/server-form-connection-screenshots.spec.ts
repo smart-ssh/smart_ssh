@@ -11,9 +11,14 @@ test("Connection tab screenshots", async ({ app }) => {
   await app.page.getByRole("treeitem", { name: /^web-1\b/ }).click();
   await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
   await expect(app.page.getByRole("button", { name: "Test Connection", exact: true })).toBeVisible();
-  // Review: the segmented control stays on one row (no wrapped labels).
+  // Review: every authentication label is fully readable (no clipped or overlapping text).
   const group = app.page.getByRole("radiogroup").first();
-  const rows = await group.locator("label").evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
-  expect(rows).toBe(1);
+  for (const [width, height] of [[1440, 900], [800, 560], [390, 844]]) {
+    await app.page.setViewportSize({ width, height });
+    await expect(async () => {
+      const clipped = await group.locator("label").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth).map((e) => e.textContent));
+      expect(clipped).toEqual([]);
+    }).toPass();
+  }
   await captureScreen(app.page, "server-form-connection");
 });
