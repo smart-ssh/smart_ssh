@@ -1,6 +1,6 @@
 import { EntryIcon, entryTitle, isBrokenLink, LinkMarker } from "./LinkMarker";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../../lib/formatDateTime";
+import { formatIsoDate } from "../../lib/formatDateTime";
 import { formatBytes } from "../../lib/format";
 import type { RemoteEntryDto } from "../../api/types";
 import type { OpenEntryMenu } from "./shared";
@@ -24,14 +24,15 @@ export function NarrowEntryList({
   load,
   renderEntryMenu,
 }: NarrowEntryListProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   return (
-    <ul className="m-0 list-none p-0 text-xs">
+    <ul className="m-0 list-none p-0 text-xs" data-testid="narrow-entry-list">
       {entries.map((entry) => {
         const rowMenuOpen = openMenu?.anchor === "row" && openMenu.entry.path === entry.path;
         const details = [
-          entry.isDir ? null : formatBytes(entry.size),
-          entry.modified ? formatDateTime(entry.modified, i18n.language) : null,
+          entry.permissions || null,
+          entry.isDir ? (entry.owner ?? null) : formatBytes(entry.size),
+          entry.modified ? formatIsoDate(entry.modified) : null,
         ]
           .filter((part): part is string => part !== null)
           .join(" · ");
@@ -40,7 +41,7 @@ export function NarrowEntryList({
           <li
             key={entry.path}
             data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
-            className="group flex min-h-11 items-center border-t border-surface-raised/70 pl-2 hover:bg-border/60 focus-within:bg-border/80 data-[active=true]:bg-border/80"
+            className="group flex min-h-14 items-center border-t border-border pl-3 hover:bg-border/60 focus-within:bg-border/80 data-[active=true]:bg-border/80"
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -53,19 +54,19 @@ export function NarrowEntryList({
                 <Button variant="bare"
                   type="button"
                   onClick={() => load(entry.path)}
-                  className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-ring-flush"
+                  className="block max-w-full truncate rounded text-left text-[15px] text-fg-soft group-hover:underline focus-ring-flush"
                   title={entryTitle(entry)}
                 >
-                  <EntryIcon entry={entry} /> {entry.name}
+                  <EntryIcon entry={entry} size={20} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </Button>
               ) : (
-                <span className={`block truncate text-sm text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
-                  <EntryIcon entry={entry} /> {entry.name}
+                <span className={`block truncate text-[15px] text-fg-soft group-hover:underline${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
+                  <EntryIcon entry={entry} size={20} /> {entry.name}
                   <LinkMarker entry={entry} />
                 </span>
               )}
-              <span className="block truncate text-fg-subtle">{details || "—"}</span>
+              <span className="block truncate font-mono text-[11px] text-fg-subtle" data-testid="narrow-entry-meta">{details || "—"}</span>
             </div>
             <Button variant="bare"
               type="button"
@@ -79,7 +80,7 @@ export function NarrowEntryList({
               aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
               aria-haspopup="true"
               aria-expanded={rowMenuOpen}
-              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-ring-flush"
+              className="flex h-11 w-11 shrink-0 items-center justify-center text-fg-muted hover:text-fg focus-ring-flush"
             >
               <Icon name="more" />
             </Button>

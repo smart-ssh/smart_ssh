@@ -57,11 +57,12 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
 ## 5b. Dateibrowser
 
-- Die Liste zeigt je Eintrag eine Zeile von mindestens 44 px Höhe: Symbol und Name in voller Breite, darunter in einer zweiten Zeile Größe und Änderungszeit. Besitzer, Gruppe und Rechte erscheinen nicht als Spalten; sie bleiben über „Eigenschaften“ erreichbar. Spalten lassen sich nicht verstellen; die gespeicherten Spaltenbreiten werden weder benutzt noch verändert und gelten beim Wechsel zum breiten Layout unverändert weiter.
+- Die Liste zeigt je Eintrag eine Zeile von 56 px Höhe mit 1-px-Linie: Symbol (20 px, Ordner in der Akzentfarbe; der Name in der normalen Textfarbe) und Name in voller Breite, bei symbolischen Links folgt „→ Ziel“ (gekürzt) einmal hinter dem Namen, darunter in einer zweiten Zeile in kleiner, blasser Festbreitenschrift die Metadaten: bei Ordnern „Rechte · Besitzer · Datum“, bei Dateien „Rechte · Größe · Datum“ (Datum ohne Uhrzeit, `JJJJ-MM-TT`). Gruppe erscheint nicht in der Liste; sie bleibt wie alle Einzelheiten über „Eigenschaften“ erreichbar. Spalten lassen sich nicht verstellen; die gespeicherten Spaltenbreiten werden weder benutzt noch verändert und gelten beim Wechsel zum breiten Layout unverändert weiter.
+- Unter der Liste steht eine Aktionsleiste mit „+ Ordner“ (sekundär) und „Hochladen“ (primär, mit Hochladen-Symbol); beide tun dasselbe wie die gleichnamigen Einträge im Blatt „Verzeichnisaktionen“, das alle seine Einträge behält.
 - Jede Zeile hat eine sichtbare Schaltfläche „⋯“ (mindestens 44×44 px), die das Eintragsmenü öffnet.
 - Die Werkzeugleiste zeigt die quadratische Schaltfläche „Übergeordnetes Verzeichnis“, die Pfadleiste (Brotkrumen in Festbreitenschrift, das letzte Segment hell; wie im breiten Layout bearbeitbar) und eine Schaltfläche „⋯“ mit der Beschriftung „Verzeichnisaktionen“. Dahinter liegen das Ausgangsverzeichnis und alle übrigen Aktionen der breiten Leiste: Neuer Ordner, Hochladen, Ordner hochladen, Einfügen und Ausschneiden verwerfen (solange etwas ausgeschnitten ist) sowie die Rechteerhöhung samt „Als anderer Benutzer…“. Das Formular für den Zielbenutzer erscheint am unteren Rand. Der Hinweis auf den erhöhten Modus bleibt oberhalb der Leiste sichtbar und mit seiner Schaltfläche zum Beenden bedienbar.
 - Eintragsmenü, Menü der leeren Fläche und das Menü der Werkzeugleiste öffnen sich als Blatt am unteren Rand über die ganze Fensterbreite; ihre Einträge sind mindestens 44 px hoch. Sie schließen wie im breiten Layout (Escape, Tipp außerhalb, Auswahl).
-- Die Dialoge des Dateibrowsers folgen Abschnitt 5; die Übertragungsliste passt sich der Breite an.
+- Die Dialoge des Dateibrowsers folgen Abschnitt 5; die Übertragungsliste passt sich der Breite an. Jede Übertragung ist ein Block mit Name, Abbrechen-Schaltfläche (mindestens 44 px), einem Fortschrittsbalken über die volle Breite (zugänglich mit Name und Wert) und einer Zeile mit erledigter Menge, Rate und Restzeit.
 
 ## 5c. Verwalten-Ansicht
 

@@ -80,7 +80,7 @@ unten angedockt.
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
-- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt unter dem
   Fortschrittsbalken die übertragenen und die gesamten Bytes, die
   Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
   oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die
