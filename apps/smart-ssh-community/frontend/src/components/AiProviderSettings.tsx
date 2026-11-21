@@ -409,9 +409,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="mb-3 font-mono text-xs uppercase tracking-wider text-fg-subtle">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
-        <ul className="divide-y divide-border border border-border bg-surface-sunken/40">
+        <ul className="divide-y divide-border border border-border bg-surface-sunken/40 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_auto] lg:gap-x-4">
           {providers.length === 0 && (
-            <li className="px-4 py-3 text-sm text-fg-subtle">{t("aiProvider.noProviders")}</li>
+            <li className="px-4 py-3 text-sm text-fg-subtle lg:col-span-full">{t("aiProvider.noProviders")}</li>
           )}
           {providers.map((provider) => {
             const typeLabel = t(`aiProvider.providerTypes.${provider.providerType}`);
@@ -422,9 +422,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             <li
               key={provider.id}
               data-active={provider.isActive ? "true" : undefined}
-              className={`px-4 py-3 ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
+              className={`px-4 py-3 lg:col-span-full lg:grid lg:grid-cols-subgrid ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
             >
-              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_21rem]">
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 lg:col-span-full lg:grid-cols-subgrid">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-fg" title={provider.displayName}>
                     {provider.displayName}
@@ -443,7 +443,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     </Badge>
                   )}
                 </div>
-                <div className="flex shrink-0 justify-end gap-2">
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
                   {!provider.isActive && (
                     <Button size="sm" onClick={() => handleSetActive(provider.id)}>
                       {t("aiProvider.setActive")}
