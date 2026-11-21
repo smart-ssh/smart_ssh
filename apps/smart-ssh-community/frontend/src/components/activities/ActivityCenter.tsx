@@ -65,31 +65,36 @@ function ProgressBar({
   const color = tone === "warning" ? "warning" : "accent";
   // Flat 6 px bar; unknown total: striped (the native indeterminate look is hidden).
   return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuetext={valueText}
-      aria-valuemin={0}
-      aria-valuemax={known ? (total as number) : undefined}
-      aria-valuenow={known ? Math.min(done, total as number) : undefined}
-      data-indeterminate={known ? undefined : "true"}
-      data-testid="activity-progress-bar"
-      style={
-        known
-          ? undefined
-          : {
-              backgroundImage: `repeating-linear-gradient(45deg, var(--${color}) 0 6px, var(--surface-raised) 6px 12px)`,
-            }
-      }
-      className="mt-2 block h-1.5 w-full overflow-hidden bg-surface-raised"
-    >
-      {known && (
+    <>
+      <progress
+        aria-label={label}
+        aria-valuetext={valueText}
+        value={known ? Math.min(done, total as number) : undefined}
+        max={known ? (total as number) : undefined}
+        data-indeterminate={known ? undefined : "true"}
+        data-testid="activity-progress-bar"
+        className={
+          known
+            ? `mt-2 block h-1.5 w-full appearance-none overflow-hidden border-0 bg-surface-raised [&::-webkit-progress-bar]:bg-transparent ${
+                tone === "warning"
+                  ? "[&::-moz-progress-bar]:bg-warning [&::-webkit-progress-value]:bg-warning"
+                  : "[&::-moz-progress-bar]:bg-accent [&::-webkit-progress-value]:bg-accent"
+              }`
+            : "sr-only"
+        }
+      />
+      {!known && (
+        // Visual stripes for the unknown total; the native indeterminate look is not styleable.
         <div
-          className={`h-full ${tone === "warning" ? "bg-warning" : "bg-accent"}`}
-          style={{ width: `${Math.round((Math.min(done, total as number) / (total as number)) * 100)}%` }}
+          aria-hidden="true"
+          data-testid="activity-progress-stripes"
+          style={{
+            backgroundImage: `repeating-linear-gradient(45deg, var(--${color}) 0 6px, var(--surface-raised) 6px 12px)`,
+          }}
+          className="mt-2 block h-1.5 w-full overflow-hidden bg-surface-raised"
         />
       )}
-    </div>
+    </>
   );
 }
 

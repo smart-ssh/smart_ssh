@@ -41,7 +41,7 @@ test.describe("activity center", () => {
     const popover = page.getByRole("dialog", { name: "Activities" });
     await expect(popover).toBeVisible();
     await expectFullyInViewport(popover);
-    await expect(popover.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "524288");
+    await expect(popover.getByRole("progressbar")).toHaveAttribute("value", "524288");
 
     await popover.getByRole("button", { name: "Cancel Activities" }).click();
     await expect.poll(async () => (await app.calls("activity_cancel")).length).toBe(1);
@@ -106,7 +106,7 @@ test.describe("activity center redesign, full fixture", () => {
     await expect(popover.locator('[data-icon="check"]')).toHaveCount(1);
     await expect(popover.locator('[data-icon="warn"]')).toHaveCount(1);
     // Unknown total: the bar renders visible stripes (background-image gradient on a sized box).
-    const stripes = popover.locator('[data-indeterminate="true"]');
+    const stripes = popover.getByTestId("activity-progress-stripes");
     await expect(stripes).toHaveCount(1);
     await expect(stripes).toHaveCSS("background-image", /repeating-linear-gradient/);
     expect((await stripes.boundingBox())?.height).toBeGreaterThan(4);
