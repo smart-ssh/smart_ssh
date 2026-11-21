@@ -141,7 +141,10 @@
     "importSshConfig": "Importă …",
     "importSshConfigHint": "Importă servere dintr-un fișier OpenSSH ssh_config",
     "exportSshConfig": "Exportă …",
-    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config"
+    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Restrânge grupul „{{name}}”",
+    "expandGroup": "Extinde grupul „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",

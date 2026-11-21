@@ -141,7 +141,10 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer servere fra en OpenSSH ssh_config-fil",
     "exportSshConfig": "Eksporter …",
-    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config"
+    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Skjul gruppen «{{name}}»",
+    "expandGroup": "Vis gruppen «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",

@@ -121,6 +121,23 @@ Auswirkungen, dann das bestätigte Löschen.
   eine Gruppe oder einen Server öffnet das Bearbeiten-Formular im Hauptbereich,
   nicht in einem eigenen Dialog, damit sich beim Einrichten mehrerer Server
   bequem hin- und herwechseln lässt.
+  - **Kopfzeile:** Beschriftung „Server“ mit den Schaltflächen „+ Gruppe“ und
+    „+ Server“. **Fußzeile:** „Import …“ und „Export …“ mit Symbol. Die
+    Funktionen sind unverändert.
+  - **Zeilen:** Gruppen mit Pfeil, Ordnersymbol, fettem Namen und der Anzahl
+    ihrer Einträge (Server und Untergruppen); Server mit Symbol und Namen in
+    Festbreitenschrift, der lokale Server mit dem Abzeichen „Lokal“. Der
+    ausgewählte Eintrag ist flach hervorgehoben (Akzentfläche, 1 px Rahmen);
+    Untergruppen und Server hängen mit Verbindungslinien an ihrer Gruppe.
+  - **Gruppen auf- und zuklappen:** per Klick auf den Pfeil, mit Pfeiltaste
+    rechts (aufklappen; ist sie offen, zum ersten Eintrag) und links (zuklappen;
+    ist sie zu, zur übergeordneten Gruppe). Die Zeile trägt `aria-expanded`.
+    Der Zustand gilt für die laufende Sitzung und ist derselbe wie in der
+    Verbinden-Ansicht. Wird ein Eintrag in einer zugeklappten Gruppe neu
+    ausgewählt (auch eine neu angelegte Gruppe oder ein neuer Server darin),
+    klappt die Gruppe auf.
+  - **Ziehen:** Der Zeiger trägt einen flachen Block mit Symbol und Namen; die
+    Meldung „→ in diese Gruppe verschieben“ erscheint mit dem Symbol „Verschieben“.
 - **Gruppen-Formular:** Name, übergeordnete Gruppe (Auswahlliste, die die
   Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
   dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit

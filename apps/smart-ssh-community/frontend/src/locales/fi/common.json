@@ -141,7 +141,10 @@
     "importSshConfig": "Tuo …",
     "importSshConfigHint": "Tuo palvelimia OpenSSH:n ssh_config-tiedostosta",
     "exportSshConfig": "Vie …",
-    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon"
+    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon",
+    "title": "Palvelimet",
+    "collapseGroup": "Kutista ryhmä ”{{name}}”",
+    "expandGroup": "Laajenna ryhmä ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",

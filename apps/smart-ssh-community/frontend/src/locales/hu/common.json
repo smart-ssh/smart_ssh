@@ -141,7 +141,10 @@
     "importSshConfig": "Importálás …",
     "importSshConfigHint": "Szerverek importálása OpenSSH ssh_config fájlból",
     "exportSshConfig": "Exportálás …",
-    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba"
+    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba",
+    "title": "Szerverek",
+    "collapseGroup": "„{{name}}” csoport összecsukása",
+    "expandGroup": "„{{name}}” csoport kibontása"
   },
   "treeDrag": {
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",

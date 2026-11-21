@@ -141,7 +141,10 @@
     "importSshConfig": "Імпорт …",
     "importSshConfigHint": "Імпортувати сервери з файлу ssh_config OpenSSH",
     "exportSshConfig": "Експорт …",
-    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH"
+    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH",
+    "title": "Сервери",
+    "collapseGroup": "Згорнути групу «{{name}}»",
+    "expandGroup": "Розгорнути групу «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Скиньте сюди, щоб перемістити на верхній рівень (без групи)",

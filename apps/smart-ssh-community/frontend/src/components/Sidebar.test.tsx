@@ -286,11 +286,84 @@ describe("Sidebar tree arrow-key navigation (issue #425)", () => {
 describe("Sidebar row icons (issue #1363)", () => {
   it("shows the folder icon for groups, the server icon for servers and the local icon for the local pseudo-server", () => {
     renderSidebar();
-    const iconOf = (text: string) => row(text).querySelector("svg")?.getAttribute("data-icon");
+    const iconOf = (text: string) =>
+      row(text).closest("[data-tree-key]")?.querySelector('svg[data-icon^="folder"], svg[data-icon="server"], svg[data-icon="local"]')?.getAttribute("data-icon");
     expect(iconOf("Prod")).toBe("folder-open");
     expect(iconOf("prod-1")).toBe("server");
     expect(iconOf("Localhost")).toBe("local");
     // Decorative: the row's accessible name is just the text.
-    expect(row("Localhost").querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(row("Localhost").closest("[data-tree-key]")?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("Sidebar header, footer and collapsible groups (issue #1368)", () => {
+  const treeItem = (name: string) => screen.getByRole("treeitem", { name: new RegExp(name) });
+
+  it("has a Servers label row with + Group / + Server and an Import / Export footer with icons", () => {
+    renderSidebar();
+    expect(screen.getByText("Server", { selector: ".text-label" })).toBeInTheDocument();
+    for (const icon of ["import", "export"]) {
+      expect(document.querySelector(`svg[data-icon="${icon}"]`)).not.toBeNull();
+    }
+  });
+
+  it("shows an item count on a group and marks the local server with a badge", () => {
+    renderSidebar();
+    // Prod: one server + one subgroup.
+    expect(treeItem("Prod").querySelector('[data-testid="group-count"]')).toHaveTextContent("2");
+    expect(treeItem("Localhost")).toHaveTextContent("Lokal");
+  });
+
+  it("collapses and expands a group with the chevron (mouse) and sets aria-expanded", () => {
+    const { onSelect } = renderSidebar();
+    expect(treeItem("Prod")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("treeitem", { name: /prod-1/ })).toBeInTheDocument();
+    fireEvent.click(treeItem("Prod").querySelector('[data-testid="group-chevron"]') as HTMLElement);
+    expect(treeItem("Prod")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("treeitem", { name: /prod-1/ })).toBeNull();
+    // The chevron only toggles; it does not open the group form.
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(treeItem("Prod").querySelector('[data-testid="group-chevron"]') as HTMLElement);
+    expect(screen.getByRole("treeitem", { name: /prod-1/ })).toBeInTheDocument();
+  });
+
+  it("collapses with ArrowLeft, expands with ArrowRight and moves to the parent / first child", () => {
+    renderSidebar();
+    const prod = treeItem("Prod");
+    prod.focus();
+    fireEvent.keyDown(prod, { key: "ArrowLeft" });
+    expect(treeItem("Prod")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.keyDown(treeItem("Prod"), { key: "ArrowRight" });
+    expect(treeItem("Prod")).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(treeItem("Prod"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(treeItem("Web"));
+    fireEvent.keyDown(treeItem("Web"), { key: "ArrowLeft" });
+    // Web is an expanded (empty) group: first Left collapses it, second goes to the parent.
+    fireEvent.keyDown(treeItem("Web"), { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(treeItem("Prod"));
+  });
+
+  it("expands the collapsed group of a newly selected server", () => {
+    const view = (selection: Selection | null) => (
+      <I18nextProvider i18n={testI18n}>
+        <Sidebar
+          groups={groups}
+          servers={servers}
+          selection={selection}
+          onSelect={vi.fn()}
+          onImportSshConfig={vi.fn()}
+          onExportSshConfig={vi.fn()}
+          onMove={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+    const { rerender } = render(view(null));
+    fireEvent.click(treeItem("Prod").querySelector('[data-testid="group-chevron"]') as HTMLElement);
+    expect(screen.queryByRole("treeitem", { name: /prod-1/ })).toBeNull();
+    rerender(view({ kind: "server", id: "s-prod" }));
+    expect(screen.getByRole("treeitem", { name: /prod-1/ })).toBeInTheDocument();
+    // Collapsing again with the same selection sticks.
+    fireEvent.click(treeItem("Prod").querySelector('[data-testid="group-chevron"]') as HTMLElement);
+    expect(screen.queryByRole("treeitem", { name: /prod-1/ })).toBeNull();
   });
 });

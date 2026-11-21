@@ -1,8 +1,8 @@
 import { dynamicKey } from "../i18nTypes";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { useTranslation } from "react-i18next";
-import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
+import { buildGroupTree, groupItemCount, type GroupTreeNode } from "../lib/groupTree";
 import { folderForNewItem } from "../lib/newItemFolder";
 import {
   classifyDrop,
@@ -20,7 +20,7 @@ import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../lib/unusableServer";
-import { Button, DialogFrame, Icon } from "./ui";
+import { Badge, Button, DialogFrame, Icon } from "./ui";
 
 export type Selection =
   | { kind: "group"; id: string }
@@ -50,18 +50,43 @@ interface SidebarProps {
   onMove: (item: DragItem, target: DropTarget) => void;
   /** Spec 0103 §3a: a copy entry was kept as a regular entry — reload the tree. */
   onKeptAsRegular?: () => void;
+  /** Issue #1368: collapsed groups, kept by the caller so the state survives
+   * leaving the Manage view (shared with the Connect tree). Without it the
+   * sidebar keeps its own state. */
+  collapsedGroupIds?: ReadonlySet<string>;
+  onToggleGroup?: (groupId: string) => void;
 }
 
+/** Container of a group's children: a 1 px rule under the parent's chevron
+ * centre (20 px wide, 22 px narrow), as in the Connect tree. */
+const CHILDREN_CLASS = "ml-5 border-l border-border narrow:ml-[22px]";
+
+/** Short horizontal connector from the rule to a nested row (decorative). */
+function TreeTick() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="tree-tick"
+      className="pointer-events-none absolute left-0 top-[15px] h-px w-3 bg-border narrow:top-[22px]"
+    />
+  );
+}
+
+/** Flat selected row: `accent-subtle` with an inset 1 px `accent-border`. */
+const SELECTED_ROW = "bg-accent-subtle shadow-[inset_0_0_0_1px_var(--accent-border)] text-fg-bright";
+
 /** Reihenfolge der sichtbaren Baumzeilen (Issue #425) — spiegelt die
- * Render-Reihenfolge; Gruppen klappen nicht zu, alle Zeilen sind sichtbar. */
+ * Render-Reihenfolge; zugeklappte Gruppen blenden ihre Kinder aus (Issue #1368). */
 function visibleKeys(
   tree: ReturnType<typeof buildGroupTree>,
   localServer: ServerDto | undefined,
+  collapsed: ReadonlySet<string>,
 ): string[] {
   const keys: string[] = [];
   if (localServer) keys.push(`server:${localServer.id}`);
   const walk = (node: GroupTreeNode) => {
     keys.push(`group:${node.group.id}`);
+    if (collapsed.has(node.group.id)) return;
     node.children.forEach(walk);
     node.servers.forEach((s) => keys.push(`server:${s.id}`));
     node.unusableServers.forEach((s) => keys.push(`unusableServer:${s.id}`));
@@ -92,6 +117,8 @@ export function Sidebar({
   onExportSshConfig,
   onMove,
   onKeptAsRegular,
+  collapsedGroupIds,
+  onToggleGroup,
 }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const manageViews = useManageViews();
@@ -100,6 +127,26 @@ export function Sidebar({
     ? servers.find((s) => s.isLocal)
     : undefined;
   const narrow = useIsNarrow();
+  // Issue #1368: collapse state — the caller's if given, else local.
+  const [localCollapsed, setLocalCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const collapsed = collapsedGroupIds ?? localCollapsed;
+  const toggleGroup = (id: string) => {
+    if (onToggleGroup) {
+      onToggleGroup(id);
+      return;
+    }
+    setLocalCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  };
+  const setGroupCollapsed = (id: string, wantCollapsed: boolean) => {
+    if (collapsed.has(id) !== wantCollapsed) toggleGroup(id);
+  };
+  // A selected item inside a collapsed group expands its ancestors (once per
+  // selection, so collapsing the group again afterwards sticks).
+  const expandedFor = useRef<string | null>(null);
   // Issue #585: row whose "Move to…" dialog is open (narrow layout).
   const [moveItem, setMoveItem] = useState<DragItem | null>(null);
   // Spec 0103 §3a: "Keep as regular entry" for copy rows, from the "⋯" dialog.
@@ -177,12 +224,50 @@ export function Sidebar({
   const treeRef = useRef<HTMLDivElement>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const keys = [
-    ...visibleKeys(tree, localServer),
+    ...visibleKeys(tree, localServer, collapsed),
     ...manageViews.map((v) => `extensionView:${v.id}`),
   ];
   const selectionKey = selection ? `${selection.kind}:${"id" in selection ? selection.id : ""}` : null;
   const tabStopKey =
     [focusedKey, selectionKey].find((k) => k !== null && keys.includes(k)) ?? keys[0] ?? null;
+
+  // Issue #1368: expand the ancestors of a newly selected item.
+  const selectionGroupChain = (): string[] | null => {
+    if (!selection) return null;
+    let start: string | null;
+    if (selection.kind === "group") {
+      start = groups.find((g) => g.id === selection.id)?.parentId ?? null;
+      if (!groups.some((g) => g.id === selection.id)) return null;
+    } else if (selection.kind === "server") {
+      const s = servers.find((x) => x.id === selection.id);
+      if (!s) return null;
+      start = s.groupId;
+    } else if (selection.kind === "unusableServer") {
+      const s = unusableServers.find((x) => x.id === selection.id);
+      if (!s) return null;
+      start = s.groupId;
+    } else if (selection.kind === "newGroup") start = selection.parentId;
+    else if (selection.kind === "newServer") start = selection.groupId;
+    else return null;
+    const chain: string[] = [];
+    while (start && !chain.includes(start)) {
+      chain.push(start);
+      start = groups.find((g) => g.id === start)?.parentId ?? null;
+    }
+    return chain;
+  };
+  useEffect(() => {
+    if (expandedFor.current === selectionKey) return;
+    const chain = selectionGroupChain();
+    if (chain === null) {
+      // Not resolvable yet (data still loading) or nothing to expand.
+      if (!selection || !("id" in selection)) expandedFor.current = selectionKey;
+      return;
+    }
+    expandedFor.current = selectionKey;
+    chain.forEach((id) => setGroupCollapsed(id, false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the selection or the loaded data changes; helpers are recreated each render
+  }, [selectionKey, groups, servers, unusableServers]);
 
   const onTreeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -196,6 +281,24 @@ export function Sidebar({
       treeRef.current?.querySelectorAll<HTMLElement>("[data-tree-key]") ?? [],
     );
     const index = rows.indexOf(target);
+    const groupId = target.getAttribute("data-group-id");
+    if (event.key === "ArrowRight" && groupId) {
+      event.preventDefault();
+      if (collapsed.has(groupId)) setGroupCollapsed(groupId, false);
+      else if (rows[index + 1]?.getAttribute("data-parent-key") === target.getAttribute("data-tree-key"))
+        rows[index + 1].focus();
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (groupId && !collapsed.has(groupId)) {
+        setGroupCollapsed(groupId, true);
+        return;
+      }
+      const parentKey = target.getAttribute("data-parent-key");
+      rows.find((r) => r.getAttribute("data-tree-key") === parentKey)?.focus();
+      return;
+    }
     let next: number;
     if (event.key === "ArrowDown") next = Math.min(index + 1, rows.length - 1);
     else if (event.key === "ArrowUp") next = Math.max(index - 1, 0);
@@ -209,138 +312,202 @@ export function Sidebar({
   const tabIndexFor = (key: string) => (key === tabStopKey ? 0 : -1);
 
   /** Gemeinsame Attribute einer Baumzeile (Tree-Semantik + Roving tabindex). */
-  const rowProps = (key: string, depth: number, selected: boolean) => ({
+  const rowProps = (key: string, depth: number, selected: boolean, parentGroupId?: string | null) => ({
     // Narrow rows sit next to a "⋯" button, which a tree does not allow; the
     // narrow list is a plain list of buttons instead (issue #585).
     ...(narrow
       ? { "aria-current": selected ? ("true" as const) : undefined }
       : { "aria-level": depth + 1, "aria-selected": selected }),
     "data-tree-key": key,
+    "data-parent-key": parentGroupId ? `group:${parentGroupId}` : undefined,
     onFocus: () => setFocusedKey(key),
   });
 
   const isSelected = (kind: "group" | "server" | "unusableServer", id: string) =>
     selection?.kind === kind && selection.id === id;
 
-  const renderNode = (node: GroupTreeNode, depth: number) => (
-    <div
-      key={node.group.id}
-      role="none"
-      data-drop-target={groupDropTargetValue(node.group.id)}
-      className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
-    >
-      <div role={narrow ? "listitem" : "none"} className="flex items-center">
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
-      <div
-      onKeyDown={onTreeKeyDown}
-      role={narrow ? "button" : "treeitem"}
-      tabIndex={tabIndexFor(`group:${node.group.id}`)}
-      {...rowProps(`group:${node.group.id}`, depth, isSelected("group", node.group.id))}
-        {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
-        onClick={() => onSelect({ kind: "group", id: node.group.id })}
-        title={node.group.name}
-        style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
-          isSelected("group", node.group.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
-        }`}
-      >
-        <Icon name="folder-open" className="mr-1 inline align-text-bottom" /> {node.group.name}
-      </div>
-      {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
-      </div>
-      {node.children.map((child) => renderNode(child, depth + 1))}
-      {node.servers.map((s) => renderServer(s, depth + 1))}
-      {node.unusableServers.map((s) => renderUnusableServer(s, depth + 1))}
-    </div>
-  );
+  const ROW_BASE =
+    "flex w-full min-w-0 cursor-pointer select-none items-center gap-2 py-1 pr-3 text-left text-sm min-h-[30px] narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset";
+  const padFor = (depth: number) => (depth > 0 ? "pl-5" : "pl-3");
 
-  const renderServer = (server: ServerDto, depth: number) => (
-    <div key={server.id} role={narrow ? "listitem" : "none"} className="flex items-center">
-    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
-    <div
-      onKeyDown={onTreeKeyDown}
-      role={narrow ? "button" : "treeitem"}
-      tabIndex={tabIndexFor(`server:${server.id}`)}
-      {...rowProps(`server:${server.id}`, depth, isSelected("server", server.id))}
-      // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
-      {...(server.isLocal
-        ? {}
-        : handlersFor({ kind: "server", id: server.id, label: server.name }))}
-      onClick={() => onSelect({ kind: "server", id: server.id })}
-      title={server.name}
-      style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
-        isSelected("server", server.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
-      }`}
-    >
-      <Icon name={server.isLocal ? "local" : "server"} className="mr-1 inline align-text-bottom" /> {server.name}
-    </div>
-    {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
-    </div>
-  );
+  const renderNode = (node: GroupTreeNode, depth: number, parentId: string | null) => {
+    const isCollapsed = collapsed.has(node.group.id);
+    const selected = isSelected("group", node.group.id);
+    const name = node.group.name;
+    const chevron = (
+      <Icon name={isCollapsed ? "chev-r" : "chev-d"} size={narrow ? 20 : 16} />
+    );
+    return (
+      <div
+        key={node.group.id}
+        role="none"
+        data-drop-target={groupDropTargetValue(node.group.id)}
+        className={`relative rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
+      >
+        {depth > 0 && <TreeTick />}
+        <div role={narrow ? "listitem" : "none"} className="flex items-center border-b border-border">
+          {narrow && (
+            <Button
+              variant="bare"
+              onClick={() => toggleGroup(node.group.id)}
+              aria-expanded={!isCollapsed}
+              aria-label={t(isCollapsed ? "sidebar.expandGroup" : "sidebar.collapseGroup", { name })}
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-fg-soft focus-ring-inset"
+            >
+              {chevron}
+            </Button>
+          )}
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
+          <div
+            onKeyDown={onTreeKeyDown}
+            role={narrow ? "button" : "treeitem"}
+            tabIndex={tabIndexFor(`group:${node.group.id}`)}
+            {...rowProps(`group:${node.group.id}`, depth, selected, parentId)}
+            {...(narrow ? {} : { "aria-expanded": !isCollapsed })}
+            data-group-id={node.group.id}
+            // The count is a visual aid; the accessible name stays the group name.
+            aria-label={name}
+            {...handlersFor({ kind: "group", id: node.group.id, label: name })}
+            onClick={() => onSelect({ kind: "group", id: node.group.id })}
+            title={name}
+            className={`${ROW_BASE} font-semibold ${narrow ? "pl-1" : padFor(depth)} ${
+              selected ? SELECTED_ROW : "text-fg-soft"
+            }`}
+          >
+            {!narrow && (
+              // Mouse-only toggle; the keyboard uses Left/Right on the row.
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyboard: Arrow Left/Right on the treeitem
+              <span
+                data-testid="group-chevron"
+                aria-hidden="true"
+                className="inline-flex shrink-0 text-fg-soft"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleGroup(node.group.id);
+                }}
+              >
+                {chevron}
+              </span>
+            )}
+            <Icon name={isCollapsed ? "folder" : "folder-open"} className="shrink-0 text-fg-muted" />
+            <span className="truncate" title={name}>{name}</span>
+            <span
+              data-testid="group-count"
+              className="ml-auto shrink-0 font-mono text-xs font-normal text-fg-faint"
+            >
+              {groupItemCount(node)}
+            </span>
+          </div>
+          {narrow && moreButton({ kind: "group", id: node.group.id, label: name })}
+        </div>
+        {!isCollapsed && groupItemCount(node) > 0 && (
+          <div role="none" data-testid="tree-children" className={CHILDREN_CLASS}>
+            {node.children.map((child) => renderNode(child, depth + 1, node.group.id))}
+            {node.servers.map((s) => renderServer(s, depth + 1, node.group.id))}
+            {node.unusableServers.map((s) => renderUnusableServer(s, depth + 1, node.group.id))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderServer = (server: ServerDto, depth: number, parentId: string | null = null) => {
+    const selected = isSelected("server", server.id);
+    return (
+      <div
+        key={server.id}
+        role={narrow ? "listitem" : "none"}
+        className="relative flex items-center border-b border-border"
+      >
+        {depth > 0 && <TreeTick />}
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
+        <div
+          onKeyDown={onTreeKeyDown}
+          role={narrow ? "button" : "treeitem"}
+          tabIndex={tabIndexFor(`server:${server.id}`)}
+          {...rowProps(`server:${server.id}`, depth, selected, parentId)}
+          // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
+          {...(server.isLocal
+            ? {}
+            : handlersFor({ kind: "server", id: server.id, label: server.name }))}
+          onClick={() => onSelect({ kind: "server", id: server.id })}
+          title={server.name}
+          className={`${ROW_BASE} ${padFor(depth)} ${selected ? SELECTED_ROW : "text-fg-muted"}`}
+        >
+          <Icon name={server.isLocal ? "local" : "server"} className="shrink-0 text-fg-muted" />
+          <span className="truncate font-mono" title={server.name}>{server.name}</span>
+          {server.isLocal && (
+            <Badge tone="local" className="ml-auto shrink-0">
+              {t("mainScreen.localBadge")}
+            </Badge>
+          )}
+        </div>
+        {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
+      </div>
+    );
+  };
 
   /** Issue #100: auswählbar, damit das Löschen erreichbar ist — aber kein
    * Ziehen und kein Bearbeiten-Formular. */
-  const renderUnusableServer = (server: UnusableServerDto, depth: number) => (
-    <div key={server.id} role={narrow ? "listitem" : "none"}>
-    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
-    <div
-      onKeyDown={onTreeKeyDown}
-      role={narrow ? "button" : "treeitem"}
-      tabIndex={tabIndexFor(`unusableServer:${server.id}`)}
-      {...rowProps(`unusableServer:${server.id}`, depth, isSelected("unusableServer", server.id))}
-      data-testid="unusable-server-entry"
-      onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
-      title={unusableReasonText(t, server.reason)}
-      style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-surface-raised focus-ring-inset ${
-        isSelected("unusableServer", server.id) ? "bg-surface-raised text-warning-fg-softer" : "text-warning-fg-soft/80"
-      }`}
-    >
-      <Icon name="warn" className="mr-1 inline align-text-bottom" /> {server.name}{" "}
-      <span className="text-xs not-italic text-fg-subtle">({t("unusableServer.badge")})</span>
-    </div>
-    </div>
-  );
+  const renderUnusableServer = (
+    server: UnusableServerDto,
+    depth: number,
+    parentId: string | null = null,
+  ) => {
+    const selected = isSelected("unusableServer", server.id);
+    return (
+      <div key={server.id} role={narrow ? "listitem" : "none"} className="relative border-b border-border">
+        {depth > 0 && <TreeTick />}
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
+        <div
+          onKeyDown={onTreeKeyDown}
+          role={narrow ? "button" : "treeitem"}
+          tabIndex={tabIndexFor(`unusableServer:${server.id}`)}
+          {...rowProps(`unusableServer:${server.id}`, depth, selected, parentId)}
+          data-testid="unusable-server-entry"
+          onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
+          title={unusableReasonText(t, server.reason)}
+          className={`${ROW_BASE} ${padFor(depth)} italic ${
+            selected ? `${SELECTED_ROW} text-warning-fg-softer` : "text-warning-fg-soft/80"
+          }`}
+        >
+          <Icon name="warn" className="shrink-0" />
+          <span className="truncate" title={server.name}>{server.name}</span>
+          <span className="ml-auto shrink-0 text-xs not-italic text-fg-subtle">
+            ({t("unusableServer.badge")})
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-surface-raised narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-      <div className="flex gap-1 border-b border-surface-raised p-2">
-        <Button size="sm"
-          onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
-          className="flex-1"
-        >
-          {t("sidebar.addGroup")}
-        </Button>
-        <Button size="sm"
-          onClick={() => onSelect({ kind: "newServer", groupId: currentFolder })}
-          className="flex-1"
-        >
-          {t("sidebar.addServer")}
-        </Button>
-      </div>
-      <div className="flex gap-1 border-b border-surface-raised p-2">
-        <Button size="sm"
-          onClick={onImportSshConfig}
-          title={t("sidebar.importSshConfigHint")}
-          className="flex-1"
-        >
-          {t("sidebar.importSshConfig")}
-        </Button>
-        <Button size="sm"
-          onClick={onExportSshConfig}
-          title={t("sidebar.exportSshConfigHint")}
-          className="flex-1"
-        >
-          {t("sidebar.exportSshConfig")}
-        </Button>
+    <div className="flex w-72 shrink-0 flex-col border-r border-border bg-surface-sunken narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
+      <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-3">
+        <span className="text-label">{t("sidebar.title")}</span>
+        <div className="flex gap-1.5">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
+          >
+            {t("sidebar.addGroup")}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onSelect({ kind: "newServer", groupId: currentFolder })}
+          >
+            {t("sidebar.addServer")}
+          </Button>
+        </div>
       </div>
       {/* Issue #48: der ganze Baumbereich ist das Ablageziel „Wurzelebene"
        * (ohne Gruppe / oberste Ebene); Gruppen darin sind innere Ziele.
        * Der angeheftete lokale Server schirmt seine Fläche ab (`none`). */}
       <div
         data-drop-target="root"
-        className={`flex flex-1 flex-col overflow-y-auto p-2 ${highlightFor({ kind: "root" })}`}
+        className={`flex flex-1 flex-col overflow-y-auto ${highlightFor({ kind: "root" })}`}
       >
         {keys.length > 0 && (
           <div
@@ -349,15 +516,15 @@ export function Sidebar({
             className="flex flex-col"
           >
         {localServer && (
-          <div role="none" data-drop-target="none" className="mb-2 border-b border-surface-raised pb-2">
+          <div role="none" data-drop-target="none">
             {renderServer(localServer, 0)}
           </div>
         )}
-        {tree.roots.map((node) => renderNode(node, 0))}
+        {tree.roots.map((node) => renderNode(node, 0, null))}
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
         {tree.ungroupedUnusableServers.map((s) => renderUnusableServer(s, 0))}
             {manageViews.length > 0 && (
-              <div role="none" data-drop-target="none" className="mt-2 border-t border-surface-raised pt-2">
+              <div role="none" data-drop-target="none" className="mt-2 border-t border-border pt-2">
                 {manageViews.map((view) => {
                   const key = `extensionView:${view.id}`;
                   const selected = selection?.kind === "extensionView" && selection.id === view.id;
@@ -373,13 +540,10 @@ export function Sidebar({
                       data-testid="extension-view-entry"
                       onClick={() => onSelect({ kind: "extensionView", id: view.id })}
                       title={label}
-                      style={{ paddingLeft: "8px" }}
-                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-ring-inset ${
-                        selected ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
-                      }`}
+                      className={`${ROW_BASE} pl-3 ${selected ? SELECTED_ROW : "text-fg-muted"}`}
                     >
-                      {view.icon && <span aria-hidden="true">{view.icon} </span>}
-                      {label}
+                      {view.icon && <span aria-hidden="true">{view.icon}</span>}
+                      <span className="truncate" title={label}>{label}</span>
                     </div>
                     </div>
                   );
@@ -391,16 +555,36 @@ export function Sidebar({
         {groups.length === 0 &&
           tree.ungroupedServers.length === 0 &&
           tree.ungroupedUnusableServers.length === 0 && (
-          <p className="px-2 py-1 text-sm text-fg-subtle">{t("sidebar.empty")}</p>
+          <p className="px-3 py-2 text-sm text-fg-subtle">{t("sidebar.empty")}</p>
         )}
         {drag && (
-          <p className="mt-2 rounded border border-dashed border-border-strong px-2 py-2 text-xs text-fg-subtle">
+          <p className="m-2 border border-dashed border-border-strong px-2 py-2 text-xs text-fg-subtle">
             {t("treeDrag.rootDropZone")}
           </p>
         )}
         {/* Füllt den Rest, damit auch die freie Fläche unter dem Baum als
          * Wurzel-Ziel greift. */}
         <div className="min-h-4 flex-1" />
+      </div>
+      <div className="grid grid-cols-2 border-t border-border">
+        <Button
+          variant="ghost"
+          onClick={onImportSshConfig}
+          title={t("sidebar.importSshConfigHint")}
+          className="h-11 rounded-none"
+        >
+          <Icon name="import" />
+          {t("sidebar.importSshConfig")}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={onExportSshConfig}
+          title={t("sidebar.exportSshConfigHint")}
+          className="h-11 rounded-none border-l border-border"
+        >
+          <Icon name="export" />
+          {t("sidebar.exportSshConfig")}
+        </Button>
       </div>
       {moveItem && (
         <MoveToDialog

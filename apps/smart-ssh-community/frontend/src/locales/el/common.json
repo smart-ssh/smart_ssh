@@ -141,7 +141,10 @@
     "importSshConfig": "Εισαγωγή …",
     "importSshConfigHint": "Εισαγωγή διακομιστών από αρχείο ssh_config του OpenSSH",
     "exportSshConfig": "Εξαγωγή …",
-    "exportSshConfigHint": "Εξαγωγή διακομιστών σε ssh_config του OpenSSH"
+    "exportSshConfigHint": "Εξαγωγή διακομιστών σε ssh_config του OpenSSH",
+    "title": "Διακομιστές",
+    "collapseGroup": "Σύμπτυξη ομάδας «{{name}}»",
+    "expandGroup": "Ανάπτυξη ομάδας «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Αφήστε εδώ για μετακίνηση στο ανώτατο επίπεδο (χωρίς ομάδα)",
