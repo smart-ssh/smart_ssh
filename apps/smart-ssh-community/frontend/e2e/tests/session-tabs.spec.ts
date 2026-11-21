@@ -113,7 +113,22 @@ test("with many open tabs every tab keeps a readable width and the strip scrolls
   const tabs = page.locator("header div.group");
   await expect(tabs).toHaveCount(6);
   for (let i = 0; i < 6; i++) {
-    const box = await tabs.nth(i).locator("button").first().boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThan(40);
+    await expect
+      .poll(async () => (await tabs.nth(i).locator("button").first().boundingBox())?.width ?? 0)
+      .toBeGreaterThan(40);
   }
+  const strip = page.getByRole("toolbar").first();
+  await expect.poll(() => strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(strip).toHaveAttribute("data-overflow-end", "");
+  // A plain vertical mouse wheel scrolls the strip horizontally.
+  await strip.hover();
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const plus = page.getByRole("button", { name: "New connection", exact: true });
+  await expect(plus).toBeInViewport();
+  await plus.click();
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveAttribute("aria-current", "page");
+  await strip.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+  await tabs.last().locator("button").first().click();
+  await expect(tabs.last().locator("button").first()).toHaveAttribute("aria-current", "page");
 });
