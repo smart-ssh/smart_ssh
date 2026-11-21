@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { testI18n } from "../../testI18n";
 import { ActionResultView } from "./ActionCard";
 
-const more = (n: number) => testI18n.t("chat.outputMoreLines", { n });
+const more = (n: number) => testI18n.t("chat.outputMoreLines", { count: n });
 const showAll = () => testI18n.t("chat.outputShowAll");
 const showLess = () => testI18n.t("chat.outputShowLess");
 const lines = (n: number, p = "line") => Array.from({ length: n }, (_, i) => `${p}${i + 1}`).join("\n");
@@ -47,5 +47,27 @@ describe("collapsible command output", () => {
     renderResult(lines(3), lines(20, "err"));
     expect(screen.getAllByRole("button", { name: showAll() })).toHaveLength(1);
     expect(screen.getByText(more(12))).toBeTruthy();
+  });
+
+  it("ignores one trailing newline when counting lines", () => {
+    const { container } = renderResult(`${lines(50)}\n`);
+    expect(screen.getByText(more(42))).toBeTruthy();
+    expect(container.querySelector("pre")!.textContent).toBe(lines(8));
+  });
+
+  it("shows no toggle for 8 lines plus a trailing newline", () => {
+    renderResult(`${lines(8)}\n`);
+    expect(screen.queryByRole("button", { name: showAll() })).toBeNull();
+  });
+
+  it("uses the singular form for one hidden line", () => {
+    renderResult(lines(9));
+    expect(screen.getByText("… 1 weitere Zeile")).toBeTruthy();
+  });
+
+  it("keeps the truncated marker visible outside the collapsed preview", () => {
+    const { container } = renderResult(lines(600, "l"));
+    expect(container.querySelector("pre")!.textContent).toBe(lines(8, "l"));
+    expect(screen.getByText(`… ${testI18n.t("chat.outputTruncated")}`)).toBeTruthy();
   });
 });

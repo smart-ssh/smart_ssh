@@ -1306,7 +1306,7 @@
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",
     "outputTruncated": "（省略されました）",
-    "outputMoreLines": "… 他 {{n}} 行",
+    "outputMoreLines_other": "… 他 {{count}} 行",
     "outputShowAll": "すべて表示",
     "outputShowLess": "表示を減らす",
     "fileWritten": "ファイル「{{path}}」を書き込みました。",

@@ -1306,7 +1306,7 @@
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",
     "outputTruncated": "(dipotong)",
-    "outputMoreLines": "… {{n}} baris lagi",
+    "outputMoreLines_other": "… {{count}} baris lagi",
     "outputShowAll": "Tampilkan semua",
     "outputShowLess": "Tampilkan lebih sedikit",
     "fileWritten": "Berkas '{{path}}' ditulis.",
