@@ -12,7 +12,7 @@ import { applyStoredLanguage } from "../i18n";
 import { applyStoredTheme } from "../lib/theme";
 import { commandErrorText } from "../api/errorCodes";
 import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../api/types";
-import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, CornerTicks, Field, FIELD_CONTROL_CLASS, Icon, Logo } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
@@ -238,14 +238,23 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Titelleistenhöhe frei (`pt-9` zusätzlich zum `p-6`, also
     // `pt-15`), über dem die Drag-Leiste liegt — die Karte rückt nie
     // darunter.
-    <div className="flex h-screen flex-col items-center overflow-y-auto bg-surface px-6 pb-6 pt-15 text-fg narrow:px-4">
+    <div
+      data-testid="startup-screen"
+      className="flex h-screen flex-col items-center overflow-y-auto bg-surface bg-[linear-gradient(to_right,var(--color-grid-line)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-grid-line)_1px,transparent_1px)] bg-[size:32px_32px] px-6 pb-6 pt-15 text-fg narrow:bg-[size:26px_26px] narrow:px-4"
+    >
       <StartupTitleBarDragStrip />
-      <div className="my-auto w-full max-w-md rounded-lg border border-border bg-surface-raised p-6 shadow-xl narrow:p-4">
-        <h1 className="font-heading mb-1 text-xl font-semibold tracking-wide">Smart SSH</h1>
+      <div
+        data-testid="startup-card"
+        className="relative my-auto w-full max-w-[460px] border border-border-strong bg-surface-raised p-8 narrow:p-5"
+      >
+        <CornerTicks tone="accent" corners="all" />
+        <Logo variant="lockup" wordmark="full" size={40} className="mb-6" />
+
+        {state?.screen !== "unlock" && <h1 className="sr-only">Smart SSH</h1>}
 
         {state === null ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.stateUnknown")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.stateUnknown")}</p>
             <Actions>
               <Secondary onClick={retry}>{t("startup.answers.retry")}</Secondary>
               <Secondary onClick={() => void quitApplication()}>
@@ -260,13 +269,20 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               void run(() => unlockWithMasterPassword(password));
             }}
           >
-            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unlockIntro")}</p>
+            <h1 className="text-display mb-3 flex items-center gap-3 text-fg-strong">
+              <Icon name="lock" size={24} className="text-accent" />
+              {t("startup.unlockButton")}
+            </h1>
+            <p className="mb-5 text-sm text-fg-muted">{t("startup.unlockIntro")}</p>
             <Field
               label={t("startup.passwordLabel")}
               help={
-                state.failedUnlockAttempts > 0
-                  ? t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })
-                  : undefined
+                state.failedUnlockAttempts > 0 ? (
+                  <span className="flex items-center gap-1.5 text-warning-fg">
+                    <Icon name="warn" size={14} className="shrink-0" />
+                    {t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })}
+                  </span>
+                ) : undefined
               }
             >
               {(control) => (
@@ -278,31 +294,38 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                   autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={FIELD_CONTROL_CLASS}
+                  className={`${FIELD_CONTROL_CLASS} h-[42px] narrow:h-12`}
                 />
               )}
             </Field>
-            <Actions>
-              <Button type="submit" variant="primary" disabled={busy || password.length === 0}>
-                {t("startup.unlockButton")}
-              </Button>
-              <Secondary onClick={() => void quitApplication()}>
-                {t("startup.answers.quit")}
-              </Secondary>
-            </Actions>
-            {/* Klarstellung 11: erst nach dem dritten Fehlversuch — und nie
-             * bei einer Datei, die sich bloß nicht lesen lässt. Beides
-             * entscheidet das Backend. */}
-            {state.offersStartOver && (
-              <div className="mt-6 border-t border-border pt-4">
-                <p className="mb-3 text-sm text-fg-subtle">{t("startup.wayOutHint")}</p>
-                <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
+            <Button
+              type="submit"
+              variant="primary"
+              className="mt-5 w-full"
+              disabled={busy || password.length === 0}
+            >
+              {t("startup.unlockButton")}
+            </Button>
+            {/* Way-out area: Quit is always there (Spec 0101 A16). Klarstellung
+             * 11: Start over only after the third failed attempt — and never
+             * for a file that merely cannot be read. The backend decides. */}
+            <div className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
+              {state.offersStartOver && (
+                <p className="text-xs text-fg-subtle">{t("startup.wayOutHint")}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {state.offersStartOver && (
+                  <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
+                )}
+                <Secondary onClick={() => void quitApplication()}>
+                  {t("startup.answers.quit")}
+                </Secondary>
               </div>
-            )}
+            </div>
           </form>
         ) : state.screen === "unusableWrapping" ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unusableWrapping")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.unusableWrapping")}</p>
             <Actions>
               <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
               <Secondary onClick={() => void quitApplication()}>
@@ -315,7 +338,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             {/* A3 *nicht erreichbar* (D1), Klarstellung 10a: Über den Inhalt
              * der Datei ist nichts gesagt — hier gibt es **kein** „Neu
              * anfangen", auch nach beliebig vielen Versuchen nicht. */}
-            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unreachableWrapping")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.unreachableWrapping")}</p>
             <Actions>
               <Button variant="primary" onClick={retry}>
                 {t("startup.answers.retry")}
@@ -327,7 +350,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
           </>
         ) : (
           <>
-            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.continuingInTheWindow")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.continuingInTheWindow")}</p>
             {/* **Diese Maske braucht eigene Knöpfe** (Review-Fund Runde 1,
               * A16/Spec 0059): Wählt der Nutzer im Dialog D1 „Beenden",
               * kommt der Startablauf als Fehler zurück („Der Start wurde

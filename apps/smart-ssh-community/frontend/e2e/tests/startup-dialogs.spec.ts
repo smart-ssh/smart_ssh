@@ -23,7 +23,7 @@ test("unlock screen: Tab follows the visual order and every stop shows focus", a
   await password.fill("correct horse battery");
 
   const stops = await walkTabOrder(page, 3);
-  expect(stops.map((s) => s.name)).toEqual(["Unlock", "Quit", "Start over"]);
+  expect(stops.map((s) => s.name)).toEqual(["Unlock", "Start over", "Quit"]);
   expect(stops.filter((s) => !s.indicator).map((s) => s.name)).toEqual([]);
   await expectUsable(page.getByRole("button", { name: "Start over", exact: true }));
 });

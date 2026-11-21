@@ -112,6 +112,17 @@ describe("StartupGate", () => {
     await waitFor(() => expect(getStartupState).toHaveBeenCalled());
   });
 
+  it("zeigt die Entsperrkarte mit Eckmarken, Überschrift, Warnzeile und immer mit Beenden (#1383)", async () => {
+    renderGate(state({ failedUnlockAttempts: 1 }));
+    const card = screen.getByTestId("startup-card");
+    expect(card.querySelectorAll("[data-corner-tick]")).toHaveLength(4);
+    expect(screen.getByRole("heading", { name: "Entsperren" })).toBeTruthy();
+    const warning = screen.getByText(/1/, { selector: "span.text-warning-fg" });
+    expect(warning.querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Neu anfangen" })).toBeNull();
+  });
+
   it("bietet „Neu anfangen“ nur an, wenn das Backend es anbietet (Klarstellung 11)", async () => {
     const withoutWayOut = renderGate(state({ failedUnlockAttempts: 2 }));
     expect(screen.queryByRole("button", { name: "Neu anfangen" })).toBeNull();
