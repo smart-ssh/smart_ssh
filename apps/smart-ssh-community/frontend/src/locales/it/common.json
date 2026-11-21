@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Elimina definitivamente",
     "testResult": {
       "success": "Connessione riuscita",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Accesso rifiutato. Verifichi nome utente e password o chiave.",
       "hostKeyUnknown": "Chiave host sconosciuta: conferma necessaria",
       "hostKeyMismatch": "La chiave host è cambiata",
@@ -1332,6 +1333,11 @@
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
     "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",
     "outputTruncated": "(troncato)",
+    "outputMoreLines_one": "… altra {{count}} riga",
+    "outputMoreLines_many": "… altre {{count}} righe",
+    "outputMoreLines_other": "… altre {{count}} righe",
+    "outputShowAll": "Mostra tutto",
+    "outputShowLess": "Mostra meno",
     "fileWritten": "File '{{path}}' scritto.",
     "writtenWithSudoPassword": "Scritto con la password sudo memorizzata.",
     "documentGenerated": "Documento generato",
@@ -1410,6 +1416,8 @@
     "aiTab": "IA",
     "paneTabs": "Aree della sessione",
     "moreActions": "Altre azioni",
+    "thisDevice": "questo dispositivo",
+    "paneSwitch": "Selettore del riquadro",
     "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
     "extraKeys": {
       "group": "Tasti aggiuntivi",

@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Slett permanent",
     "testResult": {
       "success": "Tilkobling vellykket",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Pålogging avvist. Sjekk brukernavn og passord eller nøkkel.",
       "hostKeyUnknown": "Vertsnøkkel ukjent – bekreftelse kreves",
       "hostKeyMismatch": "Vertsnøkkelen er endret",
@@ -1322,6 +1323,10 @@
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
     "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(avkortet)",
+    "outputMoreLines_one": "… {{count}} linje til",
+    "outputMoreLines_other": "… {{count}} linjer til",
+    "outputShowAll": "Vis alle",
+    "outputShowLess": "Vis færre",
     "fileWritten": "Filen «{{path}}» er skrevet.",
     "writtenWithSudoPassword": "Skrevet med det lagrede sudo-passordet.",
     "documentGenerated": "Dokument laget",
@@ -1399,6 +1404,8 @@
     "aiTab": "KI",
     "paneTabs": "Øktdeler",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enheten",
+    "paneSwitch": "Panelbryter",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
     "extraKeys": {
       "group": "Ekstra taster",

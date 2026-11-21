@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
       "success": "Verbindung erfolgreich",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
       "hostKeyUnknown": "Host-Key unbekannt — Bestätigung nötig",
       "hostKeyMismatch": "Host-Key hat sich geändert",
@@ -1322,6 +1323,10 @@
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
     "refusedResponse": "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
     "outputTruncated": "(gekürzt)",
+    "outputMoreLines_one": "… {{count}} weitere Zeile",
+    "outputMoreLines_other": "… {{count}} weitere Zeilen",
+    "outputShowAll": "Alle anzeigen",
+    "outputShowLess": "Weniger anzeigen",
     "fileWritten": "Datei '{{path}}' geschrieben.",
     "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
     "documentGenerated": "Dokument generiert",
@@ -1399,6 +1404,8 @@
     "aiTab": "KI",
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
+    "thisDevice": "dieses Gerät",
+    "paneSwitch": "Bereichsumschalter",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "extraKeys": {
       "group": "Zusatztasten",

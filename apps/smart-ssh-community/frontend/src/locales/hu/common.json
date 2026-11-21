@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Végleges törlés",
     "testResult": {
       "success": "A kapcsolat sikeres",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "A bejelentkezés elutasítva. Ellenőrizze a felhasználónevet és a jelszót vagy kulcsot.",
       "hostKeyUnknown": "Ismeretlen gazdakulcs – megerősítés szükséges",
       "hostKeyMismatch": "A gazdakulcs megváltozott",
@@ -1322,6 +1323,10 @@
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
     "refusedResponse": "A modell elutasította a kérést. Fogalmazza át, vagy kezdjen új csevegést.",
     "outputTruncated": "(csonkolva)",
+    "outputMoreLines_one": "… még {{count}} sor",
+    "outputMoreLines_other": "… még {{count}} sor",
+    "outputShowAll": "Összes megjelenítése",
+    "outputShowLess": "Kevesebb megjelenítése",
     "fileWritten": "A(z) '{{path}}' fájl megírva.",
     "writtenWithSudoPassword": "A tárolt sudo-jelszóval megírva.",
     "documentGenerated": "Dokumentum létrehozva",
@@ -1395,6 +1400,8 @@
     "aiTab": "MI",
     "paneTabs": "Munkamenet-panelek",
     "moreActions": "További műveletek",
+    "thisDevice": "ez az eszköz",
+    "paneSwitch": "Panelváltó",
     "terminalOpenFailed": "A terminál nem nyitható meg: {{error}}",
     "extraKeys": {
       "group": "Extra billentyűk",

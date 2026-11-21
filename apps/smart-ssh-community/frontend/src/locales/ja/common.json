@@ -287,6 +287,7 @@
     "confirmDeleteServer": "完全に削除",
     "testResult": {
       "success": "接続に成功しました",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
       "hostKeyUnknown": "ホストキーが不明です — 確認が必要です",
       "hostKeyMismatch": "ホストキーが変更されました",
@@ -1312,6 +1313,9 @@
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",
     "outputTruncated": "（省略されました）",
+    "outputMoreLines_other": "… 他 {{count}} 行",
+    "outputShowAll": "すべて表示",
+    "outputShowLess": "表示を減らす",
     "fileWritten": "ファイル「{{path}}」を書き込みました。",
     "writtenWithSudoPassword": "保存済みのsudoパスワードを使用して書き込みました。",
     "documentGenerated": "ドキュメントを生成しました",
@@ -1388,6 +1392,8 @@
     "aiTab": "AI",
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
+    "thisDevice": "このデバイス",
+    "paneSwitch": "ペイン切り替え",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "extraKeys": {
       "group": "追加キー",

@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Xóa vĩnh viễn",
     "testResult": {
       "success": "Kết nối thành công",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Đăng nhập bị từ chối. Kiểm tra tên người dùng và mật khẩu hoặc khóa.",
       "hostKeyUnknown": "Khóa máy chủ chưa biết — cần xác nhận",
       "hostKeyMismatch": "Khóa máy chủ đã thay đổi",
@@ -1312,6 +1313,9 @@
     "emptyResponse": "Mô hình không trả về phản hồi nào. Với các mô hình có giai đoạn suy nghĩ, nên tăng giới hạn đầu ra trong cài đặt nhà cung cấp.",
     "refusedResponse": "Mô hình đã từ chối yêu cầu này. Hãy diễn đạt lại hoặc bắt đầu cuộc trò chuyện mới.",
     "outputTruncated": "(đã cắt bớt)",
+    "outputMoreLines_other": "… {{count}} dòng nữa",
+    "outputShowAll": "Hiện tất cả",
+    "outputShowLess": "Thu gọn",
     "fileWritten": "Đã ghi tệp '{{path}}'.",
     "writtenWithSudoPassword": "Đã ghi bằng mật khẩu sudo đã lưu.",
     "documentGenerated": "Đã tạo tài liệu",
@@ -1388,6 +1392,8 @@
     "aiTab": "AI",
     "paneTabs": "Các ngăn của phiên",
     "moreActions": "Thêm hành động",
+    "thisDevice": "thiết bị này",
+    "paneSwitch": "Chuyển đổi khung",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "extraKeys": {
       "group": "Phím bổ sung",

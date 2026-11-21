@@ -287,6 +287,7 @@
     "confirmDeleteServer": "Hapus permanen",
     "testResult": {
       "success": "Koneksi berhasil",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login ditolak. Periksa nama pengguna dan kata sandi atau kunci.",
       "hostKeyUnknown": "Kunci host tidak dikenal — konfirmasi diperlukan",
       "hostKeyMismatch": "Kunci host telah berubah",
@@ -1312,6 +1313,9 @@
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",
     "outputTruncated": "(dipotong)",
+    "outputMoreLines_other": "… {{count}} baris lagi",
+    "outputShowAll": "Tampilkan semua",
+    "outputShowLess": "Tampilkan lebih sedikit",
     "fileWritten": "Berkas '{{path}}' ditulis.",
     "writtenWithSudoPassword": "Ditulis menggunakan kata sandi sudo yang tersimpan.",
     "documentGenerated": "Dokumen dibuat",
@@ -1388,6 +1392,8 @@
     "aiTab": "AI",
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
+    "thisDevice": "perangkat ini",
+    "paneSwitch": "Pengalih panel",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "extraKeys": {
       "group": "Tombol tambahan",
