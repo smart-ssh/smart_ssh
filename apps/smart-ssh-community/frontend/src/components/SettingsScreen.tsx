@@ -52,6 +52,7 @@ const CATEGORY_ICONS: Record<string, IconName> = {
 interface NavCategory {
   id: string;
   label: string;
+  icon?: IconName;
 }
 
 /**
@@ -135,9 +136,10 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   }, [unknownCategoryKey]);
   const registeredCategories: NavCategory[] = registeredSections
     .filter(isTopLevel)
-    .map(({ id, label }) => ({
+    .map(({ id, label, icon }) => ({
     id,
     label: resolveSectionLabel(label, id, i18n, t),
+    icon,
   }));
 
   const categories = [...builtinCategories, ...registeredCategories];
@@ -209,7 +211,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             {categories.map((category) => {
               const isActive = category.id === active?.id;
               return (
-              <li key={category.id}>
+              <li key={category.id} className="narrow:border-b narrow:border-border">
                 <Button variant="bare"
                   type="button"
                   ref={isActive ? activeNavRef : undefined}
@@ -232,7 +234,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                   }`}
                 >
                   <span aria-hidden="true" className="font-mono text-xs text-fg-faint">{indexOf(category.id)}</span>
-                  <Icon name={CATEGORY_ICONS[category.id] ?? "sliders"} className="hidden shrink-0 narrow:inline" />
+                  <Icon name={category.icon ?? CATEGORY_ICONS[category.id] ?? "sliders"} className="hidden shrink-0 narrow:inline" />
                   <span className="min-w-0 flex-1 truncate">{category.label}</span>
                   <Icon name="chev-r" className="hidden shrink-0 text-fg-faint narrow:inline" />
                 </Button>

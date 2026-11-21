@@ -43,6 +43,7 @@
  * Öffnen zeigt. */
 
 import type { ComponentType, ReactNode } from "react";
+import type { IconName } from "../components/ui/Icon";
 
 export interface SettingsSectionContribution {
   id: string;
@@ -68,6 +69,8 @@ export interface SettingsSectionContribution {
    * geladenen Sprachpaket existiert.
    */
   label?: string;
+  /** Optional icon for the narrow settings list; without it the list shows the generic `sliders` icon. */
+  icon?: IconName;
   /** Optional target category. When set (e.g. `"data-backup"`), the
    * contribution is NOT a top-level category but renders as a section inside
    * that built-in category, after its built-in content. Without it the
