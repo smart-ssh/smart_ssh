@@ -8,6 +8,7 @@ import type { Page } from "@playwright/test";
 
 export const SCREENSHOT_SIZES = [
   { width: 1280, height: 800 },
+  { width: 1440, height: 900 },
   { width: 800, height: 560 },
   { width: 390, height: 844 },
 ] as const;
