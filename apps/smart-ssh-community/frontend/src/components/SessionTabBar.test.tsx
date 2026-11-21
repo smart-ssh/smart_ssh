@@ -196,3 +196,40 @@ describe("SessionTabBar flat tabs (issue #1365)", () => {
     expect(Array.from(stops).map((e) => e.getAttribute("tabindex"))).toEqual(["0", "-1", "-1"]);
   });
 });
+
+// Issue #1408: overflow indication and wheel remapping.
+describe("SessionTabBar overflow (issue #1408)", () => {
+  const setup = (scrollWidth: number, clientWidth: number) => {
+    const { container } = render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const strip = container.querySelector<HTMLElement>("[role=toolbar]")!;
+    Object.defineProperty(strip, "scrollWidth", { configurable: true, value: scrollWidth });
+    Object.defineProperty(strip, "clientWidth", { configurable: true, value: clientWidth });
+    return strip;
+  };
+
+  it("maps the vertical wheel to horizontal scroll and fades the hidden edge when tabs overflow", () => {
+    const strip = setup(600, 300);
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute("data-overflow-end");
+    expect(strip.style.maskImage).toContain("linear-gradient");
+    const ev = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+    strip.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(strip.scrollLeft).toBe(40);
+  });
+
+  it("shows no indication and leaves the wheel alone when all tabs fit", () => {
+    const strip = setup(300, 300);
+    fireEvent.scroll(strip);
+    expect(strip).not.toHaveAttribute("data-overflow-end");
+    expect(strip).not.toHaveAttribute("data-overflow-start");
+    expect(strip.style.maskImage).toBe("");
+    const ev = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+    strip.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+  });
+});
