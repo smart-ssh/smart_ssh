@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "hostkey-changed"
-networks = ["hostkey-net"]
-publish = true

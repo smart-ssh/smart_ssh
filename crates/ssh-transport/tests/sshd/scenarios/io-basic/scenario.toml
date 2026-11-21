@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "io-basic"
-networks = ["io-net"]
-publish = true

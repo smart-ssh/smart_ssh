@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "smoke-openssh-current"
-networks = ["smoke-net"]
-publish = true

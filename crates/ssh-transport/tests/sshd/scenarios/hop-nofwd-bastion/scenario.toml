@@ -1,4 +1,0 @@
-image = "openssh-current"
-hostname = "hop-nofwd-bastion"
-networks = ["hop-nofwd-net"]
-publish = true
