@@ -153,6 +153,41 @@ describe("FileBrowserPanel path bar (issue #1373)", () => {
     await waitFor(() => expect(bar()).toHaveAttribute("title", "/etc"));
   });
 
+  it("a failed load keeps the input open with the typed text; Escape and blur restore the last loaded path", async () => {
+    renderPanel();
+    await waitFor(() => expect(bar()).toHaveAttribute("title", "/var/www/shop"));
+    fireEvent.click(screen.getByTestId("path-bar-edit"));
+    const input = await screen.findByRole("textbox", { name: "Pfad" });
+    vi.mocked(sftpList).mockRejectedValueOnce(new Error("no such directory"));
+    fireEvent.change(input, { target: { value: "/nope" } });
+    fireEvent.submit(input);
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "/nope", null));
+    await waitFor(() => expect(screen.getByText(/no such directory/)).toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Pfad" })).toHaveValue("/nope");
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Pfad" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Pfad" })).toBeNull());
+    expect(bar()).toHaveAttribute("title", "/var/www/shop");
+
+    fireEvent.click(screen.getByTestId("path-bar-edit"));
+    const second = await screen.findByRole("textbox", { name: "Pfad" });
+    vi.mocked(sftpList).mockRejectedValueOnce(new Error("no such directory"));
+    fireEvent.change(second, { target: { value: "/nope2" } });
+    fireEvent.submit(second);
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "/nope2", null));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Pfad" })).toHaveValue("/nope2"));
+    fireEvent.blur(screen.getByRole("textbox", { name: "Pfad" }));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Pfad" })).toBeNull());
+    expect(bar()).toHaveAttribute("title", "/var/www/shop");
+  });
+
+  it("hovering a symlink name shows name -> target (no inner name title hides it)", async () => {
+    renderPanel();
+    const name = (await screen.findAllByText("current"))[0];
+    expect(name).not.toHaveAttribute("title");
+    expect(name.closest("[title]")).toHaveAttribute("title", "current -> /var/www/shop/releases/42");
+  });
+
   it("Ctrl+L inside the file browser switches to the input", async () => {
     renderPanel();
     await waitFor(() => expect(bar()).toHaveAttribute("title", "/var/www/shop"));
