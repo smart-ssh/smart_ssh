@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nie dodano jeszcze serwera",
     "emptyStateHint": "Dodaj pierwszy serwer, aby połączyć się przez SSH.",
     "emptyStateCreateFirstServer": "Dodaj pierwszy serwer",
-    "emptyStateTryLocalhost": "Wypróbuj bez serwera: „Localhost” powyżej otwiera sesję na tym komputerze — z tymi samymi potwierdzeniami co na prawdziwym serwerze."
+    "emptyStateTryLocalhost": "Wypróbuj bez serwera: „Localhost” powyżej otwiera sesję na tym komputerze — z tymi samymi potwierdzeniami co na prawdziwym serwerze.",
+    "localBadge": "Lokalny",
+    "thisDevice": "to urządzenie",
+    "sessionOpen": "Sesja otwarta",
+    "sessionPending": "Czeka na potwierdzenie",
+    "sessionDisconnected": "Sesja rozłączona"
   },
   "settings": {
     "title": "Ustawienia",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importuj …",
     "importSshConfigHint": "Importuj serwery z pliku ssh_config OpenSSH",
     "exportSshConfig": "Eksportuj …",
-    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH",
+    "title": "Serwery",
+    "collapseGroup": "Zwiń grupę „{{name}}”",
+    "expandGroup": "Rozwiń grupę „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
@@ -484,7 +492,14 @@
     "menu": {
       "open": "Otwórz menu nawigacji",
       "title": "Menu nawigacji",
-      "sessions": "Otwarte sesje"
+      "sessions": "Otwarte sesje",
+      "close": "Zamknij menu nawigacji",
+      "needsConfirmation": "Wymaga potwierdzenia",
+      "activities": "Aktywności",
+      "activitiesRunning_one": "{{count}} w toku",
+      "activitiesRunning_few": "{{count}} w toku",
+      "activitiesRunning_many": "{{count}} w toku",
+      "activitiesRunning_other": "{{count}} w toku"
     },
     "mcp": {
       "badge": "MCP",

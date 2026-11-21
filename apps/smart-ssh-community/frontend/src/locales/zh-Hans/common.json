@@ -30,7 +30,12 @@
     "emptyStateTitle": "尚未添加服务器",
     "emptyStateHint": "添加您的第一台服务器，即可通过 SSH 连接。",
     "emptyStateCreateFirstServer": "添加第一台服务器",
-    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。"
+    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。",
+    "localBadge": "本地",
+    "thisDevice": "此设备",
+    "sessionOpen": "会话已打开",
+    "sessionPending": "等待确认",
+    "sessionDisconnected": "会话已断开"
   },
   "settings": {
     "title": "设置",
@@ -136,7 +141,10 @@
     "importSshConfig": "导入…",
     "importSshConfigHint": "从 OpenSSH ssh_config 文件导入服务器",
     "exportSshConfig": "导出…",
-    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config"
+    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config",
+    "title": "服务器",
+    "collapseGroup": "折叠分组“{{name}}”",
+    "expandGroup": "展开分组“{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
@@ -481,7 +489,11 @@
     "menu": {
       "open": "打开导航菜单",
       "title": "导航菜单",
-      "sessions": "已打开的会话"
+      "sessions": "已打开的会话",
+      "close": "关闭导航菜单",
+      "needsConfirmation": "需要确认",
+      "activities": "活动",
+      "activitiesRunning_other": "{{count}} 个运行中"
     },
     "mcp": {
       "badge": "MCP",

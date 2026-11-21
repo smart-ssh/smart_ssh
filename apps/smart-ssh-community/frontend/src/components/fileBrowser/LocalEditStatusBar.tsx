@@ -24,7 +24,7 @@ export function LocalEditStatusBar({
   const { t } = useTranslation();
   if (!localEdit.session) return null;
   return (
-      <div className="flex items-center gap-2 border-t border-accent-border-strong/50 bg-accent-subtle/40 px-2 py-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2 border-t border-accent-border-strong bg-accent-subtle/40 px-3 py-1.5 text-xs">
         {localEdit.session.status === "uploading" ? (
           <span className="text-fg-muted">
             {t("fileBrowser.localEdit.uploading", { name: localEdit.session.entry.name })}

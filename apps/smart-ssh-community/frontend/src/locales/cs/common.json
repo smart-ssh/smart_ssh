@@ -30,7 +30,12 @@
     "emptyStateTitle": "Zatím nebyl přidán žádný server",
     "emptyStateHint": "Přidejte svůj první server a připojte se přes SSH.",
     "emptyStateCreateFirstServer": "Přidat první server",
-    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru."
+    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru.",
+    "localBadge": "Místní",
+    "thisDevice": "toto zařízení",
+    "sessionOpen": "Relace otevřena",
+    "sessionPending": "Čeká na potvrzení",
+    "sessionDisconnected": "Relace odpojena"
   },
   "settings": {
     "title": "Nastavení",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importovat …",
     "importSshConfigHint": "Importovat servery ze souboru ssh_config OpenSSH",
     "exportSshConfig": "Exportovat …",
-    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH",
+    "title": "Servery",
+    "collapseGroup": "Sbalit skupinu „{{name}}“",
+    "expandGroup": "Rozbalit skupinu „{{name}}“"
   },
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
@@ -484,7 +492,14 @@
     "menu": {
       "open": "Otevřít navigační nabídku",
       "title": "Navigační nabídka",
-      "sessions": "Otevřené relace"
+      "sessions": "Otevřené relace",
+      "close": "Zavřít navigační menu",
+      "needsConfirmation": "Čeká na potvrzení",
+      "activities": "Aktivity",
+      "activitiesRunning_one": "běží: {{count}}",
+      "activitiesRunning_few": "běží: {{count}}",
+      "activitiesRunning_many": "běží: {{count}}",
+      "activitiesRunning_other": "běží: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

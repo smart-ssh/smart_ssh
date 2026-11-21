@@ -30,7 +30,12 @@
     "emptyStateTitle": "Noch kein Server angelegt",
     "emptyStateHint": "Lege deinen ersten Server an, um dich per SSH zu verbinden.",
     "emptyStateCreateFirstServer": "Ersten Server anlegen",
-    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server."
+    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server.",
+    "localBadge": "Lokal",
+    "thisDevice": "dieses Gerät",
+    "sessionOpen": "Sitzung offen",
+    "sessionPending": "Wartet auf Bestätigung",
+    "sessionDisconnected": "Sitzung getrennt"
   },
   "settings": {
     "title": "Einstellungen",
@@ -136,7 +141,10 @@
     "importSshConfig": "Import …",
     "importSshConfigHint": "Server aus einer OpenSSH-ssh_config-Datei importieren",
     "exportSshConfig": "Export …",
-    "exportSshConfigHint": "Server nach OpenSSH-ssh_config exportieren"
+    "exportSshConfigHint": "Server nach OpenSSH-ssh_config exportieren",
+    "title": "Server",
+    "collapseGroup": "Gruppe „{{name}}“ zuklappen",
+    "expandGroup": "Gruppe „{{name}}“ aufklappen"
   },
   "treeDrag": {
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
@@ -482,7 +490,12 @@
     "menu": {
       "open": "Navigationsmenü öffnen",
       "title": "Navigationsmenü",
-      "sessions": "Offene Sitzungen"
+      "sessions": "Offene Sitzungen",
+      "close": "Navigationsmenü schließen",
+      "needsConfirmation": "Bestätigung nötig",
+      "activities": "Aktivitäten",
+      "activitiesRunning_one": "{{count}} läuft",
+      "activitiesRunning_other": "{{count}} laufen"
     },
     "mcp": {
       "badge": "MCP",

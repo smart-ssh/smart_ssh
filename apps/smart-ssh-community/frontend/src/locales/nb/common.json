@@ -30,7 +30,12 @@
     "emptyStateTitle": "Ingen server er lagt til ennå",
     "emptyStateHint": "Legg til den første serveren for å koble til via SSH.",
     "emptyStateCreateFirstServer": "Legg til første server",
-    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server."
+    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server.",
+    "localBadge": "Lokal",
+    "thisDevice": "denne enheten",
+    "sessionOpen": "Økt åpen",
+    "sessionPending": "Venter på bekreftelse",
+    "sessionDisconnected": "Økt frakoblet"
   },
   "settings": {
     "title": "Innstillinger",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer servere fra en OpenSSH ssh_config-fil",
     "exportSshConfig": "Eksporter …",
-    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config"
+    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Skjul gruppen «{{name}}»",
+    "expandGroup": "Vis gruppen «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
@@ -482,7 +490,12 @@
     "menu": {
       "open": "Åpne navigasjonsmenyen",
       "title": "Navigasjonsmeny",
-      "sessions": "Åpne økter"
+      "sessions": "Åpne økter",
+      "close": "Lukk navigasjonsmenyen",
+      "needsConfirmation": "Krever bekreftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",

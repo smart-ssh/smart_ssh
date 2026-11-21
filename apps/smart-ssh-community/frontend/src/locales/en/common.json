@@ -30,7 +30,12 @@
     "emptyStateTitle": "No server added yet",
     "emptyStateHint": "Add your first server to connect over SSH.",
     "emptyStateCreateFirstServer": "Add first server",
-    "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server."
+    "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server.",
+    "localBadge": "Local",
+    "thisDevice": "this device",
+    "sessionOpen": "Session open",
+    "sessionPending": "Waiting for confirmation",
+    "sessionDisconnected": "Session disconnected"
   },
   "settings": {
     "title": "Settings",
@@ -136,7 +141,10 @@
     "importSshConfig": "Import …",
     "importSshConfigHint": "Import servers from an OpenSSH ssh_config file",
     "exportSshConfig": "Export …",
-    "exportSshConfigHint": "Export servers to OpenSSH ssh_config"
+    "exportSshConfigHint": "Export servers to OpenSSH ssh_config",
+    "title": "Servers",
+    "collapseGroup": "Collapse group “{{name}}”",
+    "expandGroup": "Expand group “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Drop here to move to the top level (no group)",
@@ -482,7 +490,12 @@
     "menu": {
       "open": "Open navigation menu",
       "title": "Navigation menu",
-      "sessions": "Open sessions"
+      "sessions": "Open sessions",
+      "close": "Close navigation menu",
+      "needsConfirmation": "Needs confirmation",
+      "activities": "Activities",
+      "activitiesRunning_one": "{{count}} running",
+      "activitiesRunning_other": "{{count}} running"
     },
     "mcp": {
       "badge": "MCP",

@@ -30,7 +30,12 @@
     "emptyStateTitle": "Henüz sunucu eklenmedi",
     "emptyStateHint": "SSH ile bağlanmak için ilk sunucunuzu ekleyin.",
     "emptyStateCreateFirstServer": "İlk sunucuyu ekle",
-    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla."
+    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla.",
+    "localBadge": "Yerel",
+    "thisDevice": "bu cihaz",
+    "sessionOpen": "Oturum açık",
+    "sessionPending": "Onay bekliyor",
+    "sessionDisconnected": "Oturum kesildi"
   },
   "settings": {
     "title": "Ayarlar",
@@ -136,7 +141,10 @@
     "importSshConfig": "İçe aktar …",
     "importSshConfigHint": "Sunucuları bir OpenSSH ssh_config dosyasından içe aktar",
     "exportSshConfig": "Dışa aktar …",
-    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar"
+    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar",
+    "title": "Sunucular",
+    "collapseGroup": "“{{name}}” grubunu daralt",
+    "expandGroup": "“{{name}}” grubunu genişlet"
   },
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
@@ -482,7 +490,12 @@
     "menu": {
       "open": "Gezinme menüsünü aç",
       "title": "Gezinme menüsü",
-      "sessions": "Açık oturumlar"
+      "sessions": "Açık oturumlar",
+      "close": "Gezinme menüsünü kapat",
+      "needsConfirmation": "Onay gerekiyor",
+      "activities": "Etkinlikler",
+      "activitiesRunning_one": "{{count}} çalışıyor",
+      "activitiesRunning_other": "{{count}} çalışıyor"
     },
     "mcp": {
       "badge": "MCP",
