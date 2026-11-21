@@ -82,6 +82,9 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             Some(p) => p,
             None => &ssh_manager_core::ssh::NoPrompter,
         };
+        // Issue #1389: the saved name of every hop, so a host key prompt names
+        // the entry its key belongs to (a jump host, not the target).
+        let hop_names = connection_chain_names(server, state.profile_store.as_ref()).await;
         let mut attempt_no: u32 = 0;
         loop {
             attempt_no += 1;
@@ -201,7 +204,9 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
                         app_logic::connect::host_key_flow::HostKeyFlowContext {
                             session_id,
                             server_id,
-                            server_name: Some(server.name.clone()),
+                            server_name: app_logic::connect::host_key_flow::hop_server_name(
+                                &hop_names, &host, port,
+                            ),
                             host_key_store: state.host_key_store.as_ref(),
                             confirmations: &state.pending_host_key_confirmations,
                             sessions: &state.sessions,
@@ -223,4 +228,26 @@ pub(super) async fn establish_transport<R: tauri::Runtime>(
             }
         }
     })
+}
+
+/// `(host, port, saved name)` per hop, in the order of `resolve_connection_target`.
+/// A hop that cannot be read simply has no entry (the dialog then shows no name).
+async fn connection_chain_names(
+    server: &ssh_manager_core::profiles::Server,
+    store: &dyn ssh_manager_core::profiles::ProfileStore,
+) -> Vec<(String, u16, String)> {
+    let mut out = vec![(server.host.clone(), server.port, server.name.clone())];
+    let mut seen = std::collections::HashSet::from([server.id]);
+    let mut next = server.jump_host;
+    while let Some(id) = next {
+        if !seen.insert(id) {
+            break;
+        }
+        let Ok(jump) = store.get_server(&id).await else {
+            break;
+        };
+        next = jump.jump_host;
+        out.push((jump.host, jump.port, jump.name));
+    }
+    out
 }
