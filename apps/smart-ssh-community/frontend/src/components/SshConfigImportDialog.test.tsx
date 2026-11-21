@@ -379,6 +379,18 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeInTheDocument();
   });
 
+  it("still shows the jump host of a conflicting entry in the details list (#1385)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    dto.entries[1].jumpHost = { name: "gateway-x", existing: true } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    const jump = screen.getByTestId("entry-1-jump");
+    expect(jump.textContent).toContain("gateway-x");
+    expect(jump.closest("table")).toBeNull();
+  });
+
   it("shows a conflict row in the table with the rename input below it (#1385)", async () => {
     const dto = preview();
     dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;

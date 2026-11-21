@@ -430,6 +430,17 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                           {e.username.value || t("sshConfigImport.field.emptyValue")}{" "}
                           <span className="text-fg-subtle">— {originLabel(t, e.username.origin)}</span>
                         </dd>
+                        {e.jumpHost && (
+                          <>
+                            <dt className="text-fg-subtle">{t("sshConfigImport.field.jumpHost")}</dt>
+                            <dd data-testid={`entry-${e.index}-jump`}>
+                              {e.jumpHost.name}{" "}
+                              <span className="text-fg-subtle">
+                                — {e.jumpHost.existing ? t("sshConfigImport.jumpHost.existing") : t("sshConfigImport.jumpHost.planned")}
+                              </span>
+                            </dd>
+                          </>
+                        )}
                       </dl>
 
                       {e.identityFile && (
