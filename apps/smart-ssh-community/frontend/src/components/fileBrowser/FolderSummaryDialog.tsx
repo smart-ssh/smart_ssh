@@ -1,7 +1,7 @@
 import { dynamicKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
 import type { FolderUploadSummaryDto } from "../../api/types";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 
 interface FolderSummaryDialogProps {
   folderSummary: FolderUploadSummaryDto;
@@ -14,6 +14,7 @@ export function FolderSummaryDialog({ folderSummary, onClose }: FolderSummaryDia
   return (
       <DialogFrame
         layer="sessionTab"
+        icon={<Icon name="folder" />}
         title={t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
         onClose={() => onClose()}
         actions={

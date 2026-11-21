@@ -1,6 +1,6 @@
 import { isRealDir } from "../../lib/remotePath";
 import { Trans, useTranslation } from "react-i18next";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 import { ChmodDialog } from "./ChmodDialog";
 import { ChownDialog } from "./ChownDialog";
 import { FilePropertiesDialog } from "./FilePropertiesDialog";
@@ -14,7 +14,11 @@ interface FileOperationDialogsProps {
 }
 
 /** The one open operation dialog of the file browser (see `useFileOperations`). */
-export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperationDialogsProps) {
+export function FileOperationDialogs({
+  ops,
+  elevated,
+  elevatedUser,
+}: FileOperationDialogsProps) {
   const { t } = useTranslation();
   const { dialog, dispatch, close } = ops;
   switch (dialog.kind) {
@@ -59,11 +63,17 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
         <DialogFrame
           layer="sessionTab"
           size="sm"
+          icon={<Icon name="trash" />}
           title={
             elevated
-              ? t(isRealDir(entry) ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
-                  user: elevatedUser,
-                })
+              ? t(
+                  isRealDir(entry)
+                    ? "fileElevation.deleteDirTitle"
+                    : "fileElevation.deleteFileTitle",
+                  {
+                    user: elevatedUser,
+                  },
+                )
               : isRealDir(entry)
                 ? t("fileBrowser.deleteDialog.dirTitle")
                 : t("fileBrowser.deleteDialog.fileTitle")
@@ -78,29 +88,35 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
             </>
           }
         >
-          <p>
-            <span className="font-mono text-xs break-all">{entry.path}</span>{" "}
-            {t("fileBrowser.deleteDialog.body")}
-            {isRealDir(entry) &&
-              (preview ? (
+          <p className="mb-2 font-mono text-xs break-all text-fg">
+            {entry.path}
+          </p>
+          <p>{t("fileBrowser.deleteDialog.body")}</p>
+          {isRealDir(entry) && (
+            <p className="mt-2">
+              {preview ? (
                 <>
-                  {" "}
                   <Trans
                     t={t}
                     i18nKey="fileBrowser.deleteDialog.contents"
                     values={{
                       fileCount: preview.fileCount,
                       dirCount: preview.dirCount,
-                      files: t("fileBrowser.deleteDialog.files", { count: preview.fileCount }),
-                      dirs: t("fileBrowser.deleteDialog.dirs", { count: preview.dirCount }),
+                      files: t("fileBrowser.deleteDialog.files", {
+                        count: preview.fileCount,
+                      }),
+                      dirs: t("fileBrowser.deleteDialog.dirs", {
+                        count: preview.dirCount,
+                      }),
                     }}
                     components={{ strong: <strong /> }}
                   />
                 </>
               ) : (
-                ` ${t("fileBrowser.deleteDialog.counting")}`
-              ))}
-          </p>
+                t("fileBrowser.deleteDialog.counting")
+              )}
+            </p>
+          )}
         </DialogFrame>
       );
     }
@@ -108,7 +124,11 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
       return (
         <ChmodDialog
           entry={dialog.entry}
-          modeNote={elevated ? t("fileElevation.chmodNote", { user: elevatedUser }) : null}
+          modeNote={
+            elevated
+              ? t("fileElevation.chmodNote", { user: elevatedUser })
+              : null
+          }
           onCancel={close}
           onConfirm={ops.handleConfirmChmod}
         />
@@ -117,7 +137,11 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
       return (
         <ChownDialog
           entry={dialog.entry}
-          modeNote={elevated ? t("fileElevation.chownNote", { user: elevatedUser }) : null}
+          modeNote={
+            elevated
+              ? t("fileElevation.chownNote", { user: elevatedUser })
+              : null
+          }
           onCancel={close}
           onConfirm={ops.handleConfirmChown}
         />
@@ -127,6 +151,7 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
         <DialogFrame
           layer="sessionTab"
           size="sm"
+          icon={<Icon name="warn" />}
           title={
             elevated && !dialog.targetIsDir
               ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
@@ -137,7 +162,10 @@ export function FileOperationDialogs({ ops, elevated, elevatedUser }: FileOperat
             <>
               <Button onClick={close}>{t("fileBrowser.cancel")}</Button>
               {!dialog.targetIsDir && (
-                <Button variant="danger" onClick={ops.handleConfirmMoveCollision}>
+                <Button
+                  variant="danger"
+                  onClick={ops.handleConfirmMoveCollision}
+                >
                   {t("fileBrowser.overwrite")}
                 </Button>
               )}

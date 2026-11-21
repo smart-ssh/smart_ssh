@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { readEditCopyText, writeEditCopyText } from "../api/api";
 import { commandErrorMessage } from "../api/api";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, DialogFrame, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, DialogFrame, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface Props {
   sessionId: string;
@@ -50,6 +50,7 @@ export function LocalEditCopyEditor({ sessionId, localPath, fileName, onClose }:
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="edit" />}
       size="xl"
       title={fileName}
       onClose={onClose}

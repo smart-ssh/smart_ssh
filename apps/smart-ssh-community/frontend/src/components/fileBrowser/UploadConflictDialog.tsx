@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { formatBytes } from "../../lib/format";
 import { previewReadFailureHint } from "../../lib/previewReadFailure";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 import { NoteDiffPreview } from "../NoteDiffPreview";
 import type { UploadConflict } from "./shared";
 
@@ -20,6 +20,7 @@ export function UploadConflictDialog({ conflict, elevated, elevatedUser, onCance
   return (
       <DialogFrame
         layer="sessionTab"
+        icon={<Icon name="upload" />}
         title={elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
         onClose={() => onCancel()}
         actions={

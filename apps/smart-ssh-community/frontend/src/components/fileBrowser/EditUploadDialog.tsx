@@ -3,7 +3,7 @@ import { previewReadFailureHint } from "../../lib/previewReadFailure";
 import { formatBytes } from "../../lib/format";
 import type { UploadOffer } from "../../hooks/useLocalEditSession";
 import { NoteDiffPreview } from "../NoteDiffPreview";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 
 interface EditUploadDialogProps {
   offer: UploadOffer;
@@ -27,6 +27,7 @@ export function EditUploadDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="upload" />}
       title={
         user ? t("fileElevation.editUploadTitle", { user }) : t("fileBrowser.localEdit.uploadTitle")
       }

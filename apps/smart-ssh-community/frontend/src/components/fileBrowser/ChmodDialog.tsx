@@ -73,6 +73,7 @@ export function ChmodDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="lock" />}
       size="sm"
       title={t("fileBrowser.chmod.title")}
       onClose={onCancel}

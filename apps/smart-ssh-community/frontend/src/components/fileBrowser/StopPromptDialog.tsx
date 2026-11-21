@@ -2,7 +2,7 @@ import type { TranslationKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
 import { formatBytes } from "../../lib/format";
 import type { RunningOperationDto } from "../../api/types";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 
 interface StopPromptDialogProps {
   operations: RunningOperationDto[];
@@ -24,6 +24,7 @@ export function StopPromptDialog({ operations, onCancel, onConfirm }: StopPrompt
   return (
       <DialogFrame
         layer="sessionTab"
+        icon={<Icon name="warn" />}
         size="sm"
         title={t("fileElevation.stopTitle")}
         onClose={() => onCancel()}
