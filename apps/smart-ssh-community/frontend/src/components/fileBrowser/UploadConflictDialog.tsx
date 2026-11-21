@@ -32,10 +32,8 @@ export function UploadConflictDialog({ conflict, elevated, elevatedUser, onCance
           </>
         }
       >
-        <p className="mb-3">
-          <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
-          {t("fileBrowser.uploadConflict.body")}
-        </p>
+        <p className="mb-2 font-mono text-xs break-all text-fg">{uploadConflict.remotePath}</p>
+        <p className="mb-3">{t("fileBrowser.uploadConflict.body")}</p>
         {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
           <NoteDiffPreview
             previousContent={uploadConflict.remoteText}
