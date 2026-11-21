@@ -55,17 +55,19 @@ function SwitchRow({
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-3 text-sm text-fg-muted">
-      <input
-        type="checkbox"
-        className="peer sr-only"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span
-        aria-hidden="true"
-        className="relative inline-block h-4 w-8 shrink-0 border border-border-strong bg-surface-sunken transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-2.5 after:w-2.5 after:bg-fg-muted after:transition-transform peer-checked:border-accent-border peer-checked:bg-accent-subtle peer-checked:after:translate-x-4 peer-checked:after:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:opacity-50"
-      />
+      <span className="relative inline-block h-4 w-8 shrink-0">
+        <input
+          type="checkbox"
+          className="focus-ring peer absolute inset-0 m-0 cursor-pointer appearance-none border border-border-strong bg-surface-sunken checked:border-accent-border checked:bg-accent-subtle disabled:opacity-50"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-[3px] left-[3px] h-2.5 w-2.5 bg-fg-muted transition-transform peer-checked:translate-x-4 peer-checked:bg-accent"
+        />
+      </span>
       {children}
     </label>
   );
