@@ -1,5 +1,4 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   addAiProvider,
@@ -12,7 +11,7 @@ import {
   updateAiProvider,
 } from "../api/api";
 import { Badge, Button, Icon } from "./ui";
-import { SettingsActionSlotContext } from "./SettingsSectionAction";
+import { SettingsActionSlotContext, SettingsSectionAction } from "./SettingsSectionAction";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
 import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
 import { commandErrorText } from "../api/errorCodes";
@@ -394,7 +393,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
   return (
     <div>
-      {settingsSlot && createPortal(addButton, settingsSlot)}
+      <SettingsSectionAction>{addButton}</SettingsSectionAction>
       {error && (
         <p className="mb-4 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>
       )}
