@@ -29,7 +29,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::filter::{RuleId, RuleOrigin};
+use crate::filter::{Pattern, RuleAction, RuleId, RuleOrigin, Scope};
 use crate::ssh::CommandOutput;
 
 /// Wer/was einen Ledger-Eintrag ausgelöst hat (Spec 0057, §1.1: "Quelle
@@ -119,4 +119,66 @@ pub enum LedgerEntryContent {
     /// Assistant-Nachricht ... übernommen, wie ein normaler Chat-Text" —
     /// dieselbe Gleichsetzung gilt hier für den Ledger-Eintrag).
     AiMessage { text: String },
+    /// An AI file read (issue #1446 fills it; Spec 0057). The file content is
+    /// never stored here, only the path and size.
+    FileRead { path: String, bytes: Option<u64> },
+    /// An AI file write (issue #1446 fills it; Spec 0057).
+    FileWritten { path: String, bytes: Option<u64> },
+    /// A connection event of the recorded session (issue #1447).
+    Connection {
+        event: LedgerConnectionEvent,
+        detail: Option<String>,
+    },
+    /// Proof of life of a running session. Carries no content at all.
+    ActivityTick,
+}
+
+/// Kind of a [`LedgerEntryContent::Connection`] entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LedgerConnectionEvent {
+    Connected,
+    Disconnected,
+    Reconnected,
+    Failed,
+}
+
+impl LedgerEntryContent {
+    /// Value of the `entry_type` column for this content.
+    pub fn entry_type(&self) -> &'static str {
+        match self {
+            LedgerEntryContent::CommandProposed { .. } => "command_proposed",
+            LedgerEntryContent::Decision { .. } => "decision",
+            LedgerEntryContent::CommandExecuted { .. } => "command_executed",
+            LedgerEntryContent::AiMessage { .. } => "ai_message",
+            LedgerEntryContent::FileRead { .. } => "file_read",
+            LedgerEntryContent::FileWritten { .. } => "file_written",
+            LedgerEntryContent::Connection { .. } => "connection",
+            LedgerEntryContent::ActivityTick => "activity_tick",
+        }
+    }
+}
+
+/// The rule that decided, as it was at decision time (stored with `decision`
+/// entries in the `rule_snapshot` column).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LedgerRuleSnapshot {
+    pub pattern: Pattern,
+    pub action: RuleAction,
+    pub scope: Scope,
+}
+
+/// Fields every ledger entry carries besides its content. All defaults apply
+/// to rows written before the activity record existed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct LedgerEntryMeta {
+    /// Links proposal, decision and execution of one action.
+    #[serde(default)]
+    pub action_id: Option<String>,
+    /// Set when redaction could not be completed for this entry.
+    #[serde(default)]
+    pub redaction_incomplete: bool,
+    /// Only for `decision` entries.
+    #[serde(default)]
+    pub rule_snapshot: Option<LedgerRuleSnapshot>,
 }

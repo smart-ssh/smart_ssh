@@ -23,8 +23,11 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
+use self::ledger_redaction::redact_ledger_entry_content;
 use super::action_exec::handle_action_proposed;
 use super::notes::handle_document_generated;
+
+mod ledger_redaction;
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -208,36 +211,6 @@ pub(crate) fn ledger_source_for_origin(origin: &ActionOrigin) -> LedgerSource {
     match origin {
         ActionOrigin::Internal => LedgerSource::Ai,
         ActionOrigin::Mcp { .. } => LedgerSource::McpAgent,
-    }
-}
-
-/// Redigiert alle Inhalts-tragenden Varianten eines [`LedgerEntryContent`]
-/// (Spec 0057, §1.2 "PFLICHT") — zentral hier statt an jeder Aufrufstelle
-/// von [`write_ledger_entry`] einzeln, damit ein vergessener Aufrufer
-/// keinen unredigierten Eintrag durchlassen kann. `Decision` trägt keine
-/// Ausgabedaten (nur `reason`/`code`, von der Filter-Engine selbst
-/// erzeugte Texte, kein Serverinhalt) und bleibt deshalb unverändert.
-fn redact_ledger_entry_content(
-    redactor: &dyn OutputRedactor,
-    content: LedgerEntryContent,
-) -> LedgerEntryContent {
-    match content {
-        LedgerEntryContent::CommandProposed { command } => LedgerEntryContent::CommandProposed {
-            command: redactor.redact_text(&command),
-        },
-        LedgerEntryContent::CommandExecuted {
-            command,
-            output,
-            cancelled,
-        } => LedgerEntryContent::CommandExecuted {
-            command: redactor.redact_text(&command),
-            output: redactor.redact(&output),
-            cancelled,
-        },
-        LedgerEntryContent::AiMessage { text } => LedgerEntryContent::AiMessage {
-            text: redactor.redact_text(&text),
-        },
-        decision @ LedgerEntryContent::Decision { .. } => decision,
     }
 }
 
