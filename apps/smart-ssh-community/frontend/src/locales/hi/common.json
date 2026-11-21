@@ -35,7 +35,8 @@
     "thisDevice": "यह डिवाइस",
     "sessionOpen": "सत्र खुला है",
     "sessionPending": "पुष्टि की प्रतीक्षा",
-    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ"
+    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ",
+    "sessionReconnecting": "फिर से कनेक्ट हो रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -402,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "AI की दूसरी राय प्राप्त नहीं हो सकी। दिखाया गया जोखिम नियम-आधारित है।",
     "riskHint": "ज्ञात पैटर्न पर आधारित आकलन — कोई गारंटी नहीं।",
     "runningSince": "{{seconds}} सेकंड से चल रहा है…",
+    "exitCode": "एग्ज़िट कोड: {{code}}",
     "waitingForInputHint": "यह कमांड संभवतः इनपुट की प्रतीक्षा कर रहा है। इसे रोकें, तो AI एक गैर-इंटरैक्टिव विकल्प सुझाएगा।",
     "cancelCommand": "इस कमांड को डिस्कनेक्ट करें",
     "cancellingCommand": "डिस्कनेक्ट हो रहा है…",

@@ -35,7 +35,8 @@
     "thisDevice": "denne enhed",
     "sessionOpen": "Session åben",
     "sessionPending": "Venter på bekræftelse",
-    "sessionDisconnected": "Session afbrudt"
+    "sessionDisconnected": "Session afbrudt",
+    "sessionReconnecting": "Opretter forbindelse igen"
   },
   "settings": {
     "title": "Indstillinger",
@@ -402,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "AI-anden vurdering kunne ikke indhentes. Den viste risiko er den regelbaserede.",
     "riskHint": "Vurdering baseret på kendte mønstre – ingen garanti.",
     "runningSince": "kører i {{seconds}} s…",
+    "exitCode": "exitkode: {{code}}",
     "waitingForInputHint": "Denne kommando venter sandsynligvis på input. Stop den, så foreslår AI'en en ikke-interaktiv variant.",
     "cancelCommand": "Afbryd forbindelsen til denne kommando",
     "cancellingCommand": "Afbryder…",

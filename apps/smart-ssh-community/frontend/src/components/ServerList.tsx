@@ -39,14 +39,16 @@ import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../lib/unusableServer";
 import type { SessionTab } from "../hooks/useSessionTabs";
+import { STATUS_TONE } from "./SessionTabParts";
 import { Badge, Button, DialogFrame, Icon, StatusSquare } from "./ui";
 
 /** Issue #1367: state of the open session(s) of a server, shown as a status
  * square on its row. `attention` = pending confirmation or waiting for the
  * host key. */
-export type ServerMarker = "connected" | "attention" | "disconnected";
+export type ServerMarker = "connected" | "attention" | "reconnecting" | "disconnected";
 
-const MARKER_RANK: Record<ServerMarker, number> = { disconnected: 0, connected: 1, attention: 2 };
+/** Most urgent last: disconnected < connected < reconnecting < attention. */
+const MARKER_RANK: Record<ServerMarker, number> = { disconnected: 0, connected: 1, reconnecting: 2, attention: 3 };
 
 /** One marker per server that has an open user session; with several tabs the
  * most urgent state wins. MCP tabs and attempts that are still connecting or
@@ -62,17 +64,25 @@ export function serverSessionMarkers(
         ? "attention"
         : tab.status === "connected"
           ? "connected"
-          : "disconnected";
+          : tab.status === "reconnecting"
+            ? "reconnecting"
+            : "disconnected";
     const current = markers.get(tab.serverId);
     if (!current || MARKER_RANK[marker] > MARKER_RANK[current]) markers.set(tab.serverId, marker);
   }
   return markers;
 }
 
-const MARKER_TONE = { connected: "success", attention: "warning", disconnected: "neutral" } as const;
+const MARKER_TONE = {
+  connected: STATUS_TONE.connected,
+  attention: "warning",
+  reconnecting: STATUS_TONE.reconnecting,
+  disconnected: STATUS_TONE.disconnected,
+} as const;
 const MARKER_TEXT = {
   connected: "mainScreen.sessionOpen",
   attention: "mainScreen.sessionPending",
+  reconnecting: "mainScreen.sessionReconnecting",
   disconnected: "mainScreen.sessionDisconnected",
 } as const;
 
