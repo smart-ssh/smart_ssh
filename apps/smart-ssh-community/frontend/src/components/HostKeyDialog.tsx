@@ -133,8 +133,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           {rejectLabel}
         </Button>
         <Button
-          variant={isMismatch ? "ghost" : "primary"}
-          className={isMismatch ? "text-danger-fg" : ""}
+          variant={isMismatch ? "danger" : "primary"}
           onClick={() => decide("trust")}
         >
           {trustLabel}
