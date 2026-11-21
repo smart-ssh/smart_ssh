@@ -1,7 +1,7 @@
 // Issue #1380: review screenshots of the server form's Connection tab
 // (SCREENSHOT_LABEL=before|after, SCREENSHOT_SCHEME=dark) at every screenshot size.
 import { expect, test } from "../support/app";
-import { populated } from "../support/data";
+import { failingStepLog, populated, server } from "../support/data";
 import { captureScreen } from "../support/screenshots";
 
 test("Connection tab screenshots", async ({ app }) => {
@@ -21,4 +21,38 @@ test("Connection tab screenshots", async ({ app }) => {
     }).toPass();
   }
   await captureScreen(app.page, "server-form-connection");
+});
+
+// Review: states with a key-file server (findings), a stored sudo password and a
+// successful test ("OK · n ms" badge), plus the two dialogs.
+test("Connection tab key-file states screenshots", async ({ app }) => {
+  const base = populated();
+  const steps = failingStepLog(1).map((r) => (r.status.state === "failed" ? { ...r, status: { state: "ok" as const } } : r));
+  await app.launch({
+    ...base,
+    servers: [
+      ...(base.servers ?? []),
+      server({ id: "key-1", name: "key-1", authKind: "identity_file", identityFilePath: "/home/deploy/.ssh/id_ed25519", hasSudoPassword: true }),
+    ],
+    commands: {
+      inspect_key_file: { result: { exists: true, permissionsTooOpen: true, validKey: true, encrypted: true, problem: null } },
+      test_connection: { result: { kind: "success", steps } },
+    },
+  });
+  if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
+  const page = app.page;
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await page.getByRole("treeitem", { name: /^key-1\b/ }).click();
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Key file" })).toBeChecked();
+  await page.getByRole("button", { name: "Test Connection", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByTestId("test-connection-result")).toContainText(/OK · \d+ ms/);
+  await captureScreen(page, "server-form-test-dialog");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const log = page.getByTestId("connect-step-log");
+  await log.getByText("Details", { exact: true }).click();
+  await expect(log).toHaveAttribute("open");
+  await captureScreen(page, "server-form-connection-keyfile");
 });
