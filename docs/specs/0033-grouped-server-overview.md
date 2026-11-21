@@ -45,9 +45,12 @@ Ansichten dürfen sich in Darstellung und Interaktion unterscheiden.
   am Ende der Zeile.
 - Hat ein Server eine offene Sitzung, zeigt seine Zeile ein quadratisches
   Statuszeichen: grün bei bestehender Verbindung, gelb bei wartender
-  Bestätigung oder wartender Host-Schlüssel-Abfrage, neutral bei getrennter
-  Verbindung (für Screenreader zusätzlich als Text). Mit dem Schließen des
-  Reiters verschwindet es. Ein laufender Verbindungsaufbau bleibt der Text
+  Bestätigung oder wartender Host-Schlüssel-Abfrage, ebenfalls gelb bei einer
+  Sitzung, die sich gerade neu verbindet (wie im Reiter), neutral bei getrennter
+  Verbindung (für Screenreader zusätzlich als Text). Bei mehreren Reitern
+  desselben Servers gewinnt der dringendste Zustand: wartende
+  Bestätigung/Host-Schlüssel vor „verbindet neu“ vor „verbunden“ vor
+  „getrennt“. Mit dem Schließen des Reiters verschwindet es. Ein laufender Verbindungsaufbau bleibt der Text
   „Verbinde …“.
 - Ein Abschnitt **„Ohne Gruppe"** für Server ohne Gruppe, am Ende der Liste. Er
   erscheint, sobald mindestens ein Server ungruppiert ist (beim Ziehen eines

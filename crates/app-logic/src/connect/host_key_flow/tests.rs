@@ -240,6 +240,7 @@ struct Fixture {
     emitter: TestEmitter,
     log: ConnectLog,
     session_id: SessionId,
+    server_name: Option<String>,
 }
 
 impl Fixture {
@@ -251,6 +252,7 @@ impl Fixture {
             emitter: TestEmitter::default(),
             log: ConnectLog::new(),
             session_id: Uuid::new_v4(),
+            server_name: None,
         }
     }
 
@@ -265,6 +267,7 @@ impl Fixture {
         let ctx = HostKeyFlowContext {
             session_id: self.session_id,
             server_id: ServerId(Uuid::new_v4()),
+            server_name: self.server_name.clone(),
             host_key_store: &self.store,
             confirmations: &self.confirmations,
             sessions: &self.sessions,
@@ -424,4 +427,46 @@ async fn test_flow_automatic_reconnect_stops_without_prompting() {
     assert!(fx.trusted().is_empty());
     assert!(fx.event_names().is_empty());
     assert!(!fx.confirmations.contains(&fx.session_id));
+}
+
+fn chain() -> Vec<(String, u16, String)> {
+    vec![
+        ("bastion.example".into(), 22, "bastion".into()),
+        ("10.0.0.5".into(), 22, "web-01".into()),
+    ]
+}
+
+/// Issue #1389: a jump host's key prompt shows the jump host's own name, not
+/// the target's.
+#[test]
+fn test_hop_server_name_is_the_name_of_the_prompting_hop() {
+    assert_eq!(
+        hop_server_name(&chain(), "bastion.example", 22).as_deref(),
+        Some("bastion")
+    );
+    assert_eq!(
+        hop_server_name(&chain(), "10.0.0.5", 22).as_deref(),
+        Some("web-01")
+    );
+    assert_eq!(hop_server_name(&chain(), "other", 22), None);
+}
+
+#[test]
+fn test_hop_server_name_is_none_when_ambiguous() {
+    let mut c = chain();
+    c.push(("bastion.example".into(), 22, "other-entry".into()));
+    assert_eq!(hop_server_name(&c, "bastion.example", 22), None);
+}
+
+/// Issue #1389: the name chosen for the prompting hop reaches the event.
+#[tokio::test]
+async fn test_flow_passes_the_hop_name_to_the_prompt_event() {
+    let mut fx = Fixture::new();
+    fx.server_name = hop_server_name(&chain(), "bastion.example", 22);
+    let (result, ()) = tokio::join!(
+        fx.run(true, LONG, unknown(), std::future::pending()),
+        fx.answer(HostKeyUserDecision::Reject),
+    );
+    let _ = result;
+    assert_eq!(recorded_events(&fx.emitter)[0].1["serverName"], "bastion");
 }

@@ -90,6 +90,11 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
         </div>
       ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 narrow:px-4">
+        {event.serverName ? (
+          <div className="mb-1 break-words font-mono text-sm text-fg" data-testid="host-key-server-name">
+            {event.serverName}
+          </div>
+        ) : null}
         <h2
           id={headingId}
           className="text-title mb-2 break-words text-fg-strong"

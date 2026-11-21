@@ -35,7 +35,8 @@
     "thisDevice": "this device",
     "sessionOpen": "Session open",
     "sessionPending": "Waiting for confirmation",
-    "sessionDisconnected": "Session disconnected"
+    "sessionDisconnected": "Session disconnected",
+    "sessionReconnecting": "Session reconnecting"
   },
   "settings": {
     "title": "Settings",

@@ -24,10 +24,26 @@ pub fn connect_cancelled_error() -> CommandError {
     CommandError::with_code("Verbindungsaufbau abgebrochen", "SSH_CONNECT_CANCELLED")
 }
 
+/// Name of the saved server whose own host key is being checked (display
+/// only). `chain` lists `(host, port, saved name)` per hop, jump hosts and
+/// target. The prompt only knows `host:port`; the name is returned only when
+/// every hop with that address carries the same name, otherwise `None` — a
+/// wrong name is worse than none.
+pub fn hop_server_name(chain: &[(String, u16, String)], host: &str, port: u16) -> Option<String> {
+    let mut names = chain
+        .iter()
+        .filter(|(h, p, _)| *p == port && h.eq_ignore_ascii_case(host))
+        .map(|(_, _, n)| n);
+    let first = names.next()?;
+    names.all(|n| n == first).then(|| first.clone())
+}
+
 /// What the flow needs from its surroundings.
 pub struct HostKeyFlowContext<'a> {
     pub session_id: SessionId,
     pub server_id: ServerId,
+    /// Name of the saved server, shown in the dialog (display-only).
+    pub server_name: Option<String>,
     pub host_key_store: &'a dyn HostKeyStore,
     pub confirmations: &'a ConfirmationRegistry<SessionId, HostKeyUserDecision>,
     pub sessions: &'a SessionManager,
@@ -61,6 +77,7 @@ pub async fn resolve_pending_host_key(
     let HostKeyFlowContext {
         session_id,
         server_id,
+        server_name,
         host_key_store,
         confirmations,
         sessions,
@@ -134,6 +151,7 @@ pub async fn resolve_pending_host_key(
         fingerprint,
         expected_fingerprint,
         key_type,
+        server_name,
     );
 
     let wait = tokio::select! {
