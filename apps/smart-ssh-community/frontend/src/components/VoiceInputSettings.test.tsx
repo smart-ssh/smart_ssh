@@ -152,6 +152,10 @@ describe("VoiceInputSettings status square and progress bar (issue #1379)", () =
       Promise.resolve({ model, ...status })) as never);
     renderSettings();
     await screen.findAllByRole("radio");
+    if (expected === "neutral") {
+      // Neutral is also the pre-load default: wait for the loaded status (download offer) first.
+      await within(rowOf()).findByRole("button", { name: "Herunterladen" });
+    }
     await waitFor(() => expect(tone(rowOf())).toBe(expected));
     expect(bar(rowOf())).toBeNull();
   });
