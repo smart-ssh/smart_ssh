@@ -102,6 +102,7 @@ test.describe("narrow Manage area @phone", () => {
     await expect(page.getByRole("dialog").getByRole("button", { name: /top level/ })).toBeDisabled();
     await expect(page.getByRole("dialog").getByText("current")).toHaveCount(1);
     await expectNoSeriousA11yViolations(page, "narrow move-to");
+    await captureScreen(page, "manage-narrow-move-to");
     await page.getByRole("dialog").getByRole("button", { name: /Lab/ }).click();
     await expect.poll(() => app.calls("move_server_to_group")).toHaveLength(1);
   });
