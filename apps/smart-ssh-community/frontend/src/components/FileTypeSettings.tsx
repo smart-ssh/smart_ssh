@@ -111,12 +111,12 @@ export function FileTypeSettings() {
       <p className="mb-4 text-sm text-fg-subtle">{t("fileTypes.description")}</p>
 
       {loadError && (
-        <p role="alert" className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
+        <p role="alert" className="mb-4 border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
       )}
 
-      <div className="mb-3 space-y-2">
+      <div className="mb-3 divide-y divide-border border-y border-border">
         {rows.map((row) => (
-          <div key={row.id} className="flex items-center gap-2">
+          <div key={row.id} className="flex items-center gap-2 py-2">
             <input
               {...TECHNICAL_INPUT_PROPS}
               value={row.extension}
@@ -139,6 +139,7 @@ export function FileTypeSettings() {
             </Button>
             <Button
               variant="ghost"
+              iconOnly
               onClick={() => removeRow(row.id)}
               title={t("fileTypes.remove")}
               aria-label={t("fileTypes.remove")}
