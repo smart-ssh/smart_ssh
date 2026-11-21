@@ -35,7 +35,8 @@
     "thisDevice": "此设备",
     "sessionOpen": "会话已打开",
     "sessionPending": "等待确认",
-    "sessionDisconnected": "会话已断开"
+    "sessionDisconnected": "会话已断开",
+    "sessionReconnecting": "正在重新连接"
   },
   "settings": {
     "title": "设置",

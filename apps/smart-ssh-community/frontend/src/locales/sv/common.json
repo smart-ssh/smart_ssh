@@ -35,7 +35,8 @@
     "thisDevice": "den här enheten",
     "sessionOpen": "Session öppen",
     "sessionPending": "Väntar på bekräftelse",
-    "sessionDisconnected": "Session frånkopplad"
+    "sessionDisconnected": "Session frånkopplad",
+    "sessionReconnecting": "Ansluter igen"
   },
   "settings": {
     "title": "Inställningar",

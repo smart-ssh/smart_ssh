@@ -35,7 +35,8 @@
     "thisDevice": "это устройство",
     "sessionOpen": "Сеанс открыт",
     "sessionPending": "Ожидает подтверждения",
-    "sessionDisconnected": "Сеанс отключён"
+    "sessionDisconnected": "Сеанс отключён",
+    "sessionReconnecting": "Переподключение"
   },
   "settings": {
     "title": "Настройки",

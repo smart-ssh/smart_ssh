@@ -4,7 +4,6 @@
 //! Fortsetzen) ohne Netzwerk. Echte SQLite-Stores (je Test eigene
 //! Datenbankdateien), `MockRuntime`, ein Mock-Connector mit Mock-Transport.
 // Testcode-Ausnahme zum `deny` — s. `lib.rs`, Modulkopf.
-
 #![expect(clippy::expect_used, reason = "test code")]
 /// Issue #395: the in-process SSH test server of `ssh-transport`, reused for
 /// the real two-hop reconnect test in `connect_flow_tests`. Test-only.
@@ -1997,4 +1996,5 @@ mod decorator_sites {
         reset(app.handle());
     }
 }
+mod tests_host_key_hop_name;
 mod tests_reconnect_refusal;

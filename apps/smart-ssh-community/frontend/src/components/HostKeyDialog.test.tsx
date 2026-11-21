@@ -488,3 +488,19 @@ describe("HostKeyDialog above other modals (issue #1150)", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ablehnen" }));
   });
 });
+
+describe("HostKeyDialog server name", () => {
+  it("shows the saved server's name as the first line, plus host:port", () => {
+    renderDialog({ ...unknownEvent, serverName: "web-01" });
+    const name = screen.getByTestId("host-key-server-name");
+    expect(name).toHaveTextContent("web-01");
+    expect(screen.getByTestId("host-key-address")).toHaveTextContent("example.com:22");
+    expect(name.parentElement?.firstElementChild).toBe(name);
+  });
+
+  it("shows no name line without a server name (unsaved server)", () => {
+    renderDialog(unknownEvent);
+    expect(screen.queryByTestId("host-key-server-name")).toBeNull();
+    expect(screen.getByTestId("host-key-address")).toHaveTextContent("example.com:22");
+  });
+});

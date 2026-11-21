@@ -35,7 +35,8 @@
     "thisDevice": "thiết bị này",
     "sessionOpen": "Phiên đang mở",
     "sessionPending": "Đang chờ xác nhận",
-    "sessionDisconnected": "Phiên đã ngắt kết nối"
+    "sessionDisconnected": "Phiên đã ngắt kết nối",
+    "sessionReconnecting": "Đang kết nối lại"
   },
   "settings": {
     "title": "Cài đặt",

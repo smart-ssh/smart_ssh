@@ -182,7 +182,7 @@ export type HostKeyUserDecision = { "decision": "trust" } | { "decision": "rejec
 
 export type HostKeyVerificationEndedPayload = { sessionId: string, promptId: number, reason: HostKeyPromptEndReason, };
 
-export type HostKeyVerificationNeededPayload = { sessionId: string, promptId: number, host: string, port: number, kind: HostKeyKind, fingerprint: string, expectedFingerprint: string | null, keyType: string | null, };
+export type HostKeyVerificationNeededPayload = { sessionId: string, promptId: number, host: string, port: number, kind: HostKeyKind, fingerprint: string, expectedFingerprint: string | null, keyType: string | null, serverName?: string, };
 
 export type InjectionCheckState = { "state": "running" } | { "state": "clean" } | { "state": "suspected", reason: string, } | { "state": "unavailable" };
 

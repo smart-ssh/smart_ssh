@@ -35,7 +35,8 @@
     "thisDevice": "toto zařízení",
     "sessionOpen": "Relace otevřena",
     "sessionPending": "Čeká na potvrzení",
-    "sessionDisconnected": "Relace odpojena"
+    "sessionDisconnected": "Relace odpojena",
+    "sessionReconnecting": "Připojuji znovu"
   },
   "settings": {
     "title": "Nastavení",

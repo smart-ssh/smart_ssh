@@ -35,7 +35,8 @@
     "thisDevice": "이 기기",
     "sessionOpen": "세션 열림",
     "sessionPending": "확인 대기 중",
-    "sessionDisconnected": "세션 연결 끊김"
+    "sessionDisconnected": "세션 연결 끊김",
+    "sessionReconnecting": "다시 연결하는 중"
   },
   "settings": {
     "title": "설정",
