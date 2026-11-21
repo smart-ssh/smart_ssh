@@ -1400,6 +1400,8 @@
     "aiTab": "IA",
     "paneTabs": "Panourile sesiunii",
     "moreActions": "Mai multe acțiuni",
+    "thisDevice": "acest dispozitiv",
+    "paneSwitch": "Comutator de panouri",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
     "extraKeys": {
       "group": "Taste suplimentare",

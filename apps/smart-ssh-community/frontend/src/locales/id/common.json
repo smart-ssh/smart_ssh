@@ -1384,6 +1384,8 @@
     "aiTab": "AI",
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
+    "thisDevice": "perangkat ini",
+    "paneSwitch": "Pengalih panel",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "extraKeys": {
       "group": "Tombol tambahan",

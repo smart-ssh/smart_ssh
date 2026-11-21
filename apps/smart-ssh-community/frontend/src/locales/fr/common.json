@@ -1404,6 +1404,8 @@
     "aiTab": "IA",
     "paneTabs": "Zones de la session",
     "moreActions": "Plus d’actions",
+    "thisDevice": "cet appareil",
+    "paneSwitch": "Sélecteur de volet",
     "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
     "extraKeys": {
       "group": "Touches supplémentaires",

@@ -1414,6 +1414,8 @@
     "aiTab": "ИИ",
     "paneTabs": "Панели сеанса",
     "moreActions": "Ещё действия",
+    "thisDevice": "это устройство",
+    "paneSwitch": "Переключатель панелей",
     "terminalOpenFailed": "Не удалось открыть терминал: {{error}}",
     "extraKeys": {
       "group": "Дополнительные клавиши",

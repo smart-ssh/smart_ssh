@@ -1404,6 +1404,8 @@
     "aiTab": "IA",
     "paneTabs": "Paneles de la sesión",
     "moreActions": "Más acciones",
+    "thisDevice": "este dispositivo",
+    "paneSwitch": "Selector de panel",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
     "extraKeys": {
       "group": "Teclas adicionales",

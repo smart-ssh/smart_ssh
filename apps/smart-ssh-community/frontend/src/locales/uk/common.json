@@ -1414,6 +1414,8 @@
     "aiTab": "ШІ",
     "paneTabs": "Панелі сеансу",
     "moreActions": "Більше дій",
+    "thisDevice": "цей пристрій",
+    "paneSwitch": "Перемикач панелей",
     "terminalOpenFailed": "Не вдалося відкрити термінал: {{error}}",
     "extraKeys": {
       "group": "Додаткові клавіші",

@@ -1414,6 +1414,8 @@
     "aiTab": "AI",
     "paneTabs": "Panele sesji",
     "moreActions": "Więcej akcji",
+    "thisDevice": "to urządzenie",
+    "paneSwitch": "Przełącznik paneli",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
     "extraKeys": {
       "group": "Dodatkowe klawisze",

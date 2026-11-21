@@ -1394,6 +1394,8 @@
     "aiTab": "AI",
     "paneTabs": "Session panes",
     "moreActions": "More actions",
+    "thisDevice": "this device",
+    "paneSwitch": "Pane switch",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "extraKeys": {
       "group": "Extra keys",

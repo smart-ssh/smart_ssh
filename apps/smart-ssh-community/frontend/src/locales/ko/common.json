@@ -1384,6 +1384,8 @@
     "aiTab": "AI",
     "paneTabs": "세션 패널",
     "moreActions": "더 많은 작업",
+    "thisDevice": "이 기기",
+    "paneSwitch": "패널 전환",
     "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
     "extraKeys": {
       "group": "추가 키",
