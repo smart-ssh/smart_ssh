@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
     "hintRoot": "→ üst düzey (grupsuz)",
+    "current": "geçerli",
     "hintGroup": "→ bu gruba taşı",
     "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
     "moveTo": "“{{name}}” öğesini taşı…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Kalıcı olarak sil",
     "testResult": {
       "success": "Bağlantı başarılı",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Oturum açma reddedildi. Kullanıcı adını ve parolayı ya da anahtarı denetleyin.",
       "hostKeyUnknown": "Ana makine anahtarı bilinmiyor — onay gerekli",
       "hostKeyMismatch": "Ana makine anahtarı değişti",
@@ -879,6 +881,8 @@
     "groupsHeading": "Ortaya çıkan klasör yapısı",
     "entriesHeading": "{{count}} sunucu",
     "field": {
+      "name": "Ad",
+      "include": "Dahil et",
       "host": "Adres",
       "port": "Bağlantı noktası",
       "username": "Kullanıcı",
@@ -954,6 +958,8 @@
       "proxyJumpLocalPseudoServer": "yerel sahte sunucuyu işaret ediyor"
     },
     "confirm": "İçe aktar",
+    "confirmCount_one": "{{count}} sunucuyu içe aktar",
+    "confirmCount_other": "{{count}} sunucuyu içe aktar",
     "applying": "İçe aktarılıyor …",
     "result": {
       "success": "{{created}} sunucu oluşturuldu, {{groups}} klasör, {{skipped}} çakışma atlandı.",
@@ -1318,6 +1324,10 @@
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
     "refusedResponse": "Model bu isteği reddetti. İsteği yeniden ifade edin veya yeni bir sohbet başlatın.",
     "outputTruncated": "(kesildi)",
+    "outputMoreLines_one": "… {{count}} satır daha",
+    "outputMoreLines_other": "… {{count}} satır daha",
+    "outputShowAll": "Tümünü göster",
+    "outputShowLess": "Daha az göster",
     "fileWritten": "'{{path}}' dosyası yazıldı.",
     "writtenWithSudoPassword": "Kayıtlı sudo parolasıyla yazıldı.",
     "documentGenerated": "Belge oluşturuldu",

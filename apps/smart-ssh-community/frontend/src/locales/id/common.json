@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Lepas di sini untuk memindahkan ke tingkat teratas (tanpa grup)",
     "hintRoot": "→ tingkat teratas (tanpa grup)",
+    "current": "saat ini",
     "hintGroup": "→ pindahkan ke grup ini",
     "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
     "moveTo": "Pindahkan “{{name}}” ke…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Hapus permanen",
     "testResult": {
       "success": "Koneksi berhasil",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login ditolak. Periksa nama pengguna dan kata sandi atau kunci.",
       "hostKeyUnknown": "Kunci host tidak dikenal — konfirmasi diperlukan",
       "hostKeyMismatch": "Kunci host telah berubah",
@@ -872,6 +874,8 @@
     "groupsHeading": "Struktur folder yang dihasilkan",
     "entriesHeading": "{{count}} server",
     "field": {
+      "name": "Nama",
+      "include": "Sertakan",
       "host": "Alamat",
       "port": "Port",
       "username": "Pengguna",
@@ -947,6 +951,7 @@
       "proxyJumpLocalPseudoServer": "mengarah ke pseudo-server lokal"
     },
     "confirm": "Impor",
+    "confirmCount_other": "Impor {{count}} server",
     "applying": "Mengimpor …",
     "result": {
       "success": "{{created}} server dibuat, {{groups}} folder, {{skipped}} konflik dilewati.",
@@ -1309,6 +1314,9 @@
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",
     "outputTruncated": "(dipotong)",
+    "outputMoreLines_other": "… {{count}} baris lagi",
+    "outputShowAll": "Tampilkan semua",
+    "outputShowLess": "Tampilkan lebih sedikit",
     "fileWritten": "Berkas '{{path}}' ditulis.",
     "writtenWithSudoPassword": "Ditulis menggunakan kata sandi sudo yang tersimpan.",
     "documentGenerated": "Dokumen dibuat",

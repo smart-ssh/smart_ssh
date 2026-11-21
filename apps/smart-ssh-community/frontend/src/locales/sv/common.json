@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
+    "current": "nuvarande",
     "hintGroup": "→ flytta in i den här gruppen",
     "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
     "moveTo": "Flytta ”{{name}}” till…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Ta bort permanent",
     "testResult": {
       "success": "Anslutningen lyckades",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inloggningen avvisades. Kontrollera användarnamn och lösenord eller nyckel.",
       "hostKeyUnknown": "Värdnyckeln är okänd — bekräftelse krävs",
       "hostKeyMismatch": "Värdnyckeln har ändrats",
@@ -879,6 +881,8 @@
     "groupsHeading": "Resulterande mappstruktur",
     "entriesHeading": "{{count}} servrar",
     "field": {
+      "name": "Namn",
+      "include": "Inkludera",
       "host": "Adress",
       "port": "Port",
       "username": "Användare",
@@ -954,6 +958,8 @@
       "proxyJumpLocalPseudoServer": "pekar på den lokala pseudoservern"
     },
     "confirm": "Importera",
+    "confirmCount_one": "Importera {{count}} server",
+    "confirmCount_other": "Importera {{count}} servrar",
     "applying": "Importerar …",
     "result": {
       "success": "{{created}} servrar skapade, {{groups}} mappar, {{skipped}} konflikt(er) överhoppade.",
@@ -1318,6 +1324,10 @@
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
     "refusedResponse": "Modellen avvisade begäran. Formulera om den eller starta en ny chatt.",
     "outputTruncated": "(kapad)",
+    "outputMoreLines_one": "… {{count}} rad till",
+    "outputMoreLines_other": "… {{count}} rader till",
+    "outputShowAll": "Visa alla",
+    "outputShowLess": "Visa färre",
     "fileWritten": "Filen '{{path}}' skriven.",
     "writtenWithSudoPassword": "Skriven med det sparade sudo-lösenordet.",
     "documentGenerated": "Dokument skapat",

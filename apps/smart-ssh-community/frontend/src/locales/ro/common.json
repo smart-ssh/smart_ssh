@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
+    "current": "curent",
     "hintGroup": "→ mută în acest grup",
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Șterge definitiv",
     "testResult": {
       "success": "Conectare reușită",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
       "hostKeyUnknown": "Cheie de host necunoscută — este necesară confirmarea",
       "hostKeyMismatch": "Cheia de host s-a schimbat",
@@ -886,6 +888,8 @@
     "groupsHeading": "Structura de foldere rezultată",
     "entriesHeading": "Servere: {{count}}",
     "field": {
+      "name": "Nume",
+      "include": "Include",
       "host": "Adresă",
       "port": "Port",
       "username": "Utilizator",
@@ -961,6 +965,9 @@
       "proxyJumpLocalPseudoServer": "indică spre pseudo-serverul local"
     },
     "confirm": "Importă",
+    "confirmCount_one": "Importă {{count}} server",
+    "confirmCount_few": "Importă {{count}} servere",
+    "confirmCount_other": "Importă {{count}} de servere",
     "applying": "Se importă …",
     "result": {
       "success": "Servere create: {{created}}, foldere: {{groups}}, conflicte omise: {{skipped}}.",
@@ -1327,6 +1334,11 @@
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "refusedResponse": "Modelul a refuzat această cerere. Reformulați-o sau începeți o conversație nouă.",
     "outputTruncated": "(trunchiat)",
+    "outputMoreLines_one": "… încă {{count}} rând",
+    "outputMoreLines_few": "… încă {{count}} rânduri",
+    "outputMoreLines_other": "… încă {{count}} rânduri",
+    "outputShowAll": "Afișează tot",
+    "outputShowLess": "Afișează mai puțin",
     "fileWritten": "Fișierul '{{path}}' a fost scris.",
     "writtenWithSudoPassword": "Scris cu parola sudo stocată.",
     "documentGenerated": "Document generat",

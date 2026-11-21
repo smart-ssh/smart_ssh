@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
+    "current": "nykyinen",
     "hintGroup": "→ siirrä tähän ryhmään",
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Poista pysyvästi",
     "testResult": {
       "success": "Yhteys onnistui",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Kirjautuminen hylättiin. Tarkista käyttäjätunnus ja salasana tai avain.",
       "hostKeyUnknown": "Isäntäavain tuntematon – vahvistus tarvitaan",
       "hostKeyMismatch": "Isäntäavain on muuttunut",
@@ -879,6 +881,8 @@
     "groupsHeading": "Syntyvä kansiorakenne",
     "entriesHeading": "{{count}} palvelinta",
     "field": {
+      "name": "Nimi",
+      "include": "Sisällytä",
       "host": "Osoite",
       "port": "Portti",
       "username": "Käyttäjä",
@@ -954,6 +958,8 @@
       "proxyJumpLocalPseudoServer": "osoittaa paikalliseen näennäispalvelimeen"
     },
     "confirm": "Tuo",
+    "confirmCount_one": "Tuo {{count}} palvelin",
+    "confirmCount_other": "Tuo {{count}} palvelinta",
     "applying": "Tuodaan …",
     "result": {
       "success": "{{created}} palvelinta luotu, {{groups}} kansiota, {{skipped}} ristiriitaa ohitettu.",
@@ -1318,6 +1324,10 @@
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
     "refusedResponse": "Malli hylkäsi pyynnön. Muotoile se uudelleen tai aloita uusi keskustelu.",
     "outputTruncated": "(katkaistu)",
+    "outputMoreLines_one": "… {{count}} rivi lisää",
+    "outputMoreLines_other": "… {{count}} riviä lisää",
+    "outputShowAll": "Näytä kaikki",
+    "outputShowLess": "Näytä vähemmän",
     "fileWritten": "Tiedosto '{{path}}' kirjoitettu.",
     "writtenWithSudoPassword": "Kirjoitettu tallennetulla sudo-salasanalla.",
     "documentGenerated": "Asiakirja luotu",

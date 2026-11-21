@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
+    "current": "aktuální",
     "hintGroup": "→ přesunout do této skupiny",
     "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
     "moveTo": "Přesunout „{{name}}“ do…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Smazat trvale",
     "testResult": {
       "success": "Připojení úspěšné",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
       "hostKeyUnknown": "Klíč hostitele neznámý — vyžadováno potvrzení",
       "hostKeyMismatch": "Klíč hostitele se změnil",
@@ -893,6 +895,8 @@
     "groupsHeading": "Výsledná struktura složek",
     "entriesHeading": "Počet serverů: {{count}}",
     "field": {
+      "name": "Název",
+      "include": "Zahrnout",
       "host": "Adresa",
       "port": "Port",
       "username": "Uživatel",
@@ -968,6 +972,10 @@
       "proxyJumpLocalPseudoServer": "odkazuje na lokální pseudoserver"
     },
     "confirm": "Importovat",
+    "confirmCount_one": "Importovat {{count}} server",
+    "confirmCount_few": "Importovat {{count}} servery",
+    "confirmCount_many": "Importovat {{count}} serveru",
+    "confirmCount_other": "Importovat {{count}} serverů",
     "applying": "Importování …",
     "result": {
       "success": "Vytvořeno serverů: {{created}}, složek: {{groups}}, přeskočených konfliktů: {{skipped}}.",
@@ -1336,6 +1344,12 @@
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
     "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
     "outputTruncated": "(zkráceno)",
+    "outputMoreLines_one": "… {{count}} další řádek",
+    "outputMoreLines_few": "… {{count}} další řádky",
+    "outputMoreLines_many": "… {{count}} dalších řádků",
+    "outputMoreLines_other": "… {{count}} dalších řádků",
+    "outputShowAll": "Zobrazit vše",
+    "outputShowLess": "Zobrazit méně",
     "fileWritten": "Soubor '{{path}}' zapsán.",
     "writtenWithSudoPassword": "Zapsáno s použitím uloženého hesla sudo.",
     "documentGenerated": "Dokument vytvořen",

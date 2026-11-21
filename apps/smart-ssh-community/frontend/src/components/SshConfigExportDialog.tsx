@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clipboardWriteText, commandErrorMessage, exportSshConfig } from "../api/api";
 import type { SshConfigExportResultDto } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 interface SshConfigExportDialogProps {
   onClose: () => void;
@@ -62,6 +62,7 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="export" />}
       title={t("sshConfigExport.dialogTitle")}
       onClose={onClose}
       actions={
@@ -76,10 +77,11 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
         {result && (
           <div className="space-y-3 text-sm text-fg-muted">
             <p className="break-words">{t("sshConfigExport.result.summary", { count: result.exported.length, path: result.path })}</p>
+            <code className="block break-all rounded border border-border-strong bg-surface-sunken px-2 py-1.5 font-mono text-xs text-fg">{result.path}</code>
 
             {result.exported.some((e) => e.renamed) && (
               <div className="rounded border border-border bg-surface-raised/60 p-2">
-                <p className="mb-1 font-semibold text-fg">{t("sshConfigExport.result.renamedHeading")}</p>
+                <p className="mb-1 font-mono text-xs uppercase tracking-wider text-fg-subtle">{t("sshConfigExport.result.renamedHeading")}</p>
                 <ul className="space-y-0.5 font-mono text-xs">
                   {result.exported
                     .filter((e) => e.renamed)

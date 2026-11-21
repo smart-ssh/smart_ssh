@@ -67,6 +67,8 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
           <Logo variant="lockup" size={20} />
         )}
       </span>
+      {/* Issue #1387: the active session's ⋯ button and menu are rendered here. */}
+      {active && <span data-testid="narrow-session-actions" className="ml-auto flex shrink-0 items-center gap-1" />}
       {open && (
         <NarrowMenu
           {...props}
