@@ -403,6 +403,7 @@
     "riskSecondOpinionUnavailableHint": "A doua opinie a IA nu a putut fi obținută. Riscul afișat este cel bazat pe reguli.",
     "riskHint": "Evaluare bazată pe modele cunoscute — fără garanție.",
     "runningSince": "rulează de {{seconds}}s…",
+    "exitCode": "cod de ieșire: {{code}}",
     "cancelCommand": "Deconectează această comandă",
     "cancellingCommand": "Se deconectează…",
     "commandCancelledNotice": "Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",

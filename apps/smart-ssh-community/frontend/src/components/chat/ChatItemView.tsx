@@ -177,7 +177,7 @@ export const ChatItemView = memo(function ChatItemView({
         )}
         {item.stderr && <pre className="mt-1 whitespace-pre-wrap text-danger-fg">{item.stderr}</pre>}
         {!item.cancelled && (
-          <p className="mt-1 text-fg-subtle">exit code: {item.exitCode ?? "—"}</p>
+          <p className="mt-1 text-fg-subtle">{t("actionCard.exitCode", { code: item.exitCode ?? "—" })}</p>
         )}
       </div>
     );
