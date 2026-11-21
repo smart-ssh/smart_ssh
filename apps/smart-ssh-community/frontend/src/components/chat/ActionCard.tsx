@@ -424,14 +424,9 @@ export function CollapsibleOutput({ text, className }: { text: string; className
         {expanded ? text : lines.slice(0, OUTPUT_PREVIEW_LINES).join("\n")}
       </pre>
       {!expanded && <p className="text-fg-subtle">{t("chat.outputMoreLines", { n: hidden })}</p>}
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-        className="font-sans text-xs text-accent-fg underline"
-      >
+      <Button size="sm" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
         {expanded ? t("chat.outputShowLess") : t("chat.outputShowAll")}
-      </button>
+      </Button>
     </div>
   );
 }
