@@ -88,6 +88,16 @@ describe("FileTypeSettings (Spec 0054, Teil 5)", () => {
     await waitFor(() => expect(saveFileTypeApps).toHaveBeenCalledWith({}));
   });
 
+  it("renders the remove buttons icon-only, keeping the accessible name", async () => {
+    vi.mocked(loadFileTypeApps).mockResolvedValue({ ".conf": "/usr/bin/code" });
+    renderSettings();
+    const buttons = await screen.findAllByRole("button", { name: "Zeile entfernen" });
+    for (const b of buttons) {
+      expect(b.textContent?.trim()).toBe("");
+      expect(b.querySelector("svg")).not.toBeNull();
+    }
+  });
+
   it("removes a row without touching the others", async () => {
     vi.mocked(loadFileTypeApps).mockResolvedValue({
       ".conf": "/usr/bin/code",
