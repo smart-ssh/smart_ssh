@@ -111,7 +111,7 @@ export function DialogFrame({
           reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0 narrow:pt-9"
         }`;
   const panelClass = bare
-    ? `${panelClassName ?? ""} focus:outline-none`
+    ? `${panelClassName ?? ""} ${tone === "danger" ? "border-danger-border" : ""} focus:outline-none`
     : `relative flex max-h-[85vh] w-full ${SIZES[size]} flex-col border ${
         tone === "danger" ? "border-danger-border" : "border-border-strong"
       } bg-surface-raised shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none focus:outline-none`;
@@ -150,7 +150,14 @@ export function DialogFrame({
         className={panelClass}
       >
         {bare ? (
-          children
+          <>
+            {ticks ? (
+              <div className="narrow:hidden" data-testid="dialog-ticks">
+                <CornerTicks tone={ticks} corners="top" />
+              </div>
+            ) : null}
+            {children}
+          </>
         ) : (
           <>
         {ticks ? (

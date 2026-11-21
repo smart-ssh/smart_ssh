@@ -45,7 +45,7 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
       <ul
         aria-label={t("connectTab.stepsLabel")}
         data-testid="connect-progress-list"
-        className="space-y-1 text-sm"
+        className="border border-border-strong bg-surface-raised text-sm"
       >
         {steps.map((step, i) => {
           const failed = step.status === "failed";
@@ -57,8 +57,8 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
               data-failed={failed ? "true" : undefined}
               className={
                 failed
-                  ? "flex items-baseline gap-2 rounded border border-danger-border-strong bg-danger-subtle/40 px-2 py-1 text-danger-fg-soft"
-                  : "flex items-baseline gap-2 px-2 py-1"
+                  ? "flex items-baseline gap-2 border-t border-danger-border bg-danger-subtle px-3 py-2 text-danger-fg first:border-t-0"
+                  : "flex items-baseline gap-2 border-t border-border px-3 py-2 first:border-t-0"
               }
             >
               <span className="inline-flex w-4 shrink-0 justify-center text-fg-muted" aria-hidden="true">
@@ -68,6 +68,8 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
                   "–"
                 ) : step.status === "ok" ? (
                   <Icon name="check" className="text-success-fg" />
+                ) : step.status === "warning" ? (
+                  <Icon name="warn" className="text-warning-fg" />
                 ) : (
                   <Icon name="x" />
                 )}
@@ -78,7 +80,7 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
                   : t(`connectLog.step.${step.kind}`)}
               </span>
               {multiHop && <span className="text-fg-subtle">{step.hop}</span>}
-              {detail && <span className="break-all text-fg-subtle">{detail}</span>}
+              {detail && <span className="font-mono text-xs break-all text-fg-subtle">{detail}</span>}
             </li>
           );
         })}
