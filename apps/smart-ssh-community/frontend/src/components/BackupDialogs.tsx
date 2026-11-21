@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { characterCount } from "../lib/passwordLength";
 import { clipboardWriteText } from "../api/api";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon, StatusSquare } from "./ui";
 
 /** K5: minimum length; the backend checks the same limit. */
 export const MIN_BACKUP_PASSPHRASE = 12;
@@ -37,42 +37,43 @@ export function RecoveryCodeDialog({ code, onContinue, onCancel }: RecoveryCodeD
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="key" />}
       title={t("backup.code.title")}
       onClose={onCancel}
       size="md"
       actions={
         <>
-          <Button className="narrow:min-h-11" onClick={onCancel}>
+          <Button onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-          <Button variant="primary" className="narrow:min-h-11" disabled={!noted} onClick={onContinue}>
+          <Button variant="primary" disabled={!noted} onClick={onContinue}>
             {t("backup.code.continue")}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <p className="rounded border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer">{t("backup.code.warning")}</p>
+        <p className="flex items-start gap-2 border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer"><StatusSquare tone="warning" className="mt-1" /><span>{t("backup.code.warning")}</span></p>
         <p
           data-testid="backup-recovery-code"
-          className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-border-strong bg-surface-sunken p-3 font-mono text-base text-fg"
+          className="flex flex-wrap gap-x-3 gap-y-1 border border-border-strong bg-surface-sunken p-3 font-mono text-base text-fg"
         >
           {codeGroups(code).map((group, i) => (
             <span key={i}>{group}</span>
           ))}
         </p>
         <div className="flex items-center gap-2">
-          <Button size="sm" className="narrow:min-h-11" onClick={copy}>
+          <Button size="sm" onClick={copy}>
             {t("backup.code.copy")}
           </Button>
           {copied === "copied" && <span className="text-xs text-success-fg">{t("about.copied")}</span>}
           {copied === "failed" && <span className="text-xs text-danger-fg-soft">{t("backup.code.copyFailed")}</span>}
         </div>
-        <label className="flex items-start gap-2 narrow:min-h-11">
+        <label className="flex items-start gap-3 narrow:min-h-11">
           <input
             ref={checkRef}
             type="checkbox"
-            className="mt-1 h-4 w-4"
+            className="switch"
             checked={noted}
             onChange={(e) => setNoted(e.target.checked)}
           />
@@ -116,6 +117,7 @@ export function PassphraseDialog({ onSave, onCancel }: PassphraseDialogProps) {
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="lock" />}
       title={t("backup.passphrase.title")}
       onClose={onCancel}
       onSubmit={(e) => {
@@ -124,17 +126,17 @@ export function PassphraseDialog({ onSave, onCancel }: PassphraseDialogProps) {
       }}
       actions={
         <>
-          <Button type="button" className="narrow:min-h-11" onClick={onCancel}>
+          <Button type="button" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={!valid || busy}>
+          <Button type="submit" variant="primary" disabled={!valid || busy}>
             {t("backup.passphrase.save")}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <p className="rounded border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer">{t("backup.passphrase.warning")}</p>
+        <p className="flex items-start gap-2 border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer"><StatusSquare tone="warning" className="mt-1" /><span>{t("backup.passphrase.warning")}</span></p>
         <Field
           label={t("backup.passphrase.label")}
           help={t("backup.passphrase.help", { count: MIN_BACKUP_PASSPHRASE })}
