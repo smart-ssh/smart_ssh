@@ -162,7 +162,7 @@ describe("FileBrowserPanel path bar (issue #1373)", () => {
     fireEvent.change(input, { target: { value: "/nope" } });
     fireEvent.submit(input);
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "/nope", null));
-    await waitFor(() => expect(screen.getByText(/no such directory/)).toBeInTheDocument());
+    expect(await screen.findByText(/no such directory/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Pfad" })).toHaveValue("/nope");
 
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Pfad" }), { key: "Escape" });
