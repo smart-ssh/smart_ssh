@@ -1158,8 +1158,7 @@
       "editing": "“{{name}}” yerel olarak düzenleniyor…",
       "end": "Düzenlemeyi durdur",
       "uploadTitle": "Yerel değişiklikler yüklensin mi?",
-      "remoteChanged": "Uzak dosya indirildikten sonra değiştirilmiş — yükleme bu diğer değişikliğin üzerine yazar.",
-      "noDiff": "Metin farkı mümkün değil (ikili dosya veya çok büyük). Yeni boyut: {{size}}."
+      "remoteChanged": "Uzak dosya indirildikten sonra değiştirilmiş — yükleme bu diğer değişikliğin üzerine yazar."
     },
     "deleteDialog": {
       "fileTitle": "Dosya silinsin mi?",
@@ -1181,7 +1180,6 @@
       "conflictTitle": "Klasördeki dosyaların üzerine yazılsın mı?",
       "conflictBody": "“{{name}}” yüklemesi sunucudaki bu {{count}} dosyanın üzerine yazar. Siz onaylamadıkça hiçbir şeyin üzerine yazılmaz.",
       "summaryTitle": "Klasör yükleme: “{{name}}”",
-      "summary": "{{uploaded}} dosya yüklendi, {{skipped}} atlandı, {{failed}} başarısız.",
       "notAttempted": "{{count}} dosya, klasörleri oluşturulamadığı için denenmedi.",
       "skipped": "Atlanan",
       "failed": "Başarısız",
@@ -1192,12 +1190,14 @@
         "unsupported": "normal dosya veya klasör değil",
         "notGranted": "seçiminiz kapsamında değil",
         "overwriteNotConfirmed": "sunucuda var, üzerine yazma onaylanmadı"
-      }
+      },
+      "uploaded": "Yüklendi"
     },
     "uploadConflict": {
       "title": "Dosyanın üzerine yazılsın mı?",
       "body": "sunucuda zaten var.",
-      "noDiff": "Metin farkı mümkün değil (ikili dosya veya çok büyük). Mevcut boyut: {{remoteSize}}, yeni boyut: {{localSize}}."
+      "currentSize": "Mevcut boyut",
+      "newSize": "Yeni boyut"
     },
     "menu": {
       "download": "İndir",
@@ -1286,7 +1286,9 @@
       "recursive": "İçeriğe uygula",
       "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin sahibini değiştirir. Sembolik bağlantılar izlenmez. Geri alınamaz."
     },
-    "transferChown": "{{name}} sahibi değiştiriliyor"
+    "transferChown": "{{name}} sahibi değiştiriliyor",
+    "stopProgress": "İlerleme",
+    "noTextDiff": "Metin farkı gösterilemiyor (ikili dosya veya çok büyük)."
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",

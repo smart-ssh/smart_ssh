@@ -1158,8 +1158,7 @@
       "editing": "Redigerer “{{name}}” lokalt…",
       "end": "Avslutt redigering",
       "uploadTitle": "Laste opp lokale endringer?",
-      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Ny størrelse: {{size}}."
+      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen."
     },
     "deleteDialog": {
       "fileTitle": "Slette filen?",
@@ -1181,7 +1180,6 @@
       "conflictTitle": "Overskrive filer i mappen?",
       "conflictBody": "Opplasting av “{{name}}” ville overskrive disse {{count}} filene på serveren. Ingenting overskrives med mindre du bekrefter.",
       "summaryTitle": "Mappeopplasting: “{{name}}”",
-      "summary": "{{uploaded}} filer lastet opp, {{skipped}} hoppet over, {{failed}} mislyktes.",
       "notAttempted": "{{count}} filer ble ikke forsøkt fordi mappen deres ikke kunne opprettes.",
       "skipped": "Hoppet over",
       "failed": "Mislyktes",
@@ -1192,12 +1190,14 @@
         "unsupported": "ikke en vanlig fil eller mappe",
         "notGranted": "dekkes ikke av valget ditt",
         "overwriteNotConfirmed": "finnes på serveren, overskriving ikke bekreftet"
-      }
+      },
+      "uploaded": "Lastet opp"
     },
     "uploadConflict": {
       "title": "Overskrive filen?",
       "body": "finnes allerede på serveren.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Nåværende størrelse: {{remoteSize}}, ny størrelse: {{localSize}}."
+      "currentSize": "Nåværende størrelse",
+      "newSize": "Ny størrelse"
     },
     "menu": {
       "download": "Last ned",
@@ -1286,7 +1286,9 @@
       "recursive": "Bruk på innholdet",
       "recursiveWarning": "— endrer eieren av ALLE filer og undermapper i denne mappen. Symbolske lenker følges ikke. Kan ikke angres."
     },
-    "transferChown": "Endrer eier av {{name}}"
+    "transferChown": "Endrer eier av {{name}}",
+    "stopProgress": "Fremdrift",
+    "noTextDiff": "Ingen tekstdiff mulig (binær fil eller for stor)."
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",

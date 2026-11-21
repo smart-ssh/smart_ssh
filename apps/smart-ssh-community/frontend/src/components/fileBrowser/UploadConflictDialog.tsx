@@ -3,6 +3,7 @@ import { formatBytes } from "../../lib/format";
 import { previewReadFailureHint } from "../../lib/previewReadFailure";
 import { Button, DialogFrame, Icon } from "../ui";
 import { NoteDiffPreview } from "../NoteDiffPreview";
+import { DialogRows } from "./DialogRows";
 import type { UploadConflict } from "./shared";
 
 interface UploadConflictDialogProps {
@@ -40,17 +41,26 @@ export function UploadConflictDialog({ conflict, elevated, elevatedUser, onCance
             newContent={uploadConflict.localPreview.text}
           />
         ) : (
-          <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-            {uploadConflict.remoteReadFailure
-              ? t(
+          <>
+            {uploadConflict.remoteReadFailure ? (
+              <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+                {t(
                   previewReadFailureHint(uploadConflict.remoteReadFailure).key,
                   previewReadFailureHint(uploadConflict.remoteReadFailure).options,
-                )
-              : t("fileBrowser.uploadConflict.noDiff", {
-                  remoteSize: formatBytes(uploadConflict.remoteSize),
-                  localSize: formatBytes(uploadConflict.localPreview.size),
-                })}
-          </p>
+                )}
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-fg-subtle">{t("fileBrowser.noTextDiff")}</p>
+                <DialogRows
+                  rows={[
+                    { label: t("fileBrowser.uploadConflict.currentSize"), value: formatBytes(uploadConflict.remoteSize) },
+                    { label: t("fileBrowser.uploadConflict.newSize"), value: formatBytes(uploadConflict.localPreview.size) },
+                  ]}
+                />
+              </>
+            )}
+          </>
         )}
       </DialogFrame>
   );

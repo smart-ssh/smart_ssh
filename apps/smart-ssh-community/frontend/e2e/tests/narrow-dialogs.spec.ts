@@ -98,6 +98,9 @@ test("sm: file properties dialog is a full-screen sheet @phone", async ({ app })
   await openEntryMenuItem(app, "Properties");
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /Properties/, ["Close"]);
+  // Issue #1386 anatomy: header icon, label/value rows with the path in mono.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  await expect(dialog.getByText("/home/deploy/notes.txt")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: properties");
   await captureScreen(app.page, "narrow-properties");
 });
@@ -106,6 +109,12 @@ test("sm: chmod dialog is a full-screen sheet @phone", async ({ app }) => {
   await openEntryMenuItem(app, /^Edit permissions|^Permissions/);
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /ermissions/, ["Cancel"]);
+  // Issue #1386 anatomy: header icon, path in its own mono paragraph, mono bit grid.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  const path = dialog.getByText("/home/deploy/notes.txt");
+  await expect(path).toHaveClass(/font-mono/);
+  expect(await path.evaluate((el) => el.tagName)).toBe("P");
+  await expect(dialog.getByTestId("chmod-grid")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: chmod");
   await captureScreen(app.page, "narrow-chmod");
 });

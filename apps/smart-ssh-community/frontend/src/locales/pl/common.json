@@ -1174,8 +1174,7 @@
       "editing": "Lokalna edycja „{{name}}”…",
       "end": "Zakończ edycję",
       "uploadTitle": "Wysłać lokalne zmiany?",
-      "remoteChanged": "Plik zdalny zmienił się od pobrania — wysłanie nadpisałoby tę inną zmianę.",
-      "noDiff": "Porównanie tekstowe niemożliwe (plik binarny lub zbyt duży). Nowy rozmiar: {{size}}."
+      "remoteChanged": "Plik zdalny zmienił się od pobrania — wysłanie nadpisałoby tę inną zmianę."
     },
     "deleteDialog": {
       "fileTitle": "Usunąć plik?",
@@ -1201,7 +1200,6 @@
       "conflictTitle": "Nadpisać pliki w folderze?",
       "conflictBody": "Wysłanie „{{name}}” nadpisałoby na serwerze te pliki ({{count}}). Nic nie zostanie nadpisane bez Twojego potwierdzenia.",
       "summaryTitle": "Wysyłanie folderu: „{{name}}”",
-      "summary": "Wysłano plików: {{uploaded}}, pominięto: {{skipped}}, nieudanych: {{failed}}.",
       "notAttempted": "Nie podjęto próby dla plików ({{count}}), bo nie dało się utworzyć ich folderu.",
       "skipped": "Pominięte",
       "failed": "Nieudane",
@@ -1212,12 +1210,14 @@
         "unsupported": "to nie zwykły plik ani folder",
         "notGranted": "poza Twoim wyborem",
         "overwriteNotConfirmed": "istnieje na serwerze, nadpisanie niepotwierdzone"
-      }
+      },
+      "uploaded": "Przesłane"
     },
     "uploadConflict": {
       "title": "Nadpisać plik?",
       "body": "już istnieje na serwerze.",
-      "noDiff": "Porównanie tekstowe niemożliwe (plik binarny lub zbyt duży). Obecny rozmiar: {{remoteSize}}, nowy rozmiar: {{localSize}}."
+      "currentSize": "Obecny rozmiar",
+      "newSize": "Nowy rozmiar"
     },
     "menu": {
       "download": "Pobierz",
@@ -1306,7 +1306,9 @@
       "recursive": "Zastosuj do zawartości",
       "recursiveWarning": "— zmienia właściciela WSZYSTKICH plików i podfolderów w tym folderze. Dowiązania symboliczne nie są śledzone. Nie można cofnąć."
     },
-    "transferChown": "Zmiana właściciela {{name}}"
+    "transferChown": "Zmiana właściciela {{name}}",
+    "stopProgress": "Postęp",
+    "noTextDiff": "Porównanie tekstowe niemożliwe (plik binarny lub zbyt duży)."
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",

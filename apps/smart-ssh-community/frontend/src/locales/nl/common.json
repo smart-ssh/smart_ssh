@@ -1158,8 +1158,7 @@
       "editing": "“{{name}}” lokaal bewerken…",
       "end": "Bewerken stoppen",
       "uploadTitle": "Lokale wijzigingen uploaden?",
-      "remoteChanged": "Het bestand op de server is sinds het downloaden gewijzigd — uploaden zou die andere wijziging overschrijven.",
-      "noDiff": "Geen tekstvergelijking mogelijk (binair bestand of te groot). Nieuwe grootte: {{size}}."
+      "remoteChanged": "Het bestand op de server is sinds het downloaden gewijzigd — uploaden zou die andere wijziging overschrijven."
     },
     "deleteDialog": {
       "fileTitle": "Bestand verwijderen?",
@@ -1181,7 +1180,6 @@
       "conflictTitle": "Bestanden in de map overschrijven?",
       "conflictBody": "Uploaden van “{{name}}” zou deze {{count}} bestanden op de server overschrijven. Er wordt niets overschreven zonder uw bevestiging.",
       "summaryTitle": "Map uploaden: “{{name}}”",
-      "summary": "{{uploaded}} bestanden geüpload, {{skipped}} overgeslagen, {{failed}} mislukt.",
       "notAttempted": "{{count}} bestanden zijn niet geprobeerd omdat hun map niet kon worden aangemaakt.",
       "skipped": "Overgeslagen",
       "failed": "Mislukt",
@@ -1192,12 +1190,14 @@
         "unsupported": "geen gewoon bestand of gewone map",
         "notGranted": "niet gedekt door uw selectie",
         "overwriteNotConfirmed": "bestaat op de server, overschrijven niet bevestigd"
-      }
+      },
+      "uploaded": "Geüpload"
     },
     "uploadConflict": {
       "title": "Bestand overschrijven?",
       "body": "bestaat al op de server.",
-      "noDiff": "Geen tekstvergelijking mogelijk (binair bestand of te groot). Huidige grootte: {{remoteSize}}, nieuwe grootte: {{localSize}}."
+      "currentSize": "Huidige grootte",
+      "newSize": "Nieuwe grootte"
     },
     "menu": {
       "download": "Downloaden",
@@ -1286,7 +1286,9 @@
       "recursive": "Toepassen op inhoud",
       "recursiveWarning": "— wijzigt de eigenaar van ALLE bestanden en submappen in deze map. Symbolische koppelingen worden niet gevolgd. Kan niet ongedaan worden gemaakt."
     },
-    "transferChown": "Eigenaar wijzigen van {{name}}"
+    "transferChown": "Eigenaar wijzigen van {{name}}",
+    "stopProgress": "Voortgang",
+    "noTextDiff": "Geen tekstverschil mogelijk (binair bestand of te groot)."
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",

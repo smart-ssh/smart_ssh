@@ -1150,8 +1150,7 @@
       "editing": "正在本地编辑“{{name}}”…",
       "end": "停止编辑",
       "uploadTitle": "上传本地更改？",
-      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。新大小：{{size}}。"
+      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。"
     },
     "deleteDialog": {
       "fileTitle": "删除文件？",
@@ -1171,7 +1170,6 @@
       "conflictTitle": "覆盖文件夹中的文件？",
       "conflictBody": "上传“{{name}}”会覆盖服务器上的这 {{count}} 个文件。除非您确认，否则不会覆盖任何内容。",
       "summaryTitle": "文件夹上传：“{{name}}”",
-      "summary": "已上传 {{uploaded}} 个文件，跳过 {{skipped}} 个，失败 {{failed}} 个。",
       "notAttempted": "有 {{count}} 个文件因其文件夹无法创建而未尝试上传。",
       "skipped": "已跳过",
       "failed": "失败",
@@ -1182,12 +1180,14 @@
         "unsupported": "不是普通文件或文件夹",
         "notGranted": "不在您的选择范围内",
         "overwriteNotConfirmed": "服务器上已存在，且未确认覆盖"
-      }
+      },
+      "uploaded": "已上传"
     },
     "uploadConflict": {
       "title": "覆盖文件？",
       "body": "在服务器上已存在。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。当前大小：{{remoteSize}}，新大小：{{localSize}}。"
+      "currentSize": "当前大小",
+      "newSize": "新大小"
     },
     "menu": {
       "download": "下载",
@@ -1276,7 +1276,9 @@
       "recursive": "应用到内容",
       "recursiveWarning": "— 更改此文件夹中所有文件和子文件夹的所有者。不会跟随符号链接。无法撤销。"
     },
-    "transferChown": "正在更改 {{name}} 的所有者"
+    "transferChown": "正在更改 {{name}} 的所有者",
+    "stopProgress": "进度",
+    "noTextDiff": "无法显示文本差异(二进制文件或文件过大)。"
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
