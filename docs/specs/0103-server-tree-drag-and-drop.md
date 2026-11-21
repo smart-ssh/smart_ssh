@@ -62,6 +62,15 @@ In **beiden** Bäumen — der Verbinden-Liste und der Verwalten-Sidebar:
   das Gruppen-Feld. Das Verschieben eines anderen Elements und das
   anschließende Neuladen der Listen lassen das geöffnete Formular
   unverändert.
+- **Dialog „Verschieben nach …".** Als Alternative ohne Ziehen (Menü der
+  Verwalten-Ansicht, auch auf schmalen Bildschirmen) zeigt der Dialog die
+  Gruppen als umrandeten Baum mit Ordner-Symbolen und Verbindungslinien. Die
+  erste Zeile „→ oberste Ebene (ohne Gruppe)" verschiebt auf die oberste Ebene.
+  Der jetzige Ort (bei einem Server seine Gruppe bzw. die oberste Ebene, bei
+  einer Gruppe ihre übergeordnete) ist mit „aktuell" markiert und deaktiviert;
+  eine Gruppe selbst und ihre Untergruppen sind als Ziel ebenfalls deaktiviert.
+  Ein Klick auf eine andere Zeile verschiebt sofort, es gibt keinen
+  zusätzlichen Bestätigungsknopf.
 - **Reihenfolge** bleibt alphabetisch.
 
 ## 3. Was ein Verschieben ändert

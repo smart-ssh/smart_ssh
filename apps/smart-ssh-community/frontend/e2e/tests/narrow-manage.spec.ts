@@ -99,6 +99,10 @@ test.describe("narrow Manage area @phone", () => {
     const page = app.page;
     await openManage(app);
     await page.getByRole("button", { name: "Move “standalone” to…", exact: true }).click();
+    await expect(page.getByRole("dialog").getByRole("button", { name: /top level/ })).toBeDisabled();
+    await expect(page.getByRole("dialog").getByText("current")).toHaveCount(1);
+    await expectNoSeriousA11yViolations(page, "narrow move-to");
+    await captureScreen(page, "manage-narrow-move-to");
     await page.getByRole("dialog").getByRole("button", { name: /Lab/ }).click();
     await expect.poll(() => app.calls("move_server_to_group")).toHaveLength(1);
   });
@@ -117,6 +121,16 @@ test.describe("narrow Manage area @phone", () => {
     await page.getByRole("button", { name: "Import …", exact: true }).click();
     await expectUsable(page.getByRole("dialog"));
     await expectNoHorizontalPageScroll(page);
+    // The three parts are stacked (same left edge, increasing top) and the table scrolls inside its own frame.
+    const dialog = page.getByRole("dialog");
+    const boxes = await Promise.all(["#ssh-import-files", "#ssh-import-tree", "#ssh-import-servers"].map((sel) => dialog.locator(`section:has(${sel})`).boundingBox()));
+    for (const b of boxes) expect(b).not.toBeNull();
+    expect(Math.abs(boxes[0]!.x - boxes[1]!.x)).toBeLessThan(2);
+    expect(Math.abs(boxes[1]!.x - boxes[2]!.x)).toBeLessThan(2);
+    expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y);
+    expect(boxes[2]!.y).toBeGreaterThan(boxes[1]!.y);
+    const frame = dialog.locator("section:has(#ssh-import-servers) div.overflow-x-auto");
+    expect(await frame.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
     await expectNoSeriousA11yViolations(page, "narrow import");
     await captureScreen(page, "manage-narrow-import");
   });

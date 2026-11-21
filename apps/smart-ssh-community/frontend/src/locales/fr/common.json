@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
+    "current": "actuel",
     "hintGroup": "→ déplacer dans ce groupe",
     "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
     "moveTo": "Déplacer « {{name}} » vers…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Supprimer définitivement",
     "testResult": {
       "success": "Connexion réussie",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Connexion refusée. Vérifiez le nom d’utilisateur et le mot de passe ou la clé.",
       "hostKeyUnknown": "Clé d’hôte inconnue — confirmation requise",
       "hostKeyMismatch": "La clé d’hôte a changé",
@@ -474,6 +476,7 @@
     "mismatchBodyAfterHost": " présente une clé différente de celle enregistrée la dernière fois. Cela peut indiquer une attaque de l’homme du milieu. Ne continuez que si vous êtes certain que la clé du serveur a changé légitimement (p. ex. réinstallation du serveur).",
     "known": "Connue",
     "offeredNow": "Présentée maintenant",
+    "offered": "Présentée",
     "keyType": "Type de clé",
     "cancelConnection": "Annuler la connexion",
     "trustAnyway": "Faire confiance malgré tout",
@@ -884,6 +887,8 @@
     "groupsHeading": "Structure de dossiers obtenue",
     "entriesHeading": "{{count}} serveurs",
     "field": {
+      "name": "Nom",
+      "include": "Inclure",
       "host": "Adresse",
       "port": "Port",
       "username": "Utilisateur",
@@ -959,6 +964,9 @@
       "proxyJumpLocalPseudoServer": "pointe vers le pseudo-serveur local"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} serveur",
+    "confirmCount_many": "Importer {{count}} de serveurs",
+    "confirmCount_other": "Importer {{count}} serveurs",
     "applying": "Import …",
     "result": {
       "success": "{{created}} serveurs créés, {{groups}} dossiers, {{skipped}} conflit(s) ignoré(s).",
@@ -1325,6 +1333,11 @@
     "emptyResponse": "Le modèle n’a renvoyé aucune réponse. Pour les modèles avec phase de réflexion, une limite de sortie plus élevée dans les paramètres du fournisseur aide.",
     "refusedResponse": "Le modèle a refusé cette demande. Reformulez-la ou démarrez un nouveau chat.",
     "outputTruncated": "(tronqué)",
+    "outputMoreLines_one": "… {{count}} ligne de plus",
+    "outputMoreLines_many": "… {{count}} lignes de plus",
+    "outputMoreLines_other": "… {{count}} lignes de plus",
+    "outputShowAll": "Tout afficher",
+    "outputShowLess": "Afficher moins",
     "fileWritten": "Fichier '{{path}}' écrit.",
     "writtenWithSudoPassword": "Écrit avec le mot de passe sudo enregistré.",
     "documentGenerated": "Document généré",
@@ -1403,6 +1416,8 @@
     "aiTab": "IA",
     "paneTabs": "Zones de la session",
     "moreActions": "Plus d’actions",
+    "thisDevice": "cet appareil",
+    "paneSwitch": "Sélecteur de volet",
     "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
     "extraKeys": {
       "group": "Touches supplémentaires",

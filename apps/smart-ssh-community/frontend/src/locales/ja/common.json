@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
+    "current": "現在",
     "hintGroup": "→ このグループに移動",
     "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
     "moveTo": "「{{name}}」の移動先…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "完全に削除",
     "testResult": {
       "success": "接続に成功しました",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
       "hostKeyUnknown": "ホストキーが不明です — 確認が必要です",
       "hostKeyMismatch": "ホストキーが変更されました",
@@ -472,6 +474,7 @@
     "mismatchBodyAfterHost": " が、前回保存された鍵とは異なる鍵を提示しています。中間者攻撃の可能性があります。サーバーの鍵が正当な理由（例: サーバーの再インストール）で変更されたと確信できる場合にのみ、続行してください。",
     "known": "既知",
     "offeredNow": "今回提示",
+    "offered": "提示",
     "keyType": "鍵の種類",
     "cancelConnection": "接続をキャンセル",
     "trustAnyway": "それでも信頼する",
@@ -870,6 +873,8 @@
     "groupsHeading": "作成されるフォルダー構造",
     "entriesHeading": "{{count}}台のサーバー",
     "field": {
+      "name": "名前",
+      "include": "含める",
       "host": "アドレス",
       "port": "ポート",
       "username": "ユーザー",
@@ -945,6 +950,7 @@
       "proxyJumpLocalPseudoServer": "ローカル擬似サーバーを指しています"
     },
     "confirm": "インポート",
+    "confirmCount_other": "{{count}}台のサーバーをインポート",
     "applying": "インポート中…",
     "result": {
       "success": "サーバー{{created}}台、フォルダー{{groups}}個を作成し、競合{{skipped}}件をスキップしました。",
@@ -1307,6 +1313,9 @@
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",
     "outputTruncated": "（省略されました）",
+    "outputMoreLines_other": "… 他 {{count}} 行",
+    "outputShowAll": "すべて表示",
+    "outputShowLess": "表示を減らす",
     "fileWritten": "ファイル「{{path}}」を書き込みました。",
     "writtenWithSudoPassword": "保存済みのsudoパスワードを使用して書き込みました。",
     "documentGenerated": "ドキュメントを生成しました",
@@ -1383,6 +1392,8 @@
     "aiTab": "AI",
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
+    "thisDevice": "このデバイス",
+    "paneSwitch": "ペイン切り替え",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "extraKeys": {
       "group": "追加キー",

@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Rilasci qui per spostare al livello superiore (nessun gruppo)",
     "hintRoot": "→ livello superiore (nessun gruppo)",
+    "current": "attuale",
     "hintGroup": "→ sposta in questo gruppo",
     "hintCycle": "Un gruppo non può essere spostato nel proprio sottogruppo",
     "moveTo": "Sposta «{{name}}» in…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Elimina definitivamente",
     "testResult": {
       "success": "Connessione riuscita",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Accesso rifiutato. Verifichi nome utente e password o chiave.",
       "hostKeyUnknown": "Chiave host sconosciuta: conferma necessaria",
       "hostKeyMismatch": "La chiave host è cambiata",
@@ -474,6 +476,7 @@
     "mismatchBodyAfterHost": " presenta una chiave diversa da quella memorizzata l'ultima volta. Ciò può indicare un attacco man-in-the-middle. Proceda solo se è certo/a che la chiave del server sia cambiata legittimamente (ad es. reinstallazione del server).",
     "known": "Nota",
     "offeredNow": "Offerta ora",
+    "offered": "Offerta",
     "keyType": "Tipo di chiave",
     "cancelConnection": "Annulla connessione",
     "trustAnyway": "Considera attendibile comunque",
@@ -884,6 +887,8 @@
     "groupsHeading": "Struttura di cartelle risultante",
     "entriesHeading": "{{count}} server",
     "field": {
+      "name": "Nome",
+      "include": "Includi",
       "host": "Indirizzo",
       "port": "Porta",
       "username": "Utente",
@@ -959,6 +964,9 @@
       "proxyJumpLocalPseudoServer": "punta allo pseudo-server locale"
     },
     "confirm": "Importa",
+    "confirmCount_one": "Importa {{count}} server",
+    "confirmCount_many": "Importa {{count}} server",
+    "confirmCount_other": "Importa {{count}} server",
     "applying": "Importazione …",
     "result": {
       "success": "{{created}} server creati, {{groups}} cartelle, {{skipped}} conflitti saltati.",
@@ -1325,6 +1333,11 @@
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
     "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",
     "outputTruncated": "(troncato)",
+    "outputMoreLines_one": "… altra {{count}} riga",
+    "outputMoreLines_many": "… altre {{count}} righe",
+    "outputMoreLines_other": "… altre {{count}} righe",
+    "outputShowAll": "Mostra tutto",
+    "outputShowLess": "Mostra meno",
     "fileWritten": "File '{{path}}' scritto.",
     "writtenWithSudoPassword": "Scritto con la password sudo memorizzata.",
     "documentGenerated": "Documento generato",
@@ -1403,6 +1416,8 @@
     "aiTab": "IA",
     "paneTabs": "Aree della sessione",
     "moreActions": "Altre azioni",
+    "thisDevice": "questo dispositivo",
+    "paneSwitch": "Selettore del riquadro",
     "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
     "extraKeys": {
       "group": "Tasti aggiuntivi",

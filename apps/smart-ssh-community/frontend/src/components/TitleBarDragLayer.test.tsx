@@ -339,7 +339,8 @@ describe("no component portals a modal backdrop itself (issue #244)", () => {
   it("only ModalBackdrop.tsx calls createPortal", () => {
     const offenders = sourceFiles(SRC_DIR)
       // SettingsSectionAction portals an action button into the settings header, not a backdrop.
-      .filter((file) => !["ModalBackdrop.tsx", "SettingsSectionAction.tsx"].includes(path.basename(file)))
+      // SessionView portals the session actions button into the narrow title bar (#1387).
+      .filter((file) => !["ModalBackdrop.tsx", "SettingsSectionAction.tsx", "SessionView.tsx"].includes(path.basename(file)))
       .filter((file) => /\bcreatePortal\s*\(/.test(fs.readFileSync(file, "utf8")))
       .map((file) => path.relative(SRC_DIR, file));
     expect(offenders, offenders.join("\n")).toEqual([]);

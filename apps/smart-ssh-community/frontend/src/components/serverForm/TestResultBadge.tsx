@@ -1,38 +1,64 @@
 import { useTranslation } from "react-i18next";
-import { Icon } from "../ui";
+import { Badge, Icon, type BadgeTone } from "../ui";
 import { translateErrorCode } from "../../api/errorCodes";
-import type { TestConnectionResult } from "../../api/types";
+import type { ConnectStepRecord, TestConnectionResult } from "../../api/types";
 
 // Spec 0069, Teil A5, Test 20: exportiert (statt modulprivat), damit sich
 // die code->Übersetzung ohne einen vollständigen `ServerForm`-Render
 // testen lässt.
-export function TestResultBadge({ result }: { result: TestConnectionResult }) {
+export function TestResultBadge({ result }: { result: TestConnectionResult & { steps?: ConnectStepRecord[] } }) {
   const { t } = useTranslation();
+  let tone: BadgeTone = "danger";
+  let icon: "check" | "x" | "warn" = "x";
+  let text: string;
   switch (result.kind) {
-    case "success":
-      return <span className="text-sm text-success-fg"><Icon name="check" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.success")}</span>;
+    case "success": {
+      tone = "success";
+      icon = "check";
+      // Sum of the step durations; without any measured step the plain
+      // success text stays.
+      const timed = (result.steps ?? []).filter((s) => s.durationMs !== null);
+      text =
+        timed.length > 0
+          ? t("serverForm.testResult.successTimed", {
+              ms: timed.reduce((sum, s) => sum + (s.durationMs ?? 0), 0),
+            })
+          : t("serverForm.testResult.success");
+      break;
+    }
     case "authenticationFailed":
-      return <span className="text-sm text-danger-fg"><Icon name="x" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.authFailed")}</span>;
+      text = t("serverForm.testResult.authFailed");
+      break;
     case "hostKeyUnknown":
-      return (
-        <span className="text-sm text-warning-fg"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.hostKeyUnknown")}</span>
-      );
+      tone = "warning";
+      icon = "warn";
+      text = t("serverForm.testResult.hostKeyUnknown");
+      break;
     case "hostKeyMismatch":
-      return <span className="text-sm text-danger-fg"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.hostKeyMismatch")}</span>;
+      icon = "warn";
+      text = t("serverForm.testResult.hostKeyMismatch");
+      break;
     case "networkError":
       // Spec 0069, Teil A5: bekannter Code → übersetzte Meldung; ohne
       // Code → wie bisher der rohe Backend-Text.
-      return (
-        <span className="text-sm text-danger-fg">
-          <Icon name="x" className="mr-1 inline align-text-bottom" />
-          {translateErrorCode(
-            t,
-            result.code,
-            t("serverForm.testResult.networkError", { message: result.message }),
-          )}
-        </span>
+      text = translateErrorCode(
+        t,
+        result.code,
+        t("serverForm.testResult.networkError", { message: result.message }),
       );
+      break;
     case "timeout":
-      return <span className="text-sm text-danger-fg"><Icon name="x" className="mr-1 inline align-text-bottom" />{t("serverForm.testResult.timeout")}</span>;
+      text = t("serverForm.testResult.timeout");
+      break;
   }
+  return (
+    <Badge
+      tone={tone}
+      square
+      className="h-auto! min-h-5 py-0.5 text-left normal-case! tracking-normal!"
+    >
+      <Icon name={icon} className="mr-1 inline align-text-bottom" />
+      {text}
+    </Badge>
+  );
 }

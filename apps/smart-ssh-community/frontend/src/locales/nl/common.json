@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
+    "current": "huidig",
     "hintGroup": "→ naar deze groep verplaatsen",
     "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
     "moveTo": "“{{name}}” verplaatsen naar…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Definitief verwijderen",
     "testResult": {
       "success": "Verbinding geslaagd",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
       "hostKeyUnknown": "Hostsleutel onbekend — bevestiging vereist",
       "hostKeyMismatch": "Hostsleutel is gewijzigd",
@@ -473,6 +475,7 @@
     "mismatchBodyAfterHost": " presenteert een andere sleutel dan de vorige keer is opgeslagen. Dit kan wijzen op een man-in-the-middle-aanval. Ga alleen door als u zeker weet dat de serversleutel legitiem is gewijzigd (bijv. herinstallatie van de server).",
     "known": "Bekend",
     "offeredNow": "Nu aangeboden",
+    "offered": "Aangeboden",
     "keyType": "Sleuteltype",
     "cancelConnection": "Verbinding annuleren",
     "trustAnyway": "Toch vertrouwen",
@@ -877,6 +880,8 @@
     "groupsHeading": "Resulterende mapstructuur",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Naam",
+      "include": "Opnemen",
       "host": "Adres",
       "port": "Poort",
       "username": "Gebruiker",
@@ -952,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "wijst naar de lokale pseudo-server"
     },
     "confirm": "Importeren",
+    "confirmCount_one": "{{count}} server importeren",
+    "confirmCount_other": "{{count}} servers importeren",
     "applying": "Importeren …",
     "result": {
       "success": "{{created}} servers aangemaakt, {{groups}} mappen, {{skipped}} conflict(en) overgeslagen.",
@@ -1316,6 +1323,10 @@
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
     "refusedResponse": "Het model heeft dit verzoek geweigerd. Formuleer het anders of begin een nieuwe chat.",
     "outputTruncated": "(afgekapt)",
+    "outputMoreLines_one": "… nog {{count}} regel",
+    "outputMoreLines_other": "… nog {{count}} regels",
+    "outputShowAll": "Alles tonen",
+    "outputShowLess": "Minder tonen",
     "fileWritten": "Bestand '{{path}}' geschreven.",
     "writtenWithSudoPassword": "Geschreven met het opgeslagen sudo-wachtwoord.",
     "documentGenerated": "Document gegenereerd",
@@ -1393,6 +1404,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessiedelen",
     "moreActions": "Meer acties",
+    "thisDevice": "dit apparaat",
+    "paneSwitch": "Paneelschakelaar",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
     "extraKeys": {
       "group": "Extra toetsen",

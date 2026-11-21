@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Suelte aquí para mover al nivel superior (sin grupo)",
     "hintRoot": "→ nivel superior (sin grupo)",
+    "current": "actual",
     "hintGroup": "→ mover a este grupo",
     "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
     "moveTo": "Mover «{{name}}» a…"
@@ -286,6 +287,7 @@
     "confirmDeleteServer": "Eliminar definitivamente",
     "testResult": {
       "success": "Conexión correcta",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inicio de sesión rechazado. Compruebe el usuario y la contraseña o la clave.",
       "hostKeyUnknown": "Clave de host desconocida: se requiere confirmación",
       "hostKeyMismatch": "La clave de host ha cambiado",
@@ -474,6 +476,7 @@
     "mismatchBodyAfterHost": " presenta una clave distinta de la guardada la última vez. Esto puede indicar un ataque de intermediario (man-in-the-middle). Continúe solo si está seguro de que la clave del servidor cambió legítimamente (p. ej. por una reinstalación del servidor).",
     "known": "Conocida",
     "offeredNow": "Ofrecida ahora",
+    "offered": "Ofrecida",
     "keyType": "Tipo de clave",
     "cancelConnection": "Cancelar conexión",
     "trustAnyway": "Confiar de todos modos",
@@ -884,6 +887,8 @@
     "groupsHeading": "Estructura de carpetas resultante",
     "entriesHeading": "{{count}} servidores",
     "field": {
+      "name": "Nombre",
+      "include": "Incluir",
       "host": "Dirección",
       "port": "Puerto",
       "username": "Usuario",
@@ -959,6 +964,9 @@
       "proxyJumpLocalPseudoServer": "apunta al seudoservidor local"
     },
     "confirm": "Importar",
+    "confirmCount_one": "Importar {{count}} servidor",
+    "confirmCount_many": "Importar {{count}} de servidores",
+    "confirmCount_other": "Importar {{count}} servidores",
     "applying": "Importando …",
     "result": {
       "success": "{{created}} servidores creados, {{groups}} carpetas, {{skipped}} conflicto(s) omitido(s).",
@@ -1325,6 +1333,11 @@
     "emptyResponse": "El modelo no devolvió ninguna respuesta. En modelos con fase de razonamiento, ayuda un límite de salida mayor en los ajustes del proveedor.",
     "refusedResponse": "El modelo rechazó esta solicitud. Reformúlala o inicia un chat nuevo.",
     "outputTruncated": "(truncado)",
+    "outputMoreLines_one": "… {{count}} línea más",
+    "outputMoreLines_many": "… {{count}} líneas más",
+    "outputMoreLines_other": "… {{count}} líneas más",
+    "outputShowAll": "Mostrar todo",
+    "outputShowLess": "Mostrar menos",
     "fileWritten": "Archivo '{{path}}' escrito.",
     "writtenWithSudoPassword": "Escrito con la contraseña de sudo guardada.",
     "documentGenerated": "Documento generado",
@@ -1403,6 +1416,8 @@
     "aiTab": "IA",
     "paneTabs": "Paneles de la sesión",
     "moreActions": "Más acciones",
+    "thisDevice": "este dispositivo",
+    "paneSwitch": "Selector de panel",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
     "extraKeys": {
       "group": "Teclas adicionales",
