@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": " が、前回保存された鍵とは異なる鍵を提示しています。中間者攻撃の可能性があります。サーバーの鍵が正当な理由（例: サーバーの再インストール）で変更されたと確信できる場合にのみ、続行してください。",
     "known": "既知",
     "offeredNow": "今回提示",
+    "offered": "提示",
     "keyType": "鍵の種類",
     "cancelConnection": "接続をキャンセル",
     "trustAnyway": "それでも信頼する",
@@ -578,6 +579,7 @@
     "ollamaProbeRetry": "再検索",
     "ollamaProbeNotFoundHeading": "ローカルのOllamaが見つかりません（既定のポート 11434）。",
     "ollamaProbeNotFoundInstructions": "ollama.comからOllamaをインストールして起動し、モデルを読み込んで（例: `ollama pull llama3`）から、もう一度検索してください。",
+    "typeLabel": "種類",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1385,6 +1387,8 @@
     "aiTab": "AI",
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
+    "thisDevice": "このデバイス",
+    "paneSwitch": "ペイン切り替え",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "extraKeys": {
       "group": "追加キー",

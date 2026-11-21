@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " en son kaydedilenden farklı bir anahtar sunuyor. Bu, ortadaki adam saldırısına işaret edebilir. Yalnızca sunucu anahtarının meşru biçimde değiştiğinden eminseniz (örn. sunucunun yeniden kurulumu) devam edin.",
     "known": "Bilinen",
     "offeredNow": "Şimdi sunulan",
+    "offered": "Sunulan",
     "keyType": "Anahtar türü",
     "cancelConnection": "Bağlantıyı iptal et",
     "trustAnyway": "Yine de güven",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Yeniden ara",
     "ollamaProbeNotFoundHeading": "Yerel Ollama bulunamadı (varsayılan bağlantı noktası 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama'yı ollama.com'dan kurun, başlatın ve bir model yükleyin (örn. `ollama pull llama3`), sonra yeniden arayın.",
+    "typeLabel": "Tür",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1392,6 +1394,8 @@
     "aiTab": "YZ",
     "paneTabs": "Oturum bölmeleri",
     "moreActions": "Diğer işlemler",
+    "thisDevice": "bu cihaz",
+    "paneSwitch": "Panel anahtarı",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
     "extraKeys": {
       "group": "Ek tuşlar",

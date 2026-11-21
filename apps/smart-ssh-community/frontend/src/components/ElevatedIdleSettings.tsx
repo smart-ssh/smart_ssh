@@ -1,6 +1,7 @@
 import type { TranslationKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { StatusSquare } from "./ui";
 import { commandErrorMessage, getElevatedIdleTimeout, setElevatedIdleTimeout } from "../api/api";
 
 /** Issue #1193: the allowed choices; `0` is "never". Must match the backend. */
@@ -41,18 +42,19 @@ export function ElevatedIdleSettings() {
   };
 
   return (
-    <div className="mt-6">
+    <fieldset className="mt-6 border-t border-border pt-3">
+      <legend className="text-label pr-2">{t("elevatedIdle.label")}</legend>
       {error && (
-        <p role="alert" className="mb-2 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
-          {error}
+        <p role="alert" className="mb-2 flex items-center gap-2 border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
+          <StatusSquare tone="danger" />{error}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-fg-muted">
-        {t("elevatedIdle.label")}
+      <div className="flex items-center gap-2 text-sm text-fg-muted">
         <select
+          aria-label={t("elevatedIdle.label")}
           value={minutes}
           onChange={(e) => handleChange(Number(e.target.value))}
-          className="rounded border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg"
+          className="border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg narrow:min-h-11"
         >
           {CHOICES.map((value) => (
             <option key={value} value={value}>
@@ -60,8 +62,8 @@ export function ElevatedIdleSettings() {
             </option>
           ))}
         </select>
-      </label>
+      </div>
       <p className="mt-1 text-xs text-fg-subtle">{t("elevatedIdle.hint")}</p>
-    </div>
+    </fieldset>
   );
 }

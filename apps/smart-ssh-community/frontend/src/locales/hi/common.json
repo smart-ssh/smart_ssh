@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " पिछली बार संग्रहीत कुंजी से अलग कुंजी प्रस्तुत कर रहा है। यह मैन-इन-द-मिडल हमले का संकेत हो सकता है। केवल तभी आगे बढ़ें जब आपको भरोसा हो कि सर्वर की कुंजी वैध कारण से बदली है (जैसे सर्वर का पुनः इंस्टॉलेशन)।",
     "known": "ज्ञात",
     "offeredNow": "अभी प्रस्तुत",
+    "offered": "प्रस्तुत",
     "keyType": "कुंजी प्रकार",
     "cancelConnection": "कनेक्शन रद्द करें",
     "trustAnyway": "फिर भी भरोसा करें",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "फिर खोजें",
     "ollamaProbeNotFoundHeading": "कोई स्थानीय Ollama नहीं मिला (डिफ़ॉल्ट पोर्ट 11434)।",
     "ollamaProbeNotFoundInstructions": "ollama.com से Ollama इंस्टॉल करें, उसे शुरू करें और एक मॉडल लोड करें (जैसे `ollama pull llama3`), फिर दोबारा खोजें।",
+    "typeLabel": "प्रकार",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1396,6 +1398,8 @@
     "aiTab": "एआई",
     "paneTabs": "सत्र पैनल",
     "moreActions": "अधिक क्रियाएँ",
+    "thisDevice": "यह डिवाइस",
+    "paneSwitch": "पैनल स्विच",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
     "extraKeys": {
       "group": "अतिरिक्त कुंजियाँ",

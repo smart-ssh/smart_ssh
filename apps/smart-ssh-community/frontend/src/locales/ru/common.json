@@ -475,6 +475,7 @@
     "mismatchBodyAfterHost": " предъявляет ключ, отличный от сохранённого в прошлый раз. Это может указывать на атаку «человек посередине». Продолжайте, только если уверены, что ключ сервера изменился правомерно (например, при переустановке сервера).",
     "known": "Известный",
     "offeredNow": "Предъявлен сейчас",
+    "offered": "Предъявлен",
     "keyType": "Тип ключа",
     "cancelConnection": "Отменить подключение",
     "trustAnyway": "Всё равно доверять",
@@ -584,6 +585,7 @@
     "ollamaProbeRetry": "Искать снова",
     "ollamaProbeNotFoundHeading": "Локальный Ollama не найден (порт по умолчанию 11434).",
     "ollamaProbeNotFoundInstructions": "Установите Ollama с ollama.com, запустите его и загрузите модель (например, `ollama pull llama3`), затем повторите поиск.",
+    "typeLabel": "Тип",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1418,6 +1420,8 @@
     "aiTab": "ИИ",
     "paneTabs": "Панели сеанса",
     "moreActions": "Ещё действия",
+    "thisDevice": "это устройство",
+    "paneSwitch": "Переключатель панелей",
     "terminalOpenFailed": "Не удалось открыть терминал: {{error}}",
     "extraKeys": {
       "group": "Дополнительные клавиши",

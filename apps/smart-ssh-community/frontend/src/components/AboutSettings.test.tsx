@@ -117,6 +117,17 @@ describe("AboutSettings (Spec 0052)", () => {
     expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build");
   });
 
+  it("renders the copy button icon-only with its accessible name", async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({
+      version: "0.4.1", commitHash: "a5b3e01", versionDisplay: "0.4.1 (a5b3e01)", edition: "Community",
+      buildType: "Release", dataDir: null, dataDirDisplay: null, settingsStorePath: null,
+    });
+    renderAbout();
+    const button = await screen.findByRole("button", { name: "Kopieren" });
+    expect(button.textContent?.trim()).toBe("");
+    expect(button.querySelector("svg")).not.toBeNull();
+  });
+
   it("shows a visible error (not just a console warning) when the clipboard write fails", async () => {
     vi.mocked(getAppInfo).mockResolvedValue({
       version: "0.4.1",

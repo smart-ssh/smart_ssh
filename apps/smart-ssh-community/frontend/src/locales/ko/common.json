@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": "이(가) 마지막으로 저장된 키와 다른 키를 제시하고 있습니다. 중간자 공격일 수 있습니다. 서버 키가 정당한 사유(예: 서버 재설치)로 변경되었다고 확신하는 경우에만 계속하십시오.",
     "known": "알려진 키",
     "offeredNow": "현재 제시된 키",
+    "offered": "제시된 키",
     "keyType": "키 유형",
     "cancelConnection": "연결 취소",
     "trustAnyway": "그래도 신뢰",
@@ -578,6 +579,7 @@
     "ollamaProbeRetry": "다시 검색",
     "ollamaProbeNotFoundHeading": "로컬 Ollama를 찾을 수 없습니다(기본 포트 11434).",
     "ollamaProbeNotFoundInstructions": "ollama.com에서 Ollama를 설치하고 실행한 뒤 모델을 받고(예: `ollama pull llama3`) 다시 검색하십시오.",
+    "typeLabel": "유형",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1385,6 +1387,8 @@
     "aiTab": "AI",
     "paneTabs": "세션 패널",
     "moreActions": "더 많은 작업",
+    "thisDevice": "이 기기",
+    "paneSwitch": "패널 전환",
     "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
     "extraKeys": {
       "group": "추가 키",

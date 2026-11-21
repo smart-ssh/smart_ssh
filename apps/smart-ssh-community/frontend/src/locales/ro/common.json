@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",
@@ -582,6 +583,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1403,6 +1405,8 @@
     "aiTab": "IA",
     "paneTabs": "Panourile sesiunii",
     "moreActions": "Mai multe acțiuni",
+    "thisDevice": "acest dispozitiv",
+    "paneSwitch": "Comutator de panouri",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
     "extraKeys": {
       "group": "Taste suplimentare",

@@ -475,6 +475,7 @@
     "mismatchBodyAfterHost": " przedstawia inny klucz niż ten zapisany ostatnio. Może to oznaczać atak typu man-in-the-middle. Kontynuuj tylko wtedy, gdy masz pewność, że klucz serwera zmienił się zgodnie z prawem (np. po ponownej instalacji serwera).",
     "known": "Znany",
     "offeredNow": "Przedstawiony teraz",
+    "offered": "Przedstawiony",
     "keyType": "Typ klucza",
     "cancelConnection": "Anuluj połączenie",
     "trustAnyway": "Zaufaj mimo to",
@@ -584,6 +585,7 @@
     "ollamaProbeRetry": "Szukaj ponownie",
     "ollamaProbeNotFoundHeading": "Nie znaleziono lokalnej Ollamy (domyślny port 11434).",
     "ollamaProbeNotFoundInstructions": "Zainstaluj Ollamę z ollama.com, uruchom ją i pobierz model (np. `ollama pull llama3`), a potem wyszukaj ponownie.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1418,6 +1420,8 @@
     "aiTab": "AI",
     "paneTabs": "Panele sesji",
     "moreActions": "Więcej akcji",
+    "thisDevice": "to urządzenie",
+    "paneSwitch": "Przełącznik paneli",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
     "extraKeys": {
       "group": "Dodatkowe klawisze",

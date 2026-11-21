@@ -25,7 +25,5 @@ import { FIELD_CONTROL_CLASS } from "./ui";
  * `font: inherit`) — Nutzereingaben erschienen halbfett. Der Text-Stil
  * liegt jetzt auf einem separaten `<span>` um den Label-Text, nicht mehr
  * auf dem Label-Element. */
-export const CARD_CLASS = "rounded-lg border border-border bg-surface/40 p-4";
-export const LABEL_CLASS = "block text-sm";
-export const LABEL_TEXT_CLASS = "font-medium text-fg-soft";
+export const CARD_CLASS = "border border-border bg-surface/40 p-4";
 export const FIELD_CLASS = FIELD_CONTROL_CLASS;

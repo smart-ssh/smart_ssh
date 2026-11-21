@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " esittää eri avaimen kuin viimeksi tallennettu. Tämä voi viitata väliinhyökkäykseen (man-in-the-middle). Jatka vain, jos olet varma, että palvelimen avain on muuttunut oikeutetusti (esim. palvelimen uudelleenasennus).",
     "known": "Tunnettu",
     "offeredNow": "Nyt tarjottu",
+    "offered": "Tarjottu",
     "keyType": "Avaintyyppi",
     "cancelConnection": "Peruuta yhteys",
     "trustAnyway": "Luota silti",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Etsi uudelleen",
     "ollamaProbeNotFoundHeading": "Paikallista Ollamaa ei löytynyt (oletusportti 11434).",
     "ollamaProbeNotFoundInstructions": "Asenna Ollama osoitteesta ollama.com, käynnistä se ja lataa malli (esim. `ollama pull llama3`), ja etsi sitten uudelleen.",
+    "typeLabel": "Tyyppi",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1396,6 +1398,8 @@
     "aiTab": "Tekoäly",
     "paneTabs": "Istunnon osat",
     "moreActions": "Lisää toimintoja",
+    "thisDevice": "tämä laite",
+    "paneSwitch": "Paneelin vaihto",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
     "extraKeys": {
       "group": "Lisänäppäimet",

@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " παρουσιάζει διαφορετικό κλειδί από αυτό που είχε αποθηκευτεί την προηγούμενη φορά. Αυτό μπορεί να υποδηλώνει επίθεση man-in-the-middle. Συνεχίστε μόνο αν είστε βέβαιοι ότι το κλειδί του διακομιστή άλλαξε νόμιμα (π.χ. επανεγκατάσταση διακομιστή).",
     "known": "Γνωστό",
     "offeredNow": "Προσφέρεται τώρα",
+    "offered": "Προσφέρεται",
     "keyType": "Τύπος κλειδιού",
     "cancelConnection": "Ακύρωση σύνδεσης",
     "trustAnyway": "Εμπιστοσύνη παρ' όλα αυτά",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Νέα αναζήτηση",
     "ollamaProbeNotFoundHeading": "Δεν βρέθηκε τοπικό Ollama (προεπιλεγμένη θύρα 11434).",
     "ollamaProbeNotFoundInstructions": "Εγκαταστήστε το Ollama από το ollama.com, ξεκινήστε το και φορτώστε ένα μοντέλο (π.χ. `ollama pull llama3`) και μετά αναζητήστε ξανά.",
+    "typeLabel": "Τύπος",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1392,6 +1394,8 @@
     "aiTab": "ΤΝ",
     "paneTabs": "Τμήματα συνεδρίας",
     "moreActions": "Περισσότερες ενέργειες",
+    "thisDevice": "αυτή η συσκευή",
+    "paneSwitch": "Εναλλαγή πάνελ",
     "terminalOpenFailed": "Δεν ήταν δυνατό το άνοιγμα τερματικού: {{error}}",
     "extraKeys": {
       "group": "Επιπλέον πλήκτρα",

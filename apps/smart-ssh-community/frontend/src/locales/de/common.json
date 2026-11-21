@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " präsentiert einen anderen Schlüssel als beim letzten Mal gespeichert. Das kann auf einen Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).",
     "known": "Bekannt",
     "offeredNow": "Jetzt angeboten",
+    "offered": "Angeboten",
     "keyType": "Schlüsseltyp",
     "cancelConnection": "Verbindung abbrechen",
     "trustAnyway": "Trotzdem vertrauen",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Erneut suchen",
     "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1396,6 +1398,8 @@
     "aiTab": "KI",
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
+    "thisDevice": "dieses Gerät",
+    "paneSwitch": "Bereichsumschalter",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "extraKeys": {
       "group": "Zusatztasten",

@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " is presenting a different key than the one stored last time. This can indicate a man-in-the-middle attack. Only continue if you are sure the server key changed legitimately (e.g. server reinstallation).",
     "known": "Known",
     "offeredNow": "Offered Now",
+    "offered": "Offered",
     "keyType": "Key type",
     "cancelConnection": "Cancel Connection",
     "trustAnyway": "Trust Anyway",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Search again",
     "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
     "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1396,6 +1398,8 @@
     "aiTab": "AI",
     "paneTabs": "Session panes",
     "moreActions": "More actions",
+    "thisDevice": "this device",
+    "paneSwitch": "Pane switch",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "extraKeys": {
       "group": "Extra keys",

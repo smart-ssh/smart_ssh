@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " está apresentando uma chave diferente da armazenada na última vez. Isso pode indicar um ataque man-in-the-middle. Prossiga somente se o senhor tiver certeza de que a chave do servidor mudou legitimamente (p. ex., reinstalação do servidor).",
     "known": "Conhecida",
     "offeredNow": "Oferecida agora",
+    "offered": "Oferecida",
     "keyType": "Tipo de chave",
     "cancelConnection": "Cancelar conexão",
     "trustAnyway": "Confiar mesmo assim",
@@ -582,6 +583,7 @@
     "ollamaProbeRetry": "Pesquisar novamente",
     "ollamaProbeNotFoundHeading": "Nenhum Ollama local encontrado (porta padrão 11434).",
     "ollamaProbeNotFoundInstructions": "Instale o Ollama em ollama.com, inicie-o e carregue um modelo (p. ex., `ollama pull llama3`) e pesquise novamente.",
+    "typeLabel": "Tipo",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1407,6 +1409,8 @@
     "aiTab": "IA",
     "paneTabs": "Painéis da sessão",
     "moreActions": "Mais ações",
+    "thisDevice": "este dispositivo",
+    "paneSwitch": "Alternador de painéis",
     "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
     "extraKeys": {
       "group": "Teclas extras",

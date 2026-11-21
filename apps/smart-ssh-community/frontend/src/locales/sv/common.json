@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " presenterar en annan nyckel än den som sparades senast. Det kan tyda på en man-in-the-middle-attack. Fortsätt bara om du är säker på att servernyckeln ändrats på legitimt sätt (t.ex. ominstallation av servern).",
     "known": "Känd",
     "offeredNow": "Erbjuds nu",
+    "offered": "Erbjuds",
     "keyType": "Nyckeltyp",
     "cancelConnection": "Avbryt anslutning",
     "trustAnyway": "Lita på ändå",
@@ -580,6 +581,7 @@
     "ollamaProbeRetry": "Sök igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama hittades (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installera Ollama från ollama.com, starta den och läs in en modell (t.ex. `ollama pull llama3`), sök sedan igen.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1396,6 +1398,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdelar",
     "moreActions": "Fler åtgärder",
+    "thisDevice": "den här enheten",
+    "paneSwitch": "Panelväxlare",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "extraKeys": {
       "group": "Extra tangenter",

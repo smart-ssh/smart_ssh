@@ -108,7 +108,7 @@ export type ConnectStep = { "kind": "dnsResolution", host: string, port: number,
 
 export type ConnectStepRecord = { hopIndex: number, hop: string, step: ConnectStep, status: StepStatus, durationMs: number | null, };
 
-export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady" | "outdatedAlgorithms" | "banner", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "warning" | "failed", errorCode: string | null, detail: StepDetail | null, };
+export type ConnectStepSnapshot = { kind: "dnsResolution" | "tcpConnect" | "tunnelOpen" | "handshake" | "hostKeyCheck" | "authentication" | "sessionReady" | "outdatedAlgorithms" | "banner", hopIndex: number, hop: string, status: "running" | "ok" | "skipped" | "warning" | "failed", errorCode: string | null, detail: StepDetail | null, durationMs: number | null, };
 
 export type ConnectWarning = { hop: string, algorithms: Array<string>, };
 

@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": " đang đưa ra một khóa khác với khóa đã lưu lần trước. Điều này có thể cho thấy một cuộc tấn công man-in-the-middle. Chỉ tiếp tục nếu bạn chắc chắn khóa máy chủ đã thay đổi một cách hợp lệ (ví dụ: cài đặt lại máy chủ).",
     "known": "Đã biết",
     "offeredNow": "Đang được đưa ra",
+    "offered": "Được đưa ra",
     "keyType": "Loại khóa",
     "cancelConnection": "Hủy kết nối",
     "trustAnyway": "Vẫn tin cậy",
@@ -578,6 +579,7 @@
     "ollamaProbeRetry": "Tìm lại",
     "ollamaProbeNotFoundHeading": "Không tìm thấy Ollama cục bộ (cổng mặc định 11434).",
     "ollamaProbeNotFoundInstructions": "Cài đặt Ollama từ ollama.com, khởi động và tải một mô hình (ví dụ `ollama pull llama3`), rồi tìm lại.",
+    "typeLabel": "Loại",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1385,6 +1387,8 @@
     "aiTab": "AI",
     "paneTabs": "Các ngăn của phiên",
     "moreActions": "Thêm hành động",
+    "thisDevice": "thiết bị này",
+    "paneSwitch": "Chuyển đổi khung",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "extraKeys": {
       "group": "Phím bổ sung",

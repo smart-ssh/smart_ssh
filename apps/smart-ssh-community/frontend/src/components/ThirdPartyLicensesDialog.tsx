@@ -61,7 +61,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
         </Button>
       }
     >
-      <div className="min-h-0 flex-1 overflow-y-auto rounded border border-border bg-surface-sunken p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto border border-border bg-surface-sunken p-3">
         {state.status === "loading" && (
           <p className="text-sm text-fg-subtle">{t("about.thirdPartyLicenses.loading")}</p>
         )}

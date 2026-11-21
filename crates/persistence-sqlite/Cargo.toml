@@ -34,7 +34,7 @@ directories = { workspace = true }
 # (gemessen, s. Spec 0101 Abschnitt 1 „Messungen“: `bundled-sqlcipher-vendored-openssl` →
 # `bundled-sqlcipher` → `bundled`, deckungsgleich mit `sqlx-sqlite/bundled`)
 # statt eine zweite, konkurrierende SQLite-Kopie zu bauen.
-libsqlite3-sys = { version = "=0.37.0", features = ["bundled-sqlcipher-vendored-openssl"] }
+libsqlite3-sys = { version = "0.40.0", features = ["bundled-sqlcipher-vendored-openssl"] }
 # Spec 0101, A2: der `PRAGMA key`-Wert kommt als `SecretString` aus
 # `core::crypto::DatabaseKey` und wird erst beim Aufbau der Verbindung
 # ausgepackt. Schon im Abhängigkeitsbaum (direkte Abhängigkeit von `core`).

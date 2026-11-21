@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, createBackupKeyWithCode, newBackupCode, setBackupPassphrase } from "../api/api";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 import { PassphraseDialog, RecoveryCodeDialog } from "./BackupDialogs";
 
 /** Set while a code was shown but the user did not confirm having noted it
@@ -93,7 +93,7 @@ export function BackupKeySetup({ mode, onDone, onCancel }: Props) {
   }
   if (mode === "newCode") {
     return error ? (
-      <DialogFrame layer="app" title={t("backup.code.title")} onClose={onCancel} actions={<Button onClick={onCancel}>{t("common.close")}</Button>}>
+      <DialogFrame layer="app" icon={<Icon name="key" />} title={t("backup.code.title")} onClose={onCancel} actions={<Button onClick={onCancel}>{t("common.close")}</Button>}>
         <p role="alert" className="text-danger-fg-soft">{error}</p>
       </DialogFrame>
     ) : null;
@@ -101,10 +101,11 @@ export function BackupKeySetup({ mode, onDone, onCancel }: Props) {
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="key" />}
       title={t("backup.setup.title")}
       onClose={onCancel}
       actions={
-        <Button className="narrow:min-h-11" onClick={onCancel}>
+        <Button onClick={onCancel}>
           {t("common.cancel")}
         </Button>
       }
@@ -112,10 +113,10 @@ export function BackupKeySetup({ mode, onDone, onCancel }: Props) {
       <div className="space-y-3">
         <p>{t("backup.setup.intro")}</p>
         <div className="flex flex-col gap-2">
-          <Button variant="primary" className="narrow:min-h-11" onClick={() => void showCode(createBackupKeyWithCode)}>
+          <Button variant="primary" onClick={() => void showCode(createBackupKeyWithCode)}>
             {t("backup.setup.useCode")}
           </Button>
-          <Button className="narrow:min-h-11" onClick={() => setStage("passphrase")}>
+          <Button onClick={() => setStage("passphrase")}>
             {t("backup.setup.usePassphrase")}
           </Button>
         </div>

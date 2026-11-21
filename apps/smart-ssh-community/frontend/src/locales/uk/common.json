@@ -475,6 +475,7 @@
     "mismatchBodyAfterHost": " пред'являє інший ключ, ніж збережений востаннє. Це може вказувати на атаку «людина посередині». Продовжуйте, лише якщо ви впевнені, що ключ сервера змінився правомірно (наприклад, після перевстановлення сервера).",
     "known": "Відомий",
     "offeredNow": "Запропоновано зараз",
+    "offered": "Запропоновано",
     "keyType": "Тип ключа",
     "cancelConnection": "Скасувати підключення",
     "trustAnyway": "Все одно довіряти",
@@ -584,6 +585,7 @@
     "ollamaProbeRetry": "Шукати знову",
     "ollamaProbeNotFoundHeading": "Локальної Ollama не знайдено (типовий порт 11434).",
     "ollamaProbeNotFoundInstructions": "Встановіть Ollama з ollama.com, запустіть її та завантажте модель (напр. `ollama pull llama3`), потім шукайте знову.",
+    "typeLabel": "Тип",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1418,6 +1420,8 @@
     "aiTab": "ШІ",
     "paneTabs": "Панелі сеансу",
     "moreActions": "Більше дій",
+    "thisDevice": "цей пристрій",
+    "paneSwitch": "Перемикач панелей",
     "terminalOpenFailed": "Не вдалося відкрити термінал: {{error}}",
     "extraKeys": {
       "group": "Додаткові клавіші",

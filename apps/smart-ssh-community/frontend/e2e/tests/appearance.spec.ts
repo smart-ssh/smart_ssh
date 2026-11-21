@@ -36,6 +36,33 @@ test.describe("appearance", () => {
     await expect(html).toHaveAttribute("data-theme", "dark");
   });
 
+  test("the selected theme segment has a 2 px accent bottom border, in light and dark", async ({ app }) => {
+    const { page } = app;
+    await app.launch(populated());
+    await openDisplaySettings(page);
+    for (const choice of ["light", "dark"] as const) {
+      await page.getByRole("button", { name: en.appearance[choice], exact: true }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", choice);
+      const accentNow = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.className = "bg-accent";
+        document.body.appendChild(probe);
+        const colour = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return colour;
+      });
+      for (const name of ["system", "light", "dark"] as const) {
+        const segment = page.getByRole("button", { name: en.appearance[name], exact: true });
+        if (name === choice) {
+          await expect(segment).toHaveCSS("border-bottom-width", "2px");
+          await expect(segment).toHaveCSS("border-bottom-color", accentNow);
+        } else {
+          await expect(segment).not.toHaveCSS("border-bottom-color", accentNow);
+        }
+      }
+    }
+  });
+
   test("Angular tokens, square corners and the 2 px focus ring (issue #1362)", async ({ app }) => {
     const { page } = app;
     await app.launch(populated());

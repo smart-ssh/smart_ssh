@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": "  menyajikan kunci yang berbeda dari yang tersimpan sebelumnya. Ini dapat menandakan serangan man-in-the-middle. Lanjutkan hanya jika Anda yakin kunci server berubah secara sah (mis. instalasi ulang server).",
     "known": "Dikenal",
     "offeredNow": "Ditawarkan Sekarang",
+    "offered": "Ditawarkan",
     "keyType": "Jenis kunci",
     "cancelConnection": "Batalkan Koneksi",
     "trustAnyway": "Tetap Percayai",
@@ -578,6 +579,7 @@
     "ollamaProbeRetry": "Cari lagi",
     "ollamaProbeNotFoundHeading": "Ollama lokal tidak ditemukan (port default 11434).",
     "ollamaProbeNotFoundInstructions": "Instal Ollama dari ollama.com, jalankan, dan muat model (mis. `ollama pull llama3`), lalu cari lagi.",
+    "typeLabel": "Jenis",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1385,6 +1387,8 @@
     "aiTab": "AI",
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
+    "thisDevice": "perangkat ini",
+    "paneSwitch": "Pengalih panel",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "extraKeys": {
       "group": "Tombol tambahan",

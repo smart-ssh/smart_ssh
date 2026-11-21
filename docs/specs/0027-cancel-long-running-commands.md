@@ -119,9 +119,10 @@ statt dauerhaft „läuft".
 ## 4. Darstellung
 
 - Der Indikator sitzt an der Aktionskarte.
-- Im Ergebnis steht bei Abbruch statt der Exit-Code-Zeile: „⚠ Manuell
-  abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer
-  Exit-Code." Die bis dahin gesammelte Ausgabe steht darunter.
+- Im Ergebnis steht bei Abbruch statt der Exit-Code-Zeile ein Warnsymbol
+  (Icon) und dahinter: „Manuell abgebrochen — Ausgabe möglicherweise
+  unvollständig, kein regulärer Exit-Code." Die bis dahin gesammelte Ausgabe
+  steht darunter.
 - Alle Texte laufen über das Übersetzungssystem (Spec 0024).
 
 ## 5. Abgrenzung
