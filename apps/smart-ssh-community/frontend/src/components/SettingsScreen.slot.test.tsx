@@ -169,3 +169,31 @@ describe("SettingsScreen category slots for every built-in category (#1311)", ()
     err.mockRestore();
   });
 });
+
+describe("SettingsScreen numbered list (#1376)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("shows a registered category with its translated name and next index", async () => {
+    registerSettingsSection({ id: "chat-retention", label: "settings.categories.chatRetention", component: mk("sec-ret") });
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    const row = rows.find((b) => b.textContent?.includes("Sitzungen & Daten"));
+    expect(row).toBeDefined();
+    const idx = rows.indexOf(row!) + 1;
+    expect(row!.textContent).toContain(String(idx).padStart(2, "0"));
+    fireEvent.click(row!);
+    await screen.findByText("sec-ret");
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
+  });
+
+  it("moves focus with ArrowDown and ArrowUp", async () => {
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: "ArrowDown" });
+    expect(rows[1]).toHaveFocus();
+    fireEvent.keyDown(rows[1], { key: "ArrowUp" });
+    expect(rows[0]).toHaveFocus();
+  });
+});

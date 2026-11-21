@@ -205,7 +205,18 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
       <div className="flex min-h-0 flex-1">
         {showList && (
         <nav className="flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-          <ul className="flex-1">
+          <ul
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+              const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+              const at = items.indexOf(document.activeElement as HTMLButtonElement);
+              if (at < 0) return;
+              e.preventDefault();
+              const next = e.key === "ArrowDown" ? Math.min(at + 1, items.length - 1) : Math.max(at - 1, 0);
+              items[next]?.focus();
+            }}
+          >
             {categories.map((category) => {
               const isActive = category.id === active?.id;
               return (

@@ -43,6 +43,23 @@ test("settings: focus starts on the active category, Escape closes and focus ret
   await expect(trigger).toBeFocused();
 });
 
+test("settings: arrow keys move through the category list, Enter opens, Escape closes", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  const dialog = await openSettings(page);
+  const rows = dialog.locator("nav li button");
+  await expect(rows.nth(0)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(rows.nth(0)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(rows.nth(1)).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
 test("settings: Tab stays inside the dialog", async ({ app }) => {
   await app.launch(populated());
   const page = app.page;
