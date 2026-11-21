@@ -193,7 +193,7 @@ export function MasterPasswordSettings() {
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="switch"
+              className="mt-1 h-4 w-4"
             />
             {t("masterPassword.noRecoveryWarning")}
           </label>

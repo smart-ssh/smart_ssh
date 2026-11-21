@@ -73,7 +73,7 @@ export function RecoveryCodeDialog({ code, onContinue, onCancel }: RecoveryCodeD
           <input
             ref={checkRef}
             type="checkbox"
-            className="switch"
+            className="mt-1 h-4 w-4"
             checked={noted}
             onChange={(e) => setNoted(e.target.checked)}
           />
