@@ -49,9 +49,9 @@ export function ElevatedIdleSettings() {
           <StatusSquare tone="danger" />{error}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-fg-muted">
-        <span className="sr-only">{t("elevatedIdle.label")}</span>
+      <div className="flex items-center gap-2 text-sm text-fg-muted">
         <select
+          aria-label={t("elevatedIdle.label")}
           value={minutes}
           onChange={(e) => handleChange(Number(e.target.value))}
           className="border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg narrow:min-h-11"
@@ -62,7 +62,7 @@ export function ElevatedIdleSettings() {
             </option>
           ))}
         </select>
-      </label>
+      </div>
       <p className="mt-1 text-xs text-fg-subtle">{t("elevatedIdle.hint")}</p>
     </fieldset>
   );

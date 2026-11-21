@@ -50,9 +50,9 @@ export function AutoReconnectSettings() {
           <StatusSquare tone="danger" />{error}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-fg-muted">
-        <span className="sr-only">{t("autoReconnect.label")}</span>
+      <div className="flex items-center gap-2 text-sm text-fg-muted">
         <select
+          aria-label={t("autoReconnect.label")}
           value={seconds}
           onChange={(e) => handleChange(Number(e.target.value) as AutoReconnectSeconds)}
           // Same look as `FIELD_CONTROL_CLASS`, but the native focus outline stays: WebKit
@@ -65,7 +65,7 @@ export function AutoReconnectSettings() {
             </option>
           ))}
         </select>
-      </label>
+      </div>
     </fieldset>
   );
 }
