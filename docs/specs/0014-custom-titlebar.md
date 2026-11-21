@@ -48,8 +48,8 @@ zeigt ein Schild-Symbol) und die Tab-Leiste der Sitzungen (Spec 0017). Die
 Navigationsreiter bleiben auch sichtbar, während eine Sitzung angezeigt wird;
 dann ist keiner von ihnen aktiv. Rechts stehen der Aktivitäten-Auslöser
 (Spec 0116) und die Einstellungen als reine Symbol-Schaltfläche mit dem Namen
-„Einstellungen“. Die Übersicht hat keine zweite Kopfzeile. Das schmale Layout
-bleibt unverändert (44 px, Spec 0113).
+„Einstellungen“. Die Übersicht hat keine zweite Kopfzeile. Im schmalen Layout ist die Titelleiste
+56 px hoch (ab 640 px bleiben es 44 px, Spec 0113).
 
 - **macOS:** Die Ampel sitzt oben links, der Header-Inhalt beginnt mit
   entsprechendem Abstand links.

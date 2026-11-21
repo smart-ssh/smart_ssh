@@ -490,7 +490,12 @@
     "menu": {
       "open": "Åbn navigationsmenuen",
       "title": "Navigationsmenu",
-      "sessions": "Åbne sessioner"
+      "sessions": "Åbne sessioner",
+      "close": "Luk navigationsmenuen",
+      "needsConfirmation": "Kræver bekræftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} kører",
+      "activitiesRunning_other": "{{count}} kører"
     },
     "mcp": {
       "badge": "MCP",

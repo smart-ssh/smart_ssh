@@ -489,7 +489,11 @@
     "menu": {
       "open": "打开导航菜单",
       "title": "导航菜单",
-      "sessions": "已打开的会话"
+      "sessions": "已打开的会话",
+      "close": "关闭导航菜单",
+      "needsConfirmation": "需要确认",
+      "activities": "活动",
+      "activitiesRunning_other": "{{count}} 个运行中"
     },
     "mcp": {
       "badge": "MCP",

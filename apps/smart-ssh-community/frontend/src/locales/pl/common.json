@@ -492,7 +492,14 @@
     "menu": {
       "open": "Otwórz menu nawigacji",
       "title": "Menu nawigacji",
-      "sessions": "Otwarte sesje"
+      "sessions": "Otwarte sesje",
+      "close": "Zamknij menu nawigacji",
+      "needsConfirmation": "Wymaga potwierdzenia",
+      "activities": "Aktywności",
+      "activitiesRunning_one": "{{count}} w toku",
+      "activitiesRunning_few": "{{count}} w toku",
+      "activitiesRunning_many": "{{count}} w toku",
+      "activitiesRunning_other": "{{count}} w toku"
     },
     "mcp": {
       "badge": "MCP",

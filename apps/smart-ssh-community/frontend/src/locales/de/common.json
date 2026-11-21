@@ -490,7 +490,12 @@
     "menu": {
       "open": "Navigationsmenü öffnen",
       "title": "Navigationsmenü",
-      "sessions": "Offene Sitzungen"
+      "sessions": "Offene Sitzungen",
+      "close": "Navigationsmenü schließen",
+      "needsConfirmation": "Bestätigung nötig",
+      "activities": "Aktivitäten",
+      "activitiesRunning_one": "{{count}} läuft",
+      "activitiesRunning_other": "{{count}} laufen"
     },
     "mcp": {
       "badge": "MCP",
