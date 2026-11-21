@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Badge, type BadgeTone } from "../ui";
+import { Badge, Icon, type BadgeTone } from "../ui";
 import { translateErrorCode } from "../../api/errorCodes";
 import type { ConnectStepRecord, TestConnectionResult } from "../../api/types";
 
@@ -9,10 +9,12 @@ import type { ConnectStepRecord, TestConnectionResult } from "../../api/types";
 export function TestResultBadge({ result }: { result: TestConnectionResult & { steps?: ConnectStepRecord[] } }) {
   const { t } = useTranslation();
   let tone: BadgeTone = "danger";
+  let icon: "check" | "x" | "warn" = "x";
   let text: string;
   switch (result.kind) {
     case "success": {
       tone = "success";
+      icon = "check";
       // Sum of the step durations; without any measured step the plain
       // success text stays.
       const timed = (result.steps ?? []).filter((s) => s.durationMs !== null);
@@ -29,9 +31,11 @@ export function TestResultBadge({ result }: { result: TestConnectionResult & { s
       break;
     case "hostKeyUnknown":
       tone = "warning";
+      icon = "warn";
       text = t("serverForm.testResult.hostKeyUnknown");
       break;
     case "hostKeyMismatch":
+      icon = "warn";
       text = t("serverForm.testResult.hostKeyMismatch");
       break;
     case "networkError":
@@ -53,6 +57,7 @@ export function TestResultBadge({ result }: { result: TestConnectionResult & { s
       square
       className="h-auto! min-h-5 py-0.5 text-left normal-case! tracking-normal!"
     >
+      <Icon name={icon} className="mr-1 inline align-text-bottom" />
       {text}
     </Badge>
   );

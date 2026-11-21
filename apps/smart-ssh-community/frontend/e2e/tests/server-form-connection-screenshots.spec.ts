@@ -49,7 +49,10 @@ test("Connection tab key-file states screenshots", async ({ app }) => {
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByTestId("test-connection-result")).toContainText(/OK · \d+ ms/);
   await captureScreen(page, "server-form-test-dialog");
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  await expect(close).toBeVisible();
+  await expect(close).toBeEnabled();
+  await close.click();
   await expect(dialog).toBeHidden();
   const log = page.getByTestId("connect-step-log");
   await log.getByText("Details", { exact: true }).click();
