@@ -406,6 +406,36 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
   );
 }
 
+/** Finished output longer than this many lines is shown as a preview. */
+export const OUTPUT_PREVIEW_LINES = 8;
+
+/** Output block with an 8-line preview and a per-card "Show all" toggle (not persisted). */
+export function CollapsibleOutput({ text, className }: { text: string; className: string }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const lines = text.split("\n");
+  const hidden = lines.length - OUTPUT_PREVIEW_LINES;
+  if (hidden <= 0) {
+    return <pre className={`whitespace-pre-wrap ${className}`}>{text}</pre>;
+  }
+  return (
+    <div>
+      <pre className={`whitespace-pre-wrap ${className}`}>
+        {expanded ? text : lines.slice(0, OUTPUT_PREVIEW_LINES).join("\n")}
+      </pre>
+      {!expanded && <p className="text-fg-subtle">{t("chat.outputMoreLines", { n: hidden })}</p>}
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        className="font-sans text-xs text-accent-fg underline"
+      >
+        {expanded ? t("chat.outputShowLess") : t("chat.outputShowAll")}
+      </button>
+    </div>
+  );
+}
+
 export function ActionResultView({
   result,
   sessionId,
@@ -460,10 +490,10 @@ export function ActionResultView({
         </div>
       )}
       {result.stdout && (
-        <pre className="whitespace-pre-wrap text-fg-subtle">{truncate(result.stdout)}</pre>
+        <CollapsibleOutput text={truncate(result.stdout)} className="text-fg-subtle" />
       )}
       {result.stderr && (
-        <pre className="whitespace-pre-wrap text-danger-fg-soft">{truncate(result.stderr)}</pre>
+        <CollapsibleOutput text={truncate(result.stderr)} className="text-danger-fg-soft" />
       )}
       {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
     </div>

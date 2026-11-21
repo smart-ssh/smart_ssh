@@ -196,6 +196,13 @@ derselben Kopfzeile (nicht mehr unter der Ausgabe). Bei wiederhergestellten
 Chats ohne Regeldaten zeigt die Kopfzeile nur „Automatisch ausgeführt“. Der
 Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
 
+Die Ausgabe eines beendeten Kommandos (stdout und stderr getrennt) zeigt in der
+Karte nur die ersten 8 Zeilen, wenn sie länger ist, dazu „… N weitere Zeilen“ und
+eine Schaltfläche „Alle anzeigen“ / „Weniger anzeigen“ (`aria-expanded`, per
+Tastatur bedienbar). Der Zustand gilt je Karte und wird nicht gespeichert; „In Notiz
+übernehmen“ übernimmt immer den vollen Text. Ausgabe mit höchstens 8 Zeilen hat
+keine Schaltfläche. Laufende Ausgabe bleibt unverändert.
+
 - Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel
   jedes Teilkommandos; deckt eine Regel mehrere Teilkommandos ab, erscheint sie
   nur einmal.
