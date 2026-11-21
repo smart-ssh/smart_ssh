@@ -327,6 +327,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
     cancel_backup_import: () => null,
     get_chat_session_retention_days: () => null,
+    set_chat_session_retention_days: () => null,
     get_elevated_idle_timeout: () => 15,
     set_elevated_idle_timeout: () => null,
     get_mcp_server_settings: () => MCP_SETTINGS,
