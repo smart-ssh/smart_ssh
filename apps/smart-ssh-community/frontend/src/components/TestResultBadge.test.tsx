@@ -6,10 +6,10 @@ import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
 import { testI18n } from "../testI18n";
-import type { TestConnectionResult } from "../api/types";
+import type { ConnectStepRecord, TestConnectionResult } from "../api/types";
 import { TestResultBadge } from "./ServerForm";
 
-function renderBadge(result: TestConnectionResult) {
+function renderBadge(result: TestConnectionResult & { steps?: ConnectStepRecord[] }) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <TestResultBadge result={result} />
@@ -72,5 +72,29 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
     renderBadge({ kind: "success" });
 
     expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
+  });
+
+  // Issue #1380: the success badge shows the sum of the step durations.
+  const stepWith = (durationMs: number | null): ConnectStepRecord => ({
+    hopIndex: 0,
+    hop: "deploy@example.invalid:22",
+    step: { kind: "sessionReady" },
+    status: { state: "ok" },
+    durationMs,
+  });
+
+  it("shows 'OK · <sum> ms' for a successful test with measured steps", () => {
+    renderBadge({ kind: "success", steps: [stepWith(100), stepWith(42), stepWith(null)] });
+    expect(screen.getByText("OK · 142 ms")).toBeInTheDocument();
+  });
+
+  it("keeps the plain success text when no step has a duration", () => {
+    renderBadge({ kind: "success" });
+    expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
+  });
+
+  it("shows a failure with its existing message", () => {
+    renderBadge({ kind: "timeout" });
+    expect(screen.getByText(/antwortet nicht/)).toBeInTheDocument();
   });
 });

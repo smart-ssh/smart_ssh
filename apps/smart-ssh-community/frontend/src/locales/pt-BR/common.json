@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Excluir permanentemente",
     "testResult": {
       "success": "Conexão bem-sucedida",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login recusado. Verifique o nome de usuário e a senha ou chave.",
       "hostKeyUnknown": "Chave de host desconhecida — confirmação necessária",
       "hostKeyMismatch": "A chave de host mudou",

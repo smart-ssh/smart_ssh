@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Hapus permanen",
     "testResult": {
       "success": "Koneksi berhasil",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login ditolak. Periksa nama pengguna dan kata sandi atau kunci.",
       "hostKeyUnknown": "Kunci host tidak dikenal — konfirmasi diperlukan",
       "hostKeyMismatch": "Kunci host telah berubah",

@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Slet permanent",
     "testResult": {
       "success": "Forbindelse oprettet",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login afvist. Kontrollér brugernavn og adgangskode eller nøgle.",
       "hostKeyUnknown": "Værtsnøgle ukendt – bekræftelse kræves",
       "hostKeyMismatch": "Værtsnøglen er ændret",

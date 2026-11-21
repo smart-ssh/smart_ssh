@@ -65,10 +65,21 @@ vier Reiter verteilt: **Allgemein**, **Verbindung**, **Sicherheit** und
 
 - *Allgemein*: Name, Gruppe, Tags, danach die Abschnitte von Erweiterungen und
   am Ende „Server löschen" samt Auswirkungs-Vorschau.
-- *Verbindung*: Host, Port, Benutzername, Jump-Host, Anmeldung (alle Arten,
-  Schlüsselprüfung, Übernahme in den Schlüsselbund), Sudo-Passwort,
-  Startverzeichnis, „Erweitert" (SFTP-Server-Pfad) sowie „Verbindung testen"
-  mit Ergebnis und Schritt-Protokoll.
+- *Verbindung*: Auf breitem Fenster zwei Spalten, auf schmalem eine Spalte in
+  derselben Reihenfolge (erst links, dann rechts). Links: Host und Port
+  (schmal, in einer Zeile), Benutzername, Jump-Host, Anmeldung, „Verbindung
+  testen" mit Ergebnis und Schritt-Protokoll. Die Anmeldeart ist eine
+  segmentierte Auswahl (Radiogruppe, Pfeiltasten) mit denselben Arten wie
+  zuvor; „Schlüsseldatei" erscheint unter denselben Bedingungen (Spec 0076).
+  Beim Pfad der Schlüsseldatei steht „Datei wählen …" neben dem Feld; die
+  Schlüsselprüfung zeigt jeden Befund mit Symbol (Haken, Warnung, Info), danach
+  Passphrase und ggf. die Übernahme in den Schlüsselbund. Rechts: der Abschnitt
+  „Sudo-Passwort" (Hinweis, Feld, „Sudo-Passwort entfernen" als Gefahr-Knopf)
+  und der immer geöffnete Abschnitt „Erweitert" (Startverzeichnis mit Hinweis,
+  Erhöhte-Rechte-Option mit Hinweis, SFTP-Server-Pfad). Technische Werte
+  (Host, Port, Benutzer, Pfade) stehen in Festbreitenschrift. Das Testergebnis
+  ist eine umrandete Marke mit Statusquadrat: „OK · 142 ms" (Summe der
+  Schrittdauern) bei Erfolg, sonst die bisherige Fehlermeldung.
 - *Sicherheit*: Bestätigung nach Serverzugriff (Spec 0039), KI-Prüfung auf
   Prompt-Injection und die gespeicherten Host-Keys.
 - *Notizen*: Notizen und Kontext-Vorschau. Die Notizen haben wie bisher ihren

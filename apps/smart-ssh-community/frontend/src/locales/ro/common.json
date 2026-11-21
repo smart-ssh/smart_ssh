@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Șterge definitiv",
     "testResult": {
       "success": "Conectare reușită",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
       "hostKeyUnknown": "Cheie de host necunoscută — este necesară confirmarea",
       "hostKeyMismatch": "Cheia de host s-a schimbat",

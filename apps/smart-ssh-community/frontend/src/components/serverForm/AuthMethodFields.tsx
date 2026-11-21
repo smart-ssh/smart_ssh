@@ -5,43 +5,45 @@ import { detectFallbackPlatform, platformCapabilities } from "../../lib/platform
 import { Button } from "../ui";
 import { Field, FIELD_CONTROL_CLASS } from "../ui/Field";
 import type { IdentityFileState, ServerModel } from "./formTypes";
+import { AuthKindSegments } from "./AuthKindSegments";
 import { IdentityFileFacts } from "./IdentityFileFacts";
 import { authKindLabels, authStateFromKind, type AuthFormState } from "./serverFormModel";
 
 interface Props {
+  idBase: string;
   isCreate: boolean;
   model: ServerModel;
   identity: IdentityFileState;
 }
 
 /** The authentication fieldset: method select plus the fields of the method. */
-export function AuthMethodFields({ isCreate, model, identity }: Props) {
+export function AuthMethodFields({ idBase, isCreate, model, identity }: Props) {
   const { t } = useTranslation();
   const AUTH_KIND_LABELS = authKindLabels(t);
   const { auth, setAuth, loaded } = model;
+  const keyFileOffered =
+    platformCapabilities(detectFallbackPlatform()).keyFilePath || auth.kind === "identityFile";
+  // Issue #679: a file path cannot be kept on Android (the picker returns a
+  // content URI), so "Key file" is only offered for a server that already
+  // uses it; new keys go in via "Private key", which imports the content.
+  const authOptions: { kind: AuthFormState["kind"]; label: string }[] = [
+    { kind: "password", label: AUTH_KIND_LABELS.password },
+    { kind: "privateKey", label: AUTH_KIND_LABELS.privateKey },
+    { kind: "agent", label: AUTH_KIND_LABELS.agent },
+    { kind: "certificate", label: AUTH_KIND_LABELS.certificate },
+    ...(keyFileOffered
+      ? [{ kind: "identityFile" as const, label: AUTH_KIND_LABELS.identityFile }]
+      : []),
+  ];
   const { identityFacts, identityFactsLoading, identityFactsError } = identity;
   return (
-        <fieldset className="rounded border border-border p-3">
-          <legend className="px-1 text-sm text-fg-muted">{t("serverForm.authFieldset")}</legend>
-          <select
-            aria-label={t("serverForm.authFieldset")}
+        <fieldset className="min-w-0 space-y-3">
+          <legend className="mb-1 text-label">{t("serverForm.authFieldset")}</legend>
+          <AuthKindSegments
             value={auth.kind}
-            onChange={(e) => setAuth(authStateFromKind(e.target.value as AuthFormState["kind"]))}
-            className="mb-3 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
-          >
-            <option value="password">{AUTH_KIND_LABELS.password}</option>
-            <option value="privateKey">{AUTH_KIND_LABELS.privateKey}</option>
-            <option value="agent">{AUTH_KIND_LABELS.agent}</option>
-            <option value="certificate">{AUTH_KIND_LABELS.certificate}</option>
-            {/* Issue #679: a file path cannot be kept on Android (the picker
-             * returns a content URI), so "Key file" is only offered for a
-             * server that already uses it; new keys go in via "Private key",
-             * which imports the picked content. */}
-            {(platformCapabilities(detectFallbackPlatform()).keyFilePath ||
-              auth.kind === "identityFile") && (
-              <option value="identityFile">{AUTH_KIND_LABELS.identityFile}</option>
-            )}
-          </select>
+            options={authOptions}
+            onChange={(kind) => setAuth(authStateFromKind(kind))}
+          />
 
           {auth.kind === "password" && (
             <div className="space-y-2">
@@ -110,7 +112,7 @@ export function AuthMethodFields({ isCreate, model, identity }: Props) {
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
                   rows={4}
-                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
+                  className={`${FIELD_CONTROL_CLASS} mt-1 w-full font-mono text-xs`}
                 />
                 {/* Spec 0069, Teil C2 (BL-0110): reiner Hinweistext — keine
                  * Prüfung des Inhalts, keine Sperre, kein Einfluss auf
@@ -162,7 +164,7 @@ export function AuthMethodFields({ isCreate, model, identity }: Props) {
                   value={auth.certContent}
                   onChange={(e) => setAuth({ ...auth, certContent: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
+                  className={`${FIELD_CONTROL_CLASS} mt-1 w-full font-mono text-xs`}
                 />
               </div>
               <div>
@@ -186,7 +188,7 @@ export function AuthMethodFields({ isCreate, model, identity }: Props) {
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
+                  className={`${FIELD_CONTROL_CLASS} mt-1 w-full font-mono text-xs`}
                 />
               </div>
             </div>
@@ -195,9 +197,21 @@ export function AuthMethodFields({ isCreate, model, identity }: Props) {
           {auth.kind === "identityFile" && (
             <div className="space-y-2">
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-fg-muted">{t("serverForm.identityFilePathLabel")}</span>
-                  <Button size="sm"
+                <label htmlFor={`${idBase}-identity-path`} className="text-label">
+                  {t("serverForm.identityFilePathLabel")}
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    id={`${idBase}-identity-path`}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="text"
+                    required
+                    value={auth.path}
+                    onChange={(e) => setAuth({ ...auth, path: e.target.value })}
+                    placeholder={t("serverForm.identityFilePathPlaceholder")}
+                    className={`${FIELD_CONTROL_CLASS} min-w-0 flex-1 font-mono`}
+                  />
+                  <Button
                     onClick={async () => {
                       const path = await pickFilePath(t("serverForm.chooseIdentityFileDialogTitle"));
                       if (path !== null) setAuth({ ...auth, path });
@@ -206,15 +220,6 @@ export function AuthMethodFields({ isCreate, model, identity }: Props) {
                     {t("serverForm.chooseFile")}
                   </Button>
                 </div>
-                <input
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="text"
-                  required
-                  value={auth.path}
-                  onChange={(e) => setAuth({ ...auth, path: e.target.value })}
-                  placeholder={t("serverForm.identityFilePathPlaceholder")}
-                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
-                />
                 {/* Spec 0076, B-3: Vorab-Befund — hindert das Speichern
                  * nicht, die Datei darf erst später entstehen. */}
                 <IdentityFileFacts

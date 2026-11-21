@@ -132,12 +132,13 @@ function openTab(name: string) {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
-function authKindSelect(): HTMLSelectElement {
-  const select = screen
-    .getAllByRole("combobox")
-    .find((el) => within(el).queryByText("Private Key") !== null);
-  if (!select) throw new Error("Anmeldeart-Auswahl nicht gefunden");
-  return select as HTMLSelectElement;
+// The authentication choice is a segmented radio group (issue #1380).
+function selectAuthKind(kind: string) {
+  const radio = screen
+    .getAllByRole("radio")
+    .find((el) => (el as HTMLInputElement).value === kind);
+  if (!radio) throw new Error(`Anmeldeart-Option ${kind} nicht gefunden`);
+  fireEvent.click(radio);
 }
 
 const ED25519_HINT =
@@ -165,7 +166,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
+    selectAuthKind("privateKey");
 
     expect(screen.getByText(ED25519_HINT)).toBeInTheDocument();
   });
@@ -174,10 +175,10 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
+    selectAuthKind("privateKey");
     expect(screen.getByText(ED25519_HINT)).toBeInTheDocument();
 
-    fireEvent.change(authKindSelect(), { target: { value: "agent" } });
+    selectAuthKind("agent");
     expect(screen.queryByText(ED25519_HINT)).not.toBeInTheDocument();
   });
 
@@ -185,7 +186,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "certificate" } });
+    selectAuthKind("certificate");
 
     expect(screen.queryByText(ED25519_HINT)).not.toBeInTheDocument();
   });
@@ -329,7 +330,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
 
     expect(screen.getByPlaceholderText("~/.ssh/id_ed25519")).toBeInTheDocument();
     expect(screen.getByText("Datei wählen…")).toBeInTheDocument();
@@ -339,7 +340,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     vi.mocked(pickFilePath).mockResolvedValue(IDENTITY_PATH);
     renderNewServerForm();
     openTab("Verbindung");
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
 
     fireEvent.click(screen.getByText("Datei wählen…"));
 
@@ -364,7 +365,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: "/tmp/nope" },
       });
@@ -400,7 +401,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -433,7 +434,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -479,7 +480,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -521,7 +522,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -551,7 +552,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
       fireEvent.change(input, { target: { value: IDENTITY_PATH } });
 
@@ -942,7 +943,7 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
     );
     expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
     fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
     return onSaved;
@@ -998,7 +999,7 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
     );
     expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
     fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
     const saveButton = screen.getByRole("button", { name: "Speichern" });
     saveButton.focus();

@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Poista pysyvästi",
     "testResult": {
       "success": "Yhteys onnistui",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Kirjautuminen hylättiin. Tarkista käyttäjätunnus ja salasana tai avain.",
       "hostKeyUnknown": "Isäntäavain tuntematon – vahvistus tarvitaan",
       "hostKeyMismatch": "Isäntäavain on muuttunut",

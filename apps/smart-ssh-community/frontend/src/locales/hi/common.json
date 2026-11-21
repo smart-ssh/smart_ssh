@@ -283,6 +283,7 @@
     "confirmDeleteServer": "स्थायी रूप से हटाएँ",
     "testResult": {
       "success": "कनेक्शन सफल",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "लॉगिन अस्वीकृत। उपयोगकर्ता नाम और पासवर्ड या कुंजी जाँचें।",
       "hostKeyUnknown": "होस्ट कुंजी अज्ञात — पुष्टि आवश्यक",
       "hostKeyMismatch": "होस्ट कुंजी बदल गई है",

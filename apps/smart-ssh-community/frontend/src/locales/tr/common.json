@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Kalıcı olarak sil",
     "testResult": {
       "success": "Bağlantı başarılı",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Oturum açma reddedildi. Kullanıcı adını ve parolayı ya da anahtarı denetleyin.",
       "hostKeyUnknown": "Ana makine anahtarı bilinmiyor — onay gerekli",
       "hostKeyMismatch": "Ana makine anahtarı değişti",

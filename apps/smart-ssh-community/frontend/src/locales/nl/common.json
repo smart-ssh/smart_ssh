@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Definitief verwijderen",
     "testResult": {
       "success": "Verbinding geslaagd",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
       "hostKeyUnknown": "Hostsleutel onbekend — bevestiging vereist",
       "hostKeyMismatch": "Hostsleutel is gewijzigd",

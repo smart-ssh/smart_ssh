@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Supprimer définitivement",
     "testResult": {
       "success": "Connexion réussie",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Connexion refusée. Vérifiez le nom d’utilisateur et le mot de passe ou la clé.",
       "hostKeyUnknown": "Clé d’hôte inconnue — confirmation requise",
       "hostKeyMismatch": "La clé d’hôte a changé",

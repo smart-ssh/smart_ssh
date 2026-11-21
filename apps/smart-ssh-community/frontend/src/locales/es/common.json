@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Eliminar definitivamente",
     "testResult": {
       "success": "Conexión correcta",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inicio de sesión rechazado. Compruebe el usuario y la contraseña o la clave.",
       "hostKeyUnknown": "Clave de host desconocida: se requiere confirmación",
       "hostKeyMismatch": "La clave de host ha cambiado",

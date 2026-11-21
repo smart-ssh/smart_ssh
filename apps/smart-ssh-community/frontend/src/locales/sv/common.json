@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Ta bort permanent",
     "testResult": {
       "success": "Anslutningen lyckades",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Inloggningen avvisades. Kontrollera användarnamn och lösenord eller nyckel.",
       "hostKeyUnknown": "Värdnyckeln är okänd — bekräftelse krävs",
       "hostKeyMismatch": "Värdnyckeln har ändrats",

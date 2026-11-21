@@ -283,6 +283,7 @@
     "confirmDeleteServer": "Usuń na stałe",
     "testResult": {
       "success": "Połączenie udane",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Logowanie odrzucone. Sprawdź nazwę użytkownika oraz hasło lub klucz.",
       "hostKeyUnknown": "Nieznany klucz hosta — wymagane potwierdzenie",
       "hostKeyMismatch": "Klucz hosta się zmienił",
