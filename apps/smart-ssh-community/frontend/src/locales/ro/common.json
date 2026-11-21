@@ -30,7 +30,12 @@
     "emptyStateTitle": "Niciun server adăugat încă",
     "emptyStateHint": "Adăugați primul server pentru a vă conecta prin SSH.",
     "emptyStateCreateFirstServer": "Adaugă primul server",
-    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real."
+    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real.",
+    "localBadge": "Local",
+    "thisDevice": "acest dispozitiv",
+    "sessionOpen": "Sesiune deschisă",
+    "sessionPending": "Așteaptă confirmarea",
+    "sessionDisconnected": "Sesiune deconectată"
   },
   "settings": {
     "title": "Setări",
@@ -483,7 +488,13 @@
     "menu": {
       "open": "Deschide meniul de navigare",
       "title": "Meniu de navigare",
-      "sessions": "Sesiuni deschise"
+      "sessions": "Sesiuni deschise",
+      "close": "Închide meniul de navigare",
+      "needsConfirmation": "Necesită confirmare",
+      "activities": "Activități",
+      "activitiesRunning_one": "{{count}} în curs",
+      "activitiesRunning_few": "{{count}} în curs",
+      "activitiesRunning_other": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",

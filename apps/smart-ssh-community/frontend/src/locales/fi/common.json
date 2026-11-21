@@ -30,7 +30,12 @@
     "emptyStateTitle": "Palvelimia ei ole vielä lisätty",
     "emptyStateHint": "Lisää ensimmäinen palvelin yhdistääksesi SSH:lla.",
     "emptyStateCreateFirstServer": "Lisää ensimmäinen palvelin",
-    "emptyStateTryLocalhost": "Kokeile ilman palvelinta: yllä oleva \"Localhost\" avaa istunnon tähän koneeseen – samoilla vahvistuksilla kuin oikealla palvelimella."
+    "emptyStateTryLocalhost": "Kokeile ilman palvelinta: yllä oleva \"Localhost\" avaa istunnon tähän koneeseen – samoilla vahvistuksilla kuin oikealla palvelimella.",
+    "localBadge": "Paikallinen",
+    "thisDevice": "tämä laite",
+    "sessionOpen": "Istunto auki",
+    "sessionPending": "Odottaa vahvistusta",
+    "sessionDisconnected": "Istunto katkaistu"
   },
   "settings": {
     "title": "Asetukset",
@@ -482,7 +487,12 @@
     "menu": {
       "open": "Avaa navigointivalikko",
       "title": "Navigointivalikko",
-      "sessions": "Avoimet istunnot"
+      "sessions": "Avoimet istunnot",
+      "close": "Sulje navigointivalikko",
+      "needsConfirmation": "Vaatii vahvistuksen",
+      "activities": "Toiminnot",
+      "activitiesRunning_one": "{{count}} käynnissä",
+      "activitiesRunning_other": "{{count}} käynnissä"
     },
     "mcp": {
       "badge": "MCP",

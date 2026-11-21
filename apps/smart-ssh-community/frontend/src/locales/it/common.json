@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nessun server ancora aggiunto",
     "emptyStateHint": "Aggiunga il suo primo server per connettersi tramite SSH.",
     "emptyStateCreateFirstServer": "Aggiungi il primo server",
-    "emptyStateTryLocalhost": "Provi senza un server: \"Localhost\" qui sopra apre una sessione su questa macchina, con le stesse conferme di un server reale."
+    "emptyStateTryLocalhost": "Provi senza un server: \"Localhost\" qui sopra apre una sessione su questa macchina, con le stesse conferme di un server reale.",
+    "localBadge": "Locale",
+    "thisDevice": "questo dispositivo",
+    "sessionOpen": "Sessione aperta",
+    "sessionPending": "In attesa di conferma",
+    "sessionDisconnected": "Sessione disconnessa"
   },
   "settings": {
     "title": "Impostazioni",
@@ -483,7 +488,13 @@
     "menu": {
       "open": "Apri il menu di navigazione",
       "title": "Menu di navigazione",
-      "sessions": "Sessioni aperte"
+      "sessions": "Sessioni aperte",
+      "close": "Chiudi il menu di navigazione",
+      "needsConfirmation": "Richiede conferma",
+      "activities": "Attività",
+      "activitiesRunning_one": "{{count}} in corso",
+      "activitiesRunning_many": "{{count}} in corso",
+      "activitiesRunning_other": "{{count}} in corso"
     },
     "mcp": {
       "badge": "MCP",

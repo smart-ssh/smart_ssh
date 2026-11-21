@@ -30,7 +30,12 @@
     "emptyStateTitle": "Серверы ещё не добавлены",
     "emptyStateHint": "Добавьте первый сервер для подключения по SSH.",
     "emptyStateCreateFirstServer": "Добавить первый сервер",
-    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере."
+    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере.",
+    "localBadge": "Локальный",
+    "thisDevice": "это устройство",
+    "sessionOpen": "Сеанс открыт",
+    "sessionPending": "Ожидает подтверждения",
+    "sessionDisconnected": "Сеанс отключён"
   },
   "settings": {
     "title": "Настройки",
@@ -484,7 +489,14 @@
     "menu": {
       "open": "Открыть меню навигации",
       "title": "Меню навигации",
-      "sessions": "Открытые сеансы"
+      "sessions": "Открытые сеансы",
+      "close": "Закрыть меню навигации",
+      "needsConfirmation": "Требуется подтверждение",
+      "activities": "Активности",
+      "activitiesRunning_one": "выполняется: {{count}}",
+      "activitiesRunning_few": "выполняется: {{count}}",
+      "activitiesRunning_many": "выполняется: {{count}}",
+      "activitiesRunning_other": "выполняется: {{count}}"
     },
     "mcp": {
       "badge": "MCP",

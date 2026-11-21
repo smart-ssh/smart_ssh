@@ -30,7 +30,12 @@
     "emptyStateTitle": "Belum ada server yang ditambahkan",
     "emptyStateHint": "Tambahkan server pertama Anda untuk terhubung melalui SSH.",
     "emptyStateCreateFirstServer": "Tambah server pertama",
-    "emptyStateTryLocalhost": "Coba tanpa server: \"Localhost\" di atas membuka sesi di komputer ini — dengan konfirmasi yang sama seperti pada server sungguhan."
+    "emptyStateTryLocalhost": "Coba tanpa server: \"Localhost\" di atas membuka sesi di komputer ini — dengan konfirmasi yang sama seperti pada server sungguhan.",
+    "localBadge": "Lokal",
+    "thisDevice": "perangkat ini",
+    "sessionOpen": "Sesi terbuka",
+    "sessionPending": "Menunggu konfirmasi",
+    "sessionDisconnected": "Sesi terputus"
   },
   "settings": {
     "title": "Pengaturan",
@@ -481,7 +486,11 @@
     "menu": {
       "open": "Buka menu navigasi",
       "title": "Menu navigasi",
-      "sessions": "Sesi terbuka"
+      "sessions": "Sesi terbuka",
+      "close": "Tutup menu navigasi",
+      "needsConfirmation": "Perlu konfirmasi",
+      "activities": "Aktivitas",
+      "activitiesRunning_other": "{{count}} berjalan"
     },
     "mcp": {
       "badge": "MCP",

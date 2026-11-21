@@ -30,7 +30,12 @@
     "emptyStateTitle": "Chưa thêm máy chủ nào",
     "emptyStateHint": "Thêm máy chủ đầu tiên để kết nối qua SSH.",
     "emptyStateCreateFirstServer": "Thêm máy chủ đầu tiên",
-    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật."
+    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật.",
+    "localBadge": "Cục bộ",
+    "thisDevice": "thiết bị này",
+    "sessionOpen": "Phiên đang mở",
+    "sessionPending": "Đang chờ xác nhận",
+    "sessionDisconnected": "Phiên đã ngắt kết nối"
   },
   "settings": {
     "title": "Cài đặt",
@@ -481,7 +486,11 @@
     "menu": {
       "open": "Mở menu điều hướng",
       "title": "Menu điều hướng",
-      "sessions": "Phiên đang mở"
+      "sessions": "Phiên đang mở",
+      "close": "Đóng menu điều hướng",
+      "needsConfirmation": "Cần xác nhận",
+      "activities": "Hoạt động",
+      "activitiesRunning_other": "{{count}} đang chạy"
     },
     "mcp": {
       "badge": "MCP",

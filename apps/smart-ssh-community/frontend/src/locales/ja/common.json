@@ -30,7 +30,12 @@
     "emptyStateTitle": "サーバーがまだ追加されていません",
     "emptyStateHint": "最初のサーバーを追加して、SSHで接続しましょう。",
     "emptyStateCreateFirstServer": "最初のサーバーを追加",
-    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。"
+    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。",
+    "localBadge": "ローカル",
+    "thisDevice": "このデバイス",
+    "sessionOpen": "セッション接続中",
+    "sessionPending": "確認待ち",
+    "sessionDisconnected": "セッション切断"
   },
   "settings": {
     "title": "設定",
@@ -481,7 +486,11 @@
     "menu": {
       "open": "ナビゲーションメニューを開く",
       "title": "ナビゲーションメニュー",
-      "sessions": "開いているセッション"
+      "sessions": "開いているセッション",
+      "close": "ナビゲーションメニューを閉じる",
+      "needsConfirmation": "確認が必要",
+      "activities": "アクティビティ",
+      "activitiesRunning_other": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",

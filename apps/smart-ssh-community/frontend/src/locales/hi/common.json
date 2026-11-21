@@ -30,7 +30,12 @@
     "emptyStateTitle": "अभी तक कोई सर्वर नहीं जोड़ा गया",
     "emptyStateHint": "SSH से कनेक्ट करने के लिए अपना पहला सर्वर जोड़ें।",
     "emptyStateCreateFirstServer": "पहला सर्वर जोड़ें",
-    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।"
+    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।",
+    "localBadge": "स्थानीय",
+    "thisDevice": "यह डिवाइस",
+    "sessionOpen": "सत्र खुला है",
+    "sessionPending": "पुष्टि की प्रतीक्षा",
+    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -482,7 +487,12 @@
     "menu": {
       "open": "नेविगेशन मेनू खोलें",
       "title": "नेविगेशन मेनू",
-      "sessions": "खुले सत्र"
+      "sessions": "खुले सत्र",
+      "close": "नेविगेशन मेनू बंद करें",
+      "needsConfirmation": "पुष्टि आवश्यक",
+      "activities": "गतिविधियाँ",
+      "activitiesRunning_one": "{{count}} चल रही है",
+      "activitiesRunning_other": "{{count}} चल रही हैं"
     },
     "mcp": {
       "badge": "MCP",

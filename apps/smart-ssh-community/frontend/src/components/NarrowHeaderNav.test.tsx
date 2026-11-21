@@ -8,6 +8,9 @@ import { testI18n } from "../testI18n";
 import type { SessionTab } from "../hooks/useSessionTabs";
 import { NarrowHeaderNav } from "./NarrowHeaderNav";
 
+const activitiesStub = vi.hoisted(() => ({ value: [] as unknown[] }));
+vi.mock("../hooks/useActivities", () => ({ useActivities: () => activitiesStub.value }));
+
 const base: Omit<SessionTab, "sessionId" | "serverId" | "serverName" | "phase"> = {
   status: "connected",
   hasPendingAction: false,
@@ -22,7 +25,7 @@ const tabs: SessionTab[] = [
   { ...base, sessionId: "s2", serverId: "b", serverName: "staging", phase: "connecting" },
 ];
 
-function setup(activeSessionId: string | null = null) {
+function setup(activeSessionId: string | null = null, sessionTabs: SessionTab[] = tabs) {
   const h = {
     onSelectMainTab: vi.fn(),
     onSwitch: vi.fn(),
@@ -32,7 +35,7 @@ function setup(activeSessionId: string | null = null) {
   function Host() {
     // Like App: the narrow header exists only while the window is narrow.
     return useIsNarrow() ? (
-      <NarrowHeaderNav tabs={tabs} activeSessionId={activeSessionId} tab="manage" {...h} />
+      <NarrowHeaderNav tabs={sessionTabs} activeSessionId={activeSessionId} tab="manage" {...h} />
     ) : (
       <p>wide header</p>
     );
@@ -50,6 +53,7 @@ const open = () => fireEvent.click(burger());
 
 beforeEach(() => testI18n.changeLanguage("en"));
 afterEach(async () => {
+  activitiesStub.value = [];
   setWide();
   await testI18n.changeLanguage("de");
 });
@@ -59,7 +63,7 @@ describe("NarrowHeaderNav", () => {
     setNarrow();
     setup();
     expect(burger()).toBeInTheDocument();
-    expect(screen.getByTestId("narrow-title")).toHaveTextContent("Smart SSH");
+    expect(within(screen.getByTestId("narrow-title")).getByRole("img", { name: "Smart SSH" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -122,6 +126,56 @@ describe("NarrowHeaderNav", () => {
     fireEvent.click(screen.getByRole("button", { name: /Close tab "prod-db"/ }));
     expect(h.onRequestClose).toHaveBeenCalledWith("s1");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("has a Close button that closes the sheet and returns focus to the burger", () => {
+    setNarrow();
+    setup();
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Close navigation menu" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(burger()).toHaveFocus();
+  });
+
+  it("shows the Needs confirmation badge for a session with a pending confirmation", () => {
+    setNarrow();
+    setup(null, [{ ...tabs[0], hasPendingAction: true }, tabs[1]]);
+    open();
+    const menu = screen.getByRole("dialog");
+    expect(within(menu).getAllByText("Needs confirmation")).toHaveLength(1);
+  });
+
+  it("has a New session entry that opens Connect", () => {
+    setNarrow();
+    const h = setup();
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "New session" }));
+    expect(h.onSelectMainTab).toHaveBeenCalledWith("connect");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows the Activities entry only while activities exist and opens the activity center", () => {
+    setNarrow();
+    setup();
+    open();
+    expect(screen.queryByRole("button", { name: /^Activities/ })).toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    act(() => {
+      activitiesStub.value = [{ id: "a1", kind: "download", state: "running" }];
+    });
+    const opener = vi.fn();
+    const host = document.createElement("button");
+    host.dataset.testid = "activity-center-button";
+    host.addEventListener("click", opener);
+    document.body.append(host);
+    open();
+    const entry = screen.getByRole("button", { name: /^Activities/ });
+    expect(entry).toHaveTextContent("1 running");
+    fireEvent.click(entry);
+    expect(opener).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    host.remove();
   });
 
   it("closes on Escape and returns focus to the burger", () => {
