@@ -29,3 +29,17 @@ test("review screenshots: AI provider settings and add dialog", async ({ app }) 
   await add.getByRole("button", { name: /Advanced/ }).click();
   await captureScreen(page, `add-provider-dialog-${scheme}`);
 });
+
+test("provider rows share column x positions", async ({ app }) => {
+  await app.launch({
+    ...populated(),
+    aiProviders: [
+      aiProvider({ id: "p-1", displayName: "Primary", model: "model-a", isActive: true }),
+      aiProvider({ id: "p-2", displayName: "Backup", model: "model-b", isActive: false }),
+    ],
+  });
+  const dialog = await openSettings(app.page, "AI Provider");
+  const a = await dialog.getByText("model-a", { exact: true }).boundingBox();
+  const b = await dialog.getByText("model-b", { exact: true }).boundingBox();
+  expect(a && b && Math.abs(a.x - b.x) < 1).toBe(true);
+});

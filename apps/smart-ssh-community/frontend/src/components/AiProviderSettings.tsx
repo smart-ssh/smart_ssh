@@ -405,8 +405,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * Struktur, bekommt aber einen dunkleren Innenhintergrund
        * (`slate-950/40`) als die Karte (`slate-900/40`), damit sich Karte
        * und Listeninhalt trotz gleicher Rahmenfarbe voneinander abheben. */}
-      <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-fg-soft">
+      <section className="mb-6">
+        <h3 className="mb-3 font-mono text-xs uppercase tracking-wider text-fg-subtle">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
         <ul className="divide-y divide-border border border-border bg-surface-sunken/40">
@@ -424,7 +424,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               data-active={provider.isActive ? "true" : undefined}
               className={`px-4 py-3 ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
             >
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_auto]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_17rem]">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-fg" title={provider.displayName}>
                     {provider.displayName}
@@ -443,7 +443,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     </Badge>
                   )}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 justify-end gap-2">
                   {!provider.isActive && (
                     <Button size="sm" onClick={() => handleSetActive(provider.id)}>
                       {t("aiProvider.setActive")}
@@ -519,22 +519,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.riskClassifierTitle")}
         </h3>
-        <p className="mb-3 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
         <SwitchRow
           checked={riskClassifierEnabled}
           onChange={(checked) => handleRiskClassifierChange(checked, riskClassifierProviderId)}
         >
           {t("aiProvider.riskClassifierEnable")}
         </SwitchRow>
+        <p className="mt-1 pl-11 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
         {riskClassifierEnabled && (
-          <Field label={t("aiProvider.riskClassifierProvider")} className="mt-3 pl-11">
+          <Field label={t("aiProvider.riskClassifierProvider")} className="mt-3 pl-11 md:flex-row! md:items-center md:gap-3">
             {(control) => (
             <select
               {...control}
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
               disabled={riskSettingsSaving}
-              className={`w-full ${FIELD_CLASS}`}
+              className={`w-full md:w-auto ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -553,7 +553,6 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.redRiskAlwaysConfirmTitle")}
         </h3>
-        <p className="mb-3 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
         <SwitchRow
           checked={redRiskAlwaysConfirm}
           disabled={redRiskSettingSaving}
@@ -561,6 +560,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         >
           {t("aiProvider.redRiskAlwaysConfirmEnable")}
         </SwitchRow>
+        <p className="mt-1 pl-11 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
       </section>
 
       {/* Spec 0069, Teil B3: eine Karte oberhalb von "Provider
