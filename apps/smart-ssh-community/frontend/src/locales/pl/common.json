@@ -1628,6 +1628,10 @@
     "quitBody": "Te aktywności nadal trwają i zostaną zatrzymane:",
     "quitResumeHint": "Przerwane pobierania można wznowić przy następnym uruchomieniu aplikacji.",
     "quitAnyway": "Zamknij mimo to",
-    "keepRunning": "Pozostaw uruchomione"
+    "keepRunning": "Pozostaw uruchomione",
+    "summaryRunning": "{{count}} trwa",
+    "summaryInterrupted": "{{count}} przerwane",
+    "summaryFailed": "{{count}} nieudane",
+    "remaining": "pozostało {{time}}"
   }
 }

@@ -1608,6 +1608,10 @@
     "quitBody": "Bu etkinlikler hâlâ çalışıyor ve durdurulacak:",
     "quitResumeHint": "Yarıda kalan indirmeler uygulamayı bir sonraki açışınızda sürdürülebilir.",
     "quitAnyway": "Yine de çık",
-    "keepRunning": "Çalışmaya devam etsin"
+    "keepRunning": "Çalışmaya devam etsin",
+    "summaryRunning": "{{count}} çalışıyor",
+    "summaryInterrupted": "{{count}} kesintiye uğradı",
+    "summaryFailed": "{{count}} başarısız",
+    "remaining": "{{time}} kaldı"
   }
 }

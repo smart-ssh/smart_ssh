@@ -1628,6 +1628,10 @@
     "quitBody": "Ці дії ще виконуються і будуть зупинені:",
     "quitResumeHint": "Перервані завантаження можна відновити під час наступного запуску застосунку.",
     "quitAnyway": "Усе одно вийти",
-    "keepRunning": "Залишити виконання"
+    "keepRunning": "Залишити виконання",
+    "summaryRunning": "{{count}} виконується",
+    "summaryInterrupted": "{{count}} перервано",
+    "summaryFailed": "{{count}} з помилкою",
+    "remaining": "залишилось {{time}}"
   }
 }

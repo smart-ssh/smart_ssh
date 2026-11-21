@@ -1618,6 +1618,10 @@
     "quitBody": "Estas actividades siguen en curso y se detendrán:",
     "quitResumeHint": "Las descargas interrumpidas se pueden reanudar la próxima vez que inicies la aplicación.",
     "quitAnyway": "Salir de todos modos",
-    "keepRunning": "Seguir en ejecución"
+    "keepRunning": "Seguir en ejecución",
+    "summaryRunning": "{{count}} en curso",
+    "summaryInterrupted": "{{count}} interrumpidas",
+    "summaryFailed": "{{count}} fallidas",
+    "remaining": "quedan {{time}}"
   }
 }

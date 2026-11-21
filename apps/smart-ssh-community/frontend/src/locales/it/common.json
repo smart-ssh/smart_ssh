@@ -1618,6 +1618,10 @@
     "quitBody": "Queste attività sono ancora in corso e verranno fermate:",
     "quitResumeHint": "I download interrotti possono essere ripresi al prossimo avvio dell'app.",
     "quitAnyway": "Esci comunque",
-    "keepRunning": "Continua l'esecuzione"
+    "keepRunning": "Continua l'esecuzione",
+    "summaryRunning": "{{count}} in corso",
+    "summaryInterrupted": "{{count}} interrotte",
+    "summaryFailed": "{{count}} non riuscite",
+    "remaining": "{{time}} rimanenti"
   }
 }

@@ -2,7 +2,9 @@
 // Runs in every project, so the same checks cover the wide and the narrow layout.
 import { expect, test } from "../support/app";
 import { populated } from "../support/data";
+import { expectNoSeriousA11yViolations } from "../support/axe";
 import { expectFullyInViewport } from "../support/layout";
+import { captureCurrent } from "../support/screenshots";
 
 const base = {
   id: "act-1",
@@ -62,6 +64,24 @@ test.describe("activity center", () => {
     await expect.poll(async () => (await app.calls("activity_dismiss")).length).toBe(1);
     await app.emit("activity-changed", { ...base, state: "failed", dismissed: true });
     await expect(page.getByTestId("activity-center-button")).toHaveCount(0);
+  });
+});
+
+test.describe("activity center redesign", () => {
+  test("open panel: trigger rule, rows, no axe findings, screenshot", async ({ app }) => {
+    await app.launch(populated());
+    const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
+    await app.emit("activity-changed", base);
+    await app.emit("activity-changed", { ...base, id: "act-2", state: "failed", errorMessage: "Disk full", cancellable: false, startedAt: 2 });
+    const icon = page.getByTestId("activity-center-button");
+    await expect(icon.getByTestId("activity-progress-rule")).toBeAttached();
+    await icon.click();
+    const popover = page.getByRole("dialog", { name: "Activities" });
+    await expect(popover.getByText("1 running · 1 failed")).toBeVisible();
+    await expect(popover.getByRole("button", { name: "Cancel Activities" })).toBeVisible();
+    await expectNoSeriousA11yViolations(page, "activity center panel");
+    await captureCurrent(page, "activity-center");
   });
 });
 

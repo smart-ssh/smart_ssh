@@ -1608,6 +1608,10 @@
     "quitBody": "Diese Aktivitäten laufen noch und werden gestoppt:",
     "quitResumeHint": "Unterbrochene Downloads lassen sich beim nächsten Start fortsetzen.",
     "quitAnyway": "Trotzdem beenden",
-    "keepRunning": "Weiterlaufen lassen"
+    "keepRunning": "Weiterlaufen lassen",
+    "summaryRunning": "{{count}} laufend",
+    "summaryInterrupted": "{{count}} unterbrochen",
+    "summaryFailed": "{{count}} fehlgeschlagen",
+    "remaining": "noch {{time}}"
   }
 }

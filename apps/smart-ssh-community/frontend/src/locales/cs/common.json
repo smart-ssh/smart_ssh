@@ -1628,6 +1628,10 @@
     "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
     "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
     "quitAnyway": "Přesto ukončit",
-    "keepRunning": "Nechat běžet"
+    "keepRunning": "Nechat běžet",
+    "summaryRunning": "{{count}} běží",
+    "summaryInterrupted": "{{count}} přerušeno",
+    "summaryFailed": "{{count}} selhalo",
+    "remaining": "zbývá {{time}}"
   }
 }

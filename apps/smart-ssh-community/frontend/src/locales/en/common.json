@@ -1608,6 +1608,10 @@
     "quitBody": "These activities are still running and will be stopped:",
     "quitResumeHint": "Interrupted downloads can be resumed the next time you start the app.",
     "quitAnyway": "Quit anyway",
-    "keepRunning": "Keep running"
+    "keepRunning": "Keep running",
+    "summaryRunning": "{{count}} running",
+    "summaryInterrupted": "{{count}} interrupted",
+    "summaryFailed": "{{count}} failed",
+    "remaining": "{{time}} left"
   }
 }

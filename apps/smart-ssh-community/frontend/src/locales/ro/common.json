@@ -1618,6 +1618,10 @@
     "quitBody": "Aceste activități încă rulează și vor fi oprite:",
     "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
     "quitAnyway": "Ieși oricum",
-    "keepRunning": "Lasă să ruleze"
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning": "{{count}} în curs",
+    "summaryInterrupted": "{{count}} întrerupte",
+    "summaryFailed": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

@@ -1628,6 +1628,10 @@
     "quitBody": "Эти задачи ещё выполняются и будут остановлены:",
     "quitResumeHint": "Прерванные загрузки можно возобновить при следующем запуске приложения.",
     "quitAnyway": "Всё равно выйти",
-    "keepRunning": "Продолжить выполнение"
+    "keepRunning": "Продолжить выполнение",
+    "summaryRunning": "{{count}} выполняется",
+    "summaryInterrupted": "{{count}} прервано",
+    "summaryFailed": "{{count}} с ошибкой",
+    "remaining": "осталось {{time}}"
   }
 }

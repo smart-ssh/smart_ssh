@@ -1598,6 +1598,10 @@
     "quitBody": "Các hoạt động này vẫn đang chạy và sẽ bị dừng:",
     "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
     "quitAnyway": "Vẫn thoát",
-    "keepRunning": "Tiếp tục chạy"
+    "keepRunning": "Tiếp tục chạy",
+    "summaryRunning": "{{count}} đang chạy",
+    "summaryInterrupted": "{{count}} bị gián đoạn",
+    "summaryFailed": "{{count}} thất bại",
+    "remaining": "còn {{time}}"
   }
 }

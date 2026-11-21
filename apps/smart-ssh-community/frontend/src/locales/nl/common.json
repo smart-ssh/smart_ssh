@@ -1608,6 +1608,10 @@
     "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
     "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
     "quitAnyway": "Toch afsluiten",
-    "keepRunning": "Blijven doorlopen"
+    "keepRunning": "Blijven doorlopen",
+    "summaryRunning": "{{count}} bezig",
+    "summaryInterrupted": "{{count}} onderbroken",
+    "summaryFailed": "{{count}} mislukt",
+    "remaining": "nog {{time}}"
   }
 }

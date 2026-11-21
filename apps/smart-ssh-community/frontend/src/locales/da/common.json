@@ -1608,6 +1608,10 @@
     "quitBody": "Disse aktiviteter kører stadig og bliver stoppet:",
     "quitResumeHint": "Afbrudte downloads kan genoptages, næste gang du starter appen.",
     "quitAnyway": "Afslut alligevel",
-    "keepRunning": "Lad dem køre"
+    "keepRunning": "Lad dem køre",
+    "summaryRunning": "{{count}} kører",
+    "summaryInterrupted": "{{count}} afbrudt",
+    "summaryFailed": "{{count}} mislykkedes",
+    "remaining": "{{time}} tilbage"
   }
 }

@@ -72,6 +72,9 @@ describe("QuitConfirmDialog", () => {
     const dialog = await requestQuit([activity(), activity({ id: "a2", titleParams: { name: "Small" } })]);
     expect(within(dialog).getByText("Sprachmodell Base")).toBeTruthy();
     expect(within(dialog).getByText("Sprachmodell Small")).toBeTruthy();
+    // warn icon in the title, a kind icon per row
+    expect(dialog.querySelectorAll('[data-icon="warn"]').length).toBeGreaterThan(0);
+    expect(dialog.querySelectorAll("li [data-icon=\"download\"]")).toHaveLength(2);
   });
 
   it("Keep running closes the dialog without quitting", async () => {

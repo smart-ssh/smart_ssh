@@ -1618,6 +1618,10 @@
     "quitBody": "Estas atividades ainda estão em andamento e serão interrompidas:",
     "quitResumeHint": "Downloads interrompidos podem ser retomados na próxima vez que você abrir o app.",
     "quitAnyway": "Sair mesmo assim",
-    "keepRunning": "Continuar executando"
+    "keepRunning": "Continuar executando",
+    "summaryRunning": "{{count}} em andamento",
+    "summaryInterrupted": "{{count}} interrompidas",
+    "summaryFailed": "{{count}} com falha",
+    "remaining": "restam {{time}}"
   }
 }

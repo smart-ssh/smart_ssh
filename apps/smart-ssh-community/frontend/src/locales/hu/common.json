@@ -1608,6 +1608,10 @@
     "quitBody": "Ezek a tevékenységek még futnak, és le fognak állni:",
     "quitResumeHint": "A megszakadt letöltések az alkalmazás következő indításakor folytathatók.",
     "quitAnyway": "Kilépés mégis",
-    "keepRunning": "Futás folytatása"
+    "keepRunning": "Futás folytatása",
+    "summaryRunning": "{{count}} fut",
+    "summaryInterrupted": "{{count}} megszakadt",
+    "summaryFailed": "{{count}} sikertelen",
+    "remaining": "{{time}} van hátra"
   }
 }
