@@ -5,7 +5,7 @@ import { Spinner, Icon, Badge } from "./ui";
 import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
 import { StatusSquare, type StatusTone } from "./ui/StatusSquare";
 
-const STATUS_TONE: Record<SessionTab["status"], StatusTone> = {
+export const STATUS_TONE: Record<SessionTab["status"], StatusTone> = {
   connected: "success",
   disconnected: "neutral",
   reconnecting: "warning",

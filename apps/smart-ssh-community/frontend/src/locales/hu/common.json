@@ -35,7 +35,8 @@
     "thisDevice": "ez az eszköz",
     "sessionOpen": "Munkamenet nyitva",
     "sessionPending": "Megerősítésre vár",
-    "sessionDisconnected": "Munkamenet megszakadt"
+    "sessionDisconnected": "Munkamenet megszakadt",
+    "sessionReconnecting": "Újracsatlakozás"
   },
   "settings": {
     "title": "Beállítások",

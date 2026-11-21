@@ -785,4 +785,24 @@ describe("serverSessionMarkers (Issue #1367)", () => {
     const m = serverSessionMarkers([tab("a", { hasPendingAction: true }), tab("a")]);
     expect(m.get("a")).toBe("attention");
   });
+
+  it("maps a reconnecting tab to its own marker (warning, like the tab bar)", () => {
+    expect(serverSessionMarkers([tab("a", { status: "reconnecting" })]).get("a")).toBe("reconnecting");
+  });
+
+  it("ranks reconnecting above connected/disconnected and below attention", () => {
+    const rec = tab("a", { status: "reconnecting" });
+    expect(serverSessionMarkers([tab("a"), rec]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { status: "disconnected" })]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { hasPendingAction: true })]).get("a")).toBe("attention");
+  });
+
+  it("gives no marker to reconnecting MCP tabs or tabs that are still connecting/failed", () => {
+    const m = serverSessionMarkers([
+      tab("a", { status: "reconnecting", mcp: { clientName: "x" } }),
+      tab("b", { status: "reconnecting", phase: "connecting" }),
+      tab("c", { status: "reconnecting", phase: "failed" }),
+    ]);
+    expect(m.size).toBe(0);
+  });
 });
