@@ -585,7 +585,7 @@
     "ollamaProbeRetry": "Søk igjen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama funnet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installer Ollama fra ollama.com, start den og last en modell (f.eks. `ollama pull llama3`), og søk deretter igjen.",
-    "typeLabel": "Sort",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

@@ -1518,6 +1518,10 @@ describe("AiProviderSettings provider grid and risk switches (issue #1377)", () 
   });
 
   it("renders both risk options as labelled checkboxes in a single card that toggle", async () => {
+    // Non-default stored values, so the assertions below only hold after the load.
+    const risk = await import("../settings/riskSettings");
+    vi.mocked(risk.loadRiskClassifierSettings).mockResolvedValueOnce({ enabled: true, providerId: null });
+    vi.mocked(risk.loadRedRiskAlwaysConfirm).mockResolvedValueOnce(false);
     renderForm();
     const redRisk = await screen.findByRole("checkbox", {
       name: testI18n.t("aiProvider.redRiskAlwaysConfirmEnable"),
@@ -1526,19 +1530,19 @@ describe("AiProviderSettings provider grid and risk switches (issue #1377)", () 
       name: testI18n.t("aiProvider.riskClassifierEnable"),
     });
     // Wait for the settings load before asserting or toggling.
-    await waitFor(() => expect((redRisk as HTMLInputElement).checked).toBe(true));
-    expect((second as HTMLInputElement).checked).toBe(false);
+    await waitFor(() => expect((redRisk as HTMLInputElement).checked).toBe(false));
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
     expect(redRisk.closest("section")).toBe(second.closest("section"));
     const { saveRiskClassifierSettings, saveRedRiskAlwaysConfirm } = await import(
       "../settings/riskSettings"
     );
     fireEvent.click(second);
-    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(false));
     expect(saveRiskClassifierSettings).toHaveBeenCalledWith({
-      enabled: true,
+      enabled: false,
       providerId: null,
     });
     fireEvent.click(redRisk);
-    await waitFor(() => expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(true));
   });
 });
