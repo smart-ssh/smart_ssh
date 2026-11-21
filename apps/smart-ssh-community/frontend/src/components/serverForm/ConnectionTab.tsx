@@ -67,7 +67,7 @@ export function ConnectionTab({
   const { testing, testResult, runTest } = test;
   return (
     <TabPanel idBase={idBase} id="connection" active={active}>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 narrow:grid-cols-1">
+      <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-x-6 gap-y-4 narrow:grid-cols-1">
         <div className="min-w-0 space-y-3">
           <div className="grid grid-cols-[minmax(0,1fr)_90px] gap-3">
             <Field label={t("serverForm.host")}>

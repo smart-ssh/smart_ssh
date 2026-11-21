@@ -25,12 +25,12 @@ export function AuthKindSegments({
     <div
       role="radiogroup"
       aria-label={t("serverForm.authFieldset")}
-      className="flex flex-wrap border border-border-strong"
+      className="flex flex-nowrap border border-border-strong"
     >
       {options.map((o) => (
         <label
           key={o.kind}
-          className={`label-condensed relative flex min-h-8 flex-1 cursor-pointer items-center justify-center px-2.5 text-xs narrow:min-h-11 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-focus ${
+          className={`label-condensed relative flex min-h-8 min-w-0 flex-1 whitespace-nowrap cursor-pointer items-center justify-center px-1.5 text-xs narrow:min-h-11 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-focus ${
             value === o.kind
               ? "bg-accent-subtle text-accent-fg"
               : "text-fg-muted hover:bg-surface-hover"

@@ -209,7 +209,7 @@ export function AuthMethodFields({ idBase, isCreate, model, identity }: Props) {
                     value={auth.path}
                     onChange={(e) => setAuth({ ...auth, path: e.target.value })}
                     placeholder={t("serverForm.identityFilePathPlaceholder")}
-                    className={`${FIELD_CONTROL_CLASS} min-w-0 flex-1 font-mono`}
+                    className={`${FIELD_CONTROL_CLASS} h-[34px] min-w-0 flex-1 font-mono narrow:h-11`}
                   />
                   <Button
                     onClick={async () => {
