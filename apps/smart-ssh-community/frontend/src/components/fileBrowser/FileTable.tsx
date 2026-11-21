@@ -159,13 +159,13 @@ export function FileTable({
                   title={entryTitle(entry)}
                 >
                   <EntryIcon entry={entry} />
-                  <span className="min-w-0 truncate" title={entry.name}>{entry.name}</span>
+                  <span className="min-w-0 truncate">{entry.name}</span>
                   <LinkMarker entry={entry} />
                 </Button>
               ) : (
                 <span className={`flex items-center text-fg-soft${isBrokenLink(entry) ? " opacity-50 italic" : ""}`} title={entryTitle(entry)}>
                   <EntryIcon entry={entry} />
-                  <span className="min-w-0 truncate" title={entry.name}>{entry.name}</span>
+                  <span className="min-w-0 truncate">{entry.name}</span>
                   <LinkMarker entry={entry} />
                 </span>
               )}

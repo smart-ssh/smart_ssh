@@ -201,7 +201,8 @@ test.describe("file browser", () => {
     await openFileBrowser(app);
     const page = app.page;
     const name = page.getByText(LONG_NAME, { exact: false }).first();
-    await expect(name).toHaveAttribute("title", LONG_NAME);
+    // The tooltip sits on the row/button (`name -> target` for symlinks), not on the inner span.
+    await expect(name.locator("xpath=ancestor::*[@title][1]")).toHaveAttribute("title", LONG_NAME);
     const clipped = await name.evaluate((el) => el.scrollWidth > el.clientWidth);
     expect(clipped, "long name is cut with an ellipsis").toBe(true);
     const overflow = await page.evaluate(
