@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, getDataPaths, getKeychainService, openDataPathFolder } from "../api/api";
 import type { DataPathEntryDto } from "../api/types";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 /** Issue #16: Wo diese Instanz ihre Daten ablegt — Datenbank, Logs,
  * Host-Keys, Schlüsseldatei des Master-Passworts, MCP-Einstellungen und
@@ -62,7 +62,7 @@ export function DataPathsSection() {
 
   return (
     <div
-      className="space-y-2 rounded border border-border px-3 py-2 text-sm text-fg-muted"
+      className="border border-border px-3 py-2 text-sm text-fg-muted"
       data-testid="data-paths"
     >
       <p className="text-fg-subtle">{t("diagnostics.dataPaths.title")}</p>
@@ -73,24 +73,25 @@ export function DataPathsSection() {
           {message.text}
         </output>
       )}
-      <ul className="space-y-2">
+      <ul className="mt-2 divide-y divide-border border-t border-border">
         {entries?.map((entry) => (
-          <li key={entry.id} data-testid={`data-path-${entry.id}`}>
+          <li key={entry.id} data-testid={`data-path-${entry.id}`} className="py-2">
             <div className="text-xs text-fg-subtle">{labelFor(entry)}</div>
             <div className="flex items-center gap-2">
               <code
                 title={entry.path}
-                className="min-w-0 flex-1 select-text break-all font-mono text-xs text-fg"
+                className="min-w-0 flex-1 select-text break-all border border-border bg-surface-sunken px-2 py-1 font-mono text-xs text-fg"
               >
                 {entry.path}
               </code>
               <Button
                 size="sm"
+                iconOnly
                 onClick={() => void handleCopy(entry)}
                 aria-label={`${t("diagnostics.dataPaths.copy")}: ${labelFor(entry)}`}
                 className="shrink-0"
               >
-                {t("diagnostics.dataPaths.copy")}
+                <Icon name="copy" />
               </Button>
               <Button
                 size="sm"
@@ -104,12 +105,12 @@ export function DataPathsSection() {
           </li>
         ))}
         {keychainService && (
-          <li data-testid="data-path-keychainService">
+          <li data-testid="data-path-keychainService" className="py-2">
             <div className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.keychainService")}</div>
-            <code className="select-text break-all font-mono text-xs text-fg">{keychainService}</code>
+            <code className="block select-text break-all border border-border bg-surface-sunken px-2 py-1 font-mono text-xs text-fg">{keychainService}</code>
           </li>
         )}
-        <li data-testid="data-path-sessions">
+        <li data-testid="data-path-sessions" className="py-2">
           <div className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.sessions")}</div>
           <div className="text-xs text-fg">{t("diagnostics.dataPaths.sessionsInDatabase")}</div>
         </li>
