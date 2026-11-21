@@ -3049,7 +3049,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
           fn({ sessionId: "session-1", transferId: "t1", bytesDone: 4, totalBytes: 10 }),
         ),
       );
-      expect(screen.getByRole("progressbar", { name: "big.bin" })).toHaveAttribute("value", "4");
+      expect(screen.getByRole("progressbar", { name: "big.bin" })).toHaveAttribute("aria-valuenow", "4");
       fireEvent.click(screen.getByRole("button", { name: "Übertragung abbrechen" }));
       expect(sftpCancelTransfer).toHaveBeenCalledWith("session-1", "t1");
 
@@ -3085,7 +3085,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       emit(4120, 10951);
       expect(screen.getByText(/Löschen: \/tmp\/gross/)).toBeVisible();
       expect(screen.getByText("4120 von 10951 Einträgen")).toBeVisible();
-      expect(screen.getByRole("progressbar", { name: "/tmp/gross" })).toHaveAttribute("value", "4120");
+      expect(screen.getByRole("progressbar", { name: "/tmp/gross" })).toHaveAttribute("aria-valuenow", "4120");
       emit(100, 10951); // stale event: counts never go backwards
       expect(screen.getByText("4120 von 10951 Einträgen")).toBeVisible();
 

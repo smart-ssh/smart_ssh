@@ -13,7 +13,7 @@ import {
 import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
 import { platformCapabilities, usePlatform } from "../lib/platform";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon } from "./ui";
 import { BackupKeySetup } from "./BackupKeySetup";
 
 interface Props {
@@ -165,10 +165,11 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
     return (
       <DialogFrame
         layer="app"
+        icon={<Icon name="file-check" />}
         title={t("backup.summary.title")}
         onClose={done}
         actions={
-          <Button variant="primary" className="narrow:min-h-11" onClick={done}>
+          <Button variant="primary" onClick={done}>
             {t("backup.summary.done")}
           </Button>
         }
@@ -188,14 +189,16 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       <DialogFrame
         layer="app"
         role="alertdialog"
+        tone="danger"
+        icon={<Icon name="warn" />}
         title={t("backup.confirm.title")}
         onClose={close}
         actions={
           <>
-            <Button className="narrow:min-h-11" onClick={close} disabled={busy}>
+            <Button onClick={close} disabled={busy}>
               {t("common.cancel")}
             </Button>
-            <Button variant="danger" className="narrow:min-h-11" onClick={() => void confirm()} disabled={busy}>
+            <Button variant="danger" onClick={() => void confirm()} disabled={busy}>
               {t("backup.confirm.replace")}
             </Button>
           </>
@@ -224,7 +227,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
           {folderPicker && (
-            <Button type="button" className="narrow:min-h-11" onClick={() => void changeSafetyDir()} disabled={busy}>
+            <Button type="button" onClick={() => void changeSafetyDir()} disabled={busy}>
               {t("backup.confirm.changeSafetyDir")}
             </Button>
           )}
@@ -237,6 +240,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="import" />}
       title={t("backup.import.title")}
       onClose={close}
       initialFocusRef={inputRef}
@@ -246,10 +250,10 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       }}
       actions={
         <>
-          <Button type="button" className="narrow:min-h-11" onClick={close}>
+          <Button type="button" onClick={close}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={busy || secret.trim() === "" || fileName === ""}>
+          <Button type="submit" variant="primary" disabled={busy || secret.trim() === "" || fileName === ""}>
             {t("backup.import.open")}
           </Button>
         </>
@@ -259,16 +263,21 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
         {pickError && (
           <div role="alert" className="space-y-2 text-danger-fg-soft">
             <p>{pickError}</p>
-            <Button type="button" className="narrow:min-h-11" onClick={() => pick(false)}>
+            <Button type="button" onClick={() => pick(false)}>
               {t("backup.import.chooseAgain")}
             </Button>
           </div>
         )}
         {fileName !== "" && <p>{t("backup.import.file", { name: fileName })}</p>}
-        <fieldset className="flex flex-wrap gap-4">
-          <legend className="sr-only">{t("backup.import.kind")}</legend>
+        <fieldset className="grid gap-2 border-t border-border pt-3">
+          <legend className="text-label pr-2">{t("backup.import.kind")}</legend>
           {(["code", "passphrase"] as const).map((k) => (
-            <label key={k} className="flex items-center gap-2 narrow:min-h-11">
+            <label
+              key={k}
+              className={`flex items-center gap-2 border px-3 py-2 narrow:min-h-11 ${
+                kind === k ? "border-accent bg-surface-hover" : "border-border-strong"
+              }`}
+            >
               <input
                 type="radio"
                 name="backup-secret-kind"

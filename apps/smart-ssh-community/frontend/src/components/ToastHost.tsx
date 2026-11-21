@@ -41,14 +41,17 @@ export function ToastHost() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-start justify-between gap-2 rounded-lg border p-3 text-sm shadow-lg ${
+          data-kind={toast.kind}
+          className={`flex items-start justify-between gap-2 border p-3 text-sm shadow-offset-sm ${
             toast.kind === "error"
-              ? "border-danger-subtle-hover bg-danger-subtle text-danger-fg-softer"
-              : "border-border bg-surface-raised text-fg"
+              ? "border-danger-border bg-danger-subtle text-danger-fg-softer"
+              : toast.kind === "success"
+                ? "border-success-border bg-surface-raised text-fg"
+                : "border-border-strong bg-surface-raised text-fg"
           }`}
         >
           <p className="min-w-0 break-words">
-            <Icon name={toast.kind === "success" ? "check" : toast.kind === "info" ? "info" : "warn"} className="mr-1 inline align-text-bottom" />
+            <Icon name={toast.kind === "success" ? "check" : toast.kind === "info" ? "info" : "warn"} className={`mr-1 inline align-text-bottom ${toast.kind === "success" ? "text-success-fg" : toast.kind === "error" ? "text-danger-fg" : "text-fg-muted"}`} />
             {toast.message}
           </p>
           <div className="flex shrink-0 gap-1">
@@ -65,7 +68,8 @@ export function ToastHost() {
             )}
             <Button
               size="sm"
-              variant={toast.kind === "error" ? "danger" : "secondary"}
+              iconOnly
+              variant={toast.kind === "error" ? "danger" : "ghost"}
               onClick={() => dismiss(toast.id)}
               aria-label={t("toast.dismiss")}
             >

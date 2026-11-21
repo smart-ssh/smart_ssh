@@ -30,7 +30,12 @@
     "emptyStateTitle": "Henüz sunucu eklenmedi",
     "emptyStateHint": "SSH ile bağlanmak için ilk sunucunuzu ekleyin.",
     "emptyStateCreateFirstServer": "İlk sunucuyu ekle",
-    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla."
+    "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla.",
+    "localBadge": "Yerel",
+    "thisDevice": "bu cihaz",
+    "sessionOpen": "Oturum açık",
+    "sessionPending": "Onay bekliyor",
+    "sessionDisconnected": "Oturum kesildi"
   },
   "settings": {
     "title": "Ayarlar",
@@ -136,7 +141,10 @@
     "importSshConfig": "İçe aktar …",
     "importSshConfigHint": "Sunucuları bir OpenSSH ssh_config dosyasından içe aktar",
     "exportSshConfig": "Dışa aktar …",
-    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar"
+    "exportSshConfigHint": "Sunucuları OpenSSH ssh_config olarak dışa aktar",
+    "title": "Sunucular",
+    "collapseGroup": "“{{name}}” grubunu daralt",
+    "expandGroup": "“{{name}}” grubunu genişlet"
   },
   "treeDrag": {
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Kural:",
     "segmentLabel": "Bölüm {{index}}",
     "checksLabel": "Denetimler:",
-    "hardBlacklistLabel": "Katı kara liste:"
+    "hardBlacklistLabel": "Katı kara liste:",
+    "invalidPattern": "Geçersiz desen",
+    "rowActions": "Satır eylemleri",
+    "ruleCount_one": "{{count}} kural",
+    "ruleCount_other": "{{count}} kural"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Otomatik devam, onayınız olmadan {{limit}} adımdan sonra duraklatıldı — devam etmek için bir mesaj gönderin.",
@@ -461,6 +473,7 @@
     "mismatchBodyAfterHost": " en son kaydedilenden farklı bir anahtar sunuyor. Bu, ortadaki adam saldırısına işaret edebilir. Yalnızca sunucu anahtarının meşru biçimde değiştiğinden eminseniz (örn. sunucunun yeniden kurulumu) devam edin.",
     "known": "Bilinen",
     "offeredNow": "Şimdi sunulan",
+    "offered": "Sunulan",
     "keyType": "Anahtar türü",
     "cancelConnection": "Bağlantıyı iptal et",
     "trustAnyway": "Yine de güven",
@@ -478,7 +491,12 @@
     "menu": {
       "open": "Gezinme menüsünü aç",
       "title": "Gezinme menüsü",
-      "sessions": "Açık oturumlar"
+      "sessions": "Açık oturumlar",
+      "close": "Gezinme menüsünü kapat",
+      "needsConfirmation": "Onay gerekiyor",
+      "activities": "Etkinlikler",
+      "activitiesRunning_one": "{{count}} çalışıyor",
+      "activitiesRunning_other": "{{count}} çalışıyor"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +581,7 @@
     "ollamaProbeRetry": "Yeniden ara",
     "ollamaProbeNotFoundHeading": "Yerel Ollama bulunamadı (varsayılan bağlantı noktası 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama'yı ollama.com'dan kurun, başlatın ve bir model yükleyin (örn. `ollama pull llama3`), sonra yeniden arayın.",
+    "typeLabel": "Tür",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1596,6 +1615,13 @@
     "quitBody": "Bu etkinlikler hâlâ çalışıyor ve durdurulacak:",
     "quitResumeHint": "Yarıda kalan indirmeler uygulamayı bir sonraki açışınızda sürdürülebilir.",
     "quitAnyway": "Yine de çık",
-    "keepRunning": "Çalışmaya devam etsin"
+    "keepRunning": "Çalışmaya devam etsin",
+    "summaryRunning_one": "{{count}} çalışıyor",
+    "summaryRunning_other": "{{count}} çalışıyor",
+    "summaryInterrupted_one": "{{count}} kesintiye uğradı",
+    "summaryInterrupted_other": "{{count}} kesintiye uğradı",
+    "summaryFailed_one": "{{count}} başarısız",
+    "summaryFailed_other": "{{count}} başarısız",
+    "remaining": "{{time}} kaldı"
   }
 }

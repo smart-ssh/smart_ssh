@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nenhum servidor adicionado ainda",
     "emptyStateHint": "Adicione o seu primeiro servidor para conectar via SSH.",
     "emptyStateCreateFirstServer": "Adicionar primeiro servidor",
-    "emptyStateTryLocalhost": "Experimente sem um servidor: \"Localhost\", acima, abre uma sessão nesta máquina — com as mesmas confirmações de um servidor real."
+    "emptyStateTryLocalhost": "Experimente sem um servidor: \"Localhost\", acima, abre uma sessão nesta máquina — com as mesmas confirmações de um servidor real.",
+    "localBadge": "Local",
+    "thisDevice": "este dispositivo",
+    "sessionOpen": "Sessão aberta",
+    "sessionPending": "Aguardando confirmação",
+    "sessionDisconnected": "Sessão desconectada"
   },
   "settings": {
     "title": "Configurações",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importar …",
     "importSshConfigHint": "Importar servidores de um arquivo ssh_config do OpenSSH",
     "exportSshConfig": "Exportar …",
-    "exportSshConfigHint": "Exportar servidores para o ssh_config do OpenSSH"
+    "exportSshConfigHint": "Exportar servidores para o ssh_config do OpenSSH",
+    "title": "Servidores",
+    "collapseGroup": "Recolher o grupo “{{name}}”",
+    "expandGroup": "Expandir o grupo “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Solte aqui para mover ao nível superior (sem grupo)",
@@ -356,7 +364,12 @@
     "matchedRuleLabel": "Regra:",
     "segmentLabel": "Segmento {{index}}",
     "checksLabel": "Verificações:",
-    "hardBlacklistLabel": "Lista de bloqueio fixa:"
+    "hardBlacklistLabel": "Lista de bloqueio fixa:",
+    "invalidPattern": "Padrão inválido",
+    "rowActions": "Ações da linha",
+    "ruleCount_one": "{{count}} regra",
+    "ruleCount_many": "{{count}} regras",
+    "ruleCount_other": "{{count}} regras"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Continuação automática pausada após {{limit}} passos sem a sua confirmação — envie uma mensagem para continuar.",
@@ -461,6 +474,7 @@
     "mismatchBodyAfterHost": " está apresentando uma chave diferente da armazenada na última vez. Isso pode indicar um ataque man-in-the-middle. Prossiga somente se o senhor tiver certeza de que a chave do servidor mudou legitimamente (p. ex., reinstalação do servidor).",
     "known": "Conhecida",
     "offeredNow": "Oferecida agora",
+    "offered": "Oferecida",
     "keyType": "Tipo de chave",
     "cancelConnection": "Cancelar conexão",
     "trustAnyway": "Confiar mesmo assim",
@@ -478,7 +492,13 @@
     "menu": {
       "open": "Abrir menu de navegação",
       "title": "Menu de navegação",
-      "sessions": "Sessões abertas"
+      "sessions": "Sessões abertas",
+      "close": "Fechar o menu de navegação",
+      "needsConfirmation": "Requer confirmação",
+      "activities": "Atividades",
+      "activitiesRunning_one": "{{count}} em andamento",
+      "activitiesRunning_many": "{{count}} em andamento",
+      "activitiesRunning_other": "{{count}} em andamento"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +583,7 @@
     "ollamaProbeRetry": "Pesquisar novamente",
     "ollamaProbeNotFoundHeading": "Nenhum Ollama local encontrado (porta padrão 11434).",
     "ollamaProbeNotFoundInstructions": "Instale o Ollama em ollama.com, inicie-o e carregue um modelo (p. ex., `ollama pull llama3`) e pesquise novamente.",
+    "typeLabel": "Tipo",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1604,6 +1625,16 @@
     "quitBody": "Estas atividades ainda estão em andamento e serão interrompidas:",
     "quitResumeHint": "Downloads interrompidos podem ser retomados na próxima vez que você abrir o app.",
     "quitAnyway": "Sair mesmo assim",
-    "keepRunning": "Continuar executando"
+    "keepRunning": "Continuar executando",
+    "summaryRunning_one": "{{count}} em andamento",
+    "summaryRunning_many": "{{count}} em andamento",
+    "summaryRunning_other": "{{count}} em andamento",
+    "summaryInterrupted_one": "{{count}} interrompida",
+    "summaryInterrupted_many": "{{count}} interrompidas",
+    "summaryInterrupted_other": "{{count}} interrompidas",
+    "summaryFailed_one": "{{count}} com falha",
+    "summaryFailed_many": "{{count}} com falha",
+    "summaryFailed_other": "{{count}} com falha",
+    "remaining": "restam {{time}}"
   }
 }

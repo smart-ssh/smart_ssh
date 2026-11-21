@@ -58,6 +58,28 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     await app.page.getByRole("button", { name: /^alpha\b/ }).click();
     await expect(app.page.getByRole("alertdialog")).toBeVisible();
   },
+  "auth prompt": async (app) => {
+    await app.launch({ settings: { ...ACKNOWLEDGED }, servers: [server({ id: "s-1", name: "alpha" })] });
+    await app.emit("auth-prompt-needed", {
+      promptId: "p1",
+      connectId: "c1",
+      hop: "root@alpha:22",
+      kind: "keyboard_interactive",
+      name: "Two factor",
+      instructions: "Enter your token",
+      prompts: [{ text: "Verification code:", echo: true }],
+    });
+    await expect(app.page.getByRole("dialog", { name: /root@alpha/ })).toBeVisible();
+  },
+  "feature locked dialog": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      commands: { connect: { error: { message: "Locked", code: null, feature_locked: { feature: "document_export", tier: "free" } } } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
   "connecting tab": async (app) => {
     await app.launch({
       settings: { ...ACKNOWLEDGED },
@@ -119,6 +141,8 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     });
     await app.page.getByRole("button", { name: "Filter Rules", exact: true }).click();
     await expect(app.page.getByText("ls *")).toBeVisible();
+    await expect(app.page.getByRole("region", { name: "Test Rules" })).toBeVisible();
+    await expect(app.page.getByText("3 rules")).toBeVisible();
   },
   "session view": async (app) => {
     await app.launch(populated());

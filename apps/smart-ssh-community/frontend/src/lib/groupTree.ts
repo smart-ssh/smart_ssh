@@ -53,6 +53,12 @@ function buildNode(
   };
 }
 
+/** Issue #1367: item count shown next to a group — direct servers, unusable
+ * servers and subgroups (not the descendants of the subgroups). */
+export function groupItemCount(node: GroupTreeNode): number {
+  return node.servers.length + node.unusableServers.length + node.children.length;
+}
+
 /** Issue #100: `unusable` sind die nicht nutzbaren Server — sie hängen an
  * derselben Stelle im Baum wie ein normaler Server ihrer Gruppe, bleiben
  * aber eine eigene Liste, damit kein Aufrufer sie versehentlich wie einen

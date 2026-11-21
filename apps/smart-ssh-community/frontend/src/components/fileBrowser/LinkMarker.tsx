@@ -46,6 +46,6 @@ export function entryIconName(entry: RemoteEntryDto): IconName {
   return entry.isSymlink ? "symlink" : "file";
 }
 
-export function EntryIcon({ entry }: { entry: RemoteEntryDto }) {
-  return <Icon name={entryIconName(entry)} className={`mr-1.5 inline shrink-0 align-text-bottom ${entry.isDir ? "text-accent-fg" : "text-fg-subtle"}`} />;
+export function EntryIcon({ entry, size }: { entry: RemoteEntryDto; size?: 16 | 20 }) {
+  return <Icon name={entryIconName(entry)} size={size} className={`mr-1.5 inline shrink-0 align-text-bottom ${entry.isDir ? "text-accent-fg" : "text-fg-subtle"}`} />;
 }

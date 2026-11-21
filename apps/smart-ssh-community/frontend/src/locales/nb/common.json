@@ -30,7 +30,12 @@
     "emptyStateTitle": "Ingen server er lagt til ennå",
     "emptyStateHint": "Legg til den første serveren for å koble til via SSH.",
     "emptyStateCreateFirstServer": "Legg til første server",
-    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server."
+    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server.",
+    "localBadge": "Lokal",
+    "thisDevice": "denne enheten",
+    "sessionOpen": "Økt åpen",
+    "sessionPending": "Venter på bekreftelse",
+    "sessionDisconnected": "Økt frakoblet"
   },
   "settings": {
     "title": "Innstillinger",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer servere fra en OpenSSH ssh_config-fil",
     "exportSshConfig": "Eksporter …",
-    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config"
+    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Skjul gruppen «{{name}}»",
+    "expandGroup": "Vis gruppen «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Del {{index}}",
     "checksLabel": "Kontroller:",
-    "hardBlacklistLabel": "Hard svarteliste:"
+    "hardBlacklistLabel": "Hard svarteliste:",
+    "invalidPattern": "Ugyldig mønster",
+    "rowActions": "Radhandlinger",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regler"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisk fortsettelse satt på pause etter {{limit}} trinn uten din bekreftelse – send en melding for å fortsette.",
@@ -461,6 +473,7 @@
     "mismatchBodyAfterHost": " presenterer en annen nøkkel enn den som ble lagret sist. Dette kan tyde på et man-in-the-middle-angrep. Fortsett bare hvis du er sikker på at servernøkkelen er endret med rette (f.eks. ved ominstallering av serveren).",
     "known": "Kjent",
     "offeredNow": "Tilbudt nå",
+    "offered": "Tilbudt",
     "keyType": "Nøkkeltype",
     "cancelConnection": "Avbryt tilkobling",
     "trustAnyway": "Stol på likevel",
@@ -478,7 +491,12 @@
     "menu": {
       "open": "Åpne navigasjonsmenyen",
       "title": "Navigasjonsmeny",
-      "sessions": "Åpne økter"
+      "sessions": "Åpne økter",
+      "close": "Lukk navigasjonsmenyen",
+      "needsConfirmation": "Krever bekreftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +581,7 @@
     "ollamaProbeRetry": "Søk igjen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama funnet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installer Ollama fra ollama.com, start den og last en modell (f.eks. `ollama pull llama3`), og søk deretter igjen.",
+    "typeLabel": "Sort",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1596,6 +1615,13 @@
     "quitBody": "Disse aktivitetene pågår fortsatt og blir stoppet:",
     "quitResumeHint": "Avbrutte nedlastinger kan gjenopptas neste gang du starter appen.",
     "quitAnyway": "Avslutt likevel",
-    "keepRunning": "La dem fortsette"
+    "keepRunning": "La dem fortsette",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbrutt",
+    "summaryInterrupted_other": "{{count}} avbrutt",
+    "summaryFailed_one": "{{count}} mislyktes",
+    "summaryFailed_other": "{{count}} mislyktes",
+    "remaining": "{{time}} igjen"
   }
 }

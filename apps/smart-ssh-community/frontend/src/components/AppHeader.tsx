@@ -101,7 +101,7 @@ export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps)
       <header
         data-tauri-drag-region
         style={paddingStyle}
-        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
+        className={`relative z-30 flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
       >
         {/* Left: Trace logo lockup, then version / edition / early-access / data-dir / dev
             markers in small mono style (spec 0052). */}
@@ -209,7 +209,8 @@ export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps)
           Kind des `<header>`: dessen `backdrop-blur` macht ihn zum
           Bezugsrahmen für `fixed`-Nachfahren und zu einem eigenen
           Stapelkontext, die Schicht käme dann nicht über die Backdrops. */}
-      {anyModalOpen && (
+      {/* Android has no window to drag; there the narrow navigation sheet reaches the top edge. */}
+      {anyModalOpen && platform !== "android" && (
         <div
           data-tauri-drag-region
           data-testid="titlebar-drag-layer"

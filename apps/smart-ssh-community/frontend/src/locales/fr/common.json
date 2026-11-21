@@ -30,7 +30,12 @@
     "emptyStateTitle": "Aucun serveur ajouté pour l’instant",
     "emptyStateHint": "Ajoutez votre premier serveur pour vous connecter via SSH.",
     "emptyStateCreateFirstServer": "Ajouter le premier serveur",
-    "emptyStateTryLocalhost": "Essayez sans serveur : « Localhost » ci-dessus ouvre une session sur cette machine, avec les mêmes confirmations que sur un vrai serveur."
+    "emptyStateTryLocalhost": "Essayez sans serveur : « Localhost » ci-dessus ouvre une session sur cette machine, avec les mêmes confirmations que sur un vrai serveur.",
+    "localBadge": "Local",
+    "thisDevice": "cet appareil",
+    "sessionOpen": "Session ouverte",
+    "sessionPending": "En attente de confirmation",
+    "sessionDisconnected": "Session déconnectée"
   },
   "settings": {
     "title": "Paramètres",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer des serveurs depuis un fichier ssh_config OpenSSH",
     "exportSshConfig": "Exporter …",
-    "exportSshConfigHint": "Exporter les serveurs vers ssh_config OpenSSH"
+    "exportSshConfigHint": "Exporter les serveurs vers ssh_config OpenSSH",
+    "title": "Serveurs",
+    "collapseGroup": "Replier le groupe « {{name}} »",
+    "expandGroup": "Déplier le groupe « {{name}} »"
   },
   "treeDrag": {
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
@@ -356,7 +364,12 @@
     "matchedRuleLabel": "Règle :",
     "segmentLabel": "Partie {{index}}",
     "checksLabel": "Vérifications :",
-    "hardBlacklistLabel": "Liste noire stricte :"
+    "hardBlacklistLabel": "Liste noire stricte :",
+    "invalidPattern": "Motif invalide",
+    "rowActions": "Actions de la ligne",
+    "ruleCount_one": "{{count}} règle",
+    "ruleCount_many": "{{count}} règles",
+    "ruleCount_other": "{{count}} règles"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Poursuite automatique suspendue après {{limit}} étapes sans votre confirmation — envoyez un message pour continuer.",
@@ -461,6 +474,7 @@
     "mismatchBodyAfterHost": " présente une clé différente de celle enregistrée la dernière fois. Cela peut indiquer une attaque de l’homme du milieu. Ne continuez que si vous êtes certain que la clé du serveur a changé légitimement (p. ex. réinstallation du serveur).",
     "known": "Connue",
     "offeredNow": "Présentée maintenant",
+    "offered": "Présentée",
     "keyType": "Type de clé",
     "cancelConnection": "Annuler la connexion",
     "trustAnyway": "Faire confiance malgré tout",
@@ -478,7 +492,13 @@
     "menu": {
       "open": "Ouvrir le menu de navigation",
       "title": "Menu de navigation",
-      "sessions": "Sessions ouvertes"
+      "sessions": "Sessions ouvertes",
+      "close": "Fermer le menu de navigation",
+      "needsConfirmation": "Confirmation requise",
+      "activities": "Activités",
+      "activitiesRunning_one": "{{count}} en cours",
+      "activitiesRunning_many": "{{count}} en cours",
+      "activitiesRunning_other": "{{count}} en cours"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +583,7 @@
     "ollamaProbeRetry": "Rechercher à nouveau",
     "ollamaProbeNotFoundHeading": "Aucun Ollama local trouvé (port par défaut 11434).",
     "ollamaProbeNotFoundInstructions": "Installez Ollama depuis ollama.com, démarrez-le et chargez un modèle (p. ex. `ollama pull llama3`), puis relancez la recherche.",
+    "typeLabel": "Genre",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1604,6 +1625,16 @@
     "quitBody": "Ces activités sont encore en cours et seront arrêtées :",
     "quitResumeHint": "Les téléchargements interrompus peuvent être repris au prochain démarrage.",
     "quitAnyway": "Quitter quand même",
-    "keepRunning": "Laisser continuer"
+    "keepRunning": "Laisser continuer",
+    "summaryRunning_one": "{{count}} en cours",
+    "summaryRunning_many": "{{count}} en cours",
+    "summaryRunning_other": "{{count}} en cours",
+    "summaryInterrupted_one": "{{count}} interrompue",
+    "summaryInterrupted_many": "{{count}} interrompues",
+    "summaryInterrupted_other": "{{count}} interrompues",
+    "summaryFailed_one": "{{count}} en échec",
+    "summaryFailed_many": "{{count}} en échec",
+    "summaryFailed_other": "{{count}} en échec",
+    "remaining": "{{time}} restantes"
   }
 }

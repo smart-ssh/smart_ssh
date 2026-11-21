@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AutoReconnectSettings } from "./AutoReconnectSettings";
 import { ElevatedIdleSettings } from "./ElevatedIdleSettings";
-import { FIELD_CONTROL_CLASS } from "./ui";
+import { FIELD_CONTROL_CLASS, StatusSquare } from "./ui";
 import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api/api";
 
 /** Spec 0034, Abschnitt 5: optionale Aufbewahrungsdauer für persistente
@@ -65,7 +65,7 @@ export function ChatRetentionSettings() {
   // SettingsScreen-eigenen Header-Rahmen sähe wie eine doppelte Linie aus.
   return (
     <div>
-      {error && <p role="alert" className="mb-2 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
+      {error && <p role="alert" className="mb-2 flex items-center gap-2 border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft"><StatusSquare tone="danger" />{error}</p>}
       {/* Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die
        * entfernte `<h3>` (Teil 3) war NICHT nur eine doppelte Kategorie-
        * Überschrift, sondern trug auch die einzige Feldbeschriftung ("Chat-
@@ -74,10 +74,12 @@ export function ChatRetentionSettings() {
        * Überschrift wieder eingesetzt (kein erneutes Duplikat des
        * Kategorie-Titels "Sitzungen & Daten", der weiterhin ausschließlich
        * von `SettingsScreen` gerendert wird). */}
-      <p className="mb-2 text-sm text-fg-muted">{t("chatRetention.label")}</p>
-      <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
+      <fieldset className="border-t border-border pt-3">
+      <legend className="text-label pr-2">{t("chatRetention.label")}</legend>
+      <label className="mb-2 flex items-center gap-3 text-sm text-fg-muted narrow:min-h-11">
         <input
           type="checkbox"
+          className="switch"
           checked={days !== null}
           disabled={busy}
           onChange={(e) => handleToggleEnabled(e.target.checked)}
@@ -98,6 +100,7 @@ export function ChatRetentionSettings() {
         />
       )}
       <p className="mt-1 text-xs text-fg-subtle">{t("chatRetention.hint")}</p>
+      </fieldset>
       <AutoReconnectSettings />
       <ElevatedIdleSettings />
     </div>

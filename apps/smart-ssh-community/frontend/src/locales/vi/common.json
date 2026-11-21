@@ -30,7 +30,12 @@
     "emptyStateTitle": "Chưa thêm máy chủ nào",
     "emptyStateHint": "Thêm máy chủ đầu tiên để kết nối qua SSH.",
     "emptyStateCreateFirstServer": "Thêm máy chủ đầu tiên",
-    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật."
+    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật.",
+    "localBadge": "Cục bộ",
+    "thisDevice": "thiết bị này",
+    "sessionOpen": "Phiên đang mở",
+    "sessionPending": "Đang chờ xác nhận",
+    "sessionDisconnected": "Phiên đã ngắt kết nối"
   },
   "settings": {
     "title": "Cài đặt",
@@ -136,7 +141,10 @@
     "importSshConfig": "Nhập …",
     "importSshConfigHint": "Nhập máy chủ từ tệp ssh_config của OpenSSH",
     "exportSshConfig": "Xuất …",
-    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH"
+    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH",
+    "title": "Máy chủ",
+    "collapseGroup": "Thu gọn nhóm “{{name}}”",
+    "expandGroup": "Mở rộng nhóm “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
@@ -356,7 +364,10 @@
     "matchedRuleLabel": "Quy tắc:",
     "segmentLabel": "Đoạn {{index}}",
     "checksLabel": "Kiểm tra:",
-    "hardBlacklistLabel": "Danh sách chặn cứng:"
+    "hardBlacklistLabel": "Danh sách chặn cứng:",
+    "invalidPattern": "Mẫu không hợp lệ",
+    "rowActions": "Thao tác của hàng",
+    "ruleCount_other": "{{count}} quy tắc"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Chế độ tự động tiếp tục đã tạm dừng sau {{limit}} bước mà không có xác nhận của bạn — hãy gửi một tin nhắn để tiếp tục.",
@@ -461,6 +472,7 @@
     "mismatchBodyAfterHost": " đang đưa ra một khóa khác với khóa đã lưu lần trước. Điều này có thể cho thấy một cuộc tấn công man-in-the-middle. Chỉ tiếp tục nếu bạn chắc chắn khóa máy chủ đã thay đổi một cách hợp lệ (ví dụ: cài đặt lại máy chủ).",
     "known": "Đã biết",
     "offeredNow": "Đang được đưa ra",
+    "offered": "Được đưa ra",
     "keyType": "Loại khóa",
     "cancelConnection": "Hủy kết nối",
     "trustAnyway": "Vẫn tin cậy",
@@ -478,7 +490,11 @@
     "menu": {
       "open": "Mở menu điều hướng",
       "title": "Menu điều hướng",
-      "sessions": "Phiên đang mở"
+      "sessions": "Phiên đang mở",
+      "close": "Đóng menu điều hướng",
+      "needsConfirmation": "Cần xác nhận",
+      "activities": "Hoạt động",
+      "activitiesRunning_other": "{{count}} đang chạy"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +579,7 @@
     "ollamaProbeRetry": "Tìm lại",
     "ollamaProbeNotFoundHeading": "Không tìm thấy Ollama cục bộ (cổng mặc định 11434).",
     "ollamaProbeNotFoundInstructions": "Cài đặt Ollama từ ollama.com, khởi động và tải một mô hình (ví dụ `ollama pull llama3`), rồi tìm lại.",
+    "typeLabel": "Loại",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1588,6 +1605,10 @@
     "quitBody": "Các hoạt động này vẫn đang chạy và sẽ bị dừng:",
     "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
     "quitAnyway": "Vẫn thoát",
-    "keepRunning": "Tiếp tục chạy"
+    "keepRunning": "Tiếp tục chạy",
+    "summaryRunning_other": "{{count}} đang chạy",
+    "summaryInterrupted_other": "{{count}} bị gián đoạn",
+    "summaryFailed_other": "{{count}} thất bại",
+    "remaining": "còn {{time}}"
   }
 }

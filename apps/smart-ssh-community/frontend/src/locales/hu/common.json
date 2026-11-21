@@ -30,7 +30,12 @@
     "emptyStateTitle": "Még nincs hozzáadott szerver",
     "emptyStateHint": "Adja hozzá az első szervert az SSH-csatlakozáshoz.",
     "emptyStateCreateFirstServer": "Első szerver hozzáadása",
-    "emptyStateTryLocalhost": "Kipróbálható szerver nélkül is: a fenti \"Localhost\" munkamenetet nyit ezen a gépen – ugyanazokkal a megerősítésekkel, mint egy valódi szerveren."
+    "emptyStateTryLocalhost": "Kipróbálható szerver nélkül is: a fenti \"Localhost\" munkamenetet nyit ezen a gépen – ugyanazokkal a megerősítésekkel, mint egy valódi szerveren.",
+    "localBadge": "Helyi",
+    "thisDevice": "ez az eszköz",
+    "sessionOpen": "Munkamenet nyitva",
+    "sessionPending": "Megerősítésre vár",
+    "sessionDisconnected": "Munkamenet megszakadt"
   },
   "settings": {
     "title": "Beállítások",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importálás …",
     "importSshConfigHint": "Szerverek importálása OpenSSH ssh_config fájlból",
     "exportSshConfig": "Exportálás …",
-    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba"
+    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba",
+    "title": "Szerverek",
+    "collapseGroup": "„{{name}}” csoport összecsukása",
+    "expandGroup": "„{{name}}” csoport kibontása"
   },
   "treeDrag": {
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Szabály:",
     "segmentLabel": "{{index}}. szakasz",
     "checksLabel": "Ellenőrzések:",
-    "hardBlacklistLabel": "Szigorú feketelista:"
+    "hardBlacklistLabel": "Szigorú feketelista:",
+    "invalidPattern": "Érvénytelen minta",
+    "rowActions": "Sor műveletei",
+    "ruleCount_one": "{{count}} szabály",
+    "ruleCount_other": "{{count}} szabály"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után a jóváhagyása nélkül szünetel – a folytatáshoz küldjön üzenetet.",
@@ -461,6 +473,7 @@
     "mismatchBodyAfterHost": " szerver az utoljára tároltól eltérő kulcsot mutat. Ez közbeékelődéses (man-in-the-middle) támadásra utalhat. Csak akkor folytassa, ha biztos benne, hogy a szerverkulcs jogosan változott (pl. a szerver újratelepítése miatt).",
     "known": "Ismert",
     "offeredNow": "Most kínált",
+    "offered": "Kínált",
     "keyType": "Kulcstípus",
     "cancelConnection": "Kapcsolat megszakítása",
     "trustAnyway": "Mégis megbízom benne",
@@ -478,7 +491,12 @@
     "menu": {
       "open": "Navigációs menü megnyitása",
       "title": "Navigációs menü",
-      "sessions": "Megnyitott munkamenetek"
+      "sessions": "Megnyitott munkamenetek",
+      "close": "Navigációs menü bezárása",
+      "needsConfirmation": "Megerősítés szükséges",
+      "activities": "Tevékenységek",
+      "activitiesRunning_one": "{{count}} fut",
+      "activitiesRunning_other": "{{count}} fut"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +581,7 @@
     "ollamaProbeRetry": "Keresés újra",
     "ollamaProbeNotFoundHeading": "Nem található helyi Ollama (alapértelmezett port: 11434).",
     "ollamaProbeNotFoundInstructions": "Telepítse az Ollamát az ollama.com oldalról, indítsa el, töltsön be egy modellt (pl. `ollama pull llama3`), majd keressen újra.",
+    "typeLabel": "Típus",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1596,6 +1615,13 @@
     "quitBody": "Ezek a tevékenységek még futnak, és le fognak állni:",
     "quitResumeHint": "A megszakadt letöltések az alkalmazás következő indításakor folytathatók.",
     "quitAnyway": "Kilépés mégis",
-    "keepRunning": "Futás folytatása"
+    "keepRunning": "Futás folytatása",
+    "summaryRunning_one": "{{count}} fut",
+    "summaryRunning_other": "{{count}} fut",
+    "summaryInterrupted_one": "{{count}} megszakadt",
+    "summaryInterrupted_other": "{{count}} megszakadt",
+    "summaryFailed_one": "{{count}} sikertelen",
+    "summaryFailed_other": "{{count}} sikertelen",
+    "remaining": "{{time}} van hátra"
   }
 }

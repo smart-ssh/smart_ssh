@@ -47,6 +47,14 @@ const ALL_LABELS = [
   ...new Set(Object.values(EXPECTED).flat()),
 ];
 
+describe("accent ticks (#1383)", () => {
+  it("draws the accent corner ticks on the prompt", () => {
+    renderDialog("retryOrQuit");
+    const ticks = screen.getByTestId("dialog-ticks");
+    expect(ticks.querySelectorAll("[data-corner-tick]")).toHaveLength(2);
+  });
+});
+
 describe("StartupPromptDialog", () => {
   it("zeigt je Frageart genau die Knöpfe, die sie anbietet (A3)", () => {
     for (const [kind, expected] of Object.entries(EXPECTED) as [StartupPromptKind, string[]][]) {

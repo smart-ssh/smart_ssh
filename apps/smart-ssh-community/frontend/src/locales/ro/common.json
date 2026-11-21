@@ -30,7 +30,12 @@
     "emptyStateTitle": "Niciun server adăugat încă",
     "emptyStateHint": "Adăugați primul server pentru a vă conecta prin SSH.",
     "emptyStateCreateFirstServer": "Adaugă primul server",
-    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real."
+    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real.",
+    "localBadge": "Local",
+    "thisDevice": "acest dispozitiv",
+    "sessionOpen": "Sesiune deschisă",
+    "sessionPending": "Așteaptă confirmarea",
+    "sessionDisconnected": "Sesiune deconectată"
   },
   "settings": {
     "title": "Setări",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importă …",
     "importSshConfigHint": "Importă servere dintr-un fișier OpenSSH ssh_config",
     "exportSshConfig": "Exportă …",
-    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config"
+    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Restrânge grupul „{{name}}”",
+    "expandGroup": "Extinde grupul „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
@@ -356,7 +364,12 @@
     "matchedRuleLabel": "Regulă:",
     "segmentLabel": "Segmentul {{index}}",
     "checksLabel": "Verificări:",
-    "hardBlacklistLabel": "Listă neagră fixă:"
+    "hardBlacklistLabel": "Listă neagră fixă:",
+    "invalidPattern": "Model nevalid",
+    "rowActions": "Acțiuni rând",
+    "ruleCount_one": "{{count}} regulă",
+    "ruleCount_few": "{{count}} reguli",
+    "ruleCount_other": "{{count}} de reguli"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",
@@ -461,6 +474,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",
@@ -478,7 +492,13 @@
     "menu": {
       "open": "Deschide meniul de navigare",
       "title": "Meniu de navigare",
-      "sessions": "Sesiuni deschise"
+      "sessions": "Sesiuni deschise",
+      "close": "Închide meniul de navigare",
+      "needsConfirmation": "Necesită confirmare",
+      "activities": "Activități",
+      "activitiesRunning_one": "{{count}} în curs",
+      "activitiesRunning_few": "{{count}} în curs",
+      "activitiesRunning_other": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +583,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1604,6 +1625,16 @@
     "quitBody": "Aceste activități încă rulează și vor fi oprite:",
     "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
     "quitAnyway": "Ieși oricum",
-    "keepRunning": "Lasă să ruleze"
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning_one": "{{count}} în curs",
+    "summaryRunning_few": "{{count}} în curs",
+    "summaryRunning_other": "{{count}} în curs",
+    "summaryInterrupted_one": "{{count}} întreruptă",
+    "summaryInterrupted_few": "{{count}} întrerupte",
+    "summaryInterrupted_other": "{{count}} întrerupte",
+    "summaryFailed_one": "{{count}} eșuată",
+    "summaryFailed_few": "{{count}} eșuate",
+    "summaryFailed_other": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

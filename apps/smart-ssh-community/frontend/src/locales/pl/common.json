@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nie dodano jeszcze serwera",
     "emptyStateHint": "Dodaj pierwszy serwer, aby połączyć się przez SSH.",
     "emptyStateCreateFirstServer": "Dodaj pierwszy serwer",
-    "emptyStateTryLocalhost": "Wypróbuj bez serwera: „Localhost” powyżej otwiera sesję na tym komputerze — z tymi samymi potwierdzeniami co na prawdziwym serwerze."
+    "emptyStateTryLocalhost": "Wypróbuj bez serwera: „Localhost” powyżej otwiera sesję na tym komputerze — z tymi samymi potwierdzeniami co na prawdziwym serwerze.",
+    "localBadge": "Lokalny",
+    "thisDevice": "to urządzenie",
+    "sessionOpen": "Sesja otwarta",
+    "sessionPending": "Czeka na potwierdzenie",
+    "sessionDisconnected": "Sesja rozłączona"
   },
   "settings": {
     "title": "Ustawienia",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importuj …",
     "importSshConfigHint": "Importuj serwery z pliku ssh_config OpenSSH",
     "exportSshConfig": "Eksportuj …",
-    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH",
+    "title": "Serwery",
+    "collapseGroup": "Zwiń grupę „{{name}}”",
+    "expandGroup": "Rozwiń grupę „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
@@ -356,7 +364,13 @@
     "matchedRuleLabel": "Reguła:",
     "segmentLabel": "Część {{index}}",
     "checksLabel": "Kontrole:",
-    "hardBlacklistLabel": "Twarda czarna lista:"
+    "hardBlacklistLabel": "Twarda czarna lista:",
+    "invalidPattern": "Nieprawidłowy wzorzec",
+    "rowActions": "Akcje wiersza",
+    "ruleCount_one": "{{count}} reguła",
+    "ruleCount_few": "{{count}} reguły",
+    "ruleCount_many": "{{count}} reguł",
+    "ruleCount_other": "{{count}} reguły"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatyczna kontynuacja wstrzymana po {{limit}} krokach bez Twojego potwierdzenia — wyślij wiadomość, aby kontynuować.",
@@ -461,6 +475,7 @@
     "mismatchBodyAfterHost": " przedstawia inny klucz niż ten zapisany ostatnio. Może to oznaczać atak typu man-in-the-middle. Kontynuuj tylko wtedy, gdy masz pewność, że klucz serwera zmienił się zgodnie z prawem (np. po ponownej instalacji serwera).",
     "known": "Znany",
     "offeredNow": "Przedstawiony teraz",
+    "offered": "Przedstawiony",
     "keyType": "Typ klucza",
     "cancelConnection": "Anuluj połączenie",
     "trustAnyway": "Zaufaj mimo to",
@@ -478,7 +493,14 @@
     "menu": {
       "open": "Otwórz menu nawigacji",
       "title": "Menu nawigacji",
-      "sessions": "Otwarte sesje"
+      "sessions": "Otwarte sesje",
+      "close": "Zamknij menu nawigacji",
+      "needsConfirmation": "Wymaga potwierdzenia",
+      "activities": "Aktywności",
+      "activitiesRunning_one": "{{count}} w toku",
+      "activitiesRunning_few": "{{count}} w toku",
+      "activitiesRunning_many": "{{count}} w toku",
+      "activitiesRunning_other": "{{count}} w toku"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +585,7 @@
     "ollamaProbeRetry": "Szukaj ponownie",
     "ollamaProbeNotFoundHeading": "Nie znaleziono lokalnej Ollamy (domyślny port 11434).",
     "ollamaProbeNotFoundInstructions": "Zainstaluj Ollamę z ollama.com, uruchom ją i pobierz model (np. `ollama pull llama3`), a potem wyszukaj ponownie.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1612,6 +1635,19 @@
     "quitBody": "Te aktywności nadal trwają i zostaną zatrzymane:",
     "quitResumeHint": "Przerwane pobierania można wznowić przy następnym uruchomieniu aplikacji.",
     "quitAnyway": "Zamknij mimo to",
-    "keepRunning": "Pozostaw uruchomione"
+    "keepRunning": "Pozostaw uruchomione",
+    "summaryRunning_one": "w toku: {{count}}",
+    "summaryRunning_few": "w toku: {{count}}",
+    "summaryRunning_many": "w toku: {{count}}",
+    "summaryRunning_other": "w toku: {{count}}",
+    "summaryInterrupted_one": "przerwane: {{count}}",
+    "summaryInterrupted_few": "przerwane: {{count}}",
+    "summaryInterrupted_many": "przerwane: {{count}}",
+    "summaryInterrupted_other": "przerwane: {{count}}",
+    "summaryFailed_one": "nieudane: {{count}}",
+    "summaryFailed_few": "nieudane: {{count}}",
+    "summaryFailed_many": "nieudane: {{count}}",
+    "summaryFailed_other": "nieudane: {{count}}",
+    "remaining": "pozostało {{time}}"
   }
 }

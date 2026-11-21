@@ -30,7 +30,12 @@
     "emptyStateTitle": "अभी तक कोई सर्वर नहीं जोड़ा गया",
     "emptyStateHint": "SSH से कनेक्ट करने के लिए अपना पहला सर्वर जोड़ें।",
     "emptyStateCreateFirstServer": "पहला सर्वर जोड़ें",
-    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।"
+    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।",
+    "localBadge": "स्थानीय",
+    "thisDevice": "यह डिवाइस",
+    "sessionOpen": "सत्र खुला है",
+    "sessionPending": "पुष्टि की प्रतीक्षा",
+    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -136,7 +141,10 @@
     "importSshConfig": "आयात करें …",
     "importSshConfigHint": "OpenSSH ssh_config फ़ाइल से सर्वर आयात करें",
     "exportSshConfig": "निर्यात करें …",
-    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें"
+    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें",
+    "title": "सर्वर",
+    "collapseGroup": "समूह “{{name}}” समेटें",
+    "expandGroup": "समूह “{{name}}” फैलाएँ"
   },
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "नियम:",
     "segmentLabel": "खंड {{index}}",
     "checksLabel": "जाँच:",
-    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
+    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:",
+    "invalidPattern": "अमान्य पैटर्न",
+    "rowActions": "पंक्ति की क्रियाएँ",
+    "ruleCount_one": "{{count}} नियम",
+    "ruleCount_other": "{{count}} नियम"
   },
   "actionCard": {
     "autoContinuationLimitReached": "आपकी पुष्टि के बिना {{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
@@ -461,6 +473,7 @@
     "mismatchBodyAfterHost": " पिछली बार संग्रहीत कुंजी से अलग कुंजी प्रस्तुत कर रहा है। यह मैन-इन-द-मिडल हमले का संकेत हो सकता है। केवल तभी आगे बढ़ें जब आपको भरोसा हो कि सर्वर की कुंजी वैध कारण से बदली है (जैसे सर्वर का पुनः इंस्टॉलेशन)।",
     "known": "ज्ञात",
     "offeredNow": "अभी प्रस्तुत",
+    "offered": "प्रस्तुत",
     "keyType": "कुंजी प्रकार",
     "cancelConnection": "कनेक्शन रद्द करें",
     "trustAnyway": "फिर भी भरोसा करें",
@@ -478,7 +491,12 @@
     "menu": {
       "open": "नेविगेशन मेनू खोलें",
       "title": "नेविगेशन मेनू",
-      "sessions": "खुले सत्र"
+      "sessions": "खुले सत्र",
+      "close": "नेविगेशन मेनू बंद करें",
+      "needsConfirmation": "पुष्टि आवश्यक",
+      "activities": "गतिविधियाँ",
+      "activitiesRunning_one": "{{count}} चल रही है",
+      "activitiesRunning_other": "{{count}} चल रही हैं"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +581,7 @@
     "ollamaProbeRetry": "फिर खोजें",
     "ollamaProbeNotFoundHeading": "कोई स्थानीय Ollama नहीं मिला (डिफ़ॉल्ट पोर्ट 11434)।",
     "ollamaProbeNotFoundInstructions": "ollama.com से Ollama इंस्टॉल करें, उसे शुरू करें और एक मॉडल लोड करें (जैसे `ollama pull llama3`), फिर दोबारा खोजें।",
+    "typeLabel": "प्रकार",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1596,6 +1615,13 @@
     "quitBody": "ये गतिविधियाँ अभी चल रही हैं और रोक दी जाएँगी:",
     "quitResumeHint": "बाधित डाउनलोड अगली बार ऐप शुरू करने पर फिर शुरू किए जा सकते हैं।",
     "quitAnyway": "फिर भी बंद करें",
-    "keepRunning": "चलने दें"
+    "keepRunning": "चलने दें",
+    "summaryRunning_one": "{{count}} चल रही",
+    "summaryRunning_other": "{{count}} चल रही",
+    "summaryInterrupted_one": "{{count}} बाधित",
+    "summaryInterrupted_other": "{{count}} बाधित",
+    "summaryFailed_one": "{{count}} विफल",
+    "summaryFailed_other": "{{count}} विफल",
+    "remaining": "{{time}} शेष"
   }
 }

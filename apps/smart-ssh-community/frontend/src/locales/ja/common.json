@@ -30,7 +30,12 @@
     "emptyStateTitle": "サーバーがまだ追加されていません",
     "emptyStateHint": "最初のサーバーを追加して、SSHで接続しましょう。",
     "emptyStateCreateFirstServer": "最初のサーバーを追加",
-    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。"
+    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。",
+    "localBadge": "ローカル",
+    "thisDevice": "このデバイス",
+    "sessionOpen": "セッション接続中",
+    "sessionPending": "確認待ち",
+    "sessionDisconnected": "セッション切断"
   },
   "settings": {
     "title": "設定",
@@ -136,7 +141,10 @@
     "importSshConfig": "インポート…",
     "importSshConfigHint": "OpenSSHのssh_configファイルからサーバーをインポートします",
     "exportSshConfig": "エクスポート…",
-    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします"
+    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします",
+    "title": "サーバー",
+    "collapseGroup": "グループ「{{name}}」を折りたたむ",
+    "expandGroup": "グループ「{{name}}」を展開"
   },
   "treeDrag": {
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
@@ -356,7 +364,10 @@
     "matchedRuleLabel": "ルール:",
     "segmentLabel": "セグメント {{index}}",
     "checksLabel": "チェック:",
-    "hardBlacklistLabel": "ハードブラックリスト:"
+    "hardBlacklistLabel": "ハードブラックリスト:",
+    "invalidPattern": "無効なパターン",
+    "rowActions": "行の操作",
+    "ruleCount_other": "{{count}} 件のルール"
   },
   "actionCard": {
     "autoContinuationLimitReached": "確認なしで{{limit}}ステップが続いたため、自動継続を一時停止しました。メッセージを送信すると続行します。",
@@ -461,6 +472,7 @@
     "mismatchBodyAfterHost": " が、前回保存された鍵とは異なる鍵を提示しています。中間者攻撃の可能性があります。サーバーの鍵が正当な理由（例: サーバーの再インストール）で変更されたと確信できる場合にのみ、続行してください。",
     "known": "既知",
     "offeredNow": "今回提示",
+    "offered": "提示",
     "keyType": "鍵の種類",
     "cancelConnection": "接続をキャンセル",
     "trustAnyway": "それでも信頼する",
@@ -478,7 +490,11 @@
     "menu": {
       "open": "ナビゲーションメニューを開く",
       "title": "ナビゲーションメニュー",
-      "sessions": "開いているセッション"
+      "sessions": "開いているセッション",
+      "close": "ナビゲーションメニューを閉じる",
+      "needsConfirmation": "確認が必要",
+      "activities": "アクティビティ",
+      "activitiesRunning_other": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +579,7 @@
     "ollamaProbeRetry": "再検索",
     "ollamaProbeNotFoundHeading": "ローカルのOllamaが見つかりません（既定のポート 11434）。",
     "ollamaProbeNotFoundInstructions": "ollama.comからOllamaをインストールして起動し、モデルを読み込んで（例: `ollama pull llama3`）から、もう一度検索してください。",
+    "typeLabel": "種類",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1588,6 +1605,10 @@
     "quitBody": "次のアクティビティは実行中で、停止されます:",
     "quitResumeHint": "中断されたダウンロードは、次回の起動時に再開できます。",
     "quitAnyway": "終了する",
-    "keepRunning": "実行を続ける"
+    "keepRunning": "実行を続ける",
+    "summaryRunning_other": "実行中 {{count}} 件",
+    "summaryInterrupted_other": "中断 {{count}} 件",
+    "summaryFailed_other": "失敗 {{count}} 件",
+    "remaining": "残り {{time}}"
   }
 }

@@ -4,7 +4,7 @@ import { deleteUnusableServer } from "../api/api";
 import { commandErrorText } from "../api/errorCodes";
 import type { DeleteUnusableServerResult, UnusableServerDto } from "../api/types";
 import { unusableReasonText } from "../lib/unusableServer";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 interface UnusableServerPanelProps {
   server: UnusableServerDto;
@@ -55,15 +55,16 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
       <div>
         <h2 className="flex flex-wrap items-center gap-2 break-words text-lg font-medium text-fg">
           {server.name}
-          <span className="rounded bg-warning-subtle-hover px-2 py-0.5 text-xs font-normal text-warning-fg-softer">
+          <span className="border border-warning-border bg-warning-subtle-hover px-2 py-0.5 text-xs font-normal text-warning-fg-softer">
             {t("unusableServer.badge")}
           </span>
         </h2>
         <p className="break-words text-sm text-fg-subtle">{t("unusableServer.host", { host: server.host })}</p>
       </div>
-      <p className="rounded border border-warning-border-strong bg-warning-subtle p-3 text-sm text-warning-fg-softer">
-        {unusableReasonText(t, server.reason)}
-      </p>
+      <div className="flex items-start gap-2 border border-warning-border-strong bg-warning-subtle p-3 text-sm text-warning-fg-softer">
+        <Icon name="warn" className="mt-0.5 shrink-0 text-warning-fg" />
+        <p className="min-w-0 break-words">{unusableReasonText(t, server.reason)}</p>
+      </div>
       <p className="text-sm text-fg-muted">{t("unusableServer.explanation")}</p>
 
       {error && <p className="text-sm text-danger-fg">{error}</p>}
@@ -79,7 +80,7 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
 
         {secretsLeftBehind && (
           <div
-            className="mt-3 rounded border border-warning-border-strong bg-warning-subtle p-3 text-sm"
+            className="mt-3 border border-warning-border-strong bg-warning-subtle p-3 text-sm"
             data-testid="secrets-left-behind"
           >
             <p className="mb-2 font-medium text-warning-fg-softer">
@@ -103,7 +104,7 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
         )}
 
         {preview && (
-          <div className="mt-3 rounded border border-danger-border bg-danger-subtle p-3 text-sm">
+          <div className="mt-3 border border-danger-border bg-danger-subtle p-3 text-sm">
             <p className="mb-2 font-medium text-danger-fg-softer">{t("serverForm.deleteImpactTitle")}</p>
             <ul className="mb-2 space-y-1 text-danger-fg-softer">
               <li>{t("unusableServer.deleteSecrets")}</li>

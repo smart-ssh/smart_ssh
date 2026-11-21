@@ -94,6 +94,31 @@ async function checkSettings(page: Page, c: Catalog) {
   await page.getByRole("button", { name: tr(c, "common.close"), exact: true }).click();
 }
 
+test("the selected language segment has a 2 px accent bottom border, the other has none", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await page.getByRole("button", { name: tr(en, "settings.title"), exact: true }).click();
+  await page.getByRole("button", { name: tr(en, "settings.categories.displayLanguage"), exact: true }).click();
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.className = "bg-accent";
+    document.body.appendChild(probe);
+    const colour = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return colour;
+  });
+  const deBtn = page.getByRole("button", { name: ENDONYMS.de, exact: true });
+  const enBtn = page.getByRole("button", { name: ENDONYMS.en, exact: true });
+  await expect(enBtn).toHaveCSS("border-bottom-color", accent);
+  await expect(enBtn).toHaveCSS("border-bottom-width", "2px");
+  await expect(deBtn).not.toHaveCSS("border-bottom-color", accent);
+  await deBtn.click();
+  await expect(deBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(deBtn).toHaveCSS("border-bottom-color", accent);
+  await expect(deBtn).toHaveCSS("border-bottom-width", "2px");
+  await expect(enBtn).not.toHaveCSS("border-bottom-color", accent);
+});
+
 test("German and English show no raw i18n keys on the main screens and in the settings", async ({ app }) => {
   test.setTimeout(90_000);
   await app.launch(populated());

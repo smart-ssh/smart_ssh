@@ -30,7 +30,12 @@
     "emptyStateTitle": "Nog geen server toegevoegd",
     "emptyStateHint": "Voeg uw eerste server toe om via SSH te verbinden.",
     "emptyStateCreateFirstServer": "Eerste server toevoegen",
-    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server."
+    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server.",
+    "localBadge": "Lokaal",
+    "thisDevice": "dit apparaat",
+    "sessionOpen": "Sessie open",
+    "sessionPending": "Wacht op bevestiging",
+    "sessionDisconnected": "Sessie verbroken"
   },
   "settings": {
     "title": "Instellingen",
@@ -136,7 +141,10 @@
     "importSshConfig": "Importeren …",
     "importSshConfigHint": "Servers importeren uit een OpenSSH ssh_config-bestand",
     "exportSshConfig": "Exporteren …",
-    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config"
+    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config",
+    "title": "Servers",
+    "collapseGroup": "Groep “{{name}}” samenvouwen",
+    "expandGroup": "Groep “{{name}}” uitvouwen"
   },
   "treeDrag": {
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
@@ -356,7 +364,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Deel {{index}}",
     "checksLabel": "Controles:",
-    "hardBlacklistLabel": "Vaste blokkeerlijst:"
+    "hardBlacklistLabel": "Vaste blokkeerlijst:",
+    "invalidPattern": "Ongeldig patroon",
+    "rowActions": "Rijacties",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regels"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",
@@ -461,6 +473,7 @@
     "mismatchBodyAfterHost": " presenteert een andere sleutel dan de vorige keer is opgeslagen. Dit kan wijzen op een man-in-the-middle-aanval. Ga alleen door als u zeker weet dat de serversleutel legitiem is gewijzigd (bijv. herinstallatie van de server).",
     "known": "Bekend",
     "offeredNow": "Nu aangeboden",
+    "offered": "Aangeboden",
     "keyType": "Sleuteltype",
     "cancelConnection": "Verbinding annuleren",
     "trustAnyway": "Toch vertrouwen",
@@ -478,7 +491,12 @@
     "menu": {
       "open": "Navigatiemenu openen",
       "title": "Navigatiemenu",
-      "sessions": "Open sessies"
+      "sessions": "Open sessies",
+      "close": "Navigatiemenu sluiten",
+      "needsConfirmation": "Bevestiging nodig",
+      "activities": "Activiteiten",
+      "activitiesRunning_one": "{{count}} bezig",
+      "activitiesRunning_other": "{{count}} bezig"
     },
     "mcp": {
       "badge": "MCP",
@@ -563,6 +581,7 @@
     "ollamaProbeRetry": "Opnieuw zoeken",
     "ollamaProbeNotFoundHeading": "Geen lokale Ollama gevonden (standaardpoort 11434).",
     "ollamaProbeNotFoundInstructions": "Installeer Ollama van ollama.com, start het en laad een model (bijv. `ollama pull llama3`), en zoek daarna opnieuw.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1596,6 +1615,13 @@
     "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
     "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
     "quitAnyway": "Toch afsluiten",
-    "keepRunning": "Blijven doorlopen"
+    "keepRunning": "Blijven doorlopen",
+    "summaryRunning_one": "{{count}} bezig",
+    "summaryRunning_other": "{{count}} bezig",
+    "summaryInterrupted_one": "{{count}} onderbroken",
+    "summaryInterrupted_other": "{{count}} onderbroken",
+    "summaryFailed_one": "{{count}} mislukt",
+    "summaryFailed_other": "{{count}} mislukt",
+    "remaining": "nog {{time}}"
   }
 }

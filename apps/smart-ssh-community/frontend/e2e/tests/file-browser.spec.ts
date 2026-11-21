@@ -237,7 +237,11 @@ test.describe("file browser, narrow layout @phone", () => {
     await expect(page.locator("table")).toHaveCount(0);
     const row = page.getByRole("listitem").filter({ hasText: "notes.txt" });
     await expect(row).toContainText("2.0 KB");
-    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+    await expect(row.getByTestId("narrow-entry-meta")).toContainText(/^\S+ · 2\.0 KB · \d{4}-\d{2}-\d{2}$/);
+    const bar = page.getByTestId("narrow-action-bar");
+    await expectUsable(bar.getByRole("button", { name: "+ Folder", exact: true }));
+    await expectUsable(bar.getByRole("button", { name: "Upload", exact: true }));
     await expectUsable(rowMenu(page, "notes.txt"));
     await captureScreen(page, "file-browser-narrow-list");
 

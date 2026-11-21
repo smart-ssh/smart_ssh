@@ -48,6 +48,14 @@ beforeEach(() => {
 });
 
 describe("AuthPromptHost", () => {
+  it("renders the foundation dialog with a lock icon in the header", async () => {
+    const { show } = renderHost();
+    show(kbd);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector('[data-icon="lock"]')).not.toBeNull();
+    expect(dialog).toHaveClass("bg-surface-raised");
+  });
+
   it("masks echo-off prompts, shows echo-on prompts plain and focuses the first field", async () => {
     const { show } = renderHost();
     show(kbd);

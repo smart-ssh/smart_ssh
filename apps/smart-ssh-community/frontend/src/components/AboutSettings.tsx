@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getAppInfo } from "../api/api";
 import type { AppInfoDto } from "../api/types";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 /** Spec 0052, Abschnitt 3.2: "Über"-Kategorie der zweispaltigen Settings
  * (Spec 0050) — Version + Commit-Hash **sichtbar und kopierbar**, damit ein
@@ -71,20 +71,26 @@ export function AboutSettings() {
   return (
     <div className="space-y-4">
       {loadError && (
-        <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
+        <p role="alert" className="border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
       )}
       {info && (
         <div>
-          <span className="block text-xs text-fg-subtle">{t("about.version")}</span>
+          <span className="label-condensed block text-xs text-fg-subtle">{t("about.version")}</span>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <code
               title={displayLine}
-              className="min-w-0 select-text break-words rounded border border-border-strong bg-surface px-3 py-1.5 font-mono text-sm text-fg"
+              className="min-w-0 select-text break-words border border-border bg-surface-sunken px-3 py-1.5 font-mono text-sm text-fg"
             >
               {displayLine}
             </code>
-            <Button size="sm" onClick={handleCopy} title={t("about.copyHint")}>
-              {t("about.copyButton")}
+            <Button
+              size="sm"
+              iconOnly
+              onClick={handleCopy}
+              title={t("about.copyHint")}
+              aria-label={t("about.copyButton")}
+            >
+              <Icon name="copy" />
             </Button>
             {copyState === "copied" && (
               <span className="text-xs text-success-fg">{t("about.copied")}</span>

@@ -10,7 +10,7 @@ import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
 import { AuthPromptHost } from "./components/AuthPromptHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
-import { ServerList } from "./components/ServerList";
+import { ServerList, serverSessionMarkers, type ServerMarker } from "./components/ServerList";
 import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { ConnectingTabView } from "./components/ConnectingTabView";
@@ -187,6 +187,8 @@ function App() {
     sessionTabs.filter((t) => t.phase === "connecting").map((t) => t.serverId),
   );
 
+  const serverMarkers = serverSessionMarkers(sessionTabs);
+
   return (
     // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
     // noch ankommen, wenn der Nutzer den Session-Screen bereits verlassen
@@ -292,6 +294,7 @@ function App() {
           onSwitchToExistingTab={switchTo}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
+          serverMarkers={serverMarkers}
           resumeRequest={resumeRequest}
           onResumeRequestConsumed={() => setResumeRequest(null)}
           connectRequest={connectRequest}
@@ -337,6 +340,8 @@ interface MainScreenProps {
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
   connectingServerIds: ReadonlySet<string>;
+  /** Issue #1367: status marker per server with an open session. */
+  serverMarkers: ReadonlyMap<string, ServerMarker>;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
@@ -349,6 +354,7 @@ function MainScreen({
   hasActiveProvider,
   onStartConnect,
   connectingServerIds,
+  serverMarkers,
   findExistingSessionId,
   onSwitchToExistingTab,
   pendingNoteEditSelection,
@@ -405,6 +411,7 @@ function MainScreen({
             <ServerList
               onStartConnect={onStartConnect}
               connectingServerIds={connectingServerIds}
+              serverMarkers={serverMarkers}
               findExistingSessionId={findExistingSessionId}
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
@@ -422,6 +429,8 @@ function MainScreen({
           initialSelection={pendingNoteEditSelection}
           onInitialSelectionConsumed={onNoteEditSelectionConsumed}
           onConnect={onRequestConnect}
+          collapsedGroupIds={collapsedGroupIds}
+          onToggleGroup={toggleGroup}
         />
       ) : (
         <FilterRulesView
