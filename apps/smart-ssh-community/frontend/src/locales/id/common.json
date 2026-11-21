@@ -1602,6 +1602,10 @@
     "quitBody": "Aktivitas ini masih berjalan dan akan dihentikan:",
     "quitResumeHint": "Unduhan yang terhenti dapat dilanjutkan saat Anda memulai aplikasi lagi.",
     "quitAnyway": "Tetap keluar",
-    "keepRunning": "Biarkan berjalan"
+    "keepRunning": "Biarkan berjalan",
+    "summaryRunning_other": "{{count}} berjalan",
+    "summaryInterrupted_other": "{{count}} terhenti",
+    "summaryFailed_other": "{{count}} gagal",
+    "remaining": "sisa {{time}}"
   }
 }

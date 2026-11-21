@@ -1622,6 +1622,16 @@
     "quitBody": "Queste attività sono ancora in corso e verranno fermate:",
     "quitResumeHint": "I download interrotti possono essere ripresi al prossimo avvio dell'app.",
     "quitAnyway": "Esci comunque",
-    "keepRunning": "Continua l'esecuzione"
+    "keepRunning": "Continua l'esecuzione",
+    "summaryRunning_one": "{{count}} in corso",
+    "summaryRunning_many": "{{count}} in corso",
+    "summaryRunning_other": "{{count}} in corso",
+    "summaryInterrupted_one": "{{count}} interrotta",
+    "summaryInterrupted_many": "{{count}} interrotte",
+    "summaryInterrupted_other": "{{count}} interrotte",
+    "summaryFailed_one": "{{count}} non riuscita",
+    "summaryFailed_many": "{{count}} non riuscite",
+    "summaryFailed_other": "{{count}} non riuscite",
+    "remaining": "{{time}} rimanenti"
   }
 }

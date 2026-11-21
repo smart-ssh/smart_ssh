@@ -1622,6 +1622,16 @@
     "quitBody": "Aceste activități încă rulează și vor fi oprite:",
     "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
     "quitAnyway": "Ieși oricum",
-    "keepRunning": "Lasă să ruleze"
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning_one": "{{count}} în curs",
+    "summaryRunning_few": "{{count}} în curs",
+    "summaryRunning_other": "{{count}} în curs",
+    "summaryInterrupted_one": "{{count}} întreruptă",
+    "summaryInterrupted_few": "{{count}} întrerupte",
+    "summaryInterrupted_other": "{{count}} întrerupte",
+    "summaryFailed_one": "{{count}} eșuată",
+    "summaryFailed_few": "{{count}} eșuate",
+    "summaryFailed_other": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

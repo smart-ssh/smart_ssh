@@ -1612,6 +1612,13 @@
     "quitBody": "Disse aktivitetene pågår fortsatt og blir stoppet:",
     "quitResumeHint": "Avbrutte nedlastinger kan gjenopptas neste gang du starter appen.",
     "quitAnyway": "Avslutt likevel",
-    "keepRunning": "La dem fortsette"
+    "keepRunning": "La dem fortsette",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbrutt",
+    "summaryInterrupted_other": "{{count}} avbrutt",
+    "summaryFailed_one": "{{count}} mislyktes",
+    "summaryFailed_other": "{{count}} mislyktes",
+    "remaining": "{{time}} igjen"
   }
 }

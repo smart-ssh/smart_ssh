@@ -1622,6 +1622,16 @@
     "quitBody": "Estas atividades ainda estão em andamento e serão interrompidas:",
     "quitResumeHint": "Downloads interrompidos podem ser retomados na próxima vez que você abrir o app.",
     "quitAnyway": "Sair mesmo assim",
-    "keepRunning": "Continuar executando"
+    "keepRunning": "Continuar executando",
+    "summaryRunning_one": "{{count}} em andamento",
+    "summaryRunning_many": "{{count}} em andamento",
+    "summaryRunning_other": "{{count}} em andamento",
+    "summaryInterrupted_one": "{{count}} interrompida",
+    "summaryInterrupted_many": "{{count}} interrompidas",
+    "summaryInterrupted_other": "{{count}} interrompidas",
+    "summaryFailed_one": "{{count}} com falha",
+    "summaryFailed_many": "{{count}} com falha",
+    "summaryFailed_other": "{{count}} com falha",
+    "remaining": "restam {{time}}"
   }
 }
