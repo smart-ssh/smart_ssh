@@ -353,6 +353,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
           fingerprint: hostKey.fingerprint,
           expectedFingerprint: hostKey.expectedFingerprint ?? null,
           keyType: hostKey.keyType ?? null,
+          serverName: server.name,
         });
       });
       if (!trusted) throw commandError("Host key was rejected", null);
