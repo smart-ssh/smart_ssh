@@ -70,11 +70,7 @@ for (const category of ["AI Provider", "MCP Server"]) {
       await settings.getByRole("button", { name: "Add Provider", exact: true }).click();
       const add = page.getByRole("dialog", { name: "Add Provider" });
       await add.getByRole("button", { name: /Advanced/ }).click();
-      // The visual-order check reads unscrolled positions, so the open
-      // advanced section must fit without scrolling the dialog body.
       await add.getByRole("button", { name: "+ Header", exact: true }).click();
-      const size = page.viewportSize();
-      if (size && size.width >= 1000) await page.setViewportSize({ width: size.width, height: 1000 });
       await expectTabOrderFollowsVisualOrder(page, add);
       await expectNoClippedText(add);
     });
@@ -118,10 +114,13 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
 // Issue #1377: both risk switches have accessible names, sit in the Tab order
 // after the provider list and toggle with the keyboard.
 test("settings: AI Provider risk switches are labelled, in Tab order and toggle", async ({ app }) => {
+  const base = longContent();
+  // Known non-default initial values: second opinion on (default off), red-risk confirm off (default on).
   await app.launch({
-    ...longContent(),
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true, redRiskAlwaysConfirm: false },
     commands: {
-      ...longContent().commands,
+      ...base.commands,
       set_risk_second_opinion_settings: { result: null },
       set_red_risk_always_confirm: { result: null },
     },
@@ -130,18 +129,21 @@ test("settings: AI Provider risk switches are labelled, in Tab order and toggle"
   const dialog = await openSettings(page, "AI Provider");
   const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
   const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
-  await expect(second).toBeVisible();
-  await expect(red).toBeVisible();
-  const before = await second.isChecked();
+  // Wait for the loaded (non-default) state before interacting.
+  await expect(second).toBeChecked();
+  await expect(red).not.toBeChecked();
   await second.focus();
   await expect(second).toBeFocused();
-  await page.keyboard.press("Space");
-  await expect(second).toBeChecked({ checked: !before });
+  // Tab order: second-opinion switch, its provider select (shown while on), red-risk switch.
   await page.keyboard.press("Tab");
-  // Focus moved on (not lost to body) and eventually reaches the second switch.
-  await expect(page.locator("body")).not.toBeFocused();
-  const redBefore = await red.isChecked();
-  await red.focus();
+  await expect(dialog.getByRole("combobox", { name: /provider/i }).first()).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(red).toBeFocused();
   await page.keyboard.press("Space");
-  await expect(red).toBeChecked({ checked: !redBefore });
+  await expect(red).toBeChecked();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
 });
