@@ -1521,10 +1521,20 @@ describe("AiProviderSettings provider grid and risk switches (issue #1377)", () 
     const second = screen.getByRole("checkbox", {
       name: testI18n.t("aiProvider.riskClassifierEnable"),
     });
-    expect((redRisk as HTMLInputElement).checked).toBe(true);
+    // Wait for the settings load before asserting or toggling.
+    await waitFor(() => expect((redRisk as HTMLInputElement).checked).toBe(true));
     expect((second as HTMLInputElement).checked).toBe(false);
     expect(redRisk.closest("section")).toBe(second.closest("section"));
+    const { saveRiskClassifierSettings, saveRedRiskAlwaysConfirm } = await import(
+      "../settings/riskSettings"
+    );
     fireEvent.click(second);
     await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
+    expect(saveRiskClassifierSettings).toHaveBeenCalledWith({
+      enabled: true,
+      providerId: null,
+    });
+    fireEvent.click(redRisk);
+    await waitFor(() => expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false));
   });
 });

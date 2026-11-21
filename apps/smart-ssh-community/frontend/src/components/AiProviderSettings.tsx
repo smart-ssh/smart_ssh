@@ -10,10 +10,10 @@ import {
   setActiveAiProvider,
   updateAiProvider,
 } from "../api/api";
-import { Badge, Button, Icon } from "./ui";
+import { Badge, Button, Field, Icon } from "./ui";
 import { SettingsActionSlotContext, SettingsSectionAction } from "./SettingsSectionAction";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
-import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
+import { CARD_CLASS, FIELD_CLASS } from "./aiProviderFormStyles";
 import { commandErrorText } from "../api/errorCodes";
 import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../lib/ollama";
 import {
@@ -461,14 +461,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               </div>
 
               {supportsWebResearch(provider.providerType, provider.baseUrl) && (
-                <label className="mt-2 flex items-center gap-2 text-sm text-fg-muted">
-                  <input
-                    type="checkbox"
+                <div className="mt-2">
+                  <SwitchRow
                     checked={provider.webResearchEnabled}
-                    onChange={(e) => handleWebResearchChange(provider, e.target.checked)}
-                  />
-                  {t("aiProvider.webResearch")}
-                </label>
+                    onChange={(checked) => handleWebResearchChange(provider, checked)}
+                  >
+                    {t("aiProvider.webResearch")}
+                  </SwitchRow>
+                </div>
               )}
 
               {provider.attestationUrl && (
@@ -495,7 +495,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       <p className="text-xs font-semibold text-fg-subtle">
                         {t("aiProvider.attestationResultLabel")}
                       </p>
-                      <pre className="max-h-40 overflow-auto rounded border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
+                      <pre className="max-h-40 overflow-auto border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
                         {attestationResults[provider.id]}
                       </pre>
                     </div>
@@ -527,13 +527,14 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           {t("aiProvider.riskClassifierEnable")}
         </SwitchRow>
         {riskClassifierEnabled && (
-          <label className={`${LABEL_CLASS} mt-3 pl-11`}>
-            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.riskClassifierProvider")}</span>
+          <Field label={t("aiProvider.riskClassifierProvider")} className="mt-3 pl-11">
+            {(control) => (
             <select
+              {...control}
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
               disabled={riskSettingsSaving}
-              className={`mt-1 w-full ${FIELD_CLASS}`}
+              className={`w-full ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -542,7 +543,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </option>
               ))}
             </select>
-          </label>
+            )}
+          </Field>
         )}
 
         {/* Spec 0092, A1.4: independent of the second opinion above (rule-based
@@ -578,12 +580,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeFoundHeading")}
               </p>
-              <label className={LABEL_CLASS}>
-                <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
+              <Field label={t("aiProvider.model")}>
+                {(control) => (
                 <select
+                  {...control}
                   value={ollamaSelectedModel}
                   onChange={(e) => setOllamaSelectedModel(e.target.value)}
-                  className={`mt-1 w-full ${FIELD_CLASS}`}
+                  className={`w-full ${FIELD_CLASS}`}
                 >
                   {ollamaProbe.models.map((model) => (
                     <option key={model} value={model}>
@@ -591,7 +594,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     </option>
                   ))}
                 </select>
-              </label>
+                )}
+              </Field>
               <p className="text-xs text-fg-subtle">
                 {providers.some((p) => p.isActive)
                   ? t("aiProvider.ollamaProbeFoundHintInactive")
