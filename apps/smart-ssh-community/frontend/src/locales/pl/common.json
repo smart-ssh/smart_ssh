@@ -1631,6 +1631,19 @@
     "quitBody": "Te aktywności nadal trwają i zostaną zatrzymane:",
     "quitResumeHint": "Przerwane pobierania można wznowić przy następnym uruchomieniu aplikacji.",
     "quitAnyway": "Zamknij mimo to",
-    "keepRunning": "Pozostaw uruchomione"
+    "keepRunning": "Pozostaw uruchomione",
+    "summaryRunning_one": "w toku: {{count}}",
+    "summaryRunning_few": "w toku: {{count}}",
+    "summaryRunning_many": "w toku: {{count}}",
+    "summaryRunning_other": "w toku: {{count}}",
+    "summaryInterrupted_one": "przerwane: {{count}}",
+    "summaryInterrupted_few": "przerwane: {{count}}",
+    "summaryInterrupted_many": "przerwane: {{count}}",
+    "summaryInterrupted_other": "przerwane: {{count}}",
+    "summaryFailed_one": "nieudane: {{count}}",
+    "summaryFailed_few": "nieudane: {{count}}",
+    "summaryFailed_many": "nieudane: {{count}}",
+    "summaryFailed_other": "nieudane: {{count}}",
+    "remaining": "pozostało {{time}}"
   }
 }

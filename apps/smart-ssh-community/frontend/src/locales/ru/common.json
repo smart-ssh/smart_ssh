@@ -1631,6 +1631,19 @@
     "quitBody": "Эти задачи ещё выполняются и будут остановлены:",
     "quitResumeHint": "Прерванные загрузки можно возобновить при следующем запуске приложения.",
     "quitAnyway": "Всё равно выйти",
-    "keepRunning": "Продолжить выполнение"
+    "keepRunning": "Продолжить выполнение",
+    "summaryRunning_one": "выполняется: {{count}}",
+    "summaryRunning_few": "выполняется: {{count}}",
+    "summaryRunning_many": "выполняется: {{count}}",
+    "summaryRunning_other": "выполняется: {{count}}",
+    "summaryInterrupted_one": "прервано: {{count}}",
+    "summaryInterrupted_few": "прервано: {{count}}",
+    "summaryInterrupted_many": "прервано: {{count}}",
+    "summaryInterrupted_other": "прервано: {{count}}",
+    "summaryFailed_one": "с ошибкой: {{count}}",
+    "summaryFailed_few": "с ошибкой: {{count}}",
+    "summaryFailed_many": "с ошибкой: {{count}}",
+    "summaryFailed_other": "с ошибкой: {{count}}",
+    "remaining": "осталось {{time}}"
   }
 }

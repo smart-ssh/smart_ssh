@@ -1601,6 +1601,10 @@
     "quitBody": "次のアクティビティは実行中で、停止されます:",
     "quitResumeHint": "中断されたダウンロードは、次回の起動時に再開できます。",
     "quitAnyway": "終了する",
-    "keepRunning": "実行を続ける"
+    "keepRunning": "実行を続ける",
+    "summaryRunning_other": "実行中 {{count}} 件",
+    "summaryInterrupted_other": "中断 {{count}} 件",
+    "summaryFailed_other": "失敗 {{count}} 件",
+    "remaining": "残り {{time}}"
   }
 }

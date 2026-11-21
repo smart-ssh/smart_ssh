@@ -1611,6 +1611,13 @@
     "quitBody": "Nämä toiminnot ovat vielä käynnissä ja pysäytetään:",
     "quitResumeHint": "Keskeytyneet lataukset voi jatkaa, kun käynnistät sovelluksen seuraavan kerran.",
     "quitAnyway": "Sulje silti",
-    "keepRunning": "Jatka suoritusta"
+    "keepRunning": "Jatka suoritusta",
+    "summaryRunning_one": "{{count}} käynnissä",
+    "summaryRunning_other": "{{count}} käynnissä",
+    "summaryInterrupted_one": "{{count}} keskeytetty",
+    "summaryInterrupted_other": "{{count}} keskeytetty",
+    "summaryFailed_one": "{{count}} epäonnistui",
+    "summaryFailed_other": "{{count}} epäonnistui",
+    "remaining": "{{time}} jäljellä"
   }
 }
