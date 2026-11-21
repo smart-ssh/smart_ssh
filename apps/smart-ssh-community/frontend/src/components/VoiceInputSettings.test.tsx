@@ -1,5 +1,5 @@
 // Issue #1299, Spec 0108 §2.1, §5.8: the settings list the models the backend offers.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -148,14 +148,15 @@ describe("VoiceInputSettings status square and progress bar (issue #1379)", () =
     ["error", { state: "error", key: "voice.error.download" }, "danger"],
     ["not_downloaded", { state: "not_downloaded" }, "neutral"],
   ])("uses the %s tone for the status square", async (_n, status, expected) => {
+    // Deferred status: the tone is only asserted after the load resolved inside act().
+    let resolveStatus: (v: unknown) => void = () => {};
+    const loaded = new Promise((r) => { resolveStatus = r; });
     vi.mocked(getSpeechModelStatus).mockImplementation(((model: string) =>
-      Promise.resolve({ model, ...status })) as never);
+      loaded.then(() => ({ model, ...status }))) as never);
     renderSettings();
     await screen.findAllByRole("radio");
-    if (expected === "neutral") {
-      // Neutral is also the pre-load default: wait for the loaded status (download offer) first.
-      await within(rowOf()).findByRole("button", { name: "Herunterladen" });
-    }
+    await waitFor(() => expect(getSpeechModelStatus).toHaveBeenCalledWith("base"));
+    await act(async () => { resolveStatus(null); await loaded; });
     await waitFor(() => expect(tone(rowOf())).toBe(expected));
     expect(bar(rowOf())).toBeNull();
   });
