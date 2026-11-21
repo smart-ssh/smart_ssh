@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Delete permanently",
     "testResult": {
       "success": "Connection successful",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Login rejected. Check the user name and password or key.",
       "hostKeyUnknown": "Host key unknown — confirmation required",
       "hostKeyMismatch": "Host key has changed",

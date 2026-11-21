@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Xóa vĩnh viễn",
     "testResult": {
       "success": "Kết nối thành công",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Đăng nhập bị từ chối. Kiểm tra tên người dùng và mật khẩu hoặc khóa.",
       "hostKeyUnknown": "Khóa máy chủ chưa biết — cần xác nhận",
       "hostKeyMismatch": "Khóa máy chủ đã thay đổi",

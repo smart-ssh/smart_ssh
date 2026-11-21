@@ -124,7 +124,7 @@ const SAME_WORDS: Record<string, readonly string[]> = {
   ],
 };
 // Produktnamen sind in allen Sprachen gleich (Glossar: bleiben unübersetzt).
-const PRODUCT_WORDS = ["openai", "anthropic", "ollama", "mcp", "ok"];
+const PRODUCT_WORDS = ["openai", "anthropic", "ollama", "mcp", "ok", "ms"];
 function isAllowedSame(code: string, value: string): boolean {
   if (/^(https?:|~\/|\/)/.test(value.trim())) return true;
   const words = stripped(value)

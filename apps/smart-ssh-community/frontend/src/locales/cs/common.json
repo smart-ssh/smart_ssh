@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Smazat trvale",
     "testResult": {
       "success": "Připojení úspěšné",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
       "hostKeyUnknown": "Klíč hostitele neznámý — vyžadováno potvrzení",
       "hostKeyMismatch": "Klíč hostitele se změnil",

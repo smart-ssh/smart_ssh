@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Видалити назавжди",
     "testResult": {
       "success": "Підключення успішне",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Вхід відхилено. Перевірте ім'я користувача та пароль або ключ.",
       "hostKeyUnknown": "Ключ хоста невідомий — потрібне підтвердження",
       "hostKeyMismatch": "Ключ хоста змінився",

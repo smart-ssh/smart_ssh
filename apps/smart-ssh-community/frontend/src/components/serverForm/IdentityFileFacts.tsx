@@ -1,6 +1,18 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { translateErrorCode } from "../../api/errorCodes";
 import type { KeyFileFactsDto } from "../../api/types";
+import { Icon, type IconName } from "../ui";
+
+/** One finding line with its status icon (check / warn / info). */
+function Finding({ icon, className, children }: { icon: IconName; className: string; children: ReactNode }) {
+  return (
+    <li className={`flex items-start gap-1.5 ${className}`}>
+      <Icon name={icon} size={14} className="mt-0.5 shrink-0" />
+      <span>{children}</span>
+    </li>
+  );
+}
 
 /** Spec 0076, B-3: zeigt den Vorab-Befund über eine Schlüsseldatei —
  * existiert sie, passen die Rechte, sieht sie wie ein OpenSSH-Schlüssel
@@ -28,23 +40,23 @@ export function IdentityFileFacts({
   const { t } = useTranslation();
   if (emptyPath) return null;
   if (error) {
-    return <p className="mt-1 text-xs text-warning-fg">{t("serverForm.identityFile.checkFailed")}</p>;
+    return <ul className="mt-1 text-xs"><Finding icon="warn" className="text-warning-fg">{t("serverForm.identityFile.checkFailed")}</Finding></ul>;
   }
   if (facts === null) {
     return loading ? (
-      <p className="mt-1 text-xs text-fg-subtle">{t("serverForm.identityFile.checking")}</p>
+      <ul className="mt-1 text-xs"><Finding icon="info" className="text-fg-subtle">{t("serverForm.identityFile.checking")}</Finding></ul>
     ) : null;
   }
 
   const problemLine = facts.problem ? (
-    <li className="text-warning-fg">
+    <Finding icon="warn" className="text-warning-fg">
       {/* Issue #667 / Spec 0109 C3: the file is missing on this device. */}
       {facts.problem.code === "KEY_FILE_NOT_FOUND"
         ? `${t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}: ${path}`
         : translateErrorCode(t, facts.problem.code, facts.problem.message)}
-    </li>
+    </Finding>
   ) : (
-    <li className="text-success-fg">{t("serverForm.identityFile.looksValid")}</li>
+    <Finding icon="check" className="text-success-fg">{t("serverForm.identityFile.looksValid")}</Finding>
   );
 
   // B-3 verlangt Existenz, Rechte, Gültigkeit UND Verschlüsselung — auch
@@ -74,19 +86,19 @@ export function IdentityFileFacts({
       {problemLine}
       {permissionsAreKnown &&
         (facts.permissionsTooOpen ? (
-          <li className="text-warning-fg">{t("serverForm.identityFile.permissionsTooOpen")}</li>
+          <Finding icon="warn" className="text-warning-fg">{t("serverForm.identityFile.permissionsTooOpen")}</Finding>
         ) : (
-          <li className="text-fg-subtle">{t("serverForm.identityFile.permissionsOk")}</li>
+          <Finding icon="check" className="text-fg-subtle">{t("serverForm.identityFile.permissionsOk")}</Finding>
         ))}
       {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
        * gültig ist (bei einem Problem steht das Feld immer auf `false`,
        * s. `crate::dto::KeyFileFactsDto::from`). */}
       {!facts.problem && (
-        <li className="text-fg-subtle">
+        <Finding icon="info" className="text-fg-subtle">
           {facts.encrypted
             ? t("serverForm.identityFile.encrypted")
             : t("serverForm.identityFile.notEncrypted")}
-        </li>
+        </Finding>
       )}
     </ul>
   );

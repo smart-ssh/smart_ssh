@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Elimina definitivamente",
     "testResult": {
       "success": "Connessione riuscita",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Accesso rifiutato. Verifichi nome utente e password o chiave.",
       "hostKeyUnknown": "Chiave host sconosciuta: conferma necessaria",
       "hostKeyMismatch": "La chiave host è cambiata",

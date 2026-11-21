@@ -286,6 +286,7 @@
     "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
       "success": "Verbindung erfolgreich",
+      "successTimed": "OK · {{ms}} ms",
       "authFailed": "Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
       "hostKeyUnknown": "Host-Key unbekannt — Bestätigung nötig",
       "hostKeyMismatch": "Host-Key hat sich geändert",
