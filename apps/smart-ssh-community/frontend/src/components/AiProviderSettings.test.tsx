@@ -231,7 +231,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("Zugangsdaten gültig")).toBeInTheDocument();
+    const valid = await screen.findByText("Zugangsdaten gültig");
+    expect(valid).toBeInTheDocument();
+    expect(valid.querySelector("svg")?.getAttribute("data-icon")).toBe("check");
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
@@ -250,7 +252,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("Authentifizierung fehlgeschlagen – API-Key prüfen")).toBeInTheDocument();
+    const failed = await screen.findByText("Authentifizierung fehlgeschlagen – API-Key prüfen");
+    expect(failed).toBeInTheDocument();
+    expect(failed.querySelector("svg")?.getAttribute("data-icon")).toBe("x");
   });
 
   it("shows an unreachable result including the message", async () => {

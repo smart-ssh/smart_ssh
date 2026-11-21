@@ -73,4 +73,16 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
 
     expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
   });
+
+  it("renders the check icon for the success state", () => {
+    const { container } = renderBadge({ kind: "success" });
+
+    expect(container.querySelector("svg")?.getAttribute("data-icon")).toBe("check");
+  });
+
+  it("renders the x icon for the failure state", () => {
+    const { container } = renderBadge({ kind: "authenticationFailed" });
+
+    expect(container.querySelector("svg")?.getAttribute("data-icon")).toBe("x");
+  });
 });
