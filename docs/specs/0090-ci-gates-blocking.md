@@ -125,6 +125,9 @@ Betriebssystem ab).
   verlangt eine bewusste Entscheidung. MPL-2.0 ist erst nach einer
   Einzelprüfung auf die Liste gekommen, BSL-1.0 (Boost) nach einer
   Maintainer-Entscheidung (permissive, nur Windows-Zwischenabhängigkeiten).
+  Die Lizenzen `blessing` und WTFPL sind nur für die gebündelte
+  SQLCipher-Quelle (`sqlcipher-src`) als Einzel-Ausnahme erlaubt, nicht
+  allgemein.
   Die Liste gilt für
   Drittabhängigkeiten, nicht für die eigenen, unveröffentlichten Crates des
   Workspace. Dieselbe Liste gilt auch für die Drittlizenzen des Frontends

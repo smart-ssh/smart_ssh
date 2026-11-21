@@ -70,6 +70,15 @@ allow = [
 ]
 confidence-threshold = 0.8
 
+# `blessing` (SQLite public-domain blessing) and WTFPL (libtomcrypt), both
+# declared by the bundled SQLCipher source crate `sqlcipher-src` ("MIT AND
+# BSD-3-Clause AND blessing AND WTFPL"). Both are permissive, no copyleft.
+# Maintainer decision (#1243): accepted for this crate only, not in the
+# general allow list (ADR 0135 mechanism).
+exceptions = [
+    { crate = "sqlcipher-src", allow = ["blessing", "WTFPL"] },
+]
+
 [licenses.private]
 # Spec 0090, A12 gilt für Abhängigkeiten, nicht für die eigene Lizenz des
 # Projekts (`[workspace.package] license = "Apache-2.0"`, Spec 0099, L1) —

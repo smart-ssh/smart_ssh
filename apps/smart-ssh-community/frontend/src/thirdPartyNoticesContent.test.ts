@@ -53,8 +53,8 @@ describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, A1.1, A1.8)"
   it.skipIf(!hasOutput)(
     "enthält die Lizenztexte von SQLCipher und der vendorten OpenSSL-Quelle (Spec 0101, T9)",
     () => {
-      expect(content).toContain("SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)");
-      expect(content).toContain("Zetetic LLC");
+      expect(content).toContain("SQLCipher (gebündelt in sqlcipher-src, Spec 0101 A1)");
+      expect(content).toContain("ZETETIC LLC");
       expect(content).toContain("OpenSSL (vendorte Quelle in openssl-src, Spec 0101 A1)");
     },
   );
