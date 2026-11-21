@@ -11,7 +11,7 @@ import {
 } from "../../hooks/useInterruptedActivities";
 import type { InterruptedRow } from "../../api/activitiesApi";
 import { formatBytes } from "../../lib/format";
-import { formatDuration, formatSpeed, nextRate, type RateState } from "../../lib/transferRate";
+import { formatDuration, formatSpeed, nextRate, RATE_WINDOW_MS, type RateState } from "../../lib/transferRate";
 import { voiceErrorKey } from "../../settings/voiceInputSettings";
 import { Button, Icon } from "../ui";
 import { kindIcon } from "./activityKind";
@@ -32,20 +32,76 @@ export function combinedProgress(list: Activity[]): number | null {
 /** Speed and remaining time per running activity (Spec 0054 moving average).
  * Lives in the trigger, which is mounted while the panel is closed, so the
  * window is filled from the progress updates before the panel opens. */
+interface RateEntry {
+  rate: RateState;
+  done: number;
+  /** Time of the last progress update (ms). */
+  at: number;
+  /** No update within `RATE_WINDOW_MS`: speed and remaining time are unknown. */
+  stalled: boolean;
+}
+
 function useRates(list: Activity[]): Map<string, RateState> {
-  const ref = useRef(new Map<string, { rate: RateState; done: number }>());
-  const live = new Set<string>();
-  for (const a of list) {
-    if (a.state !== "running") continue;
-    live.add(a.id);
-    const prev = ref.current.get(a.id);
-    // Fold only real progress updates, not unrelated re-renders.
-    if (prev?.done !== a.done) {
-      ref.current.set(a.id, { rate: nextRate(prev?.rate, Date.now(), a.done, a.total), done: a.done });
+  const [entries, setEntries] = useState<Map<string, RateEntry>>(() => new Map());
+
+  // Fold real progress updates (a changed `done`) and drop activities that left the running state.
+  useEffect(() => {
+    setEntries((prev) => {
+      const now = Date.now();
+      const next = new Map<string, RateEntry>();
+      let changed = false;
+      for (const a of list) {
+        if (a.state !== "running") continue;
+        const old = prev.get(a.id);
+        if (old && old.done === a.done) {
+          next.set(a.id, old);
+        } else {
+          next.set(a.id, {
+            rate: nextRate(old?.rate, now, a.done, a.total),
+            done: a.done,
+            at: now,
+            stalled: false,
+          });
+          changed = true;
+        }
+      }
+      return changed || next.size !== prev.size ? next : prev;
+    });
+  }, [list]);
+
+  // Without progress events nothing re-renders: a timer marks entries as stalled.
+  useEffect(() => {
+    let soonest: number | null = null;
+    for (const e of entries.values()) {
+      if (!e.stalled && (soonest === null || e.at < soonest)) soonest = e.at;
     }
-  }
-  for (const id of [...ref.current.keys()]) if (!live.has(id)) ref.current.delete(id);
-  return new Map([...ref.current].map(([id, v]) => [id, v.rate]));
+    if (soonest === null) return;
+    const timer = setTimeout(
+      () => {
+        const now = Date.now();
+        setEntries((prev) => {
+          let changed = false;
+          const next = new Map(prev);
+          for (const [id, e] of prev) {
+            if (!e.stalled && now - e.at >= RATE_WINDOW_MS) {
+              next.set(id, { ...e, stalled: true });
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      },
+      Math.max(0, soonest + RATE_WINDOW_MS - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [entries]);
+
+  return new Map(
+    [...entries].map(([id, e]) => [
+      id,
+      e.stalled ? { ...e.rate, speed: null, etaSeconds: null } : e.rate,
+    ]),
+  );
 }
 
 function ProgressBar({
