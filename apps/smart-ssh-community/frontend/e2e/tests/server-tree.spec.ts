@@ -2,7 +2,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 import { populated } from "../support/data";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 
 /** Drags with real pointer events, in steps, like a user's mouse. */
 async function dragOnto(page: Page, source: Locator, target: Locator) {
@@ -28,11 +28,24 @@ test.describe("server tree", () => {
 
   test("dragging a server onto a folder moves it there", async ({ app }) => {
     const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
     const serverRow = page.getByRole("treeitem", { name: "standalone", exact: true });
     const labRow = page.getByRole("treeitem", { name: "Lab", exact: true });
     await expect(folderBlock(page, labRow)).not.toContainText("standalone");
 
-    await dragOnto(page, serverRow, labRow);
+    // Hold the pointer over the folder: the ghost shows the mono name and the drop hint.
+    const from = await serverRow.boundingBox();
+    const to = await labRow.boundingBox();
+    expect(from && to, "drag source and target need a layout box").toBeTruthy();
+    await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 12 });
+    const ghost = page.locator("div[aria-hidden='true'].pointer-events-none").filter({ hasText: "→ move into this group" });
+    await expect(ghost).toBeVisible();
+    await expect(ghost.locator("span.font-mono")).toHaveText("standalone");
+    await expect(ghost.locator('svg[data-icon="move"]')).toBeVisible();
+    await captureCurrent(page, `manage-drag-${process.env.SCREENSHOT_SCHEME ?? "light"}`);
+    await page.mouse.up();
 
     await expect.poll(() => app.calls("move_server_to_group")).toEqual([
       { cmd: "move_server_to_group", args: { id: "s-loose", groupId: "g-lab" } },
