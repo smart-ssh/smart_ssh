@@ -1,8 +1,9 @@
 // Issue #1380: review screenshots of the server form's Connection tab
 // (SCREENSHOT_LABEL=before|after, SCREENSHOT_SCHEME=dark) at every screenshot size.
+import type { Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 import { failingStepLog, populated, server } from "../support/data";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 
 test("Connection tab screenshots", async ({ app }) => {
   await app.launch(populated());
@@ -25,6 +26,20 @@ test("Connection tab screenshots", async ({ app }) => {
 
 // Review: states with a key-file server (findings), a stored sudo password and a
 // successful test ("OK · n ms" badge), plus the two dialogs.
+// Review: the new states are captured at 1440 px and 390 px.
+async function captureAt1440And390(page: Page, name: string) {
+  const original = page.viewportSize();
+  try {
+    for (const [width, height] of [[1440, 900], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+      await captureCurrent(page, name);
+    }
+  } finally {
+    if (original) await page.setViewportSize(original);
+  }
+}
+
 test("Connection tab key-file states screenshots", async ({ app }) => {
   const base = populated();
   const steps = failingStepLog(1).map((r) => (r.status.state === "failed" ? { ...r, status: { state: "ok" as const } } : r));
@@ -48,7 +63,8 @@ test("Connection tab key-file states screenshots", async ({ app }) => {
   await page.getByRole("button", { name: "Test Connection", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByTestId("test-connection-result")).toContainText(/OK · \d+ ms/);
-  await captureScreen(page, "server-form-test-dialog");
+  await expect(dialog).toBeVisible();
+  await captureAt1440And390(page, "server-form-test-dialog");
   const close = dialog.getByRole("button", { name: "Close", exact: true });
   await expect(close).toBeVisible();
   await expect(close).toBeEnabled();
@@ -57,5 +73,5 @@ test("Connection tab key-file states screenshots", async ({ app }) => {
   const log = page.getByTestId("connect-step-log");
   await log.getByText("Details", { exact: true }).click();
   await expect(log).toHaveAttribute("open");
-  await captureScreen(page, "server-form-connection-keyfile");
+  await captureAt1440And390(page, "server-form-connection-keyfile");
 });
