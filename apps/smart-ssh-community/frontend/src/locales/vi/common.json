@@ -141,7 +141,10 @@
     "importSshConfig": "Nhập …",
     "importSshConfigHint": "Nhập máy chủ từ tệp ssh_config của OpenSSH",
     "exportSshConfig": "Xuất …",
-    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH"
+    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH",
+    "title": "Máy chủ",
+    "collapseGroup": "Thu gọn nhóm “{{name}}”",
+    "expandGroup": "Mở rộng nhóm “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
@@ -470,6 +473,7 @@
     "mismatchBodyAfterHost": " đang đưa ra một khóa khác với khóa đã lưu lần trước. Điều này có thể cho thấy một cuộc tấn công man-in-the-middle. Chỉ tiếp tục nếu bạn chắc chắn khóa máy chủ đã thay đổi một cách hợp lệ (ví dụ: cài đặt lại máy chủ).",
     "known": "Đã biết",
     "offeredNow": "Đang được đưa ra",
+    "offered": "Được đưa ra",
     "keyType": "Loại khóa",
     "cancelConnection": "Hủy kết nối",
     "trustAnyway": "Vẫn tin cậy",
@@ -576,6 +580,7 @@
     "ollamaProbeRetry": "Tìm lại",
     "ollamaProbeNotFoundHeading": "Không tìm thấy Ollama cục bộ (cổng mặc định 11434).",
     "ollamaProbeNotFoundInstructions": "Cài đặt Ollama từ ollama.com, khởi động và tải một mô hình (ví dụ `ollama pull llama3`), rồi tìm lại.",
+    "typeLabel": "Loại",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1599,6 +1604,10 @@
     "quitBody": "Các hoạt động này vẫn đang chạy và sẽ bị dừng:",
     "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
     "quitAnyway": "Vẫn thoát",
-    "keepRunning": "Tiếp tục chạy"
+    "keepRunning": "Tiếp tục chạy",
+    "summaryRunning_other": "{{count}} đang chạy",
+    "summaryInterrupted_other": "{{count}} bị gián đoạn",
+    "summaryFailed_other": "{{count}} thất bại",
+    "remaining": "còn {{time}}"
   }
 }

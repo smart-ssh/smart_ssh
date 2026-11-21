@@ -141,7 +141,10 @@
     "importSshConfig": "Importálás …",
     "importSshConfigHint": "Szerverek importálása OpenSSH ssh_config fájlból",
     "exportSshConfig": "Exportálás …",
-    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba"
+    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba",
+    "title": "Szerverek",
+    "collapseGroup": "„{{name}}” csoport összecsukása",
+    "expandGroup": "„{{name}}” csoport kibontása"
   },
   "treeDrag": {
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
@@ -471,6 +474,7 @@
     "mismatchBodyAfterHost": " szerver az utoljára tároltól eltérő kulcsot mutat. Ez közbeékelődéses (man-in-the-middle) támadásra utalhat. Csak akkor folytassa, ha biztos benne, hogy a szerverkulcs jogosan változott (pl. a szerver újratelepítése miatt).",
     "known": "Ismert",
     "offeredNow": "Most kínált",
+    "offered": "Kínált",
     "keyType": "Kulcstípus",
     "cancelConnection": "Kapcsolat megszakítása",
     "trustAnyway": "Mégis megbízom benne",
@@ -578,6 +582,7 @@
     "ollamaProbeRetry": "Keresés újra",
     "ollamaProbeNotFoundHeading": "Nem található helyi Ollama (alapértelmezett port: 11434).",
     "ollamaProbeNotFoundInstructions": "Telepítse az Ollamát az ollama.com oldalról, indítsa el, töltsön be egy modellt (pl. `ollama pull llama3`), majd keressen újra.",
+    "typeLabel": "Típus",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1609,6 +1614,13 @@
     "quitBody": "Ezek a tevékenységek még futnak, és le fognak állni:",
     "quitResumeHint": "A megszakadt letöltések az alkalmazás következő indításakor folytathatók.",
     "quitAnyway": "Kilépés mégis",
-    "keepRunning": "Futás folytatása"
+    "keepRunning": "Futás folytatása",
+    "summaryRunning_one": "{{count}} fut",
+    "summaryRunning_other": "{{count}} fut",
+    "summaryInterrupted_one": "{{count}} megszakadt",
+    "summaryInterrupted_other": "{{count}} megszakadt",
+    "summaryFailed_one": "{{count}} sikertelen",
+    "summaryFailed_other": "{{count}} sikertelen",
+    "remaining": "{{time}} van hátra"
   }
 }

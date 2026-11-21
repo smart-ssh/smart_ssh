@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
  * caps, mitred joins, `currentColor`. Paths are inlined (no fetch, no sprite).
  *
  * Icons drawn on the same grid because the design set lacks them:
- * `home`, `arrow-down`, `arrow-left`, `chev-u`, `globe`, `scissors`, `lock-open`, `square`, `square-check`.
+ * `home`, `arrow-down`, `arrow-left`, `chev-u`, `chev-l`, `globe`, `scissors`, `lock-open`, `square`, `square-check`.
  */
 export const ICON_PATHS = {
   "activity": "M2 12h5l3-8 4 16 3-8h5",
@@ -15,6 +15,7 @@ export const ICON_PATHS = {
   "chat": "M3 4h18v13H10l-5 4v-4H3z",
   "check": "M4 12l5 5L20 6",
   "chev-d": "M6 9l6 6 6-6",
+  "chev-l": "M15 6l-6 6 6 6",
   "chev-r": "M9 6l6 6-6 6",
   "chev-u": "M6 15l6-6 6 6",
   "clock": "M3 3h18v18H3z M12 7v5h4",

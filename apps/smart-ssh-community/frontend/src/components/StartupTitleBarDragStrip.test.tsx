@@ -146,7 +146,7 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     // Die Karte liegt nicht in der Leiste, hat keinen Stapelrang darüber,
     // und die Maske hält oben Titelleistenhöhe + Rand frei (`pt-15` =
     // `h-11` + `p-6`), sodass die zentrierte Karte nie darunter rückt.
-    const card = screen.getByRole("heading", { name: "Smart SSH" }).parentElement!;
+    const card = screen.getByTestId("startup-card");
     expect(layer!.contains(card)).toBe(false);
     expect(stackRankOf(card)).toBeLessThan(zIndexOf(layer!));
     const gateRoot = container.firstElementChild!;

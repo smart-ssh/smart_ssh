@@ -141,7 +141,10 @@
     "importSshConfig": "导入…",
     "importSshConfigHint": "从 OpenSSH ssh_config 文件导入服务器",
     "exportSshConfig": "导出…",
-    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config"
+    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config",
+    "title": "服务器",
+    "collapseGroup": "折叠分组“{{name}}”",
+    "expandGroup": "展开分组“{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
@@ -470,6 +473,7 @@
     "mismatchBodyAfterHost": " 出示的密钥与上次保存的不同。这可能意味着存在中间人攻击。仅当您确定服务器密钥是合理更改（例如服务器重装）时，才可继续。",
     "known": "已知",
     "offeredNow": "当前出示",
+    "offered": "出示",
     "keyType": "密钥类型",
     "cancelConnection": "取消连接",
     "trustAnyway": "仍然信任",
@@ -576,6 +580,7 @@
     "ollamaProbeRetry": "重新搜索",
     "ollamaProbeNotFoundHeading": "未找到本地 Ollama（默认端口 11434）。",
     "ollamaProbeNotFoundInstructions": "请从 ollama.com 安装 Ollama，启动并加载一个模型（例如 `ollama pull llama3`），然后重新搜索。",
+    "typeLabel": "类型",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1599,6 +1604,10 @@
     "quitBody": "以下活动仍在运行，退出后将被停止：",
     "quitResumeHint": "中断的下载可在下次启动应用时继续。",
     "quitAnyway": "仍然退出",
-    "keepRunning": "继续运行"
+    "keepRunning": "继续运行",
+    "summaryRunning_other": "{{count}} 个运行中",
+    "summaryInterrupted_other": "{{count}} 个已中断",
+    "summaryFailed_other": "{{count}} 个失败",
+    "remaining": "剩余 {{time}}"
   }
 }

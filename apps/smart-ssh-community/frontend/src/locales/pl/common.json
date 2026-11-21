@@ -141,7 +141,10 @@
     "importSshConfig": "Importuj …",
     "importSshConfigHint": "Importuj serwery z pliku ssh_config OpenSSH",
     "exportSshConfig": "Eksportuj …",
-    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Eksportuj serwery do ssh_config OpenSSH",
+    "title": "Serwery",
+    "collapseGroup": "Zwiń grupę „{{name}}”",
+    "expandGroup": "Rozwiń grupę „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
@@ -473,6 +476,7 @@
     "mismatchBodyAfterHost": " przedstawia inny klucz niż ten zapisany ostatnio. Może to oznaczać atak typu man-in-the-middle. Kontynuuj tylko wtedy, gdy masz pewność, że klucz serwera zmienił się zgodnie z prawem (np. po ponownej instalacji serwera).",
     "known": "Znany",
     "offeredNow": "Przedstawiony teraz",
+    "offered": "Przedstawiony",
     "keyType": "Typ klucza",
     "cancelConnection": "Anuluj połączenie",
     "trustAnyway": "Zaufaj mimo to",
@@ -582,6 +586,7 @@
     "ollamaProbeRetry": "Szukaj ponownie",
     "ollamaProbeNotFoundHeading": "Nie znaleziono lokalnej Ollamy (domyślny port 11434).",
     "ollamaProbeNotFoundInstructions": "Zainstaluj Ollamę z ollama.com, uruchom ją i pobierz model (np. `ollama pull llama3`), a potem wyszukaj ponownie.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1629,6 +1634,19 @@
     "quitBody": "Te aktywności nadal trwają i zostaną zatrzymane:",
     "quitResumeHint": "Przerwane pobierania można wznowić przy następnym uruchomieniu aplikacji.",
     "quitAnyway": "Zamknij mimo to",
-    "keepRunning": "Pozostaw uruchomione"
+    "keepRunning": "Pozostaw uruchomione",
+    "summaryRunning_one": "w toku: {{count}}",
+    "summaryRunning_few": "w toku: {{count}}",
+    "summaryRunning_many": "w toku: {{count}}",
+    "summaryRunning_other": "w toku: {{count}}",
+    "summaryInterrupted_one": "przerwane: {{count}}",
+    "summaryInterrupted_few": "przerwane: {{count}}",
+    "summaryInterrupted_many": "przerwane: {{count}}",
+    "summaryInterrupted_other": "przerwane: {{count}}",
+    "summaryFailed_one": "nieudane: {{count}}",
+    "summaryFailed_few": "nieudane: {{count}}",
+    "summaryFailed_many": "nieudane: {{count}}",
+    "summaryFailed_other": "nieudane: {{count}}",
+    "remaining": "pozostało {{time}}"
   }
 }

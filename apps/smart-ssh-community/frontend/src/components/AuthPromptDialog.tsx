@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { AuthPromptNeededEvent } from "../api/types";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface AuthPromptDialogProps {
   event: AuthPromptNeededEvent;
@@ -55,6 +55,7 @@ export function AuthPromptDialog({ event, onSubmit, onCancel }: AuthPromptDialog
     <DialogFrame
       layer="app"
       size="md"
+      icon={<Icon name="lock" />}
       title={t("authPrompt.title", { hop: event.hop })}
       onClose={cancel}
       initialFocusRef={firstRef}

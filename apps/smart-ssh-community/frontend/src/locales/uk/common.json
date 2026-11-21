@@ -141,7 +141,10 @@
     "importSshConfig": "Імпорт …",
     "importSshConfigHint": "Імпортувати сервери з файлу ssh_config OpenSSH",
     "exportSshConfig": "Експорт …",
-    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH"
+    "exportSshConfigHint": "Експортувати сервери в ssh_config OpenSSH",
+    "title": "Сервери",
+    "collapseGroup": "Згорнути групу «{{name}}»",
+    "expandGroup": "Розгорнути групу «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Скиньте сюди, щоб перемістити на верхній рівень (без групи)",
@@ -473,6 +476,7 @@
     "mismatchBodyAfterHost": " пред'являє інший ключ, ніж збережений востаннє. Це може вказувати на атаку «людина посередині». Продовжуйте, лише якщо ви впевнені, що ключ сервера змінився правомірно (наприклад, після перевстановлення сервера).",
     "known": "Відомий",
     "offeredNow": "Запропоновано зараз",
+    "offered": "Запропоновано",
     "keyType": "Тип ключа",
     "cancelConnection": "Скасувати підключення",
     "trustAnyway": "Все одно довіряти",
@@ -582,6 +586,7 @@
     "ollamaProbeRetry": "Шукати знову",
     "ollamaProbeNotFoundHeading": "Локальної Ollama не знайдено (типовий порт 11434).",
     "ollamaProbeNotFoundInstructions": "Встановіть Ollama з ollama.com, запустіть її та завантажте модель (напр. `ollama pull llama3`), потім шукайте знову.",
+    "typeLabel": "Тип",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1629,6 +1634,19 @@
     "quitBody": "Ці дії ще виконуються і будуть зупинені:",
     "quitResumeHint": "Перервані завантаження можна відновити під час наступного запуску застосунку.",
     "quitAnyway": "Усе одно вийти",
-    "keepRunning": "Залишити виконання"
+    "keepRunning": "Залишити виконання",
+    "summaryRunning_one": "виконується: {{count}}",
+    "summaryRunning_few": "виконується: {{count}}",
+    "summaryRunning_many": "виконується: {{count}}",
+    "summaryRunning_other": "виконується: {{count}}",
+    "summaryInterrupted_one": "перервано: {{count}}",
+    "summaryInterrupted_few": "перервано: {{count}}",
+    "summaryInterrupted_many": "перервано: {{count}}",
+    "summaryInterrupted_other": "перервано: {{count}}",
+    "summaryFailed_one": "з помилкою: {{count}}",
+    "summaryFailed_few": "з помилкою: {{count}}",
+    "summaryFailed_many": "з помилкою: {{count}}",
+    "summaryFailed_other": "з помилкою: {{count}}",
+    "remaining": "залишилось {{time}}"
   }
 }

@@ -23,7 +23,7 @@ test("unlock screen: Tab follows the visual order and every stop shows focus", a
   await password.fill("correct horse battery");
 
   const stops = await walkTabOrder(page, 3);
-  expect(stops.map((s) => s.name)).toEqual(["Unlock", "Quit", "Start over"]);
+  expect(stops.map((s) => s.name)).toEqual(["Unlock", "Start over", "Quit"]);
   expect(stops.filter((s) => !s.indicator).map((s) => s.name)).toEqual([]);
   await expectUsable(page.getByRole("button", { name: "Start over", exact: true }));
 });
@@ -150,9 +150,10 @@ test("host key dialog: long host name and both fingerprints stay fully visible, 
   await expectUsable(dialog.getByRole("button", { name: "Trust Anyway", exact: true }));
 });
 
-// Before/after images for the review PR: `SCREENSHOT_LABEL=before|after npm run test:e2e -- startup-dialogs`.
+// Before/after images for the review PR: `SCREENSHOT_LABEL=before|after [SCREENSHOT_SCHEME=dark] npm run test:e2e -- startup-dialogs`.
 test("screenshots of the scoped screens", async ({ app }) => {
   test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   await app.launch({ commands: { get_startup_state: { result: UNLOCK_STATE } } });
   await captureScreen(app.page, "startup-unlock");
   await app.emit("startup:prompt", {
@@ -166,6 +167,7 @@ test("screenshots of the scoped screens", async ({ app }) => {
 
 test("screenshots of the startup question", async ({ app }) => {
   test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   await app.launch({ commands: { get_startup_state: { result: UNLOCK_STATE } } });
   await app.emit("startup:prompt", { kind: "confirmStartOver", title: "Start over?", message: "This deletes the data file." });
   await expect(app.page.getByRole("dialog")).toBeVisible();
@@ -174,6 +176,7 @@ test("screenshots of the startup question", async ({ app }) => {
 
 test("screenshots of the first-run notice", async ({ app }) => {
   test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   await app.launch({ servers: [server({ id: "s-1", name: "alpha" })] });
   await app.page.getByRole("button", { name: /^alpha\b/ }).click();
   await expect(app.page.getByRole("dialog")).toBeVisible();
@@ -182,6 +185,7 @@ test("screenshots of the first-run notice", async ({ app }) => {
 
 test("screenshots of the host key dialog", async ({ app }) => {
   test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   await app.launch({
     settings: { ...ACKNOWLEDGED },
     servers: [server({ id: "s-new", name: "fresh-host", host: "fresh.example.test" })],

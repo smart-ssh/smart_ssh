@@ -141,7 +141,10 @@
     "importSshConfig": "Importera …",
     "importSshConfigHint": "Importera servrar från en OpenSSH-ssh_config-fil",
     "exportSshConfig": "Exportera …",
-    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config"
+    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config",
+    "title": "Servrar",
+    "collapseGroup": "Fäll ihop gruppen ”{{name}}”",
+    "expandGroup": "Expandera gruppen ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
@@ -471,6 +474,7 @@
     "mismatchBodyAfterHost": " presenterar en annan nyckel än den som sparades senast. Det kan tyda på en man-in-the-middle-attack. Fortsätt bara om du är säker på att servernyckeln ändrats på legitimt sätt (t.ex. ominstallation av servern).",
     "known": "Känd",
     "offeredNow": "Erbjuds nu",
+    "offered": "Erbjuds",
     "keyType": "Nyckeltyp",
     "cancelConnection": "Avbryt anslutning",
     "trustAnyway": "Lita på ändå",
@@ -578,6 +582,7 @@
     "ollamaProbeRetry": "Sök igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama hittades (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installera Ollama från ollama.com, starta den och läs in en modell (t.ex. `ollama pull llama3`), sök sedan igen.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1609,6 +1614,13 @@
     "quitBody": "Dessa aktiviteter pågår fortfarande och stoppas:",
     "quitResumeHint": "Avbrutna nedladdningar kan återupptas nästa gång du startar appen.",
     "quitAnyway": "Avsluta ändå",
-    "keepRunning": "Låt dem fortsätta"
+    "keepRunning": "Låt dem fortsätta",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbruten",
+    "summaryInterrupted_other": "{{count}} avbrutna",
+    "summaryFailed_one": "{{count}} misslyckad",
+    "summaryFailed_other": "{{count}} misslyckade",
+    "remaining": "{{time}} kvar"
   }
 }

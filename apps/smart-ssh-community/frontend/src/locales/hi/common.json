@@ -141,7 +141,10 @@
     "importSshConfig": "आयात करें …",
     "importSshConfigHint": "OpenSSH ssh_config फ़ाइल से सर्वर आयात करें",
     "exportSshConfig": "निर्यात करें …",
-    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें"
+    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें",
+    "title": "सर्वर",
+    "collapseGroup": "समूह “{{name}}” समेटें",
+    "expandGroup": "समूह “{{name}}” फैलाएँ"
   },
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
@@ -471,6 +474,7 @@
     "mismatchBodyAfterHost": " पिछली बार संग्रहीत कुंजी से अलग कुंजी प्रस्तुत कर रहा है। यह मैन-इन-द-मिडल हमले का संकेत हो सकता है। केवल तभी आगे बढ़ें जब आपको भरोसा हो कि सर्वर की कुंजी वैध कारण से बदली है (जैसे सर्वर का पुनः इंस्टॉलेशन)।",
     "known": "ज्ञात",
     "offeredNow": "अभी प्रस्तुत",
+    "offered": "प्रस्तुत",
     "keyType": "कुंजी प्रकार",
     "cancelConnection": "कनेक्शन रद्द करें",
     "trustAnyway": "फिर भी भरोसा करें",
@@ -578,6 +582,7 @@
     "ollamaProbeRetry": "फिर खोजें",
     "ollamaProbeNotFoundHeading": "कोई स्थानीय Ollama नहीं मिला (डिफ़ॉल्ट पोर्ट 11434)।",
     "ollamaProbeNotFoundInstructions": "ollama.com से Ollama इंस्टॉल करें, उसे शुरू करें और एक मॉडल लोड करें (जैसे `ollama pull llama3`), फिर दोबारा खोजें।",
+    "typeLabel": "प्रकार",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1609,6 +1614,13 @@
     "quitBody": "ये गतिविधियाँ अभी चल रही हैं और रोक दी जाएँगी:",
     "quitResumeHint": "बाधित डाउनलोड अगली बार ऐप शुरू करने पर फिर शुरू किए जा सकते हैं।",
     "quitAnyway": "फिर भी बंद करें",
-    "keepRunning": "चलने दें"
+    "keepRunning": "चलने दें",
+    "summaryRunning_one": "{{count}} चल रही",
+    "summaryRunning_other": "{{count}} चल रही",
+    "summaryInterrupted_one": "{{count}} बाधित",
+    "summaryInterrupted_other": "{{count}} बाधित",
+    "summaryFailed_one": "{{count}} विफल",
+    "summaryFailed_other": "{{count}} विफल",
+    "remaining": "{{time}} शेष"
   }
 }

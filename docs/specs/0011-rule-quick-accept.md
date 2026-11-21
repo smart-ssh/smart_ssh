@@ -103,7 +103,7 @@ erlaubt sind, kompakt zusammen: eine kurze Zeile je Teilkommando mit grünem
 Haken, die abdeckende Regel als sichtbarer Text in der Zeile (zusätzlich als Tooltip). Darunter steht jedes Teilkommando, das
 noch entschieden werden muss, als eigene Zeile.
 
-- Eine Zeile „braucht eine Regel" hat einen Umschalter ▸/▾ (`aria-expanded`,
+- Eine Zeile „braucht eine Regel" hat einen Umschalter mit Chevron-Symbol (nach rechts = zugeklappt, nach unten = aufgeklappt; `aria-expanded`,
   per Tastatur bedienbar). Aufgeklappt (direkt in der Zeile, kein Popup, auch
   auf schmalen Bildschirmen) zeigt sie den Geltungsbereich und die Vorschläge
   für dieses Teilkommando mit ihren Urteilen (Abschnitt 8). Der Geltungsbereich

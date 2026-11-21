@@ -141,7 +141,10 @@
     "importSshConfig": "Impor …",
     "importSshConfigHint": "Impor server dari berkas ssh_config OpenSSH",
     "exportSshConfig": "Ekspor …",
-    "exportSshConfigHint": "Ekspor server ke ssh_config OpenSSH"
+    "exportSshConfigHint": "Ekspor server ke ssh_config OpenSSH",
+    "title": "Server",
+    "collapseGroup": "Ciutkan grup “{{name}}”",
+    "expandGroup": "Bentangkan grup “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Lepas di sini untuk memindahkan ke tingkat teratas (tanpa grup)",
@@ -470,6 +473,7 @@
     "mismatchBodyAfterHost": "  menyajikan kunci yang berbeda dari yang tersimpan sebelumnya. Ini dapat menandakan serangan man-in-the-middle. Lanjutkan hanya jika Anda yakin kunci server berubah secara sah (mis. instalasi ulang server).",
     "known": "Dikenal",
     "offeredNow": "Ditawarkan Sekarang",
+    "offered": "Ditawarkan",
     "keyType": "Jenis kunci",
     "cancelConnection": "Batalkan Koneksi",
     "trustAnyway": "Tetap Percayai",
@@ -576,6 +580,7 @@
     "ollamaProbeRetry": "Cari lagi",
     "ollamaProbeNotFoundHeading": "Ollama lokal tidak ditemukan (port default 11434).",
     "ollamaProbeNotFoundInstructions": "Instal Ollama dari ollama.com, jalankan, dan muat model (mis. `ollama pull llama3`), lalu cari lagi.",
+    "typeLabel": "Jenis",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1599,6 +1604,10 @@
     "quitBody": "Aktivitas ini masih berjalan dan akan dihentikan:",
     "quitResumeHint": "Unduhan yang terhenti dapat dilanjutkan saat Anda memulai aplikasi lagi.",
     "quitAnyway": "Tetap keluar",
-    "keepRunning": "Biarkan berjalan"
+    "keepRunning": "Biarkan berjalan",
+    "summaryRunning_other": "{{count}} berjalan",
+    "summaryInterrupted_other": "{{count}} terhenti",
+    "summaryFailed_other": "{{count}} gagal",
+    "remaining": "sisa {{time}}"
   }
 }

@@ -141,7 +141,10 @@
     "importSshConfig": "Tuo …",
     "importSshConfigHint": "Tuo palvelimia OpenSSH:n ssh_config-tiedostosta",
     "exportSshConfig": "Vie …",
-    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon"
+    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon",
+    "title": "Palvelimet",
+    "collapseGroup": "Kutista ryhmä ”{{name}}”",
+    "expandGroup": "Laajenna ryhmä ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
@@ -471,6 +474,7 @@
     "mismatchBodyAfterHost": " esittää eri avaimen kuin viimeksi tallennettu. Tämä voi viitata väliinhyökkäykseen (man-in-the-middle). Jatka vain, jos olet varma, että palvelimen avain on muuttunut oikeutetusti (esim. palvelimen uudelleenasennus).",
     "known": "Tunnettu",
     "offeredNow": "Nyt tarjottu",
+    "offered": "Tarjottu",
     "keyType": "Avaintyyppi",
     "cancelConnection": "Peruuta yhteys",
     "trustAnyway": "Luota silti",
@@ -578,6 +582,7 @@
     "ollamaProbeRetry": "Etsi uudelleen",
     "ollamaProbeNotFoundHeading": "Paikallista Ollamaa ei löytynyt (oletusportti 11434).",
     "ollamaProbeNotFoundInstructions": "Asenna Ollama osoitteesta ollama.com, käynnistä se ja lataa malli (esim. `ollama pull llama3`), ja etsi sitten uudelleen.",
+    "typeLabel": "Tyyppi",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1609,6 +1614,13 @@
     "quitBody": "Nämä toiminnot ovat vielä käynnissä ja pysäytetään:",
     "quitResumeHint": "Keskeytyneet lataukset voi jatkaa, kun käynnistät sovelluksen seuraavan kerran.",
     "quitAnyway": "Sulje silti",
-    "keepRunning": "Jatka suoritusta"
+    "keepRunning": "Jatka suoritusta",
+    "summaryRunning_one": "{{count}} käynnissä",
+    "summaryRunning_other": "{{count}} käynnissä",
+    "summaryInterrupted_one": "{{count}} keskeytetty",
+    "summaryInterrupted_other": "{{count}} keskeytetty",
+    "summaryFailed_one": "{{count}} epäonnistui",
+    "summaryFailed_other": "{{count}} epäonnistui",
+    "remaining": "{{time}} jäljellä"
   }
 }

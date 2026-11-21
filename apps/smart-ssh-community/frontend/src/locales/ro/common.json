@@ -141,7 +141,10 @@
     "importSshConfig": "Importă …",
     "importSshConfigHint": "Importă servere dintr-un fișier OpenSSH ssh_config",
     "exportSshConfig": "Exportă …",
-    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config"
+    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Restrânge grupul „{{name}}”",
+    "expandGroup": "Extinde grupul „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
@@ -472,6 +475,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",
@@ -580,6 +584,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1619,6 +1624,16 @@
     "quitBody": "Aceste activități încă rulează și vor fi oprite:",
     "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
     "quitAnyway": "Ieși oricum",
-    "keepRunning": "Lasă să ruleze"
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning_one": "{{count}} în curs",
+    "summaryRunning_few": "{{count}} în curs",
+    "summaryRunning_other": "{{count}} în curs",
+    "summaryInterrupted_one": "{{count}} întreruptă",
+    "summaryInterrupted_few": "{{count}} întrerupte",
+    "summaryInterrupted_other": "{{count}} întrerupte",
+    "summaryFailed_one": "{{count}} eșuată",
+    "summaryFailed_few": "{{count}} eșuate",
+    "summaryFailed_other": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

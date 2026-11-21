@@ -141,7 +141,10 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer des serveurs depuis un fichier ssh_config OpenSSH",
     "exportSshConfig": "Exporter …",
-    "exportSshConfigHint": "Exporter les serveurs vers ssh_config OpenSSH"
+    "exportSshConfigHint": "Exporter les serveurs vers ssh_config OpenSSH",
+    "title": "Serveurs",
+    "collapseGroup": "Replier le groupe « {{name}} »",
+    "expandGroup": "Déplier le groupe « {{name}} »"
   },
   "treeDrag": {
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
@@ -472,6 +475,7 @@
     "mismatchBodyAfterHost": " présente une clé différente de celle enregistrée la dernière fois. Cela peut indiquer une attaque de l’homme du milieu. Ne continuez que si vous êtes certain que la clé du serveur a changé légitimement (p. ex. réinstallation du serveur).",
     "known": "Connue",
     "offeredNow": "Présentée maintenant",
+    "offered": "Présentée",
     "keyType": "Type de clé",
     "cancelConnection": "Annuler la connexion",
     "trustAnyway": "Faire confiance malgré tout",
@@ -580,6 +584,7 @@
     "ollamaProbeRetry": "Rechercher à nouveau",
     "ollamaProbeNotFoundHeading": "Aucun Ollama local trouvé (port par défaut 11434).",
     "ollamaProbeNotFoundInstructions": "Installez Ollama depuis ollama.com, démarrez-le et chargez un modèle (p. ex. `ollama pull llama3`), puis relancez la recherche.",
+    "typeLabel": "Genre",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1619,6 +1624,16 @@
     "quitBody": "Ces activités sont encore en cours et seront arrêtées :",
     "quitResumeHint": "Les téléchargements interrompus peuvent être repris au prochain démarrage.",
     "quitAnyway": "Quitter quand même",
-    "keepRunning": "Laisser continuer"
+    "keepRunning": "Laisser continuer",
+    "summaryRunning_one": "{{count}} en cours",
+    "summaryRunning_many": "{{count}} en cours",
+    "summaryRunning_other": "{{count}} en cours",
+    "summaryInterrupted_one": "{{count}} interrompue",
+    "summaryInterrupted_many": "{{count}} interrompues",
+    "summaryInterrupted_other": "{{count}} interrompues",
+    "summaryFailed_one": "{{count}} en échec",
+    "summaryFailed_many": "{{count}} en échec",
+    "summaryFailed_other": "{{count}} en échec",
+    "remaining": "{{time}} restantes"
   }
 }

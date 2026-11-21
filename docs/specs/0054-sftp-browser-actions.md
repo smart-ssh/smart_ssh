@@ -67,7 +67,7 @@ Einfügen bzw. Kopieren der Auswahl erhalten bleiben. Entwicklungs-Builds
 behalten das Webview-Menü.
 
 Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
-Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular
+Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung (Knopf mit Chevron-nach-unten-Symbol) mit dem Formular
 „Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
 rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
 und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
@@ -80,7 +80,7 @@ unten angedockt.
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
-- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt unter dem
   Fortschrittsbalken die übertragenen und die gesamten Bytes, die
   Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
   oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die

@@ -25,8 +25,9 @@ export interface DialogFrameProps {
    * where a drag strip lies over the backdrop (start-up dialogs, Spec 0014 §5). */
   reserveTitlebar?: boolean;
   /** `"centered"` (default): framed dialog in the middle (full window when narrow).
-   * `"sheet"`: panel positioned by `panelClassName` over a dimmed backdrop (navigation drawer). */
-  layout?: "centered" | "sheet";
+   * `"sheet"`: panel positioned by `panelClassName` over a dimmed backdrop (navigation drawer).
+   * `"page"`: a full window below the title bar, no frame and no dimmed backdrop (settings). */
+  layout?: "centered" | "sheet" | "page";
   /** The caller renders the whole panel content (own heading, own padding,
    * no action row) and styles the panel with `panelClassName`. Needs `labelledBy` or `ariaLabel`. */
   bare?: boolean;
@@ -104,11 +105,13 @@ export function DialogFrame({
   const backdropClass =
     layout === "sheet"
       ? `fixed inset-0 z-50 bg-overlay/60`
+      : layout === "page"
+      ? `fixed inset-x-0 bottom-0 top-13 z-50 flex bg-surface narrow:top-9`
       : `fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 narrow:items-stretch ${
           reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0 narrow:pt-9"
         }`;
   const panelClass = bare
-    ? `${panelClassName ?? ""} focus:outline-none`
+    ? `${panelClassName ?? ""} ${tone === "danger" ? "border-danger-border" : ""} focus:outline-none`
     : `relative flex max-h-[85vh] w-full ${SIZES[size]} flex-col border ${
         tone === "danger" ? "border-danger-border" : "border-border-strong"
       } bg-surface-raised shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none focus:outline-none`;
@@ -147,7 +150,14 @@ export function DialogFrame({
         className={panelClass}
       >
         {bare ? (
-          children
+          <>
+            {ticks ? (
+              <div className="narrow:hidden" data-testid="dialog-ticks">
+                <CornerTicks tone={ticks} corners="top" />
+              </div>
+            ) : null}
+            {children}
+          </>
         ) : (
           <>
         {ticks ? (

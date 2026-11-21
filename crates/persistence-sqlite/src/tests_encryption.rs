@@ -543,6 +543,36 @@ async fn test_a8_cipher_log_level_is_none() {
     store.pool.close().await;
 }
 
+/// Issue #1243 / RUSTSEC-2026-0459: the bundled SQLCipher must be built on
+/// SQLite >= 3.54 (the fix) and really be SQLCipher.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_bundled_sqlcipher_is_based_on_sqlite_3_54_or_newer() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let db_path = dir.path().join("smart-ssh.db");
+    let store = SqliteProfileStore::connect_encrypted(&db_path, &test_key())
+        .await
+        .expect("creatable");
+
+    let cipher: String = sqlx::query_scalar("PRAGMA cipher_version")
+        .fetch_one(&store.pool)
+        .await
+        .expect("cipher_version queryable");
+    assert!(!cipher.is_empty(), "not a SQLCipher build");
+    let sqlite: String = sqlx::query_scalar("SELECT sqlite_version()")
+        .fetch_one(&store.pool)
+        .await
+        .expect("sqlite_version queryable");
+    let mut parts = sqlite
+        .split('.')
+        .map(|p| p.parse::<u32>().expect("numeric"));
+    let (major, minor) = (parts.next().unwrap(), parts.next().unwrap());
+    assert!(
+        (major, minor) >= (3, 54),
+        "SQLite {sqlite} (SQLCipher {cipher}) predates the RUSTSEC-2026-0459 fix"
+    );
+    store.pool.close().await;
+}
+
 // --- A3-Dateizustand (die Erkennung; die Tabelle selbst in Commit 5) -----
 
 #[test]

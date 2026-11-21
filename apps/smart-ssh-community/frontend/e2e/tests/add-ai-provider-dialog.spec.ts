@@ -34,3 +34,25 @@ test("add provider dialog: title and actions usable, body scrolls, focus returns
   await expect(page.getByRole("button", { name: "AI Provider", exact: true })).toBeVisible();
   await expect(addButton).toBeFocused();
 });
+
+// Issue #1377: the add action sits in the section header and the dialog fields use `Field`.
+test("add provider: header button is reachable, dialog fields have accessible names", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "AI Provider", exact: true }).click();
+  const addButton = page.getByRole("button", { name: "Add Provider", exact: true });
+  await expect(addButton).toHaveCount(1);
+  await addButton.focus();
+  await expect(addButton).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  const dialog = page.getByRole("dialog", { name: "Add Provider" });
+  await expect(dialog).toBeVisible();
+  for (const name of ["Name", "API Key"]) {
+    await expect(dialog.getByLabel(name, { exact: false }).first()).toBeVisible();
+  }
+  await expect(dialog.getByRole("combobox").first()).toBeVisible();
+  await dialog.getByRole("button", { name: /Advanced/ }).click();
+  await expect(dialog.getByLabel(/Max. response length/).first()).toBeVisible();
+});

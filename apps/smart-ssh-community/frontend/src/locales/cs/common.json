@@ -141,7 +141,10 @@
     "importSshConfig": "Importovat …",
     "importSshConfigHint": "Importovat servery ze souboru ssh_config OpenSSH",
     "exportSshConfig": "Exportovat …",
-    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH",
+    "title": "Servery",
+    "collapseGroup": "Sbalit skupinu „{{name}}“",
+    "expandGroup": "Rozbalit skupinu „{{name}}“"
   },
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
@@ -473,6 +476,7 @@
     "mismatchBodyAfterHost": " předkládá jiný klíč, než který byl uložen naposledy. To může naznačovat útok typu man-in-the-middle. Pokračujte, pouze pokud jste si jisti, že se klíč serveru změnil oprávněně (např. přeinstalací serveru).",
     "known": "Známý",
     "offeredNow": "Nyní nabídnutý",
+    "offered": "Nabídnutý",
     "keyType": "Typ klíče",
     "cancelConnection": "Zrušit připojení",
     "trustAnyway": "Přesto důvěřovat",
@@ -582,6 +586,7 @@
     "ollamaProbeRetry": "Hledat znovu",
     "ollamaProbeNotFoundHeading": "Lokální Ollama nenalezena (výchozí port 11434).",
     "ollamaProbeNotFoundInstructions": "Nainstalujte Ollamu z ollama.com, spusťte ji a načtěte model (např. `ollama pull llama3`), poté hledejte znovu.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1629,6 +1634,19 @@
     "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
     "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
     "quitAnyway": "Přesto ukončit",
-    "keepRunning": "Nechat běžet"
+    "keepRunning": "Nechat běžet",
+    "summaryRunning_one": "běží: {{count}}",
+    "summaryRunning_few": "běží: {{count}}",
+    "summaryRunning_many": "běží: {{count}}",
+    "summaryRunning_other": "běží: {{count}}",
+    "summaryInterrupted_one": "přerušeno: {{count}}",
+    "summaryInterrupted_few": "přerušeno: {{count}}",
+    "summaryInterrupted_many": "přerušeno: {{count}}",
+    "summaryInterrupted_other": "přerušeno: {{count}}",
+    "summaryFailed_one": "selhalo: {{count}}",
+    "summaryFailed_few": "selhalo: {{count}}",
+    "summaryFailed_many": "selhalo: {{count}}",
+    "summaryFailed_other": "selhalo: {{count}}",
+    "remaining": "zbývá {{time}}"
   }
 }

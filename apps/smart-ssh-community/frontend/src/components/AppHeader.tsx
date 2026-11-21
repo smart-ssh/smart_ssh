@@ -101,7 +101,7 @@ export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps)
       <header
         data-tauri-drag-region
         style={paddingStyle}
-        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
+        className={`relative z-30 flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
       >
         {/* Left: Trace logo lockup, then version / edition / early-access / data-dir / dev
             markers in small mono style (spec 0052). */}

@@ -87,12 +87,12 @@ export function DiagnosticsSettings() {
 
   return (
     <div className="space-y-4">
-      {error && <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
+      {error && <p role="alert" className="border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
       <div
-        className="rounded border border-border px-3 py-2 text-sm text-fg-muted"
+        className="border border-border px-3 py-2 text-sm text-fg-muted"
         data-testid="keychain-status"
       >
-        <span className="text-fg-subtle">{t("diagnostics.keychainLabel")}:</span>{" "}
+        <span className="label-condensed text-fg-subtle">{t("diagnostics.keychainLabel")}:</span>{" "}
         <span>{keychainStateText()}</span>
         {keychain && !keychain.available && (
           <p className="mt-1 text-xs text-fg-subtle">{t("diagnostics.keychainBlocked")}</p>
@@ -113,7 +113,7 @@ export function DiagnosticsSettings() {
             aria-label={t("diagnostics.generateBundle")}
             readOnly
             value={bundle}
-            className="h-64 w-full select-text rounded border border-border-strong bg-surface p-2 font-mono text-xs text-fg"
+            className="h-64 w-full select-text border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg"
           />
           <Button className="w-full" onClick={handleSaveBundle}>
             {t("diagnostics.save")}
