@@ -200,7 +200,7 @@ export function RemoteServerForm({
   ) : null;
 
   return (
-    <div className="max-w-5xl space-y-6 p-4">
+    <div data-testid="server-form" className="max-w-5xl space-y-6 p-4">
       <div className="flex items-center gap-3">
         <Icon name="server" size={24} className="shrink-0 text-fg-muted" />
         <h2 className="min-w-0 flex-1 break-words font-heading text-2xl font-semibold uppercase tracking-wide text-fg-strong">

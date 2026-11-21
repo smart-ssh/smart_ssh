@@ -22,7 +22,7 @@ test("Connect is disabled with unsaved changes and starts the server list's flow
   });
   const page = app.page;
   await openForm(page);
-  const connect = page.locator("form").getByRole("button", { name: "Connect", exact: true });
+  const connect = page.getByTestId("server-form").getByRole("button", { name: "Connect", exact: true });
   await expect(connect).toBeEnabled();
 
   await page.getByLabel("Name", { exact: true }).first().fill("alpha2");
@@ -41,7 +41,7 @@ test("Connect shows the first-run notice before the first connection", async ({ 
   await app.launch({ servers: [server({ id: "s-1", name: "alpha" })] });
   const page = app.page;
   await openForm(page);
-  await page.locator("form").getByRole("button", { name: "Connect", exact: true }).click();
+  await page.getByTestId("server-form").getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Before you start" })).toBeVisible();
   expect(await app.calls("connect")).toEqual([]);
 });
@@ -53,7 +53,7 @@ test("Connect switches to the open tab of the server", async ({ app }) => {
   await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await openForm(page);
-  await page.locator("form").getByRole("button", { name: "Connect", exact: true }).click();
+  await page.getByTestId("server-form").getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   expect(await app.calls("connect")).toHaveLength(1);
 });
