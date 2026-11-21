@@ -38,7 +38,13 @@ vi.stubGlobal(
 
 const t = (key: TranslationKey) => testI18n.t(key);
 
-function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void } = {}) {
+function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void; slot?: boolean } = {}) {
+  // Issue #1387: the title bar of `NarrowHeaderNav` provides the slot.
+  if (props.slot !== false) {
+    const slot = document.createElement("div");
+    slot.dataset.testid = "narrow-session-actions";
+    document.body.appendChild(slot);
+  }
   return render(
     <I18nextProvider i18n={testI18n}>
       <SessionView
@@ -59,7 +65,10 @@ describe("SessionView narrow layout (#580)", () => {
     setNarrow();
     fileBrowserVisible.mockClear();
   });
-  afterEach(() => setWide());
+  afterEach(() => {
+    setWide();
+    document.querySelectorAll('[data-testid="narrow-session-actions"]').forEach((n) => n.remove());
+  });
 
   it("shows the tab strip with AI active and no separator", () => {
     renderView();
@@ -102,6 +111,13 @@ describe("SessionView narrow layout (#580)", () => {
     fireEvent.click(screen.getByRole("button", { name: t("session.moreActions") }));
     fireEvent.click(screen.getByText(t("session.disconnect")));
     expect(close).toHaveBeenCalled();
+  });
+
+  it("renders the ⋯ button in the title bar slot and no second header row (#1387)", () => {
+    renderView();
+    const slot = document.querySelector('[data-testid="narrow-session-actions"]') as HTMLElement;
+    expect(slot).toContainElement(screen.getByRole("button", { name: t("session.moreActions") }));
+    expect(document.querySelector("header")).toBeNull();
   });
 
   it("shows no tab strip for an MCP session", () => {

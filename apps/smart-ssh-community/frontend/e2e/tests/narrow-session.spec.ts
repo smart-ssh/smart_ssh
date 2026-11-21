@@ -17,10 +17,10 @@ test.describe("narrow session view @phone", () => {
       // Issue #1366: every pane tab carries an icon.
       await expect(tab(name).locator("[data-icon]")).toHaveCount(1);
     }
-    // Spec 0113 §4: name and status stay visible in the header.
-    await expect(
-      page.locator("header").filter({ has: page.getByRole("button", { name: "More actions" }) }).locator("[data-status-square]"),
-    ).toBeVisible();
+    // Issue #1387, Spec 0113 §4: one header row; name, status and ⋯ live in the title bar.
+    await expect(page.locator("header")).toHaveCount(1);
+    await expect(page.getByTestId("narrow-title")).toContainText("web-1");
+    await expect(page.locator("header").getByRole("button", { name: "More actions" })).toBeVisible();
     await expect(tab("AI")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("separator")).toHaveCount(0);
     await captureScreen(page, "session-narrow-ai");
