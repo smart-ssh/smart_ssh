@@ -1622,7 +1622,7 @@
     "summaryRunning_one": "{{count}} en cours",
     "summaryRunning_many": "{{count}} en cours",
     "summaryRunning_other": "{{count}} en cours",
-    "summaryInterrupted_one": "{{count}} interrompues",
+    "summaryInterrupted_one": "{{count}} interrompue",
     "summaryInterrupted_many": "{{count}} interrompues",
     "summaryInterrupted_other": "{{count}} interrompues",
     "summaryFailed_one": "{{count}} en échec",

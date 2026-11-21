@@ -1611,9 +1611,9 @@
     "keepRunning": "Να συνεχιστεί η εκτέλεση",
     "summaryRunning_one": "{{count}} σε εξέλιξη",
     "summaryRunning_other": "{{count}} σε εξέλιξη",
-    "summaryInterrupted_one": "{{count}} διακόπηκαν",
+    "summaryInterrupted_one": "{{count}} διακόπηκε",
     "summaryInterrupted_other": "{{count}} διακόπηκαν",
-    "summaryFailed_one": "{{count}} απέτυχαν",
+    "summaryFailed_one": "{{count}} απέτυχε",
     "summaryFailed_other": "{{count}} απέτυχαν",
     "remaining": "απομένουν {{time}}"
   }

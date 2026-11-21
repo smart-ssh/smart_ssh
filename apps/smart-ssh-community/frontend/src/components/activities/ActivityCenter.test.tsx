@@ -98,11 +98,11 @@ describe("ActivityCenter", () => {
     const dialog = await screen.findByRole("dialog");
     const bars = within(dialog).getAllByRole("progressbar");
     expect(bars).toHaveLength(2);
-    expect(bars[0]).toHaveAttribute("value", "512");
-    expect(bars[0]).toHaveAttribute("max", "1024");
+    expect(bars[0]).toHaveAttribute("aria-valuenow", "512");
+    expect(bars[0]).toHaveAttribute("aria-valuemax", "1024");
     expect(bars[0]).toHaveAttribute("aria-valuetext", "512 B / 1.0 KB");
     // total unknown: indeterminate, no value
-    expect(bars[1]).not.toHaveAttribute("value");
+    expect(bars[1]).not.toHaveAttribute("aria-valuenow");
     expect(bars[1]).toHaveAttribute("data-indeterminate", "true");
     // header summary
     expect(within(dialog).getByText("2 laufend")).toBeInTheDocument();

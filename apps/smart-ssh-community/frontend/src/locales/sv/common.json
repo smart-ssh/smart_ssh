@@ -1611,9 +1611,9 @@
     "keepRunning": "Låt dem fortsätta",
     "summaryRunning_one": "{{count}} pågår",
     "summaryRunning_other": "{{count}} pågår",
-    "summaryInterrupted_one": "{{count}} avbrutna",
+    "summaryInterrupted_one": "{{count}} avbruten",
     "summaryInterrupted_other": "{{count}} avbrutna",
-    "summaryFailed_one": "{{count}} misslyckade",
+    "summaryFailed_one": "{{count}} misslyckad",
     "summaryFailed_other": "{{count}} misslyckade",
     "remaining": "{{time}} kvar"
   }

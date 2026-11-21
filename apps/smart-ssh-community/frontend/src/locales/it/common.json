@@ -1622,10 +1622,10 @@
     "summaryRunning_one": "{{count}} in corso",
     "summaryRunning_many": "{{count}} in corso",
     "summaryRunning_other": "{{count}} in corso",
-    "summaryInterrupted_one": "{{count}} interrotte",
+    "summaryInterrupted_one": "{{count}} interrotta",
     "summaryInterrupted_many": "{{count}} interrotte",
     "summaryInterrupted_other": "{{count}} interrotte",
-    "summaryFailed_one": "{{count}} non riuscite",
+    "summaryFailed_one": "{{count}} non riuscita",
     "summaryFailed_many": "{{count}} non riuscite",
     "summaryFailed_other": "{{count}} non riuscite",
     "remaining": "{{time}} rimanenti"

@@ -1622,10 +1622,10 @@
     "summaryRunning_one": "{{count}} en curso",
     "summaryRunning_many": "{{count}} en curso",
     "summaryRunning_other": "{{count}} en curso",
-    "summaryInterrupted_one": "{{count}} interrumpidas",
+    "summaryInterrupted_one": "{{count}} interrumpida",
     "summaryInterrupted_many": "{{count}} interrumpidas",
     "summaryInterrupted_other": "{{count}} interrumpidas",
-    "summaryFailed_one": "{{count}} fallidas",
+    "summaryFailed_one": "{{count}} fallida",
     "summaryFailed_many": "{{count}} fallidas",
     "summaryFailed_other": "{{count}} fallidas",
     "remaining": "quedan {{time}}"

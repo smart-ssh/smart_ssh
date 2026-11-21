@@ -41,7 +41,7 @@ test.describe("activity center", () => {
     const popover = page.getByRole("dialog", { name: "Activities" });
     await expect(popover).toBeVisible();
     await expectFullyInViewport(popover);
-    await expect(popover.getByRole("progressbar")).toHaveAttribute("value", "524288");
+    await expect(popover.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "524288");
 
     await popover.getByRole("button", { name: "Cancel Activities" }).click();
     await expect.poll(async () => (await app.calls("activity_cancel")).length).toBe(1);
@@ -88,15 +88,15 @@ test.describe("activity center redesign", () => {
 test.describe("activity center redesign, full fixture", () => {
   test("every row kind is shown, screenshot", async ({ app }) => {
     const interrupted = {
-      id: "int-1", kind: "speech-model", key: "small", titleKey: "activities.title",
-      titleParams: {}, done: 262144, total: 1048576, native: true,
+      id: "int-1", kind: "speech-model", key: "small", titleKey: "activities.speechModelTitle",
+      titleParams: { name: "small" }, done: 262144, total: 1048576, native: true,
     };
     await app.launch({ ...populated(), commands: { activities_interrupted: { result: [interrupted] } } });
     const page = app.page;
     if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
-    const speech = { ...base, kind: "speech-model", id: "sp" };
+    const speech = { ...base, kind: "speech-model", id: "sp", titleKey: "activities.speechModelTitle", titleParams: { name: "base" } };
     await app.emit("activity-changed", speech);
-    await app.emit("activity-changed", { ...base, id: "verify", total: null, done: 0, startedAt: 2 });
+    await app.emit("activity-changed", { ...base, id: "verify", total: null, done: 0, statusKey: "activities.verifying", startedAt: 2 });
     await app.emit("activity-changed", { ...base, id: "ok", state: "succeeded", done: 1048576, cancellable: false, startedAt: 3 });
     await app.emit("activity-changed", { ...base, id: "bad", state: "failed", errorMessage: "Disk full", cancellable: false, startedAt: 4 });
     await page.getByTestId("activity-center-button").click();
@@ -105,6 +105,11 @@ test.describe("activity center redesign, full fixture", () => {
     await expect(popover.locator('[data-icon="mic"]')).toHaveCount(2);
     await expect(popover.locator('[data-icon="check"]')).toHaveCount(1);
     await expect(popover.locator('[data-icon="warn"]')).toHaveCount(1);
+    // Unknown total: the bar renders visible stripes (background-image gradient on a sized box).
+    const stripes = popover.locator('[data-indeterminate="true"]');
+    await expect(stripes).toHaveCount(1);
+    await expect(stripes).toHaveCSS("background-image", /repeating-linear-gradient/);
+    expect((await stripes.boundingBox())?.height).toBeGreaterThan(4);
     await captureCurrent(page, "activity-center-full");
   });
 });

@@ -18,7 +18,7 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 - Ein Klick (oder Enter/Leertaste) auf das Symbol öffnet es, ein weiterer Klick, ein Klick außerhalb oder Escape schließt es; Escape gibt den Fokus an das Symbol zurück.
 - Das Popover ist 440 px breit (auf schmalen Fenstern so breit wie das Fenster abzüglich Rand) und hat eine Kopfzeile mit dem Titel und einer Zusammenfassung („2 running · 1 interrupted“; nur die vorhandenen Teile).
 - Eine Zeile je Aktivität, nach Startzeit geordnet; mehrere Aktivitäten laufen parallel.
-- Jede Zeile zeigt ein Symbol der Aktivitätsart, den Titel fett und eine Statusbezeichnung in Großbuchstaben in der Statusfarbe.
+- Jede Zeile einer laufenden oder unterbrochenen Aktivität zeigt ein Symbol der Aktivitätsart; erfolgreich beendete Zeilen zeigen stattdessen ein Häkchen, fehlgeschlagene ein Warnsymbol. Dazu den Titel fett und eine Statusbezeichnung in Großbuchstaben in der Statusfarbe.
 - Zeile einer laufenden Aktivität: zusätzlich ein flacher, 6 px hoher Fortschrittsbalken (gestreift, wenn die Gesamtgröße unbekannt ist), darunter eine Monospace-Zeile mit „erledigt / gesamt“ in lesbarer Größe, Geschwindigkeit und Restzeit (Geschwindigkeit und Restzeit nur bei bekannter Gesamtgröße und sobald genug Fortschrittsmeldungen vorliegen), optional ein Statustext (z. B. „Verifying“) anstelle von „In progress“, und darunter eine Symbol-Schaltfläche „Cancel“ (X, mit zugänglichem Namen), wenn die Aktivität abbrechbar ist. Nicht abbrechbare Aktivitäten haben keine.
 - „Cancel“ ruft den Abbruch der Aktivität auf; die Zeile endet als „Cancelled“.
 - Erfolgreich beendet: die Zeile bleibt mit Häkchen, bis sie verworfen wird („Dismiss“) oder das Popover geschlossen wird, nachdem sie gesehen wurde.
