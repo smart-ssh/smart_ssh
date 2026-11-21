@@ -35,7 +35,8 @@
     "thisDevice": "to urządzenie",
     "sessionOpen": "Sesja otwarta",
     "sessionPending": "Czeka na potwierdzenie",
-    "sessionDisconnected": "Sesja rozłączona"
+    "sessionDisconnected": "Sesja rozłączona",
+    "sessionReconnecting": "Łączenie ponownie"
   },
   "settings": {
     "title": "Ustawienia",

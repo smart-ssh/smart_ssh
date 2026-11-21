@@ -35,7 +35,8 @@
     "thisDevice": "acest dispozitiv",
     "sessionOpen": "Sesiune deschisă",
     "sessionPending": "Așteaptă confirmarea",
-    "sessionDisconnected": "Sesiune deconectată"
+    "sessionDisconnected": "Sesiune deconectată",
+    "sessionReconnecting": "Se reconectează"
   },
   "settings": {
     "title": "Setări",

@@ -35,7 +35,8 @@
     "thisDevice": "tämä laite",
     "sessionOpen": "Istunto auki",
     "sessionPending": "Odottaa vahvistusta",
-    "sessionDisconnected": "Istunto katkaistu"
+    "sessionDisconnected": "Istunto katkaistu",
+    "sessionReconnecting": "Yhdistetään uudelleen"
   },
   "settings": {
     "title": "Asetukset",

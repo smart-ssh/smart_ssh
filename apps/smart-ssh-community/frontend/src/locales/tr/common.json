@@ -35,7 +35,8 @@
     "thisDevice": "bu cihaz",
     "sessionOpen": "Oturum açık",
     "sessionPending": "Onay bekliyor",
-    "sessionDisconnected": "Oturum kesildi"
+    "sessionDisconnected": "Oturum kesildi",
+    "sessionReconnecting": "Yeniden bağlanılıyor"
   },
   "settings": {
     "title": "Ayarlar",

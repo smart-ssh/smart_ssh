@@ -35,7 +35,8 @@
     "thisDevice": "このデバイス",
     "sessionOpen": "セッション接続中",
     "sessionPending": "確認待ち",
-    "sessionDisconnected": "セッション切断"
+    "sessionDisconnected": "セッション切断",
+    "sessionReconnecting": "再接続中"
   },
   "settings": {
     "title": "設定",

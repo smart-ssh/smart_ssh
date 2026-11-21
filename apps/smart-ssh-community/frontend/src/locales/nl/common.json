@@ -35,7 +35,8 @@
     "thisDevice": "dit apparaat",
     "sessionOpen": "Sessie open",
     "sessionPending": "Wacht op bevestiging",
-    "sessionDisconnected": "Sessie verbroken"
+    "sessionDisconnected": "Sessie verbroken",
+    "sessionReconnecting": "Opnieuw verbinden"
   },
   "settings": {
     "title": "Instellingen",

@@ -35,7 +35,8 @@
     "thisDevice": "αυτή η συσκευή",
     "sessionOpen": "Συνεδρία ανοιχτή",
     "sessionPending": "Αναμονή επιβεβαίωσης",
-    "sessionDisconnected": "Συνεδρία αποσυνδέθηκε"
+    "sessionDisconnected": "Συνεδρία αποσυνδέθηκε",
+    "sessionReconnecting": "Επανασύνδεση"
   },
   "settings": {
     "title": "Ρυθμίσεις",

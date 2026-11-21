@@ -35,7 +35,8 @@
     "thisDevice": "este dispositivo",
     "sessionOpen": "Sesión abierta",
     "sessionPending": "Esperando confirmación",
-    "sessionDisconnected": "Sesión desconectada"
+    "sessionDisconnected": "Sesión desconectada",
+    "sessionReconnecting": "Reconectando"
   },
   "settings": {
     "title": "Ajustes",

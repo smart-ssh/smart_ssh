@@ -35,7 +35,8 @@
     "thisDevice": "यह डिवाइस",
     "sessionOpen": "सत्र खुला है",
     "sessionPending": "पुष्टि की प्रतीक्षा",
-    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ"
+    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ",
+    "sessionReconnecting": "फिर से कनेक्ट हो रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",

@@ -35,7 +35,8 @@
     "thisDevice": "denne enheten",
     "sessionOpen": "Økt åpen",
     "sessionPending": "Venter på bekreftelse",
-    "sessionDisconnected": "Økt frakoblet"
+    "sessionDisconnected": "Økt frakoblet",
+    "sessionReconnecting": "Kobler til på nytt"
   },
   "settings": {
     "title": "Innstillinger",

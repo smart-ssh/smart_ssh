@@ -35,7 +35,8 @@
     "thisDevice": "dieses Gerät",
     "sessionOpen": "Sitzung offen",
     "sessionPending": "Wartet auf Bestätigung",
-    "sessionDisconnected": "Sitzung getrennt"
+    "sessionDisconnected": "Sitzung getrennt",
+    "sessionReconnecting": "Sitzung verbindet neu"
   },
   "settings": {
     "title": "Einstellungen",

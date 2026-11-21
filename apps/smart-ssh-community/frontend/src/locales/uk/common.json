@@ -35,7 +35,8 @@
     "thisDevice": "цей пристрій",
     "sessionOpen": "Сеанс відкрито",
     "sessionPending": "Очікує підтвердження",
-    "sessionDisconnected": "Сеанс від’єднано"
+    "sessionDisconnected": "Сеанс від’єднано",
+    "sessionReconnecting": "Перепідключення"
   },
   "settings": {
     "title": "Параметри",

@@ -35,7 +35,8 @@
     "thisDevice": "perangkat ini",
     "sessionOpen": "Sesi terbuka",
     "sessionPending": "Menunggu konfirmasi",
-    "sessionDisconnected": "Sesi terputus"
+    "sessionDisconnected": "Sesi terputus",
+    "sessionReconnecting": "Menghubungkan ulang"
   },
   "settings": {
     "title": "Pengaturan",
