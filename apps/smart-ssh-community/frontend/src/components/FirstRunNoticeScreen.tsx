@@ -99,6 +99,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   return (
     <DialogFrame
       layer="app"
+      ticks="accent"
       title={t("firstRunNotice.title")}
       onClose={() => {}}
       initialFocusRef={checkboxRef}
