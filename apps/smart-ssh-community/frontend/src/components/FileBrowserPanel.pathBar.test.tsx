@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sftpList, sftpStartDirectory } from "../api/api";
-import { saveHiddenFileColumns } from "../settings/layoutSettings";
+import { loadHiddenFileColumns, saveHiddenFileColumns } from "../settings/layoutSettings";
 import { testI18n } from "../testI18n";
 import type { RemoteEntryDto } from "../api/types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
@@ -196,6 +196,56 @@ describe("FileBrowserPanel path bar (issue #1373)", () => {
     await waitFor(() => expect(input).toHaveValue("/var/www/shop"));
   });
 
+  it("Cmd+L (metaKey) inside the file browser switches to the input", async () => {
+    renderPanel();
+    await waitFor(() => expect(bar()).toHaveAttribute("title", "/var/www/shop"));
+    fireEvent.keyDown(within(bar()).getByText("shop"), { key: "l", metaKey: true });
+    const input = await screen.findByRole("textbox", { name: "Pfad" });
+    await waitFor(() => expect(input).toHaveValue("/var/www/shop"));
+  });
+
+  it("clicking the last breadcrumb segment enters edit mode without loading", async () => {
+    renderPanel();
+    await waitFor(() => expect(bar()).toHaveAttribute("title", "/var/www/shop"));
+    const listCalls = vi.mocked(sftpList).mock.calls.length;
+    fireEvent.click(within(bar()).getByText("shop"));
+    const input = await screen.findByRole("textbox", { name: "Pfad" });
+    await waitFor(() => expect(input).toHaveValue("/var/www/shop"));
+    expect(vi.mocked(sftpList).mock.calls.length).toBe(listCalls);
+  });
+
+  it("clicking a middle breadcrumb segment loads that path and stays in breadcrumb mode", async () => {
+    renderPanel();
+    await waitFor(() => expect(bar()).toHaveAttribute("title", "/var/www/shop"));
+    fireEvent.click(within(bar()).getByText("var"));
+    await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "/var", null));
+    await waitFor(() => expect(bar()).toHaveAttribute("title", "/var"));
+    expect(screen.queryByRole("textbox", { name: "Pfad" })).toBeNull();
+  });
+
+  it("sortable headers: inactive ones show the faint chev-r marker, the active one a chevron", async () => {
+    renderPanel();
+    await screen.findByText(/current/);
+    const icon = (column: string) =>
+      screen.getByTestId(`column-sort-${column}`).querySelector("[data-icon]");
+    const active = await waitFor(() => {
+      const th = document.querySelector('thead th[aria-sort="ascending"], thead th[aria-sort="descending"]');
+      expect(th).not.toBeNull();
+      return th as Element;
+    });
+    const activeButton = active.querySelector('[data-testid^="column-sort-"]') as HTMLElement;
+    const activeColumn = activeButton.getAttribute("data-testid")!.replace("column-sort-", "");
+    expect(["chev-u", "chev-d"]).toContain(icon(activeColumn)?.getAttribute("data-icon"));
+    const inactive = Array.from(document.querySelectorAll('[data-testid^="column-sort-"]'))
+      .map((b) => b.getAttribute("data-testid")!.replace("column-sort-", ""))
+      .filter((c) => c !== activeColumn);
+    expect(inactive.length).toBeGreaterThan(0);
+    for (const column of inactive) {
+      expect(icon(column)).toHaveAttribute("data-icon", "chev-r");
+      expect(icon(column)).toHaveClass("text-fg-faint");
+    }
+  });
+
   it("a symlink row shows the target inline, with the target in the title", async () => {
     renderPanel();
     const marker = await screen.findByText("→ /var/www/shop/releases/42");
@@ -206,6 +256,9 @@ describe("FileBrowserPanel path bar (issue #1373)", () => {
     vi.mocked(sftpList).mockResolvedValue([link]);
     const { container } = renderPanel();
     await screen.findByText(/current/);
+    // Wait for the persisted hidden columns to be loaded and applied before opening the menu.
+    await waitFor(() => expect(loadHiddenFileColumns).toHaveBeenCalled());
+    await act(async () => {});
 
     fireEvent.click(screen.getByRole("button", { name: "Spalten ein- oder ausblenden" }));
     const menu = await screen.findByRole("menu", { name: "Spalten ein- oder ausblenden" });
