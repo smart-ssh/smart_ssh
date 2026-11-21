@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": "이(가) 마지막으로 저장된 키와 다른 키를 제시하고 있습니다. 중간자 공격일 수 있습니다. 서버 키가 정당한 사유(예: 서버 재설치)로 변경되었다고 확신하는 경우에만 계속하십시오.",
     "known": "알려진 키",
     "offeredNow": "현재 제시된 키",
+    "offered": "제시된 키",
     "keyType": "키 유형",
     "cancelConnection": "연결 취소",
     "trustAnyway": "그래도 신뢰",

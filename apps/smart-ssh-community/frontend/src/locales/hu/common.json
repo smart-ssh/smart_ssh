@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " szerver az utoljára tároltól eltérő kulcsot mutat. Ez közbeékelődéses (man-in-the-middle) támadásra utalhat. Csak akkor folytassa, ha biztos benne, hogy a szerverkulcs jogosan változott (pl. a szerver újratelepítése miatt).",
     "known": "Ismert",
     "offeredNow": "Most kínált",
+    "offered": "Kínált",
     "keyType": "Kulcstípus",
     "cancelConnection": "Kapcsolat megszakítása",
     "trustAnyway": "Mégis megbízom benne",

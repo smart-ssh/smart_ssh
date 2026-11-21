@@ -72,7 +72,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                       </span>
                       <span className="min-w-0 font-medium">{stepLabel(t, record.step, record.status.state)}</span>
                       <span>{stepStatusText(t, record)}</span>
-                      <span className="text-fg-subtle">{formatDuration(record.durationMs)}</span>
+                      <span className="font-mono text-fg-subtle">{formatDuration(record.durationMs)}</span>
                     </div>
                     {details && <div className="ml-5 break-all text-fg-subtle">{details}</div>}
                   </li>

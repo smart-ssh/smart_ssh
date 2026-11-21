@@ -473,6 +473,7 @@
     "mismatchBodyAfterHost": " en son kaydedilenden farklı bir anahtar sunuyor. Bu, ortadaki adam saldırısına işaret edebilir. Yalnızca sunucu anahtarının meşru biçimde değiştiğinden eminseniz (örn. sunucunun yeniden kurulumu) devam edin.",
     "known": "Bilinen",
     "offeredNow": "Şimdi sunulan",
+    "offered": "Sunulan",
     "keyType": "Anahtar türü",
     "cancelConnection": "Bağlantıyı iptal et",
     "trustAnyway": "Yine de güven",

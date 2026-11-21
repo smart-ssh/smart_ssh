@@ -474,6 +474,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",

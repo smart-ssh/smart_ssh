@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": "  menyajikan kunci yang berbeda dari yang tersimpan sebelumnya. Ini dapat menandakan serangan man-in-the-middle. Lanjutkan hanya jika Anda yakin kunci server berubah secara sah (mis. instalasi ulang server).",
     "known": "Dikenal",
     "offeredNow": "Ditawarkan Sekarang",
+    "offered": "Ditawarkan",
     "keyType": "Jenis kunci",
     "cancelConnection": "Batalkan Koneksi",
     "trustAnyway": "Tetap Percayai",

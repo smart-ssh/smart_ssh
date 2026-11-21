@@ -23,7 +23,7 @@ test("opens a focused connecting tab before connect resolves and lists the steps
 
   await emitProgress(app, [
     snapshotStep("dnsResolution", "ok", { code: "contacting", target: "h.example.test:22" }),
-    snapshotStep("tcpConnect", "ok", { code: "contacting", target: "10.0.0.1:22" }),
+    snapshotStep("tcpConnect", "ok", { code: "contacting", target: "10.0.0.1:22" }, null, 1530),
     snapshotStep("hostKeyCheck", "running", { code: "waitingForDecision" }),
   ]);
   const rows = page.getByTestId("connect-progress-list").getByRole("listitem");
@@ -31,6 +31,11 @@ test("opens a focused connecting tab before connect resolves and lists the steps
   await expect(rows.nth(0)).toContainText("DNS resolution");
   await expect(rows.nth(0)).toContainText("h.example.test:22");
   await expect(rows.nth(2)).toContainText("waiting for your decision");
+  // Finished steps show a mono duration, a running step none.
+  await expect(rows.nth(1).getByTestId("step-duration")).toHaveText("1.5 s");
+  await expect(rows.nth(1).getByTestId("step-duration")).toHaveClass(/font-mono/);
+  await expect(rows.nth(2).getByTestId("step-duration")).toHaveCount(0);
+  await expect(rows.nth(1).locator('[data-icon="check"]')).toHaveCount(1);
   await expectNoSeriousA11yViolations(page, "connecting tab");
 });
 

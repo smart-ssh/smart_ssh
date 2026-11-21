@@ -472,6 +472,7 @@
     "mismatchBodyAfterHost": " đang đưa ra một khóa khác với khóa đã lưu lần trước. Điều này có thể cho thấy một cuộc tấn công man-in-the-middle. Chỉ tiếp tục nếu bạn chắc chắn khóa máy chủ đã thay đổi một cách hợp lệ (ví dụ: cài đặt lại máy chủ).",
     "known": "Đã biết",
     "offeredNow": "Đang được đưa ra",
+    "offered": "Được đưa ra",
     "keyType": "Loại khóa",
     "cancelConnection": "Hủy kết nối",
     "trustAnyway": "Vẫn tin cậy",
