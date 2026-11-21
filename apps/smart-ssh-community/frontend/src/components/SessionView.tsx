@@ -542,6 +542,16 @@ export function SessionView({
               {t("session.reconnectGaveUp")}
             </output>
           )}
+          {narrow && showReconnect && (
+            <Button variant="bare"
+              type="button"
+              onClick={handleReconnect}
+              disabled={link === "reconnecting"}
+              className="min-h-11 min-w-11 shrink-0 px-2 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush"
+            >
+              {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+            </Button>
+          )}
         </div>
       )}
       {reconnectError && (

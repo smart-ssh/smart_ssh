@@ -33,7 +33,7 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Beim Wechsel zum breiten Layout gilt wieder die Aufteilung mit der zuletzt gewählten Ansicht des rechten Bereichs; beim Zurückwechseln der zuletzt gewählte Reiter. Die gespeicherte Breite der Aufteilung wird im schmalen Layout weder benutzt noch verändert.
 - Eine MCP-Sitzung zeigt nur den Chat, ohne Reiter.
 - Eine Sitzung hat im schmalen Layout keine eigene Kopfzeile: Servername und Verbindungszustand stehen in der Titelleiste, und rechts darin liegt die Schaltfläche mit den Sitzungsaktionen („Neu verbinden“, „Trennen“ und die Aktionen von Erweiterungen), mindestens 44 px groß und per Tastatur bedienbar. Das Terminal, der Chat und die Dateien gewinnen so die Höhe der früheren Kopfzeile.
-- Statushinweise der Sitzung (Verbindung verloren, Neuverbindung läuft, Fehler) erscheinen als schmaler Streifen unter der Titelleiste, nur solange sie zutreffen; die Aktion „Neu verbinden“ bleibt im Menü der Titelleiste.
+- Statushinweise der Sitzung (Verbindung verloren, Neuverbindung läuft, Fehler) erscheinen als schmaler Streifen unter der Titelleiste, nur solange sie zutreffen; bei verlorener Verbindung enthält der Streifen eine Schaltfläche „Neu verbinden“ (mindestens 44 px, gesperrt während der Neuverbindung); die Aktion bleibt zusätzlich im Menü der Titelleiste.
 
 ## 4a. Chat
 
