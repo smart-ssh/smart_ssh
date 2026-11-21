@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
+    "current": "当前",
     "hintGroup": "→ 移入此分组",
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
@@ -872,6 +873,8 @@
     "groupsHeading": "生成的文件夹结构",
     "entriesHeading": "{{count}} 台服务器",
     "field": {
+      "name": "名称",
+      "include": "包含",
       "host": "地址",
       "port": "端口",
       "username": "用户",
@@ -947,6 +950,7 @@
       "proxyJumpLocalPseudoServer": "指向本地伪服务器"
     },
     "confirm": "导入",
+    "confirmCount_other": "导入 {{count}} 台服务器",
     "applying": "正在导入…",
     "result": {
       "success": "已创建 {{created}} 台服务器、{{groups}} 个文件夹，跳过 {{skipped}} 个冲突。",

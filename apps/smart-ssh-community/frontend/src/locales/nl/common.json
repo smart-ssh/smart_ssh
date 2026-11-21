@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
+    "current": "huidig",
     "hintGroup": "→ naar deze groep verplaatsen",
     "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
     "moveTo": "“{{name}}” verplaatsen naar…"
@@ -879,6 +880,8 @@
     "groupsHeading": "Resulterende mapstructuur",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Naam",
+      "include": "Opnemen",
       "host": "Adres",
       "port": "Poort",
       "username": "Gebruiker",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "wijst naar de lokale pseudo-server"
     },
     "confirm": "Importeren",
+    "confirmCount_one": "{{count}} server importeren",
+    "confirmCount_other": "{{count}} servers importeren",
     "applying": "Importeren …",
     "result": {
       "success": "{{created}} servers aangemaakt, {{groups}} mappen, {{skipped}} conflict(en) overgeslagen.",

@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
     "hintRoot": "→ शीर्ष स्तर (बिना समूह)",
+    "current": "वर्तमान",
     "hintGroup": "→ इस समूह में ले जाएँ",
     "hintCycle": "किसी समूह को उसके ही उप-समूह में नहीं ले जाया जा सकता",
     "moveTo": "“{{name}}” को यहाँ ले जाएँ…"
@@ -879,6 +880,8 @@
     "groupsHeading": "परिणामी फ़ोल्डर संरचना",
     "entriesHeading": "{{count}} सर्वर",
     "field": {
+      "name": "नाम",
+      "include": "शामिल करें",
       "host": "पता",
       "port": "पोर्ट",
       "username": "उपयोगकर्ता",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "स्थानीय छद्म-सर्वर की ओर इशारा करता है"
     },
     "confirm": "आयात करें",
+    "confirmCount_one": "{{count}} सर्वर आयात करें",
+    "confirmCount_other": "{{count}} सर्वर आयात करें",
     "applying": "आयात हो रहा है …",
     "result": {
       "success": "{{created}} सर्वर बनाए गए, {{groups}} फ़ोल्डर, {{skipped}} टकराव छोड़े गए।",

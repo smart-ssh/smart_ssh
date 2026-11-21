@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
+    "current": "nuvarande",
     "hintGroup": "→ flytta in i den här gruppen",
     "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
     "moveTo": "Flytta ”{{name}}” till…"
@@ -879,6 +880,8 @@
     "groupsHeading": "Resulterande mappstruktur",
     "entriesHeading": "{{count}} servrar",
     "field": {
+      "name": "Namn",
+      "include": "Inkludera",
       "host": "Adress",
       "port": "Port",
       "username": "Användare",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "pekar på den lokala pseudoservern"
     },
     "confirm": "Importera",
+    "confirmCount_one": "Importera {{count}} server",
+    "confirmCount_other": "Importera {{count}} servrar",
     "applying": "Importerar …",
     "result": {
       "success": "{{created}} servrar skapade, {{groups}} mappar, {{skipped}} konflikt(er) överhoppade.",

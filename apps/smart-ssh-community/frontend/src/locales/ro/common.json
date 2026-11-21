@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
+    "current": "curent",
     "hintGroup": "→ mută în acest grup",
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
@@ -886,6 +887,8 @@
     "groupsHeading": "Structura de foldere rezultată",
     "entriesHeading": "Servere: {{count}}",
     "field": {
+      "name": "Nume",
+      "include": "Include",
       "host": "Adresă",
       "port": "Port",
       "username": "Utilizator",
@@ -961,6 +964,9 @@
       "proxyJumpLocalPseudoServer": "indică spre pseudo-serverul local"
     },
     "confirm": "Importă",
+    "confirmCount_one": "Importă {{count}} server",
+    "confirmCount_few": "Importă {{count}} servere",
+    "confirmCount_other": "Importă {{count}} de servere",
     "applying": "Se importă …",
     "result": {
       "success": "Servere create: {{created}}, foldere: {{groups}}, conflicte omise: {{skipped}}.",

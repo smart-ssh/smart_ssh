@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
+    "current": "hiện tại",
     "hintGroup": "→ chuyển vào nhóm này",
     "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
     "moveTo": "Di chuyển “{{name}}” tới…"
@@ -872,6 +873,8 @@
     "groupsHeading": "Cấu trúc thư mục kết quả",
     "entriesHeading": "{{count}} máy chủ",
     "field": {
+      "name": "Tên",
+      "include": "Bao gồm",
       "host": "Địa chỉ",
       "port": "Cổng",
       "username": "Người dùng",
@@ -947,6 +950,7 @@
       "proxyJumpLocalPseudoServer": "trỏ đến máy chủ giả lập cục bộ"
     },
     "confirm": "Nhập",
+    "confirmCount_other": "Nhập {{count}} máy chủ",
     "applying": "Đang nhập …",
     "result": {
       "success": "Đã tạo {{created}} máy chủ, {{groups}} thư mục, bỏ qua {{skipped}} xung đột.",

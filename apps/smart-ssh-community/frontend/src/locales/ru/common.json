@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Отпустите здесь, чтобы переместить на верхний уровень (без группы)",
     "hintRoot": "→ верхний уровень (без группы)",
+    "current": "текущая",
     "hintGroup": "→ переместить в эту группу",
     "hintCycle": "Группу нельзя переместить в её собственную подгруппу",
     "moveTo": "Переместить «{{name}}» в…"
@@ -893,6 +894,8 @@
     "groupsHeading": "Итоговая структура папок",
     "entriesHeading": "Серверов: {{count}}",
     "field": {
+      "name": "Имя",
+      "include": "Включить",
       "host": "Адрес",
       "port": "Порт",
       "username": "Пользователь",
@@ -968,6 +971,10 @@
       "proxyJumpLocalPseudoServer": "указывает на локальный псевдосервер"
     },
     "confirm": "Импортировать",
+    "confirmCount_one": "Импортировать {{count}} сервер",
+    "confirmCount_few": "Импортировать {{count}} сервера",
+    "confirmCount_many": "Импортировать {{count}} серверов",
+    "confirmCount_other": "Импортировать {{count}} сервера",
     "applying": "Импорт …",
     "result": {
       "success": "Создано серверов: {{created}}, папок: {{groups}}, пропущено конфликтов: {{skipped}}.",

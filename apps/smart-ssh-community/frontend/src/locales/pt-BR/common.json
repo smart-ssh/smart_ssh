@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Solte aqui para mover ao nível superior (sem grupo)",
     "hintRoot": "→ nível superior (sem grupo)",
+    "current": "atual",
     "hintGroup": "→ mover para este grupo",
     "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo",
     "moveTo": "Mover “{{name}}” para…"
@@ -886,6 +887,8 @@
     "groupsHeading": "Estrutura de pastas resultante",
     "entriesHeading": "{{count}} servidores",
     "field": {
+      "name": "Nome",
+      "include": "Incluir",
       "host": "Endereço",
       "port": "Porta",
       "username": "Usuário",
@@ -961,6 +964,9 @@
       "proxyJumpLocalPseudoServer": "aponta para o pseudoservidor local"
     },
     "confirm": "Importar",
+    "confirmCount_one": "Importar {{count}} servidor",
+    "confirmCount_many": "Importar {{count}} de servidores",
+    "confirmCount_other": "Importar {{count}} servidores",
     "applying": "Importando …",
     "result": {
       "success": "{{created}} servidores criados, {{groups}} pastas, {{skipped}} conflito(s) ignorado(s).",

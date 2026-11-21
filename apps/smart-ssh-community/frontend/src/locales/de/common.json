@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
     "hintRoot": "→ oberste Ebene (ohne Gruppe)",
+    "current": "aktuell",
     "hintGroup": "→ in diese Gruppe verschieben",
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
@@ -879,6 +880,8 @@
     "groupsHeading": "Entstehende Ordnerstruktur",
     "entriesHeading": "{{count}} Server",
     "field": {
+      "name": "Name",
+      "include": "Übernehmen",
       "host": "Adresse",
       "port": "Port",
       "username": "Benutzer",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "zeigt auf den lokalen Pseudo-Server"
     },
     "confirm": "Importieren",
+    "confirmCount_one": "{{count}} Server importieren",
+    "confirmCount_other": "{{count}} Server importieren",
     "applying": "Importiert …",
     "result": {
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",

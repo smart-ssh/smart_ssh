@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "여기에 놓으면 최상위(그룹 없음)로 이동합니다",
     "hintRoot": "→ 최상위(그룹 없음)",
+    "current": "현재",
     "hintGroup": "→ 이 그룹으로 이동",
     "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
     "moveTo": "“{{name}}” 이동 위치…"
@@ -872,6 +873,8 @@
     "groupsHeading": "생성될 폴더 구조",
     "entriesHeading": "서버 {{count}}개",
     "field": {
+      "name": "이름",
+      "include": "포함",
       "host": "주소",
       "port": "포트",
       "username": "사용자",
@@ -947,6 +950,7 @@
       "proxyJumpLocalPseudoServer": "로컬 의사 서버를 가리킴"
     },
     "confirm": "가져오기",
+    "confirmCount_other": "서버 {{count}}개 가져오기",
     "applying": "가져오는 중 …",
     "result": {
       "success": "서버 {{created}}개, 폴더 {{groups}}개를 만들었고, 충돌 {{skipped}}개를 건너뛰었습니다.",

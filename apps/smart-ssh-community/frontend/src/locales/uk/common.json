@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Скиньте сюди, щоб перемістити на верхній рівень (без групи)",
     "hintRoot": "→ верхній рівень (без групи)",
+    "current": "поточна",
     "hintGroup": "→ перемістити в цю групу",
     "hintCycle": "Групу не можна перемістити у власну підгрупу",
     "moveTo": "Перемістити «{{name}}» до…"
@@ -893,6 +894,8 @@
     "groupsHeading": "Підсумкова структура тек",
     "entriesHeading": "Серверів: {{count}}",
     "field": {
+      "name": "Назва",
+      "include": "Включити",
       "host": "Адреса",
       "port": "Порт",
       "username": "Користувач",
@@ -968,6 +971,10 @@
       "proxyJumpLocalPseudoServer": "вказує на локальний псевдосервер"
     },
     "confirm": "Імпортувати",
+    "confirmCount_one": "Імпортувати {{count}} сервер",
+    "confirmCount_few": "Імпортувати {{count}} сервери",
+    "confirmCount_many": "Імпортувати {{count}} серверів",
+    "confirmCount_other": "Імпортувати {{count}} сервера",
     "applying": "Імпорт …",
     "result": {
       "success": "Створено серверів: {{created}}, тек: {{groups}}, пропущено конфліктів: {{skipped}}.",

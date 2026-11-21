@@ -48,14 +48,33 @@ function initialEntryState(entry: SshConfigPreviewEntryDto): EntryUiState {
   };
 }
 
-function groupDepth(groups: SshConfigImportPreviewDto["groups"], index: number): number {
-  let depth = 0;
-  let cur = groups[index]?.parent ?? null;
-  while (cur !== null) {
-    depth += 1;
-    cur = groups[cur]?.parent ?? null;
-  }
-  return depth;
+const FILE_STATUS_ICON = {
+  read: "file-check",
+  alreadyRead: "file-check",
+  notSshConfig: "file-x",
+  unreadable: "file-x",
+} as const;
+
+/** Resulting folder tree as a flat, depth-ordered list: each group followed
+ * by its servers and then its subgroups. */
+type TreeRow =
+  | { kind: "group"; key: string; depth: number; name: string }
+  | { kind: "server"; key: string; depth: number; entry: SshConfigPreviewEntryDto };
+
+function buildTreeRows(preview: SshConfigImportPreviewDto): TreeRow[] {
+  const rows: TreeRow[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    preview.groups.forEach((g, i) => {
+      if (g.parent !== parent) return;
+      rows.push({ kind: "group", key: `g${i}`, depth, name: g.name });
+      for (const e of preview.entries) {
+        if (e.group === i) rows.push({ kind: "server", key: `e${e.index}`, depth: depth + 1, entry: e });
+      }
+      walk(i, depth + 1);
+    });
+  };
+  walk(null, 0);
+  return rows;
 }
 
 function originLabel(
@@ -137,6 +156,8 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
       return { ...prev, [index]: { ...cur, droppedTags: dropped } };
     });
 
+  const selectedCount = preview ? preview.entries.filter((e) => entryState[e.index]?.selected).length : 0;
+
   const handleConfirm = async () => {
     if (!preview) return;
     setApplying(true);
@@ -205,7 +226,11 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
             {t("common.cancel")}
           </Button>
           <Button variant="primary" onClick={handleConfirm} disabled={!preview || applying || loading}>
-            {applying ? t("sshConfigImport.applying") : t("sshConfigImport.confirm")}
+            {applying
+              ? t("sshConfigImport.applying")
+              : preview
+                ? t("sshConfigImport.confirmCount", { count: selectedCount })
+                : t("sshConfigImport.confirm")}
           </Button>
         </>
       }
@@ -216,38 +241,137 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
 
           {preview && (
             <>
-              {/* Gelesene Dateien (§3.1.4) */}
-              <section className="mb-4">
-                <h3 className="mb-1 font-semibold text-fg">{t("sshConfigImport.filesHeading")}</h3>
-                <ul className="space-y-0.5 font-mono text-xs">
-                  {preview.files.map((f) => (
-                    <li key={f.path} className="flex gap-2">
-                      <span className="text-fg-subtle">{"  ".repeat(f.depth)}</span>
-                      <span className="break-all">{f.path}</span>
-                      <span className="text-fg-subtle">— {t(`sshConfigImport.fileStatus.${f.status}`)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              {/* Gruppenstruktur (§4.5) */}
-              {preview.groups.length > 0 && (
-                <section className="mb-4">
-                  <h3 className="mb-1 font-semibold text-fg">{t("sshConfigImport.groupsHeading")}</h3>
-                  <ul className="space-y-0.5 text-xs">
-                    {preview.groups.map((g, i) => (
-                      <li key={`${g.sourcePath}-${g.name}`} style={{ paddingLeft: `${groupDepth(preview.groups, i) * 14}px` }}>
-                        <Icon name="folder" className="inline align-text-bottom" /> {g.name}
+              {/* Three parts: files read (§3.1.4), resulting folder structure
+               * (§4.5), servers (§3.1.7); stacked when the window is narrow. */}
+              <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2.4fr)]">
+                <section aria-labelledby="ssh-import-files">
+                  <h3 id="ssh-import-files" className="mb-2 font-mono text-xs uppercase tracking-wider text-fg-subtle">{t("sshConfigImport.filesHeading")}</h3>
+                  <ul className="space-y-1 font-mono text-xs">
+                    {preview.files.map((f) => (
+                      <li key={f.path} className="flex items-start gap-2" style={{ paddingLeft: `${f.depth * 14}px` }}>
+                        <Icon
+                          name={FILE_STATUS_ICON[f.status]}
+                          className={`mt-0.5 shrink-0 ${f.status === "read" ? "text-success-fg" : "text-fg-subtle"}`}
+                        />
+                        <span className={`min-w-0 break-all ${f.status === "read" ? "" : "text-fg-subtle"}`}>{f.path}</span>
+                        <span className="ml-auto shrink-0 text-fg-subtle">{t(`sshConfigImport.fileStatus.${f.status}`)}</span>
                       </li>
                     ))}
                   </ul>
                 </section>
-              )}
+
+                <section aria-labelledby="ssh-import-tree">
+                  <h3 id="ssh-import-tree" className="mb-2 font-mono text-xs uppercase tracking-wider text-fg-subtle">{t("sshConfigImport.groupsHeading")}</h3>
+                  <ul className="space-y-0.5 text-xs">
+                    {buildTreeRows(preview).map((row) => (
+                      <li
+                        key={row.key}
+                        className={`flex items-center gap-1.5 ${row.depth > 0 ? "border-l border-border-strong" : ""} ${row.kind === "server" && !entryState[row.entry.index]?.selected ? "opacity-50" : ""}`}
+                        style={{ marginLeft: `${Math.max(row.depth - 1, 0) * 14}px`, paddingLeft: row.depth > 0 ? "8px" : 0 }}
+                      >
+                        {row.kind === "group" ? (
+                          <>
+                            <Icon name="folder" className="shrink-0" />
+                            <span className="min-w-0 break-words">{row.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="server" className="shrink-0 text-fg-subtle" />
+                            <span className="min-w-0 break-words font-mono">{row.entry.name}</span>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section aria-labelledby="ssh-import-servers" className="min-w-0">
+                  <h3 id="ssh-import-servers" className="mb-2 font-mono text-xs uppercase tracking-wider text-fg-subtle">
+                    {t("sshConfigImport.entriesHeading", { count: preview.entries.length })}
+                  </h3>
+                  <div className="overflow-x-auto overflow-y-hidden rounded border border-border">
+                    <table className="w-full text-left text-xs">
+                      <thead className="font-mono uppercase tracking-wider text-fg-subtle">
+                        <tr>
+                          <th scope="col" className="w-8 px-2 py-1.5" aria-label={t("sshConfigImport.field.include")} title={t("sshConfigImport.field.include")}><Icon name="check" /></th>
+                          <th scope="col" className="px-2 py-1.5 font-normal">{t("sshConfigImport.field.name")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-normal">{t("sshConfigImport.field.host")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-normal">{t("sshConfigImport.field.port")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-normal">{t("sshConfigImport.field.username")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-normal">{t("sshConfigImport.field.jumpHost")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.entries.map((e) => {
+                          const st = entryState[e.index];
+                          if (!st) return null;
+                          return (
+                            <tr
+                              key={e.index}
+                              className={`border-t border-border ${e.conflict ? "bg-warning-subtle/40" : ""} ${st.selected ? "" : "opacity-60"}`}
+                            >
+                              <td className="px-2 py-1.5">
+                                <input
+                                  type="checkbox"
+                                  aria-label={e.name}
+                                  checked={st.selected}
+                                  onChange={(ev) => setEntry(e.index, { selected: ev.target.checked })}
+                                />
+                              </td>
+                              <td data-testid={`entry-${e.index}-name`} className="px-2 py-1.5 font-mono text-fg">{e.name}</td>
+                              <td className="px-2 py-1.5 font-mono">{e.host.value}</td>
+                              <td className="px-2 py-1.5 font-mono">{e.port.value}</td>
+                              <td className="px-2 py-1.5 font-mono">{e.username.value || t("sshConfigImport.field.emptyValue")}</td>
+                              <td className="px-2 py-1.5">
+                                {e.conflict ? (
+                                  <span className="text-warning-fg-soft">
+                                    {t(`sshConfigImport.conflict.${e.conflict.kind}`, { name: e.conflict.existingName })}
+                                  </span>
+                                ) : e.jumpHost ? (
+                                  <>
+                                    {e.jumpHost.name}{" "}
+                                    <span className="text-fg-subtle">
+                                      ·{" "}
+                                      {e.jumpHost.existing
+                                        ? t("sshConfigImport.jumpHost.existing")
+                                        : t("sshConfigImport.jumpHost.planned")}
+                                    </span>
+                                  </>
+                                ) : null}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {preview.entries.map((e) => {
+                    const st = entryState[e.index];
+                    if (!st || !e.conflict) return null;
+                    return (
+                      <div key={e.index} className="mt-3 text-xs">
+                        <label className="flex flex-wrap items-center gap-2">
+                          <span>{e.name}: {t("sshConfigImport.conflict.renameLabel")}</span>
+                          <input
+                            {...TECHNICAL_INPUT_PROPS}
+                            type="text"
+                            className="rounded border border-border-strong bg-surface-sunken px-1.5 py-1 font-mono text-fg"
+                            placeholder={t("sshConfigImport.conflict.renamePlaceholder")}
+                            value={st.renameTo}
+                            onChange={(ev) => setEntry(e.index, { renameTo: ev.target.value })}
+                          />
+                        </label>
+                        {!st.renameTo.trim() && <p className="mt-1 text-fg-subtle">{t("sshConfigImport.conflict.skipHint")}</p>}
+                      </div>
+                    );
+                  })}
+                </section>
+              </div>
 
               {/* Weg (b): globale Wahl + Dateien, die dabei aufgingen (§3.1.9) */}
               <section className="mb-4 rounded border border-border p-3">
                 <h3 className="mb-2 font-semibold text-fg">{t("sshConfigImport.identityFile.modeHeading")}</h3>
-                <div className="mb-2 flex gap-4">
+                <div className="mb-2 flex flex-wrap gap-4">
                   {(["keepAsFile", "intoKeychain", "drop"] as const).map((mode) => (
                     <label key={mode} className="flex items-center gap-1">
                       <input
@@ -281,168 +405,120 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                 )}
               </section>
 
-              {/* Profile (§3.1.7) */}
-              <section className="mb-4">
-                <h3 className="mb-1 font-semibold text-fg">
-                  {t("sshConfigImport.entriesHeading", { count: preview.entries.length })}
-                </h3>
-                <div className="space-y-2">
-                  {preview.entries.map((e) => {
-                    const st = entryState[e.index];
-                    if (!st) return null;
-                    return (
-                      <div
-                        key={e.index}
-                        className={`rounded border p-3 ${st.selected ? "border-border bg-surface-raised/60" : "border-surface-raised bg-surface/40 opacity-60"}`}
-                      >
-                        <div className="mb-2 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            aria-label={e.name}
-                            checked={st.selected}
-                            onChange={(ev) => setEntry(e.index, { selected: ev.target.checked })}
-                          />
-                          <span
-                            data-testid={`entry-${e.index}-name`}
-                            className="font-mono font-semibold text-fg"
-                          >
-                            {e.name}
-                          </span>
-                          {e.conflict && (
-                            <span className="rounded bg-warning-subtle-hover/60 px-1.5 py-0.5 text-xs text-warning-fg-soft">
-                              {t(`sshConfigImport.conflict.${e.conflict.kind}`, { name: e.conflict.existingName })}
+              {/* Per-entry details (§3.1.7): origin of each value, key file, tags */}
+              <section className="mb-4 space-y-2">
+                {preview.entries.map((e) => {
+                  const st = entryState[e.index];
+                  if (!st) return null;
+                  return (
+                    <div
+                      key={e.index}
+                      className={`rounded border p-3 ${st.selected ? "border-border bg-surface-raised/60" : "border-surface-raised bg-surface/40 opacity-60"}`}
+                    >
+                      <p className="mb-2 font-mono text-xs font-semibold text-fg">{e.name}</p>
+                      <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] break-words gap-x-2 gap-y-0.5 text-xs">
+                        <dt className="text-fg-subtle">{t("sshConfigImport.field.host")}</dt>
+                        <dd>
+                          {e.host.value} <span className="text-fg-subtle">— {originLabel(t, e.host.origin)}</span>
+                        </dd>
+                        <dt className="text-fg-subtle">{t("sshConfigImport.field.port")}</dt>
+                        <dd>
+                          {e.port.value} <span className="text-fg-subtle">— {originLabel(t, e.port.origin)}</span>
+                        </dd>
+                        <dt className="text-fg-subtle">{t("sshConfigImport.field.username")}</dt>
+                        <dd>
+                          {e.username.value || t("sshConfigImport.field.emptyValue")}{" "}
+                          <span className="text-fg-subtle">— {originLabel(t, e.username.origin)}</span>
+                        </dd>
+                        {e.jumpHost && (
+                          <>
+                            <dt className="text-fg-subtle">{t("sshConfigImport.field.jumpHost")}</dt>
+                            <dd data-testid={`entry-${e.index}-jump`}>
+                              {e.jumpHost.name}{" "}
+                              <span className="text-fg-subtle">
+                                — {e.jumpHost.existing ? t("sshConfigImport.jumpHost.existing") : t("sshConfigImport.jumpHost.planned")}
+                              </span>
+                            </dd>
+                          </>
+                        )}
+                      </dl>
+
+                      {e.identityFile && (
+                        <div className="mt-2 text-xs">
+                          <span className="text-fg-subtle">{t("sshConfigImport.field.identityFile")}: </span>
+                          <span className="font-mono break-all">{e.identityFile.path}</span>{" "}
+                          <span className="text-fg-subtle">— {originLabel(t, e.identityFile.origin)}</span>
+                          {!e.identityFile.usableWhenConnecting && (
+                            <span className="ml-2 rounded bg-warning-subtle-hover/60 px-1.5 py-0.5 text-warning-fg-soft">
+                              {t("sshConfigImport.identityFile.notUsable")}
                             </span>
                           )}
+                          <div className="mt-1 flex flex-wrap gap-3">
+                            {(["keepAsFile", "intoKeychain", "drop"] as const).map((mode) => (
+                              <label key={mode} className="flex items-center gap-1">
+                                <input
+                                  type="radio"
+                                  name={`identity-mode-${e.index}`}
+                                  checked={effectiveMode(e.index) === mode}
+                                  onChange={() => setEntry(e.index, { identityModeOverride: mode })}
+                                />
+                                {t(`sshConfigImport.identityFile.mode.${mode}`)}
+                              </label>
+                            ))}
+                          </div>
                         </div>
+                      )}
 
-                        {e.conflict && (
-                          <div className="mb-2 pl-6 text-xs">
-                            <label className="flex items-center gap-2">
-                              {t("sshConfigImport.conflict.renameLabel")}
-                              <input
-                                {...TECHNICAL_INPUT_PROPS}
-                                type="text"
-                                className="rounded border border-border-strong bg-surface-sunken px-1.5 py-0.5 text-fg"
-                                placeholder={t("sshConfigImport.conflict.renamePlaceholder")}
-                                value={st.renameTo}
-                                onChange={(ev) => setEntry(e.index, { renameTo: ev.target.value })}
-                              />
-                            </label>
-                            {!st.renameTo.trim() && (
-                              <p className="mt-1 text-fg-subtle">{t("sshConfigImport.conflict.skipHint")}</p>
-                            )}
-                          </div>
-                        )}
-
-                        <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] break-words gap-x-2 gap-y-0.5 pl-6 text-xs">
-                          <dt className="text-fg-subtle">{t("sshConfigImport.field.host")}</dt>
-                          <dd>
-                            {e.host.value}{" "}
-                            <span className="text-fg-subtle">— {originLabel(t, e.host.origin)}</span>
-                          </dd>
-                          <dt className="text-fg-subtle">{t("sshConfigImport.field.port")}</dt>
-                          <dd>
-                            {e.port.value}{" "}
-                            <span className="text-fg-subtle">— {originLabel(t, e.port.origin)}</span>
-                          </dd>
-                          <dt className="text-fg-subtle">{t("sshConfigImport.field.username")}</dt>
-                          <dd>
-                            {e.username.value || t("sshConfigImport.field.emptyValue")}{" "}
-                            <span className="text-fg-subtle">— {originLabel(t, e.username.origin)}</span>
-                          </dd>
-                          {e.jumpHost && (
-                            <>
-                              <dt className="text-fg-subtle">{t("sshConfigImport.field.jumpHost")}</dt>
-                              <dd>
-                                {e.jumpHost.name}{" "}
-                                <span className="text-fg-subtle">
-                                  —{" "}
-                                  {e.jumpHost.existing
-                                    ? t("sshConfigImport.jumpHost.existing")
-                                    : t("sshConfigImport.jumpHost.planned")}
-                                </span>
-                              </dd>
-                            </>
-                          )}
-                        </dl>
-
-                        {e.identityFile && (
-                          <div className="mt-2 pl-6 text-xs">
-                            <span className="text-fg-subtle">{t("sshConfigImport.field.identityFile")}: </span>
-                            <span className="font-mono break-all">{e.identityFile.path}</span>{" "}
-                            <span className="text-fg-subtle">— {originLabel(t, e.identityFile.origin)}</span>
-                            {!e.identityFile.usableWhenConnecting && (
-                              <span className="ml-2 rounded bg-warning-subtle-hover/60 px-1.5 py-0.5 text-warning-fg-soft">
-                                {t("sshConfigImport.identityFile.notUsable")}
-                              </span>
-                            )}
-                            <div className="mt-1 flex gap-3">
-                              {(["keepAsFile", "intoKeychain", "drop"] as const).map((mode) => (
-                                <label key={mode} className="flex items-center gap-1">
-                                  <input
-                                    type="radio"
-                                    name={`identity-mode-${e.index}`}
-                                    checked={effectiveMode(e.index) === mode}
-                                    onChange={() => setEntry(e.index, { identityModeOverride: mode })}
-                                  />
-                                  {t(`sshConfigImport.identityFile.mode.${mode}`)}
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {e.tags.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1 pl-6">
-                            {e.tags.map((tag) => {
-                              const dropped = st.droppedTags.has(tag.tag);
-                              const flagged = tag.matchedRules.length > 0;
-                              // §5.2a verlangt, die betroffene Regel zu
-                              // nennen — mindestens ihre Wirkung (Allow
-                              // kann Confirm→Allow heben, Deny/Confirm
-                              // ändern nichts an der bestehenden Stufe).
-                              const actions = [...new Set(tag.matchedRules.map((r) => r.action))];
-                              const actionLabels = actions
-                                .map((a) => t(`sshConfigImport.tag.action.${a}`))
-                                .join(", ");
-                              return (
-                                <label
-                                  key={tag.tag}
-                                  className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs ${
-                                    tag.isLiteral
-                                      ? "border border-danger bg-danger-subtle/50 text-danger-fg-softer"
-                                      : flagged
-                                        ? "border border-warning bg-warning-subtle/40 text-warning-fg-softer"
-                                        : "border border-border-strong bg-surface text-fg-muted"
-                                  }`}
-                                  title={
-                                    tag.isLiteral
-                                      ? t("sshConfigImport.tag.literalHint")
-                                      : flagged
-                                        ? t("sshConfigImport.tag.matchesRuleHint", {
-                                            count: tag.matchedRules.length,
-                                            actions: actionLabels,
-                                          })
-                                        : undefined
-                                  }
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!dropped}
-                                    onChange={() => toggleTag(e.index, tag.tag)}
-                                  />
-                                  {tag.isLiteral && <Icon name="warn" />}
-                                  {tag.tag}
-                                  {flagged && <span>({actionLabels})</span>}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      {e.tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {e.tags.map((tag) => {
+                            const dropped = st.droppedTags.has(tag.tag);
+                            const flagged = tag.matchedRules.length > 0;
+                            // §5.2a verlangt, die betroffene Regel zu
+                            // nennen — mindestens ihre Wirkung (Allow
+                            // kann Confirm→Allow heben, Deny/Confirm
+                            // ändern nichts an der bestehenden Stufe).
+                            const actions = [...new Set(tag.matchedRules.map((r) => r.action))];
+                            const actionLabels = actions
+                              .map((a) => t(`sshConfigImport.tag.action.${a}`))
+                              .join(", ");
+                            return (
+                              <label
+                                key={tag.tag}
+                                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs ${
+                                  tag.isLiteral
+                                    ? "border border-danger bg-danger-subtle/50 text-danger-fg-softer"
+                                    : flagged
+                                      ? "border border-warning bg-warning-subtle/40 text-warning-fg-softer"
+                                      : "border border-border-strong bg-surface text-fg-muted"
+                                }`}
+                                title={
+                                  tag.isLiteral
+                                    ? t("sshConfigImport.tag.literalHint")
+                                    : flagged
+                                      ? t("sshConfigImport.tag.matchesRuleHint", {
+                                          count: tag.matchedRules.length,
+                                          actions: actionLabels,
+                                        })
+                                      : undefined
+                                }
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!dropped}
+                                  onChange={() => toggleTag(e.index, tag.tag)}
+                                />
+                                {tag.isLiteral && <Icon name="warn" />}
+                                {tag.tag}
+                                {flagged && <span>({actionLabels})</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </section>
 
               {/* Nicht übernommene Direktiven (§3.1.5) */}

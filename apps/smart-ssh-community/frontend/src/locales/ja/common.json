@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
+    "current": "現在",
     "hintGroup": "→ このグループに移動",
     "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
     "moveTo": "「{{name}}」の移動先…"
@@ -872,6 +873,8 @@
     "groupsHeading": "作成されるフォルダー構造",
     "entriesHeading": "{{count}}台のサーバー",
     "field": {
+      "name": "名前",
+      "include": "含める",
       "host": "アドレス",
       "port": "ポート",
       "username": "ユーザー",
@@ -947,6 +950,7 @@
       "proxyJumpLocalPseudoServer": "ローカル擬似サーバーを指しています"
     },
     "confirm": "インポート",
+    "confirmCount_other": "{{count}}台のサーバーをインポート",
     "applying": "インポート中…",
     "result": {
       "success": "サーバー{{created}}台、フォルダー{{groups}}個を作成し、競合{{skipped}}件をスキップしました。",

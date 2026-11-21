@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
+    "current": "nykyinen",
     "hintGroup": "→ siirrä tähän ryhmään",
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
@@ -879,6 +880,8 @@
     "groupsHeading": "Syntyvä kansiorakenne",
     "entriesHeading": "{{count}} palvelinta",
     "field": {
+      "name": "Nimi",
+      "include": "Sisällytä",
       "host": "Osoite",
       "port": "Portti",
       "username": "Käyttäjä",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "osoittaa paikalliseen näennäispalvelimeen"
     },
     "confirm": "Tuo",
+    "confirmCount_one": "Tuo {{count}} palvelin",
+    "confirmCount_other": "Tuo {{count}} palvelinta",
     "applying": "Tuodaan …",
     "result": {
       "success": "{{created}} palvelinta luotu, {{groups}} kansiota, {{skipped}} ristiriitaa ohitettu.",

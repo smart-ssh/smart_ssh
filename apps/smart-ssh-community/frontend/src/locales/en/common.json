@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Drop here to move to the top level (no group)",
     "hintRoot": "→ top level (no group)",
+    "current": "current",
     "hintGroup": "→ move into this group",
     "hintCycle": "A group cannot be moved into its own subgroup",
     "moveTo": "Move “{{name}}” to…"
@@ -879,6 +880,8 @@
     "groupsHeading": "Resulting folder structure",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Name",
+      "include": "Include",
       "host": "Address",
       "port": "Port",
       "username": "User",
@@ -954,6 +957,8 @@
       "proxyJumpLocalPseudoServer": "points to the local pseudo server"
     },
     "confirm": "Import",
+    "confirmCount_one": "Import {{count}} server",
+    "confirmCount_other": "Import {{count}} servers",
     "applying": "Importing …",
     "result": {
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",

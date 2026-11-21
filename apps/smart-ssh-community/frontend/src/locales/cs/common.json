@@ -149,6 +149,7 @@
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
+    "current": "aktuální",
     "hintGroup": "→ přesunout do této skupiny",
     "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
     "moveTo": "Přesunout „{{name}}“ do…"
@@ -893,6 +894,8 @@
     "groupsHeading": "Výsledná struktura složek",
     "entriesHeading": "Počet serverů: {{count}}",
     "field": {
+      "name": "Název",
+      "include": "Zahrnout",
       "host": "Adresa",
       "port": "Port",
       "username": "Uživatel",
@@ -968,6 +971,10 @@
       "proxyJumpLocalPseudoServer": "odkazuje na lokální pseudoserver"
     },
     "confirm": "Importovat",
+    "confirmCount_one": "Importovat {{count}} server",
+    "confirmCount_few": "Importovat {{count}} servery",
+    "confirmCount_many": "Importovat {{count}} serveru",
+    "confirmCount_other": "Importovat {{count}} serverů",
     "applying": "Importování …",
     "result": {
       "success": "Vytvořeno serverů: {{created}}, složek: {{groups}}, přeskočených konfliktů: {{skipped}}.",
