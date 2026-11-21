@@ -196,4 +196,15 @@ describe("SettingsScreen numbered list (#1376)", () => {
     fireEvent.keyDown(rows[1], { key: "ArrowUp" });
     expect(rows[0]).toHaveFocus();
   });
+
+  it("shows a registered section's icon and falls back to sliders (#1428)", async () => {
+    registerSettingsSection({ id: "with-icon", label: "With icon", icon: "plug", component: mk("x") });
+    registerSettingsSection({ id: "no-icon", label: "No icon", component: mk("y") });
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    const iconOf = (text: string) =>
+      rows.find((b) => b.textContent?.includes(text))!.querySelector("svg[data-icon]")!.getAttribute("data-icon");
+    expect(iconOf("With icon")).toBe("plug");
+    expect(iconOf("No icon")).toBe("sliders");
+  });
 });
