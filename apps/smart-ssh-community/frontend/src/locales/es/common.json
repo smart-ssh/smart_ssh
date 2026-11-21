@@ -583,6 +583,7 @@
     "ollamaProbeRetry": "Buscar de nuevo",
     "ollamaProbeNotFoundHeading": "No se encontró ningún Ollama local (puerto predeterminado 11434).",
     "ollamaProbeNotFoundInstructions": "Instale Ollama desde ollama.com, inícielo y cargue un modelo (p. ej. `ollama pull llama3`); después vuelva a buscar.",
+    "typeLabel": "Tipo",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1622,6 +1623,16 @@
     "quitBody": "Estas actividades siguen en curso y se detendrán:",
     "quitResumeHint": "Las descargas interrumpidas se pueden reanudar la próxima vez que inicies la aplicación.",
     "quitAnyway": "Salir de todos modos",
-    "keepRunning": "Seguir en ejecución"
+    "keepRunning": "Seguir en ejecución",
+    "summaryRunning_one": "{{count}} en curso",
+    "summaryRunning_many": "{{count}} en curso",
+    "summaryRunning_other": "{{count}} en curso",
+    "summaryInterrupted_one": "{{count}} interrumpida",
+    "summaryInterrupted_many": "{{count}} interrumpidas",
+    "summaryInterrupted_other": "{{count}} interrumpidas",
+    "summaryFailed_one": "{{count}} fallida",
+    "summaryFailed_many": "{{count}} fallidas",
+    "summaryFailed_other": "{{count}} fallidas",
+    "remaining": "quedan {{time}}"
   }
 }

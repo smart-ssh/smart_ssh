@@ -185,6 +185,12 @@ test("unlock screen passes axe and is captured @phone", async ({ app }) => {
   await expectUsable(app.page.getByRole("button", { name: "Unlock", exact: true }));
   await expectNoSeriousA11yViolations(app.page, "narrow: unlock");
   await captureScreen(app.page, "narrow-unlock");
+  // The way-out area sits at the bottom of the screen with a full-width Quit.
+  const quit = app.page.getByRole("button", { name: "Quit", exact: true });
+  const box = (await quit.boundingBox())!;
+  const viewport = app.page.viewportSize()!;
+  expect(box.y + box.height).toBeGreaterThan(viewport.height - 64);
+  expect(box.width).toBeGreaterThan(viewport.width - 80);
 });
 
 test("toasts stay inside the viewport and do not cover the composer @phone", async ({ app }) => {

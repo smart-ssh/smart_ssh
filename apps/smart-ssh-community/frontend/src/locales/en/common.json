@@ -581,6 +581,7 @@
     "ollamaProbeRetry": "Search again",
     "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
     "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1612,6 +1613,13 @@
     "quitBody": "These activities are still running and will be stopped:",
     "quitResumeHint": "Interrupted downloads can be resumed the next time you start the app.",
     "quitAnyway": "Quit anyway",
-    "keepRunning": "Keep running"
+    "keepRunning": "Keep running",
+    "summaryRunning_one": "{{count}} running",
+    "summaryRunning_other": "{{count}} running",
+    "summaryInterrupted_one": "{{count}} interrupted",
+    "summaryInterrupted_other": "{{count}} interrupted",
+    "summaryFailed_one": "{{count}} failed",
+    "summaryFailed_other": "{{count}} failed",
+    "remaining": "{{time}} left"
   }
 }

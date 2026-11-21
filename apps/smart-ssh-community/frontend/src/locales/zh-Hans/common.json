@@ -579,6 +579,7 @@
     "ollamaProbeRetry": "重新搜索",
     "ollamaProbeNotFoundHeading": "未找到本地 Ollama（默认端口 11434）。",
     "ollamaProbeNotFoundInstructions": "请从 ollama.com 安装 Ollama，启动并加载一个模型（例如 `ollama pull llama3`），然后重新搜索。",
+    "typeLabel": "类型",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1602,6 +1603,10 @@
     "quitBody": "以下活动仍在运行，退出后将被停止：",
     "quitResumeHint": "中断的下载可在下次启动应用时继续。",
     "quitAnyway": "仍然退出",
-    "keepRunning": "继续运行"
+    "keepRunning": "继续运行",
+    "summaryRunning_other": "{{count}} 个运行中",
+    "summaryInterrupted_other": "{{count}} 个已中断",
+    "summaryFailed_other": "{{count}} 个失败",
+    "remaining": "剩余 {{time}}"
   }
 }

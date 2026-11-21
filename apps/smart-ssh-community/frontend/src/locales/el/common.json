@@ -581,6 +581,7 @@
     "ollamaProbeRetry": "Νέα αναζήτηση",
     "ollamaProbeNotFoundHeading": "Δεν βρέθηκε τοπικό Ollama (προεπιλεγμένη θύρα 11434).",
     "ollamaProbeNotFoundInstructions": "Εγκαταστήστε το Ollama από το ollama.com, ξεκινήστε το και φορτώστε ένα μοντέλο (π.χ. `ollama pull llama3`) και μετά αναζητήστε ξανά.",
+    "typeLabel": "Τύπος",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1612,6 +1613,13 @@
     "quitBody": "Αυτές οι δραστηριότητες εκτελούνται ακόμη και θα σταματήσουν:",
     "quitResumeHint": "Οι διακοπείσες λήψεις μπορούν να συνεχιστούν στην επόμενη εκκίνηση της εφαρμογής.",
     "quitAnyway": "Έξοδος παρ' όλα αυτά",
-    "keepRunning": "Να συνεχιστεί η εκτέλεση"
+    "keepRunning": "Να συνεχιστεί η εκτέλεση",
+    "summaryRunning_one": "{{count}} σε εξέλιξη",
+    "summaryRunning_other": "{{count}} σε εξέλιξη",
+    "summaryInterrupted_one": "{{count}} διακόπηκε",
+    "summaryInterrupted_other": "{{count}} διακόπηκαν",
+    "summaryFailed_one": "{{count}} απέτυχε",
+    "summaryFailed_other": "{{count}} απέτυχαν",
+    "remaining": "απομένουν {{time}}"
   }
 }

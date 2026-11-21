@@ -25,7 +25,7 @@ import {
   saveVoiceInputEnabled,
   voiceErrorKey,
 } from "../settings/voiceInputSettings";
-import { Button } from "./ui";
+import { Button, StatusSquare } from "./ui";
 
 /** ISO codes offered for a fixed recognition language (all supported by Whisper). */
 const LANGUAGE_CODES = [
@@ -115,7 +115,7 @@ export function VoiceInputSettings() {
         {t("voice.settings.description", { source: models[0]?.source_host ?? "huggingface.co" })}
       </p>
       {errorKey && (
-        <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
+        <p role="alert" className="border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
           {t(errorKey)}
         </p>
       )}
@@ -150,7 +150,7 @@ export function VoiceInputSettings() {
           const downloading = status?.state === "downloading";
           const ready = status?.state === "ready";
           return (
-            <div key={id} className="flex flex-wrap items-center gap-3 text-sm text-fg-muted">
+            <div key={id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm text-fg-muted">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -163,9 +163,15 @@ export function VoiceInputSettings() {
                 />
                 {t(`voice.settings.models.${id}` as TranslationKey, { size: speechModelSizeMib(info) })}
               </label>
-              <span aria-live="polite" className="text-fg-subtle">
+              <span aria-live="polite" className="inline-flex items-center gap-1.5 text-fg-subtle">
+                <StatusSquare tone={ready ? "success" : downloading ? "accent" : status?.state === "error" ? "danger" : "neutral"} />
                 {statusText(status)}
               </span>
+              {downloading && status.total > 0 && (
+                <span aria-hidden="true" className="block h-1 w-24 bg-border">
+                  <span className="block h-full bg-accent" style={{ width: `${Math.min(100, Math.floor((status.done / status.total) * 100))}%` }} />
+                </span>
+              )}
               {downloading ? (
                 <Button size="sm" onClick={() => run(() => cancelSpeechModelDownload(id))}>
                   {t("voice.consent.cancel")}
@@ -207,7 +213,7 @@ export function VoiceInputSettings() {
               throw err;
             }));
           }}
-          className="rounded border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg"
+          className="border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg"
         >
           <option value="auto">{t("voice.settings.languageAuto")}</option>
           {LANGUAGE_CODES.map((code) => (

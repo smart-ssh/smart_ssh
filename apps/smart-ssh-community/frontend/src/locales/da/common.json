@@ -581,6 +581,7 @@
     "ollamaProbeRetry": "Søg igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama fundet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installér Ollama fra ollama.com, start den og indlæs en model (f.eks. `ollama pull llama3`), og søg derefter igen.",
+    "typeLabel": "Slags",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1612,6 +1613,13 @@
     "quitBody": "Disse aktiviteter kører stadig og bliver stoppet:",
     "quitResumeHint": "Afbrudte downloads kan genoptages, næste gang du starter appen.",
     "quitAnyway": "Afslut alligevel",
-    "keepRunning": "Lad dem køre"
+    "keepRunning": "Lad dem køre",
+    "summaryRunning_one": "{{count}} kører",
+    "summaryRunning_other": "{{count}} kører",
+    "summaryInterrupted_one": "{{count}} afbrudt",
+    "summaryInterrupted_other": "{{count}} afbrudt",
+    "summaryFailed_one": "{{count}} mislykkedes",
+    "summaryFailed_other": "{{count}} mislykkedes",
+    "remaining": "{{time}} tilbage"
   }
 }

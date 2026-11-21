@@ -581,6 +581,7 @@
     "ollamaProbeRetry": "Opnieuw zoeken",
     "ollamaProbeNotFoundHeading": "Geen lokale Ollama gevonden (standaardpoort 11434).",
     "ollamaProbeNotFoundInstructions": "Installeer Ollama van ollama.com, start het en laad een model (bijv. `ollama pull llama3`), en zoek daarna opnieuw.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1612,6 +1613,13 @@
     "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
     "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
     "quitAnyway": "Toch afsluiten",
-    "keepRunning": "Blijven doorlopen"
+    "keepRunning": "Blijven doorlopen",
+    "summaryRunning_one": "{{count}} bezig",
+    "summaryRunning_other": "{{count}} bezig",
+    "summaryInterrupted_one": "{{count}} onderbroken",
+    "summaryInterrupted_other": "{{count}} onderbroken",
+    "summaryFailed_one": "{{count}} mislukt",
+    "summaryFailed_other": "{{count}} mislukt",
+    "remaining": "nog {{time}}"
   }
 }

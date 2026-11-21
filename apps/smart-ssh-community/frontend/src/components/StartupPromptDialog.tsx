@@ -149,6 +149,7 @@ export function StartupPromptDialog({
       layer="app"
       size="sm"
       reserveTitlebar
+      ticks="accent"
       title={request.title}
       onClose={onEscape}
       initialFocusRef={wantsPassword ? passwordRef : safeButtonRef}

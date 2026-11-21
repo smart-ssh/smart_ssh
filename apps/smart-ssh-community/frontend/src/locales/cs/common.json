@@ -585,6 +585,7 @@
     "ollamaProbeRetry": "Hledat znovu",
     "ollamaProbeNotFoundHeading": "Lokální Ollama nenalezena (výchozí port 11434).",
     "ollamaProbeNotFoundInstructions": "Nainstalujte Ollamu z ollama.com, spusťte ji a načtěte model (např. `ollama pull llama3`), poté hledejte znovu.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1632,6 +1633,19 @@
     "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
     "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
     "quitAnyway": "Přesto ukončit",
-    "keepRunning": "Nechat běžet"
+    "keepRunning": "Nechat běžet",
+    "summaryRunning_one": "běží: {{count}}",
+    "summaryRunning_few": "běží: {{count}}",
+    "summaryRunning_many": "běží: {{count}}",
+    "summaryRunning_other": "běží: {{count}}",
+    "summaryInterrupted_one": "přerušeno: {{count}}",
+    "summaryInterrupted_few": "přerušeno: {{count}}",
+    "summaryInterrupted_many": "přerušeno: {{count}}",
+    "summaryInterrupted_other": "přerušeno: {{count}}",
+    "summaryFailed_one": "selhalo: {{count}}",
+    "summaryFailed_few": "selhalo: {{count}}",
+    "summaryFailed_many": "selhalo: {{count}}",
+    "summaryFailed_other": "selhalo: {{count}}",
+    "remaining": "zbývá {{time}}"
   }
 }

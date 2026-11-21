@@ -26,6 +26,12 @@ function renderScreen(
 }
 
 describe("first-run notice screen (Spec 0031)", () => {
+  it("draws the accent corner ticks (#1383)", () => {
+    renderScreen();
+    const ticks = screen.getByTestId("dialog-ticks");
+    expect(ticks.querySelectorAll("[data-corner-tick]")).toHaveLength(2);
+  });
+
   it("keeps the continue button disabled until the checkbox is checked", () => {
     renderScreen();
     const continueButton = screen.getByRole("button", { name: "Weiter" });

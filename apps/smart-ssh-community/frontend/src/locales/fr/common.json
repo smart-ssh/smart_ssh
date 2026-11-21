@@ -583,6 +583,7 @@
     "ollamaProbeRetry": "Rechercher à nouveau",
     "ollamaProbeNotFoundHeading": "Aucun Ollama local trouvé (port par défaut 11434).",
     "ollamaProbeNotFoundInstructions": "Installez Ollama depuis ollama.com, démarrez-le et chargez un modèle (p. ex. `ollama pull llama3`), puis relancez la recherche.",
+    "typeLabel": "Genre",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1622,6 +1623,16 @@
     "quitBody": "Ces activités sont encore en cours et seront arrêtées :",
     "quitResumeHint": "Les téléchargements interrompus peuvent être repris au prochain démarrage.",
     "quitAnyway": "Quitter quand même",
-    "keepRunning": "Laisser continuer"
+    "keepRunning": "Laisser continuer",
+    "summaryRunning_one": "{{count}} en cours",
+    "summaryRunning_many": "{{count}} en cours",
+    "summaryRunning_other": "{{count}} en cours",
+    "summaryInterrupted_one": "{{count}} interrompue",
+    "summaryInterrupted_many": "{{count}} interrompues",
+    "summaryInterrupted_other": "{{count}} interrompues",
+    "summaryFailed_one": "{{count}} en échec",
+    "summaryFailed_many": "{{count}} en échec",
+    "summaryFailed_other": "{{count}} en échec",
+    "remaining": "{{time}} restantes"
   }
 }

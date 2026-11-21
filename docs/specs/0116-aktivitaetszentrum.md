@@ -8,15 +8,18 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 
 - Ohne Aktivität gibt es kein Symbol.
 - Mit Aktivität steht das Symbol am rechten Ende der Kopfzeile, links von den übrigen Bedienelementen, im breiten wie im schmalen Layout.
-- Solange mindestens eine Aktivität läuft, zeigt das Symbol die Anzahl der laufenden Aktivitäten und einen Fortschrittsring für den zusammengefassten Fortschritt (Summe von erledigt durch Summe von gesamt über alle laufenden Aktivitäten mit bekannter Gesamtgröße). Ist keine Gesamtgröße bekannt, dreht sich der Ring unbestimmt.
-- Laufen keine mehr, aber es gibt beendete Zeilen: Häkchen (alles erfolgreich oder abgebrochen) bzw. Ausrufezeichen (mindestens eine fehlgeschlagen).
+- Das Symbol ist das Aktivitäts-Symbol. Solange mindestens eine Aktivität läuft, steht daneben die Anzahl der laufenden Aktivitäten in Monospace-Schrift in der Akzentfarbe, und eine dünne Fortschrittslinie am unteren Rand zeigt den zusammengefassten Fortschritt (Summe von erledigt durch Summe von gesamt über alle laufenden Aktivitäten mit bekannter Gesamtgröße). Ist keine Gesamtgröße bekannt, ist die Linie unbestimmt (animiert, ohne Füllstand).
+- Laufen keine mehr, aber es gibt beendete Zeilen: Häkchen-Symbol (alles erfolgreich oder abgebrochen) bzw. Warnsymbol (mindestens eine fehlgeschlagen oder unterbrochen).
+- Solange das Popover offen ist, trägt das Symbol eine Akzentlinie am oberen Rand.
 - Der zugängliche Name nennt den Zustand („Activities: 2 running“, …).
 
 ## 2. Popover
 
 - Ein Klick (oder Enter/Leertaste) auf das Symbol öffnet es, ein weiterer Klick, ein Klick außerhalb oder Escape schließt es; Escape gibt den Fokus an das Symbol zurück.
+- Das Popover ist 440 px breit (auf schmalen Fenstern so breit wie das Fenster abzüglich Rand) und hat eine Kopfzeile mit dem Titel und einer Zusammenfassung („2 running · 1 interrupted“; nur die vorhandenen Teile).
 - Eine Zeile je Aktivität, nach Startzeit geordnet; mehrere Aktivitäten laufen parallel.
-- Zeile einer laufenden Aktivität: Titel, Fortschrittsbalken, „erledigt / gesamt“ in lesbarer Größe (unbestimmter Balken, wenn die Gesamtgröße unbekannt ist), optional ein Statustext (z. B. „Verifying“), und eine Schaltfläche „Cancel“, wenn die Aktivität abbrechbar ist. Nicht abbrechbare Aktivitäten haben keine.
+- Jede Zeile einer laufenden oder unterbrochenen Aktivität zeigt ein Symbol der Aktivitätsart; erfolgreich beendete Zeilen zeigen stattdessen ein Häkchen, fehlgeschlagene ein Warnsymbol. Dazu den Titel fett und eine Statusbezeichnung in Großbuchstaben in der Statusfarbe.
+- Zeile einer laufenden Aktivität: zusätzlich ein flacher, 6 px hoher Fortschrittsbalken (gestreift, wenn die Gesamtgröße unbekannt ist), darunter eine Monospace-Zeile mit „erledigt / gesamt“ in lesbarer Größe, Geschwindigkeit und Restzeit (Geschwindigkeit und Restzeit nur bei bekannter Gesamtgröße und sobald genug Fortschrittsmeldungen vorliegen), optional ein Statustext (z. B. „Verifying“) anstelle von „In progress“, und darunter eine Symbol-Schaltfläche „Cancel“ (X, mit zugänglichem Namen), wenn die Aktivität abbrechbar ist. Nicht abbrechbare Aktivitäten haben keine.
 - „Cancel“ ruft den Abbruch der Aktivität auf; die Zeile endet als „Cancelled“.
 - Erfolgreich beendet: die Zeile bleibt mit Häkchen, bis sie verworfen wird („Dismiss“) oder das Popover geschlossen wird, nachdem sie gesehen wurde.
 - Fehlgeschlagen: die Zeile bleibt mit der Fehlermeldung, bis sie verworfen wird. Abgebrochen: bleibt bis zum Verwerfen.
@@ -39,14 +42,14 @@ Bezüge: Spec 0038 (Erweiterungen), Spec 0108 (Sprachmodelle), Spec 0113 (schmal
 
 ## 5. Beenden mit laufenden Aktivitäten
 
-- Beenden der App (Menü, Cmd+Q, Schließen des letzten Fensters), während mindestens eine Aktivität läuft und abbrechbar oder wiederaufnehmbar ist, fragt zuerst nach: ein Dialog nennt die laufenden Aktivitäten beim Namen und bietet „Trotzdem beenden“ und „Weiterlaufen lassen“.
+- Beenden der App (Menü, Cmd+Q, Schließen des letzten Fensters), während mindestens eine Aktivität läuft und abbrechbar oder wiederaufnehmbar ist, fragt zuerst nach: ein Dialog mit Warnsymbol nennt die laufenden Aktivitäten beim Namen, je mit dem Symbol ihrer Art, und bietet „Trotzdem beenden“ und „Weiterlaufen lassen“.
 - „Weiterlaufen lassen“ lässt die App offen und die Aktivitäten laufen. „Trotzdem beenden“ beendet die App.
 - Läuft keine solche Aktivität, erscheint kein Dialog. Ein Beenden, das die App selbst auslöst (etwa der Neustart nach einem Update), wird nicht gebremst.
 
 ## 6. Wiederaufnehmbare Aktivitäten
 
 - Eine Aktivität kann sich als wiederaufnehmbar anmelden (Art und Schlüssel). Beim bestätigten Beenden werden die laufenden wiederaufnehmbaren Aktivitäten gespeichert: Art, Schlüssel, Titel, erledigte und gesamte Menge – sonst nichts, keine URLs, keine Zugangsdaten.
-- Beim nächsten Start erscheinen gespeicherte Einträge, für deren Art ein Handler angemeldet ist (Rust-Seite oder Erweiterung), im Aktivitätszentrum als „Unterbrochen“ mit „Fortsetzen“ und „Verwerfen“. Einträge ohne Handler werden still entfernt.
+- Beim nächsten Start erscheinen gespeicherte Einträge, für deren Art ein Handler angemeldet ist (Rust-Seite oder Erweiterung), im Aktivitätszentrum als „Unterbrochen“ (Warnfarbe, zuerst in der Liste) mit „Fortsetzen“ und „Verwerfen“ unter der Zeile. Einträge ohne Handler werden still entfernt.
 - „Fortsetzen“ ruft den Handler, der eine neue Aktivität startet; der Eintrag verschwindet. Scheitert das Fortsetzen, bleibt der Eintrag mit einer Fehlermeldung stehen. „Verwerfen“ ruft den optionalen Verwerfen-Handler (etwa Teildateien löschen) und entfernt den Eintrag.
 - Gespeicherte Einträge sind je Art und Schlüssel eindeutig: Wird beim erneuten Beenden derselbe Eintrag noch einmal gespeichert, ersetzt der neuere Stand (mit dem jüngeren Fortschritt) den alten; es steht nie dieselbe Aktivität doppelt in der Liste.
 - Ein gespeicherter Eintrag, dessen Arbeit inzwischen neu gestartet wurde oder erfolgreich abgeschlossen ist (gleiche Art und gleicher Schlüssel), wird entfernt.

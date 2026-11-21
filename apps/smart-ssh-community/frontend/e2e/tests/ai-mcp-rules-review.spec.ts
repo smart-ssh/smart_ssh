@@ -70,7 +70,11 @@ for (const category of ["AI Provider", "MCP Server"]) {
       await settings.getByRole("button", { name: "Add Provider", exact: true }).click();
       const add = page.getByRole("dialog", { name: "Add Provider" });
       await add.getByRole("button", { name: /Advanced/ }).click();
+      // The visual-order check reads unscrolled positions, so the open
+      // advanced section must fit without scrolling the dialog body.
       await add.getByRole("button", { name: "+ Header", exact: true }).click();
+      const size = page.viewportSize();
+      if (size && size.width >= 1000) await page.setViewportSize({ width: size.width, height: 1000 });
       await expectTabOrderFollowsVisualOrder(page, add);
       await expectNoClippedText(add);
     });
@@ -109,4 +113,35 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
   await expectTabOrderFollowsVisualOrder(page, ruleDialog);
   await expectNoClippedText(ruleDialog);
   await captureScreen(page, "filter-rules-edit");
+});
+
+// Issue #1377: both risk switches have accessible names, sit in the Tab order
+// after the provider list and toggle with the keyboard.
+test("settings: AI Provider risk switches are labelled, in Tab order and toggle", async ({ app }) => {
+  await app.launch({
+    ...longContent(),
+    commands: {
+      ...longContent().commands,
+      set_risk_second_opinion_settings: { result: null },
+      set_red_risk_always_confirm: { result: null },
+    },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
+  await expect(second).toBeVisible();
+  await expect(red).toBeVisible();
+  const before = await second.isChecked();
+  await second.focus();
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).toBeChecked({ checked: !before });
+  await page.keyboard.press("Tab");
+  // Focus moved on (not lost to body) and eventually reaches the second switch.
+  await expect(page.locator("body")).not.toBeFocused();
+  const redBefore = await red.isChecked();
+  await red.focus();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked({ checked: !redBefore });
 });
