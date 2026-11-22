@@ -1076,6 +1076,28 @@ mod lookup_failures {
             .load(SeqCst));
     }
 
+    /// Issue #1533: an incomplete reconnect raises the live flag; a complete
+    /// one never lowers it (the literal set is kept).
+    #[test]
+    fn test_reconnect_redactor_sets_live_flag_and_complete_does_not_clear() {
+        let session = dummy_session(ServerId::new());
+        let incomplete = |inc| crate::session_extension::ScopeLookup {
+            scope: None,
+            incomplete: inc,
+        };
+        let sudo = (None, true);
+        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(false), &[]);
+        assert!(!session.safety.redaction_incomplete.load(SeqCst));
+        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(true), &[]);
+        assert!(session.safety.redaction_incomplete.load(SeqCst));
+        assert!(session
+            .safety
+            .redaction_incomplete_notice_pending
+            .load(SeqCst));
+        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(false), &[]);
+        assert!(session.safety.redaction_incomplete.load(SeqCst));
+    }
+
     /// A literal the regex size limit rejects flags the session and is not
     /// logged; the session's byte-wise literal set still masks it.
     #[test]
