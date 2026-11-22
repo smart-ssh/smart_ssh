@@ -37,13 +37,13 @@ ALTER TABLE chat_sessions ADD COLUMN activity_session_id TEXT;
 -- Backfill: one recorded session per existing chat session. The recorded
 -- session reuses the chat session id, so existing ledger rows keep their
 -- `session_id` unchanged.
-WITH RECURSIVE path(server_id, gid, name, parent_id, depth) AS (
-    SELECT s.id, g.id, g.name, g.parent_id, 0
+WITH RECURSIVE path(server_id, gid, name, parent_id, depth, seen) AS (
+    SELECT s.id, g.id, g.name, g.parent_id, 0, '|' || g.id || '|'
     FROM servers s JOIN groups g ON g.id = s.group_id
     UNION ALL
-    SELECT p.server_id, g.id, g.name, g.parent_id, p.depth + 1
+    SELECT p.server_id, g.id, g.name, g.parent_id, p.depth + 1, p.seen || g.id || '|'
     FROM path p JOIN groups g ON g.id = p.parent_id
-    WHERE p.depth < 64
+    WHERE p.depth < 64 AND instr(p.seen, '|' || g.id || '|') = 0
 )
 INSERT INTO activity_sessions (
     id, kind, mcp_client, server_id, server_name, server_host, server_port,

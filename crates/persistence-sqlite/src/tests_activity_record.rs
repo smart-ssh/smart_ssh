@@ -145,6 +145,29 @@ async fn test_migration_0029_keeps_rows_and_links_snapshots() {
         row.get::<Option<String>, _>("ended_at").as_deref(),
         Some("2026-01-01T01:00:00+00:00")
     );
+
+    // The server without a group gets empty group lists.
+    let ungrouped = sqlx::query(
+        "SELECT group_ids, group_names FROM activity_sessions \
+         WHERE id = '00000000-0000-4000-8000-0000000000c3'",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(ungrouped.get::<String, _>("group_ids"), "[]");
+    assert_eq!(ungrouped.get::<String, _>("group_names"), "[]");
+
+    // Every link points at an existing recorded session.
+    let dangling: i64 = sqlx::query(
+        "SELECT COUNT(*) AS c FROM chat_sessions c \
+         WHERE c.activity_session_id IS NULL OR NOT EXISTS \
+         (SELECT 1 FROM activity_sessions a WHERE a.id = c.activity_session_id)",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap()
+    .get("c");
+    assert_eq!(dangling, 0);
 }
 
 #[tokio::test]
@@ -384,6 +407,15 @@ async fn test_migration_0029_terminates_on_cyclic_group_chain() {
     .expect("migration must terminate")
     .unwrap();
     assert_eq!(count(&store, "activity_sessions").await, 3);
+    let row = sqlx::query(
+        "SELECT group_ids, group_names FROM activity_sessions \
+         WHERE id = '00000000-0000-4000-8000-0000000000c1'",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(row.get::<String, _>("group_ids"), r#"["g1","g2"]"#);
+    assert_eq!(row.get::<String, _>("group_names"), r#"["Prod","EU"]"#);
 }
 
 /// Creating a chat on a server below a cyclic group chain terminates.
@@ -417,10 +449,68 @@ async fn test_create_session_terminates_on_cyclic_group_chain() {
     .await
     .expect("create_session must terminate")
     .unwrap();
-    assert!(store
+    let snap = store
         .activity_session_store()
         .load(chat)
         .await
         .unwrap()
-        .is_some());
+        .unwrap();
+    assert_eq!(snap.group_ids, vec!["g2", "g1"]);
+    assert_eq!(snap.group_names, vec!["B", "A"]);
+}
+
+async fn corrupt_load(column: &str, value: &str) -> String {
+    let (store, _server, chat) = store_with_chat().await;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE activity_sessions SET {column} = ? WHERE id = ?"
+    )))
+    .bind(value)
+    .bind(chat.to_string())
+    .execute(&store.pool)
+    .await
+    .unwrap();
+    let err = store
+        .activity_session_store()
+        .load(chat)
+        .await
+        .expect_err("corrupt snapshot must fail to load");
+    assert!(matches!(
+        err,
+        crate::ledger_store::LedgerStoreError::CorruptContent { .. }
+    ));
+    err.to_string()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_group_ids() {
+    assert!(corrupt_load("group_ids", "not json")
+        .await
+        .contains("group_ids"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_group_names() {
+    assert!(corrupt_load("group_names", "{")
+        .await
+        .contains("group_names"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_tags() {
+    assert!(corrupt_load("tags", "[1]").await.contains("tags"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_out_of_range_port() {
+    let (store, _server, chat) = store_with_chat().await;
+    for bad in [65536_i64, -1] {
+        sqlx::query("UPDATE activity_sessions SET server_port = ? WHERE id = ?")
+            .bind(bad)
+            .bind(chat.to_string())
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let err = store.activity_session_store().load(chat).await.unwrap_err();
+        assert!(err.to_string().contains("server_port"), "{err}");
+    }
 }
