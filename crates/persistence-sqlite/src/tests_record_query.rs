@@ -643,6 +643,14 @@ async fn test_content_filters_survive_a_row_with_invalid_content() {
         },
     ];
     for (i, f) in filters.iter().enumerate() {
+        // The entry_type condition runs before json_extract, so the damaged
+        // row must have the type the filter looks at to reach the guard.
+        let ty = ["command_proposed", "decision", "command_executed"][i];
+        sqlx::query("UPDATE ledger_entries SET entry_type = ? WHERE sequence = 2")
+            .bind(ty)
+            .execute(&s.pool)
+            .await
+            .unwrap();
         let (mut seen, mut after) = (Vec::new(), None);
         loop {
             let p = q
