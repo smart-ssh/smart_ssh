@@ -39,6 +39,7 @@ const EXPECTED: Record<string, Kind> = {
   invokeCommand: fn, commandErrorMessage: fn, commandErrorCode: fn, commandErrorFeatureLocked: fn,
   commandErrorConnectLog: fn, listServers: fn, getStartupState: fn,
   listGroups: fn, listAiProviders: fn, listChatSessions: fn,
+  listRecordedSessions: fn, listRecordEntries: fn, recordEntriesOfSession: fn,
   TECHNICAL_INPUT_PROPS: obj, useIsNarrow: fn, resolveSectionLabel: fn, pickAndReadTextFile: fn,
   SUPPORTED_LANGUAGES: obj, settingsStore: fn, initI18n: fn,
   setUiPreference: fn,
@@ -63,6 +64,23 @@ describe("public-api", () => {
     expect(typeof testSupport.listComposerDropHandlers).toBe("function");
     expect(typeof testSupport.resetComposerRegistryForTests).toBe("function");
     expect(typeof testSupport.ToastHost).toBe("function");
+  });
+
+  it("record functions call the record commands with filter, page and session id", async () => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue({ items: [], next_cursor: null });
+    await publicApi.listRecordedSessions({ has_failed_writes: true }, "7", 5);
+    expect(invokeMock).toHaveBeenCalledWith("record_list_sessions", {
+      filter: { has_failed_writes: true },
+      page: { page_size: 5, cursor: "7" },
+    });
+    await publicApi.listRecordEntries({ text_contains: "ls" });
+    expect(invokeMock).toHaveBeenCalledWith("record_list_entries", {
+      filter: { text_contains: "ls" },
+      page: { page_size: 200, cursor: null },
+    });
+    await publicApi.recordEntriesOfSession("abc");
+    expect(invokeMock).toHaveBeenCalledWith("record_session_entries", { sessionId: "abc" });
   });
 
   it("setUiPreference calls set_ui_preference with key and value", async () => {

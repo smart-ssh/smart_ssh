@@ -477,7 +477,7 @@ exportiert: die Registrierungsfunktionen und Typen, Berechtigungs-Typen,
 `bootstrap`, die UI-Bausteine samt `ErrorBoundary`, der zentrale
 Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
 die Fehler-Helfer, `listServers`, `listGroups`, `listAiProviders`,
-`listChatSessions`, `getStartupState`, einige Hilfen
+`listChatSessions`, `getStartupState`, die schreibgeschützten Zugriffe auf die Aktivitätsaufzeichnung (`listRecordedSessions`, `listRecordEntries`, `recordEntriesOfSession`, nur nach dem Entsperren; Filter und Seitenaufteilung wie in der Aufzeichnungs-API von Spec 0057), einige Hilfen
 (`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
 `pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`, `setUiPreference`), `showToast` (zeigt die regulären Erfolgs-, Fehler- und Info-Hinweise) und
 DTO-Typen (u. a. `GroupDto`) sowie die Typen `ComposerContext` und
