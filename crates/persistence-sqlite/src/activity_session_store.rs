@@ -54,6 +54,18 @@ pub struct ActivitySession {
     pub failed_writes: i64,
 }
 
+/// Source of the device's IANA time zone name; `None` when unknown.
+pub type TimeZoneSource = std::sync::Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+/// Default source: the platform's zone; a failed or empty lookup is `None`.
+pub fn device_time_zone_source() -> TimeZoneSource {
+    std::sync::Arc::new(|| {
+        iana_time_zone::get_timezone()
+            .ok()
+            .filter(|z| !z.trim().is_empty())
+    })
+}
+
 /// Creates the recorded session for `server_id` inside `tx`, with the
 /// snapshot taken from the current server, group path and tags. Returns
 /// `false` (no row written) when the server does not exist.
@@ -66,12 +78,13 @@ pub(crate) async fn insert_snapshot(
     time_zone: Option<&str>,
 ) -> Result<bool, sqlx::Error> {
     let res = sqlx::query(
-        "WITH RECURSIVE path(gid, name, parent_id, depth) AS ( \
-             SELECT g.id, g.name, g.parent_id, 0 FROM servers s \
+        "WITH RECURSIVE path(gid, name, parent_id, depth, seen) AS ( \
+             SELECT g.id, g.name, g.parent_id, 0, '|' || g.id || '|' FROM servers s \
                  JOIN groups g ON g.id = s.group_id WHERE s.id = ?1 \
              UNION ALL \
-             SELECT g.id, g.name, g.parent_id, p.depth + 1 FROM path p \
-                 JOIN groups g ON g.id = p.parent_id WHERE p.depth < 64 \
+             SELECT g.id, g.name, g.parent_id, p.depth + 1, p.seen || g.id || '|' FROM path p \
+                 JOIN groups g ON g.id = p.parent_id \
+                 WHERE p.depth < 64 AND instr(p.seen, '|' || g.id || '|') = 0 \
          ) \
          INSERT INTO activity_sessions ( \
              id, kind, mcp_client, server_id, server_name, server_host, server_port, \
@@ -107,6 +120,7 @@ pub(crate) async fn create_chat_session(
     id: Uuid,
     server_id: &ServerId,
     ai_provider_id: Option<Uuid>,
+    time_zone: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let _server_exists = insert_snapshot(
@@ -115,7 +129,7 @@ pub(crate) async fn create_chat_session(
         ActivitySessionKind::Chat,
         None,
         server_id,
-        None,
+        time_zone,
     )
     .await?;
     sqlx::query(
@@ -169,8 +183,16 @@ pub struct SqliteActivitySessionStore {
     pool: SqlitePool,
 }
 
-fn json_list(raw: &str) -> Vec<String> {
-    serde_json::from_str(raw).unwrap_or_default()
+fn corrupt(id: Uuid, field: &str, reason: impl std::fmt::Display) -> LedgerStoreError {
+    LedgerStoreError::CorruptSession {
+        session_id: id.to_string(),
+        field: field.to_string(),
+        reason: reason.to_string(),
+    }
+}
+
+fn json_list(id: Uuid, field: &str, raw: &str) -> Result<Vec<String>, LedgerStoreError> {
+    serde_json::from_str(raw).map_err(|e| corrupt(id, field, e))
 }
 
 impl SqliteActivitySessionStore {
@@ -185,23 +207,63 @@ impl SqliteActivitySessionStore {
             .fetch_optional(&self.pool)
             .await
             .map_err(|e| LedgerStoreError::Database(e.into()))?;
-        Ok(row.map(|row| ActivitySession {
-            id,
-            kind: row.get("kind"),
-            mcp_client: row.get("mcp_client"),
-            server_id: row.get("server_id"),
-            server_name: row.get("server_name"),
-            server_host: row.get("server_host"),
-            server_port: u16::try_from(row.get::<i64, _>("server_port")).unwrap_or(0),
-            server_user: row.get("server_user"),
-            group_ids: json_list(&row.get::<String, _>("group_ids")),
-            group_names: json_list(&row.get::<String, _>("group_names")),
-            tags: json_list(&row.get::<String, _>("tags")),
-            time_zone: row.get("time_zone"),
-            started_at: row.get("started_at"),
-            ended_at: row.get("ended_at"),
-            last_activity_at: row.get("last_activity_at"),
-            failed_writes: row.get("failed_writes"),
-        }))
+        row.map(|row| {
+            let list = |field: &str| json_list(id, field, &row.get::<String, _>(field));
+            let raw_port: i64 = row.get("server_port");
+            let server_port = u16::try_from(raw_port)
+                .map_err(|_| corrupt(id, "server_port", format!("{raw_port} out of range")))?;
+            Ok(ActivitySession {
+                id,
+                kind: row.get("kind"),
+                mcp_client: row.get("mcp_client"),
+                server_id: row.get("server_id"),
+                server_name: row.get("server_name"),
+                server_host: row.get("server_host"),
+                server_port,
+                server_user: row.get("server_user"),
+                group_ids: list("group_ids")?,
+                group_names: list("group_names")?,
+                tags: list("tags")?,
+                time_zone: row.get("time_zone"),
+                started_at: row.get("started_at"),
+                ended_at: row.get("ended_at"),
+                last_activity_at: row.get("last_activity_at"),
+                failed_writes: row.get("failed_writes"),
+            })
+        })
+        .transpose()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use ssh_manager_core::profiles::ProfileStore;
+    use ssh_manager_core::testing::ServerBuilder;
+
+    use super::*;
+    use crate::SqliteProfileStore;
+
+    /// Creates a chat session with the given zone source; returns its recorded zone.
+    async fn recorded_zone(source: TimeZoneSource) -> Option<String> {
+        let options = SqliteConnectOptions::new().filename(":memory:");
+        let profiles = SqliteProfileStore::connect_with(options).await.unwrap();
+        let server = ServerBuilder::new().name("Test-Server").build();
+        profiles.create_server(&server).await.unwrap();
+        let chats = profiles.chat_session_store().with_time_zone_source(source);
+        let id = chats.create_session(&server.id, None).await.unwrap();
+        let session = profiles.activity_session_store().load(id).await;
+        session.unwrap().unwrap().time_zone
+    }
+
+    #[tokio::test]
+    async fn test_new_session_stores_injected_time_zone() {
+        let zone = recorded_zone(std::sync::Arc::new(|| Some("Europe/Berlin".into()))).await;
+        assert_eq!(zone.as_deref(), Some("Europe/Berlin"));
+    }
+
+    #[tokio::test]
+    async fn test_failed_time_zone_lookup_still_creates_session_with_null() {
+        assert_eq!(recorded_zone(std::sync::Arc::new(|| None)).await, None);
     }
 }

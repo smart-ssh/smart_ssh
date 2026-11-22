@@ -128,6 +128,7 @@ pub(crate) async fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
 pub struct SqliteChatSessionStore {
     pool: SqlitePool,
     removal: RemovalHook,
+    time_zone: crate::activity_session_store::TimeZoneSource,
 }
 
 impl SqliteChatSessionStore {
@@ -135,11 +136,26 @@ impl SqliteChatSessionStore {
         Self {
             pool,
             removal: RemovalHook::default(),
+            time_zone: crate::activity_session_store::device_time_zone_source(),
         }
     }
 
     pub(crate) fn with_removal_hook(pool: SqlitePool, removal: RemovalHook) -> Self {
-        Self { pool, removal }
+        Self {
+            pool,
+            removal,
+            time_zone: crate::activity_session_store::device_time_zone_source(),
+        }
+    }
+
+    /// Replaces the source of the time zone stored with new recorded
+    /// sessions (default: the device zone; tests inject a fixed value).
+    pub fn with_time_zone_source(
+        mut self,
+        source: crate::activity_session_store::TimeZoneSource,
+    ) -> Self {
+        self.time_zone = source;
+        self
     }
 
     /// Spec 0034, Abschnitt 4: "Eine Sitzung beginnt bei `connect()`" —
@@ -156,6 +172,7 @@ impl SqliteChatSessionStore {
             id,
             server_id,
             ai_provider_id,
+            (self.time_zone)().as_deref(),
         )
         .await?;
         Ok(id)
@@ -1570,53 +1587,6 @@ mod tests {
         );
     }
 
-    /// Ein Inhalt, der kein Text ist (eine nicht umgestellte Altzeile), ist
-    /// ein klarer Fehler — kein Panic, keine stille Lücke im Verlauf.
-    #[tokio::test]
-    async fn test_a_blob_message_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "INSERT INTO chat_messages \
-             (id, session_id, role, content_type, content, sequence, created_at) \
-             VALUES (?, ?, 'user', 'text', ?, 0, ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(session_id.to_string())
-        .bind(vec![0u8; 40])
-        .bind(Utc::now().to_rfc3339())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_session(session_id).await,
-            Err(ChatSessionStoreError::Database(_))
-        ));
-    }
-
-    /// Wie oben, für `load_summary`.
-    #[tokio::test]
-    async fn test_a_blob_summary_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = 2 WHERE id = ?",
-        )
-        .bind(vec![0u8; 40])
-        .bind(session_id.to_string())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_summary(session_id).await,
-            Err(ChatSessionStoreError::Database(_))
-        ));
-    }
-
     /// `load_summary` muss für eine Sitzung ohne je gespeicherte
     /// Zusammenfassung `Ok(None)` liefern (additive Migration: beide
     /// Spalten `NULL`), nicht fälschlich einen Fehler.
@@ -1630,3 +1600,6 @@ mod tests {
         assert_eq!(loaded, None);
     }
 }
+
+#[cfg(test)]
+mod tests_blob;
