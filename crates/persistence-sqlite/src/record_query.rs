@@ -24,6 +24,11 @@ use crate::ledger_store::{LedgerEntry, LedgerStoreError};
 /// Rows examined per statement while a text filter is matched in Rust.
 const TEXT_SCAN_CHUNK: i64 = 500;
 
+/// Rows examined per `list_entries` call with a text filter. A call that
+/// reaches it returns what it found so far (possibly an empty page) together
+/// with a cursor, so a page stays fast on a very large record.
+const TEXT_SCAN_BUDGET: i64 = 5_000;
+
 /// Largest page a caller can get.
 pub const MAX_PAGE_SIZE: u32 = 200;
 
@@ -177,7 +182,10 @@ impl SqliteRecordQuery {
     ///
     /// A text filter is matched in Rust (Unicode case-insensitive; SQLite's
     /// `lower()` only folds ASCII) over keyset chunks of `TEXT_SCAN_CHUNK`
-    /// rows, so each statement stays bounded.
+    /// rows, so each statement stays bounded. A call examines at most
+    /// `TEXT_SCAN_BUDGET` rows; when it stops there, the page may be short
+    /// (or empty) and `next` continues after the last row examined, so
+    /// callers page on `next` rather than on the page being full.
     pub async fn list_entries(
         &self,
         filter: &EntryFilter,
@@ -202,12 +210,15 @@ impl SqliteRecordQuery {
         };
         let mut after = page.after.map(|c| c.0);
         let mut hit_ids: Vec<i64> = Vec::new();
+        let mut scanned: i64 = 0;
+        let mut budget_cursor: Option<i64> = None;
         loop {
             // Only the row id and the searched text are read while scanning.
             let chunk = self
                 .entries_chunk(filter, after, TEXT_SCAN_CHUNK, true)
                 .await?;
             let exhausted = (chunk.len() as i64) < TEXT_SCAN_CHUNK;
+            scanned += chunk.len() as i64;
             for row in chunk {
                 let rid: i64 = row.get("rid");
                 after = Some(rid);
@@ -222,13 +233,17 @@ impl SqliteRecordQuery {
             if hit_ids.len() as i64 > limit || exhausted {
                 break;
             }
+            if scanned >= TEXT_SCAN_BUDGET {
+                budget_cursor = after;
+                break;
+            }
         }
         let has_more = hit_ids.len() as i64 > limit;
         hit_ids.truncate(limit as usize);
         let next = if has_more {
             hit_ids.last().map(|r| RecordCursor(*r))
         } else {
-            None
+            budget_cursor.map(RecordCursor)
         };
         let mut items = Vec::with_capacity(hit_ids.len());
         for id in &hit_ids {

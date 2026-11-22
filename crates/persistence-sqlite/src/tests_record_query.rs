@@ -602,12 +602,58 @@ async fn record_query_bench_page_of_200_in_100k_entries() {
             for _ in 0..5 {
                 let none = q.list_entries(&no_match, ALL).await.unwrap();
                 assert!(none.items.is_empty());
+                assert!(none.next.is_some());
             }
             for _ in 0..20 {
                 q.list_entries(&EntryFilter::default(), ALL).await.unwrap();
             }
         })
     };
+    // Text-filtered page: no match and a selective match (Unicode needle).
+    sqlx::query(
+        "UPDATE ledger_entries SET content = '{\"CommandProposed\":{\"command\":\"Übersicht\"}}' \
+         WHERE sequence = 90000",
+    )
+    .execute(&s.pool)
+    .await
+    .unwrap();
+    for (needle, expected) in [("zzz-no-match", 0), ("ÜBERSICHT", 1)] {
+        let f = EntryFilter {
+            text_contains: Some(needle.into()),
+            ..Default::default()
+        };
+        let start = std::time::Instant::now();
+        let page = q
+            .list_entries(
+                &f,
+                PageRequest {
+                    limit: 200,
+                    after: None,
+                },
+            )
+            .await
+            .unwrap();
+        let took = start.elapsed();
+        assert!(page.items.len() <= expected);
+        assert!(took.as_millis() < 50, "text page {needle} took {took:?}");
+        // Paging on `next` reaches the whole record.
+        let (mut found, mut after) = (page.items.len(), page.next);
+        while let Some(c) = after {
+            let p = q
+                .list_entries(
+                    &f,
+                    PageRequest {
+                        limit: 200,
+                        after: Some(c),
+                    },
+                )
+                .await
+                .unwrap();
+            found += p.items.len();
+            after = p.next;
+        }
+        assert_eq!(found, expected);
+    }
     let mut worst = std::time::Duration::ZERO;
     for _ in 0..20 {
         let start = std::time::Instant::now();
@@ -648,4 +694,73 @@ async fn test_text_filter_is_unicode_case_insensitive() {
         .await
         .unwrap();
     assert_eq!(page.items.len(), 1);
+}
+
+/// Review of #1449: lower-case stored text, upper-case needle.
+#[tokio::test]
+async fn test_text_filter_upper_needle_matches_lower_stored_text() {
+    let s = store().await;
+    add_session(&s, 1, "chat", "srv-a", "[]", "2026-01-01T00:00:00+00:00", 0).await;
+    add_entry(
+        &s,
+        1,
+        0,
+        "ai",
+        "ai_message",
+        r#"{"AiMessage":{"text":"übersicht der dienste"}}"#,
+        "2026-01-01T14:00:00+00:00",
+    )
+    .await;
+    let q = s.ledger_store().record_query();
+    let page = q
+        .list_entries(
+            &EntryFilter {
+                text_contains: Some("ÜBERSICHT".into()),
+                ..Default::default()
+            },
+            ALL,
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
+}
+
+/// A text filter over more rows than the scan budget returns a cursor, and
+/// following it finds a match beyond the budget.
+#[tokio::test]
+async fn test_text_filter_scan_budget_cursor_continues_to_later_match() {
+    let s = store().await;
+    add_session(&s, 1, "chat", "srv-a", "[]", "2026-01-01T00:00:00+00:00", 0).await;
+    sqlx::query(
+        "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 5999) \
+         INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
+         SELECT 'e' || i, ?, i, 'ai', 'command_proposed', \
+         CASE WHEN i = 5999 THEN '{\"CommandProposed\":{\"command\":\"Needle\"}}' \
+         ELSE '{\"CommandProposed\":{\"command\":\"ls\"}}' END, \
+         '2026-01-01T00:00:00+00:00' FROM n",
+    )
+    .bind(sid(1).to_string())
+    .execute(&s.pool)
+    .await
+    .unwrap();
+    let q = s.ledger_store().record_query();
+    let f = EntryFilter {
+        text_contains: Some("NEEDLE".into()),
+        ..Default::default()
+    };
+    let first = q.list_entries(&f, ALL).await.unwrap();
+    assert!(first.items.is_empty());
+    let cursor = first.next.expect("budget reached, cursor expected");
+    let second = q
+        .list_entries(
+            &f,
+            PageRequest {
+                limit: 200,
+                after: Some(cursor),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.items.len(), 1);
+    assert!(second.next.is_none());
 }
