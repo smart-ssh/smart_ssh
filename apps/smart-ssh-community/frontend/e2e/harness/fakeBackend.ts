@@ -215,6 +215,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     move_group: ({ id, parentId }) => {
       const group = model.groups.find((g) => g.id === id);
       if (!group) throw commandError(`group not found: ${String(id)}`);
+      // Like the real backend: a group cannot move into itself or a descendant.
+      for (let cur = (parentId as string | null) ?? null; cur; ) {
+        if (cur === group.id) throw commandError("group cycle", "GROUP_CYCLE_DETECTED");
+        cur = model.groups.find((g) => g.id === cur)?.parentId ?? null;
+      }
       group.parentId = (parentId as string | null) ?? null;
       persist();
       return null;
