@@ -380,10 +380,7 @@ async fn test_mcp_tab_closed_during_connect_ends_the_recorded_session() {
                 Ok::<(), ()>(())
             }
         },
-        |id| {
-            sessions.remove(id);
-            async {}
-        },
+        |_| async {},
     )
     .await;
     assert!(result.is_err());
