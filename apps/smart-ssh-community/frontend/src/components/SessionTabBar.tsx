@@ -5,6 +5,8 @@ import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
 import { Button, Icon } from "./ui";
 
+/** Pixels per line for `WheelEvent.DOM_DELTA_LINE` (a typical browser line height). */
+const WHEEL_LINE_PX = 16;
 
 interface SessionTabBarProps {
   tabs: SessionTab[];
@@ -60,7 +62,9 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
     const onWheel = (e: WheelEvent) => {
       if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       e.preventDefault();
-      el.scrollLeft += e.deltaY;
+      // deltaMode: 0 pixels, 1 lines, 2 pages (a page is one strip width).
+      const unit = e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? el.clientWidth : 1;
+      el.scrollLeft += e.deltaY * unit;
     };
     update();
     el.addEventListener("scroll", update, { passive: true });

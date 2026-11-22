@@ -232,4 +232,22 @@ describe("SessionTabBar overflow (issue #1408)", () => {
     strip.dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(false);
   });
+
+  it("converts line and page wheel deltas to pixels", () => {
+    const strip = setup(600, 300);
+    fireEvent.scroll(strip);
+    strip.dispatchEvent(new WheelEvent("wheel", { deltaY: 3, deltaMode: 1, cancelable: true }));
+    expect(strip.scrollLeft).toBe(48);
+    strip.scrollLeft = 0;
+    strip.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, deltaMode: 2, cancelable: true }));
+    expect(strip.scrollLeft).toBe(300);
+  });
+
+  it("fades the start edge once the strip is scrolled", () => {
+    const strip = setup(600, 300);
+    strip.scrollLeft = 50;
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute("data-overflow-start");
+    expect(strip.style.maskImage).toContain("transparent, currentColor");
+  });
 });
