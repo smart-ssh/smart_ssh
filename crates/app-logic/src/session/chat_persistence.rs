@@ -59,6 +59,13 @@ pub struct ChatPersistence {
     /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
     /// hält (der eigentliche `INSERT`).
     pub chat_session_id: AsyncMutex<Option<uuid::Uuid>>,
+    /// Store of recorded sessions (activity record); `None` in tests.
+    pub activity_session_store: Option<persistence_sqlite::SqliteActivitySessionStore>,
+    /// Issue #1444: the recorded session (`activity_sessions`, kind `mcp`) of
+    /// an MCP-driven connection. Set once by
+    /// `mcp_sessions::attach_recorded_session`; `None` for chat sessions,
+    /// which record under `chat_session_id`. Never a `chat_sessions` row.
+    pub mcp_activity_session_id: AsyncMutex<Option<uuid::Uuid>>,
     /// Issue #505: chat content extensions (`AppState.chat_content`); the
     /// send path seals extension parts through it.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,

@@ -1,5 +1,4 @@
-//! Tests of `connect_session` against an injected connector.
-//! Issue #259: `connect_session` gegen einen eingespeisten `Connector` — der
+//! Issue #259: tests of `connect_session` against an injected `Connector` — der
 //! echte Verbindungsaufbau (Verbinden, Fortsetzen, Fehlerpfad beim
 //! Fortsetzen) ohne Netzwerk. Echte SQLite-Stores (je Test eigene
 //! Datenbankdateien), `MockRuntime`, ein Mock-Connector mit Mock-Transport.
@@ -215,6 +214,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         prompt_history_store: main_db.prompt_history_store(),
         chat_session_store: chat_db.chat_session_store(),
         ledger_store: chat_db.ledger_store(),
+        activity_session_store: chat_db.activity_session_store(),
         profile_store: Arc::new(main_db),
         credential_store: Arc::new(credential_store),
         key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),

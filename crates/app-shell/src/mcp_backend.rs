@@ -77,9 +77,22 @@ impl AppMcpBackend {
             // rein MCP-ausgelöste Verbindung erzeugt keine
             // `chat_sessions`-Zeile (s. `connect_session`-Doc-Kommentar).
             |session_id| async move {
-                connect_session(app, state, server_id, session_id, None, false)
+                let connected = connect_session(app, state, server_id, session_id, None, false)
                     .await
-                    .map(|_| ())
+                    .map(|_| ());
+                // Issue #1444: the activity record gets its own `mcp`
+                // recorded session, named after the MCP client.
+                if connected.is_ok() {
+                    if let Some(session) = state.sessions.get(session_id) {
+                        app_logic::mcp_sessions::attach_recorded_session(
+                            &session,
+                            &server_id,
+                            client_name,
+                        )
+                        .await;
+                    }
+                }
+                connected
             },
             |session_id| async move {
                 let elevated = app.state::<crate::elevated_sftp::ElevatedSftpRegistry>();

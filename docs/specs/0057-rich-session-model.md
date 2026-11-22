@@ -130,8 +130,18 @@ Chat-Aufbewahrung und das Löschen des Servers.
 
 Wird für eine Verbindung keine Chat-Sitzung gespeichert (Chat-Historie aus,
 lokaler Pseudo-Server, Anlegefehler), entsteht über den Chat keine
-aufgezeichnete Sitzung; MCP- und Terminal-Sitzungen bekommen ihre eigene
-(Umsetzung: #1444, #1447).
+aufgezeichnete Sitzung.
+
+**MCP-Sitzungen:** Jede vom MCP-Client getriebene Verbindung bekommt eine
+eigene aufgezeichnete Sitzung der Art `mcp` mit dem Namen des Clients aus dem
+Handshake (fehlt er, steht `unknown` dort), aber keine Chat-Sitzung. Vorschläge,
+Entscheidungen und Ausführungen ihrer Aktionen stehen mit Quelle `mcp-agent` in
+ihrem Ledger, mit derselben Redaction wie im Chat. Sie erscheinen weder in der
+Liste der Chat-Sitzungen noch im Dialog zum Fortsetzen, lassen sich nicht als
+Chat fortsetzen und fließen nie in den Kontext eines Chats. Ein Chat und eine
+MCP-Sitzung auf demselben Server schreiben in zwei verschiedene aufgezeichnete
+Sitzungen. Beim Schließen der MCP-Sitzung wird ihr Ende gesetzt. Terminal-
+Sitzungen bekommen ihre eigene aufgezeichnete Sitzung mit #1447.
 
 ### 1.6 Löschen
 
@@ -390,7 +400,8 @@ nicht neu vergeben.
   nicht (sehr kleines Fenster), wird der Request trotzdem gesendet und nur
   protokolliert.
 - **Lokaler Pseudo-Server und rein MCP-getriebene Sitzungen** speichern keine
-  Chat-Sitzung (§1.4), daher kein Ledger und keine gespeicherte Summary; die
+  Chat-Sitzung (§1.4), daher keine gespeicherte Summary (MCP-Aktionen stehen
+  trotzdem in ihrem Ledger, §1.5); die
   Kompaktierung läuft dort trotzdem im Speicher.
 - **Der Banner des Servers** (Betriebssystem-Information) steht in der
   ersten Runde und kann so indirekt in eine gespeicherte Summary gelangen;

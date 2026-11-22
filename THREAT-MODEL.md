@@ -130,6 +130,7 @@ Before content leaves the app towards an AI provider, it passes through the
 output redactor
 ([`crates/core/src/ai/redactor.rs`](crates/core/src/ai/redactor.rs)).
 Redaction also runs before ledger entries and note suggestions are stored (the ledger is the activity record: it belongs to a recorded session, not to a chat, so it outlives deleting a chat or a server; a server snapshot stays with it),
+MCP-driven actions are recorded in the ledger under their own recorded session (kind `mcp`) with the same redaction; the MCP client name from the handshake is stored as a label only, shortened to 64 characters, and is never used as an instruction or put into a prompt. MCP recorded sessions have no chat session, so they cannot be listed or resumed as a chat,
 and before server notes are returned to an MCP client
 ([ADR 0103](docs/adr/0103-mcp-server-notes-redact-and-fence.md)).
 

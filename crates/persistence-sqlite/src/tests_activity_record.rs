@@ -582,3 +582,123 @@ async fn test_restore_as_copy_moves_activity_record_to_the_server_copy() {
             .unwrap();
     assert_eq!(other, gone.to_string());
 }
+
+// --- Issue #1444: recorded sessions of MCP-driven connections -------------
+
+async fn store_with_server() -> (SqliteProfileStore, ServerId) {
+    let store = SqliteProfileStore::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new().filename(":memory:"),
+    )
+    .await
+    .unwrap();
+    let now = chrono::Utc::now();
+    let server = Server {
+        id: ServerId::new(),
+        name: "Web".into(),
+        host: "web.example".into(),
+        port: 22,
+        username: "deploy".into(),
+        group_id: None,
+        tags: Vec::new(),
+        auth: AuthMethod::Agent,
+        notes: String::new(),
+        jump_host: None,
+        post_ingest_policy: PostIngestPolicy::default(),
+        ai_injection_check_enabled: false,
+        sftp_server_path: None,
+        elevation_allowed: true,
+        start_directory: None,
+        created_at: now,
+        updated_at: now,
+    };
+    store.create_server(&server).await.unwrap();
+    (store, server.id)
+}
+
+#[tokio::test]
+async fn test_mcp_session_has_kind_mcp_client_name_and_no_chat_row() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    let id = activity
+        .create_mcp_session(&server, Some("Claude Code"))
+        .await
+        .unwrap();
+    let loaded = activity.load(id).await.unwrap().unwrap();
+    assert_eq!(loaded.kind, "mcp");
+    assert_eq!(loaded.mcp_client.as_deref(), Some("Claude Code"));
+    assert_eq!(loaded.server_name, "Web");
+    assert_eq!(loaded.ended_at, None);
+    // Not a chat: not listed, not resumable.
+    let chats = store.chat_session_store();
+    assert!(chats
+        .list_sessions_for_server(&server)
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!activity.is_chat_session(id).await.unwrap());
+    assert_eq!(count(&store, "chat_sessions").await, 0);
+}
+
+#[tokio::test]
+async fn test_mcp_session_without_client_name_is_stored_as_unknown() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    for name in [None, Some("  ")] {
+        let id = activity.create_mcp_session(&server, name).await.unwrap();
+        let loaded = activity.load(id).await.unwrap().unwrap();
+        assert_eq!(loaded.mcp_client.as_deref(), Some("unknown"));
+    }
+}
+
+#[tokio::test]
+async fn test_chat_and_mcp_session_on_one_server_are_two_recorded_sessions() {
+    let (store, server) = store_with_server().await;
+    let chat = store
+        .chat_session_store()
+        .create_session(&server, None)
+        .await
+        .unwrap();
+    let mcp = store
+        .activity_session_store()
+        .create_mcp_session(&server, Some("c"))
+        .await
+        .unwrap();
+    assert_ne!(chat, mcp);
+    assert!(store
+        .activity_session_store()
+        .is_chat_session(chat)
+        .await
+        .unwrap());
+    assert_eq!(
+        store
+            .chat_session_store()
+            .list_sessions_for_server(&server)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn test_mcp_session_for_missing_server_is_an_error_and_writes_nothing() {
+    let (store, _) = store_with_server().await;
+    let res = store
+        .activity_session_store()
+        .create_mcp_session(&ServerId::new(), Some("c"))
+        .await;
+    assert!(res.is_err());
+    assert_eq!(count(&store, "activity_sessions").await, 0);
+}
+
+#[tokio::test]
+async fn test_mark_ended_sets_ended_at_of_a_recorded_session() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    let id = activity
+        .create_mcp_session(&server, Some("c"))
+        .await
+        .unwrap();
+    activity.mark_ended(id).await.unwrap();
+    assert!(activity.load(id).await.unwrap().unwrap().ended_at.is_some());
+}
