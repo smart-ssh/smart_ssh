@@ -397,6 +397,18 @@ async fn write_via_sudo_fallback(
         None
     };
 
+    // "Before" hash: only when the old content is readable over SFTP (e.g. a
+    // 0644 root file); `None` when the read itself is denied or fails.
+    let mut sha256_before = None;
+    if existed {
+        let mut guard = session.lock_sftp().await;
+        if let Some(sftp) = guard.sftp() {
+            if let Ok(old) = sftp.read_file(path).await {
+                sha256_before = Some(sha256_hex(&old));
+            }
+        }
+    }
+
     if let Some(backup) = &backup_path {
         let cmd = format!(
             "sudo -S cp -p {} {}",
@@ -442,11 +454,9 @@ async fn write_via_sudo_fallback(
     }
 
     install_result?;
-    // The old content is not read on this path (it was not readable over
-    // SFTP), so there is no "before" hash.
     Ok(WriteDone {
         backup_path,
-        sha256_before: None,
+        sha256_before,
     })
 }
 

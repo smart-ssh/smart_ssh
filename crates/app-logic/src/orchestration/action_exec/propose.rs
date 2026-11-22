@@ -23,7 +23,8 @@ use crate::state::{ActionId, SessionId};
 use super::super::approval::ApprovedAction;
 use super::super::chat_turn::{
     ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
+    wait_for_rate_limit_budget, write_ledger_entry, write_ledger_entry_for_action,
+    PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 use super::super::notes::note_target_preview_for_action;
 use super::super::pending_confirmation::{
@@ -529,8 +530,8 @@ async fn run_approved(
     matched_rule_origin: Option<ssh_manager_core::filter::RuleOrigin>,
     uses_password: bool,
 ) -> bool {
-    if let AiAction::SuggestCommand { .. } = &action {
-        write_ledger_entry(
+    if records_decision(&action) {
+        write_ledger_entry_for_action(
             ctx.session,
             ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::Decision {
@@ -540,6 +541,7 @@ async fn run_approved(
                 matched_rule,
                 matched_rule_origin,
             },
+            decision_link(&action, ctx.action_id),
         )
         .await;
     }
@@ -570,8 +572,8 @@ async fn report_denied(
 ) -> bool {
     ctx.earlier_rejection
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    if let AiAction::SuggestCommand { .. } = action {
-        write_ledger_entry(
+    if records_decision(action) {
+        write_ledger_entry_for_action(
             ctx.session,
             ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::Decision {
@@ -581,6 +583,7 @@ async fn report_denied(
                 matched_rule,
                 matched_rule_origin,
             },
+            decision_link(action, ctx.action_id),
         )
         .await;
     }

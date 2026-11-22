@@ -2,7 +2,7 @@
 //! path, size, hashes and backup path are recorded, never content or diff.
 
 use ssh_manager_core::ai::AiEvent;
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
+use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::{normalize_lexical_path, FilterEngine};
 use ssh_manager_core::ssh::mock::MockSftpSession;
 
@@ -32,13 +32,35 @@ async fn file_entries(
         .filter(|e| {
             matches!(
                 e.content,
-                LedgerEntryContent::FileRead { .. } | LedgerEntryContent::FileWritten { .. }
+                LedgerEntryContent::FileRead { .. }
+                    | LedgerEntryContent::FileWritten { .. }
+                    | LedgerEntryContent::Decision { .. }
             )
         })
         .collect()
 }
 
 async fn run_write(
+    events: Vec<AiEvent>,
+    transport: MockSshTransport,
+    sftp: MockSftpSession,
+    sudo: bool,
+    approve: bool,
+) -> (
+    Vec<persistence_sqlite::LedgerEntry>,
+    tempfile::TempDir,
+    persistence_sqlite::SqliteChatSessionStore,
+) {
+    let (all, t, c) = run_write_all(events, transport, sftp, sudo, approve).await;
+    let files = all
+        .into_iter()
+        .filter(|e| !matches!(e.content, LedgerEntryContent::Decision { .. }))
+        .collect();
+    (files, t, c)
+}
+
+/// Like `run_write`, but keeps the decision entries linked to the action.
+async fn run_write_all(
     events: Vec<AiEvent>,
     transport: MockSshTransport,
     sftp: MockSftpSession,
@@ -196,6 +218,7 @@ async fn test_file_write_with_sudo_fallback_records_sudo() {
     assert_eq!(entries.len(), 1, "{entries:?}");
     let LedgerEntryContent::FileWritten {
         backup_path,
+        sha256_before,
         sha256_after,
         sudo,
         ..
@@ -204,6 +227,10 @@ async fn test_file_write_with_sudo_fallback_records_sudo() {
         panic!("expected file_written")
     };
     assert!(sudo);
+    assert_eq!(
+        sha256_before.as_deref(),
+        Some(sha256_hex(b"alte config").as_str())
+    );
     assert!(backup_path.is_some());
     assert_eq!(
         sha256_after.as_deref(),
@@ -257,4 +284,75 @@ async fn test_file_ledger_path_is_redacted_like_command_text() {
     assert_eq!(entries.len(), 1, "{entries:?}");
     let json = serde_json::to_string(&entries[0].content).unwrap();
     assert!(!json.contains("hunter2geheim"), "{json}");
+}
+
+fn decision_outcome(e: &persistence_sqlite::LedgerEntry) -> Option<LedgerDecisionOutcome> {
+    match &e.content {
+        LedgerEntryContent::Decision { outcome, .. } => Some(*outcome),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn test_rejected_file_write_records_rejected_decision_linked_by_action_id() {
+    let path = "/home/deploy/app.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu"),
+        MockSshTransport::default(),
+        MockSftpSession::new().with_file(path, b"alt".to_vec()),
+        false,
+        false,
+    )
+    .await;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(
+        decision_outcome(&entries[0]),
+        Some(LedgerDecisionOutcome::Rejected)
+    );
+    assert!(entries[0].meta.action_id.is_some());
+}
+
+#[tokio::test]
+async fn test_approved_file_write_records_decision_and_file_written_with_same_action_id() {
+    let path = "/home/deploy/app.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu"),
+        MockSshTransport::default(),
+        MockSftpSession::new().with_file(path, b"alt".to_vec()),
+        false,
+        true,
+    )
+    .await;
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    let decision = entries
+        .iter()
+        .find(|e| decision_outcome(e) == Some(LedgerDecisionOutcome::Confirmed));
+    let written = entries
+        .iter()
+        .find(|e| matches!(e.content, LedgerEntryContent::FileWritten { .. }));
+    let (Some(decision), Some(written)) = (decision, written) else {
+        panic!("expected decision and file_written: {entries:?}")
+    };
+    assert!(decision.meta.action_id.is_some());
+    assert_eq!(decision.meta.action_id, written.meta.action_id);
+}
+
+#[tokio::test]
+async fn test_failed_approved_file_write_records_decision_but_no_file_written() {
+    let path = "/etc/nginx/nginx.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu"),
+        MockSshTransport::default(),
+        MockSftpSession::new()
+            .with_file(path, b"alt".to_vec())
+            .with_permission_denied(path),
+        false,
+        true,
+    )
+    .await;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(
+        decision_outcome(&entries[0]),
+        Some(LedgerDecisionOutcome::Confirmed)
+    );
 }

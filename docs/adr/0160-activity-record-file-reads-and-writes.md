@@ -16,7 +16,7 @@ ADR 0047 point 3 limited the ledger to `SuggestCommand`. A file read or write by
 | What is recorded for a write? | `file_written`: path, backup path or none, size and SHA-256 before and after, whether the sudo fallback was used. | Lets a reader tie a change to the backup and verify it later. |
 | Content or diff? | Never stored. | The record is not a copy of server data; the hashes suffice. |
 | When is `file_written` written? | Only after the write succeeded. A rejected, blocked or failed write leaves no `file_written` entry. | "Written" must mean bytes were written. A failed write is visible as the action error in the chat. |
-| "Before" values | Size from the stat before the write; hash from the content read for the backup. On the sudo path the old content is not readable over SFTP, so the hash is absent (size still recorded). A new file has no "before". | No extra privileged read is added to the write path. |
+| "Before" values | Size from the stat before the write; hash from the content read for the backup. On the sudo path the old content is read over SFTP once more for the hash; it is absent only when that read itself is denied or fails (size still recorded). A new file has no "before". | No privileged read is added; the extra read on the sudo path is an ordinary SFTP read. |
 | "After" values | Computed over the bytes sent to the server (after the edition's outgoing transform). | These are the bytes that were written. |
 | Redaction | Path and backup path go through the same central redaction as command text. | Spec 0057 §1.2. |
 | Link to the action | Entries carry the `action_id` of the proposed action. | Spec 0057 §1. |
