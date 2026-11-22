@@ -228,7 +228,9 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §3).
 - **File reads and writes by the AI** appear in the ledger as path, size, SHA-256
   and (for writes) backup path only — never the file content or a diff. Paths
-  are redacted like command text.
+  are redacted like command text. A write that failed after it reached the
+  target is recorded the same way, marked as failed (the file may be partly
+  overwritten), without hashes of the new content.
 - **Your own chat messages** are stored as you typed them (inside the
   encrypted database, section 3) and redacted only when they are sent.
 

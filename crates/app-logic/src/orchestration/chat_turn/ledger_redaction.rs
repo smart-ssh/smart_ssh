@@ -41,6 +41,7 @@ pub(super) fn redact_ledger_entry_content(
         // Only the paths can carry a secret; sizes and hashes are not content.
         LedgerEntryContent::FileWritten {
             path,
+            status,
             backup_path,
             bytes_before,
             bytes_after,
@@ -49,6 +50,7 @@ pub(super) fn redact_ledger_entry_content(
             sudo,
         } => LedgerEntryContent::FileWritten {
             path: redactor.redact_text(&path),
+            status,
             backup_path: backup_path.map(|b| redactor.redact_text(&b)),
             bytes_before,
             bytes_after,

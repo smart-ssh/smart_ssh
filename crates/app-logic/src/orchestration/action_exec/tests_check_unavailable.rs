@@ -585,6 +585,7 @@ async fn test_ledger_redacts_fake_secret_in_file_paths_and_connection_detail() {
         },
         LedgerEntryContent::FileWritten {
             path: "/srv/app?password=hunter2geheim".to_string(),
+            status: Default::default(),
             backup_path: None,
             bytes_before: None,
             bytes_after: Some(1),

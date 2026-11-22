@@ -126,12 +126,17 @@ pub enum LedgerEntryContent {
         bytes: Option<u64>,
         sha256: Option<String>,
     },
-    /// An AI file write (Spec 0057): written only when bytes were actually
-    /// written. Neither content nor diff is stored; `None` in a before/after
+    /// An AI file write (Spec 0057): written when the write succeeded, or with
+    /// status `Failed` when it failed after it had started. Neither content nor diff is stored; `None` in a before/after
     /// field means "not known" (e.g. a new file has no "before"; the old
     /// content of a file only readable with elevated rights is not read).
     FileWritten {
         path: String,
+        /// `Failed`: the write started and then failed, so the target may be
+        /// partly overwritten; the size/hash fields of such an entry are `None`
+        /// (nothing is known to have been written).
+        #[serde(default)]
+        status: LedgerFileWriteStatus,
         /// Server-side backup of the previous content, if one was made.
         backup_path: Option<String>,
         bytes_before: Option<u64>,
@@ -148,6 +153,17 @@ pub enum LedgerEntryContent {
     },
     /// Proof of life of a running session. Carries no content at all.
     ActivityTick,
+}
+
+/// Outcome of a [`LedgerEntryContent::FileWritten`] entry.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LedgerFileWriteStatus {
+    /// The whole write succeeded.
+    #[default]
+    Completed,
+    /// The write reached the target and then failed; it may be partly changed.
+    Failed,
 }
 
 /// Kind of a [`LedgerEntryContent::Connection`] entry.

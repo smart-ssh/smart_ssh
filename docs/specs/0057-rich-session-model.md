@@ -63,8 +63,14 @@ Typen:
 - **Datei geschrieben** — Pfad, Pfad der Sicherungskopie, Größe und SHA-256
   vorher/nachher sowie ob erhöhte Rechte (Sudo) genutzt wurden; nie Inhalt
   und nie ein Diff. Der „vorher"-Hash fehlt nur, wenn die alte Datei nicht
-  lesbar war oder neu angelegt wurde. Ein abgelehnter oder fehlgeschlagener
-  Schreibvorgang erzeugt keinen „Datei geschrieben"-Eintrag; die
+  lesbar war oder neu angelegt wurde. Ein abgelehnter Schreibvorgang oder einer,
+  der scheitert, bevor die Zieldatei angefasst wurde (Zugriff verweigert,
+  Sicherungskopie fehlgeschlagen), erzeugt keinen „Datei geschrieben"-Eintrag.
+  Scheitert der Schreibvorgang, nachdem er die Zieldatei erreicht hat (z. B.
+  Abbruch mitten im Übertragen, fehlgeschlagener Sudo-Kopierschritt), steht ein
+  „Datei geschrieben"-Eintrag mit Status „fehlgeschlagen" im Ledger: Pfad,
+  Pfad der Sicherungskopie und Aktions-ID, ohne Größen-/Hash-Angaben „nachher",
+  nie Inhalt oder Diff; die Zieldatei kann teilweise überschrieben sein. Die
   **Entscheidung** (bestätigt, abgelehnt, automatisch freigegeben) steht wie
   bei Kommandos im Ledger und ist über dieselbe Aktions-ID mit dem
   „Datei geschrieben"-Eintrag verknüpft.

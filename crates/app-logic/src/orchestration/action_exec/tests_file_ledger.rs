@@ -169,6 +169,7 @@ async fn test_file_write_records_backup_and_both_hashes_without_content() {
     assert!(entries[0].meta.action_id.is_some());
     let LedgerEntryContent::FileWritten {
         path: p,
+        status: _,
         backup_path,
         bytes_before,
         bytes_after,
@@ -355,4 +356,142 @@ async fn test_failed_approved_file_write_records_decision_but_no_file_written() 
         decision_outcome(&entries[0]),
         Some(LedgerDecisionOutcome::Confirmed)
     );
+}
+
+fn failed_entry(
+    entries: &[persistence_sqlite::LedgerEntry],
+) -> (&persistence_sqlite::LedgerEntry, &LedgerEntryContent) {
+    let e = entries
+        .iter()
+        .find(|e| matches!(e.content, LedgerEntryContent::FileWritten { .. }))
+        .unwrap_or_else(|| panic!("expected file_written: {entries:?}"));
+    (e, &e.content)
+}
+
+#[tokio::test]
+async fn test_write_failing_mid_stream_records_failed_file_written() {
+    let path = "/home/deploy/app.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "NEW-MARKER-2 body"),
+        MockSshTransport::default(),
+        MockSftpSession::new()
+            .with_file(path, b"OLD-MARKER-1 body".to_vec())
+            .with_partial_write_failure(path),
+        false,
+        true,
+    )
+    .await;
+    let decision = entries
+        .iter()
+        .find(|e| decision_outcome(e) == Some(LedgerDecisionOutcome::Confirmed))
+        .unwrap_or_else(|| panic!("expected decision: {entries:?}"));
+    let (written, content) = failed_entry(&entries);
+    assert_eq!(decision.meta.action_id, written.meta.action_id);
+    let LedgerEntryContent::FileWritten {
+        path: p,
+        status,
+        backup_path,
+        bytes_after,
+        sha256_after,
+        ..
+    } = content
+    else {
+        unreachable!()
+    };
+    assert_eq!(p, path);
+    assert_eq!(
+        *status,
+        ssh_manager_core::audit::LedgerFileWriteStatus::Failed
+    );
+    assert!(backup_path
+        .as_deref()
+        .unwrap()
+        .starts_with("/home/deploy/app.conf.smartssh-backup-"));
+    assert!(bytes_after.is_none() && sha256_after.is_none());
+    let json = serde_json::to_string(content).unwrap();
+    assert!(!json.contains("MARKER"), "no content in the record: {json}");
+}
+
+#[tokio::test]
+async fn test_failed_file_write_path_is_redacted() {
+    let path = "/srv/app?password=hunter2geheim";
+    let normalized = normalize_lexical_path(path);
+    let (entries, _t, _c) = run_write(
+        write_action(path, "x"),
+        MockSshTransport::default(),
+        MockSftpSession::new().with_partial_write_failure(normalized),
+        false,
+        true,
+    )
+    .await;
+    let (_, content) = failed_entry(&entries);
+    let json = serde_json::to_string(content).unwrap();
+    assert!(!json.contains("hunter2geheim"), "{json}");
+}
+
+#[tokio::test]
+async fn test_backup_failure_records_no_file_written_entry() {
+    // The backup copy fails before the target is touched.
+    let path = "/home/deploy/app.conf";
+    let backup_fail = MockSftpSession::new()
+        .with_file(path, b"alt".to_vec())
+        .with_permission_denied(path);
+    let (entries, _t, _c) = run_write(
+        write_action(path, "neu"),
+        MockSshTransport::default().with_prefix_response(
+            "sudo -S cp -p ",
+            ssh_manager_core::ssh::CommandOutput {
+                stdout: Vec::new(),
+                stderr: b"cp: failed".to_vec(),
+                exit_code: Some(1),
+                truncated: false,
+            },
+        ),
+        backup_fail,
+        true,
+        true,
+    )
+    .await;
+    assert!(entries.is_empty(), "{entries:?}");
+}
+
+#[tokio::test]
+async fn test_failed_sudo_install_records_failed_file_written_with_sudo() {
+    let path = "/etc/nginx/nginx.conf";
+    let transport = MockSshTransport::default()
+        .with_prefix_response("sudo -S cp -p '/etc/nginx/nginx.conf' ", output(""))
+        .with_prefix_response(
+            "sudo -S install -m 644 ",
+            ssh_manager_core::ssh::CommandOutput {
+                stdout: Vec::new(),
+                stderr: b"install: failed".to_vec(),
+                exit_code: Some(1),
+                truncated: false,
+            },
+        );
+    let (entries, _t, _c) = run_write(
+        write_action(path, "neu"),
+        transport,
+        MockSftpSession::new()
+            .with_file(path, b"alt".to_vec())
+            .with_permission_denied(path),
+        true,
+        true,
+    )
+    .await;
+    let (_, content) = failed_entry(&entries);
+    let LedgerEntryContent::FileWritten {
+        status,
+        sudo,
+        backup_path,
+        ..
+    } = content
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        *status,
+        ssh_manager_core::audit::LedgerFileWriteStatus::Failed
+    );
+    assert!(*sudo && backup_path.is_some());
 }

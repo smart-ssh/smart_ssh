@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::approval::ApprovedFileWrite;
 
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerFileWriteStatus, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
 use ssh_manager_core::ssh::elevated::shell_single_quote;
 use ssh_manager_core::ssh::{CommandOutput, SshError};
@@ -44,6 +44,33 @@ fn sha256_hex(bytes: &[u8]) -> String {
 struct WriteDone {
     backup_path: Option<String>,
     sha256_before: Option<String>,
+}
+
+/// A failed write. `started` is true once the write to the target itself was
+/// issued (direct SFTP write, or the privileged `install`), so the target may
+/// be partly changed; failures before that (backup, temp file, permission
+/// denied on open) leave it untouched. `backup_path` is set once the backup
+/// exists.
+struct WriteFailure {
+    error: SshError,
+    started: bool,
+    backup_path: Option<String>,
+}
+
+impl WriteFailure {
+    fn before_target(error: SshError) -> Self {
+        Self {
+            error,
+            started: false,
+            backup_path: None,
+        }
+    }
+}
+
+impl From<SshError> for WriteFailure {
+    fn from(error: SshError) -> Self {
+        Self::before_target(error)
+    }
 }
 
 /// Spec 0020, Abschnitt 3: öffnet die SFTP-Session der Session lazy (erst
@@ -319,7 +346,7 @@ async fn write_via_sftp_with_backup(
     path: &str,
     content: &str,
     existed: bool,
-) -> Result<WriteDone, SshError> {
+) -> Result<WriteDone, WriteFailure> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
@@ -337,7 +364,16 @@ async fn write_via_sftp_with_backup(
 
     let mut guard = session.lock_sftp().await;
     let sftp = guard.sftp_or_err()?;
-    sftp.write_file(path, content.as_bytes()).await?;
+    if let Err(error) = sftp.write_file(path, content.as_bytes()).await {
+        // Permission denied is refused on open: the target is untouched (and
+        // the sudo fallback may follow). Any other error may be mid-stream.
+        let started = !matches!(error, SshError::SftpPermissionDenied(_));
+        return Err(WriteFailure {
+            error,
+            started,
+            backup_path,
+        });
+    }
 
     Ok(WriteDone {
         backup_path,
@@ -390,7 +426,7 @@ async fn write_via_sudo_fallback(
     existed: bool,
     old_mode: Option<u32>,
     password: &secrecy::SecretString,
-) -> Result<WriteDone, SshError> {
+) -> Result<WriteDone, WriteFailure> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
@@ -453,11 +489,52 @@ async fn write_via_sudo_fallback(
         }
     }
 
-    install_result?;
+    // The `install` command is the write to the target; a non-zero exit may
+    // come after it began copying, so the target counts as possibly changed.
+    if let Err(error) = install_result {
+        return Err(WriteFailure {
+            error,
+            started: true,
+            backup_path,
+        });
+    }
     Ok(WriteDone {
         backup_path,
         sha256_before,
     })
+}
+
+/// Activity record for a write that failed after it started (the target may be
+/// partly overwritten). Writes nothing when the target was never touched.
+/// No content, no hashes: nothing is known to have been written.
+async fn record_failed_write(
+    session: &Session,
+    ledger_source: LedgerSource,
+    path: &str,
+    bytes_before: Option<u64>,
+    failure: &WriteFailure,
+    sudo: bool,
+    action_id: Uuid,
+) {
+    if !failure.started {
+        return;
+    }
+    write_ledger_entry_for_action(
+        session,
+        ledger_source,
+        LedgerEntryContent::FileWritten {
+            path: path.to_string(),
+            status: LedgerFileWriteStatus::Failed,
+            backup_path: failure.backup_path.clone(),
+            bytes_before,
+            bytes_after: None,
+            sha256_before: None,
+            sha256_after: None,
+            sudo,
+        },
+        Some(action_id),
+    )
+    .await;
 }
 
 /// Spec 0020, Abschnitt 4.2/4.3: kompletter Schreib-Ablauf — regulärer
@@ -542,7 +619,10 @@ pub(crate) async fn execute_write_remote_file(
 
     let (done, used_sudo_password) = match regular {
         Ok(done) => (done, false),
-        Err(SshError::SftpPermissionDenied(_)) => {
+        Err(WriteFailure {
+            error: SshError::SftpPermissionDenied(_),
+            ..
+        }) => {
             // Spec 0068, Teil 3: Sudo-Fallback nur, wenn der Dialog ihn vorab
             // angekündigt hat — genau der im Event gesendete Wert
             // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
@@ -581,7 +661,18 @@ pub(crate) async fn execute_write_remote_file(
             .await
             {
                 Ok(done) => (done, true),
-                Err(err) => {
+                Err(failure) => {
+                    record_failed_write(
+                        session,
+                        ledger_source,
+                        &path,
+                        bytes_before,
+                        &failure,
+                        true,
+                        action_id,
+                    )
+                    .await;
+                    let err = failure.error;
                     let code = err.code();
                     return emit_action_error(
                         session,
@@ -597,7 +688,18 @@ pub(crate) async fn execute_write_remote_file(
                 }
             }
         }
-        Err(err) => {
+        Err(failure) => {
+            record_failed_write(
+                session,
+                ledger_source,
+                &path,
+                bytes_before,
+                &failure,
+                false,
+                action_id,
+            )
+            .await;
+            let err = failure.error;
             let code = err.code();
             return emit_action_error(
                 session,
@@ -622,6 +724,7 @@ pub(crate) async fn execute_write_remote_file(
         ledger_source,
         LedgerEntryContent::FileWritten {
             path: path.clone(),
+            status: LedgerFileWriteStatus::Completed,
             backup_path: backup_path.clone(),
             bytes_before,
             bytes_after: Some(wire_content.len() as u64),

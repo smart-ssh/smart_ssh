@@ -50,6 +50,9 @@ struct Inner {
     /// 0020, Abschnitt 4.3, ohne einen echten privilegierten Zielpfad zu
     /// brauchen.
     permission_denied_paths: HashSet<String>,
+    /// Paths whose `write_file` stores half of the content and then fails
+    /// (an SFTP error mid-stream).
+    partial_write_paths: HashSet<String>,
     /// Issue #625: bietet der simulierte Server `posix-rename@openssh.com` an?
     posix_rename: bool,
     /// Issue #625: Quellpfade, bei denen `rename` scheitern soll.
@@ -85,6 +88,14 @@ impl MockSftpSession {
     pub fn with_permission_denied(self, path: impl Into<String>) -> Self {
         lock_tolerating_poison(&self.inner)
             .permission_denied_paths
+            .insert(path.into());
+        self
+    }
+
+    /// `write_file` on `path` writes the first half of the content, then fails.
+    pub fn with_partial_write_failure(self, path: impl Into<String>) -> Self {
+        lock_tolerating_poison(&self.inner)
+            .partial_write_paths
             .insert(path.into());
         self
     }
@@ -209,6 +220,19 @@ impl SftpSession for MockSftpSession {
         if inner.permission_denied_paths.contains(path) {
             return Err(SshError::SftpPermissionDenied(format!(
                 "keine Schreibrechte für {path}"
+            )));
+        }
+        if inner.partial_write_paths.contains(path) {
+            inner.files.insert(
+                path.to_string(),
+                MockFile {
+                    content: content[..content.len() / 2].to_vec(),
+                    permissions: 0o644,
+                    modified: Some(Utc::now()),
+                },
+            );
+            return Err(SshError::ChannelError(format!(
+                "Verbindung beim Schreiben von {path} abgebrochen"
             )));
         }
         inner.files.insert(
