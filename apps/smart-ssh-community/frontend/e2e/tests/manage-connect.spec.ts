@@ -57,3 +57,17 @@ test("Connect switches to the open tab of the server", async ({ app }) => {
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   expect(await app.calls("connect")).toHaveLength(1);
 });
+
+test("on wide screens Connect sits in the title row with a plug icon, not next to Save", async ({ app }) => {
+  await app.launch({ settings: { ...ACKNOWLEDGED }, servers: [server({ id: "s-1", name: "alpha" })] });
+  const page = app.page;
+  await openForm(page);
+  const form = page.getByTestId("server-form");
+  const connect = form.getByRole("button", { name: "Connect", exact: true });
+  await expect(connect.locator('svg[data-icon="plug"]')).toBeVisible();
+  const heading = await form.getByRole("heading", { level: 2 }).boundingBox();
+  const save = await form.getByRole("button", { name: "Save", exact: true }).boundingBox();
+  const box = (await connect.boundingBox())!;
+  expect(Math.abs(box.y - heading!.y)).toBeLessThan(30);
+  expect(box.y).toBeLessThan(save!.y);
+});

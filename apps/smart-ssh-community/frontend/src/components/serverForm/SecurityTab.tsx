@@ -94,8 +94,10 @@ export function SecurityTab({ idBase, active, isCreate, model }: Props) {
                     className="flex items-start gap-2 px-3 py-2 text-xs text-fg-muted"
                   >
                     <Icon name="key" size={16} className="mt-0.5 shrink-0 text-fg-subtle" />
-                    <span className="font-mono">{k.algorithm}</span>
-                    <span className="min-w-0 select-text break-all font-mono">{k.fingerprint}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono">{k.algorithm}</div>
+                      <div className="select-text break-all font-mono">{k.fingerprint}</div>
+                    </div>
                   </li>
                 ))}
               </ul>

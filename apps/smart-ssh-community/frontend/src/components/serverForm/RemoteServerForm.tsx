@@ -195,6 +195,7 @@ export function RemoteServerForm({
       onClick={() => onConnect(serverId)}
       className="shrink-0 narrow:min-h-11 narrow:w-32"
     >
+      <Icon name="plug" size={16} className="mr-1.5 shrink-0" />
       {t("serverForm.connect")}
     </Button>
   ) : null;
@@ -215,7 +216,7 @@ export function RemoteServerForm({
         onChange={setActiveTab}
         ariaLabel={t("serverForm.tabs.label")}
         idBase={tabsIdBase}
-        tabClassName="narrow:min-h-11 narrow:flex-1"
+        tabClassName="narrow:min-h-11 narrow:min-w-0 narrow:flex-1 narrow:px-1"
       />
 
       <form
@@ -260,13 +261,13 @@ export function RemoteServerForm({
 
         {activeTab !== "notes" && (
           <div className="border-t border-border pt-4 narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-surface-raised narrow:bg-surface narrow:px-4 narrow:py-2">
-            <div className="flex flex-wrap items-center gap-2 narrow:flex-nowrap">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:flex-1">
                 {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
               </Button>
               {showConnect && narrow && connectButton}
               {!isCreate && dirty && onConnect && (
-                <span className="text-xs text-fg-subtle narrow:sr-only" data-testid="connect-save-first-hint">
+                <span className="text-xs text-fg-subtle narrow:basis-full narrow:order-last" data-testid="connect-save-first-hint">
                   {t("serverForm.connectSaveFirst")}
                 </span>
               )}
