@@ -69,7 +69,7 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
 - Die Verwalten-Ansicht zeigt zuerst die Liste (Server, Gruppen, Ansichten von Erweiterungen, „Gruppe“, „Server“, Import und Export) über die volle Breite. Die Auswahl eines Eintrags öffnet Formular oder Detail über die volle Breite, darüber steht eine Zeile mit „Zurück“ (Pfeilsymbol), dem Symbol des Eintrags und seinem Namen. Die Kopfzeile der Liste trägt „Server“, „+ Gruppe“ und „+ Server“, die Fußzeile „Import …“ und „Export …“. Gruppen lassen sich über einen eigenen Pfeil-Knopf (mindestens 44 px) auf- und zuklappen; der Zustand gilt wie im breiten Layout für die Sitzung. „Zurück“ führt zur Liste an derselben Scroll-Position. Wie beim Wechsel zwischen Einträgen im breiten Layout werden dabei ungespeicherte Eingaben verworfen.
 - Jede Server- und Gruppenzeile der Liste (außer dem lokalen Server) hat wie in der Verbinden-Ansicht eine Schaltfläche „⋯“ mit „Verschieben nach…“; Ziehen per Fingergeste startet keinen Vorgang.
-- Formulare haben eine Spalte, Beschriftungen stehen über den Feldern, Hinweise brechen um. Im Server-Formular bleibt „Speichern“ am unteren Rand sichtbar; Löschen steht am Ende des Formulars.
+- Formulare haben eine Spalte, Beschriftungen stehen über den Feldern, Hinweise brechen um. Im Server-Formular bleibt „Speichern“ am unteren Rand sichtbar, bei einem gespeicherten Server mit „Verbinden“ in derselben Zeile (Hinweis „Zuerst Änderungen speichern“ darunter, solange es Änderungen gibt); die Reiter teilen die Zeile in gleich breite Felder; Löschen steht am Ende des Formulars.
 - Notizen, Import und Export passen in die Breite. Abschnitte und Ansichten von Erweiterungen erhalten die volle Breite (siehe Abschnitt 6).
 
 ## 5d. Einstellungen und Filterregeln

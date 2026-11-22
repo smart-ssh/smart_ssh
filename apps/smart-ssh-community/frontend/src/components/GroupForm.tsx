@@ -7,7 +7,8 @@ import { flattenGroupOptions, groupOptionLabel } from "../lib/groupTree";
 import type { DeleteGroupResult, GroupDto } from "../api/types";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
+import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 /** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen
  * Verschieben per Drag-and-drop — `groupId` ist die neue Gruppe (Server)
@@ -145,38 +146,45 @@ export function GroupForm({
 
   return (
     <div className="max-w-xl space-y-6 p-4">
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">
-        {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
-      </h2>
+      <div className="flex items-center gap-3">
+        <Icon name="folder" size={24} className="shrink-0 text-fg-muted" />
+        <h2 className="min-w-0 flex-1 break-words font-heading text-2xl font-semibold uppercase tracking-wide text-fg-strong">
+          {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
+        </h2>
+      </div>
 
       <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
-        <label className="block text-sm text-fg-muted">
-          {t("common.name")}
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
-          />
-        </label>
+        <Field label={t("common.name")}>
+          {(control) => (
+            <input
+              {...control}
+              {...TECHNICAL_INPUT_PROPS}
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            />
+          )}
+        </Field>
 
-        <label className="block text-sm text-fg-muted">
-          {t("groupForm.parent")}
-          <select
-            value={parentId ?? ""}
-            onChange={(e) => setParentId(e.target.value || null)}
-            className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
-          >
-            <option value="">{t("groupForm.noParent")}</option>
-            {availableParents.map((option) => (
-              <option key={option.group.id} value={option.group.id}>
-                {groupOptionLabel(option)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label={t("groupForm.parent")}>
+          {(control) => (
+            <select
+              {...control}
+              value={parentId ?? ""}
+              onChange={(e) => setParentId(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full narrow:min-h-11`}
+            >
+              <option value="">{t("groupForm.noParent")}</option>
+              {availableParents.map((option) => (
+                <option key={option.group.id} value={option.group.id}>
+                  {groupOptionLabel(option)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
         {error && <p className="text-sm text-danger-fg">{error}</p>}
 

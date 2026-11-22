@@ -24,7 +24,7 @@ import {
   respondToAction,
   resumeChatSession,
 } from "../api/api";
-import { translateErrorCode } from "../api/errorCodes";
+import { CHAT_SESSION_NOT_FOUND_CODE, translateErrorCode } from "../api/errorCodes";
 import { showOutdatedAlgorithmsToast } from "../lib/outdatedAlgorithmsToast";
 import {
   onActionDecisionEscalated,
@@ -448,7 +448,16 @@ export function useSessionTabs() {
       setTabs((prev) =>
         prev.map((t) =>
           t.sessionId === key && t.attemptId === attemptId
-            ? { ...t, phase: "failed", attemptId: null, failure }
+            ? {
+                ...t,
+                phase: "failed",
+                attemptId: null,
+                failure,
+                // Issue #1500: a retry must not loop on a chat that is gone.
+                ...(commandErrorCode(err) === CHAT_SESSION_NOT_FOUND_CODE
+                  ? { resumeChatSessionId: null }
+                  : {}),
+              }
             : t,
         ),
       );

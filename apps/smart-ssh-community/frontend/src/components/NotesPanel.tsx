@@ -184,14 +184,14 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
         </div>
       )}
 
-      <label className="block text-sm text-fg-muted">
+      <label className="block text-label">
         {t("notes.noteLabel")}
         <textarea
           ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={6}
-          className={`${FIELD_CONTROL_CLASS} mt-1 w-full`}
+          className={`${FIELD_CONTROL_CLASS} mt-1 w-full normal-case tracking-normal`}
         />
       </label>
 
@@ -206,6 +206,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           {saving ? t("common.saving") : t("notes.saveNote")}
         </Button>
         <Button onClick={() => setShowHistory((s) => !s)} aria-expanded={showHistory}>
+          <Icon name={showHistory ? "chev-d" : "chev-r"} />
           {showHistory ? t("notes.hideHistory") : t("notes.showHistory")}
         </Button>
       </div>
