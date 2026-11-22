@@ -119,11 +119,28 @@ pub enum LedgerEntryContent {
     /// Assistant-Nachricht ... übernommen, wie ein normaler Chat-Text" —
     /// dieselbe Gleichsetzung gilt hier für den Ledger-Eintrag).
     AiMessage { text: String },
-    /// An AI file read (issue #1446 fills it; Spec 0057). The file content is
-    /// never stored here, only the path and size.
-    FileRead { path: String, bytes: Option<u64> },
-    /// An AI file write (issue #1446 fills it; Spec 0057).
-    FileWritten { path: String, bytes: Option<u64> },
+    /// An AI file read (Spec 0057). The file content is never stored here,
+    /// only the path, the size and a SHA-256 (lowercase hex) of the bytes read.
+    FileRead {
+        path: String,
+        bytes: Option<u64>,
+        sha256: Option<String>,
+    },
+    /// An AI file write (Spec 0057): written only when bytes were actually
+    /// written. Neither content nor diff is stored; `None` in a before/after
+    /// field means "not known" (e.g. a new file has no "before"; the old
+    /// content of a file only readable with elevated rights is not read).
+    FileWritten {
+        path: String,
+        /// Server-side backup of the previous content, if one was made.
+        backup_path: Option<String>,
+        bytes_before: Option<u64>,
+        bytes_after: Option<u64>,
+        sha256_before: Option<String>,
+        sha256_after: Option<String>,
+        /// Whether the sudo fallback was used for this write.
+        sudo: bool,
+    },
     /// A connection event of the recorded session (issue #1447).
     Connection {
         event: LedgerConnectionEvent,

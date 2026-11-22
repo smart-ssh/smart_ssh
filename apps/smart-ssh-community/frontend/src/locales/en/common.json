@@ -1160,8 +1160,7 @@
       "editing": "Editing “{{name}}” locally…",
       "end": "Stop editing",
       "uploadTitle": "Upload local changes?",
-      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change.",
-      "noDiff": "No text diff possible (binary file or too large). New size: {{size}}."
+      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change."
     },
     "deleteDialog": {
       "fileTitle": "Delete file?",
@@ -1183,7 +1182,6 @@
       "conflictTitle": "Overwrite files in the folder?",
       "conflictBody": "Uploading “{{name}}” would overwrite these {{count}} files on the server. Nothing is overwritten unless you confirm.",
       "summaryTitle": "Folder upload: “{{name}}”",
-      "summary": "{{uploaded}} files uploaded, {{skipped}} skipped, {{failed}} failed.",
       "notAttempted": "{{count}} files were not attempted because their folder could not be created.",
       "skipped": "Skipped",
       "failed": "Failed",
@@ -1194,12 +1192,14 @@
         "unsupported": "not a regular file or folder",
         "notGranted": "not covered by your selection",
         "overwriteNotConfirmed": "exists on the server, overwrite not confirmed"
-      }
+      },
+      "uploaded": "Uploaded"
     },
     "uploadConflict": {
       "title": "Overwrite file?",
       "body": "already exists on the server.",
-      "noDiff": "No text diff possible (binary file or too large). Current size: {{remoteSize}}, new size: {{localSize}}."
+      "currentSize": "Current size",
+      "newSize": "New size"
     },
     "menu": {
       "download": "Download",
@@ -1288,7 +1288,9 @@
       "recursive": "Apply to contents",
       "recursiveWarning": "— changes the owner of ALL files and subfolders in this folder. Symbolic links are not followed. Cannot be undone."
     },
-    "transferChown": "Changing owner of {{name}}"
+    "transferChown": "Changing owner of {{name}}",
+    "stopProgress": "Progress",
+    "noTextDiff": "No text diff possible (binary file or too large)."
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",

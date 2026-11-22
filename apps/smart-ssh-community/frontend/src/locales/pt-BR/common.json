@@ -1168,8 +1168,7 @@
       "editing": "Editando “{{name}}” localmente…",
       "end": "Parar de editar",
       "uploadTitle": "Enviar alterações locais?",
-      "remoteChanged": "O arquivo remoto foi alterado desde o download — o envio sobrescreveria essa outra alteração.",
-      "noDiff": "Comparação de texto não é possível (arquivo binário ou grande demais). Novo tamanho: {{size}}."
+      "remoteChanged": "O arquivo remoto foi alterado desde o download — o envio sobrescreveria essa outra alteração."
     },
     "deleteDialog": {
       "fileTitle": "Excluir arquivo?",
@@ -1193,7 +1192,6 @@
       "conflictTitle": "Sobrescrever arquivos na pasta?",
       "conflictBody": "Enviar “{{name}}” sobrescreveria estes {{count}} arquivos no servidor. Nada é sobrescrito sem a sua confirmação.",
       "summaryTitle": "Envio de pasta: “{{name}}”",
-      "summary": "{{uploaded}} arquivos enviados, {{skipped}} ignorados, {{failed}} com falha.",
       "notAttempted": "{{count}} arquivos não foram tentados porque a pasta deles não pôde ser criada.",
       "skipped": "Ignorados",
       "failed": "Com falha",
@@ -1204,12 +1202,14 @@
         "unsupported": "não é um arquivo comum nem uma pasta",
         "notGranted": "não coberto pela sua seleção",
         "overwriteNotConfirmed": "existe no servidor, sobrescrita não confirmada"
-      }
+      },
+      "uploaded": "Enviados"
     },
     "uploadConflict": {
       "title": "Sobrescrever arquivo?",
       "body": "já existe no servidor.",
-      "noDiff": "Comparação de texto não é possível (arquivo binário ou grande demais). Tamanho atual: {{remoteSize}}, novo tamanho: {{localSize}}."
+      "currentSize": "Tamanho atual",
+      "newSize": "Novo tamanho"
     },
     "menu": {
       "download": "Baixar",
@@ -1298,7 +1298,9 @@
       "recursive": "Aplicar ao conteúdo",
       "recursiveWarning": "— altera o proprietário de TODOS os arquivos e subpastas desta pasta. Links simbólicos não são seguidos. Não pode ser desfeito."
     },
-    "transferChown": "Alterando proprietário de {{name}}"
+    "transferChown": "Alterando proprietário de {{name}}",
+    "stopProgress": "Progresso",
+    "noTextDiff": "Diff de texto impossível (arquivo binário ou grande demais)."
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",

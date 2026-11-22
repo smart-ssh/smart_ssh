@@ -1168,8 +1168,7 @@
       "editing": "Modifica locale di “{{name}}”…",
       "end": "Termina modifica",
       "uploadTitle": "Caricare le modifiche locali?",
-      "remoteChanged": "Il file remoto è stato modificato dopo il download: il caricamento sovrascriverebbe quell'altra modifica.",
-      "noDiff": "Nessun diff testuale possibile (file binario o troppo grande). Nuova dimensione: {{size}}."
+      "remoteChanged": "Il file remoto è stato modificato dopo il download: il caricamento sovrascriverebbe quell'altra modifica."
     },
     "deleteDialog": {
       "fileTitle": "Eliminare il file?",
@@ -1193,7 +1192,6 @@
       "conflictTitle": "Sovrascrivere i file nella cartella?",
       "conflictBody": "Il caricamento di “{{name}}” sovrascriverebbe questi {{count}} file sul server. Nulla viene sovrascritto senza la sua conferma.",
       "summaryTitle": "Caricamento cartella: “{{name}}”",
-      "summary": "{{uploaded}} file caricati, {{skipped}} saltati, {{failed}} non riusciti.",
       "notAttempted": "{{count}} file non sono stati tentati perché la loro cartella non ha potuto essere creata.",
       "skipped": "Saltati",
       "failed": "Non riusciti",
@@ -1204,12 +1202,14 @@
         "unsupported": "non è un file regolare né una cartella",
         "notGranted": "non coperto dalla sua selezione",
         "overwriteNotConfirmed": "esiste sul server, sovrascrittura non confermata"
-      }
+      },
+      "uploaded": "Caricati"
     },
     "uploadConflict": {
       "title": "Sovrascrivere il file?",
       "body": "esiste già sul server.",
-      "noDiff": "Nessun diff testuale possibile (file binario o troppo grande). Dimensione attuale: {{remoteSize}}, nuova dimensione: {{localSize}}."
+      "currentSize": "Dimensione attuale",
+      "newSize": "Nuova dimensione"
     },
     "menu": {
       "download": "Scarica",
@@ -1298,7 +1298,9 @@
       "recursive": "Applica al contenuto",
       "recursiveWarning": "— cambia il proprietario di TUTTI i file e le sottocartelle di questa cartella. I collegamenti simbolici non vengono seguiti. Non annullabile."
     },
-    "transferChown": "Cambio del proprietario di {{name}}"
+    "transferChown": "Cambio del proprietario di {{name}}",
+    "stopProgress": "Avanzamento",
+    "noTextDiff": "Diff di testo non possibile (file binario o troppo grande)."
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",

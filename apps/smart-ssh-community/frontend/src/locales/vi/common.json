@@ -1152,8 +1152,7 @@
       "editing": "Đang chỉnh sửa “{{name}}” cục bộ…",
       "end": "Dừng chỉnh sửa",
       "uploadTitle": "Tải lên các thay đổi cục bộ?",
-      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước mới: {{size}}."
+      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia."
     },
     "deleteDialog": {
       "fileTitle": "Xóa tệp?",
@@ -1173,7 +1172,6 @@
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
       "conflictBody": "Việc tải “{{name}}” lên sẽ ghi đè {{count}} tệp này trên máy chủ. Không có gì bị ghi đè nếu bạn chưa xác nhận.",
       "summaryTitle": "Tải thư mục lên: “{{name}}”",
-      "summary": "Đã tải lên {{uploaded}} tệp, bỏ qua {{skipped}}, thất bại {{failed}}.",
       "notAttempted": "{{count}} tệp chưa được thử vì không thể tạo thư mục của chúng.",
       "skipped": "Đã bỏ qua",
       "failed": "Thất bại",
@@ -1184,12 +1182,14 @@
         "unsupported": "không phải tệp hoặc thư mục thông thường",
         "notGranted": "không nằm trong phần bạn đã chọn",
         "overwriteNotConfirmed": "đã có trên máy chủ, chưa xác nhận ghi đè"
-      }
+      },
+      "uploaded": "Đã tải lên"
     },
     "uploadConflict": {
       "title": "Ghi đè tệp?",
       "body": "đã tồn tại trên máy chủ.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước hiện tại: {{remoteSize}}, kích thước mới: {{localSize}}."
+      "currentSize": "Kích thước hiện tại",
+      "newSize": "Kích thước mới"
     },
     "menu": {
       "download": "Tải xuống",
@@ -1278,7 +1278,9 @@
       "recursive": "Áp dụng cho nội dung",
       "recursiveWarning": "— đổi chủ sở hữu của TẤT CẢ tệp và thư mục con trong thư mục này. Liên kết tượng trưng không được theo. Không thể hoàn tác."
     },
-    "transferChown": "Đang đổi chủ sở hữu của {{name}}"
+    "transferChown": "Đang đổi chủ sở hữu của {{name}}",
+    "stopProgress": "Tiến độ",
+    "noTextDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn)."
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

@@ -73,6 +73,7 @@ export function ChmodDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="lock" />}
       size="sm"
       title={t("fileBrowser.chmod.title")}
       onClose={onCancel}
@@ -96,7 +97,7 @@ export function ChmodDialog({
         </p>
       )}
 
-      <table className="mb-3 w-full text-sm text-fg-muted">
+      <table className="mb-3 w-full font-mono text-sm text-fg-muted" data-testid="chmod-grid">
         <thead>
           <tr className="text-fg-subtle">
             <th className="text-left font-normal">

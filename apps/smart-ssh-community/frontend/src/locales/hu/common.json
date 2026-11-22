@@ -1160,8 +1160,7 @@
       "editing": "„{{name}}” szerkesztése helyben…",
       "end": "Szerkesztés befejezése",
       "uploadTitle": "Feltölti a helyi módosításokat?",
-      "remoteChanged": "A távoli fájl a letöltés óta módosult – a feltöltés felülírná azt a másik módosítást.",
-      "noDiff": "Szöveges összehasonlítás nem lehetséges (bináris fájl vagy túl nagy). Új méret: {{size}}."
+      "remoteChanged": "A távoli fájl a letöltés óta módosult – a feltöltés felülírná azt a másik módosítást."
     },
     "deleteDialog": {
       "fileTitle": "Törli a fájlt?",
@@ -1183,7 +1182,6 @@
       "conflictTitle": "Felülírja a mappában lévő fájlokat?",
       "conflictBody": "A(z) „{{name}}” feltöltése felülírná ezt a(z) {{count}} fájlt a szerveren. Megerősítés nélkül semmi nem íródik felül.",
       "summaryTitle": "Mappafeltöltés: „{{name}}”",
-      "summary": "{{uploaded}} fájl feltöltve, {{skipped}} kihagyva, {{failed}} sikertelen.",
       "notAttempted": "{{count}} fájl fel sem lett próbálva, mert a mappájuk nem hozható létre.",
       "skipped": "Kihagyva",
       "failed": "Sikertelen",
@@ -1194,12 +1192,14 @@
         "unsupported": "nem szabályos fájl vagy mappa",
         "notGranted": "a kijelölése nem fedi le",
         "overwriteNotConfirmed": "létezik a szerveren, a felülírás nincs megerősítve"
-      }
+      },
+      "uploaded": "Feltöltve"
     },
     "uploadConflict": {
       "title": "Felülírja a fájlt?",
       "body": "már létezik a szerveren.",
-      "noDiff": "Szöveges összehasonlítás nem lehetséges (bináris fájl vagy túl nagy). Jelenlegi méret: {{remoteSize}}, új méret: {{localSize}}."
+      "currentSize": "Jelenlegi méret",
+      "newSize": "Új méret"
     },
     "menu": {
       "download": "Letöltés",
@@ -1288,7 +1288,9 @@
       "recursive": "Alkalmazás a tartalomra",
       "recursiveWarning": "— a mappa ÖSSZES fájljának és almappájának tulajdonosát módosítja. A szimbolikus hivatkozásokat nem követi. Nem vonható vissza."
     },
-    "transferChown": "{{name}} tulajdonosának módosítása"
+    "transferChown": "{{name}} tulajdonosának módosítása",
+    "stopProgress": "Előrehaladás",
+    "noTextDiff": "Szöveges különbség nem lehetséges (bináris vagy túl nagy fájl)."
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",

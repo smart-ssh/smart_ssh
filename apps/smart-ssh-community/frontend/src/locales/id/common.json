@@ -1152,8 +1152,7 @@
       "editing": "Mengedit “{{name}}” secara lokal…",
       "end": "Berhenti mengedit",
       "uploadTitle": "Unggah perubahan lokal?",
-      "remoteChanged": "Berkas jarak jauh diubah sejak diunduh — mengunggah akan menimpa perubahan lain tersebut.",
-      "noDiff": "Diff teks tidak memungkinkan (berkas biner atau terlalu besar). Ukuran baru: {{size}}."
+      "remoteChanged": "Berkas jarak jauh diubah sejak diunduh — mengunggah akan menimpa perubahan lain tersebut."
     },
     "deleteDialog": {
       "fileTitle": "Hapus berkas?",
@@ -1173,7 +1172,6 @@
       "conflictTitle": "Timpa berkas di folder?",
       "conflictBody": "Mengunggah “{{name}}” akan menimpa {{count}} berkas ini di server. Tidak ada yang ditimpa kecuali Anda mengonfirmasi.",
       "summaryTitle": "Unggah folder: “{{name}}”",
-      "summary": "{{uploaded}} berkas diunggah, {{skipped}} dilewati, {{failed}} gagal.",
       "notAttempted": "{{count}} berkas tidak dicoba karena foldernya tidak dapat dibuat.",
       "skipped": "Dilewati",
       "failed": "Gagal",
@@ -1184,12 +1182,14 @@
         "unsupported": "bukan berkas biasa atau folder",
         "notGranted": "tidak tercakup dalam pilihan Anda",
         "overwriteNotConfirmed": "ada di server, penimpaan tidak dikonfirmasi"
-      }
+      },
+      "uploaded": "Terunggah"
     },
     "uploadConflict": {
       "title": "Timpa berkas?",
       "body": "sudah ada di server.",
-      "noDiff": "Diff teks tidak memungkinkan (berkas biner atau terlalu besar). Ukuran saat ini: {{remoteSize}}, ukuran baru: {{localSize}}."
+      "currentSize": "Ukuran saat ini",
+      "newSize": "Ukuran baru"
     },
     "menu": {
       "download": "Unduh",
@@ -1278,7 +1278,9 @@
       "recursive": "Terapkan ke isi",
       "recursiveWarning": "— mengubah pemilik SEMUA file dan subfolder di folder ini. Tautan simbolik tidak diikuti. Tidak dapat dibatalkan."
     },
-    "transferChown": "Mengubah pemilik {{name}}"
+    "transferChown": "Mengubah pemilik {{name}}",
+    "stopProgress": "Kemajuan",
+    "noTextDiff": "Diff teks tidak dapat ditampilkan (berkas biner atau terlalu besar)."
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
