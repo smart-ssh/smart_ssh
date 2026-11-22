@@ -13,7 +13,6 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::legacy_field_content::encrypt_for_tests;
 use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::profiles::ProfileStore;
@@ -33,7 +32,6 @@ struct Expected {
     server_id: ServerId,
     session_id: Uuid,
     messages: Vec<ChatMessage>,
-    ledger: Vec<LedgerEntryContent>,
     prompts: Vec<String>,
     summary: (String, i64),
 }
@@ -48,22 +46,6 @@ async fn insert_message(store: &SqliteProfileStore, session_id: Uuid, seq: i64, 
     .bind(session_id.to_string())
     .bind(blob)
     .bind(seq)
-    .bind(Utc::now().to_rfc3339())
-    .execute(&store.pool)
-    .await
-    .unwrap();
-}
-
-async fn insert_ledger(store: &SqliteProfileStore, session_id: Uuid, seq: i64, blob: Vec<u8>) {
-    sqlx::query(
-        "INSERT INTO ledger_entries \
-         (id, session_id, sequence, source, entry_type, content, created_at) \
-         VALUES (?, ?, ?, 'ai', 'command_proposed', ?, ?)",
-    )
-    .bind(Uuid::new_v4().to_string())
-    .bind(session_id.to_string())
-    .bind(seq)
-    .bind(blob)
     .bind(Utc::now().to_rfc3339())
     .execute(&store.pool)
     .await
@@ -127,19 +109,6 @@ async fn plant_legacy_rows(store: &SqliteProfileStore) -> Expected {
         insert_message(store, session_id, seq as i64, encrypt_for_tests(&K, &json)).await;
     }
 
-    let ledger = vec![
-        LedgerEntryContent::CommandProposed {
-            command: "df -h /var".to_string(),
-        },
-        LedgerEntryContent::CommandProposed {
-            command: "df -h /home".to_string(),
-        },
-    ];
-    for (seq, entry) in ledger.iter().enumerate() {
-        let json = serde_json::to_string(entry).unwrap();
-        insert_ledger(store, session_id, seq as i64, encrypt_for_tests(&K, &json)).await;
-    }
-
     let prompts = vec!["df -h".to_string(), "du -sh /var/log".to_string()];
     for (minute, prompt) in prompts.iter().enumerate() {
         insert_prompt(
@@ -164,7 +133,6 @@ async fn plant_legacy_rows(store: &SqliteProfileStore) -> Expected {
         server_id,
         session_id,
         messages,
-        ledger,
         prompts,
         summary,
     }
@@ -178,15 +146,6 @@ async fn assert_readable_through_the_app(store: &SqliteProfileStore, expected: &
         .await
         .expect("chat readable");
     assert_eq!(messages, expected.messages);
-    let ledger: Vec<LedgerEntryContent> = store
-        .ledger_store()
-        .load_entries(expected.session_id)
-        .await
-        .expect("ledger readable")
-        .into_iter()
-        .map(|e| e.content)
-        .collect();
-    assert_eq!(ledger, expected.ledger);
     assert_eq!(
         store
             .prompt_history_store()
@@ -238,7 +197,7 @@ async fn open_encrypted(path: &Path) -> SqliteProfileStore {
 /// AC 1: Nach der Umstellung trägt keine der vier Spalten mehr ein
 /// Chiffrat, und was die App liest, ist derselbe Inhalt wie vorher.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_all_four_columns_are_decrypted_and_read_back_identically() {
+async fn test_all_three_columns_are_decrypted_and_read_back_identically() {
     let dir = tempfile::tempdir().unwrap();
     let store = open_encrypted(&dir.path().join("smart-ssh.db")).await;
     let expected = plant_legacy_rows(&store).await;
@@ -261,7 +220,6 @@ async fn test_all_four_columns_are_decrypted_and_read_back_identically() {
         removed: 0,
     };
     assert_eq!(report.chat_messages, two);
-    assert_eq!(report.ledger_entries, two);
     assert_eq!(report.prompt_history, two);
     assert_eq!(
         report.summaries,
@@ -363,7 +321,7 @@ async fn test_pre_0040_plaintext_prompt_rows_are_kept_as_they_are() {
 
 /// AC 5 (Entscheidung im Issue: entfernen und einmal hinweisen): Je Spalte
 /// wird eine Zeile, die unter einem anderen K steht, entfernt — die
-/// lesbaren daneben bleiben. Nachricht, Ledger-Eintrag und Historie
+/// lesbaren daneben bleiben. Nachricht und Historie
 /// verschwinden als Zeile; bei der Zusammenfassung verschwindet nur sie,
 /// die Sitzung bleibt. Eine zu kurze, kaputte Zeile zählt genauso.
 #[tokio::test(flavor = "multi_thread")]
@@ -383,17 +341,6 @@ async fn test_rows_not_decryptable_with_the_current_key_are_removed_in_every_col
     )
     .await;
     insert_message(&store, expected.session_id, 11, vec![1, 2, 3]).await;
-    let foreign_ledger = serde_json::to_string(&LedgerEntryContent::CommandProposed {
-        command: "fremd".into(),
-    })
-    .unwrap();
-    insert_ledger(
-        &store,
-        expected.session_id,
-        10,
-        encrypt_for_tests(&OTHER_K, &foreign_ledger),
-    )
-    .await;
     insert_prompt(
         &store,
         expected.server_id,
@@ -431,13 +378,6 @@ async fn test_rows_not_decryptable_with_the_current_key_are_removed_in_every_col
         }
     );
     assert_eq!(
-        report.ledger_entries,
-        ColumnCounts {
-            decrypted: 2,
-            removed: 1
-        }
-    );
-    assert_eq!(
         report.prompt_history,
         ColumnCounts {
             decrypted: 2,
@@ -451,7 +391,7 @@ async fn test_rows_not_decryptable_with_the_current_key_are_removed_in_every_col
             removed: 1
         }
     );
-    assert_eq!(report.removed_total(), 5);
+    assert_eq!(report.removed_total(), 4);
     assert!(blob_counts(&store).await.iter().all(|(_, n)| *n == 0));
 
     // Die lesbaren Zeilen sind vollständig da, die unlesbaren weg.
@@ -485,7 +425,7 @@ async fn test_an_interrupted_run_keeps_the_old_state_and_completes_on_the_next_s
     let expected = plant_legacy_rows(&store).await;
     let blobs_before = blob_counts(&store).await;
 
-    // 3 von 7 Altzeilen bearbeitet: beide Nachrichten und ein Ledger-Eintrag.
+    // 3 von 5 Altzeilen bearbeitet: beide Nachrichten und eine Historie-Zeile.
     let interrupted = store
         .decrypt_field_encrypted_content_failing_after(
             &ssh_manager_core::crypto::RootKey::for_tests(K),
@@ -504,13 +444,13 @@ async fn test_an_interrupted_run_keeps_the_old_state_and_completes_on_the_next_s
         "an interrupted run must not leave a half-converted column"
     );
     let rows: i64 = sqlx::query_scalar(
-        "SELECT (SELECT COUNT(*) FROM chat_messages) + (SELECT COUNT(*) FROM ledger_entries) \
+        "SELECT (SELECT COUNT(*) FROM chat_messages) \
          + (SELECT COUNT(*) FROM prompt_history)",
     )
     .fetch_one(&store.pool)
     .await
     .unwrap();
-    assert_eq!(rows, 6, "no row may be lost by the interrupted run");
+    assert_eq!(rows, 4, "no row may be lost by the interrupted run");
 
     // Der nächste Lauf stellt vollständig um.
     let outcome = store
@@ -520,14 +460,14 @@ async fn test_an_interrupted_run_keeps_the_old_state_and_completes_on_the_next_s
     let FieldContentDecryption::Completed(report) = outcome else {
         panic!("expected a completed run, got {outcome:?}");
     };
-    assert_eq!(report.decrypted_total(), 7);
+    assert_eq!(report.decrypted_total(), 5);
     assert_eq!(report.removed_total(), 0);
     assert!(blob_counts(&store).await.iter().all(|(_, n)| *n == 0));
     assert_readable_through_the_app(&store, &expected).await;
     store.close().await;
 }
 
-/// AC 3: Nach der Umstellung stehen die vier Spalten als Klartext in der
+/// AC 3: Nach der Umstellung stehen die drei Spalten als Klartext in der
 /// Datenbank — aber nicht auf der Platte: Die Datei ist verschlüsselt, kein
 /// Inhalt aus einer der Spalten steht roh in einer Datei des Verzeichnisses.
 #[tokio::test(flavor = "multi_thread")]
@@ -535,12 +475,7 @@ async fn test_decrypted_content_never_appears_in_any_database_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("smart-ssh.db");
     let store = open_encrypted(&path).await;
-    let markers = [
-        "Marker-113-chat",
-        "Marker-113-ledger",
-        "Marker-113-prompt",
-        "Marker-113-summary",
-    ];
+    let markers = ["Marker-113-chat", "Marker-113-prompt", "Marker-113-summary"];
     let server = ServerBuilder::new().name("Test-Server").build();
     store.create_server(&server).await.unwrap();
     let session_id = store
@@ -550,13 +485,8 @@ async fn test_decrypted_content_never_appears_in_any_database_file() {
         .unwrap();
     let chat_json = serde_json::to_string(&MessageContent::Text(markers[0].into())).unwrap();
     insert_message(&store, session_id, 0, encrypt_for_tests(&K, &chat_json)).await;
-    let ledger_json = serde_json::to_string(&LedgerEntryContent::CommandProposed {
-        command: markers[1].into(),
-    })
-    .unwrap();
-    insert_ledger(&store, session_id, 0, encrypt_for_tests(&K, &ledger_json)).await;
-    insert_prompt(&store, server.id, 0, encrypt_for_tests(&K, markers[2])).await;
-    set_summary(&store, session_id, encrypt_for_tests(&K, markers[3]), 1).await;
+    insert_prompt(&store, server.id, 0, encrypt_for_tests(&K, markers[1])).await;
+    set_summary(&store, session_id, encrypt_for_tests(&K, markers[2]), 1).await;
 
     store
         .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
@@ -568,18 +498,6 @@ async fn test_decrypted_content_never_appears_in_any_database_file() {
         .await
         .unwrap();
     assert!(chat_raw.contains(markers[0]));
-    // Und ein Neuschreiben über die Stores dazu.
-    store
-        .ledger_store()
-        .append_entry(
-            session_id,
-            LedgerSource::User,
-            &LedgerEntryContent::CommandProposed {
-                command: markers[1].into(),
-            },
-        )
-        .await
-        .unwrap();
     store.close().await;
 
     for entry in std::fs::read_dir(dir.path()).unwrap() {
