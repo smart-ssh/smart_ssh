@@ -142,7 +142,7 @@ pub struct RecordEntryFilter {
     /// Executed commands with an exit code other than 0 (an unknown exit
     /// code counts as not 0).
     pub exit_code_nonzero: bool,
-    /// Case-insensitive (ASCII) substring of a command text or AI text.
+    /// Case-insensitive (Unicode) substring of a command text or AI text.
     pub text_contains: Option<String>,
 }
 
@@ -157,7 +157,9 @@ pub struct RecordPageRequest {
 /// Largest page size.
 pub const MAX_RECORD_PAGE_SIZE: u32 = MAX_PAGE_SIZE;
 
-/// A page of results; `next_cursor` is `None` after the last page.
+/// A page of results; `next_cursor` is `None` after the last page. With a text
+/// filter a page can be short or even empty while `next_cursor` is still `Some`
+/// (the scan per call is bounded): keep paging while `next_cursor` is `Some`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordPage<T> {
     pub items: Vec<T>,

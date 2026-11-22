@@ -22,6 +22,7 @@ SQL through `ExtensionDb::pool()`.
 - Paging returns every entry once while entries are appended.
 - Chat message content is never part of a result.
 - Text that leaves the device is redacted with `redact_for_server`.
+- With a text filter a page can be short or empty while `next_cursor` is still set (the scan per call is bounded); keep paging until `next_cursor` is `None`.
 
 ## 4. Guard that catches a forgotten step
 

@@ -120,7 +120,8 @@ pub async fn list_recorded_sessions(
 
 /// Entries of the activity record across sessions and servers, in recording
 /// order, with filters and keyset paging. Entries are returned as stored
-/// (redacted by the writer); text that leaves the device must be redacted
+/// again with [`redact_for_server`]. With a text filter a page can be short or
+/// empty while `next_cursor` is still `Some`: keep paging while it is `Some`.
 /// again with [`redact_for_server`].
 pub async fn list_record_entries(
     state: &AppState,

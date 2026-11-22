@@ -92,7 +92,7 @@ pub struct EntryFilter {
     /// Executed commands whose exit code is not 0; an unknown exit code
     /// (killed, cancelled) counts as not 0.
     pub exit_code_nonzero: bool,
-    /// Case-insensitive (ASCII) substring of a command text or an AI message.
+    /// Case-insensitive (Unicode) substring of a command text or an AI message.
     pub text_contains: Option<String>,
 }
 
