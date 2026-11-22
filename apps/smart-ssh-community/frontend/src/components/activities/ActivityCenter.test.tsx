@@ -171,6 +171,38 @@ describe("ActivityCenter", () => {
     }
   });
 
+  it("marks an entry stalled even if the timer fires early because the clock stepped back", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const mb = 1024 * 1024;
+      act(() => api.handler?.(activity({ done: 0, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => api.handler?.(activity({ done: 2 * mb, total: 10 * mb })));
+      fireEvent.click(screen.getByTestId("activity-center-button"));
+      expect(screen.getByText(/MB\/s/)).toBeInTheDocument();
+      // Step the wall clock back, then let the first timer fire: nothing is due yet.
+      vi.setSystemTime(Date.now() - 5000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RATE_WINDOW_MS);
+      });
+      expect(screen.getByText(/MB\/s/)).toBeInTheDocument();
+      // The re-armed timer fires once the window has really elapsed.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+      expect(screen.queryByText(/MB\/s/)).toBeNull();
+      expect(screen.queryByText(/noch/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("clears the stall timer on unmount", async () => {
     vi.useFakeTimers();
     try {
