@@ -106,12 +106,18 @@ pub async fn explain_confirmation(
         &state.sessions,
         session_id,
         &command,
+        "explain_confirmation",
     )?;
     let stored = app_logic::filter_rules::list_rules(&state.policy_store, None)
         .await
         .map_err(|e| {
             let err = app_logic::error::CommandError::from(e);
-            app_logic::confirmation_explain::log_explain_failure(&err, session_id, &command);
+            app_logic::confirmation_explain::log_explain_failure(
+                &err,
+                session_id,
+                &command,
+                "explain_confirmation",
+            );
             err
         })?;
     Ok(app_logic::confirmation_explain::explain_confirmation(
@@ -143,6 +149,7 @@ pub async fn explain_segment_rules(
         &state.sessions,
         session_id,
         &command,
+        "explain_segment_rules",
     )?;
     app_logic::confirmation_explain::explain_segment_rules_for_session(
         &session,
@@ -154,7 +161,12 @@ pub async fn explain_segment_rules(
     )
     .await
     .inspect_err(|e| {
-        app_logic::confirmation_explain::log_explain_failure(e, session_id, &command);
+        app_logic::confirmation_explain::log_explain_failure(
+            e,
+            session_id,
+            &command,
+            "explain_segment_rules",
+        );
     })
 }
 
