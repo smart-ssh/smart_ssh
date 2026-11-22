@@ -139,7 +139,7 @@ export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps)
         )}
 
         {!narrow && mainNav && (
-          <nav className="ml-4 flex h-full shrink-0 items-stretch">
+          <nav aria-label={t("nav.label")} className="ml-4 flex h-full shrink-0 items-stretch">
             {MAIN_TAB_ENTRIES.map((entry) => {
               const active = mainNav.active === entry.id;
               return (

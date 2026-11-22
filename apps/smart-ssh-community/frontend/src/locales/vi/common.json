@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Điều hướng chính",
     "connect": "Kết nối",
     "manage": "Quản lý",
     "rules": "Quy tắc lọc"
