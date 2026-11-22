@@ -423,6 +423,28 @@ async fn test_an_mcp_recorded_session_cannot_be_resumed_as_a_chat() {
         run.built.is_err(),
         "an MCP recorded session id must not resume"
     );
+    assert_eq!(
+        run.built.err().unwrap().code,
+        Some(crate::error::CHAT_SESSION_NOT_FOUND)
+    );
+}
+
+#[tokio::test]
+async fn test_resuming_an_unknown_id_returns_chat_session_not_found() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let run = run(
+        &fx,
+        fx.server.id,
+        fx.server.clone(),
+        Err(()),
+        ok("1000"),
+        Some(uuid::Uuid::new_v4()),
+    )
+    .await;
+    assert_eq!(
+        run.built.err().unwrap().code,
+        Some(crate::error::CHAT_SESSION_NOT_FOUND)
+    );
 }
 
 #[tokio::test]
