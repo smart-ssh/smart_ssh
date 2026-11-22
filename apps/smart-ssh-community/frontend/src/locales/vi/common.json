@@ -700,6 +700,7 @@
     "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Nhà cung cấp AI đã chọn chưa được cấu hình. Hãy chọn một nhà cung cấp đã cấu hình.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Hãy chọn nhà cung cấp AI trước khi bật ý kiến thứ hai về rủi ro.",
+    "CHAT_SESSION_NOT_FOUND": "Cuộc trò chuyện đã lưu này không còn tồn tại. Chọn Thử lại để kết nối bình thường mà không tiếp tục nó.",
     "SESSION_NOT_FOUND": "Phiên này không còn mở nữa. Hãy mở lại từ danh sách máy chủ.",
     "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này",
@@ -1152,8 +1153,7 @@
       "editing": "Đang chỉnh sửa “{{name}}” cục bộ…",
       "end": "Dừng chỉnh sửa",
       "uploadTitle": "Tải lên các thay đổi cục bộ?",
-      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước mới: {{size}}."
+      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia."
     },
     "deleteDialog": {
       "fileTitle": "Xóa tệp?",
@@ -1173,7 +1173,6 @@
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
       "conflictBody": "Việc tải “{{name}}” lên sẽ ghi đè {{count}} tệp này trên máy chủ. Không có gì bị ghi đè nếu bạn chưa xác nhận.",
       "summaryTitle": "Tải thư mục lên: “{{name}}”",
-      "summary": "Đã tải lên {{uploaded}} tệp, bỏ qua {{skipped}}, thất bại {{failed}}.",
       "notAttempted": "{{count}} tệp chưa được thử vì không thể tạo thư mục của chúng.",
       "skipped": "Đã bỏ qua",
       "failed": "Thất bại",
@@ -1184,12 +1183,14 @@
         "unsupported": "không phải tệp hoặc thư mục thông thường",
         "notGranted": "không nằm trong phần bạn đã chọn",
         "overwriteNotConfirmed": "đã có trên máy chủ, chưa xác nhận ghi đè"
-      }
+      },
+      "uploaded": "Đã tải lên"
     },
     "uploadConflict": {
       "title": "Ghi đè tệp?",
       "body": "đã tồn tại trên máy chủ.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước hiện tại: {{remoteSize}}, kích thước mới: {{localSize}}."
+      "currentSize": "Kích thước hiện tại",
+      "newSize": "Kích thước mới"
     },
     "menu": {
       "download": "Tải xuống",
@@ -1278,7 +1279,9 @@
       "recursive": "Áp dụng cho nội dung",
       "recursiveWarning": "— đổi chủ sở hữu của TẤT CẢ tệp và thư mục con trong thư mục này. Liên kết tượng trưng không được theo. Không thể hoàn tác."
     },
-    "transferChown": "Đang đổi chủ sở hữu của {{name}}"
+    "transferChown": "Đang đổi chủ sở hữu của {{name}}",
+    "stopProgress": "Tiến độ",
+    "noTextDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn)."
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

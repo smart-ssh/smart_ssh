@@ -145,6 +145,29 @@ async fn test_migration_0029_keeps_rows_and_links_snapshots() {
         row.get::<Option<String>, _>("ended_at").as_deref(),
         Some("2026-01-01T01:00:00+00:00")
     );
+
+    // The server without a group gets empty group lists.
+    let ungrouped = sqlx::query(
+        "SELECT group_ids, group_names FROM activity_sessions \
+         WHERE id = '00000000-0000-4000-8000-0000000000c3'",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(ungrouped.get::<String, _>("group_ids"), "[]");
+    assert_eq!(ungrouped.get::<String, _>("group_names"), "[]");
+
+    // Every link points at an existing recorded session.
+    let dangling: i64 = sqlx::query(
+        "SELECT COUNT(*) AS c FROM chat_sessions c \
+         WHERE c.activity_session_id IS NULL OR NOT EXISTS \
+         (SELECT 1 FROM activity_sessions a WHERE a.id = c.activity_session_id)",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap()
+    .get("c");
+    assert_eq!(dangling, 0);
 }
 
 #[tokio::test]
@@ -354,6 +377,7 @@ async fn test_failed_append_counts_and_new_entry_types_round_trip() {
         LedgerEntryContent::FileRead {
             path: "/etc/hosts".to_string(),
             bytes: Some(10),
+            sha256: None,
         },
     ] {
         ledger
@@ -383,6 +407,15 @@ async fn test_migration_0029_terminates_on_cyclic_group_chain() {
     .expect("migration must terminate")
     .unwrap();
     assert_eq!(count(&store, "activity_sessions").await, 3);
+    let row = sqlx::query(
+        "SELECT group_ids, group_names FROM activity_sessions \
+         WHERE id = '00000000-0000-4000-8000-0000000000c1'",
+    )
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(row.get::<String, _>("group_ids"), r#"["g1","g2"]"#);
+    assert_eq!(row.get::<String, _>("group_names"), r#"["Prod","EU"]"#);
 }
 
 /// Creating a chat on a server below a cyclic group chain terminates.
@@ -416,10 +449,256 @@ async fn test_create_session_terminates_on_cyclic_group_chain() {
     .await
     .expect("create_session must terminate")
     .unwrap();
-    assert!(store
+    let snap = store
         .activity_session_store()
         .load(chat)
         .await
         .unwrap()
-        .is_some());
+        .unwrap();
+    assert_eq!(snap.group_ids, vec!["g2", "g1"]);
+    assert_eq!(snap.group_names, vec!["B", "A"]);
+}
+
+async fn corrupt_load(column: &str, value: &str) -> String {
+    let (store, _server, chat) = store_with_chat().await;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE activity_sessions SET {column} = ? WHERE id = ?"
+    )))
+    .bind(value)
+    .bind(chat.to_string())
+    .execute(&store.pool)
+    .await
+    .unwrap();
+    let err = store
+        .activity_session_store()
+        .load(chat)
+        .await
+        .expect_err("corrupt snapshot must fail to load");
+    assert!(matches!(
+        err,
+        crate::ledger_store::LedgerStoreError::CorruptSession { .. }
+    ));
+    assert_eq!(
+        ssh_manager_core::ipc_error::ErrorCode::code(&err),
+        crate::error_kind::StoreErrorKind::Corrupt.code()
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Sitzung") && !msg.contains("Ledger-Eintrag"),
+        "{msg}"
+    );
+    assert!(msg.contains(&chat.to_string()), "{msg}");
+    msg
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_group_ids() {
+    assert!(corrupt_load("group_ids", "not json")
+        .await
+        .contains("group_ids"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_group_names() {
+    assert!(corrupt_load("group_names", "{")
+        .await
+        .contains("group_names"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_corrupt_tags() {
+    assert!(corrupt_load("tags", "[1]").await.contains("tags"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_load_reports_out_of_range_port() {
+    let (store, _server, chat) = store_with_chat().await;
+    for bad in [65536_i64, -1] {
+        sqlx::query("UPDATE activity_sessions SET server_port = ? WHERE id = ?")
+            .bind(bad)
+            .bind(chat.to_string())
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let err = store.activity_session_store().load(chat).await.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("server_port"), "{msg}");
+        assert!(
+            msg.contains("Sitzung") && !msg.contains("Ledger-Eintrag"),
+            "{msg}"
+        );
+        assert_eq!(
+            ssh_manager_core::ipc_error::ErrorCode::code(&err),
+            crate::error_kind::StoreErrorKind::Corrupt.code()
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_restore_as_copy_moves_activity_record_to_the_server_copy() {
+    use crate::backup_store::{DatabaseSnapshot, ImportPlan};
+    let (store, server, chat) = store_with_chat().await;
+    // A record of a server that is not part of the archive (already deleted).
+    let gone = Uuid::new_v4();
+    sqlx::query("INSERT INTO activity_sessions (id,kind,server_id,server_name,server_host,server_port,server_user,started_at) VALUES (?, 'mcp', ?, 'Gone', 'gone.example', 22, 'u', 't')")
+        .bind(Uuid::new_v4().to_string())
+        .bind(gone.to_string())
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+    store
+        .backup_store()
+        .apply_import(&ImportPlan {
+            data: DatabaseSnapshot::default(),
+            archive_folder: Some("Previous data".into()),
+            now: "2026-01-01T00:00:00+00:00".into(),
+            pending_host_keys: "[]".into(),
+        })
+        .await
+        .unwrap();
+
+    let chat_server: String =
+        sqlx::query_scalar("SELECT server_id FROM chat_sessions WHERE id = ?")
+            .bind(chat.to_string())
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    assert_ne!(chat_server, server.id.0.to_string());
+    let row = sqlx::query(
+        "SELECT server_id, server_name, server_host FROM activity_sessions WHERE id = ?",
+    )
+    .bind(chat.to_string())
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(row.get::<String, _>("server_id"), chat_server);
+    assert_eq!(row.get::<String, _>("server_name"), "Snapshot-Server");
+    assert_eq!(row.get::<String, _>("server_host"), "snap.example");
+    let other: String =
+        sqlx::query_scalar("SELECT server_id FROM activity_sessions WHERE server_name = 'Gone'")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    assert_eq!(other, gone.to_string());
+}
+
+// --- Issue #1444: recorded sessions of MCP-driven connections -------------
+
+async fn store_with_server() -> (SqliteProfileStore, ServerId) {
+    let store = SqliteProfileStore::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new().filename(":memory:"),
+    )
+    .await
+    .unwrap();
+    let now = chrono::Utc::now();
+    let server = Server {
+        id: ServerId::new(),
+        name: "Web".into(),
+        host: "web.example".into(),
+        port: 22,
+        username: "deploy".into(),
+        group_id: None,
+        tags: Vec::new(),
+        auth: AuthMethod::Agent,
+        notes: String::new(),
+        jump_host: None,
+        post_ingest_policy: PostIngestPolicy::default(),
+        ai_injection_check_enabled: false,
+        sftp_server_path: None,
+        elevation_allowed: true,
+        start_directory: None,
+        created_at: now,
+        updated_at: now,
+    };
+    store.create_server(&server).await.unwrap();
+    (store, server.id)
+}
+
+#[tokio::test]
+async fn test_mcp_session_has_kind_mcp_client_name_and_no_chat_row() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    let id = activity
+        .create_mcp_session(&server, Some("Claude Code"))
+        .await
+        .unwrap();
+    let loaded = activity.load(id).await.unwrap().unwrap();
+    assert_eq!(loaded.kind, "mcp");
+    assert_eq!(loaded.mcp_client.as_deref(), Some("Claude Code"));
+    assert_eq!(loaded.server_name, "Web");
+    assert_eq!(loaded.ended_at, None);
+    // Not a chat: not listed, not resumable.
+    let chats = store.chat_session_store();
+    assert!(chats
+        .list_sessions_for_server(&server)
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!activity.is_chat_session(id).await.unwrap());
+    assert_eq!(count(&store, "chat_sessions").await, 0);
+}
+
+#[tokio::test]
+async fn test_mcp_session_without_client_name_is_stored_as_unknown() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    for name in [None, Some("  ")] {
+        let id = activity.create_mcp_session(&server, name).await.unwrap();
+        let loaded = activity.load(id).await.unwrap().unwrap();
+        assert_eq!(loaded.mcp_client.as_deref(), Some("unknown"));
+    }
+}
+
+#[tokio::test]
+async fn test_chat_and_mcp_session_on_one_server_are_two_recorded_sessions() {
+    let (store, server) = store_with_server().await;
+    let chat = store
+        .chat_session_store()
+        .create_session(&server, None)
+        .await
+        .unwrap();
+    let mcp = store
+        .activity_session_store()
+        .create_mcp_session(&server, Some("c"))
+        .await
+        .unwrap();
+    assert_ne!(chat, mcp);
+    assert!(store
+        .activity_session_store()
+        .is_chat_session(chat)
+        .await
+        .unwrap());
+    assert_eq!(
+        store
+            .chat_session_store()
+            .list_sessions_for_server(&server)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn test_mcp_session_for_missing_server_is_an_error_and_writes_nothing() {
+    let (store, _) = store_with_server().await;
+    let res = store
+        .activity_session_store()
+        .create_mcp_session(&ServerId::new(), Some("c"))
+        .await;
+    assert!(res.is_err());
+    assert_eq!(count(&store, "activity_sessions").await, 0);
+}
+
+#[tokio::test]
+async fn test_mark_ended_sets_ended_at_of_a_recorded_session() {
+    let (store, server) = store_with_server().await;
+    let activity = store.activity_session_store();
+    let id = activity
+        .create_mcp_session(&server, Some("c"))
+        .await
+        .unwrap();
+    activity.mark_ended(id).await.unwrap();
+    assert!(activity.load(id).await.unwrap().unwrap().ended_at.is_some());
 }

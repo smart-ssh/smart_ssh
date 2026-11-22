@@ -702,6 +702,7 @@
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Der gewählte KI-Anbieter ist nicht eingerichtet. Wähle einen eingerichteten Anbieter.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wähle einen KI-Anbieter, bevor du die Zweitmeinung zum Risiko einschaltest.",
+    "CHAT_SESSION_NOT_FOUND": "Dieser gespeicherte Chat existiert nicht mehr. Wähle „Erneut versuchen“, um normal zu verbinden, ohne ihn fortzusetzen.",
     "SESSION_NOT_FOUND": "Diese Sitzung ist nicht mehr geöffnet. Öffne sie erneut über die Serverliste.",
     "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden",
@@ -1160,8 +1161,7 @@
       "editing": "„{{name}}\" wird lokal bearbeitet…",
       "end": "Bearbeitung beenden",
       "uploadTitle": "Lokale Änderungen hochladen?",
-      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe: {{size}}."
+      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben."
     },
     "deleteDialog": {
       "fileTitle": "Datei löschen?",
@@ -1183,7 +1183,6 @@
       "conflictTitle": "Dateien im Ordner überschreiben?",
       "conflictBody": "Beim Hochladen von „{{name}}“ würden diese {{count}} Dateien auf dem Server überschrieben. Ohne deine Bestätigung wird nichts überschrieben.",
       "summaryTitle": "Ordner-Upload: „{{name}}“",
-      "summary": "{{uploaded}} Dateien hochgeladen, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
       "notAttempted": "{{count}} Dateien wurden nicht versucht, weil ihr Ordner nicht angelegt werden konnte.",
       "skipped": "Übersprungen",
       "failed": "Fehlgeschlagen",
@@ -1194,12 +1193,14 @@
         "unsupported": "keine normale Datei oder Ordner",
         "notGranted": "nicht von deiner Auswahl abgedeckt",
         "overwriteNotConfirmed": "existiert auf dem Server, Überschreiben nicht bestätigt"
-      }
+      },
+      "uploaded": "Hochgeladen"
     },
     "uploadConflict": {
       "title": "Datei überschreiben?",
       "body": "existiert bereits auf dem Server.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe: {{remoteSize}}, neue Größe: {{localSize}}."
+      "currentSize": "Bisherige Größe",
+      "newSize": "Neue Größe"
     },
     "menu": {
       "download": "Herunterladen",
@@ -1288,7 +1289,9 @@
       "recursive": "Auf Inhalt anwenden",
       "recursiveWarning": "— ändert den Besitzer ALLER Dateien und Unterordner in diesem Ordner. Symbolische Links werden nicht verfolgt. Nicht rückgängig zu machen."
     },
-    "transferChown": "Besitzer ändern: {{name}}"
+    "transferChown": "Besitzer ändern: {{name}}",
+    "stopProgress": "Fortschritt",
+    "noTextDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß)."
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",

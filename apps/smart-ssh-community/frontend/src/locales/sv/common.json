@@ -702,6 +702,7 @@
     "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valda AI-leverantören är inte konfigurerad. Välj en konfigurerad leverantör.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Välj en AI-leverantör innan du slår på den andra bedömningen av risk.",
+    "CHAT_SESSION_NOT_FOUND": "Den här sparade chatten finns inte längre. Välj Försök igen för att ansluta som vanligt utan att återuppta den.",
     "SESSION_NOT_FOUND": "Den här sessionen är inte längre öppen. Öppna den igen från serverlistan.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten",
@@ -1160,8 +1161,7 @@
       "editing": "Redigerar “{{name}}” lokalt…",
       "end": "Sluta redigera",
       "uploadTitle": "Ladda upp lokala ändringar?",
-      "remoteChanged": "Fjärrfilen har ändrats sedan nedladdningen — en uppladdning skulle skriva över den andra ändringen.",
-      "noDiff": "Ingen textdiff möjlig (binärfil eller för stor). Ny storlek: {{size}}."
+      "remoteChanged": "Fjärrfilen har ändrats sedan nedladdningen — en uppladdning skulle skriva över den andra ändringen."
     },
     "deleteDialog": {
       "fileTitle": "Ta bort filen?",
@@ -1183,7 +1183,6 @@
       "conflictTitle": "Skriva över filer i mappen?",
       "conflictBody": "Uppladdningen av “{{name}}” skulle skriva över dessa {{count}} filer på servern. Inget skrivs över om du inte bekräftar.",
       "summaryTitle": "Mappuppladdning: “{{name}}”",
-      "summary": "{{uploaded}} filer uppladdade, {{skipped}} överhoppade, {{failed}} misslyckade.",
       "notAttempted": "{{count}} filer försöktes inte eftersom deras mapp inte kunde skapas.",
       "skipped": "Överhoppade",
       "failed": "Misslyckade",
@@ -1194,12 +1193,14 @@
         "unsupported": "varken vanlig fil eller mapp",
         "notGranted": "ingår inte i ditt urval",
         "overwriteNotConfirmed": "finns på servern, överskrivning inte bekräftad"
-      }
+      },
+      "uploaded": "Uppladdade"
     },
     "uploadConflict": {
       "title": "Skriva över filen?",
       "body": "finns redan på servern.",
-      "noDiff": "Ingen textdiff möjlig (binärfil eller för stor). Nuvarande storlek: {{remoteSize}}, ny storlek: {{localSize}}."
+      "currentSize": "Nuvarande storlek",
+      "newSize": "Ny storlek"
     },
     "menu": {
       "download": "Ladda ned",
@@ -1288,7 +1289,9 @@
       "recursive": "Tillämpa på innehållet",
       "recursiveWarning": "— ändrar ägare för ALLA filer och undermappar i den här mappen. Symboliska länkar följs inte. Kan inte ångras."
     },
-    "transferChown": "Ändrar ägare för {{name}}"
+    "transferChown": "Ändrar ägare för {{name}}",
+    "stopProgress": "Förlopp",
+    "noTextDiff": "Ingen textdiff möjlig (binär fil eller för stor)."
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",

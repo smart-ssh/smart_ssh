@@ -32,6 +32,7 @@ mod mapping;
 mod paths;
 mod policy_store;
 mod prompt_history_store;
+mod record_query;
 pub mod runtime_bridge;
 mod server_columns;
 mod store;
@@ -78,6 +79,8 @@ mod tests_fixture_t0;
 /// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
 #[cfg(test)]
 mod tests_raw_file;
+#[cfg(test)]
+mod tests_record_query;
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
@@ -87,7 +90,7 @@ mod tests_runtime_bridge_guard;
 mod tests_server_columns;
 
 pub use activity_session_store::{
-    ActivitySession, ActivitySessionKind, SqliteActivitySessionStore,
+    ActivitySession, ActivitySessionKind, SqliteActivitySessionStore, UNKNOWN_MCP_CLIENT,
 };
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
@@ -132,4 +135,8 @@ pub use paths::{
 };
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
+pub use record_query::{
+    EntryFilter, Page, PageRequest, RecordCursor, RecordedEntry, SessionFilter, SqliteRecordQuery,
+    MAX_PAGE_SIZE,
+};
 pub use store::SqliteProfileStore;

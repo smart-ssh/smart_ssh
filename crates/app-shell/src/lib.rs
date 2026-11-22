@@ -63,6 +63,7 @@ mod startup_dialog;
 /// Spec 0101, A16: das Tor, das vor der Entsperrung jedes Kommando außer
 /// Entsperren, Beenden und Neu-anfangen abweist.
 mod startup_gate;
+use startup_gate::gated;
 /// Spec 0101, A16/T18: die Verdrahtung des Tors — dass es vor dem Verteiler
 /// sitzt und der MCP-Server vor der Entsperrung nicht startet.
 #[cfg(test)]
@@ -354,10 +355,10 @@ pub(crate) async fn open_and_assemble(
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
-        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
-        // geöffnet wurde — damit das Einrichten aus den Einstellungen
-        // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
+        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank geöffnet wurde —
+        // damit das Einrichten aus den Einstellungen denselben Schlüssel prüfen kann (Fund 10).
         root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&root_key),
+        activity_session_store: profile_store.activity_session_store(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
         // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei
@@ -868,6 +869,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_stored_host_keys,
             commands::update_group_notes,
             commands::update_server_notes,
+            commands::record_list_sessions,
+            commands::record_list_entries,
+            commands::record_session_entries,
             commands::large_note_dialog_threshold_chars,
             commands::request_note_shrink,
             commands::update_local_server_notes,
@@ -1163,38 +1167,6 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"
     );
-}
-
-/// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
-/// Verteiler.
-///
-/// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
-/// nicht in einem Schließungsausdruck mitten in der Builder-Kette
-/// verschwindet: **erst** prüfen, **dann** weiterleiten.
-///
-/// Über die Laufzeit `R` abstrahiert, damit `startup_gate_wiring` die
-/// Verdrahtung mit der Test-Laufzeit **durch den echten IPC-Weg** prüfen
-/// kann (T18): In `run()` wird `R` zu `tauri::Wry`, am Aufruf ändert sich
-/// nichts.
-fn gated<R: tauri::Runtime, F>(
-    gate: std::sync::Arc<crate::startup_gate::StartupGate>,
-    inner: F,
-) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
-where
-    F: Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
-{
-    move |invoke| {
-        let command = invoke.message.command();
-        if !gate.allows(command) {
-            tracing::warn!(
-                command,
-                "a command was refused because the application is locked (Spec 0101, A16)"
-            );
-            invoke.resolver.reject(crate::startup_gate::APP_LOCKED_CODE);
-            return true;
-        }
-        inner(invoke)
-    }
 }
 
 /// Android: the microphone permission plugin (shipped by `tauri-plugin-android-host`); elsewhere a plugin that does

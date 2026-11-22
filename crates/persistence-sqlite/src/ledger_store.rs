@@ -48,6 +48,14 @@ pub enum LedgerStoreError {
         entry_id: String,
         reason: String,
     },
+    /// A stored recorded-session snapshot (`activity_sessions` row) could not
+    /// be read back (e.g. a column holding invalid JSON). Same error code as
+    /// `CorruptContent`.
+    CorruptSession {
+        session_id: String,
+        field: String,
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for LedgerStoreError {
@@ -58,6 +66,14 @@ impl std::fmt::Display for LedgerStoreError {
             LedgerStoreError::CorruptContent { entry_id, reason } => write!(
                 f,
                 "Ledger-Eintrag '{entry_id}' konnte nicht gelesen werden: {reason}"
+            ),
+            LedgerStoreError::CorruptSession {
+                session_id,
+                field,
+                reason,
+            } => write!(
+                f,
+                "Aufgezeichnete Sitzung '{session_id}' konnte nicht gelesen werden: Feld '{field}': {reason}"
             ),
         }
     }
@@ -99,6 +115,11 @@ pub struct SqliteLedgerStore {
 impl SqliteLedgerStore {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
+    }
+
+    /// Read-only query handle over the same pool (issue #1449).
+    pub fn record_query(&self) -> crate::SqliteRecordQuery {
+        crate::SqliteRecordQuery::new(self.pool.clone())
     }
 
     /// Appends an entry with default meta fields; see [`Self::append`].

@@ -130,6 +130,7 @@ Before content leaves the app towards an AI provider, it passes through the
 output redactor
 ([`crates/core/src/ai/redactor.rs`](crates/core/src/ai/redactor.rs)).
 Redaction also runs before ledger entries and note suggestions are stored (the ledger is the activity record: it belongs to a recorded session, not to a chat, so it outlives deleting a chat or a server; a server snapshot stays with it),
+MCP-driven actions are recorded in the ledger under their own recorded session (kind `mcp`) with the same redaction; the MCP client name from the handshake is stored as a label only, shortened to 64 characters, and is never used as an instruction or put into a prompt. MCP recorded sessions have no chat session, so they cannot be listed or resumed as a chat,
 and before server notes are returned to an MCP client
 ([ADR 0103](docs/adr/0103-mcp-server-notes-redact-and-fence.md)).
 
@@ -226,6 +227,13 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
   filter engine. The free-text reason of the AI second opinion is never
   stored for that reason
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §3).
+- **File reads and writes by the AI** appear in the ledger as path, size, SHA-256
+  and (for writes) backup path only — never the file content or a diff. Paths
+  are redacted like command text. A SHA-256 of very short or low-entropy
+  content (a PIN file, a single-token line) can be recovered by brute force,
+  so the hash is not a secrecy boundary: the protection is the encrypted
+  database, not the hash
+  ([ADR 0160](docs/adr/0160-activity-record-file-reads-and-writes.md)).
 - **Your own chat messages** are stored as you typed them (inside the
   encrypted database, section 3) and redacted only when they are sent.
 
@@ -287,6 +295,40 @@ What encryption at rest protects against: someone who gets a copy of the
 data directory (backup, stolen disk) without access to your unlocked OS
 account or your master password. It does not protect against malware
 running as your user while the app is unlocked.
+
+### The activity record and who can read it
+
+**What it stores.** For every recorded session (chat, MCP, terminal) the
+activity record holds a snapshot of the server (name, host, port, user, group
+path, tags) and an append-only ledger: proposed and executed commands with
+their output, approval decisions, AI messages, file reads and writes (path and
+size, never content), connection events and activity ticks. It is written
+redacted, in the encrypted database file, and outlives deleting a chat or a
+server.
+
+**Who can read it.** Extensions of an edition read it through the read-only
+extension API (`app_logic::ext`: `list_recorded_sessions`,
+`list_record_entries`, `record_entries_of_session`). The API has no write path,
+never reads chat messages, and returns entries exactly as stored. An extension
+is trusted code inside the process (see section 5); the API only keeps it from
+depending on the table layout, it is not a sandbox. Anything raw SQL on the
+extension pool could reach is out of this API's control, so extensions must not
+use that pool for core tables.
+
+**Residual redaction risk.** The record holds what the redactor knew at write
+time. A secret that became known later (a rotated password, a secret an
+extension learned afterwards) can still sit in older entries in plaintext, and
+entries marked "redaction incomplete" were written while a secret lookup had
+failed. The generic patterns are heuristics (see the explicit limit in
+section 2).
+
+**Rule for anything that leaves the device.** Text that goes to a third party
+(export, sync, upload, an AI provider) must be taken from the record and
+redacted again with `redact_for_server`, which uses the server's current
+redactor including the secrets session extensions contribute. For a deleted
+server only the generic patterns apply, and the result says so ("generic
+only"); callers must treat such text as less protected. A failed secret lookup
+is reported as "incomplete" instead of being hidden.
 
 ---
 

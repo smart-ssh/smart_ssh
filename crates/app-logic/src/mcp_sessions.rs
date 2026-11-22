@@ -105,6 +105,46 @@ impl McpSessionKey {
     }
 }
 
+/// Issue #1444: creates the recorded session (`activity_sessions`, kind
+/// `mcp`, `mcp_client` = the handshake client name, `unknown` if none) of an
+/// MCP-driven connection and attaches it to `session`, so proposals, decisions
+/// and executions are written to the ledger with source `mcp-agent` through
+/// `write_ledger_entry`. No `chat_sessions` row is created: the session never
+/// shows up in chat lists or the resume dialog and is never loaded into a
+/// human chat. A failure is logged and the session stays unrecorded (the
+/// action itself is not blocked — same best-effort stance as chat ledger
+/// writes). The local pseudo-server has no `servers` row and is skipped.
+pub async fn attach_recorded_session(
+    session: &Session,
+    server_id: &ServerId,
+    client_name: Option<&str>,
+) {
+    let Some(store) = &session.persistence.activity_session_store else {
+        return;
+    };
+    if crate::dto::is_local(*server_id) {
+        return;
+    }
+    match store.create_mcp_session(server_id, client_name).await {
+        Ok(id) => *session.persistence.mcp_activity_session_id.lock().await = Some(id),
+        Err(err) => tracing::warn!(error = %err, "MCP recorded session could not be created"),
+    }
+}
+
+/// Issue #1444: sets `ended_at` of the MCP recorded session when the MCP
+/// session closes. No-op for sessions without one.
+pub async fn end_recorded_session(session: &Session) {
+    let (Some(store), Some(id)) = (
+        &session.persistence.activity_session_store,
+        *session.persistence.mcp_activity_session_id.lock().await,
+    ) else {
+        return;
+    };
+    if let Err(err) = store.mark_ended(id).await {
+        tracing::warn!(error = %err, "MCP recorded session end could not be stored");
+    }
+}
+
 /// Was die App über eine MCP-Sitzung weiß — für die Tab-Beschriftung
 /// ("<Client> @ <Server>") und die Sperre von Nutzer-Eingaben.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -475,6 +515,11 @@ where
     }
 
     if !registry.is_mcp_session(session_id) {
+        // Issue #1444: the tab was closed while connecting; the recorded
+        // session attached by `connect` must not stay open forever.
+        if let Some(orphan) = sessions.get(session_id) {
+            end_recorded_session(&orphan).await;
+        }
         disconnect_orphan(session_id).await;
         return Err(EnsureMcpSessionError::Closed);
     }

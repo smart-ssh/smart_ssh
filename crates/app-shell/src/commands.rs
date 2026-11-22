@@ -23,6 +23,7 @@ mod groups;
 /// den Einstellungen.
 pub mod master_password;
 mod notes;
+mod record;
 mod rules;
 mod scope;
 mod servers;
@@ -41,6 +42,7 @@ pub(crate) use diagnostics_export::*;
 pub(crate) use elevation::*;
 pub(crate) use groups::*;
 pub(crate) use notes::*;
+pub(crate) use record::*;
 pub(crate) use rules::*;
 pub(crate) use servers::*;
 pub(crate) use sftp::*;

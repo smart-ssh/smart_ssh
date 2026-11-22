@@ -702,6 +702,7 @@
     "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Valittua tekoälypalvelua ei ole määritetty. Valitse määritetty palvelu.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Valitse tekoälypalvelu ennen riskin toisen mielipiteen käyttöönottoa.",
+    "CHAT_SESSION_NOT_FOUND": "Tätä tallennettua keskustelua ei enää ole. Valitse Yritä uudelleen yhdistääksesi normaalisti jatkamatta sitä.",
     "SESSION_NOT_FOUND": "Tämä istunto ei ole enää auki. Avaa se uudelleen palvelinluettelosta.",
     "SSH_SFTP_ALREADY_EXISTS": "Tämänniminen tiedosto tai kansio on jo olemassa",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Avaintiedostoa ei löytynyt tältä laitteelta",
@@ -1160,8 +1161,7 @@
       "editing": "Muokataan “{{name}}” paikallisesti…",
       "end": "Lopeta muokkaus",
       "uploadTitle": "Lähetetäänkö paikalliset muutokset?",
-      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Uusi koko: {{size}}."
+      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen."
     },
     "deleteDialog": {
       "fileTitle": "Poistetaanko tiedosto?",
@@ -1183,7 +1183,6 @@
       "conflictTitle": "Korvataanko kansion tiedostot?",
       "conflictBody": "Kohteen “{{name}}” lähetys korvaisi nämä {{count}} tiedostoa palvelimella. Mitään ei korvata, ellet vahvista.",
       "summaryTitle": "Kansion lähetys: “{{name}}”",
-      "summary": "{{uploaded}} tiedostoa lähetetty, {{skipped}} ohitettu, {{failed}} epäonnistui.",
       "notAttempted": "{{count}} tiedostoa jätettiin yrittämättä, koska niiden kansiota ei voitu luoda.",
       "skipped": "Ohitettu",
       "failed": "Epäonnistui",
@@ -1194,12 +1193,14 @@
         "unsupported": "ei tavallinen tiedosto tai kansio",
         "notGranted": "valintasi ei kata sitä",
         "overwriteNotConfirmed": "on palvelimella, korvausta ei vahvistettu"
-      }
+      },
+      "uploaded": "Lähetetty"
     },
     "uploadConflict": {
       "title": "Korvataanko tiedosto?",
       "body": "on jo palvelimella.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Nykyinen koko: {{remoteSize}}, uusi koko: {{localSize}}."
+      "currentSize": "Nykyinen koko",
+      "newSize": "Uusi koko"
     },
     "menu": {
       "download": "Lataa",
@@ -1288,7 +1289,9 @@
       "recursive": "Käytä sisältöön",
       "recursiveWarning": "— vaihtaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden omistajan. Symbolisia linkkejä ei seurata. Ei voi perua."
     },
-    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa"
+    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa",
+    "stopProgress": "Eteneminen",
+    "noTextDiff": "Tekstivertailu ei ole mahdollinen (binääritiedosto tai liian suuri)."
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",

@@ -14,7 +14,10 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::super::approval::ApprovedAction;
-use super::super::chat_turn::{ledger_source_for_origin, push_history_scoped, write_ledger_entry};
+use super::super::chat_turn::{
+    ledger_source_for_origin, push_history_scoped, write_ledger_entry,
+    write_ledger_entry_for_action,
+};
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
@@ -88,6 +91,21 @@ pub(super) async fn handle_user_decision(
     }
 }
 
+/// Whether the user's/engine's decision on `action` goes into the activity
+/// record: commands and file writes (Spec 0057). File writes link the entry
+/// to the action so a decision pairs with its `file_written` entry.
+pub(super) fn records_decision(action: &AiAction) -> bool {
+    matches!(
+        action,
+        AiAction::SuggestCommand { .. } | AiAction::WriteRemoteFile { .. }
+    )
+}
+
+/// `action_id` for the decision entry: only file writes carry it.
+pub(super) fn decision_link(action: &AiAction, action_id: ActionId) -> Option<ActionId> {
+    matches!(action, AiAction::WriteRemoteFile { .. }).then_some(action_id)
+}
+
 /// Everything the decision steps share.
 struct DecisionEnv<'a> {
     session: &'a Session,
@@ -104,10 +122,10 @@ struct DecisionEnv<'a> {
 }
 
 /// The ledger `Decision` fields of the user's decision (Spec 0057, §1.1).
-struct DecisionRecord {
-    source: LedgerSource,
+pub(super) struct DecisionRecord {
+    pub(super) source: LedgerSource,
     reason: Option<String>,
-    code: Option<String>,
+    pub(super) code: Option<String>,
     matched_rule: Option<RuleId>,
     matched_rule_origin: Option<RuleOrigin>,
 }
@@ -118,7 +136,7 @@ impl DecisionRecord {
     /// proposal and the specific code `TIMEOUT`. Otherwise the original
     /// escalation reason/code is kept so the ledger shows WHY a confirmation
     /// was needed.
-    fn new(
+    pub(super) fn new(
         deny_reason: &RejectionReason,
         origin: &ActionOrigin,
         confirm_reason: String,
@@ -185,11 +203,12 @@ impl DecisionEnv<'_> {
         action: &AiAction,
         reason: RejectionReason,
     ) -> bool {
-        if let AiAction::SuggestCommand { .. } = action {
-            write_ledger_entry(
+        if records_decision(action) {
+            write_ledger_entry_for_action(
                 self.session,
                 record.source,
                 record.content(LedgerDecisionOutcome::Rejected),
+                decision_link(action, self.action_id),
             )
             .await;
         }
@@ -209,11 +228,12 @@ impl DecisionEnv<'_> {
     }
 
     async fn approve(&self, record: &DecisionRecord, action: AiAction) -> bool {
-        if let AiAction::SuggestCommand { .. } = &action {
-            write_ledger_entry(
+        if records_decision(&action) {
+            write_ledger_entry_for_action(
                 self.session,
                 record.source,
                 record.content(LedgerDecisionOutcome::Confirmed),
+                decision_link(&action, self.action_id),
             )
             .await;
         }

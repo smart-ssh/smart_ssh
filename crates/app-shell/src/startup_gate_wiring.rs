@@ -43,6 +43,9 @@ const COMMANDS_UNDER_TEST: &[&str] = &[
     "send_chat_message",
     "get_mcp_server_settings",
     "set_mcp_server_enabled",
+    "record_list_sessions",
+    "record_list_entries",
+    "record_session_entries",
     "get_app_info",
     "create_overlay_titlebar",
     "unlock_with_master_password",
@@ -151,6 +154,10 @@ fn test_t18_a_locked_app_answers_every_command_with_an_error_and_no_data() {
         // Ausschalten des Servers und das Lesen seiner Zugangsdaten.
         "get_mcp_server_settings",
         "set_mcp_server_enabled",
+        // Activity record read API (issue #1450).
+        "record_list_sessions",
+        "record_list_entries",
+        "record_session_entries",
         // Ohne `AppState` im Argument — sie liefen ohne das Tor.
         "get_app_info",
         "create_overlay_titlebar",

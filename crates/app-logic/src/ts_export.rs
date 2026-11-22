@@ -35,6 +35,7 @@ fn generate() -> String {
     use crate::elevation_events::ElevationAutoDisabledPayload;
     use crate::events::connect_warnings::ConnectWarningsPayload;
     use crate::events::*;
+    use crate::record_query::*;
     use crate::status::ConnectionStatus;
     use crate::version::BuildType;
     use ssh_manager_core::ai::{ExtensionMedia, ProviderId, ProviderType};
@@ -52,6 +53,16 @@ fn generate() -> String {
     };
     use ssh_manager_core::ssh::{ConnectStepSnapshot, ConnectWarning};
     let decls = decls![
+        RecordSessionKind,
+        RecordSource,
+        RecordEntryType,
+        RecordDecisionOutcome,
+        RecordedSessionFilter,
+        RecordEntryFilter,
+        RecordPageRequest,
+        RecordPage<RecordedSessionInfo>,
+        RecordedSessionInfo,
+        RecordEntryInfo,
         Activity,
         ActivityOutcome,
         ActivitySpec,

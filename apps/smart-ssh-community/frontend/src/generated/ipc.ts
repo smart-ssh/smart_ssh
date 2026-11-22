@@ -238,6 +238,26 @@ export type QuestionOptionDto = { label: string, description: string | null, };
 
 export type QuitRequestedPayload = { activities: Array<Activity>, };
 
+export type RecordDecisionOutcome = "Confirmed" | "Rejected" | "AutoApproved";
+
+export type RecordEntryFilter = { from: string | null, until: string | null, session_ids: Array<string>, server_ids: Array<ServerId>, group_id: string | null, sources: Array<RecordSource>, entry_types: Array<RecordEntryType>, decision_outcomes: Array<RecordDecisionOutcome>, exit_code_nonzero: boolean, text_contains: string | null, };
+
+export type RecordEntryInfo = { id: string, session_id: string, sequence: number, created_at: string, source: RecordSource, entry_type: RecordEntryType, text: string | null, outcome: RecordDecisionOutcome | null, reason: string | null, code: string | null, exit_code: number | null, stdout: string | null, stderr: string | null, cancelled: boolean | null, path: string | null, bytes: number | null, connection_event: string | null, detail: string | null, action_id: string | null, redaction_incomplete: boolean, };
+
+export type RecordEntryType = "CommandProposed" | "Decision" | "CommandExecuted" | "AiMessage" | "FileRead" | "FileWritten" | "Connection" | "ActivityTick";
+
+export type RecordPage<T> = { items: Array<T>, next_cursor: string | null, };
+
+export type RecordPageRequest = { page_size: number, cursor: string | null, };
+
+export type RecordSessionKind = "Chat" | "Mcp" | "Terminal";
+
+export type RecordSource = "User" | "Ai" | "McpAgent";
+
+export type RecordedSessionFilter = { started_from: string | null, started_until: string | null, server_ids: Array<ServerId>, group_id: string | null, kinds: Array<RecordSessionKind>, has_failed_writes: boolean, };
+
+export type RecordedSessionInfo = { id: string, kind: string, mcp_client: string | null, server_id: string, server_name: string, server_host: string, server_port: number, server_user: string, group_ids: Array<string>, group_names: Array<string>, tags: Array<string>, time_zone: string | null, started_at: string, ended_at: string | null, last_activity_at: string | null, failed_writes: number, };
+
 export type RemoteEntryDto = { name: string, path: string, isDir: boolean, size: number, permissions: string, modified: string | null, permissionsOctal: number, uid: number | null, gid: number | null, owner: string | null, group: string | null, isSymlink: boolean, linkTarget: string | null, linkKind: LinkKind | null, };
 
 export type ResumeSpec = { kind: string, key: string, };

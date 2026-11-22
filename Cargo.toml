@@ -22,6 +22,7 @@ publish = false
 async-trait = { version = "0.1.92" }
 base64 = { version = "0.23.1" }
 chrono = { version = "0.4.45" }
+iana-time-zone = { version = "0.1.65", default-features = false }
 directories = { version = "6.0.0" }
 futures = { version = "0.3.34" }
 globset = { version = "0.4.20" }

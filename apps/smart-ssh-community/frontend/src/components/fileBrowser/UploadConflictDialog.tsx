@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { formatBytes } from "../../lib/format";
 import { previewReadFailureHint } from "../../lib/previewReadFailure";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 import { NoteDiffPreview } from "../NoteDiffPreview";
+import { DialogRows } from "./DialogRows";
 import type { UploadConflict } from "./shared";
 
 interface UploadConflictDialogProps {
@@ -20,6 +21,7 @@ export function UploadConflictDialog({ conflict, elevated, elevatedUser, onCance
   return (
       <DialogFrame
         layer="sessionTab"
+        icon={<Icon name="upload" />}
         title={elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
         onClose={() => onCancel()}
         actions={
@@ -31,27 +33,34 @@ export function UploadConflictDialog({ conflict, elevated, elevatedUser, onCance
           </>
         }
       >
-        <p className="mb-3">
-          <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
-          {t("fileBrowser.uploadConflict.body")}
-        </p>
+        <p className="mb-2 font-mono text-xs break-all text-fg">{uploadConflict.remotePath}</p>
+        <p className="mb-3">{t("fileBrowser.uploadConflict.body")}</p>
         {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
           <NoteDiffPreview
             previousContent={uploadConflict.remoteText}
             newContent={uploadConflict.localPreview.text}
           />
         ) : (
-          <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-            {uploadConflict.remoteReadFailure
-              ? t(
+          <>
+            {uploadConflict.remoteReadFailure ? (
+              <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+                {t(
                   previewReadFailureHint(uploadConflict.remoteReadFailure).key,
                   previewReadFailureHint(uploadConflict.remoteReadFailure).options,
-                )
-              : t("fileBrowser.uploadConflict.noDiff", {
-                  remoteSize: formatBytes(uploadConflict.remoteSize),
-                  localSize: formatBytes(uploadConflict.localPreview.size),
-                })}
-          </p>
+                )}
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-fg-subtle">{t("fileBrowser.noTextDiff")}</p>
+                <DialogRows
+                  rows={[
+                    { label: t("fileBrowser.uploadConflict.currentSize"), value: formatBytes(uploadConflict.remoteSize) },
+                    { label: t("fileBrowser.uploadConflict.newSize"), value: formatBytes(uploadConflict.localPreview.size) },
+                  ]}
+                />
+              </>
+            )}
+          </>
         )}
       </DialogFrame>
   );

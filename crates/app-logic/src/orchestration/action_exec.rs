@@ -116,6 +116,12 @@ mod tests_check_unavailable;
 mod tests_files_and_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
+mod tests_mcp_recording;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+mod tests_file_ledger;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
 mod tests_outgoing;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]

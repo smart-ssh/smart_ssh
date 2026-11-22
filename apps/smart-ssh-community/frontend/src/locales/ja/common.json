@@ -700,6 +700,7 @@
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "選択した AI プロバイダーは設定されていません。設定済みのプロバイダーを選択してください。",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
+    "CHAT_SESSION_NOT_FOUND": "保存されたこのチャットは存在しません。「再試行」を選ぶと、再開せずに通常どおり接続します。",
     "SESSION_NOT_FOUND": "このセッションは既に閉じられています。サーバー一覧からもう一度開いてください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません",
@@ -1152,8 +1153,7 @@
       "editing": "「{{name}}」をローカルで編集中…",
       "end": "編集を終了",
       "uploadTitle": "ローカルの変更をアップロードしますか？",
-      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。新しいサイズ: {{size}}。"
+      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。"
     },
     "deleteDialog": {
       "fileTitle": "ファイルを削除しますか？",
@@ -1173,7 +1173,6 @@
       "conflictTitle": "フォルダー内のファイルを上書きしますか？",
       "conflictBody": "「{{name}}」をアップロードすると、サーバー上のこれら{{count}}個のファイルが上書きされます。確認しない限り、何も上書きされません。",
       "summaryTitle": "フォルダーのアップロード: 「{{name}}」",
-      "summary": "{{uploaded}}個のファイルをアップロード、{{skipped}}個をスキップ、{{failed}}個が失敗しました。",
       "notAttempted": "フォルダーを作成できなかったため、{{count}}個のファイルは処理されませんでした。",
       "skipped": "スキップ",
       "failed": "失敗",
@@ -1184,12 +1183,14 @@
         "unsupported": "通常のファイルまたはフォルダーではありません",
         "notGranted": "選択範囲に含まれていません",
         "overwriteNotConfirmed": "サーバー上に存在し、上書きが確認されていません"
-      }
+      },
+      "uploaded": "アップロード済み"
     },
     "uploadConflict": {
       "title": "ファイルを上書きしますか？",
       "body": "はサーバー上にすでに存在します。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。現在のサイズ: {{remoteSize}}、新しいサイズ: {{localSize}}。"
+      "currentSize": "現在のサイズ",
+      "newSize": "新しいサイズ"
     },
     "menu": {
       "download": "ダウンロード",
@@ -1278,7 +1279,9 @@
       "recursive": "内容にも適用",
       "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの所有者を変更します。シンボリックリンクはたどりません。元に戻せません。"
     },
-    "transferChown": "{{name}} の所有者を変更中"
+    "transferChown": "{{name}} の所有者を変更中",
+    "stopProgress": "進捗",
+    "noTextDiff": "テキスト差分を表示できません(バイナリファイル、またはサイズが大きすぎます)。"
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",

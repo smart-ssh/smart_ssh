@@ -67,6 +67,7 @@ pub(super) async fn execute_action(
                 profile_store,
                 persist,
                 sudo_fallback_announced,
+                ledger_source,
             )
             .await;
         }
@@ -96,7 +97,16 @@ pub(super) async fn execute_action(
             unreachable!("AskUser is never executed, see run_one_round")
         }
         AiAction::ReadRemoteFile { path } => {
-            execute_read_remote_file(session, session_id, action_id, path, emitter, persist).await
+            execute_read_remote_file(
+                session,
+                session_id,
+                action_id,
+                path,
+                emitter,
+                persist,
+                ledger_source,
+            )
+            .await
         }
         AiAction::SuggestCommand { .. } | AiAction::WriteRemoteFile { .. } => {
             unreachable!("approved commands and file writes are wrapped by ApprovedAction")

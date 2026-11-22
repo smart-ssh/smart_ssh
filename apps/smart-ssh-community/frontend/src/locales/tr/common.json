@@ -702,6 +702,7 @@
     "CLIPBOARD_FILE_FAILED": "Dosya bu sistemde panoya konulamadı.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Seçilen yapay zekâ sağlayıcısı yapılandırılmamış. Yapılandırılmış bir sağlayıcı seçin.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Risk için ikinci görüşü açmadan önce bir yapay zekâ sağlayıcısı seçin.",
+    "CHAT_SESSION_NOT_FOUND": "Bu kayıtlı sohbet artık yok. Devam ettirmeden normal şekilde bağlanmak için Yeniden dene'yi seçin.",
     "SESSION_NOT_FOUND": "Bu oturum artık açık değil. Sunucu listesinden yeniden açın.",
     "SSH_SFTP_ALREADY_EXISTS": "Bu adda bir dosya veya klasör zaten var",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Anahtar dosyası bu cihazda bulunamadı",
@@ -1160,8 +1161,7 @@
       "editing": "“{{name}}” yerel olarak düzenleniyor…",
       "end": "Düzenlemeyi durdur",
       "uploadTitle": "Yerel değişiklikler yüklensin mi?",
-      "remoteChanged": "Uzak dosya indirildikten sonra değiştirilmiş — yükleme bu diğer değişikliğin üzerine yazar.",
-      "noDiff": "Metin farkı mümkün değil (ikili dosya veya çok büyük). Yeni boyut: {{size}}."
+      "remoteChanged": "Uzak dosya indirildikten sonra değiştirilmiş — yükleme bu diğer değişikliğin üzerine yazar."
     },
     "deleteDialog": {
       "fileTitle": "Dosya silinsin mi?",
@@ -1183,7 +1183,6 @@
       "conflictTitle": "Klasördeki dosyaların üzerine yazılsın mı?",
       "conflictBody": "“{{name}}” yüklemesi sunucudaki bu {{count}} dosyanın üzerine yazar. Siz onaylamadıkça hiçbir şeyin üzerine yazılmaz.",
       "summaryTitle": "Klasör yükleme: “{{name}}”",
-      "summary": "{{uploaded}} dosya yüklendi, {{skipped}} atlandı, {{failed}} başarısız.",
       "notAttempted": "{{count}} dosya, klasörleri oluşturulamadığı için denenmedi.",
       "skipped": "Atlanan",
       "failed": "Başarısız",
@@ -1194,12 +1193,14 @@
         "unsupported": "normal dosya veya klasör değil",
         "notGranted": "seçiminiz kapsamında değil",
         "overwriteNotConfirmed": "sunucuda var, üzerine yazma onaylanmadı"
-      }
+      },
+      "uploaded": "Yüklendi"
     },
     "uploadConflict": {
       "title": "Dosyanın üzerine yazılsın mı?",
       "body": "sunucuda zaten var.",
-      "noDiff": "Metin farkı mümkün değil (ikili dosya veya çok büyük). Mevcut boyut: {{remoteSize}}, yeni boyut: {{localSize}}."
+      "currentSize": "Mevcut boyut",
+      "newSize": "Yeni boyut"
     },
     "menu": {
       "download": "İndir",
@@ -1288,7 +1289,9 @@
       "recursive": "İçeriğe uygula",
       "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin sahibini değiştirir. Sembolik bağlantılar izlenmez. Geri alınamaz."
     },
-    "transferChown": "{{name}} sahibi değiştiriliyor"
+    "transferChown": "{{name}} sahibi değiştiriliyor",
+    "stopProgress": "İlerleme",
+    "noTextDiff": "Metin farkı gösterilemiyor (ikili dosya veya çok büyük)."
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",

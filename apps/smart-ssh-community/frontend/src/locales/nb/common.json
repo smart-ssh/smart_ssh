@@ -702,6 +702,7 @@
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte KI-leverandøren er ikke konfigurert. Velg en konfigurert leverandør.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
+    "CHAT_SESSION_NOT_FOUND": "Denne lagrede chatten finnes ikke lenger. Velg Prøv igjen for å koble til som vanlig uten å gjenoppta den.",
     "SESSION_NOT_FOUND": "Denne økten er ikke lenger åpen. Åpne den på nytt fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten",
@@ -1160,8 +1161,7 @@
       "editing": "Redigerer “{{name}}” lokalt…",
       "end": "Avslutt redigering",
       "uploadTitle": "Laste opp lokale endringer?",
-      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Ny størrelse: {{size}}."
+      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen."
     },
     "deleteDialog": {
       "fileTitle": "Slette filen?",
@@ -1183,7 +1183,6 @@
       "conflictTitle": "Overskrive filer i mappen?",
       "conflictBody": "Opplasting av “{{name}}” ville overskrive disse {{count}} filene på serveren. Ingenting overskrives med mindre du bekrefter.",
       "summaryTitle": "Mappeopplasting: “{{name}}”",
-      "summary": "{{uploaded}} filer lastet opp, {{skipped}} hoppet over, {{failed}} mislyktes.",
       "notAttempted": "{{count}} filer ble ikke forsøkt fordi mappen deres ikke kunne opprettes.",
       "skipped": "Hoppet over",
       "failed": "Mislyktes",
@@ -1194,12 +1193,14 @@
         "unsupported": "ikke en vanlig fil eller mappe",
         "notGranted": "dekkes ikke av valget ditt",
         "overwriteNotConfirmed": "finnes på serveren, overskriving ikke bekreftet"
-      }
+      },
+      "uploaded": "Lastet opp"
     },
     "uploadConflict": {
       "title": "Overskrive filen?",
       "body": "finnes allerede på serveren.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Nåværende størrelse: {{remoteSize}}, ny størrelse: {{localSize}}."
+      "currentSize": "Nåværende størrelse",
+      "newSize": "Ny størrelse"
     },
     "menu": {
       "download": "Last ned",
@@ -1288,7 +1289,9 @@
       "recursive": "Bruk på innholdet",
       "recursiveWarning": "— endrer eieren av ALLE filer og undermapper i denne mappen. Symbolske lenker følges ikke. Kan ikke angres."
     },
-    "transferChown": "Endrer eier av {{name}}"
+    "transferChown": "Endrer eier av {{name}}",
+    "stopProgress": "Fremdrift",
+    "noTextDiff": "Ingen tekstdiff mulig (binær fil eller for stor)."
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",

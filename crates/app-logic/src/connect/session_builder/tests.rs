@@ -145,6 +145,7 @@ async fn fixture(
         policy_store: db.policy_store(),
         prompt_history_store: db.prompt_history_store(),
         chat_session_store: db.chat_session_store(),
+        activity_session_store: db.activity_session_store(),
         ledger_store: db.ledger_store(),
         profile_store: Arc::new(db),
         credential_store: Arc::new(credentials),
@@ -398,6 +399,52 @@ async fn test_resume_loads_history_and_flags_untrusted_content() {
         .safety
         .untrusted_content_ingested
         .load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn test_an_mcp_recorded_session_cannot_be_resumed_as_a_chat() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let mcp_id = fx
+        .state
+        .activity_session_store
+        .create_mcp_session(&fx.server.id, Some("Claude Code"))
+        .await
+        .unwrap();
+    let run = run(
+        &fx,
+        fx.server.id,
+        fx.server.clone(),
+        Err(()),
+        ok("1000"),
+        Some(mcp_id),
+    )
+    .await;
+    assert!(
+        run.built.is_err(),
+        "an MCP recorded session id must not resume"
+    );
+    assert_eq!(
+        run.built.err().unwrap().code,
+        Some(crate::error::CHAT_SESSION_NOT_FOUND)
+    );
+}
+
+#[tokio::test]
+async fn test_resuming_an_unknown_id_returns_chat_session_not_found() {
+    let fx = fixture(InMemoryCredentialStore::new(), None).await;
+    let run = run(
+        &fx,
+        fx.server.id,
+        fx.server.clone(),
+        Err(()),
+        ok("1000"),
+        Some(uuid::Uuid::new_v4()),
+    )
+    .await;
+    assert_eq!(
+        run.built.err().unwrap().code,
+        Some(crate::error::CHAT_SESSION_NOT_FOUND)
+    );
 }
 
 #[tokio::test]

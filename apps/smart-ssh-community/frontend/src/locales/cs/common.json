@@ -706,6 +706,7 @@
     "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Vybraný poskytovatel AI není nastaven. Vyberte nastaveného poskytovatele.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
+    "CHAT_SESSION_NOT_FOUND": "Tento uložený chat už neexistuje. Zvolte Zkusit znovu a připojte se normálně bez jeho obnovení.",
     "SESSION_NOT_FOUND": "Tato relace už není otevřená. Otevřete ji znovu ze seznamu serverů.",
     "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen",
@@ -1176,8 +1177,7 @@
       "editing": "Lokální úprava „{{name}}“…",
       "end": "Ukončit úpravy",
       "uploadTitle": "Nahrát lokální změny?",
-      "remoteChanged": "Vzdálený soubor byl od stažení změněn — nahráním by se tato jiná změna přepsala.",
-      "noDiff": "Textový rozdíl není možný (binární soubor nebo příliš velký). Nová velikost: {{size}}."
+      "remoteChanged": "Vzdálený soubor byl od stažení změněn — nahráním by se tato jiná změna přepsala."
     },
     "deleteDialog": {
       "fileTitle": "Smazat soubor?",
@@ -1203,7 +1203,6 @@
       "conflictTitle": "Přepsat soubory ve složce?",
       "conflictBody": "Nahráním „{{name}}“ by se na serveru přepsaly tyto soubory (počet: {{count}}). Nic se nepřepíše, dokud to nepotvrdíte.",
       "summaryTitle": "Nahrání složky: „{{name}}“",
-      "summary": "Nahráno souborů: {{uploaded}}, přeskočeno: {{skipped}}, selhalo: {{failed}}.",
       "notAttempted": "Souborů, které se ani nezkoušely, protože se nepodařilo vytvořit jejich složku: {{count}}.",
       "skipped": "Přeskočeno",
       "failed": "Selhalo",
@@ -1214,12 +1213,14 @@
         "unsupported": "není běžný soubor ani složka",
         "notGranted": "není zahrnuto ve vašem výběru",
         "overwriteNotConfirmed": "existuje na serveru, přepsání nepotvrzeno"
-      }
+      },
+      "uploaded": "Nahráno"
     },
     "uploadConflict": {
       "title": "Přepsat soubor?",
       "body": "již na serveru existuje.",
-      "noDiff": "Textový rozdíl není možný (binární soubor nebo příliš velký). Aktuální velikost: {{remoteSize}}, nová velikost: {{localSize}}."
+      "currentSize": "Aktuální velikost",
+      "newSize": "Nová velikost"
     },
     "menu": {
       "download": "Stáhnout",
@@ -1308,7 +1309,9 @@
       "recursive": "Použít na obsah",
       "recursiveWarning": "— změní vlastníka VŠECH souborů a podsložek v této složce. Symbolické odkazy se nenásledují. Nelze vrátit zpět."
     },
-    "transferChown": "Změna vlastníka {{name}}"
+    "transferChown": "Změna vlastníka {{name}}",
+    "stopProgress": "Průběh",
+    "noTextDiff": "Textový rozdíl nelze zobrazit (binární soubor nebo příliš velký)."
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",

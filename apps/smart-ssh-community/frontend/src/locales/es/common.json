@@ -704,6 +704,7 @@
     "CLIPBOARD_FILE_FAILED": "No se pudo colocar el archivo en el portapapeles de este sistema.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "El proveedor de IA seleccionado no está configurado. Elija un proveedor configurado.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Elija un proveedor de IA antes de activar la segunda opinión sobre el riesgo.",
+    "CHAT_SESSION_NOT_FOUND": "Este chat guardado ya no existe. Seleccione Reintentar para conectarse normalmente sin reanudarlo.",
     "SESSION_NOT_FOUND": "Esta sesión ya no está abierta. Ábrela de nuevo desde la lista de servidores.",
     "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo",
@@ -1168,8 +1169,7 @@
       "editing": "Editando “{{name}}” localmente…",
       "end": "Dejar de editar",
       "uploadTitle": "¿Subir los cambios locales?",
-      "remoteChanged": "El archivo remoto cambió desde la descarga: la subida sobrescribiría ese otro cambio.",
-      "noDiff": "No es posible una comparación de texto (archivo binario o demasiado grande). Tamaño nuevo: {{size}}."
+      "remoteChanged": "El archivo remoto cambió desde la descarga: la subida sobrescribiría ese otro cambio."
     },
     "deleteDialog": {
       "fileTitle": "¿Eliminar archivo?",
@@ -1193,7 +1193,6 @@
       "conflictTitle": "¿Sobrescribir archivos de la carpeta?",
       "conflictBody": "Subir “{{name}}” sobrescribiría estos {{count}} archivos en el servidor. No se sobrescribe nada si no lo confirma.",
       "summaryTitle": "Subida de carpeta: “{{name}}”",
-      "summary": "{{uploaded}} archivos subidos, {{skipped}} omitidos, {{failed}} fallidos.",
       "notAttempted": "No se intentó subir {{count}} archivos porque no se pudo crear su carpeta.",
       "skipped": "Omitidos",
       "failed": "Fallidos",
@@ -1204,12 +1203,14 @@
         "unsupported": "no es un archivo ni una carpeta normal",
         "notGranted": "no incluido en su selección",
         "overwriteNotConfirmed": "existe en el servidor, sobrescritura no confirmada"
-      }
+      },
+      "uploaded": "Subidos"
     },
     "uploadConflict": {
       "title": "¿Sobrescribir archivo?",
       "body": "ya existe en el servidor.",
-      "noDiff": "No es posible una comparación de texto (archivo binario o demasiado grande). Tamaño actual: {{remoteSize}}, tamaño nuevo: {{localSize}}."
+      "currentSize": "Tamaño actual",
+      "newSize": "Tamaño nuevo"
     },
     "menu": {
       "download": "Descargar",
@@ -1298,7 +1299,9 @@
       "recursive": "Aplicar al contenido",
       "recursiveWarning": "— cambia el propietario de TODOS los archivos y subcarpetas de esta carpeta. No se siguen los enlaces simbólicos. No se puede deshacer."
     },
-    "transferChown": "Cambiando propietario de {{name}}"
+    "transferChown": "Cambiando propietario de {{name}}",
+    "stopProgress": "Progreso",
+    "noTextDiff": "No es posible un diff de texto (archivo binario o demasiado grande)."
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",

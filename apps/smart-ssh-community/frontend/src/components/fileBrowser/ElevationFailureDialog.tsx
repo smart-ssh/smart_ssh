@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clipboardWriteText } from "../../api/api";
 import { type ElevationResultDto } from "../../api/types";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 
 /** Spec 0067, A3: verständliche Erklärung, warum der erhöhte Modus nicht
  * geht — bei fehlender sudo-Regel mit der zugeschnittenen sudoers-Zeile zum
@@ -32,6 +32,7 @@ export function ElevationFailureDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="warn" />}
       title={t("fileElevation.failureTitle")}
       onClose={onClose}
       size="md"
