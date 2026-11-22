@@ -37,7 +37,8 @@ ist nicht eingecheckt.
   abhängigkeiten, deren Code ins gebaute Frontend gelangt (heute
   `tailwindcss` und `vite`), (d) der Schriften (A6), (e) des fremden
   C-Quelltexts, den Rust-Abhängigkeiten gebündelt mitbringen (heute
-  SQLCipher und OpenSSL, Spec 0101); fehlt einer dieser Texte, bricht die
+  SQLCipher, OpenSSL und der im SQLCipher-Quelltext mitgelieferte
+  LibTomCrypt, Spec 0101); fehlt einer dieser Texte, bricht die
   Erzeugung ab. Je Lizenztext stehen
   die Pakete (Name, Version), die ihn verwenden. Pakete des eigenen
   Workspace und lokale npm-Pakete (Mitglieder eines npm-Workspace, per
