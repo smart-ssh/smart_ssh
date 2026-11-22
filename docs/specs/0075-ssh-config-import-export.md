@@ -191,7 +191,12 @@ Ordnerstruktur samt Servern und die Server als Tabelle (Auswahl, Name,
 Adresse, Port, Benutzer, Jump-Host); im schmalen Fenster stehen sie
 untereinander. Konfliktzeilen sind als Warnung hervorgehoben, das Feld
 für den neuen Namen steht unter der Tabelle. Die Schaltfläche zum
-Bestätigen nennt die Zahl der angewählten Server („N Server importieren“).
+Bestätigen nennt die Zahl der Server, die tatsächlich angelegt werden
+(„N Server importieren“): angewählte Einträge ohne Konflikt sowie
+angewählte Konflikteinträge mit einem neuen Namen (nicht leer, Leerraum
+zählt nicht). Angewählte Konflikteinträge ohne neuen Namen werden
+übersprungen (3.1.8) und zählen nicht mit. Ist die Zahl 0, ist die
+Schaltfläche deaktiviert.
 
 **3.1.8 Kein Überschreiben.** Existiert bereits ein Server mit gleichem
 Name **oder** gleicher Kombination aus Adresse, Port und Benutzername,

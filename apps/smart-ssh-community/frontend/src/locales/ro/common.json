@@ -1168,8 +1168,7 @@
       "editing": "Se editează „{{name}}” local…",
       "end": "Oprește editarea",
       "uploadTitle": "Încărcați modificările locale?",
-      "remoteChanged": "Fișierul de pe server a fost modificat de la descărcare — încărcarea ar suprascrie acea altă modificare.",
-      "noDiff": "Comparație de text imposibilă (fișier binar sau prea mare). Dimensiune nouă: {{size}}."
+      "remoteChanged": "Fișierul de pe server a fost modificat de la descărcare — încărcarea ar suprascrie acea altă modificare."
     },
     "deleteDialog": {
       "fileTitle": "Ștergeți fișierul?",
@@ -1193,7 +1192,6 @@
       "conflictTitle": "Suprascrieți fișierele din folder?",
       "conflictBody": "Încărcarea „{{name}}” ar suprascrie aceste {{count}} fișiere de pe server. Nimic nu este suprascris fără confirmarea dvs.",
       "summaryTitle": "Încărcare folder: „{{name}}”",
-      "summary": "Fișiere încărcate: {{uploaded}}, omise: {{skipped}}, eșuate: {{failed}}.",
       "notAttempted": "{{count}} fișiere nu au fost încercate deoarece folderul lor nu a putut fi creat.",
       "skipped": "Omise",
       "failed": "Eșuate",
@@ -1204,12 +1202,14 @@
         "unsupported": "nu este fișier obișnuit sau folder",
         "notGranted": "nu este inclus în selecția dvs.",
         "overwriteNotConfirmed": "există pe server, suprascrierea nu a fost confirmată"
-      }
+      },
+      "uploaded": "Încărcate"
     },
     "uploadConflict": {
       "title": "Suprascrieți fișierul?",
       "body": "există deja pe server.",
-      "noDiff": "Comparație de text imposibilă (fișier binar sau prea mare). Dimensiune curentă: {{remoteSize}}, dimensiune nouă: {{localSize}}."
+      "currentSize": "Dimensiune curentă",
+      "newSize": "Dimensiune nouă"
     },
     "menu": {
       "download": "Descarcă",
@@ -1298,7 +1298,9 @@
       "recursive": "Aplică pe conținut",
       "recursiveWarning": "— schimbă proprietarul TUTUROR fișierelor și subfolderelor din acest folder. Legăturile simbolice nu sunt urmate. Nu poate fi anulat."
     },
-    "transferChown": "Se schimbă proprietarul pentru {{name}}"
+    "transferChown": "Se schimbă proprietarul pentru {{name}}",
+    "stopProgress": "Progres",
+    "noTextDiff": "Diferența de text nu este posibilă (fișier binar sau prea mare)."
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",

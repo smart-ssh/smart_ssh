@@ -1152,8 +1152,7 @@
       "editing": "“{{name}}”을(를) 로컬에서 편집 중…",
       "end": "편집 중지",
       "uploadTitle": "로컬 변경 사항을 업로드하시겠습니까?",
-      "remoteChanged": "다운로드한 이후 원격 파일이 변경되었습니다. 업로드하면 그 다른 변경 사항을 덮어쓰게 됩니다.",
-      "noDiff": "텍스트 비교를 할 수 없습니다(바이너리 파일이거나 너무 큼). 새 크기: {{size}}."
+      "remoteChanged": "다운로드한 이후 원격 파일이 변경되었습니다. 업로드하면 그 다른 변경 사항을 덮어쓰게 됩니다."
     },
     "deleteDialog": {
       "fileTitle": "파일을 삭제하시겠습니까?",
@@ -1173,7 +1172,6 @@
       "conflictTitle": "폴더의 파일을 덮어쓰시겠습니까?",
       "conflictBody": "“{{name}}”을(를) 업로드하면 서버의 파일 {{count}}개를 덮어씁니다. 확인하지 않으면 아무것도 덮어쓰지 않습니다.",
       "summaryTitle": "폴더 업로드: “{{name}}”",
-      "summary": "파일 {{uploaded}}개 업로드, {{skipped}}개 건너뜀, {{failed}}개 실패.",
       "notAttempted": "폴더를 만들 수 없어 파일 {{count}}개는 시도하지 않았습니다.",
       "skipped": "건너뜀",
       "failed": "실패",
@@ -1184,12 +1182,14 @@
         "unsupported": "일반 파일 또는 폴더가 아님",
         "notGranted": "선택 범위에 포함되지 않음",
         "overwriteNotConfirmed": "서버에 있으며 덮어쓰기가 확인되지 않음"
-      }
+      },
+      "uploaded": "업로드됨"
     },
     "uploadConflict": {
       "title": "파일을 덮어쓰시겠습니까?",
       "body": "이(가) 서버에 이미 있습니다.",
-      "noDiff": "텍스트 비교를 할 수 없습니다(바이너리 파일이거나 너무 큼). 현재 크기: {{remoteSize}}, 새 크기: {{localSize}}."
+      "currentSize": "현재 크기",
+      "newSize": "새 크기"
     },
     "menu": {
       "download": "다운로드",
@@ -1278,7 +1278,9 @@
       "recursive": "내용에도 적용",
       "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 소유자를 변경합니다. 심볼릭 링크는 따라가지 않습니다. 되돌릴 수 없습니다."
     },
-    "transferChown": "{{name}} 소유자 변경 중"
+    "transferChown": "{{name}} 소유자 변경 중",
+    "stopProgress": "진행률",
+    "noTextDiff": "텍스트 비교를 할 수 없습니다(바이너리 파일이거나 너무 큼)."
   },
   "chat": {
     "jumpToLatest": "최신 메시지로 이동",

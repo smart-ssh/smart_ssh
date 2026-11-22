@@ -6,6 +6,7 @@ import type { Activity } from "../../api/activitiesApi";
 import { resetActivitiesStoreForTests } from "../../hooks/useActivities";
 import { resetInterruptedForTests } from "../../hooks/useInterruptedActivities";
 import { registerActivityResumeHandler } from "../../lib/activityResume";
+import { RATE_WINDOW_MS } from "../../lib/transferRate";
 import { ActivityCenter, combinedProgress } from "./ActivityCenter";
 
 const api = vi.hoisted(() => ({
@@ -134,6 +135,55 @@ describe("ActivityCenter", () => {
       expect(within(dialog).getByText(/2\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:08/)).toBeInTheDocument();
     } finally {
       now.mockRestore();
+    }
+  });
+
+  it("hides speed and remaining time of a stalled download and shows them again on progress", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const mb = 1024 * 1024;
+      act(() => api.handler?.(activity({ done: 0, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => api.handler?.(activity({ done: 2 * mb, total: 10 * mb })));
+      fireEvent.click(screen.getByTestId("activity-center-button"));
+      expect(screen.getByText(/2\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:08/)).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RATE_WINDOW_MS + 100);
+      });
+      expect(screen.getByText(/2\.0 MB \/ 10\.0 MB/)).toBeInTheDocument();
+      expect(screen.queryByText(/MB\/s/)).toBeNull();
+      expect(screen.queryByText(/noch/)).toBeNull();
+      // Progress resumes: the values reappear after the next updates.
+      act(() => api.handler?.(activity({ done: 3 * mb, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      act(() => api.handler?.(activity({ done: 4 * mb, total: 10 * mb })));
+      expect(screen.getByText(/4\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:06/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the stall timer on unmount", async () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => api.handler?.(activity({ done: 1, total: 10 })));
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

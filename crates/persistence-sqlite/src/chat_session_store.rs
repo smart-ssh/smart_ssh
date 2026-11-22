@@ -151,18 +151,13 @@ impl SqliteChatSessionStore {
         ai_provider_id: Option<Uuid>,
     ) -> Result<Uuid, ChatSessionStoreError> {
         let id = Uuid::new_v4();
-        sqlx::query(
-            "INSERT INTO chat_sessions (id, server_id, title, started_at, ended_at, ai_provider_id) \
-             VALUES (?, ?, NULL, ?, NULL, ?)",
+        crate::activity_session_store::create_chat_session(
+            &self.pool,
+            id,
+            server_id,
+            ai_provider_id,
         )
-        .bind(id.to_string())
-        .bind(server_id.0.to_string())
-        .bind(Utc::now().to_rfc3339())
-        .bind(ai_provider_id.map(|id| id.to_string()))
-        .execute(&self.pool)
-        .await
-        ?;
-
+        .await?;
         Ok(id)
     }
 
@@ -282,15 +277,10 @@ impl SqliteChatSessionStore {
     /// statement, so a message arriving concurrently either lands first (row
     /// kept) or hits a missing session. Returns whether a row was deleted.
     pub async fn delete_if_empty(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
-        let res = sqlx::query(
-            "DELETE FROM chat_sessions WHERE id = ? \
-             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
-             AND NOT EXISTS (SELECT 1 FROM ledger_entries WHERE session_id = chat_sessions.id)",
+        Ok(
+            crate::activity_session_store::delete_chat_session_if_empty(&self.pool, session_id)
+                .await?,
         )
-        .bind(session_id.to_string())
-        .execute(&self.pool)
-        .await?;
-        Ok(res.rows_affected() > 0)
     }
 
     /// Ends a session: an empty one is discarded, any other is marked ended.
@@ -1412,7 +1402,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=28).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=29).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

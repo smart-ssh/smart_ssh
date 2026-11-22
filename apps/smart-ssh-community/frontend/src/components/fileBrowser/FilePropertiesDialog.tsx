@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../lib/formatDateTime";
 import { formatBytes } from "../../lib/format";
 import { type RemoteEntryDto } from "../../api/types";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 
 /** Spec 0054, Teil 2: "Eigenschaften" — reine Anzeige der bereits geladenen
  * `RemoteEntryDto` (kein eigener Backend-Aufruf: `sftp_list` liefert
@@ -33,6 +33,7 @@ export function FilePropertiesDialog({
     <DialogFrame
       layer="sessionTab"
       size="sm"
+      icon={<Icon name="info" />}
       title={t("fileBrowser.properties.title")}
       onClose={onClose}
       actions={<Button onClick={onClose}>{t("fileBrowser.properties.close")}</Button>}

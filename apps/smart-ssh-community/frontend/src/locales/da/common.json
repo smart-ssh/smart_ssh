@@ -585,7 +585,7 @@
     "ollamaProbeRetry": "Søg igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama fundet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installér Ollama fra ollama.com, start den og indlæs en model (f.eks. `ollama pull llama3`), og søg derefter igen.",
-    "typeLabel": "Slags",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -1160,8 +1160,7 @@
       "editing": "Redigerer “{{name}}” lokalt…",
       "end": "Stop redigering",
       "uploadTitle": "Upload lokale ændringer?",
-      "remoteChanged": "Filen på serveren er ændret siden hentningen – en upload ville overskrive den anden ændring.",
-      "noDiff": "Ingen tekstforskel mulig (binær fil eller for stor). Ny størrelse: {{size}}."
+      "remoteChanged": "Filen på serveren er ændret siden hentningen – en upload ville overskrive den anden ændring."
     },
     "deleteDialog": {
       "fileTitle": "Slet fil?",
@@ -1183,7 +1182,6 @@
       "conflictTitle": "Overskriv filer i mappen?",
       "conflictBody": "Upload af “{{name}}” ville overskrive disse {{count}} filer på serveren. Intet overskrives, medmindre du bekræfter.",
       "summaryTitle": "Mappeupload: “{{name}}”",
-      "summary": "{{uploaded}} filer uploadet, {{skipped}} sprunget over, {{failed}} mislykkedes.",
       "notAttempted": "{{count}} filer blev ikke forsøgt, fordi deres mappe ikke kunne oprettes.",
       "skipped": "Sprunget over",
       "failed": "Mislykkedes",
@@ -1194,12 +1192,14 @@
         "unsupported": "ikke en almindelig fil eller mappe",
         "notGranted": "ikke dækket af dit valg",
         "overwriteNotConfirmed": "findes på serveren, overskrivning ikke bekræftet"
-      }
+      },
+      "uploaded": "Uploadet"
     },
     "uploadConflict": {
       "title": "Overskriv fil?",
       "body": "findes allerede på serveren.",
-      "noDiff": "Ingen tekstforskel mulig (binær fil eller for stor). Nuværende størrelse: {{remoteSize}}, ny størrelse: {{localSize}}."
+      "currentSize": "Nuværende størrelse",
+      "newSize": "Ny størrelse"
     },
     "menu": {
       "download": "Hent",
@@ -1288,7 +1288,9 @@
       "recursive": "Anvend på indhold",
       "recursiveWarning": "— skifter ejer på ALLE filer og undermapper i denne mappe. Symbolske links følges ikke. Kan ikke fortrydes."
     },
-    "transferChown": "Skifter ejer af {{name}}"
+    "transferChown": "Skifter ejer af {{name}}",
+    "stopProgress": "Fremskridt",
+    "noTextDiff": "Ingen tekstdiff mulig (binær fil eller for stor)."
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",

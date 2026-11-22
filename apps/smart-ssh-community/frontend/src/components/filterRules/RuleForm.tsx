@@ -38,6 +38,10 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
    * Stelle im Muster nennt. `translateErrorCode` ersetzt die `message` bei
    * bekanntem Code vollständig, sie ginge sonst verloren. */
   const [patternErrorDetail, setPatternErrorDetail] = useState<string | null>(null);
+  /** Translated sentence for a rejected pattern; shown in the pattern
+   * field's error slot (linked via aria-describedby). Other errors stay in
+   * `error` (form-level alert). */
+  const [patternError, setPatternError] = useState<string | null>(null);
 
   const buildScope = (): Scope | null => {
     if (kind === "global") return "Global";
@@ -49,6 +53,8 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const scope = buildScope();
+    setPatternErrorDetail(null);
+    setPatternError(null);
     if (!scope) {
       setError(kind === "server" ? t("filterRules.serverRequired") : t("filterRules.tagRequired"));
       return;
@@ -57,6 +63,7 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
     setSaving(true);
     setError(null);
     setPatternErrorDetail(null);
+    setPatternError(null);
     try {
       if (isCreate) {
         await createRule(input);
@@ -72,7 +79,7 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
       const code = commandErrorCode(err);
       const message = commandErrorMessage(err);
       if (code === "FILTER_RULE_PATTERN_INVALID") {
-        setError(translateErrorCode(t, code, message));
+        setPatternError(translateErrorCode(t, code, message));
         setPatternErrorDetail(message);
       } else {
         setError(message);
@@ -119,7 +126,22 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
             </select>
           )}
         </Field>
-        <Field label={t("filterRules.pattern")}>
+        <Field
+          label={t("filterRules.pattern")}
+          error={
+            patternError ? (
+              <>
+                {patternError}
+                {/* Spec 0077, 3.1.4: library detail names the position in the pattern. */}
+                {patternErrorDetail && (
+                  <span className="mt-1 block font-mono text-xs text-danger-fg-soft/80">
+                    {patternErrorDetail}
+                  </span>
+                )}
+              </>
+            ) : undefined
+          }
+        >
           {(c) => (
             <input
               {...c}
@@ -222,16 +244,7 @@ export function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFo
         )}
       </div>
 
-      {error && (
-        <div className="space-y-1">
-          <p role="alert" className="text-sm text-danger-fg">{error}</p>
-          {/* Spec 0077, 3.1.4: der Fehlertext der Bibliothek als Detail — er
-              nennt die Stelle im Muster. */}
-          {patternErrorDetail && (
-            <p className="font-mono text-xs text-danger-fg-soft/80">{patternErrorDetail}</p>
-          )}
-        </div>
-      )}
+      {error && <p role="alert" className="text-sm text-danger-fg">{error}</p>}
 
       </div>
     </DialogFrame>

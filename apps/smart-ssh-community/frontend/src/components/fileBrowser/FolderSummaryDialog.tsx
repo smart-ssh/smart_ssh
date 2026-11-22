@@ -1,7 +1,8 @@
 import { dynamicKey } from "../../i18nTypes";
 import { useTranslation } from "react-i18next";
 import type { FolderUploadSummaryDto } from "../../api/types";
-import { Button, DialogFrame } from "../ui";
+import { DialogRows } from "./DialogRows";
+import { Button, DialogFrame, Icon } from "../ui";
 
 interface FolderSummaryDialogProps {
   folderSummary: FolderUploadSummaryDto;
@@ -14,6 +15,7 @@ export function FolderSummaryDialog({ folderSummary, onClose }: FolderSummaryDia
   return (
       <DialogFrame
         layer="sessionTab"
+        icon={<Icon name="folder" />}
         title={t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
         onClose={() => onClose()}
         actions={
@@ -22,13 +24,13 @@ export function FolderSummaryDialog({ folderSummary, onClose }: FolderSummaryDia
           </Button>
         }
       >
-        <p className="mb-3">
-          {t("fileBrowser.folderUpload.summary", {
-            uploaded: folderSummary.filesUploaded,
-            skipped: folderSummary.skipped.length,
-            failed: folderSummary.failed.length,
-          })}
-        </p>
+        <DialogRows
+          rows={[
+            { label: t("fileBrowser.folderUpload.uploaded"), value: String(folderSummary.filesUploaded) },
+            { label: t("fileBrowser.folderUpload.skipped"), value: String(folderSummary.skipped.length) },
+            { label: t("fileBrowser.folderUpload.failed"), value: String(folderSummary.failed.length) },
+          ]}
+        />
         {folderSummary.notAttempted > 0 && (
           <p className="mb-3 text-warning-fg-soft">
             {t("fileBrowser.folderUpload.notAttempted", { count: folderSummary.notAttempted })}

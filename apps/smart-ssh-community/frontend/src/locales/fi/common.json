@@ -1160,8 +1160,7 @@
       "editing": "Muokataan “{{name}}” paikallisesti…",
       "end": "Lopeta muokkaus",
       "uploadTitle": "Lähetetäänkö paikalliset muutokset?",
-      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Uusi koko: {{size}}."
+      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen."
     },
     "deleteDialog": {
       "fileTitle": "Poistetaanko tiedosto?",
@@ -1183,7 +1182,6 @@
       "conflictTitle": "Korvataanko kansion tiedostot?",
       "conflictBody": "Kohteen “{{name}}” lähetys korvaisi nämä {{count}} tiedostoa palvelimella. Mitään ei korvata, ellet vahvista.",
       "summaryTitle": "Kansion lähetys: “{{name}}”",
-      "summary": "{{uploaded}} tiedostoa lähetetty, {{skipped}} ohitettu, {{failed}} epäonnistui.",
       "notAttempted": "{{count}} tiedostoa jätettiin yrittämättä, koska niiden kansiota ei voitu luoda.",
       "skipped": "Ohitettu",
       "failed": "Epäonnistui",
@@ -1194,12 +1192,14 @@
         "unsupported": "ei tavallinen tiedosto tai kansio",
         "notGranted": "valintasi ei kata sitä",
         "overwriteNotConfirmed": "on palvelimella, korvausta ei vahvistettu"
-      }
+      },
+      "uploaded": "Lähetetty"
     },
     "uploadConflict": {
       "title": "Korvataanko tiedosto?",
       "body": "on jo palvelimella.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Nykyinen koko: {{remoteSize}}, uusi koko: {{localSize}}."
+      "currentSize": "Nykyinen koko",
+      "newSize": "Uusi koko"
     },
     "menu": {
       "download": "Lataa",
@@ -1288,7 +1288,9 @@
       "recursive": "Käytä sisältöön",
       "recursiveWarning": "— vaihtaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden omistajan. Symbolisia linkkejä ei seurata. Ei voi perua."
     },
-    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa"
+    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa",
+    "stopProgress": "Eteneminen",
+    "noTextDiff": "Tekstivertailu ei ole mahdollinen (binääritiedosto tai liian suuri)."
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
