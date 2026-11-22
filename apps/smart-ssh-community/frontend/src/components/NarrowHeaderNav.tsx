@@ -3,6 +3,7 @@
 // navigation and the open sessions. Entries come from the same data as the
 // wide layout (`navEntries.ts`, `SessionTabParts.tsx`).
 import { useRef, useState } from "react";
+import { useNarrowSlot } from "../lib/narrowSlot";
 import { useTranslation } from "react-i18next";
 import { MAIN_TAB_ENTRIES, type MainTab } from "../lib/navEntries";
 import type { SessionTab } from "../hooks/useSessionTabs";
@@ -30,6 +31,7 @@ interface NarrowHeaderNavProps {
 export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const { setSlot } = useNarrowSlot();
   const burgerRef = useRef<HTMLButtonElement>(null);
   const active = props.tabs.find((x) => x.sessionId === props.activeSessionId);
 
@@ -68,7 +70,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
         )}
       </span>
       {/* Issue #1387: the active session's ⋯ button and menu are rendered here. */}
-      {active && <span data-testid="narrow-session-actions" className="ml-auto flex shrink-0 items-center gap-1" />}
+      {active && <span ref={setSlot} data-testid="narrow-session-actions" className="ml-auto flex shrink-0 items-center gap-1" />}
       {open && (
         <NarrowMenu
           {...props}

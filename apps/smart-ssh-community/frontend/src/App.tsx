@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
@@ -11,6 +11,7 @@ import { ToastHost } from "./components/ToastHost";
 import { AuthPromptHost } from "./components/AuthPromptHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList, serverSessionMarkers, type ServerMarker } from "./components/ServerList";
+import { NarrowSlotProvider } from "./lib/narrowSlot";
 import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { ConnectingTabView } from "./components/ConnectingTabView";
@@ -35,6 +36,9 @@ type Tab = MainTab;
 function App() {
   const [tab, setTab] = useState<Tab>("connect");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Issue #1461: title-bar slot for the narrow session actions.
+  const [narrowSlot, setNarrowSlot] = useState<HTMLElement | null>(null);
+  const narrowSlotValue = useMemo(() => ({ slot: narrowSlot, setSlot: setNarrowSlot }), [narrowSlot]);
   // WebKit on macOS does not focus a clicked button, so the opener is taken
   // from the click and handed to the dialog as the focus-return target.
   const [settingsOpener, setSettingsOpener] = useState<HTMLElement | null>(null);
@@ -203,6 +207,7 @@ function App() {
     // Notizbereich unmarkierbar gemacht. `AppHeader` trägt bereits sein
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
+    <NarrowSlotProvider value={narrowSlotValue}>
     <div className="flex h-[var(--app-vh,100vh)] flex-col bg-surface text-fg overflow-hidden">
       <AppHeader
         mainNav={{
@@ -316,6 +321,7 @@ function App() {
         />
       )}
     </div>
+    </NarrowSlotProvider>
   );
 }
 

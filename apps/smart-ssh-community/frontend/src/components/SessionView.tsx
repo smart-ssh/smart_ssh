@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useNarrowSlot } from "../lib/narrowSlot";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { getServer, listGroups, reconnectSession, stopAutoReconnect } from "../api/api";
 import { commandErrorText } from "../api/errorCodes";
@@ -142,12 +143,8 @@ export function SessionView({
   const [menuOpen, setMenuOpen] = useState(false);
   // Issue #1387, Spec 0113 §4: in the narrow layout the ⋯ button and its menu
   // live in the title bar (slot of `NarrowHeaderNav`) of the active session.
-  const [narrowSlot, setNarrowSlot] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    setNarrowSlot(
-      narrow && isActiveTab ? document.querySelector<HTMLElement>('[data-testid="narrow-session-actions"]') : null,
-    );
-  }, [narrow, isActiveTab]);
+  const { slot: titleBarSlot } = useNarrowSlot();
+  const narrowSlot = narrow && isActiveTab ? titleBarSlot : null;
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   // Issue #1366: server details for the header line. Loaded once per mount
   // without blocking the panes; a failure just leaves the line out.
