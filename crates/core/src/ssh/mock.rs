@@ -53,6 +53,8 @@ struct Inner {
     /// Paths whose `write_file` stores half of the content and then fails
     /// (an SFTP error mid-stream).
     partial_write_paths: HashSet<String>,
+    /// Paths whose `write_file` fails before anything is stored.
+    failing_open_paths: HashSet<String>,
     /// Issue #625: bietet der simulierte Server `posix-rename@openssh.com` an?
     posix_rename: bool,
     /// Issue #625: Quellpfade, bei denen `rename` scheitern soll.
@@ -96,6 +98,14 @@ impl MockSftpSession {
     pub fn with_partial_write_failure(self, path: impl Into<String>) -> Self {
         lock_tolerating_poison(&self.inner)
             .partial_write_paths
+            .insert(path.into());
+        self
+    }
+
+    /// `write_file` on `path` fails with a channel error before storing anything.
+    pub fn with_failing_open_for_write(self, path: impl Into<String>) -> Self {
+        lock_tolerating_poison(&self.inner)
+            .failing_open_paths
             .insert(path.into());
         self
     }
@@ -220,6 +230,11 @@ impl SftpSession for MockSftpSession {
         if inner.permission_denied_paths.contains(path) {
             return Err(SshError::SftpPermissionDenied(format!(
                 "keine Schreibrechte für {path}"
+            )));
+        }
+        if inner.failing_open_paths.contains(path) {
+            return Err(SshError::ChannelError(format!(
+                "Öffnen von {path} fehlgeschlagen"
             )));
         }
         if inner.partial_write_paths.contains(path) {

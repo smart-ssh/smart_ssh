@@ -512,12 +512,25 @@ async fn record_failed_write(
     ledger_source: LedgerSource,
     path: &str,
     bytes_before: Option<u64>,
+    existed: bool,
     failure: &WriteFailure,
     sudo: bool,
     action_id: Uuid,
 ) {
     if !failure.started {
         return;
+    }
+    // A new file whose open failed (missing directory, closed session, wrong
+    // sudo password) was never touched: if it still does not exist, nothing
+    // was written and nothing is recorded. A failed stat counts as "missing",
+    // as in the stat before the write.
+    if !existed {
+        let mut guard = session.lock_sftp().await;
+        if let Some(sftp) = guard.sftp() {
+            if sftp.stat(path).await.is_err() {
+                return;
+            }
+        }
     }
     write_ledger_entry_for_action(
         session,
@@ -667,6 +680,7 @@ pub(crate) async fn execute_write_remote_file(
                         ledger_source,
                         &path,
                         bytes_before,
+                        existed,
                         &failure,
                         true,
                         action_id,
@@ -694,6 +708,7 @@ pub(crate) async fn execute_write_remote_file(
                 ledger_source,
                 &path,
                 bytes_before,
+                existed,
                 &failure,
                 false,
                 action_id,

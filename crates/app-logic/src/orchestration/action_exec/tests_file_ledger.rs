@@ -413,6 +413,48 @@ async fn test_write_failing_mid_stream_records_failed_file_written() {
 }
 
 #[tokio::test]
+async fn test_new_file_failing_before_open_records_no_file_written_entry() {
+    // The new target was never created (e.g. missing directory): no record.
+    let path = "/home/deploy/missing-dir/new.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu"),
+        MockSshTransport::default(),
+        MockSftpSession::new().with_failing_open_for_write(path),
+        false,
+        true,
+    )
+    .await;
+    assert!(
+        !entries
+            .iter()
+            .any(|e| matches!(e.content, LedgerEntryContent::FileWritten { .. })),
+        "{entries:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_new_file_failing_mid_stream_records_failed_file_written() {
+    // A new file that exists after the failure was touched: recorded.
+    let path = "/home/deploy/new.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu und lang"),
+        MockSshTransport::default(),
+        MockSftpSession::new().with_partial_write_failure(path),
+        false,
+        true,
+    )
+    .await;
+    let (_, content) = failed_entry(&entries);
+    assert!(matches!(
+        content,
+        LedgerEntryContent::FileWritten {
+            status: ssh_manager_core::audit::LedgerFileWriteStatus::Failed,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
 async fn test_failed_file_write_path_is_redacted() {
     let path = "/srv/app?password=hunter2geheim";
     let normalized = normalize_lexical_path(path);

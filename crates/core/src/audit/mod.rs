@@ -215,3 +215,36 @@ pub struct LedgerEntryMeta {
     #[serde(default)]
     pub rule_snapshot: Option<LedgerRuleSnapshot>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A `file_written` row stored before the `status` field existed (#1483)
+    /// still reads back as `Completed`, other fields unchanged.
+    #[test]
+    fn test_legacy_file_written_without_status_deserializes_as_completed() {
+        let json = r#"{"FileWritten":{"path":"/etc/a","backup_path":"/etc/a.bak","bytes_before":3,"bytes_after":5,"sha256_before":"aa","sha256_after":"bb","sudo":true}}"#;
+        let content: LedgerEntryContent = serde_json::from_str(json).unwrap();
+        let LedgerEntryContent::FileWritten {
+            path,
+            status,
+            backup_path,
+            bytes_before,
+            bytes_after,
+            sha256_before,
+            sha256_after,
+            sudo,
+        } = content
+        else {
+            panic!("expected file_written");
+        };
+        assert_eq!(status, LedgerFileWriteStatus::Completed);
+        assert_eq!(path, "/etc/a");
+        assert_eq!(backup_path.as_deref(), Some("/etc/a.bak"));
+        assert_eq!((bytes_before, bytes_after), (Some(3), Some(5)));
+        assert_eq!(sha256_before.as_deref(), Some("aa"));
+        assert_eq!(sha256_after.as_deref(), Some("bb"));
+        assert!(sudo);
+    }
+}
