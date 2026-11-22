@@ -507,6 +507,7 @@ async fn write_via_sudo_fallback(
 /// Activity record for a write that failed after it started (the target may be
 /// partly overwritten). Writes nothing when the target was never touched.
 /// No content, no hashes: nothing is known to have been written.
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn record_failed_write(
     session: &Session,
     ledger_source: LedgerSource,
