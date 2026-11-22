@@ -6,7 +6,7 @@
 // wenn die KI-Zweitmeinung eine ursprünglich automatisch laufende Aktion erst
 // NACH dem Vorschlag auf Rot hebt (A3.1) — und "Tab schließen" würde die
 // wartende Bestätigung nicht ablehnen.
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { disconnect, listServers, listSessions, respondToAction } from "../api/api";
 import {
@@ -401,18 +401,24 @@ describe("useSessionTabs / chat session id (Issue #611)", () => {
   });
 });
 
-describe("useSessionTabs / local tab marker (#1409)", () => {
+describe("useSessionTabs / local tab marker (#1409, #1465)", () => {
   const server = (id: string, isLocal: boolean) => ({ id, name: id, isLocal }) as never;
+
+  beforeEach(() => {
+    vi.mocked(listServers).mockReset();
+    vi.mocked(listServers).mockResolvedValue([]);
+  });
 
   it("marks a local tab even if the first listServers() call failed", async () => {
     vi.mocked(listServers).mockRejectedValueOnce(new Error("boom"));
     vi.mocked(listServers).mockResolvedValue([server("server-1", true)]);
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const { result } = await renderWithOneTab();
-    await act(async () => {
-      await Promise.resolve();
+    // The retry runs on the next tabs update.
+    act(() => {
+      result.current.openTab("session-2", "server-1", "Other");
     });
-    expect(result.current.tabs[0].isLocal).toBe(true);
+    await waitFor(() => expect(result.current.tabs[0].isLocal).toBe(true));
   });
 
   it("marks a local server added after startup when its tab opens", async () => {
@@ -423,9 +429,26 @@ describe("useSessionTabs / local tab marker (#1409)", () => {
     act(() => {
       result.current.openTab("session-9", "local-2", "Local");
     });
-    await act(async () => {
-      await Promise.resolve();
+    await waitFor(() =>
+      expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true),
+    );
+  });
+
+  it("refetches at most once per unknown server id across tabs updates", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false)]);
+    const { result } = await renderWithOneTab();
+    const before = vi.mocked(listServers).mock.calls.length;
+    act(() => {
+      result.current.openTab("session-9", "removed-srv", "Gone");
     });
-    expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true);
+    await waitFor(() => expect(vi.mocked(listServers).mock.calls.length).toBe(before + 1));
+    for (let i = 0; i < 4; i++) {
+      act(() => {
+        result.current.openTab(`session-x${i}`, "server-1", "Same");
+      });
+    }
+    await waitFor(() => expect(result.current.tabs).toHaveLength(5));
+    expect(vi.mocked(listServers).mock.calls.length).toBe(before + 1);
   });
 });

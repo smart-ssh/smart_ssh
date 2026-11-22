@@ -182,20 +182,33 @@ export function useSessionTabs() {
   // Server ids seen in the last successful list; a tab for an id outside it
   // (list failed, or the server was added later) triggers a refetch.
   const knownServerIdsRef = useRef<ReadonlySet<string> | null>(null);
-  const serverListRequestRef = useRef(0);
-  const refreshServerList = useCallback(() => {
-    const request = ++serverListRequestRef.current;
+  // A server id missing from the list triggers at most one successful refetch;
+  // after a failed one, a single retry (on the next `tabs` change). Issue #1465.
+  const serverListAttemptsRef = useRef(new Map<string, number>());
+  const serverListSettledRef = useRef(new Set<string>());
+  const serverListInFlightRef = useRef(false);
+  const refreshServerList = useCallback((keys: string[]) => {
+    serverListInFlightRef.current = true;
+    for (const k of keys) serverListAttemptsRef.current.set(k, (serverListAttemptsRef.current.get(k) ?? 0) + 1);
     listServers()
       .then((servers) => {
-        if (request !== serverListRequestRef.current) return;
+        for (const k of keys) serverListSettledRef.current.add(k);
         knownServerIdsRef.current = new Set(servers.map((s) => s.id));
         setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id)));
       })
-      .catch((err) => console.warn("list_servers failed:", commandErrorMessage(err)));
+      .catch((err) => console.warn("list_servers failed:", commandErrorMessage(err)))
+      .finally(() => {
+        serverListInFlightRef.current = false;
+      });
   }, []);
   useEffect(() => {
+    if (serverListInFlightRef.current) return;
     const known = knownServerIdsRef.current;
-    if (known === null || tabs.some((x) => !known.has(x.serverId))) refreshServerList();
+    const wanted = known === null ? [""] : tabs.filter((x) => !known.has(x.serverId)).map((x) => x.serverId);
+    const keys = [...new Set(wanted)].filter(
+      (k) => !serverListSettledRef.current.has(k) && (serverListAttemptsRef.current.get(k) ?? 0) < 2,
+    );
+    if (keys.length > 0) refreshServerList(keys);
   }, [tabs, refreshServerList]);
   const tabsWithLocal = useMemo(
     () => (localServerIds.size === 0 ? tabs : tabs.map((x) => (localServerIds.has(x.serverId) ? { ...x, isLocal: true } : x))),
