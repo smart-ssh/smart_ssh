@@ -128,6 +128,7 @@ pub(crate) async fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
 pub struct SqliteChatSessionStore {
     pool: SqlitePool,
     removal: RemovalHook,
+    time_zone: crate::activity_session_store::TimeZoneSource,
 }
 
 impl SqliteChatSessionStore {
@@ -135,11 +136,26 @@ impl SqliteChatSessionStore {
         Self {
             pool,
             removal: RemovalHook::default(),
+            time_zone: crate::activity_session_store::device_time_zone_source(),
         }
     }
 
     pub(crate) fn with_removal_hook(pool: SqlitePool, removal: RemovalHook) -> Self {
-        Self { pool, removal }
+        Self {
+            pool,
+            removal,
+            time_zone: crate::activity_session_store::device_time_zone_source(),
+        }
+    }
+
+    /// Replaces the source of the time zone stored with new recorded
+    /// sessions (default: the device zone; tests inject a fixed value).
+    pub fn with_time_zone_source(
+        mut self,
+        source: crate::activity_session_store::TimeZoneSource,
+    ) -> Self {
+        self.time_zone = source;
+        self
     }
 
     /// Spec 0034, Abschnitt 4: "Eine Sitzung beginnt bei `connect()`" —
@@ -156,6 +172,7 @@ impl SqliteChatSessionStore {
             id,
             server_id,
             ai_provider_id,
+            (self.time_zone)().as_deref(),
         )
         .await?;
         Ok(id)
@@ -595,6 +612,37 @@ mod tests {
             role,
             content: MessageContent::Text(text.to_string()),
         }
+    }
+
+    #[tokio::test]
+    async fn test_new_session_stores_injected_time_zone() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let chat_store = chat_store
+            .with_time_zone_source(std::sync::Arc::new(|| Some("Europe/Berlin".to_string())));
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        let session = profile_store
+            .activity_session_store()
+            .load(id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.time_zone.as_deref(), Some("Europe/Berlin"));
+    }
+
+    #[tokio::test]
+    async fn test_failed_time_zone_lookup_still_creates_session_with_null() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let chat_store = chat_store.with_time_zone_source(std::sync::Arc::new(|| None));
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        let session = profile_store
+            .activity_session_store()
+            .load(id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.time_zone, None);
     }
 
     #[tokio::test]

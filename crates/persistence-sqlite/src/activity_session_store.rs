@@ -54,6 +54,18 @@ pub struct ActivitySession {
     pub failed_writes: i64,
 }
 
+/// Source of the device's IANA time zone name; `None` when unknown.
+pub type TimeZoneSource = std::sync::Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+/// Default source: the platform's zone; a failed or empty lookup is `None`.
+pub fn device_time_zone_source() -> TimeZoneSource {
+    std::sync::Arc::new(|| {
+        iana_time_zone::get_timezone()
+            .ok()
+            .filter(|z| !z.trim().is_empty())
+    })
+}
+
 /// Creates the recorded session for `server_id` inside `tx`, with the
 /// snapshot taken from the current server, group path and tags. Returns
 /// `false` (no row written) when the server does not exist.
@@ -107,6 +119,7 @@ pub(crate) async fn create_chat_session(
     id: Uuid,
     server_id: &ServerId,
     ai_provider_id: Option<Uuid>,
+    time_zone: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let _server_exists = insert_snapshot(
@@ -115,7 +128,7 @@ pub(crate) async fn create_chat_session(
         ActivitySessionKind::Chat,
         None,
         server_id,
-        None,
+        time_zone,
     )
     .await?;
     sqlx::query(
