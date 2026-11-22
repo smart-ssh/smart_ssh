@@ -206,7 +206,7 @@ pub fn d4_new_key_for_plaintext_text(db_path: &Path, language: Language) -> Choi
                  Schlüssel. Deine Datenbank ist noch unverschlüsselt und damit lesbar.\n\n\
                  Mit einem neuen Schlüssel bleiben Server, Gruppen, Regeln und Einstellungen \
                  vollständig erhalten. Verloren geht allein der bisherige Chatverlauf \
-                 (einschließlich Ausführungsprotokoll und Eingabe-Historie) — er war mit dem \
+                 (einschließlich Eingabe-Historie) — er war mit dem \
                  unbrauchbaren Schlüssel verschlüsselt.\n\n\
                  Bis du hier wählst, wird nichts verändert.\n\n\
                  Datenpfad: {db_path}"
@@ -299,14 +299,14 @@ pub fn new_key_confirmation_text(language: Language) -> ChoiceDialogText {
     let (title, message, confirm) = match language {
         Language::De => (
             "Wirklich einen neuen Schlüssel erzeugen?",
-            "Der bisherige Chatverlauf, das Ausführungsprotokoll und die Eingabe-Historie \
+            "Der bisherige Chatverlauf und die Eingabe-Historie \
              werden damit unlesbar. Server, Gruppen, Regeln und Einstellungen bleiben \
              erhalten.",
             "Ja, neuen Schlüssel erzeugen",
         ),
         Language::En => (
             "Really create a new key?",
-            "The existing chat history, execution ledger and input history will become \
+            "The existing chat history and input history will become \
              unreadable. Servers, groups, rules and settings are kept.",
             "Yes, create a new key",
         ),
@@ -385,7 +385,7 @@ pub fn started_over_notice_text(renamed_to: &str, language: Language) -> DialogT
 }
 
 /// Issue #113: der einmalige Hinweis, dass alte Einträge aus Chat-Verlauf,
-/// Ausführungsprotokoll, Eingabe-Historie oder Zusammenfassungen mit dem
+/// Eingabe-Historie oder Zusammenfassungen mit dem
 /// aktuellen Schlüssel nicht lesbar waren und entfernt wurden. `removed` ist
 /// immer mindestens 1 — ohne Entferntes gibt es keinen Hinweis.
 pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) -> DialogText {
@@ -393,13 +393,13 @@ pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) 
         Language::De => (
             "Alte Verlaufseinträge entfernt",
             if removed == 1 {
-                "1 alter Eintrag aus Chat-Verlauf, Ausführungsprotokoll, \
+                "1 alter Eintrag aus Chat-Verlauf, \
                  Eingabe-Historie oder Sitzungszusammenfassungen ließ sich mit dem aktuellen Schlüssel nicht lesen und \
                  wurde entfernt. Alles andere ist erhalten."
                     .to_string()
             } else {
                 format!(
-                    "{removed} alte Einträge aus Chat-Verlauf, Ausführungsprotokoll, \
+                    "{removed} alte Einträge aus Chat-Verlauf, \
                      Eingabe-Historie oder Sitzungszusammenfassungen ließen sich mit dem aktuellen Schlüssel nicht lesen \
                      und wurden entfernt. Alles andere ist erhalten."
                 )

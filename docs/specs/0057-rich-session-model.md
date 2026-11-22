@@ -131,8 +131,8 @@ Der Kürzungshinweis (§2.2) und die Hülle, in der eine Summary im Kontext
 steht, sind auf Deutsch und Englisch vorhanden und folgen der Sprache des
 System-Prompts derselben Anfrage (Spec 0024, Abschnitt 2: gespeicherte
 UI-Sprache, sonst System-Locale, sonst Englisch). Beide Fassungen tragen
-dieselbe Information: wie viele frühere Runden entfernt wurden und dass der
-vollständige Verlauf an die Beobachter geht. Der Text der Summary
+dieselbe Information: wie viele frühere Runden entfernt wurden. Der Hinweis
+macht keine Aussage darüber, wo der Verlauf sonst verbleibt. Der Text der Summary
 selbst wird nicht übersetzt. Ohne Sprachwechsel bleiben die Hinweise von
 Anfrage zu Anfrage unverändert; gespeicherte Historie enthält
 sie nicht, sie entstehen bei jeder Anfrage neu.

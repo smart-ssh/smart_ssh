@@ -219,8 +219,7 @@ fn test_round_truncation_placeholder_follows_the_prompt_language() {
     assert_eq!(
         placeholder_text(&german[0]),
         "[Hinweis: ältere Konversation gekürzt — 2 frühere Gesprächsrunde(n) wurden aus \
-             Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf bleibt im \
-             Session-Ledger erhalten.]"
+             Platzgründen aus diesem Kontext entfernt.]"
     );
 }
 

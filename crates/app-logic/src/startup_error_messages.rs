@@ -417,8 +417,8 @@ fn db_connect_failure_message_de(
         // Issue #113: s. englischer Zweig — die Umstellung rollt
         // vollständig zurück, die Datenbank ist offen.
         ConnectFailureKind::FieldContentDecryptionFailed => format!(
-            "Smart SSH konnte deinen gespeicherten Chat-Verlauf, das \
-             Ausführungsprotokoll und die Eingabe-Historie nicht in das neue \
+            "Smart SSH konnte deinen gespeicherten Chat-Verlauf und die \
+             Eingabe-Historie nicht in das neue \
              Speicherformat übernehmen. Die Datenbank selbst ließ sich öffnen — es ist \
              keine Datei beschädigt, und es wurde nichts verändert.\n\n\
              Nächster Schritt: Prüfe, ob das Datenverzeichnis beschreibbar ist und noch \

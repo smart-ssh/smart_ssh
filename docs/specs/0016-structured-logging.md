@@ -80,5 +80,5 @@ Ausgabe, Kontext, Rohantwort) erscheint nur auf `debug`, redigiert.
 
 - Dateien älterer Versionen können noch Inhalte enthalten; sie werden nach
   14 Tagen gelöscht.
-- Die Datenbank (Ausführungsprotokoll, Chatverlauf) ist nicht Gegenstand
+- Die Datenbank (Chatverlauf) ist nicht Gegenstand
   dieser Spec.
