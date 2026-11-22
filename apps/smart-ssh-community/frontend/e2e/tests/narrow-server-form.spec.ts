@@ -35,6 +35,12 @@ test.describe("narrow server form @phone", () => {
     await expect(connect).toBeDisabled();
     await expect(form.getByTestId("connect-save-first-hint")).toBeVisible();
     await expect(form.getByTestId("connect-save-first-hint")).toHaveText("Save your changes first");
+    // Really rendered (not sr-only): a real box on its own row below Save + Connect.
+    const hintBox = (await form.getByTestId("connect-save-first-hint").boundingBox())!;
+    const saveBox2 = (await save.boundingBox())!;
+    expect(hintBox.width).toBeGreaterThan(40);
+    expect(hintBox.height).toBeGreaterThan(8);
+    expect(hintBox.y).toBeGreaterThanOrEqual(saveBox2.y + saveBox2.height - 1);
     await expectNoHorizontalPageScroll(page);
 
     await save.click();
@@ -58,7 +64,11 @@ test.describe("narrow server form @phone", () => {
     const count = await tabs.count();
     expect(count).toBeGreaterThanOrEqual(3);
     const widths: number[] = [];
-    for (let i = 0; i < count; i++) widths.push((await tabs.nth(i).boundingBox())!.width);
+    for (let i = 0; i < count; i++) {
+      const box = (await tabs.nth(i).boundingBox())!;
+      widths.push(box.width);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
     for (const w of widths) expect(Math.abs(w - widths[0])).toBeLessThan(2);
 
     await page.getByRole("tab", { name: "Security", exact: true }).click();

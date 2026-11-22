@@ -1,6 +1,6 @@
 // Issue #1381: review screenshots of the server form frame, General, Security and Notes tabs and the group form.
 import { expect, test } from "../support/app";
-import { group, populated } from "../support/data";
+import { group, populated, server } from "../support/data";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
 import { captureScreen } from "../support/screenshots";
 
@@ -30,7 +30,9 @@ test("Security tab with stored host keys screenshots", async ({ app }) => {
   await app.page.getByRole("button", { name: "Manage", exact: true }).click();
   await app.page.getByRole("treeitem", { name: /^web-1\b/ }).click();
   await app.page.getByRole("tab", { name: "Security", exact: true }).click();
-  await expect(app.page.getByText("ssh-rsa", { exact: true })).toBeVisible();
+  const lastKey = app.page.getByText("ssh-rsa", { exact: true });
+  await lastKey.scrollIntoViewIfNeeded();
+  await expect(lastKey).toBeVisible();
   await captureScreen(app.page, "server-form-security-host-keys");
 });
 
@@ -48,4 +50,12 @@ test("Notes tab with expanded history screenshots", async ({ app }) => {
   await app.page.getByRole("button", { name: "Show history", exact: true }).click();
   await expect(app.page.getByRole("button", { name: "Restore" }).first()).toBeVisible();
   await captureScreen(app.page, "server-form-notes-history");
+});
+
+test("Local server form screenshots", async ({ app }) => {
+  await app.launch({ ...populated(), servers: [...populated().servers!, server({ id: "s-local", name: "This computer", isLocal: true })] });
+  await app.page.getByRole("button", { name: "Manage", exact: true }).click();
+  await app.page.getByRole("treeitem", { name: /^This computer/ }).or(app.page.getByRole("button", { name: /^This computer/ })).first().click();
+  await expect(app.page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await captureScreen(app.page, "server-form-local");
 });
