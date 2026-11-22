@@ -7,8 +7,9 @@
 //! order (`rowid`, which only grows on append): a page boundary stays valid
 //! while entries are appended, and every row is returned exactly once.
 //!
-//! Every statement is bounded by `LIMIT`, because the pool has a single
-//! connection: a long read would block appends.
+//! Every statement except `entries_of_session` (one session's entries) is
+//! bounded by `LIMIT`, because the pool has a single connection: a long read
+//! would block appends.
 
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqlitePool, SqliteRow};
@@ -19,6 +20,9 @@ use ssh_manager_core::audit::{LedgerEntryContent, LedgerEntryMeta, LedgerSource}
 
 use crate::activity_session_store::ActivitySession;
 use crate::ledger_store::{LedgerEntry, LedgerStoreError};
+
+/// Rows examined per statement while a text filter is matched in Rust.
+const TEXT_SCAN_CHUNK: i64 = 500;
 
 /// Largest page a caller can get.
 pub const MAX_PAGE_SIZE: u32 = 200;
@@ -170,20 +174,104 @@ impl SqliteRecordQuery {
     }
 
     /// Ledger entries across sessions, in the order they were appended.
+    ///
+    /// A text filter is matched in Rust (Unicode case-insensitive; SQLite's
+    /// `lower()` only folds ASCII) over keyset chunks of `TEXT_SCAN_CHUNK`
+    /// rows, so each statement stays bounded.
     pub async fn list_entries(
         &self,
         filter: &EntryFilter,
         page: PageRequest,
     ) -> Result<Page<RecordedEntry>, LedgerStoreError> {
         let limit = page.effective_limit();
-        let mut qb = QueryBuilder::<Sqlite>::new(
+        let needle = filter
+            .text_contains
+            .as_deref()
+            .filter(|t| !t.is_empty())
+            .map(str::to_lowercase);
+        let Some(needle) = needle else {
+            let mut rows = self
+                .entries_chunk(filter, page.after.map(|c| c.0), limit + 1, false)
+                .await?;
+            let next = take_next(&mut rows, limit, |r| r.get::<i64, _>("rid"));
+            let items = rows
+                .iter()
+                .map(entry_from_row)
+                .collect::<Result<Vec<_>, _>>()?;
+            return Ok(Page { items, next });
+        };
+        let mut after = page.after.map(|c| c.0);
+        let mut hit_ids: Vec<i64> = Vec::new();
+        loop {
+            // Only the row id and the searched text are read while scanning.
+            let chunk = self
+                .entries_chunk(filter, after, TEXT_SCAN_CHUNK, true)
+                .await?;
+            let exhausted = (chunk.len() as i64) < TEXT_SCAN_CHUNK;
+            for row in chunk {
+                let rid: i64 = row.get("rid");
+                after = Some(rid);
+                let text: String = row.get("txt");
+                if text.to_lowercase().contains(&needle) {
+                    hit_ids.push(rid);
+                    if hit_ids.len() as i64 > limit {
+                        break;
+                    }
+                }
+            }
+            if hit_ids.len() as i64 > limit || exhausted {
+                break;
+            }
+        }
+        let has_more = hit_ids.len() as i64 > limit;
+        hit_ids.truncate(limit as usize);
+        let next = if has_more {
+            hit_ids.last().map(|r| RecordCursor(*r))
+        } else {
+            None
+        };
+        let mut items = Vec::with_capacity(hit_ids.len());
+        for id in &hit_ids {
+            let row = sqlx::query(
+                "SELECT e.id, e.session_id, e.sequence, e.source, e.content, e.created_at, \
+                 e.action_id, e.redaction_incomplete, e.rule_snapshot \
+                 FROM ledger_entries e WHERE e.rowid = ?",
+            )
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(err)?;
+            items.push(entry_from_row(&row)?);
+        }
+        Ok(Page { items, next })
+    }
+
+    async fn entries_chunk(
+        &self,
+        filter: &EntryFilter,
+        after: Option<i64>,
+        limit: i64,
+        with_text: bool,
+    ) -> Result<Vec<SqliteRow>, LedgerStoreError> {
+        let mut qb = QueryBuilder::<Sqlite>::new(if with_text {
+            "SELECT e.rowid AS rid"
+        } else {
             "SELECT e.rowid AS rid, e.id, e.session_id, e.sequence, e.source, e.content, \
-             e.created_at, e.action_id, e.redaction_incomplete, e.rule_snapshot \
-             FROM ledger_entries e JOIN activity_sessions a ON a.id = e.session_id \
+             e.created_at, e.action_id, e.redaction_incomplete, e.rule_snapshot"
+        });
+        if with_text {
+            qb.push(
+                ", COALESCE(json_extract(e.content, '$.CommandProposed.command'), \
+                 json_extract(e.content, '$.CommandExecuted.command'), \
+                 json_extract(e.content, '$.AiMessage.text'), '') AS txt",
+            );
+        }
+        qb.push(
+            " FROM ledger_entries e JOIN activity_sessions a ON a.id = e.session_id \
              WHERE 1 = 1",
         );
-        if let Some(c) = page.after {
-            qb.push(" AND e.rowid > ").push_bind(c.0);
+        if let Some(c) = after {
+            qb.push(" AND e.rowid > ").push_bind(c);
         }
         if let Some(t) = filter.from {
             qb.push(" AND e.created_at >= ").push_bind(t.to_rfc3339());
@@ -226,24 +314,8 @@ impl SqliteRecordQuery {
                  COALESCE(json_extract(e.content, '$.CommandExecuted.output.exit_code'), -1) <> 0",
             );
         }
-        if let Some(text) = filter.text_contains.as_deref().filter(|t| !t.is_empty()) {
-            let needle = text.to_ascii_lowercase();
-            qb.push(
-                " AND instr(lower(COALESCE(json_extract(e.content, '$.CommandProposed.command'), \
-                 json_extract(e.content, '$.CommandExecuted.command'), \
-                 json_extract(e.content, '$.AiMessage.text'), '')), ",
-            )
-            .push_bind(needle)
-            .push(") > 0");
-        }
-        qb.push(" ORDER BY e.rowid ASC LIMIT ").push_bind(limit + 1);
-        let mut rows = qb.build().fetch_all(&self.pool).await.map_err(err)?;
-        let next = take_next(&mut rows, limit, |r| r.get::<i64, _>("rid"));
-        let items = rows
-            .iter()
-            .map(entry_from_row)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Page { items, next })
+        qb.push(" ORDER BY e.rowid ASC LIMIT ").push_bind(limit);
+        qb.build().fetch_all(&self.pool).await.map_err(err)
     }
 
     /// All entries of one recorded session, in `sequence` order.

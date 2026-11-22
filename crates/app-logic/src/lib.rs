@@ -91,8 +91,6 @@ pub mod owner_names;
 #[cfg(any(test, feature = "test-support"))]
 pub mod policy;
 pub mod quick_rules_batch;
-/// Issue #18: Session-Redactor eines Servers und redigierte, gefencte
-/// Notizen für das MCP-Tool `get_server_notes`.
 mod record_query;
 pub mod rule_suggestions;
 pub mod second_opinion;
@@ -102,6 +100,8 @@ pub mod secret_migration;
 pub mod server_credentials;
 pub mod server_guards;
 pub mod server_paths;
+/// Issue #18: Session-Redactor eines Servers und redigierte, gefencte
+/// Notizen für das MCP-Tool `get_server_notes`.
 pub mod server_redaction;
 pub mod servers;
 pub mod session;

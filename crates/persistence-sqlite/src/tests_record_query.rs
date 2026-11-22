@@ -593,6 +593,16 @@ async fn record_query_bench_page_of_200_in_100k_entries() {
     let reader = {
         let q = q.clone();
         tokio::spawn(async move {
+            // Includes a no-match text filter, which scans all 100k entries
+            // in bounded chunks so appends can interleave.
+            let no_match = EntryFilter {
+                text_contains: Some("übersicht".into()),
+                ..Default::default()
+            };
+            for _ in 0..5 {
+                let none = q.list_entries(&no_match, ALL).await.unwrap();
+                assert!(none.items.is_empty());
+            }
             for _ in 0..20 {
                 q.list_entries(&EntryFilter::default(), ALL).await.unwrap();
             }
@@ -609,4 +619,33 @@ async fn record_query_bench_page_of_200_in_100k_entries() {
     }
     reader.await.unwrap();
     assert!(worst.as_millis() < 50, "append blocked for {worst:?}");
+}
+
+/// Review of #1449: the text filter folds non-ASCII case too.
+#[tokio::test]
+async fn test_text_filter_is_unicode_case_insensitive() {
+    let s = store().await;
+    add_session(&s, 1, "chat", "srv-a", "[]", "2026-01-01T00:00:00+00:00", 0).await;
+    add_entry(
+        &s,
+        1,
+        0,
+        "ai",
+        "ai_message",
+        r#"{"AiMessage":{"text":"Übersicht der Dienste"}}"#,
+        "2026-01-01T14:00:00+00:00",
+    )
+    .await;
+    let q = s.ledger_store().record_query();
+    let page = q
+        .list_entries(
+            &EntryFilter {
+                text_contains: Some("übersicht".into()),
+                ..Default::default()
+            },
+            ALL,
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
 }
