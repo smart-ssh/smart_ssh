@@ -11,8 +11,8 @@ keeps no activity store of its own for this.
 ## 2. Files to touch
 
 - [ ] `crates/app-logic/src/activity.rs` — the event types, the observer trait and the bounded queue with its worker.
-- [ ] `crates/app-logic/src/session/activity_events.rs` — where `Session` builds an event from redacted ledger content.
-- [ ] `crates/app-logic/src/orchestration/chat_turn/ledger_funnel.rs` — `write_ledger_entry_and_event`, the one place that redacts for ledger and event.
+- [ ] `crates/app-logic/src/session/activity_events.rs` — where `Session` builds an event from redacted content.
+- [ ] `crates/app-logic/src/orchestration/chat_turn/activity_funnel.rs` — `emit_activity_event`, the one place that redacts and feeds the observers.
 - [ ] `crates/app-logic/src/ext.rs` — re-export of new types.
 - [ ] `crates/app-shell/src/wiring.rs` — `Wiring::activity_observers`.
 - [ ] `crates/app-logic/src/orchestration/action_exec/tests_activity.rs` — a test per event kind.
