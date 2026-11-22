@@ -141,14 +141,39 @@ test("settings: AI Provider risk switches are labelled, in Tab order and toggle"
   await expect(red).toBeFocused();
   await page.keyboard.press("Space");
   await expect(red).toBeChecked();
-  // The switch stays disabled while the save runs; wait for it to be usable and focused again.
-  await expect(red).toBeEnabled();
-  // The browser drops focus from a disabled control; restore it explicitly.
-  await red.focus();
+  // The switch keeps focus while the save runs and afterwards (no `disabled`).
   await expect(red).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(second).toBeFocused();
   await page.keyboard.press("Space");
   await expect(second).not.toBeChecked();
+});
+
+// Issue #1526: the red-risk switch keeps keyboard focus during a slow save,
+// ignores a second toggle meanwhile and reverts (keeping focus) on failure.
+test("settings: red-risk switch keeps focus while saving, ignores repeats, reverts on failure", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, redRiskAlwaysConfirm: false },
+    commands: { ...base.commands, set_red_risk_always_confirm: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
+  await expect(red).not.toBeChecked();
+  await red.focus();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toBeFocused();
+  await app.release("set_red_risk_always_confirm", { error: { code: "E2E", message: "save failed" } });
+  await expect(red).not.toBeChecked();
+  await expect(red).not.toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  expect((await app.calls("set_red_risk_always_confirm")).length).toBe(1);
 });
