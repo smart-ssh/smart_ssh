@@ -731,3 +731,30 @@ pub(crate) async fn resolve_first_confirm(
         tokio::task::yield_now().await;
     }
 }
+
+/// Drops the entries the app writes on its own (issue #1447: `connection` and
+/// `activity_tick`), so tests about actions compare only the action entries.
+pub trait WithoutMarkers {
+    fn without_markers(self) -> Self;
+}
+
+impl WithoutMarkers for Vec<persistence_sqlite::LedgerEntry> {
+    fn without_markers(self) -> Self {
+        use ssh_manager_core::audit::LedgerEntryContent as C;
+        self.into_iter()
+            .filter(|e| !matches!(e.content, C::ActivityTick | C::Connection { .. }))
+            .collect()
+    }
+}
+
+/// Entries of a recorded session without the app's own markers.
+pub async fn markerless_entries(
+    store: &persistence_sqlite::SqliteLedgerStore,
+    session_id: uuid::Uuid,
+) -> Vec<persistence_sqlite::LedgerEntry> {
+    store
+        .load_entries(session_id)
+        .await
+        .unwrap()
+        .without_markers()
+}

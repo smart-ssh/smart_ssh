@@ -2,6 +2,7 @@
 //! connection records under its own `mcp` recorded session, source
 //! `mcp-agent`, with the same redaction as chat entries.
 
+use crate::orchestration::test_support::WithoutMarkers;
 use async_trait::async_trait;
 
 use ssh_manager_core::ai::AiEvent;
@@ -110,15 +111,7 @@ async fn test_mcp_confirmed_action_records_proposed_decision_executed_as_mcp_age
         .load_entries(fx.mcp_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     assert_eq!(entries.len(), 3, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -182,15 +175,7 @@ async fn test_mcp_action_rejected_by_rule_records_proposed_and_rejected_only() {
         .load_entries(fx.mcp_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     assert_eq!(entries.len(), 2, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -245,15 +230,7 @@ async fn test_mcp_timeout_decision_is_attributed_to_the_mcp_agent_with_timeout_c
         .load_entries(fx.mcp_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     assert_eq!(entries.len(), 2, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -336,28 +313,12 @@ async fn test_chat_and_mcp_session_on_one_server_are_two_recorded_sessions() {
         .load_entries(mcp.mcp_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     let chat_entries = ledger
         .load_entries(chat_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     assert!(!mcp_entries.is_empty() && !chat_entries.is_empty());
     assert!(mcp_entries
         .iter()
@@ -477,15 +438,7 @@ async fn test_mcp_run_output_secret_is_redacted_in_the_stored_entry() {
         .load_entries(fx.mcp_id)
         .await
         .unwrap()
-        .into_iter()
-        .filter(|e| {
-            !matches!(
-                e.content,
-                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
-                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .without_markers();
     for e in &entries {
         let raw = serde_json::to_string(&e.content).unwrap();
         assert!(!raw.contains("hunter2geheim"), "{raw}");

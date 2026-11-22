@@ -24,7 +24,7 @@ const look = (sw: Locator) =>
 async function openSwitch(app: AppDriver) {
   await app.launch(populated());
   const dialog = await openSettings(app.page, "Sessions & Data");
-  return dialog.locator("input.switch");
+  return dialog.locator("input.switch").first();
 }
 
 test("forced colors: on and off differ in knob and track, knob contrasts with track", async ({ app }) => {
