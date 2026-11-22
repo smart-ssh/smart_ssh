@@ -399,10 +399,7 @@ pub(crate) fn session_with_ai_provider(
             // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
             // no-opt bei `None` bereits vollständig.
             chat_session_store: None,
-            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
-            activity_session_store: None,
-            mcp_activity_session_id: AsyncMutex::new(None),
         },
         conn: TransportState {
             terminal: StdMutex::new(None),

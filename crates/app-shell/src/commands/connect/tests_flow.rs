@@ -212,8 +212,6 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         policy_store: main_db.policy_store(),
         prompt_history_store: main_db.prompt_history_store(),
         chat_session_store: chat_db.chat_session_store(),
-        ledger_store: chat_db.ledger_store(),
-        activity_session_store: chat_db.activity_session_store(),
         profile_store: Arc::new(main_db),
         credential_store: Arc::new(credential_store),
         key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
