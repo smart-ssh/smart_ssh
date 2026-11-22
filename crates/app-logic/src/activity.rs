@@ -9,7 +9,7 @@
 //!
 //! The core keeps no activity record of its own in this module. Events are
 //! built from the content that was already redacted by the central
-//! redaction of the ledger funnel (`write_ledger_entry_for_action`), so an
+//! redaction of the ledger funnel (`write_ledger_entry_and_event` in `chat_turn/ledger_funnel.rs`), so an
 //! observer only ever sees redacted text. With no observer registered no
 //! event is built and nothing is queued.
 //!

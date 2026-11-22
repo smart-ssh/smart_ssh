@@ -311,6 +311,24 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
 
+### Beobachter der Aktivität
+
+Eine Edition kann über die Verdrahtung beliebig viele Beobachter für die
+Aktivität einer Sitzung registrieren (Befehlsvorschläge, Entscheidungen,
+Ausführungen). Regeln:
+
+- Jedes Ereignis wird jedem Beobachter gemeldet. Der Text darin stammt aus
+  demselben zentralen Schwärzungsschritt wie Protokoll und Ereignis; ein
+  Beobachter sieht nur geschwärzten Text.
+- Die Beobachter sind rein passiv: Sie geben nichts zurück und beeinflussen
+  weder Filter noch Bestätigung noch Ausführung. Die Zustellung läuft über
+  eine begrenzte Warteschlange außerhalb des Sitzungspfads. Ist sie voll,
+  wird das Ereignis verworfen und gezählt (`dropped_activity_events`); ein
+  langsamer oder abstürzender Beobachter stört den Ablauf nicht.
+- Der Kern führt keine eigene Aktivitätsaufzeichnung. Ohne registrierten
+  Beobachter wird kein Ereignis gebaut. Community registriert keinen
+  Beobachter; dann ändert sich nichts.
+
 ### Umhüllung der KI-Anbieter
 
 Eine Edition kann über die Verdrahtung beliebig viele Umhüller für KI-Anbieter
@@ -350,6 +368,10 @@ Nach Themen:
   `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,
   `seal_extension_parts`, `accept_extension_content`.
 - **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
+- **Aktivität:** `ActivityObserver`, `ActivityEvent`, `ActivityEventKind`,
+  `ActivityDecisionOutcome`, `ActivitySessionKind`, `ActivitySource`,
+  `RuleSnapshot`, `ServerSnapshot`, `SessionEndReason`, `SessionRef`,
+  `dropped_activity_events`.
 - **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
   `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
   `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,
