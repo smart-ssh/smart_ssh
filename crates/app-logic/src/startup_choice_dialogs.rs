@@ -219,8 +219,8 @@ pub fn d4_new_key_for_plaintext_text(db_path: &Path, language: Language) -> Choi
                 "The key stored for Smart SSH in the keychain is not a valid key. Your \
                  database is still unencrypted and therefore readable.\n\n\
                  With a new key, servers, groups, rules and settings are kept in full. The \
-                 only thing lost is the existing chat history (including the execution \
-                 ledger and the input history) — it was encrypted with the unusable key.\n\n\
+                 only thing lost is the existing chat history (including the \
+                 input history) — it was encrypted with the unusable key.\n\n\
                  Nothing is changed until you choose here.\n\n\
                  Data path: {db_path}"
             ),
@@ -408,13 +408,13 @@ pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) 
         Language::En => (
             "Old history entries removed",
             if removed == 1 {
-                "1 old entry from the chat history, command log, input history or session \
+                "1 old entry from the chat history, input history or session \
                  summaries could not be read with the current key and was removed. Everything else has been \
                  kept."
                     .to_string()
             } else {
                 format!(
-                    "{removed} old entries from the chat history, command log, input \
+                    "{removed} old entries from the chat history, input \
                      history or session summaries could not be read with the current key and were removed. \
                      Everything else has been kept."
                 )

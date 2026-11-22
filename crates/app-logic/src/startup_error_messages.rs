@@ -238,7 +238,7 @@ pub fn db_connect_failure_text(
         // Issue #113: die Datenbank ist offen und die Umstellung rollt
         // vollständig zurück — also kein „Backup einspielen".
         (Language::En, ConnectFailureKind::FieldContentDecryptionFailed) => format!(
-            "Smart SSH could not finish converting your stored chat history, command log \
+            "Smart SSH could not finish converting your stored chat history \
              and input history to the new storage format. The database itself opened \
              fine — this is not a damaged file, and nothing has been changed.\n\n\
              Next step: check whether the data directory is writable and has free space, \
