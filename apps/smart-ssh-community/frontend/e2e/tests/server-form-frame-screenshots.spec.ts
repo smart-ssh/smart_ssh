@@ -33,7 +33,10 @@ test("Security tab with stored host keys screenshots", async ({ app }) => {
   const lastKey = app.page.getByText("ssh-rsa", { exact: true });
   await lastKey.scrollIntoViewIfNeeded();
   await expect(lastKey).toBeVisible();
-  await captureScreen(app.page, "server-form-security-host-keys");
+  await captureScreen(app.page, "server-form-security-host-keys", async () => {
+    await lastKey.scrollIntoViewIfNeeded();
+    await expect(lastKey).toBeInViewport();
+  });
 });
 
 test("Group form screenshots", async ({ app }) => {
