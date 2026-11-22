@@ -2,7 +2,7 @@
 // (SCREENSHOT_LABEL=before|after, SCREENSHOT_SCHEME=dark).
 import { expect, openSettings, test } from "../support/app";
 import { aiProvider, populated } from "../support/data";
-import { captureScreen } from "../support/screenshots";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 
 const scheme = process.env.SCREENSHOT_SCHEME === "dark" ? "dark" : "light";
 
@@ -103,4 +103,28 @@ for (const [language, settingsName, categoryName] of [
       for (const w of full) expect(w).toBeGreaterThan(rowBox!.width - 40);
     });
   }
+}
+
+for (const [language, settingsName, categoryName] of [
+    ["en", "Settings", "AI Provider"],
+    ["uk", "Параметри", "ШІ-провайдер"],
+  ] as const) {
+  test(`review screenshots: provider rows at 1024px (${language})`, async ({ app }) => {
+    await app.launch({
+      ...populated(),
+      settings: { ...populated().settings, language },
+      aiProviders: [
+        aiProvider({ id: "p-1", displayName: "Primary", model: "claude-sonnet-4-5", isActive: true, webResearchEnabled: true, attestationUrl: "https://att.example.com/a" }),
+        aiProvider({ id: "p-2", displayName: "Backup", model: "claude-opus-4-1", isActive: false }),
+      ],
+    });
+    const page = app.page;
+    if (scheme === "dark") await page.emulateMedia({ colorScheme: "dark" });
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.getByRole("button", { name: settingsName, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: settingsName });
+    await dialog.getByRole("button", { name: categoryName, exact: true }).click();
+    await expect(dialog.getByText("claude-sonnet-4-5", { exact: true })).toBeVisible();
+    await captureCurrent(page, `provider-rows-1024-${language}-${scheme}`);
+  });
 }
