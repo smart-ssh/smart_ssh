@@ -218,3 +218,36 @@ impl SqliteActivitySessionStore {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use ssh_manager_core::profiles::ProfileStore;
+    use ssh_manager_core::testing::ServerBuilder;
+
+    use super::*;
+    use crate::SqliteProfileStore;
+
+    /// Creates a chat session with the given zone source; returns its recorded zone.
+    async fn recorded_zone(source: TimeZoneSource) -> Option<String> {
+        let options = SqliteConnectOptions::new().filename(":memory:");
+        let profiles = SqliteProfileStore::connect_with(options).await.unwrap();
+        let server = ServerBuilder::new().name("Test-Server").build();
+        profiles.create_server(&server).await.unwrap();
+        let chats = profiles.chat_session_store().with_time_zone_source(source);
+        let id = chats.create_session(&server.id, None).await.unwrap();
+        let session = profiles.activity_session_store().load(id).await;
+        session.unwrap().unwrap().time_zone
+    }
+
+    #[tokio::test]
+    async fn test_new_session_stores_injected_time_zone() {
+        let zone = recorded_zone(std::sync::Arc::new(|| Some("Europe/Berlin".into()))).await;
+        assert_eq!(zone.as_deref(), Some("Europe/Berlin"));
+    }
+
+    #[tokio::test]
+    async fn test_failed_time_zone_lookup_still_creates_session_with_null() {
+        assert_eq!(recorded_zone(std::sync::Arc::new(|| None)).await, None);
+    }
+}
