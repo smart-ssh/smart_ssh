@@ -357,6 +357,7 @@ jobs:
     name: Browser Tests (Playwright)
     # Pinned: Playwright's WebKit build needs the Ubuntu 24.04 libraries (libicu74).
     # Drop the pin once Playwright supports the newer ubuntu-latest image.
+    # Keep in sync with the image name in the Playwright cache key below.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -387,6 +388,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
+          # The image name here must match `runs-on` above.
           key: playwright-ubuntu-24.04-${{ steps.playwright.outputs.version }}-chromium-webkit
 
       - name: Install Playwright browsers (with system dependencies)

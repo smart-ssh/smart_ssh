@@ -74,7 +74,7 @@ screen or command needs a handler in `e2e/harness/fakeBackend.ts` or a
 per-test override. Layout checks (inside the viewport, not covered, reachable
 by Tab, only the content scrolls) live in `e2e/support/layout.ts`; known axe
 findings are listed with a reason in `e2e/support/axe.ts`. CI runs the
-suite in the separate `browser-tests` job (`ubuntu-latest` only); on
+suite in the separate `browser-tests` job (`ubuntu-24.04` only, pinned for Playwright's WebKit); on
 failure it uploads traces and the HTML report as the `playwright-traces`
 artifact.
 
