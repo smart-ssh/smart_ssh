@@ -92,6 +92,38 @@ impl StartupGate {
     }
 }
 
+/// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
+/// Verteiler.
+///
+/// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
+/// nicht in einem Schließungsausdruck mitten in der Builder-Kette
+/// verschwindet: **erst** prüfen, **dann** weiterleiten.
+///
+/// Über die Laufzeit `R` abstrahiert, damit `startup_gate_wiring` die
+/// Verdrahtung mit der Test-Laufzeit **durch den echten IPC-Weg** prüfen
+/// kann (T18): In `run()` wird `R` zu `tauri::Wry`, am Aufruf ändert sich
+/// nichts.
+pub(crate) fn gated<R: tauri::Runtime, F>(
+    gate: std::sync::Arc<StartupGate>,
+    inner: F,
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
+where
+    F: Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
+{
+    move |invoke| {
+        let command = invoke.message.command();
+        if !gate.allows(command) {
+            tracing::warn!(
+                command,
+                "a command was refused because the application is locked (Spec 0101, A16)"
+            );
+            invoke.resolver.reject(crate::startup_gate::APP_LOCKED_CODE);
+            return true;
+        }
+        inner(invoke)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

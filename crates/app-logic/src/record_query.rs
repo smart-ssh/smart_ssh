@@ -31,6 +31,7 @@ use crate::session_extension::SessionExtension;
 
 /// Kind of a recorded session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RecordSessionKind {
     Chat,
     Mcp,
@@ -49,6 +50,7 @@ impl RecordSessionKind {
 
 /// Who caused an entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RecordSource {
     User,
     Ai,
@@ -67,6 +69,7 @@ impl RecordSource {
 
 /// Type of an entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RecordEntryType {
     CommandProposed,
     Decision,
@@ -95,6 +98,7 @@ impl RecordEntryType {
 
 /// Outcome of an approval decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RecordDecisionOutcome {
     Confirmed,
     Rejected,
@@ -112,7 +116,9 @@ impl RecordDecisionOutcome {
 }
 
 /// Filter for [`list_recorded_sessions`]. Empty list / `None` = no restriction.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordedSessionFilter {
     /// Started at or after.
     pub started_from: Option<DateTime<Utc>>,
@@ -128,7 +134,9 @@ pub struct RecordedSessionFilter {
 }
 
 /// Filter for [`list_record_entries`]. Empty list / `None` = no restriction.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordEntryFilter {
     pub from: Option<DateTime<Utc>>,
     pub until: Option<DateTime<Utc>>,
@@ -148,7 +156,9 @@ pub struct RecordEntryFilter {
 
 /// Page request: `page_size` is clamped to 1..=[`MAX_RECORD_PAGE_SIZE`];
 /// `cursor` is the `next_cursor` of the previous page.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordPageRequest {
     pub page_size: u32,
     pub cursor: Option<String>,
@@ -161,6 +171,7 @@ pub const MAX_RECORD_PAGE_SIZE: u32 = MAX_PAGE_SIZE;
 /// filter a page can be short or even empty while `next_cursor` is still `Some`
 /// (the scan per call is bounded): keep paging while `next_cursor` is `Some`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordPage<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<String>,
@@ -168,6 +179,7 @@ pub struct RecordPage<T> {
 
 /// A recorded session with the server snapshot taken when it started.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordedSessionInfo {
     pub id: Uuid,
     pub kind: String,
@@ -191,6 +203,7 @@ pub struct RecordedSessionInfo {
 /// One entry of the record, as stored (already redacted by the writer).
 /// Fields that do not apply to the entry type are `None`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RecordEntryInfo {
     pub id: String,
     pub session_id: Uuid,
