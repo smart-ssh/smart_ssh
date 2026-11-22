@@ -521,15 +521,21 @@ async fn record_failed_write(
     if !failure.started {
         return;
     }
-    // A new file whose open failed (missing directory, closed session, wrong
-    // sudo password) was never touched: if it still does not exist, nothing
-    // was written and nothing is recorded. A failed stat counts as "missing",
-    // as in the stat before the write.
+    // A new file whose open failed (missing directory, wrong sudo password)
+    // was never touched: if the stat says it is missing, nothing was written
+    // and nothing is recorded. If the state cannot be established (session
+    // closed, permission denied, no channel) the file may be partly written,
+    // so the failed entry is kept.
     if !existed {
         let mut guard = session.lock_sftp().await;
         if let Some(sftp) = guard.sftp() {
-            if sftp.stat(path).await.is_err() {
-                return;
+            match sftp.stat(path).await {
+                Ok(_)
+                | Err(
+                    ssh_manager_core::ssh::SshError::SessionClosed(_)
+                    | ssh_manager_core::ssh::SshError::SftpPermissionDenied(_),
+                ) => {}
+                Err(_) => return,
             }
         }
     }

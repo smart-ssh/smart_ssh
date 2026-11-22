@@ -55,6 +55,10 @@ struct Inner {
     partial_write_paths: HashSet<String>,
     /// Paths whose `write_file` fails before anything is stored.
     failing_open_paths: HashSet<String>,
+    /// A failing write also drops the session: that write fails with
+    /// `SessionClosed` and every later `stat` fails the same way.
+    drop_session_on_failed_write: bool,
+    session_dropped: bool,
     /// Issue #625: bietet der simulierte Server `posix-rename@openssh.com` an?
     posix_rename: bool,
     /// Issue #625: Quellpfade, bei denen `rename` scheitern soll.
@@ -107,6 +111,13 @@ impl MockSftpSession {
         lock_tolerating_poison(&self.inner)
             .failing_open_paths
             .insert(path.into());
+        self
+    }
+
+    /// A failing `write_file` closes the session: it fails with
+    /// [`SshError::SessionClosed`] and later `stat` calls fail the same way.
+    pub fn with_session_drop_on_failed_write(self) -> Self {
+        lock_tolerating_poison(&self.inner).drop_session_on_failed_write = true;
         self
     }
 
@@ -233,6 +244,10 @@ impl SftpSession for MockSftpSession {
             )));
         }
         if inner.failing_open_paths.contains(path) {
+            if inner.drop_session_on_failed_write {
+                inner.session_dropped = true;
+                return Err(SshError::SessionClosed(format!("session closed: {path}")));
+            }
             return Err(SshError::ChannelError(format!(
                 "Öffnen von {path} fehlgeschlagen"
             )));
@@ -393,6 +408,9 @@ impl SftpSession for MockSftpSession {
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("stat {path}"));
+        if inner.session_dropped {
+            return Err(SshError::SessionClosed(format!("session closed: {path}")));
+        }
         if inner.dirs.contains(path) {
             return Ok(RemoteEntry {
                 name: path.rsplit('/').next().unwrap_or(path).to_string(),

@@ -67,8 +67,10 @@ Typen:
   der scheitert, bevor die Zieldatei angefasst wurde (Zugriff verweigert,
   Sicherungskopie fehlgeschlagen), erzeugt keinen „Datei geschrieben"-Eintrag.
   Das gilt auch für eine neue Datei, die nach dem Fehlschlag weiterhin nicht
-  existiert (z. B. fehlendes Verzeichnis, geschlossene Sitzung, falsches
-  Sudo-Passwort).
+  existiert (z. B. fehlendes Verzeichnis, falsches Sudo-Passwort). Lässt sich
+  nach dem Fehlschlag nicht feststellen, ob die neue Datei angelegt wurde
+  (Sitzung geschlossen, Zugriff auf das Verzeichnis verweigert), steht der
+  Eintrag „fehlgeschlagen“, weil sie teilweise geschrieben sein kann.
   Scheitert der Schreibvorgang, nachdem er die Zieldatei erreicht hat (z. B.
   Abbruch mitten im Übertragen, fehlgeschlagener Sudo-Kopierschritt), steht ein
   „Datei geschrieben"-Eintrag mit Status „fehlgeschlagen" im Ledger: Pfad,

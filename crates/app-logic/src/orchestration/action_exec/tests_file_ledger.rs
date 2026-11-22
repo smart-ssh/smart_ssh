@@ -433,6 +433,31 @@ async fn test_new_file_failing_before_open_records_no_file_written_entry() {
 }
 
 #[tokio::test]
+async fn test_new_file_failing_with_closed_session_records_failed_file_written() {
+    // The stat after the failure cannot tell whether the file was created
+    // (session closed): the possibly partly written file is recorded.
+    let path = "/home/deploy/new.conf";
+    let (entries, _t, _c) = run_write_all(
+        write_action(path, "neu und lang"),
+        MockSshTransport::default(),
+        MockSftpSession::new()
+            .with_failing_open_for_write(path)
+            .with_session_drop_on_failed_write(),
+        false,
+        true,
+    )
+    .await;
+    let (_, content) = failed_entry(&entries);
+    assert!(matches!(
+        content,
+        LedgerEntryContent::FileWritten {
+            status: ssh_manager_core::audit::LedgerFileWriteStatus::Failed,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
 async fn test_new_file_failing_mid_stream_records_failed_file_written() {
     // A new file that exists after the failure was touched: recorded.
     let path = "/home/deploy/new.conf";
