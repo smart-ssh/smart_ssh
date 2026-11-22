@@ -122,10 +122,10 @@ struct DecisionEnv<'a> {
 }
 
 /// The ledger `Decision` fields of the user's decision (Spec 0057, §1.1).
-struct DecisionRecord {
-    source: LedgerSource,
+pub(super) struct DecisionRecord {
+    pub(super) source: LedgerSource,
     reason: Option<String>,
-    code: Option<String>,
+    pub(super) code: Option<String>,
     matched_rule: Option<RuleId>,
     matched_rule_origin: Option<RuleOrigin>,
 }
@@ -136,7 +136,7 @@ impl DecisionRecord {
     /// proposal and the specific code `TIMEOUT`. Otherwise the original
     /// escalation reason/code is kept so the ledger shows WHY a confirmation
     /// was needed.
-    fn new(
+    pub(super) fn new(
         deny_reason: &RejectionReason,
         origin: &ActionOrigin,
         confirm_reason: String,

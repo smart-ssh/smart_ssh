@@ -401,6 +401,8 @@ pub(crate) fn session_with_ai_provider(
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
+            activity_session_store: None,
+            mcp_activity_session_id: AsyncMutex::new(None),
         },
         conn: TransportState {
             terminal: StdMutex::new(None),

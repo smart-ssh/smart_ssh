@@ -1,6 +1,6 @@
 # Spec 0057 — Reiches Session-Modell (Ledger, Summary, Kompaktierung)
 
-Status: umgesetzt, Aktivitätsprotokoll (§1.5–§1.8) in Umsetzung (Epic #1442): aufgezeichnete Sitzungen und Ledger-Tabelle vorhanden (#1443), Rest offen
+Status: umgesetzt, Aktivitätsprotokoll (§1.5–§1.8) in Umsetzung (Epic #1442): aufgezeichnete Sitzungen und Ledger-Tabelle (#1443), Dateilese-/Schreibaktionen (#1446) und MCP-ausgelöste Aktionen (#1444) vorhanden, Rest offen
 Zweck: Lange Sitzungen und große Notizen lassen den KI-Kontext nicht mehr anwachsen, bis die Sitzung hängt: Der an die KI gesendete Kontext wird vor jeder Anfrage bei Bedarf verkleinert (Zusammenfassung alter Runden, Kürzung einzelner Ausgaben, verkürzte Notiz), während ein dauerhaftes, redigiertes Ledger alle Vorgänge der Sitzung vollständig festhält.
 Bezüge: Spec 0004 (Persistenz und Migrationen), Spec 0034 (Chat-Sitzungen), Spec 0036 (Chat-Inhalte), Spec 0101 (verschlüsselte Datenbank), Spec 0039 (Fencing), Spec 0051 (Rate-Limit-Handling), Spec 0024 (Sprache), Spec 0003 und 0023 (Notiz-Vorschläge, Diff-Bestätigung), Spec 0058 und 0079 (Notiz-Oberfläche), ADR 0003 und 0004 (Notiz-Scopes), ADR 0047 (Ledger), ADR 0048 (Token-Schätzung, Kontextaufbau), ADR 0049 (Summary-Fallback), ADR 0050 (Notiz-Kürzungs-Dialog).
 Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
@@ -130,8 +130,18 @@ Chat-Aufbewahrung und das Löschen des Servers.
 
 Wird für eine Verbindung keine Chat-Sitzung gespeichert (Chat-Historie aus,
 lokaler Pseudo-Server, Anlegefehler), entsteht über den Chat keine
-aufgezeichnete Sitzung; MCP- und Terminal-Sitzungen bekommen ihre eigene
-(Umsetzung: #1444, #1447).
+aufgezeichnete Sitzung.
+
+**MCP-Sitzungen:** Jede vom MCP-Client getriebene Verbindung bekommt eine
+eigene aufgezeichnete Sitzung der Art `mcp` mit dem Namen des Clients aus dem
+Handshake (fehlt er, steht `unknown` dort), aber keine Chat-Sitzung. Vorschläge,
+Entscheidungen und Ausführungen ihrer Aktionen stehen mit Quelle `mcp-agent` in
+ihrem Ledger, mit derselben Redaction wie im Chat. Sie erscheinen weder in der
+Liste der Chat-Sitzungen noch im Dialog zum Fortsetzen, lassen sich nicht als
+Chat fortsetzen und fließen nie in den Kontext eines Chats. Ein Chat und eine
+MCP-Sitzung auf demselben Server schreiben in zwei verschiedene aufgezeichnete
+Sitzungen. Beim Schließen der MCP-Sitzung wird ihr Ende gesetzt. Terminal-
+Sitzungen bekommen ihre eigene aufgezeichnete Sitzung mit #1447.
 
 ### 1.6 Löschen
 
@@ -390,7 +400,8 @@ nicht neu vergeben.
   nicht (sehr kleines Fenster), wird der Request trotzdem gesendet und nur
   protokolliert.
 - **Lokaler Pseudo-Server und rein MCP-getriebene Sitzungen** speichern keine
-  Chat-Sitzung (§1.4), daher kein Ledger und keine gespeicherte Summary; die
+  Chat-Sitzung (§1.4), daher keine gespeicherte Summary (MCP-Aktionen stehen
+  trotzdem in ihrem Ledger, §1.5); die
   Kompaktierung läuft dort trotzdem im Speicher.
 - **Der Banner des Servers** (Betriebssystem-Information) steht in der
   ersten Runde und kann so indirekt in eine gespeicherte Summary gelangen;

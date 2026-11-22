@@ -98,6 +98,7 @@ mod tests {
             prompt_history_store: db.prompt_history_store(),
             chat_session_store: db.chat_session_store(),
             ledger_store: db.ledger_store(),
+            activity_session_store: db.activity_session_store(),
             profile_store: db.clone(),
             credential_store: Arc::new(InMemoryCredentialStore::new()),
             key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
