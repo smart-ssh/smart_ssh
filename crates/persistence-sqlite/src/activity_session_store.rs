@@ -184,9 +184,10 @@ pub struct SqliteActivitySessionStore {
 }
 
 fn corrupt(id: Uuid, field: &str, reason: impl std::fmt::Display) -> LedgerStoreError {
-    LedgerStoreError::CorruptContent {
-        entry_id: format!("activity session {id}"),
-        reason: format!("field {field}: {reason}"),
+    LedgerStoreError::CorruptSession {
+        session_id: id.to_string(),
+        field: field.to_string(),
+        reason: reason.to_string(),
     }
 }
 
