@@ -117,6 +117,8 @@ pub(crate) struct StartupInputs {
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Issue #610: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    /// Issue #1505: from `Wiring`, handed to the `AppState`.
+    pub(crate) activity: Arc<app_logic::activity::ActivityHub>,
     /// Issue #1246: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_provider_decorators:
         Arc<Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>>,
@@ -128,6 +130,7 @@ fn startup_inputs(
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    activity: Arc<app_logic::activity::ActivityHub>,
     ai_provider_decorators: Arc<
         Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
     >,
@@ -174,6 +177,7 @@ fn startup_inputs(
         keychain,
         outgoing_transform,
         ai_usage_observers,
+        activity,
         ai_provider_decorators,
     }
 }
@@ -388,6 +392,7 @@ pub(crate) async fn open_and_assemble(
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
+        activity: inputs.activity.clone(),
         ai_provider_decorators: inputs.ai_provider_decorators.clone(),
         chat_content: chat_content.clone(),
         title_attempts: Default::default(),
@@ -539,12 +544,16 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
+    let activity = Arc::new(app_logic::activity::ActivityHub::new(std::mem::take(
+        &mut wiring.activity_observers,
+    )));
     let inputs = startup_inputs(
         db_path,
         data_dir_lock,
         language,
         wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
+        activity.clone(),
         Arc::new(std::mem::take(&mut wiring.ai_provider_decorators)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
@@ -702,7 +711,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wie die App, sonst springt das Fenster beim Entsperren.
         .plugin(tauri_plugin_decoration::init());
     builder
-        .setup(|app| {
+        .setup(move |app| {
             use tauri::Manager;
 
             // Spec 0047, Fund B1: letzter Startschritt — steht dieser
@@ -722,6 +731,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
+            // Issue #1505: the one worker that delivers activity events.
+            activity.start_worker(&background_tasks::app_scope(app.handle()));
 
             background_tasks::activate_window_decoration(app.handle());
 

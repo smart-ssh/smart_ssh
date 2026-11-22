@@ -23,6 +23,7 @@ Every recipe has the same five sections:
 | [`new-ai-provider.md`](new-ai-provider.md) | A new `ProviderType` is added |
 | [`new-session-or-server-field.md`](new-session-or-server-field.md) | A field is added to `Session` or to the `Server` profile |
 | [`extension-reads-activity-record.md`](extension-reads-activity-record.md) | An extension reads the activity record or a new filter/field is added to that read API |
+| [`extension-observes-activity.md`](extension-observes-activity.md) | An extension observes session activity as it happens, or the event stream gets a new kind/field |
 
 Paths in recipes are checked by extracting every backticked path and testing
 that it exists, for example:

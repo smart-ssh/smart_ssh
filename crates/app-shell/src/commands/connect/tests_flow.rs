@@ -1,7 +1,6 @@
 //! Issue #259: tests of `connect_session` against an injected `Connector` — der
-//! echte Verbindungsaufbau (Verbinden, Fortsetzen, Fehlerpfad beim
-//! Fortsetzen) ohne Netzwerk. Echte SQLite-Stores (je Test eigene
-//! Datenbankdateien), `MockRuntime`, ein Mock-Connector mit Mock-Transport.
+//! echte Verbindungsaufbau (Verbinden, Fortsetzen, Fehlerpfad beim Fortsetzen)
+//! ohne Netzwerk, mit echten SQLite-Stores, `MockRuntime` und Mock-Connector.
 // Testcode-Ausnahme zum `deny` — s. `lib.rs`, Modulkopf.
 #![expect(clippy::expect_used, reason = "test code")]
 /// Issue #395: the in-process SSH test server of `ssh-transport`, reused for
@@ -240,6 +239,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        activity: Default::default(),
         ai_provider_decorators: Default::default(),
     };
     Fixture {

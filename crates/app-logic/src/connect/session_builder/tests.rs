@@ -172,6 +172,7 @@ async fn fixture(
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        activity: Default::default(),
         ai_provider_decorators: Default::default(),
     };
     Fixture {

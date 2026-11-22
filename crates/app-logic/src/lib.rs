@@ -23,6 +23,7 @@
 mod ts_export;
 
 pub mod activities;
+pub mod activity;
 pub mod ai_provider_decorator;
 pub mod ai_provider_factory;
 pub mod ai_usage;

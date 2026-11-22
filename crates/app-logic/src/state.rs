@@ -220,6 +220,9 @@ pub struct AppState {
     /// Issue #610 (Spec 0038 §2): observers of completed AI requests an
     /// edition registered; empty in Community. Handed to every new session.
     pub ai_usage_observers: Arc<Vec<Arc<dyn crate::ai_usage::AiUsageObserver>>>,
+    /// Issue #1505: observers of session activity an edition registered and
+    /// the queue that delivers to them; inactive in Community.
+    pub activity: Arc<crate::activity::ActivityHub>,
     /// Issue #1246 (Spec 0038 §2): decorators applied to every AI provider
     /// the app builds, in registration order; empty in Community.
     pub ai_provider_decorators:

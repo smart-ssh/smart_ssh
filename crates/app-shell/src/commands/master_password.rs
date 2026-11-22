@@ -73,9 +73,8 @@ pub const KEYCHAIN_HOLDS_ANOTHER_KEY_CODE: &str = "KEYCHAIN_HOLDS_ANOTHER_KEY";
 /// Existenz einer Verpackungsdatei, nur etwas über den Schlüsselbund, dessen
 /// Modus die Oberfläche ohnehin anzeigt (A18).
 pub const KEYCHAIN_KEY_MISMATCH_CODE: &str = "KEYCHAIN_KEY_MISMATCH";
-/// Derselbe Grund: Der Vorgang passt nicht zum aktiven Modus (A18) —
-/// einrichten, obwohl schon ein Passwort gilt, oder wechseln, obwohl keines
-/// gilt. Das ist kein Dateifehler und soll nicht als einer gemeldet werden.
+/// Derselbe Grund: Der Vorgang passt nicht zum aktiven Modus (A18) — einrichten,
+/// obwohl schon ein Passwort gilt, oder wechseln, obwohl keines gilt. Kein Dateifehler.
 pub const MASTER_PASSWORD_MODE_MISMATCH_CODE: &str = "MASTER_PASSWORD_MODE_MISMATCH";
 /// Klarstellung 12 (A13/E10): Die Warnung ist nicht ausdrücklich bestätigt.
 ///
@@ -1172,6 +1171,7 @@ mod tests {
                 keychain: credentials_keyring::KeychainAvailability::Available,
                 outgoing_transform: None,
                 ai_usage_observers: Default::default(),
+                activity: Default::default(),
                 ai_provider_decorators: Default::default(),
             },
             Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
