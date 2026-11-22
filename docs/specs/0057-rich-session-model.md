@@ -114,9 +114,9 @@ Eine **aufgezeichnete Sitzung** besteht unabhängig von einem Chat. Es gibt
 drei Arten: `chat`, `mcp` (vom MCP-Client getrieben, mit dem Namen des
 Clients) und `terminal` (nur Terminal, ohne Chat). Sie hält ihren Beginn,
 ihr Ende, den Zeitpunkt der letzten Aktivität, die Zeitzone des Geräts
-(IANA-Name; solange die Anwendung sie noch nicht ermittelt, ist sie
-unbekannt – das gilt für Sitzungen aus der Zeit vor dem Protokoll und
-vorerst auch für neu angelegte) und
+(IANA-Name; beim Anlegen einer Sitzung ermittelt; unbekannt, wenn die
+Plattform keinen Namen liefert – dann entsteht die Sitzung trotzdem – und
+für Sitzungen aus der Zeit vor dem Protokoll) und
 einen **Schnappschuss des Servers** zum Zeitpunkt des Beginns: Name, Host,
 Port, Benutzer, Gruppenpfad (Namen und Kennungen) und Tags. Der Schnappschuss
 bleibt lesbar, auch wenn der Server oder die Gruppe später umbenannt oder

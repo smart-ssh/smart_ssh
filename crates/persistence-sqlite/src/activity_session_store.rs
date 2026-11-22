@@ -54,6 +54,18 @@ pub struct ActivitySession {
     pub failed_writes: i64,
 }
 
+/// Source of the device's IANA time zone name; `None` when unknown.
+pub type TimeZoneSource = std::sync::Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+/// Default source: the platform's zone; a failed or empty lookup is `None`.
+pub fn device_time_zone_source() -> TimeZoneSource {
+    std::sync::Arc::new(|| {
+        iana_time_zone::get_timezone()
+            .ok()
+            .filter(|z| !z.trim().is_empty())
+    })
+}
+
 /// Creates the recorded session for `server_id` inside `tx`, with the
 /// snapshot taken from the current server, group path and tags. Returns
 /// `false` (no row written) when the server does not exist.
@@ -108,6 +120,7 @@ pub(crate) async fn create_chat_session(
     id: Uuid,
     server_id: &ServerId,
     ai_provider_id: Option<Uuid>,
+    time_zone: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let _server_exists = insert_snapshot(
@@ -116,7 +129,7 @@ pub(crate) async fn create_chat_session(
         ActivitySessionKind::Chat,
         None,
         server_id,
-        None,
+        time_zone,
     )
     .await?;
     sqlx::query(
@@ -218,5 +231,38 @@ impl SqliteActivitySessionStore {
             })
         })
         .transpose()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use ssh_manager_core::profiles::ProfileStore;
+    use ssh_manager_core::testing::ServerBuilder;
+
+    use super::*;
+    use crate::SqliteProfileStore;
+
+    /// Creates a chat session with the given zone source; returns its recorded zone.
+    async fn recorded_zone(source: TimeZoneSource) -> Option<String> {
+        let options = SqliteConnectOptions::new().filename(":memory:");
+        let profiles = SqliteProfileStore::connect_with(options).await.unwrap();
+        let server = ServerBuilder::new().name("Test-Server").build();
+        profiles.create_server(&server).await.unwrap();
+        let chats = profiles.chat_session_store().with_time_zone_source(source);
+        let id = chats.create_session(&server.id, None).await.unwrap();
+        let session = profiles.activity_session_store().load(id).await;
+        session.unwrap().unwrap().time_zone
+    }
+
+    #[tokio::test]
+    async fn test_new_session_stores_injected_time_zone() {
+        let zone = recorded_zone(std::sync::Arc::new(|| Some("Europe/Berlin".into()))).await;
+        assert_eq!(zone.as_deref(), Some("Europe/Berlin"));
+    }
+
+    #[tokio::test]
+    async fn test_failed_time_zone_lookup_still_creates_session_with_null() {
+        assert_eq!(recorded_zone(std::sync::Arc::new(|| None)).await, None);
     }
 }
