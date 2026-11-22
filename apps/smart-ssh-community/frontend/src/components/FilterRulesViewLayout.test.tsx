@@ -106,6 +106,55 @@ describe("FilterRulesView layout (issue #1375)", () => {
     expect(await screen.findByText(/web-01/, { selector: "p" })).toBeInTheDocument();
   });
 
+  async function runTester(trace: EvaluationTraceDto) {
+    evaluateExplainedMock.mockResolvedValue(trace);
+    renderView();
+    await screen.findByText("ls *");
+    const input = screen.getByPlaceholderText("ls -la && rm -rf /tmp/x");
+    fireEvent.change(input, { target: { value: "ls -la && rm -rf /" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    const label = await screen.findByText(/^(Gesamt-Entscheidung|Overall Decision)$/);
+    // The overall block is the tinted container around the label.
+    return label.closest("div.border") as HTMLElement;
+  }
+
+  it("shows the matched pattern per segment and the allow tint/badge for an allowed command", async () => {
+    const overall = await runTester({
+      ...seg(0, null),
+      subCommandTraces: [seg(0, "g1")],
+    });
+    expect(overall).toHaveClass("bg-success-subtle", "border-success-border");
+    expect(within(overall).getAllByText("AutoExec")).toHaveLength(2);
+    const segment = within(overall).getByText("ls *").closest("p")!;
+    expect(segment).toHaveTextContent(/^(Regel|Rule):\s*ls \*\s*\(Allow\)/);
+  });
+
+  it("shows the matched pattern and the deny tint/badge for a denied chain", async () => {
+    const overall = await runTester({
+      ...seg(0, null),
+      decision: { Deny: { reason: "blocked by rule", code: "UNKNOWN_CODE" } },
+      subCommandTraces: [
+        seg(0, "g1"),
+        { ...seg(1, "s1"), decision: { Deny: { reason: "blocked by rule", code: "UNKNOWN_CODE" } } },
+      ],
+    } as EvaluationTraceDto);
+    expect(overall).toHaveClass("bg-danger-subtle", "border-danger-border");
+    expect(overall).not.toHaveClass("bg-success-subtle");
+    expect(within(overall).getAllByText("Deny").length).toBeGreaterThanOrEqual(2);
+    const denied = within(overall).getByText("rm *").closest("p")!;
+    expect(denied).toHaveTextContent(/^(Regel|Rule):\s*rm \*\s*\(Deny\)/);
+    expect(denied).toHaveTextContent(/web-01/);
+  });
+
+  it("shows the confirm tint/badge", async () => {
+    const overall = await runTester({
+      ...seg(0, null),
+      decision: { Confirm: { reason: "needs confirmation", code: "UNKNOWN_CODE" } },
+    } as EvaluationTraceDto);
+    expect(overall).toHaveClass("bg-warning-subtle", "border-warning-border");
+    expect(within(overall).getAllByText("Confirm").length).toBeGreaterThanOrEqual(1);
+  });
+
   it("does not render the Test rules header button on wide windows", async () => {
     renderView();
     await screen.findByText("ls *");

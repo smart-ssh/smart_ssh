@@ -448,12 +448,13 @@ pub fn log_explain_failure(
     err: &crate::error::CommandError,
     session_id: crate::state::SessionId,
     command: &str,
+    command_name: &str,
 ) {
     tracing::warn!(
         error_code = err.code.unwrap_or("none"),
         session_id = ?session_id,
         command_len = command.len(),
-        "explain_confirmation failed"
+        "{command_name} failed"
     );
 }
 
@@ -463,13 +464,14 @@ pub fn session_for_explain(
     sessions: &crate::session::SessionManager,
     session_id: crate::state::SessionId,
     command: &str,
+    command_name: &str,
 ) -> Result<std::sync::Arc<crate::session::Session>, crate::error::CommandError> {
     sessions.get(session_id).ok_or_else(|| {
         let err = crate::error::CommandError::with_code(
             format!("unknown session {session_id:?}"),
             "SESSION_NOT_FOUND",
         );
-        log_explain_failure(&err, session_id, command);
+        log_explain_failure(&err, session_id, command, command_name);
         err
     })
 }
@@ -776,13 +778,32 @@ mod tests {
     }
 
     #[test]
+    fn explain_failure_log_names_the_command() {
+        use crate::test_support::log_capture;
+        log_capture::start_recording();
+        let sessions = crate::session::SessionManager::new();
+        let id = uuid::Uuid::from_u128(8);
+        let command = "cat /etc/secret-marker-abc";
+        assert!(session_for_explain(&sessions, id, command, "explain_segment_rules").is_err());
+        let lines = log_capture::recorded_lines_at_info_or_above();
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(
+            lines[0].contains("explain_segment_rules failed"),
+            "{}",
+            lines[0]
+        );
+        assert!(!lines[0].contains("explain_confirmation"));
+        assert!(!lines[0].contains("secret-marker-abc"));
+    }
+
+    #[test]
     fn unknown_session_logs_one_warn_without_command_text() {
         use crate::test_support::log_capture;
         log_capture::start_recording();
         let sessions = crate::session::SessionManager::new();
         let id = uuid::Uuid::from_u128(7);
         let command = "cat /etc/secret-marker-xyz";
-        assert!(session_for_explain(&sessions, id, command).is_err());
+        assert!(session_for_explain(&sessions, id, command, "explain_confirmation").is_err());
         let lines = log_capture::recorded_lines_at_info_or_above();
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert!(lines[0].contains("\"WARN\""), "{}", lines[0]);
