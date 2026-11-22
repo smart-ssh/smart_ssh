@@ -101,6 +101,11 @@ impl SqliteLedgerStore {
         Self { pool }
     }
 
+    /// Read-only query handle over the same pool (issue #1449).
+    pub fn record_query(&self) -> crate::SqliteRecordQuery {
+        crate::SqliteRecordQuery::new(self.pool.clone())
+    }
+
     /// Appends an entry with default meta fields; see [`Self::append`].
     /// `session_id` is the id of the recorded session (`activity_sessions`).
     pub async fn append_entry(

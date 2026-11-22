@@ -288,6 +288,40 @@ data directory (backup, stolen disk) without access to your unlocked OS
 account or your master password. It does not protect against malware
 running as your user while the app is unlocked.
 
+### The activity record and who can read it
+
+**What it stores.** For every recorded session (chat, MCP, terminal) the
+activity record holds a snapshot of the server (name, host, port, user, group
+path, tags) and an append-only ledger: proposed and executed commands with
+their output, approval decisions, AI messages, file reads and writes (path and
+size, never content), connection events and activity ticks. It is written
+redacted, in the encrypted database file, and outlives deleting a chat or a
+server.
+
+**Who can read it.** Extensions of an edition read it through the read-only
+extension API (`app_logic::ext`: `list_recorded_sessions`,
+`list_record_entries`, `record_entries_of_session`). The API has no write path,
+never reads chat messages, and returns entries exactly as stored. An extension
+is trusted code inside the process (see section 5); the API only keeps it from
+depending on the table layout, it is not a sandbox. Anything raw SQL on the
+extension pool could reach is out of this API's control, so extensions must not
+use that pool for core tables.
+
+**Residual redaction risk.** The record holds what the redactor knew at write
+time. A secret that became known later (a rotated password, a secret an
+extension learned afterwards) can still sit in older entries in plaintext, and
+entries marked "redaction incomplete" were written while a secret lookup had
+failed. The generic patterns are heuristics (see the explicit limit in
+section 2).
+
+**Rule for anything that leaves the device.** Text that goes to a third party
+(export, sync, upload, an AI provider) must be taken from the record and
+redacted again with `redact_for_server`, which uses the server's current
+redactor including the secrets session extensions contribute. For a deleted
+server only the generic patterns apply, and the result says so ("generic
+only"); callers must treat such text as less protected. A failed secret lookup
+is reported as "incomplete" instead of being hidden.
+
 ---
 
 ## 4. Network connections
