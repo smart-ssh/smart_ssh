@@ -214,6 +214,8 @@ pub struct ActivityHub {
     tx: SyncSender<ActivityEvent>,
     rx: Mutex<Option<Receiver<ActivityEvent>>>,
     dropped: AtomicU64,
+    /// Tests only: deliver in `push` instead of through the worker.
+    inline: bool,
 }
 
 impl Default for ActivityHub {
@@ -237,7 +239,17 @@ impl ActivityHub {
             tx,
             rx: Mutex::new(Some(rx)),
             dropped: AtomicU64::new(0),
+            inline: false,
         }
+    }
+
+    /// Delivers events synchronously inside `push`, so a test can read what
+    /// an observer received without waiting for a worker.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new_inline_for_tests(observers: Vec<Arc<dyn ActivityObserver>>) -> Self {
+        let mut hub = Self::new(observers);
+        hub.inline = true;
+        hub
     }
 
     /// `true` if at least one observer is registered.
@@ -282,6 +294,10 @@ impl ActivityHub {
     /// Never blocks. A full queue drops the event (counted, logged without
     /// content).
     pub(crate) fn push(&self, event: ActivityEvent) {
+        if self.inline {
+            deliver(&self.observers, &event);
+            return;
+        }
         match self.tx.try_send(event) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
@@ -292,6 +308,14 @@ impl ActivityHub {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
                 tracing::warn!("activity worker has ended; an event was dropped");
             }
+        }
+    }
+}
+
+fn deliver(observers: &[Arc<dyn ActivityObserver>], event: &ActivityEvent) {
+    for observer in observers {
+        if catch_unwind(AssertUnwindSafe(|| observer.on_event(event))).is_err() {
+            tracing::warn!("an activity observer panicked");
         }
     }
 }
@@ -308,13 +332,7 @@ fn run_worker(
             return;
         }
         match rx.recv_timeout(WORKER_POLL) {
-            Ok(event) => {
-                for observer in observers {
-                    if catch_unwind(AssertUnwindSafe(|| observer.on_event(&event))).is_err() {
-                        tracing::warn!("an activity observer panicked");
-                    }
-                }
-            }
+            Ok(event) => deliver(observers, &event),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }

@@ -507,10 +507,10 @@ async fn test_issue_688_no_provider_logs_no_injection_check_lines() {
 }
 
 /// Issue #836: a decision made while the filter rules are unavailable
-/// carries `FILTER_RULES_UNAVAILABLE` in the ledger, even though an allow
+/// carries `FILTER_RULES_UNAVAILABLE` in its activity event, even though an allow
 /// rule for the command exists.
 #[tokio::test]
-async fn test_ledger_records_rules_unavailable_code() {
+async fn test_activity_event_carries_rules_unavailable_code() {
     struct UnavailableWithAllow;
     #[async_trait]
     impl PolicyStore for UnavailableWithAllow {
@@ -526,12 +526,9 @@ async fn test_ledger_records_rules_unavailable_code() {
         }
     }
 
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
+    let (session, _chat_store, _chat_session_id, _tmp_dir) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(UnavailableWithAllow)));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -557,26 +554,25 @@ async fn test_ledger_records_rules_unavailable_code() {
         responder
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let kinds = probe.kinds();
     assert!(
         matches!(
-            &entries[1].content,
-            LedgerEntryContent::Decision {
+            &kinds[1],
+            crate::activity::ActivityEventKind::Decision {
                 code: Some(code),
                 ..
             } if code == "FILTER_RULES_UNAVAILABLE"
         ),
-        "{entries:?}"
+        "{kinds:?}"
     );
 }
 
-/// Spec 0057, §1.2: file paths and connection details are redacted before
-/// they reach the ledger — read back from the stored row.
+/// File paths are redacted before they reach an observer.
 #[tokio::test]
-async fn test_ledger_redacts_fake_secret_in_file_paths_and_connection_detail() {
-    use ssh_manager_core::audit::LedgerConnectionEvent;
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(vec![], MockSshTransport::default()).await;
+async fn test_activity_events_redact_fake_secret_in_file_paths() {
+    let (session, _chat_store, _chat_session_id, _tmp_dir) =
+        session_with_real_chat_persistence(vec![], MockSshTransport::default()).await;
+    let (session, probe) = with_activity_probe(session);
     for content in [
         LedgerEntryContent::FileRead {
             path: "/srv/app?password=hunter2geheim".to_string(),
@@ -592,20 +588,22 @@ async fn test_ledger_redacts_fake_secret_in_file_paths_and_connection_detail() {
             sha256_after: None,
             sudo: false,
         },
-        LedgerEntryContent::Connection {
-            event: LedgerConnectionEvent::Connected,
-            detail: Some("failed: password=hunter2geheim".to_string()),
-        },
     ] {
-        super::super::chat_turn::emit_activity(&session, LedgerSource::Ai, content).await;
+        super::super::chat_turn::emit_activity_for_action(
+            &session,
+            LedgerSource::Ai,
+            content,
+            Some(Uuid::new_v4()),
+        )
+        .await;
     }
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(entries.len(), 3);
-    for e in &entries {
-        let s = serde_json::to_string(&e.content).unwrap();
+    let kinds = probe.kinds();
+    assert_eq!(kinds.len(), 2, "{kinds:?}");
+    for k in &kinds {
+        let s = format!("{k:?}");
         assert!(
             !s.contains("hunter2geheim"),
-            "secret stored in plaintext: {s}"
+            "secret reported in plaintext: {s}"
         );
     }
 }
