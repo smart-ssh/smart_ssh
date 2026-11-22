@@ -48,6 +48,7 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+mod activity_events;
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -550,6 +551,9 @@ pub struct Session {
     /// Issue #610: where completed AI requests are reported (observers an
     /// edition registered). `None` = nobody listens. Private: set at build.
     usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
+    /// Issue #1505: where activity events go (observers an edition
+    /// registered). `None` = nobody listens, nothing is built.
+    activity: Option<crate::activity::ActivityReporting>,
 }
 
 impl std::ops::Deref for Session {
@@ -629,7 +633,22 @@ impl Session {
             is_root: None,
             id_names: tokio::sync::OnceCell::new(),
             usage_reporting: None,
+            activity: None,
         }
+    }
+
+    /// Issue #1505: sets up reporting of activity events to observers. Only
+    /// at construction.
+    pub fn with_activity_reporting(
+        mut self,
+        reporting: Option<crate::activity::ActivityReporting>,
+    ) -> Self {
+        self.activity = reporting;
+        self
+    }
+
+    pub(crate) fn activity_reporting(&self) -> Option<&crate::activity::ActivityReporting> {
+        self.activity.as_ref()
     }
 
     /// Issue #610: sets up reporting of completed AI requests to observers.

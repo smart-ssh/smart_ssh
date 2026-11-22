@@ -90,7 +90,8 @@ mod tests_runtime_bridge_guard;
 mod tests_server_columns;
 
 pub use activity_session_store::{
-    ActivitySession, ActivitySessionKind, SqliteActivitySessionStore, UNKNOWN_MCP_CLIENT,
+    device_time_zone_source, ActivitySession, ActivitySessionKind, SqliteActivitySessionStore,
+    TimeZoneSource, UNKNOWN_MCP_CLIENT,
 };
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,

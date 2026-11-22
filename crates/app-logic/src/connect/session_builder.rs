@@ -307,6 +307,20 @@ pub async fn build_session(
         side_call: side_call_source,
     };
 
+    // Issue #1505: the snapshot is only read when an observer listens.
+    let activity_reporting = if state.activity.is_active() {
+        let snapshot =
+            crate::activity::server_snapshot(state.profile_store.as_ref(), &server).await;
+        crate::activity::ActivityReporting::new(
+            &state.activity,
+            session_id.to_string(),
+            snapshot,
+            redaction_incomplete,
+        )
+    } else {
+        None
+    };
+
     // Spec 0034, Abschnitt 2: the local pseudo-server has no `servers` row, so
     // it gets no `chat_sessions` row (foreign key). The special case belongs
     // here (session construction), not in the filter/risk loop.
@@ -484,7 +498,8 @@ pub async fn build_session(
     })
     .with_start_directory(start_directory)
     .with_is_root(is_root)
-    .with_usage_reporting(Some(ai_usage_reporting));
+    .with_usage_reporting(Some(ai_usage_reporting))
+    .with_activity_reporting(activity_reporting);
     // Byte-wise copy: stays masked if a later lookup fails (issue #843).
     session.redactor.add_secret_values(&extension_secrets);
     Ok(BuiltSession {

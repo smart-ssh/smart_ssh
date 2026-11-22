@@ -107,6 +107,14 @@ pub struct Wiring {
     /// Community registers none.
     pub ai_usage_observers: Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>,
 
+    /// Issue #1505 (Spec 0057, hook): observers told about the activity of a
+    /// session (started/ended, command proposed/decided/executed, AI message,
+    /// file read/written) as already-redacted events, off the session flow.
+    /// Passive: they cannot influence filter, confirmation or execution. The
+    /// core keeps no activity record; with none registered no event is built.
+    /// Community registers none.
+    pub activity_observers: Vec<Arc<dyn app_logic::activity::ActivityObserver>>,
+
     /// Issue #1246 (Spec 0038, section 2): decorators that wrap every AI
     /// provider the app constructs (chat connect, notes, second opinion,
     /// credential test), applied in registration order. They see type,
@@ -157,6 +165,7 @@ impl Wiring {
             outgoing_transform: None,
             outgoing_transforms: Vec::new(),
             ai_usage_observers: Vec::new(),
+            activity_observers: Vec::new(),
             ai_provider_decorators: Vec::new(),
             entitlement_features: Vec::new(),
         }
@@ -333,6 +342,11 @@ mod tests {
     #[test]
     fn test_community_registers_no_ai_provider_decorators() {
         assert!(Wiring::community().ai_provider_decorators.is_empty());
+    }
+
+    #[test]
+    fn test_community_registers_no_activity_observers() {
+        assert!(Wiring::community().activity_observers.is_empty());
     }
 
     #[test]

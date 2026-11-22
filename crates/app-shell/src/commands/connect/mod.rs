@@ -308,6 +308,14 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         );
     }
 
+    // Issue #1505: an MCP-driven session (`persist_chat_session: false`)
+    // announces itself with its client name from `mcp_backend`.
+    if persist_chat_session {
+        session
+            .emit_session_started(app_logic::activity::ActivitySessionKind::Chat, None)
+            .await;
+    }
+
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(
         &crate::event_emitter::TauriEventEmitter(app.clone()),
