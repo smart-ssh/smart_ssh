@@ -476,9 +476,19 @@ async fn corrupt_load(column: &str, value: &str) -> String {
         .expect_err("corrupt snapshot must fail to load");
     assert!(matches!(
         err,
-        crate::ledger_store::LedgerStoreError::CorruptContent { .. }
+        crate::ledger_store::LedgerStoreError::CorruptSession { .. }
     ));
-    err.to_string()
+    assert_eq!(
+        ssh_manager_core::ipc_error::ErrorCode::code(&err),
+        crate::error_kind::StoreErrorKind::Corrupt.code()
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Sitzung") && !msg.contains("Ledger-Eintrag"),
+        "{msg}"
+    );
+    assert!(msg.contains(&chat.to_string()), "{msg}");
+    msg
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -511,7 +521,16 @@ async fn test_load_reports_out_of_range_port() {
             .await
             .unwrap();
         let err = store.activity_session_store().load(chat).await.unwrap_err();
-        assert!(err.to_string().contains("server_port"), "{err}");
+        let msg = err.to_string();
+        assert!(msg.contains("server_port"), "{msg}");
+        assert!(
+            msg.contains("Sitzung") && !msg.contains("Ledger-Eintrag"),
+            "{msg}"
+        );
+        assert_eq!(
+            ssh_manager_core::ipc_error::ErrorCode::code(&err),
+            crate::error_kind::StoreErrorKind::Corrupt.code()
+        );
     }
 }
 

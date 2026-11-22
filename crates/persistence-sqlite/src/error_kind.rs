@@ -191,7 +191,7 @@ impl ErrorCode for crate::ledger_store::LedgerStoreError {
     fn code(&self) -> &'static str {
         use crate::ledger_store::LedgerStoreError as E;
         match self {
-            E::CorruptContent { .. } => StoreErrorKind::Corrupt.code(),
+            E::CorruptContent { .. } | E::CorruptSession { .. } => StoreErrorKind::Corrupt.code(),
             _ => kind_code(self.kind(), None),
         }
     }
