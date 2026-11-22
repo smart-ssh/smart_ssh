@@ -10,7 +10,7 @@ import {
 } from "../../api/api";
 import { commandErrorText } from "../../api/errorCodes";
 import type { ServerDto } from "../../api/types";
-import { Button, TabPanel, Tabs } from "../ui";
+import { Button, Icon, TabPanel, Tabs } from "../ui";
 import { ExtensionTabPanels } from "./ExtensionTabPanels";
 import type { ServerModel } from "./formTypes";
 import { NotesTab } from "./NotesTab";
@@ -106,7 +106,12 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
 
   return (
     <div className="max-w-2xl space-y-6 p-4" onChange={() => markDirty()}>
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">{loaded.name}</h2>
+      <div className="flex items-center gap-3">
+        <Icon name="local" size={24} className="shrink-0 text-local-fg" />
+        <h2 className="min-w-0 flex-1 break-words font-heading text-2xl font-semibold uppercase tracking-wide text-fg-strong">
+          {loaded.name}
+        </h2>
+      </div>
       <p className="text-sm text-fg-subtle">{t("serverForm.localHint")}</p>
 
       {error && <p className="text-sm text-danger-fg">{error}</p>}
@@ -116,6 +121,7 @@ export function LocalServerForm({ loaded, model, tabs, error, setError, onSaved,
         value={activeTab}
         onChange={setActiveTab}
         ariaLabel={t("serverForm.tabs.label")}
+        tabClassName="narrow:min-h-11 narrow:flex-1"
         idBase={tabsIdBase}
       />
 

@@ -40,7 +40,7 @@ export function GeneralTab({ idBase, active, model, allGroups }: Props) {
               {...control}
               value={groupId ?? ""}
               onChange={(e) => setGroupId(e.target.value || null)}
-              className={`${FIELD_CONTROL_CLASS} w-full`}
+              className={`${FIELD_CONTROL_CLASS} w-full narrow:min-h-11`}
             >
               <option value="">{t("serverForm.noGroup")}</option>
               {/* Issue #49: hierarchisch (eingerückter voller Pfad), damit

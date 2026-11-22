@@ -97,10 +97,13 @@ nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
 *Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
 (Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
 
-**Verbinden aus den Einstellungen:** Neben „Speichern" zeigt das Formular eines
-gespeicherten Servers (nicht beim Anlegen) den Knopf „Verbinden". Solange das
-Formular ungespeicherte Änderungen hat, ist er deaktiviert und zeigt den Hinweis
-„Zuerst Änderungen speichern"; nach dem Speichern ist er wieder aktiv. Ein Klick
+**Verbinden aus den Einstellungen:** Das Formular eines gespeicherten Servers
+(nicht beim Anlegen) zeigt den Knopf „Verbinden" mit Stecker-Symbol: auf breiten
+Bildschirmen in der Titelzeile rechts neben dem Servernamen, auf schmalen neben
+„Speichern". Solange das Formular ungespeicherte Änderungen hat, ist er
+deaktiviert; der Hinweis „Zuerst Änderungen speichern" bleibt dabei sichtbar
+(auf schmalen Bildschirmen als Zeile unter den Knöpfen); nach dem Speichern ist
+er wieder aktiv. Ein Klick
 wechselt zum Tab dieses Servers, falls einer offen ist (auch ein gerade
 verbindender), sonst läuft derselbe Ablauf wie beim Klick auf den Server in der
 Serverliste (Erststart-Hinweis, Sitzungsauswahl, Verbindungs-Tab); es gibt keinen
