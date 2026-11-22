@@ -229,8 +229,13 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
 - **File reads and writes by the AI** appear in the ledger as path, size, SHA-256
   and (for writes) backup path only — never the file content or a diff. Paths
   are redacted like command text. A write that failed after it reached the
-  target is recorded the same way, marked as failed (the file may be partly
-  overwritten), without hashes of the new content.
+  target (or whose outcome is unknown) is recorded the same way, marked as
+  failed (the file may be partly overwritten), without hashes of the new
+  content. A SHA-256 of very short or low-entropy
+  content (a PIN file, a single-token line) can be recovered by brute force,
+  so the hash is not a secrecy boundary: the protection is the encrypted
+  database, not the hash
+  ([ADR 0160](docs/adr/0160-activity-record-file-reads-and-writes.md)).
 - **Your own chat messages** are stored as you typed them (inside the
   encrypted database, section 3) and redacted only when they are sent.
 
