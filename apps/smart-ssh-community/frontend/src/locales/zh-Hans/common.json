@@ -16,6 +16,7 @@
     "ok": "确定"
   },
   "nav": {
+    "label": "主导航",
     "connect": "连接",
     "manage": "管理",
     "rules": "过滤规则"

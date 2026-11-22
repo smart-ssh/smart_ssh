@@ -308,6 +308,7 @@ describe("AppHeader navigation and settings (issue #1365)", () => {
   it("renders Connect / Manage / Filter Rules as tabs, marks the active one and reports clicks", async () => {
     const onSelect = vi.fn();
     render(<AppHeader mainNav={{ active: "manage", onSelect }} />);
+    expect(screen.getByRole("navigation", { name: testI18n.t("nav.label") })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: testI18n.t("nav.manage") })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: testI18n.t("nav.connect") })).not.toHaveAttribute("aria-current");
     fireEvent.click(screen.getByRole("button", { name: testI18n.t("nav.rules") }));

@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hlavní navigace",
     "connect": "Připojit",
     "manage": "Správa",
     "rules": "Pravidla filtru"

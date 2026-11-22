@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "기본 탐색",
     "connect": "연결",
     "manage": "관리",
     "rules": "필터 규칙"

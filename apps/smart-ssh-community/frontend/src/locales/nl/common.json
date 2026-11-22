@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hoofdnavigatie",
     "connect": "Verbinden",
     "manage": "Beheren",
     "rules": "Filterregels"

@@ -16,6 +16,7 @@
     "ok": "Tamam"
   },
   "nav": {
+    "label": "Ana gezinme",
     "connect": "Bağlan",
     "manage": "Yönet",
     "rules": "Filtre kuralları"
