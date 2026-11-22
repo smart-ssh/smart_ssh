@@ -125,6 +125,18 @@ describe("StartupGate", () => {
     const wayOut = screen.getByTestId("unlock-way-out");
     expect(wayOut.className).toContain("narrow:mt-auto");
     expect(wayOut.className).toContain("narrow:[&_button]:w-full");
+    expect(card.className).toContain("narrow:flex-1");
+    expect(card.className).toContain("narrow:my-0");
+  });
+
+  it("lässt die Karte in allen anderen Zuständen auf schmalen Bildschirmen inhaltshoch (#1434)", async () => {
+    for (const screenName of ["unusableWrapping", "unreachableWrapping"] as const) {
+      const r = renderGate(state({ screen: screenName, offersStartOver: true }));
+      const card = screen.getByTestId("startup-card");
+      expect(card.className).not.toContain("narrow:flex-1");
+      expect(card.className).not.toContain("narrow:my-0");
+      r.unmount();
+    }
   });
 
   it("bietet „Neu anfangen“ nur an, wenn das Backend es anbietet (Klarstellung 11)", async () => {
