@@ -60,12 +60,11 @@ fn snapshot() -> ServerSnapshot {
 }
 
 fn with_hub(session: Session, hub: &Arc<ActivityHub>, incomplete: bool) -> Session {
-    session.with_activity_reporting(ActivityReporting::new(
-        hub,
-        "runtime-1".into(),
-        snapshot(),
-        incomplete,
-    ))
+    session
+        .safety
+        .redaction_incomplete
+        .store(incomplete, std::sync::atomic::Ordering::SeqCst);
+    session.with_activity_reporting(ActivityReporting::new(hub, "runtime-1".into(), snapshot()))
 }
 
 /// A session reporting to a recording observer.
@@ -666,4 +665,54 @@ fn test_default_hub_is_inactive() {
     let hub = ActivityHub::default();
     assert!(!hub.is_active());
     assert_eq!(hub.dropped_events(), 0);
+}
+
+/// Issue #1533: rebuilds the session's redactor against `store` and returns
+/// the flag the next event carries.
+async fn flag_after_rebuild(
+    started_incomplete: bool,
+    store: &crate::test_support::InMemoryProfileStore,
+) -> bool {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    hub.start_detached_worker();
+    let session = with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        started_incomplete,
+    );
+    let server_id = session.server_id;
+    let manager = crate::session::SessionManager::new();
+    let id = Uuid::new_v4();
+    manager.insert(id, Arc::new(session));
+    crate::session_extension::rebuild_redactors_for_sessions(
+        &manager,
+        store,
+        Arc::new(crate::test_support::InMemoryCredentialStore::new()),
+        None,
+        server_id,
+    )
+    .await;
+    manager
+        .get(id)
+        .unwrap()
+        .emit_session_ended(crate::activity::SessionEndReason::Closed)
+        .await;
+    take(&rx, 1)[0].redaction_incomplete
+}
+
+#[tokio::test]
+async fn test_failing_rebuild_marks_later_events_incomplete() {
+    let store = crate::test_support::InMemoryProfileStore::new();
+    store
+        .fail_get_server
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(flag_after_rebuild(false, &store).await);
+}
+
+#[tokio::test]
+async fn test_complete_rebuild_clears_the_incomplete_flag_on_events() {
+    // Server not stored: no groups, a complete lookup.
+    let store = crate::test_support::InMemoryProfileStore::new();
+    assert!(!flag_after_rebuild(true, &store).await);
 }

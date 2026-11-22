@@ -464,6 +464,11 @@ pub async fn rebuild_redactors_for_sessions(
             session.swap_redactor(redactor);
             session.redactor.add_secret_values(&secrets);
         }
+        // Issue #1533: the flag on activity events mirrors this rebuild.
+        session.safety.redaction_incomplete.store(
+            !(lookup_complete && compiled),
+            std::sync::atomic::Ordering::SeqCst,
+        );
         if !(lookup_complete && compiled) {
             session
                 .safety

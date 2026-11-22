@@ -329,7 +329,6 @@ pub struct ActivityReporting {
     pub(crate) runtime_session_id: String,
     pub(crate) server: ServerSnapshot,
     pub(crate) time_zone: Option<String>,
-    pub(crate) redaction_incomplete: bool,
 }
 
 impl ActivityReporting {
@@ -338,14 +337,12 @@ impl ActivityReporting {
         hub: &Arc<ActivityHub>,
         runtime_session_id: String,
         server: ServerSnapshot,
-        redaction_incomplete: bool,
     ) -> Option<Self> {
         hub.is_active().then(|| Self {
             hub: Arc::clone(hub),
             runtime_session_id,
             server,
             time_zone: persistence_sqlite::device_time_zone_source()(),
-            redaction_incomplete,
         })
     }
 }
