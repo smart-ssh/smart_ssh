@@ -434,6 +434,23 @@ describe("useSessionTabs / local tab marker (#1409, #1465)", () => {
     );
   });
 
+  it("initial load and retry failed, later local tab still gets the marker", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(listServers).mockRejectedValue(new Error("boom"));
+    const { result } = await renderWithOneTab();
+    act(() => {
+      result.current.openTab("session-2", "server-1", "Other");
+    });
+    await waitFor(() => expect(vi.mocked(listServers).mock.calls.length).toBeGreaterThanOrEqual(2));
+    vi.mocked(listServers).mockResolvedValue([server("server-1", true), server("local-9", true)]);
+    act(() => {
+      result.current.openTab("session-9", "local-9", "Local");
+    });
+    await waitFor(() =>
+      expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true),
+    );
+  });
+
   it("refetches at most once per unknown server id across tabs updates", async () => {
     vi.mocked(listSessions).mockResolvedValue([]);
     vi.mocked(listServers).mockResolvedValue([server("server-1", false)]);

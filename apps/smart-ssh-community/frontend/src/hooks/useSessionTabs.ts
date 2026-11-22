@@ -187,6 +187,8 @@ export function useSessionTabs() {
   const serverListAttemptsRef = useRef(new Map<string, number>());
   const serverListSettledRef = useRef(new Set<string>());
   const serverListInFlightRef = useRef(false);
+  // Bumped when a fetch settles so the effect re-checks tabs that changed meanwhile.
+  const [serverListTick, setServerListTick] = useState(0);
   const refreshServerList = useCallback((keys: string[]) => {
     serverListInFlightRef.current = true;
     for (const k of keys) serverListAttemptsRef.current.set(k, (serverListAttemptsRef.current.get(k) ?? 0) + 1);
@@ -195,21 +197,26 @@ export function useSessionTabs() {
         for (const k of keys) serverListSettledRef.current.add(k);
         knownServerIdsRef.current = new Set(servers.map((s) => s.id));
         setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id)));
-      })
-      .catch((err) => console.warn("list_servers failed:", commandErrorMessage(err)))
-      .finally(() => {
         serverListInFlightRef.current = false;
+        setServerListTick((n) => n + 1);
+      })
+      .catch((err) => {
+        console.warn("list_servers failed:", commandErrorMessage(err));
+        serverListInFlightRef.current = false;
+        setServerListTick((n) => n + 1);
       });
   }, []);
   useEffect(() => {
     if (serverListInFlightRef.current) return;
     const known = knownServerIdsRef.current;
-    const wanted = known === null ? [""] : tabs.filter((x) => !known.has(x.serverId)).map((x) => x.serverId);
+    const wanted = known === null
+        ? ["", ...tabs.map((x) => x.serverId)]
+        : tabs.filter((x) => !known.has(x.serverId)).map((x) => x.serverId);
     const keys = [...new Set(wanted)].filter(
       (k) => !serverListSettledRef.current.has(k) && (serverListAttemptsRef.current.get(k) ?? 0) < 2,
     );
     if (keys.length > 0) refreshServerList(keys);
-  }, [tabs, refreshServerList]);
+  }, [tabs, serverListTick, refreshServerList]);
   const tabsWithLocal = useMemo(
     () => (localServerIds.size === 0 ? tabs : tabs.map((x) => (localServerIds.has(x.serverId) ? { ...x, isLocal: true } : x))),
     [tabs, localServerIds],
