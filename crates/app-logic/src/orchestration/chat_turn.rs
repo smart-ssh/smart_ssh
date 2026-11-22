@@ -246,7 +246,13 @@ pub(crate) async fn write_ledger_entry_for_action(
     let Some(store) = &session.persistence.ledger_store else {
         return;
     };
-    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
+    // A chat session records under its own id; an MCP session (no chat
+    // session) under its recorded session (issue #1444). Same redaction.
+    let recorded_session_id = match *session.persistence.chat_session_id.lock().await {
+        Some(id) => Some(id),
+        None => *session.persistence.mcp_activity_session_id.lock().await,
+    };
+    let Some(chat_session_id) = recorded_session_id else {
         return;
     };
     let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);

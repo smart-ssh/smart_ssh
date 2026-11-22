@@ -129,6 +129,8 @@ fn dummy_session(server_id: ServerId) -> Session {
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
+            activity_session_store: None,
+            mcp_activity_session_id: AsyncMutex::new(None),
         },
         conn: crate::session::TransportState {
             terminal: StdMutex::new(None),
@@ -850,6 +852,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         policy_store: db.policy_store(),
         prompt_history_store: db.prompt_history_store(),
         chat_session_store: db.chat_session_store(),
+        activity_session_store: db.activity_session_store(),
         ledger_store: db.ledger_store(),
         profile_store: Arc::new(db),
         credential_store: Arc::new(InMemoryCredentialStore::new()),

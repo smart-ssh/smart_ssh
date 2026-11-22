@@ -177,10 +177,14 @@ pub(crate) async fn delete_chat_session_if_empty(
     Ok(deleted)
 }
 
+/// Client name stored for an MCP recorded session whose handshake gave none.
+pub const UNKNOWN_MCP_CLIENT: &str = "unknown";
+
 /// Store for recorded sessions; shares the pool with the other stores.
 #[derive(Clone)]
 pub struct SqliteActivitySessionStore {
     pool: SqlitePool,
+    time_zone: TimeZoneSource,
 }
 
 fn corrupt(id: Uuid, field: &str, reason: impl std::fmt::Display) -> LedgerStoreError {
@@ -197,7 +201,77 @@ fn json_list(id: Uuid, field: &str, raw: &str) -> Result<Vec<String>, LedgerStor
 
 impl SqliteActivitySessionStore {
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            time_zone: device_time_zone_source(),
+        }
+    }
+
+    /// Creates the recorded session of an MCP-driven connection (kind `mcp`,
+    /// snapshot as for chats) and returns its id. No `chat_sessions` row is
+    /// written, so the session never shows up in chat lists or resume.
+    /// `client_name` is the (already normalised) MCP client name; `None` or
+    /// blank is stored as [`UNKNOWN_MCP_CLIENT`]. Fails when the server does
+    /// not exist.
+    pub async fn create_mcp_session(
+        &self,
+        server_id: &ServerId,
+        client_name: Option<&str>,
+    ) -> Result<Uuid, LedgerStoreError> {
+        let client = client_name
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .unwrap_or(UNKNOWN_MCP_CLIENT);
+        let id = Uuid::new_v4();
+        let zone = (self.time_zone)();
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        let created = insert_snapshot(
+            &mut tx,
+            id,
+            ActivitySessionKind::Mcp,
+            Some(client),
+            server_id,
+            zone.as_deref(),
+        )
+        .await
+        .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        if !created {
+            return Err(LedgerStoreError::Backend(format!(
+                "server {} not found for the recorded session",
+                server_id.0
+            )));
+        }
+        tx.commit()
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        Ok(id)
+    }
+
+    /// Whether `id` is a chat session (a `chat_sessions` row). A recorded
+    /// session of another kind (MCP) is not, so it can never be resumed as a
+    /// human chat.
+    pub async fn is_chat_session(&self, id: Uuid) -> Result<bool, LedgerStoreError> {
+        let found: Option<i64> = sqlx::query_scalar("SELECT 1 FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        Ok(found.is_some())
+    }
+
+    /// Sets `ended_at` of a recorded session (the MCP session was closed).
+    pub async fn mark_ended(&self, id: Uuid) -> Result<(), LedgerStoreError> {
+        sqlx::query("UPDATE activity_sessions SET ended_at = ? WHERE id = ?")
+            .bind(Utc::now().to_rfc3339())
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        Ok(())
     }
 
     /// Loads one recorded session, `None` if it does not exist.
