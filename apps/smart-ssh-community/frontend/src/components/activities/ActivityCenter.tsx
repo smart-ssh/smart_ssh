@@ -43,6 +43,9 @@ interface RateEntry {
 
 function useRates(list: Activity[]): Map<string, RateState> {
   const [entries, setEntries] = useState<Map<string, RateEntry>>(() => new Map());
+  // Bumped when the stall timer fires without marking anything (early firing,
+  // clock stepped back), so the effect below re-runs and re-arms the timer.
+  const [rearm, setRearm] = useState(0);
 
   // Fold real progress updates (a changed `done`) and drop activities that left the running state.
   useEffect(() => {
@@ -90,11 +93,14 @@ function useRates(list: Activity[]): Map<string, RateState> {
           }
           return changed ? next : prev;
         });
+        // Re-run the effect even when nothing was due yet, so the remaining
+        // entries get a new timer (batched with `entries` when it did change).
+        setRearm((n) => n + 1);
       },
       Math.max(0, soonest + RATE_WINDOW_MS - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [entries]);
+  }, [entries, rearm]);
 
   return new Map(
     [...entries].map(([id, e]) => [
