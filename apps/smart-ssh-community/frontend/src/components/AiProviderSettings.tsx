@@ -409,7 +409,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="mb-3 font-mono text-xs uppercase tracking-wider text-fg-subtle">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
-        <ul className="divide-y divide-border border border-border bg-surface-sunken/40 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_auto] lg:gap-x-4">
+        <ul className="divide-y divide-border border border-border bg-surface-sunken/40 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(11rem,1fr)_auto_minmax(min-content,11rem)] lg:gap-x-4">
           {providers.length === 0 && (
             <li className="px-4 py-3 text-sm text-fg-subtle lg:col-span-full">{t("aiProvider.noProviders")}</li>
           )}
@@ -461,7 +461,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               </div>
 
               {supportsWebResearch(provider.providerType, provider.baseUrl) && (
-                <div className="mt-2">
+                <div className="mt-2 lg:col-span-full">
                   <SwitchRow
                     checked={provider.webResearchEnabled}
                     onChange={(checked) => handleWebResearchChange(provider, checked)}
@@ -472,7 +472,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               )}
 
               {provider.attestationUrl && (
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-2 space-y-1.5 lg:col-span-full">
                   <Button size="sm"
                     onClick={() => handleFetchAttestation(provider.id)}
                     disabled={attestationLoading[provider.id]}

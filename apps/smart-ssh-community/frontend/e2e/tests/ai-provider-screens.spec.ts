@@ -60,3 +60,47 @@ test("provider rows share column x positions", async ({ app }) => {
   );
   expect(clipped).toEqual([]);
 });
+
+// Issue #1435: at lg and up the columns stay aligned and name/model stay readable;
+// the action buttons wrap before name/model shrink.
+for (const [language, settingsName, categoryName] of [
+  ["en", "Settings", "AI Provider"],
+  ["uk", "Параметри", "ШІ-провайдер"],
+] as const) {
+  for (const width of [1024, 1280]) {
+    test(`provider rows stay readable and aligned (${language}, ${width}px)`, async ({ app }) => {
+      await app.launch({
+        ...populated(),
+        settings: { ...populated().settings, language },
+        aiProviders: [
+          aiProvider({ id: "p-1", displayName: "Primary", providerType: "anthropic", model: "claude-sonnet-4-5", isActive: true, webResearchEnabled: true, attestationUrl: "https://att.example.com/a" }),
+          aiProvider({ id: "p-2", displayName: "Backup", providerType: "anthropic", model: "claude-opus-4-1", isActive: false }),
+        ],
+      });
+      const page = app.page;
+      await page.setViewportSize({ width, height: 800 });
+      await page.getByRole("button", { name: settingsName, exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: settingsName });
+      await dialog.getByRole("button", { name: categoryName, exact: true }).click();
+      const m1 = dialog.getByText("claude-sonnet-4-5", { exact: true });
+      const m2 = dialog.getByText("claude-opus-4-1", { exact: true });
+      await expect(m1).toBeVisible();
+      await expect(m2).toBeVisible();
+      const widths = await dialog.locator("ul li p.truncate").evaluateAll((els) =>
+        els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent),
+      );
+      expect(widths).toEqual([]);
+      const a = await m1.boundingBox();
+      const b = await m2.boundingBox();
+      expect(a && b && Math.abs(a.x - b.x) < 1).toBe(true);
+      // Attestation and web-research rows span the whole row, below the actions.
+      const row = dialog.locator("ul li").first();
+      const rowBox = await row.boundingBox();
+      const full = await row.locator(":scope > div").evaluateAll((divs) =>
+        divs.map((d) => d.getBoundingClientRect().width),
+      );
+      expect(rowBox).not.toBeNull();
+      for (const w of full) expect(w).toBeGreaterThan(rowBox!.width - 40);
+    });
+  }
+}
