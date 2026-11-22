@@ -393,15 +393,17 @@ fn entry_info(r: RecordedEntry) -> RecordEntryInfo {
             info.entry_type = RecordEntryType::AiMessage;
             info.text = Some(text);
         }
-        LedgerEntryContent::FileRead { path, bytes } => {
+        LedgerEntryContent::FileRead { path, bytes, .. } => {
             info.entry_type = RecordEntryType::FileRead;
             info.path = Some(path);
             info.bytes = bytes;
         }
-        LedgerEntryContent::FileWritten { path, bytes } => {
+        LedgerEntryContent::FileWritten {
+            path, bytes_after, ..
+        } => {
             info.entry_type = RecordEntryType::FileWritten;
             info.path = Some(path);
-            info.bytes = bytes;
+            info.bytes = bytes_after;
         }
         LedgerEntryContent::Connection { event, detail } => {
             info.entry_type = RecordEntryType::Connection;
