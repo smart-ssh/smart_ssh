@@ -181,8 +181,9 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
   // meter sits in the header; no meter before the first answer.
   it("shows the active provider's model in the header and the meter only after the first answer", async () => {
     renderChatPanel();
-    const title = await screen.findByTestId("chat-header-title");
-    expect(title.textContent).toBe("AI · claude");
+    // The provider model is loaded asynchronously; the header first renders plain "AI".
+    await waitFor(() => expect(screen.getByTestId("chat-header-title").textContent).toBe("AI · claude"));
+    const title = screen.getByTestId("chat-header-title");
     expect(title.getAttribute("title")).toContain("Claude");
     expect(screen.queryByTestId("context-usage")).not.toBeInTheDocument();
     const handler = vi.mocked(onChatContextUsage).mock.calls[0][0];
