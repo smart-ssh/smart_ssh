@@ -4,7 +4,7 @@ use persistence_sqlite::SqlitePolicyStore;
 use ssh_manager_core::filter::{RuleAction, RuleId};
 
 use crate::dto::RuleInput;
-use crate::filter_rules::RuleWriteError;
+use crate::filter_rules::{prepare_rule, RuleWriteError};
 
 /// Issue #1356: saves several staged rules, each with its own patterns and
 /// scope, in ONE transaction: all or nothing. Any invalid pattern (empty,
@@ -35,24 +35,19 @@ pub async fn create_quick_rules_batch(
                     },
                 ));
             }
-            stored.push(
+            stored.push(prepare_rule(
                 RuleInput {
                     pattern_type: p.pattern_type,
                     pattern_value: p.pattern_value,
                     action: RuleAction::Allow,
                     scope: staged.scope.clone(),
                     priority: 0,
-                }
-                .into_stored_rule(
-                    RuleId(uuid::Uuid::new_v4().to_string()),
-                    now,
-                    now,
-                ),
-            );
+                },
+                RuleId(uuid::Uuid::new_v4().to_string()),
+                now,
+                now,
+            )?);
         }
-    }
-    for rule in &stored {
-        rule.pattern.validate()?;
     }
     policy_store.create_many(&stored).await?;
     Ok(stored.into_iter().map(|r| r.id).collect())
