@@ -4,7 +4,6 @@ import { expect, openSettings, test } from "../support/app";
 import { aiProvider, populated } from "../support/data";
 import { captureCurrent, captureScreen } from "../support/screenshots";
 
-const scheme = process.env.SCREENSHOT_SCHEME === "dark" ? "dark" : "light";
 
 test("review screenshots: AI provider settings and add dialog", async ({ app }) => {
   await app.launch({
@@ -16,18 +15,17 @@ test("review screenshots: AI provider settings and add dialog", async ({ app }) 
     ],
   });
   const page = app.page;
-  if (scheme === "dark") await page.emulateMedia({ colorScheme: "dark" });
   const dialog = await openSettings(page, "AI Provider");
   await expect(dialog.getByText("Primary").first()).toBeVisible();
   const second = dialog.getByRole("checkbox", { name: /second opinion/i }).first();
   await second.check({ force: true });
-  await captureScreen(page, `settings-aiprovider-${scheme}`);
+  await captureScreen(page, `settings-aiprovider`);
 
   await dialog.getByRole("button", { name: "Add Provider", exact: true }).click();
   const add = page.getByRole("dialog", { name: "Add Provider" });
   await expect(add).toBeVisible();
   await add.getByRole("button", { name: /Advanced/ }).click();
-  await captureScreen(page, `add-provider-dialog-${scheme}`);
+  await captureScreen(page, `add-provider-dialog`);
 });
 
 test("provider rows share column x positions", async ({ app }) => {
@@ -119,12 +117,11 @@ for (const [language, settingsName, categoryName] of [
       ],
     });
     const page = app.page;
-    if (scheme === "dark") await page.emulateMedia({ colorScheme: "dark" });
     await page.setViewportSize({ width: 1024, height: 800 });
     await page.getByRole("button", { name: settingsName, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: settingsName });
     await dialog.getByRole("button", { name: categoryName, exact: true }).click();
     await expect(dialog.getByText("claude-sonnet-4-5", { exact: true })).toBeVisible();
-    await captureCurrent(page, `provider-rows-1024-${language}-${scheme}`);
+    await captureCurrent(page, `provider-rows-1024-${language}`);
   });
 }
