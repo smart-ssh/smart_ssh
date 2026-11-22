@@ -7,7 +7,9 @@ use uuid::Uuid;
 
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 
-use crate::{EntryFilter, PageRequest, RecordCursor, SessionFilter, SqliteProfileStore};
+use crate::{
+    EntryFilter, PageRequest, RecordCursor, RecordedRow, SessionFilter, SqliteProfileStore,
+};
 
 fn sid(n: u128) -> Uuid {
     Uuid::from_u128(n)
@@ -259,7 +261,7 @@ async fn seqs(s: &SqliteProfileStore, f: EntryFilter) -> Vec<(u128, i64)> {
         .unwrap()
         .items
         .into_iter()
-        .map(|e| (e.session_id.as_u128(), e.sequence))
+        .map(|e| (e.session_id().unwrap().as_u128(), e.sequence()))
         .collect()
 }
 
@@ -412,7 +414,13 @@ async fn test_entries_of_session_in_sequence_order() {
         .entries_of_session(sid(1))
         .await
         .unwrap();
-    let seq: Vec<i64> = rows.iter().map(|r| r.sequence).collect();
+    let seq: Vec<i64> = rows
+        .iter()
+        .map(|r| match r {
+            RecordedRow::Entry(e) => e.sequence,
+            RecordedRow::Unreadable(u) => u.sequence,
+        })
+        .collect();
     assert_eq!(seq, vec![0, 1, 2, 3, 4]);
 }
 
@@ -439,7 +447,7 @@ async fn test_paging_returns_every_entry_once_while_entries_are_appended() {
             .list_entries(&EntryFilter::default(), PageRequest { limit: 3, after })
             .await
             .unwrap();
-        seen.extend(page.items.iter().map(|e| e.sequence));
+        seen.extend(page.items.iter().map(|e| e.sequence()));
         // Concurrent writer: one more entry between every two pages.
         ledger
             .append_entry(sid(1), LedgerSource::Ai, &content(appended))
@@ -545,6 +553,180 @@ async fn test_chat_messages_are_never_read() {
         .await
         .unwrap();
     assert!(hit.items.is_empty());
+}
+
+const GOOD: &str = r#"{"CommandProposed":{"command":"ls"}}"#;
+const TS: &str = "2026-01-01T00:00:00+00:00";
+
+/// Session 1 with entries 0..=4; the entry at sequence 2 is damaged by `bad`.
+async fn with_damaged(bad: &str) -> SqliteProfileStore {
+    let s = store().await;
+    add_session(&s, 1, "chat", "srv-a", "[]", TS, 0).await;
+    for seq in 0..5 {
+        add_entry(&s, 1, seq, "ai", "command_proposed", GOOD, TS).await;
+    }
+    // Rows are damaged after the fact, as a broken file would be.
+    sqlx::query("PRAGMA ignore_check_constraints = ON")
+        .execute(&s.pool)
+        .await
+        .unwrap();
+    let sql = match bad {
+        "content" => "UPDATE ledger_entries SET content = 'not json' WHERE sequence = 2",
+        "timestamp" => "UPDATE ledger_entries SET created_at = 'yesterday' WHERE sequence = 2",
+        "snapshot" => "UPDATE ledger_entries SET rule_snapshot = '{broken' WHERE sequence = 2",
+        "source" => "UPDATE ledger_entries SET source = 'robot' WHERE sequence = 2",
+        _ => unreachable!(),
+    };
+    sqlx::query(sql).execute(&s.pool).await.unwrap();
+    s
+}
+
+fn describe(rows: &[RecordedRow]) -> Vec<(i64, bool)> {
+    rows.iter()
+        .map(|r| match r {
+            RecordedRow::Entry(e) => (e.sequence, true),
+            RecordedRow::Unreadable(u) => (u.sequence, false),
+        })
+        .collect()
+}
+
+/// Issue #1496: a damaged row is marked per item, in a page and in a session
+/// read, for every kind of damage; the cursor continues past it.
+#[tokio::test]
+async fn test_damaged_row_is_marked_not_fatal_for_every_kind_of_damage() {
+    for bad in ["content", "timestamp", "snapshot", "source"] {
+        let s = with_damaged(bad).await;
+        let q = s.ledger_store().record_query();
+        let expect = vec![(0, true), (1, true), (2, false), (3, true), (4, true)];
+        let all = q.entries_of_session(sid(1)).await.unwrap();
+        assert_eq!(describe(&all), expect, "session read, {bad}");
+        let RecordedRow::Unreadable(u) = &all[2] else {
+            unreachable!()
+        };
+        assert_eq!(u.session_id, Some(sid(1)));
+        assert!(!u.reason.is_empty() && !u.id.is_empty());
+        // Page of 2: [0,1] / [2(damaged),3] / [4]; the cursor walks past it.
+        let (mut seen, mut after) = (Vec::new(), None);
+        loop {
+            let p = q
+                .list_entries(&EntryFilter::default(), PageRequest { limit: 2, after })
+                .await
+                .unwrap();
+            seen.extend(describe(&p.items));
+            match p.next {
+                Some(c) => after = Some(c),
+                None => break,
+            }
+        }
+        assert_eq!(seen, expect, "paged read, {bad}");
+    }
+}
+
+/// Issue #1496: an unknown `source` is damage, not an AI entry.
+#[tokio::test]
+async fn test_unknown_source_reason_is_reported() {
+    let s = with_damaged("source").await;
+    let all = s
+        .ledger_store()
+        .record_query()
+        .entries_of_session(sid(1))
+        .await
+        .unwrap();
+    let RecordedRow::Unreadable(u) = &all[2] else {
+        panic!("must not be mapped to an entry")
+    };
+    assert!(u.reason.contains("robot"), "{}", u.reason);
+}
+
+/// Issue #1496: an entry whose stored session id is not a UUID is marked.
+#[tokio::test]
+async fn test_invalid_session_id_is_marked() {
+    let s = store().await;
+    sqlx::query(
+        "INSERT INTO activity_sessions (id, kind, server_id, server_name, server_host, \
+         server_port, server_user, group_ids, started_at, failed_writes) \
+         VALUES ('not-a-uuid', 'chat', 'srv-a', 'n', 'h', 22, 'u', '[]', ?, 0)",
+    )
+    .bind(TS)
+    .execute(&s.pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, \
+         created_at) VALUES ('e1', 'not-a-uuid', 7, 'ai', 'command_proposed', ?, ?)",
+    )
+    .bind(GOOD)
+    .bind(TS)
+    .execute(&s.pool)
+    .await
+    .unwrap();
+    let p = s
+        .ledger_store()
+        .record_query()
+        .list_entries(&EntryFilter::default(), ALL)
+        .await
+        .unwrap();
+    let [RecordedRow::Unreadable(u)] = p.items.as_slice() else {
+        panic!("{:?}", p.items)
+    };
+    assert_eq!((u.id.as_str(), u.sequence, u.session_id), ("e1", 7, None));
+}
+
+/// Issue #1496: the shared row mapping gives `load_entries` and the read API
+/// the same entries, and both reject the same damage.
+#[tokio::test]
+async fn test_load_entries_and_read_api_map_rows_alike() {
+    let s = with_damaged("timestamp").await;
+    let ledger = s.ledger_store();
+    assert!(ledger.load_entries(sid(1)).await.is_err());
+    sqlx::query("UPDATE ledger_entries SET created_at = ? WHERE sequence = 2")
+        .bind(TS)
+        .execute(&s.pool)
+        .await
+        .unwrap();
+    let loaded = ledger.load_entries(sid(1)).await.unwrap();
+    let read = ledger
+        .record_query()
+        .entries_of_session(sid(1))
+        .await
+        .unwrap();
+    assert_eq!(loaded.len(), read.len());
+    for (l, r) in loaded.iter().zip(&read) {
+        let RecordedRow::Entry(e) = r else {
+            panic!("{r:?}")
+        };
+        assert_eq!(l, &e.entry);
+    }
+    sqlx::query("UPDATE ledger_entries SET source = 'robot' WHERE sequence = 2")
+        .execute(&s.pool)
+        .await
+        .unwrap();
+    assert!(ledger.load_entries(sid(1)).await.is_err());
+}
+
+/// More entries than one chunk: all returned, in order, none twice.
+#[tokio::test]
+async fn test_entries_of_session_spans_several_chunks() {
+    let s = store().await;
+    add_session(&s, 1, "chat", "srv-a", "[]", TS, 0).await;
+    sqlx::query(
+        "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 2499) \
+         INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
+         SELECT 'e' || i, ?, i, 'ai', 'activity_tick', '\"ActivityTick\"', ? FROM n",
+    )
+    .bind(sid(1).to_string())
+    .bind(TS)
+    .execute(&s.pool)
+    .await
+    .unwrap();
+    let rows = s
+        .ledger_store()
+        .record_query()
+        .entries_of_session(sid(1))
+        .await
+        .unwrap();
+    let seq: Vec<i64> = describe(&rows).iter().map(|r| r.0).collect();
+    assert_eq!(seq, (0..2500).collect::<Vec<_>>());
 }
 
 /// Benchmark (issue #1449): 100k entries, a page of 200 under 50 ms, an
@@ -654,6 +836,22 @@ async fn record_query_bench_page_of_200_in_100k_entries() {
         }
         assert_eq!(found, expected);
     }
+    // Issue #1496: the whole session in chunks, appends interleave.
+    let session_reader = {
+        let q = q.clone();
+        tokio::spawn(async move {
+            let rows = q.entries_of_session(sid(1)).await.unwrap();
+            assert!(rows.len() >= 100_000);
+            let seq: Vec<i64> = rows
+                .iter()
+                .map(|r| match r {
+                    RecordedRow::Entry(e) => e.sequence,
+                    RecordedRow::Unreadable(u) => u.sequence,
+                })
+                .collect();
+            assert!(seq.windows(2).all(|w| w[0] < w[1]), "sequence order");
+        })
+    };
     let mut worst = std::time::Duration::ZERO;
     for _ in 0..20 {
         let start = std::time::Instant::now();
@@ -664,6 +862,7 @@ async fn record_query_bench_page_of_200_in_100k_entries() {
         worst = worst.max(start.elapsed());
     }
     reader.await.unwrap();
+    session_reader.await.unwrap();
     assert!(worst.as_millis() < 50, "append blocked for {worst:?}");
 }
 

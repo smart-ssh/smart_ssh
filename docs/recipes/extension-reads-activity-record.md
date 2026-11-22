@@ -21,6 +21,9 @@ SQL through `ExtensionDb::pool()`.
 - Each new filter narrows the result alone and combined with others.
 - Paging returns every entry once while entries are appended.
 - Chat message content is never part of a result.
+- A damaged row (content, timestamp, rule snapshot, session id, unknown source) is returned as an item with `unreadable` set, in its place; it never fails a page or a session read, and a new mapped column is damage-tested too.
+- A session read stays chunked (one bounded statement per chunk), so appends are not blocked.
+- The row mapping is shared with `SqliteLedgerStore::load_entries` (`ledger_entry_from_row`); add new columns there.
 - Text that leaves the device is redacted with `redact_for_server`.
 - With a text filter a page can be short or empty while `next_cursor` is still set (the scan per call is bounded); keep paging until `next_cursor` is `None`.
 

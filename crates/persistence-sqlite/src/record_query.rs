@@ -7,19 +7,23 @@
 //! order (`rowid`, which only grows on append): a page boundary stays valid
 //! while entries are appended, and every row is returned exactly once.
 //!
-//! Every statement except `entries_of_session` (one session's entries) is
-//! bounded by `LIMIT`, because the pool has a single connection: a long read
-//! would block appends.
+//! Every statement is bounded by `LIMIT`, because the pool has a single
+//! connection: a long read would block appends. `entries_of_session` reads a
+//! session in keyset chunks on `sequence` for the same reason.
+//!
+//! A damaged row never fails a page or a session: it is returned as
+//! [`RecordedRow::Unreadable`] at its position and the walk continues.
 
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::{QueryBuilder, Row, Sqlite};
 use uuid::Uuid;
 
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerEntryMeta, LedgerSource};
-
 use crate::activity_session_store::ActivitySession;
-use crate::ledger_store::{LedgerEntry, LedgerStoreError};
+use crate::ledger_store::{ledger_entry_from_row, LedgerEntry, LedgerStoreError};
+
+/// Entries read per statement by `entries_of_session`.
+const SESSION_CHUNK: i64 = 1_000;
 
 /// Rows examined per statement while a text filter is matched in Rust.
 const TEXT_SCAN_CHUNK: i64 = 500;
@@ -102,6 +106,40 @@ pub struct RecordedEntry {
     pub session_id: Uuid,
     pub sequence: i64,
     pub entry: LedgerEntry,
+}
+
+/// A row of `ledger_entries` that could not be mapped (invalid content,
+/// timestamp, rule snapshot, session id or an unknown source).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnreadableEntry {
+    pub id: String,
+    /// `None` when the stored session id is itself not a valid UUID.
+    pub session_id: Option<Uuid>,
+    pub sequence: i64,
+    pub reason: String,
+}
+
+/// One row of a read: the entry, or a marker for a damaged one.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordedRow {
+    Entry(Box<RecordedEntry>),
+    Unreadable(UnreadableEntry),
+}
+
+impl RecordedRow {
+    pub fn sequence(&self) -> i64 {
+        match self {
+            Self::Entry(e) => e.sequence,
+            Self::Unreadable(u) => u.sequence,
+        }
+    }
+
+    pub fn session_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Entry(e) => Some(e.session_id),
+            Self::Unreadable(u) => u.session_id,
+        }
+    }
 }
 
 /// Read-only query handle; shares the pool with the other stores.
@@ -190,7 +228,7 @@ impl SqliteRecordQuery {
         &self,
         filter: &EntryFilter,
         page: PageRequest,
-    ) -> Result<Page<RecordedEntry>, LedgerStoreError> {
+    ) -> Result<Page<RecordedRow>, LedgerStoreError> {
         let limit = page.effective_limit();
         let needle = filter
             .text_contains
@@ -202,10 +240,7 @@ impl SqliteRecordQuery {
                 .entries_chunk(filter, page.after.map(|c| c.0), limit + 1, false)
                 .await?;
             let next = take_next(&mut rows, limit, |r| r.get::<i64, _>("rid"));
-            let items = rows
-                .iter()
-                .map(entry_from_row)
-                .collect::<Result<Vec<_>, _>>()?;
+            let items = rows.iter().map(row_to_item).collect();
             return Ok(Page { items, next });
         };
         let mut after = page.after.map(|c| c.0);
@@ -256,7 +291,7 @@ impl SqliteRecordQuery {
             .fetch_one(&self.pool)
             .await
             .map_err(err)?;
-            items.push(entry_from_row(&row)?);
+            items.push(row_to_item(&row));
         }
         Ok(Page { items, next })
     }
@@ -333,21 +368,38 @@ impl SqliteRecordQuery {
         qb.build().fetch_all(&self.pool).await.map_err(err)
     }
 
-    /// All entries of one recorded session, in `sequence` order.
+    /// All entries of one recorded session, in `sequence` order. Read in
+    /// chunks of `SESSION_CHUNK` (one statement each), so the single
+    /// connection is free for appends between chunks. A damaged row is
+    /// returned as [`RecordedRow::Unreadable`] at its place.
     pub async fn entries_of_session(
         &self,
         session_id: Uuid,
-    ) -> Result<Vec<RecordedEntry>, LedgerStoreError> {
-        let rows = sqlx::query(
-            "SELECT e.id, e.session_id, e.sequence, e.source, e.content, e.created_at, \
-             e.action_id, e.redaction_incomplete, e.rule_snapshot \
-             FROM ledger_entries e WHERE e.session_id = ? ORDER BY e.sequence ASC",
-        )
-        .bind(session_id.to_string())
-        .fetch_all(&self.pool)
-        .await
-        .map_err(err)?;
-        rows.iter().map(entry_from_row).collect()
+    ) -> Result<Vec<RecordedRow>, LedgerStoreError> {
+        let mut out = Vec::new();
+        let mut after = i64::MIN;
+        loop {
+            let rows = sqlx::query(
+                "SELECT e.id, e.session_id, e.sequence, e.source, e.content, e.created_at, \
+                 e.action_id, e.redaction_incomplete, e.rule_snapshot \
+                 FROM ledger_entries e WHERE e.session_id = ? AND e.sequence > ? \
+                 ORDER BY e.sequence ASC LIMIT ?",
+            )
+            .bind(session_id.to_string())
+            .bind(after)
+            .bind(SESSION_CHUNK)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(err)?;
+            let Some(last) = rows.last() else { break };
+            after = last.get::<i64, _>("sequence");
+            let full = rows.len() as i64 == SESSION_CHUNK;
+            out.extend(rows.iter().map(row_to_item));
+            if !full {
+                break;
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -394,44 +446,29 @@ fn session_from_row(row: &SqliteRow) -> Result<ActivitySession, LedgerStoreError
     })
 }
 
-fn entry_from_row(row: &SqliteRow) -> Result<RecordedEntry, LedgerStoreError> {
+/// Maps a row; a damaged one becomes an [`UnreadableEntry`] (never an error).
+fn row_to_item(row: &SqliteRow) -> RecordedRow {
     let id: String = row.get("id");
-    let corrupt = |reason: String| LedgerStoreError::CorruptContent {
-        entry_id: id.clone(),
-        reason,
-    };
-    let content_json: String = row.try_get("content").map_err(err)?;
-    let content: LedgerEntryContent =
-        serde_json::from_str(&content_json).map_err(|e| corrupt(e.to_string()))?;
-    let created_at_raw: String = row.get("created_at");
-    let created_at = DateTime::parse_from_rfc3339(&created_at_raw)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|e| corrupt(format!("timestamp: {e}")))?;
-    let rule_snapshot = row
-        .get::<Option<String>, _>("rule_snapshot")
-        .map(|raw| serde_json::from_str(&raw))
-        .transpose()
-        .map_err(|e| corrupt(format!("rule snapshot: {e}")))?;
-    let source = match row.get::<String, _>("source").as_str() {
-        "user" => LedgerSource::User,
-        "mcp-agent" => LedgerSource::McpAgent,
-        _ => LedgerSource::Ai,
-    };
-    let session_id = Uuid::parse_str(&row.get::<String, _>("session_id"))
-        .map_err(|e| corrupt(format!("session id: {e}")))?;
-    Ok(RecordedEntry {
-        session_id,
-        sequence: row.get("sequence"),
-        entry: LedgerEntry {
-            meta: LedgerEntryMeta {
-                action_id: row.get("action_id"),
-                redaction_incomplete: row.get::<i64, _>("redaction_incomplete") != 0,
-                rule_snapshot,
-            },
+    let sequence: i64 = row.get("sequence");
+    let session_id = Uuid::parse_str(&row.get::<String, _>("session_id"));
+    let unreadable = |reason: String| {
+        RecordedRow::Unreadable(UnreadableEntry {
             id: id.clone(),
-            source,
-            content,
-            created_at,
-        },
-    })
+            session_id: session_id.as_ref().ok().copied(),
+            sequence,
+            reason,
+        })
+    };
+    let Ok(sid) = session_id.as_ref() else {
+        return unreadable("session id: invalid".to_owned());
+    };
+    match ledger_entry_from_row(row) {
+        Ok(entry) => RecordedRow::Entry(Box::new(RecordedEntry {
+            session_id: *sid,
+            sequence,
+            entry,
+        })),
+        Err(LedgerStoreError::CorruptContent { reason, .. }) => unreadable(reason),
+        Err(e) => unreadable(e.to_string()),
+    }
 }

@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use persistence_sqlite::{
-    EntryFilter, PageRequest, RecordCursor, RecordedEntry, SessionFilter, SqliteRecordQuery,
-    MAX_PAGE_SIZE,
+    EntryFilter, PageRequest, RecordCursor, RecordedEntry, RecordedRow, SessionFilter,
+    SqliteRecordQuery, MAX_PAGE_SIZE,
 };
 use ssh_manager_core::ai::{DefaultOutputRedactor, OutputRedactor};
 use ssh_manager_core::audit::{
@@ -215,6 +215,12 @@ pub struct RecordEntryInfo {
     pub action_id: Option<String>,
     /// The writer could not redact completely.
     pub redaction_incomplete: bool,
+    /// `Some(reason)` when the stored row is damaged (unreadable content,
+    /// timestamp, rule snapshot, session id, or an unknown source). Only
+    /// `id`, `sequence` and, if it is valid, `session_id` (otherwise the nil
+    /// UUID) are real then; every other field is a placeholder and must not
+    /// be shown as entry data. The entry keeps its place in the order.
+    pub unreadable: Option<String>,
 }
 
 /// Result of [`redact_for_server`].
@@ -294,7 +300,9 @@ pub async fn list_recorded_sessions(
     }))
 }
 
-/// Entries across sessions, in the order they were recorded.
+/// Entries across sessions, in the order they were recorded. A damaged row
+/// does not fail the page: it is returned in its place with
+/// [`RecordEntryInfo::unreadable`] set, and `next_cursor` continues behind it.
 pub async fn list_record_entries(
     query: &SqliteRecordQuery,
     filter: &RecordEntryFilter,
@@ -316,10 +324,12 @@ pub async fn list_record_entries(
         .list_entries(&f, page_request(page)?)
         .await
         .map_err(CommandError::from)?;
-    Ok(map_page(page, entry_info))
+    Ok(map_page(page, row_info))
 }
 
-/// All entries of one recorded session, in sequence order.
+/// All entries of one recorded session, in sequence order. Read in bounded
+/// chunks so appends are not blocked for long; a damaged row is returned
+/// marked ([`RecordEntryInfo::unreadable`]) and the others are unaffected.
 pub async fn record_entries_of_session(
     query: &SqliteRecordQuery,
     session_id: Uuid,
@@ -328,7 +338,36 @@ pub async fn record_entries_of_session(
         .entries_of_session(session_id)
         .await
         .map_err(CommandError::from)?;
-    Ok(rows.into_iter().map(entry_info).collect())
+    Ok(rows.into_iter().map(row_info).collect())
+}
+
+fn row_info(row: RecordedRow) -> RecordEntryInfo {
+    match row {
+        RecordedRow::Entry(e) => entry_info(*e),
+        RecordedRow::Unreadable(u) => RecordEntryInfo {
+            id: u.id,
+            session_id: u.session_id.unwrap_or_else(Uuid::nil),
+            sequence: u.sequence,
+            created_at: DateTime::<Utc>::UNIX_EPOCH,
+            source: RecordSource::User,
+            entry_type: RecordEntryType::ActivityTick,
+            text: None,
+            outcome: None,
+            reason: None,
+            code: None,
+            exit_code: None,
+            stdout: None,
+            stderr: None,
+            cancelled: None,
+            path: None,
+            bytes: None,
+            connection_event: None,
+            detail: None,
+            action_id: None,
+            redaction_incomplete: false,
+            unreadable: Some(u.reason),
+        },
+    }
 }
 
 fn entry_info(r: RecordedEntry) -> RecordEntryInfo {
@@ -358,6 +397,7 @@ fn entry_info(r: RecordedEntry) -> RecordEntryInfo {
         detail: None,
         action_id: e.meta.action_id,
         redaction_incomplete: e.meta.redaction_incomplete,
+        unreadable: None,
     };
     match e.content {
         LedgerEntryContent::CommandProposed { command } => {
@@ -493,6 +533,36 @@ mod tests {
 
     fn creds() -> Arc<dyn CredentialStore + Send + Sync> {
         Arc::new(InMemoryCredentialStore::new())
+    }
+
+    /// Issue #1496: a damaged row reaches the caller as a marked item that
+    /// keeps its id and sequence; a readable one is not marked.
+    #[test]
+    fn test_unreadable_row_is_marked_and_keeps_id_and_sequence() {
+        let sid = Uuid::from_u128(9);
+        let info = row_info(RecordedRow::Unreadable(
+            persistence_sqlite::UnreadableEntry {
+                id: "e1".into(),
+                session_id: Some(sid),
+                sequence: 4,
+                reason: "unknown source 'robot'".into(),
+            },
+        ));
+        assert_eq!(
+            (info.id.as_str(), info.sequence, info.session_id),
+            ("e1", 4, sid)
+        );
+        assert_eq!(info.unreadable.as_deref(), Some("unknown source 'robot'"));
+        assert!(info.text.is_none());
+        let nil = row_info(RecordedRow::Unreadable(
+            persistence_sqlite::UnreadableEntry {
+                id: "e2".into(),
+                session_id: None,
+                sequence: 0,
+                reason: "x".into(),
+            },
+        ));
+        assert_eq!(nil.session_id, Uuid::nil());
     }
 
     #[tokio::test]

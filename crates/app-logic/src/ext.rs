@@ -123,6 +123,8 @@ pub async fn list_recorded_sessions(
 /// (redacted by the writer); text that leaves the device must be redacted
 /// again with [`redact_for_server`]. With a text filter a page can be short or
 /// empty while `next_cursor` is still `Some`: keep paging while it is `Some`.
+/// A damaged row is returned in its place with `unreadable` set (check it
+/// before using the other fields); it does not fail the page.
 pub async fn list_record_entries(
     state: &AppState,
     filter: &RecordEntryFilter,
@@ -131,7 +133,9 @@ pub async fn list_record_entries(
     crate::record_query::list_record_entries(&state.ledger_store.record_query(), filter, page).await
 }
 
-/// All entries of one recorded session, in sequence order.
+/// All entries of one recorded session, in sequence order. The read is
+/// chunked internally, so it does not hold the database for long; a damaged
+/// row is returned with `unreadable` set and the rest is unaffected.
 pub async fn record_entries_of_session(
     state: &AppState,
     session_id: uuid::Uuid,

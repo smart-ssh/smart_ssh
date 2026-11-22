@@ -29,7 +29,7 @@
 //! waren (Issue #113, `crate::field_content_decryption`).
 
 use chrono::Utc;
-use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::Row;
 
 use uuid::Uuid;
@@ -94,16 +94,47 @@ fn source_to_text(source: ssh_manager_core::audit::LedgerSource) -> &'static str
     }
 }
 
-/// Fail-safe auf `Ai` bei einem unbekannten Wert — dieselbe Haltung wie
-/// `chat_session_store::role_from_text` (in der Praxis unerreichbar, solange
-/// die `CHECK`-Constraint der Migration greift).
-fn source_from_text(raw: &str) -> ssh_manager_core::audit::LedgerSource {
+/// Maps the columns `id, source, content, created_at, action_id,
+/// redaction_incomplete, rule_snapshot` of a `ledger_entries` row. Shared by
+/// `load_entries` and the read API over the activity record (issue #1496), so
+/// the two cannot drift. Every unreadable column (including a `source` other
+/// than the three known ones) is a `CorruptContent` naming the entry.
+pub(crate) fn ledger_entry_from_row(row: &SqliteRow) -> Result<LedgerEntry, LedgerStoreError> {
     use ssh_manager_core::audit::LedgerSource;
-    match raw {
+    let id: String = row.get("id");
+    let corrupt = |reason: String| LedgerStoreError::CorruptContent {
+        entry_id: id.clone(),
+        reason,
+    };
+    let content_json: String = row.try_get("content").map_err(backend_err)?;
+    let content: LedgerEntryContent =
+        serde_json::from_str(&content_json).map_err(|e| corrupt(e.to_string()))?;
+    let created_at_raw: String = row.get("created_at");
+    let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_raw)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| corrupt(format!("timestamp: {e}")))?;
+    let rule_snapshot: Option<LedgerRuleSnapshot> = row
+        .get::<Option<String>, _>("rule_snapshot")
+        .map(|raw| serde_json::from_str(&raw))
+        .transpose()
+        .map_err(|e| corrupt(format!("rule snapshot: {e}")))?;
+    let source = match row.get::<String, _>("source").as_str() {
         "user" => LedgerSource::User,
+        "ai" => LedgerSource::Ai,
         "mcp-agent" => LedgerSource::McpAgent,
-        _ => LedgerSource::Ai,
-    }
+        other => return Err(corrupt(format!("unknown source '{other}'"))),
+    };
+    Ok(LedgerEntry {
+        meta: LedgerEntryMeta {
+            action_id: row.get("action_id"),
+            redaction_incomplete: row.get::<i64, _>("redaction_incomplete") != 0,
+            rule_snapshot,
+        },
+        id,
+        source,
+        content,
+        created_at,
+    })
 }
 
 /// S. Moduldoc — teilt sich den Pool mit [`crate::SqliteProfileStore`].
@@ -231,45 +262,7 @@ impl SqliteLedgerStore {
         .await
         .map_err(backend_err)?;
 
-        rows.into_iter()
-            .map(|row| {
-                let id: String = row.get("id");
-                let source_raw: String = row.get("source");
-                let content_json: String = row.try_get("content").map_err(backend_err)?;
-                let created_at_raw: String = row.get("created_at");
-                let content: LedgerEntryContent =
-                    serde_json::from_str(&content_json).map_err(|e| {
-                        LedgerStoreError::CorruptContent {
-                            entry_id: id.clone(),
-                            reason: e.to_string(),
-                        }
-                    })?;
-                let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_raw)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .map_err(|e| {
-                        LedgerStoreError::Backend(format!("ungültiger Zeitstempel: {e}"))
-                    })?;
-                let rule_snapshot_raw: Option<String> = row.get("rule_snapshot");
-                let rule_snapshot: Option<LedgerRuleSnapshot> = rule_snapshot_raw
-                    .map(|raw| serde_json::from_str(&raw))
-                    .transpose()
-                    .map_err(|e| LedgerStoreError::CorruptContent {
-                        entry_id: id.clone(),
-                        reason: format!("rule snapshot: {e}"),
-                    })?;
-                Ok(LedgerEntry {
-                    meta: LedgerEntryMeta {
-                        action_id: row.get("action_id"),
-                        redaction_incomplete: row.get::<i64, _>("redaction_incomplete") != 0,
-                        rule_snapshot,
-                    },
-                    id,
-                    source: source_from_text(&source_raw),
-                    content,
-                    created_at,
-                })
-            })
-            .collect()
+        rows.iter().map(ledger_entry_from_row).collect()
     }
 }
 

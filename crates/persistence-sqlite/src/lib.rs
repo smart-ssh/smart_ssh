@@ -136,7 +136,7 @@ pub use paths::{
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
 pub use record_query::{
-    EntryFilter, Page, PageRequest, RecordCursor, RecordedEntry, SessionFilter, SqliteRecordQuery,
-    MAX_PAGE_SIZE,
+    EntryFilter, Page, PageRequest, RecordCursor, RecordedEntry, RecordedRow, SessionFilter,
+    SqliteRecordQuery, UnreadableEntry, MAX_PAGE_SIZE,
 };
 pub use store::SqliteProfileStore;
