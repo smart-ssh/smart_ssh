@@ -245,7 +245,11 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       <StartupTitleBarDragStrip />
       <div
         data-testid="startup-card"
-        className="relative my-auto flex w-full max-w-[460px] flex-col border border-border-strong bg-surface-raised p-8 narrow:my-0 narrow:flex-1 narrow:p-5"
+        className={`relative my-auto flex w-full max-w-[460px] flex-col border border-border-strong bg-surface-raised p-8 narrow:p-5 ${
+          // Only the unlock card fills the narrow screen (its way-out area is
+          // pinned to the bottom); the other states keep a content-height card.
+          state?.screen === "unlock" ? "narrow:my-0 narrow:flex-1" : ""
+        }`}
       >
         <CornerTicks tone="accent" corners="all" />
         <Logo variant="lockup" wordmark="full" size={40} className="mb-6" />

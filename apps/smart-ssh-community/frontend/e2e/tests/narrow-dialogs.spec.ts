@@ -42,6 +42,20 @@ test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
   await expectNoHorizontalPageScroll(page);
 });
 
+test("start-up card is content-height outside the unlock state @phone", async ({ app }) => {
+  await app.launch({
+    commands: {
+      get_startup_state: {
+        result: { screen: "unusableWrapping", mode: "password", offersStartOver: true, failedUnlockAttempts: 0, language: "en" },
+      },
+    },
+  });
+  const card = app.page.getByTestId("startup-card");
+  await expect(card).toBeVisible();
+  const box = await card.boundingBox();
+  expect(box!.height).toBeLessThan(app.page.viewportSize()!.height * 0.8);
+});
+
 const UNLOCK_STATE = {
   screen: "unlock",
   mode: "password",
