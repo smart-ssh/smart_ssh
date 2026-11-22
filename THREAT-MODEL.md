@@ -226,6 +226,9 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
   filter engine. The free-text reason of the AI second opinion is never
   stored for that reason
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §3).
+- **File reads and writes by the AI** appear in the ledger as path, size, SHA-256
+  and (for writes) backup path only — never the file content or a diff. Paths
+  are redacted like command text.
 - **Your own chat messages** are stored as you typed them (inside the
   encrypted database, section 3) and redacted only when they are sent.
 

@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::approval::ApprovedFileWrite;
 
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
 use ssh_manager_core::ssh::elevated::shell_single_quote;
 use ssh_manager_core::ssh::{CommandOutput, SshError};
@@ -17,7 +18,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::action_exec::{check_for_injected_instructions, emit_action_error};
-use super::chat_turn::push_history_scoped;
+use super::chat_turn::{push_history_scoped, write_ledger_entry_for_action};
 
 // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) --------
 
@@ -26,6 +27,24 @@ use super::chat_turn::push_history_scoped;
 /// den KI-Kontext geladen. Aktuell nicht nutzerkonfigurierbar (keine
 /// entsprechende Einstellungs-UI vorgesehen).
 pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
+
+/// Lowercase hex SHA-256 of `bytes` — the content fingerprint the activity
+/// record keeps instead of the content itself (Spec 0057).
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// What a successful write leaves for the activity record. `sha256_before`
+/// is `None` when the old content was not read (new file, or only readable
+/// with elevated rights).
+struct WriteDone {
+    backup_path: Option<String>,
+    sha256_before: Option<String>,
+}
 
 /// Spec 0020, Abschnitt 3: öffnet die SFTP-Session der Session lazy (erst
 /// beim ersten Aufruf) und hält sie danach für die Dauer der Session offen
@@ -127,6 +146,7 @@ pub(crate) async fn execute_read_remote_file(
     path: String,
     emitter: &dyn EventEmitter,
     persist: bool,
+    ledger_source: LedgerSource,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
@@ -198,6 +218,19 @@ pub(crate) async fn execute_read_remote_file(
 
     match raw {
         Ok(bytes) => {
+            // Activity record (Spec 0057): path, size and hash only — never
+            // the content. Hash of the raw bytes, before redaction.
+            write_ledger_entry_for_action(
+                session,
+                ledger_source,
+                LedgerEntryContent::FileRead {
+                    path: path.clone(),
+                    bytes: Some(bytes.len() as u64),
+                    sha256: Some(sha256_hex(&bytes)),
+                },
+                Some(action_id),
+            )
+            .await;
             let redacted = ssh_manager_core::ai::OutputRedactor::redact(
                 &session.redactor,
                 &CommandOutput {
@@ -286,17 +319,19 @@ async fn write_via_sftp_with_backup(
     path: &str,
     content: &str,
     existed: bool,
-) -> Result<Option<String>, SshError> {
+) -> Result<WriteDone, SshError> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
         None
     };
 
+    let mut sha256_before = None;
     if let Some(backup) = &backup_path {
         let mut guard = session.lock_sftp().await;
         let sftp = guard.sftp_or_err()?;
         let old_content = sftp.read_file(path).await?;
+        sha256_before = Some(sha256_hex(&old_content));
         sftp.write_file(backup, &old_content).await?;
     }
 
@@ -304,7 +339,10 @@ async fn write_via_sftp_with_backup(
     let sftp = guard.sftp_or_err()?;
     sftp.write_file(path, content.as_bytes()).await?;
 
-    Ok(backup_path)
+    Ok(WriteDone {
+        backup_path,
+        sha256_before,
+    })
 }
 
 /// Führt `command` mit dem hinterlegten Sudo-Passwort über Stdin aus (Spec
@@ -352,12 +390,24 @@ async fn write_via_sudo_fallback(
     existed: bool,
     old_mode: Option<u32>,
     password: &secrecy::SecretString,
-) -> Result<Option<String>, SshError> {
+) -> Result<WriteDone, SshError> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
         None
     };
+
+    // "Before" hash: only when the old content is readable over SFTP (e.g. a
+    // 0644 root file); `None` when the read itself is denied or fails.
+    let mut sha256_before = None;
+    if existed {
+        let mut guard = session.lock_sftp().await;
+        if let Some(sftp) = guard.sftp() {
+            if let Ok(old) = sftp.read_file(path).await {
+                sha256_before = Some(sha256_hex(&old));
+            }
+        }
+    }
 
     if let Some(backup) = &backup_path {
         let cmd = format!(
@@ -404,7 +454,10 @@ async fn write_via_sudo_fallback(
     }
 
     install_result?;
-    Ok(backup_path)
+    Ok(WriteDone {
+        backup_path,
+        sha256_before,
+    })
 }
 
 /// Spec 0020, Abschnitt 4.2/4.3: kompletter Schreib-Ablauf — regulärer
@@ -412,7 +465,11 @@ async fn write_via_sudo_fallback(
 /// Fallback, sofern für den Server ein Passwort hinterlegt ist. Ohne
 /// Passwort wird der ursprüngliche Fehler unverändert gemeldet (Abschnitt
 /// 4.3, Punkt 5: "kein stiller Fallback").
-#[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one argument per input; one linear write flow"
+)]
 pub(crate) async fn execute_write_remote_file(
     session: &Session,
     session_id: SessionId,
@@ -422,6 +479,7 @@ pub(crate) async fn execute_write_remote_file(
     profile_store: &dyn ProfileStore,
     persist: bool,
     sudo_fallback_announced: bool,
+    ledger_source: LedgerSource,
 ) -> bool {
     let path = approved.path().to_owned();
     let content = approved.content().to_owned();
@@ -466,14 +524,14 @@ pub(crate) async fn execute_write_remote_file(
         let mut guard = session.lock_sftp().await;
         match guard.sftp_or_err() {
             Ok(sftp) => Ok(match sftp.stat(&path).await {
-                Ok(entry) => (true, Some(entry.permissions)),
-                Err(_) => (false, None),
+                Ok(entry) => (true, Some(entry.permissions), Some(entry.size)),
+                Err(_) => (false, None, None),
             }),
             // s. `execute_read_remote_file`: melden erst nach dem Block.
             Err(err) => Err(err),
         }
     };
-    let (existed, old_mode) = match stat_result {
+    let (existed, old_mode, bytes_before) = match stat_result {
         Ok(found) => found,
         Err(err) => {
             return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist).await
@@ -482,8 +540,8 @@ pub(crate) async fn execute_write_remote_file(
 
     let regular = write_via_sftp_with_backup(session, &path, wire_content, existed).await;
 
-    let (backup_path, used_sudo_password) = match regular {
-        Ok(backup_path) => (backup_path, false),
+    let (done, used_sudo_password) = match regular {
+        Ok(done) => (done, false),
         Err(SshError::SftpPermissionDenied(_)) => {
             // Spec 0068, Teil 3: Sudo-Fallback nur, wenn der Dialog ihn vorab
             // angekündigt hat — genau der im Event gesendete Wert
@@ -522,7 +580,7 @@ pub(crate) async fn execute_write_remote_file(
             )
             .await
             {
-                Ok(backup_path) => (backup_path, true),
+                Ok(done) => (done, true),
                 Err(err) => {
                     let code = err.code();
                     return emit_action_error(
@@ -553,6 +611,27 @@ pub(crate) async fn execute_write_remote_file(
         }
     };
 
+    let WriteDone {
+        backup_path,
+        sha256_before,
+    } = done;
+    // Activity record (Spec 0057): written only now, when bytes were written.
+    // The hash is of the bytes that went over the wire; no content, no diff.
+    write_ledger_entry_for_action(
+        session,
+        ledger_source,
+        LedgerEntryContent::FileWritten {
+            path: path.clone(),
+            backup_path: backup_path.clone(),
+            bytes_before,
+            bytes_after: Some(wire_content.len() as u64),
+            sha256_before,
+            sha256_after: Some(sha256_hex(wire_content.as_bytes())),
+            sudo: used_sudo_password,
+        },
+        Some(action_id),
+    )
+    .await;
     let summary = match &backup_path {
         Some(backup) => format!("Datei '{path}' geschrieben (Backup: '{backup}')."),
         None => format!("Datei '{path}' neu angelegt."),

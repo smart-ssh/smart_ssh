@@ -58,8 +58,16 @@ Typen:
   Exit-Code, ob die Ausgabe gekürzt oder das Kommando abgebrochen wurde),
   **redigiert**.
 - **KI-Nachricht** — Antworttext der KI, auch ein erzeugtes Dokument.
-- **Datei gelesen / Datei geschrieben** — Pfad und Größe eines Dateizugriffs
-  der KI, nie der Dateiinhalt (Umsetzung: #1446).
+- **Datei gelesen** — Pfad, Größe und SHA-256 einer von der KI gelesenen
+  Datei, nie der Dateiinhalt.
+- **Datei geschrieben** — Pfad, Pfad der Sicherungskopie, Größe und SHA-256
+  vorher/nachher sowie ob erhöhte Rechte (Sudo) genutzt wurden; nie Inhalt
+  und nie ein Diff. Der „vorher"-Hash fehlt nur, wenn die alte Datei nicht
+  lesbar war oder neu angelegt wurde. Ein abgelehnter oder fehlgeschlagener
+  Schreibvorgang erzeugt keinen „Datei geschrieben"-Eintrag; die
+  **Entscheidung** (bestätigt, abgelehnt, automatisch freigegeben) steht wie
+  bei Kommandos im Ledger und ist über dieselbe Aktions-ID mit dem
+  „Datei geschrieben"-Eintrag verknüpft.
 - **Verbindung** — verbunden, getrennt, wiederverbunden oder fehlgeschlagen
   (Umsetzung: #1447).
 - **Aktivitätsmarke** — ein Lebenszeichen einer laufenden Sitzung, ganz ohne
@@ -365,9 +373,9 @@ nicht neu vergeben.
 
 ## 9. Grenzen
 
-- **Das Ledger erfasst derzeit nur Kommandovorschläge** als Aktionstyp.
-  Dateilese- und Schreibaktionen (#1446) und Verbindungsereignisse (#1447)
-  sind vorgesehen, aber noch nicht umgesetzt; Notiz-Änderungsvorschläge der
+- **Das Ledger erfasst Kommandovorschläge und Dateilese-/Schreibaktionen**
+  als Aktionstyp. Verbindungsereignisse (#1447) sind vorgesehen, aber noch
+  nicht umgesetzt; Notiz-Änderungsvorschläge der
   KI erzeugen keine Ledger-Einträge (Kommandos, Entscheidungen, Ergebnisse und
   KI-Nachrichten dagegen vollständig, ADR 0047).
 - **Das Ledger hat noch keine Oberfläche in der Anwendung:** Es wird

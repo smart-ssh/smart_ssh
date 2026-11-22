@@ -2151,48 +2151,6 @@ async fn test_ledger_records_edit_then_approve_accepted_edit() {
     ));
 }
 
-/// spec-reviewer-Fund (Review dieses Schritts): die dokumentierte
-/// Scope-Reduktion (ADR 0047 Punkt 3 — Etappe 1 erfasst ausschließlich
-/// `AiAction::SuggestCommand`) als expliziter Negativ-Test, statt nur
-/// implizit aus dem `if let AiAction::SuggestCommand` an jeder
-/// Schreibstelle ableitbar zu sein: ein `ReadRemoteFile`-Vorschlag darf
-/// KEINEN Ledger-Eintrag erzeugen, auch nicht bei `AutoExec`.
-#[tokio::test]
-async fn test_ledger_stays_empty_for_read_remote_file_in_this_stage() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let mock_sftp = MockSftpSession::new().with_file("/home/deploy/app.conf", b"ok".to_vec());
-    session.set_sftp_for_tests(Box::new(mock_sftp)).await;
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::ReadRemoteFile {
-            path: "/home/deploy/app.conf".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert!(
-        entries.is_empty(),
-        "Etappe 1 deckt nur SuggestCommand ab (ADR 0047 Punkt 3): {entries:?}"
-    );
-}
-
 /// Spec 0088, T13 (A3.2, Regression): Scheitert das Oeffnen des SFTP-Kanals,
 /// endet die Dateiaktion als sichtbarer Fehler im Chat — mit Fehlercode, und
 /// ohne Panic.
