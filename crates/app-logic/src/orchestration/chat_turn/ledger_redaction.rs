@@ -29,13 +29,32 @@ pub(super) fn redact_ledger_entry_content(
         LedgerEntryContent::AiMessage { text } => LedgerEntryContent::AiMessage {
             text: redactor.redact_text(&text),
         },
-        LedgerEntryContent::FileRead { path, bytes } => LedgerEntryContent::FileRead {
+        LedgerEntryContent::FileRead {
+            path,
+            bytes,
+            sha256,
+        } => LedgerEntryContent::FileRead {
             path: redactor.redact_text(&path),
             bytes,
+            sha256,
         },
-        LedgerEntryContent::FileWritten { path, bytes } => LedgerEntryContent::FileWritten {
+        // Only the paths can carry a secret; sizes and hashes are not content.
+        LedgerEntryContent::FileWritten {
+            path,
+            backup_path,
+            bytes_before,
+            bytes_after,
+            sha256_before,
+            sha256_after,
+            sudo,
+        } => LedgerEntryContent::FileWritten {
             path: redactor.redact_text(&path),
-            bytes,
+            backup_path: backup_path.map(|b| redactor.redact_text(&b)),
+            bytes_before,
+            bytes_after,
+            sha256_before,
+            sha256_after,
+            sudo,
         },
         LedgerEntryContent::Connection { event, detail } => LedgerEntryContent::Connection {
             event,

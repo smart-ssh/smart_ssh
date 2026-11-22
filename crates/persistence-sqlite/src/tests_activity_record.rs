@@ -354,6 +354,7 @@ async fn test_failed_append_counts_and_new_entry_types_round_trip() {
         LedgerEntryContent::FileRead {
             path: "/etc/hosts".to_string(),
             bytes: Some(10),
+            sha256: None,
         },
     ] {
         ledger
