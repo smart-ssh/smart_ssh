@@ -117,6 +117,11 @@ pub const RISK_SETTINGS_PROVIDER_UNKNOWN: &str = "RISK_SETTINGS_PROVIDER_UNKNOWN
 /// Issue #856: the risk second opinion was switched on without a provider.
 pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIRED";
 
+/// Issue #1500: resuming a saved chat whose id is not a chat session any more
+/// (deleted meanwhile) or never was one (an MCP recorded session id). The
+/// frontend shows its own text and drops the id from the tab's retry.
+pub const CHAT_SESSION_NOT_FOUND: &str = "CHAT_SESSION_NOT_FOUND";
+
 /// Issue #862: `set_ui_preference` refused a key that is not a registered UI
 /// preference, or a value outside the shape registered for it.
 pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";

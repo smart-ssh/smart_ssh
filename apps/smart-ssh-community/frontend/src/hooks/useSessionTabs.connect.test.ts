@@ -5,7 +5,8 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelConnect, connect, disconnect, resumeChatSession } from "../api/api";
 import { onConnectProgress } from "../api/events";
-import "../testI18n";
+import { testI18n } from "../testI18n";
+import { translateErrorCode } from "../api/errorCodes";
 import type { ConnectProgressEvent } from "../api/types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
@@ -191,6 +192,28 @@ describe("resuming a saved chat session in the connecting tab (issue #568)", () 
     expect(vi.mocked(resumeChatSession).mock.calls[1].slice(0, 2)).toEqual(["srv-1", "chat-1"]);
     expect(connect).not.toHaveBeenCalled();
     expect(result.current.tabs[0]).toMatchObject({ sessionId: "session-r2", phase: "connected" });
+  });
+
+  it("shows the translated message and retries without resuming when the chat is gone (issue #1500)", async () => {
+    vi.mocked(resumeChatSession).mockReset();
+    vi.mocked(resumeChatSession).mockRejectedValueOnce({
+      code: "CHAT_SESSION_NOT_FOUND",
+      message: "chat session chat-1 does not exist",
+    });
+    const { result } = renderHook(() => useSessionTabs());
+    await act(async () => result.current.startConnect(server, "chat-1"));
+    const key = result.current.tabs[0].sessionId;
+    expect(result.current.tabs[0].phase).toBe("failed");
+    const message = result.current.tabs[0].failure?.message ?? "";
+    expect(message).toBe(translateErrorCode(testI18n.t.bind(testI18n) as never, "CHAT_SESSION_NOT_FOUND", "raw"));
+    expect(message).not.toBe("raw");
+    expect(message).not.toMatch(/^errors\./);
+    expect(message).not.toContain("does not exist");
+    vi.mocked(connect).mockResolvedValueOnce("session-n");
+    await act(async () => result.current.retryConnect(key));
+    expect(resumeChatSession).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(result.current.tabs[0]).toMatchObject({ sessionId: "session-n", phase: "connected" });
   });
 });
 

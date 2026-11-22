@@ -329,10 +329,10 @@ pub async fn build_session(
             Ok(true) => {}
             Ok(false) => {
                 transport.disconnect().await.ok();
-                return Err(persistence_sqlite::ChatSessionStoreError::Backend(format!(
-                    "chat session {existing_id} does not exist"
-                ))
-                .into());
+                return Err(CommandError::with_code(
+                    format!("chat session {existing_id} does not exist"),
+                    crate::error::CHAT_SESSION_NOT_FOUND,
+                ));
             }
             Err(err) => {
                 transport.disconnect().await.ok();
