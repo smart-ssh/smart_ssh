@@ -66,6 +66,9 @@ pub struct ChatPersistence {
     /// `mcp_sessions::attach_recorded_session`; `None` for chat sessions,
     /// which record under `chat_session_id`. Never a `chat_sessions` row.
     pub mcp_activity_session_id: AsyncMutex<Option<uuid::Uuid>>,
+    /// Issue #1447: decides which input starts an `activity_tick` entry
+    /// (at most one per minute, off when "Record active minutes" is off).
+    pub activity: super::activity::ActivityTicker,
     /// Issue #505: chat content extensions (`AppState.chat_content`); the
     /// send path seals extension parts through it.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,

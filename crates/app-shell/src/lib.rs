@@ -10,6 +10,7 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+mod activity_record;
 mod android_debug_switch;
 #[cfg(target_os = "android")]
 mod android_service;
@@ -815,6 +816,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::resume_chat_session,
             commands::rename_chat_session,
             commands::delete_chat_session,
+            activity_record::get_record_active_minutes,
+            activity_record::set_record_active_minutes,
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
             risk_second_opinion::set_risk_second_opinion_settings,
@@ -1048,6 +1051,14 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
+    });
+
+    // Issue #1447: recorded sessions a crash left open are closed.
+    let handle_for_record = app.clone();
+    let startup_time = chrono::Utc::now();
+    background_tasks::app_scope(&app).spawn("activity-record-recovery", async move {
+        let state = handle_for_record.state::<AppState>();
+        activity_record::close_open_sessions_on_startup(&state, startup_time).await;
     });
 
     // Issue #551: titles for old untitled sessions, once per start.

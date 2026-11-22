@@ -69,6 +69,10 @@ impl Session {
         self.parts.safety.red_risk_always_confirm = value;
     }
 
+    pub fn set_activity_ticker_for_tests(&mut self, value: super::activity::ActivityTicker) {
+        self.parts.persistence.activity = value;
+    }
+
     pub fn set_chat_session_id_for_tests(&mut self, value: AsyncMutex<Option<uuid::Uuid>>) {
         self.parts.persistence.chat_session_id = value;
     }

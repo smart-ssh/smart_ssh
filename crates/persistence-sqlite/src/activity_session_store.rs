@@ -146,9 +146,13 @@ pub(crate) async fn create_chat_session(
     tx.commit().await
 }
 
-/// Deletes a chat session that has no messages and no ledger entries, plus
-/// its (then unused) recorded session. Check and delete are one write
-/// transaction. Returns whether the chat session was deleted.
+/// Ends a chat session that has no messages and no content entries (only
+/// `connection` / `activity_tick` entries do not count as content). Its
+/// `chat_sessions` row is deleted. The recorded session is kept as a
+/// `terminal` session when it has ledger entries (issue #1447: a
+/// terminal-only connection stays in the record), else it is deleted as
+/// before. Check and delete are one write transaction. Returns whether the
+/// chat session was deleted.
 pub(crate) async fn delete_chat_session_if_empty(
     pool: &SqlitePool,
     session_id: Uuid,
@@ -158,7 +162,8 @@ pub(crate) async fn delete_chat_session_if_empty(
         "DELETE FROM chat_sessions WHERE id = ? \
          AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
          AND NOT EXISTS (SELECT 1 FROM ledger_entries \
-             WHERE session_id = COALESCE(chat_sessions.activity_session_id, chat_sessions.id))",
+             WHERE session_id = COALESCE(chat_sessions.activity_session_id, chat_sessions.id) \
+             AND entry_type NOT IN ('connection', 'activity_tick'))",
     )
     .bind(session_id.to_string())
     .execute(&mut *tx)
@@ -172,9 +177,68 @@ pub(crate) async fn delete_chat_session_if_empty(
         .bind(session_id.to_string())
         .execute(&mut *tx)
         .await?;
+        sqlx::query("UPDATE activity_sessions SET kind = 'terminal', ended_at = ?2 WHERE id = ?1")
+            .bind(session_id.to_string())
+            .bind(Utc::now().to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(deleted)
+}
+
+/// Closes every recorded session left open by a previous run (crash, killed
+/// process): `ended_at = last_activity_at`, or `started_at` without any
+/// activity. The linked chat sessions get the same end. Only sessions that
+/// started before `before` are touched, so a session opened by this run while
+/// the cleanup is still pending stays open. Returns how many recorded
+/// sessions were closed.
+pub(crate) async fn close_open_sessions(
+    pool: &SqlitePool,
+    before: chrono::DateTime<Utc>,
+) -> Result<u64, sqlx::Error> {
+    let before = before.to_rfc3339();
+    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+    // A chat session nobody wrote to is a terminal-only session: it never
+    // shows up in the resume dialog (same rule as `delete_chat_session_if_empty`).
+    sqlx::query(
+        "UPDATE activity_sessions SET kind = 'terminal' \
+         WHERE kind = 'chat' AND ended_at IS NULL AND started_at < ?1 \
+         AND NOT EXISTS (SELECT 1 FROM chat_messages m JOIN chat_sessions c ON c.id = m.session_id \
+             WHERE c.activity_session_id = activity_sessions.id) \
+         AND NOT EXISTS (SELECT 1 FROM ledger_entries e WHERE e.session_id = activity_sessions.id \
+             AND e.entry_type NOT IN ('connection', 'activity_tick'))",
+    )
+    .bind(&before)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM chat_sessions WHERE activity_session_id IN \
+             (SELECT id FROM activity_sessions \
+              WHERE kind = 'terminal' AND ended_at IS NULL AND started_at < ?1)",
+    )
+    .bind(&before)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE chat_sessions SET ended_at = ( \
+             SELECT COALESCE(a.last_activity_at, a.started_at) FROM activity_sessions a \
+             WHERE a.id = chat_sessions.activity_session_id) \
+         WHERE ended_at IS NULL AND activity_session_id IN \
+             (SELECT id FROM activity_sessions WHERE ended_at IS NULL AND started_at < ?1)",
+    )
+    .bind(&before)
+    .execute(&mut *tx)
+    .await?;
+    let res = sqlx::query(
+        "UPDATE activity_sessions SET ended_at = COALESCE(last_activity_at, started_at) \
+         WHERE ended_at IS NULL AND started_at < ?1",
+    )
+    .bind(&before)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(res.rows_affected())
 }
 
 /// Client name stored for an MCP recorded session whose handshake gave none.
@@ -251,6 +315,56 @@ impl SqliteActivitySessionStore {
         Ok(id)
     }
 
+    /// Records a connection attempt that failed before a session existed
+    /// (issue #1447): a `terminal` recorded session with one `failed`
+    /// connection entry, already ended. `step` is the stable failure code of
+    /// the step that failed (no message text, no secrets). Fails when the
+    /// server does not exist.
+    pub async fn record_failed_connection(
+        &self,
+        server_id: &ServerId,
+        step: &str,
+    ) -> Result<Uuid, LedgerStoreError> {
+        let id = Uuid::new_v4();
+        let zone = (self.time_zone)();
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        let created = insert_snapshot(
+            &mut tx,
+            id,
+            ActivitySessionKind::Terminal,
+            None,
+            server_id,
+            zone.as_deref(),
+        )
+        .await
+        .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        if !created {
+            return Err(LedgerStoreError::Backend(format!(
+                "server {} not found for the recorded session",
+                server_id.0
+            )));
+        }
+        tx.commit()
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))?;
+        crate::SqliteLedgerStore::new(self.pool.clone())
+            .append_entry(
+                id,
+                ssh_manager_core::audit::LedgerSource::User,
+                &ssh_manager_core::audit::LedgerEntryContent::Connection {
+                    event: ssh_manager_core::audit::LedgerConnectionEvent::Failed,
+                    detail: Some(step.to_owned()),
+                },
+            )
+            .await?;
+        self.mark_ended(id).await?;
+        Ok(id)
+    }
+
     /// Whether `id` is a chat session (a `chat_sessions` row). A recorded
     /// session of another kind (MCP) is not, so it can never be resumed as a
     /// human chat.
@@ -261,6 +375,18 @@ impl SqliteActivitySessionStore {
             .await
             .map_err(|e| LedgerStoreError::Database(e.into()))?;
         Ok(found.is_some())
+    }
+
+    /// Closes recorded sessions a previous run left open (issue #1447); see
+    /// [`close_open_sessions`]. Call once at app start with the start time
+    /// of this run.
+    pub async fn close_open_sessions(
+        &self,
+        before: chrono::DateTime<Utc>,
+    ) -> Result<u64, LedgerStoreError> {
+        close_open_sessions(&self.pool, before)
+            .await
+            .map_err(|e| LedgerStoreError::Database(e.into()))
     }
 
     /// Sets `ended_at` of a recorded session (the MCP session was closed).

@@ -122,6 +122,15 @@ impl<'a> CloseContext<'a> {
         // actor, connection watch, SFTP pumps, auto-reconnect, MCP action
         // task) are cancelled and awaited.
         self.close_task_scope(session_id).await;
+        // Issue #1447: a lost connection already recorded its own disconnect.
+        if *lock_tolerating_poison(&session.conn.status) != ConnectionStatus::Disconnected {
+            app_logic::session::activity::record_connection_event(
+                &session,
+                ssh_manager_core::audit::LedgerConnectionEvent::Disconnected,
+                Some("user"),
+            )
+            .await;
+        }
         // Issue #1444: after the scope closed, so a decision written by the
         // cancelled action task is in the record before `ended_at`.
         app_logic::mcp_sessions::end_recorded_session(&session).await;

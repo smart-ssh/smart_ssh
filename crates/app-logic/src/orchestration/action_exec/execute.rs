@@ -334,17 +334,30 @@ async fn run_prepared_command(
             }
         }
     };
-    let (raw_outcome, ()) = tokio::join!(
-        execution,
-        super::super::live_output::forward_live_output(
-            live_chunks,
-            session.redactor.as_ref(),
-            emitter,
-            session_id,
-            action_id,
-            waiting_for_input.clone(),
-        )
-    );
+    // Issue #1447: a running command counts as activity in every minute it
+    // runs; the ticker coalesces to one tick per minute. Content-free.
+    let heartbeat = async {
+        loop {
+            crate::session::activity::record_activity(session).await;
+            tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+        }
+    };
+    let (raw_outcome, ()) = tokio::select! {
+        joined = async {
+            tokio::join!(
+                execution,
+                super::super::live_output::forward_live_output(
+                    live_chunks,
+                    session.redactor.as_ref(),
+                    emitter,
+                    session_id,
+                    action_id,
+                    waiting_for_input.clone(),
+                )
+            )
+        } => joined,
+        () = heartbeat => unreachable!("the heartbeat never ends"),
+    };
     let _ = session
         .conn
         .running_command_cancellations

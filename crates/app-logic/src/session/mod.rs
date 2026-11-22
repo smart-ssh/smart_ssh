@@ -48,6 +48,7 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+pub mod activity;
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -1036,7 +1037,7 @@ pub use terminal_actor::{spawn_terminal_actor, spawn_terminal_actor_with_idle};
 /// this call made the transition.
 pub fn report_connection_lost(
     session_id: SessionId,
-    session: &Session,
+    session: &Arc<Session>,
     emitter: &dyn EventEmitter,
     reason: Option<String>,
 ) -> bool {
@@ -1059,6 +1060,12 @@ pub fn report_connection_lost(
     // The hook runs first: it announces the automatic attempts before the
     // status event, so the UI never shows "lost" for a moment.
     session.conn.auto_reconnect.fire_hook(session_id);
+    // Issue #1447: recorded once, by the call that made the transition.
+    activity::spawn_connection_event(
+        Arc::clone(session),
+        ssh_manager_core::audit::LedgerConnectionEvent::Disconnected,
+        "network_loss",
+    );
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1101,3 +1108,5 @@ mod test_setters;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_activity;

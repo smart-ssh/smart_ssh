@@ -61,6 +61,8 @@ pub struct SessionBuildInput {
     /// off for the server or no provider is available.
     pub injection_check: ResolvedSideProvider,
     pub red_risk_always_confirm: bool,
+    /// Shared "Record active minutes" switch (issue #1447).
+    pub active_minutes: crate::session::activity::ActiveMinutesFlag,
 }
 
 /// The assembled session and what the caller needs to register it.
@@ -185,6 +187,7 @@ pub async fn build_session(
         second_opinion_setup_failed,
         injection_check,
         red_risk_always_confirm,
+        active_minutes,
     } = input;
     let is_local = crate::dto::is_local(server_id);
 
@@ -469,6 +472,7 @@ pub async fn build_session(
             chat_session_id: tokio::sync::Mutex::new(chat_session_id),
             activity_session_store: Some(state.activity_session_store.clone()),
             mcp_activity_session_id: tokio::sync::Mutex::new(None),
+            activity: crate::session::activity::ActivityTicker::new(active_minutes),
         },
         conn: TransportState {
             terminal: std::sync::Mutex::new(None),

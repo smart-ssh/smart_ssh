@@ -179,6 +179,47 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     persist_chat_session: bool,
     progress: Option<&ConnectProgress>,
 ) -> CommandResult<SessionId> {
+    let result = connect_session_inner(
+        app,
+        state,
+        server_id,
+        session_id,
+        resume,
+        persist_chat_session,
+        progress,
+    )
+    .await;
+    // Issue #1447: a failed attempt of a person's own connection is recorded
+    // with the failing step (the stable error code, no message text). A
+    // cancelled attempt is not a failure, and the local pseudo-server and MCP
+    // connections (`persist_chat_session == false`) are not recorded here.
+    if let Err(err) = &result {
+        if persist_chat_session
+            && !app_logic::dto::is_local(server_id)
+            && err.code != Some("SSH_CONNECT_CANCELLED")
+        {
+            let step = err.code.unwrap_or("UNKNOWN");
+            if let Err(record_err) = state
+                .activity_session_store
+                .record_failed_connection(&server_id, step)
+                .await
+            {
+                tracing::warn!(error = %record_err, "failed connection could not be recorded");
+            }
+        }
+    }
+    result
+}
+
+async fn connect_session_inner<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    server_id: ServerId,
+    session_id: SessionId,
+    resume: Option<uuid::Uuid>,
+    persist_chat_session: bool,
+    progress: Option<&ConnectProgress>,
+) -> CommandResult<SessionId> {
     // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
     // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
     // Frontend-Sperre wäre umgehbar (z. B. ein direkter
@@ -287,6 +328,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             second_opinion_setup_failed,
             injection_check,
             red_risk_always_confirm,
+            active_minutes: crate::activity_record::flag(app),
         },
     )
     .await?;
@@ -307,6 +349,14 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             &crate::background_tasks::session_scope(app, session_id),
         );
     }
+
+    // Issue #1447: the connect is the first entry of the recorded session.
+    app_logic::session::activity::record_connection_event(
+        &session,
+        ssh_manager_core::audit::LedgerConnectionEvent::Connected,
+        None,
+    )
+    .await;
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(
@@ -435,6 +485,12 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
                     &crate::background_tasks::session_scope(app, session_id),
                 );
             }
+            app_logic::session::activity::record_connection_event(
+                &session,
+                ssh_manager_core::audit::LedgerConnectionEvent::Reconnected,
+                None,
+            )
+            .await;
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
             let current = *session.persistence.chat_session_id.lock().await;
@@ -443,6 +499,12 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         }
         Err(err) => {
             drop(claim);
+            app_logic::session::activity::record_connection_event(
+                &session,
+                ssh_manager_core::audit::LedgerConnectionEvent::Failed,
+                Some(err.code.unwrap_or("UNKNOWN")),
+            )
+            .await;
             tracing::warn!(session_id = %session_id, "reconnect failed");
             emit_connection_status_changed(
                 &emitter,

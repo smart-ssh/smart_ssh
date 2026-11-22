@@ -131,6 +131,7 @@ fn dummy_session(server_id: ServerId) -> Session {
             chat_session_id: AsyncMutex::new(None),
             activity_session_store: None,
             mcp_activity_session_id: AsyncMutex::new(None),
+            activity: Default::default(),
         },
         conn: crate::session::TransportState {
             terminal: StdMutex::new(None),
@@ -464,7 +465,7 @@ async fn wait_for_status_events(emitter: &crate::events::TestEmitter, count: usi
 /// error, keepalive) must not emit a second `disconnected` event.
 #[test]
 fn test_connection_loss_is_reported_once_per_session() {
-    let session = dummy_session(ServerId::new());
+    let session = Arc::new(dummy_session(ServerId::new()));
     let emitter = crate::events::TestEmitter::default();
     let id = Uuid::new_v4();
 

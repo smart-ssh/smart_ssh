@@ -45,6 +45,8 @@ pub(crate) fn session_spawner<R: tauri::Runtime>(
 /// bounded, so a hanging one cannot block exit.
 pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
     use tauri::Manager;
+    // Issue #1447: open sessions get `disconnected (app_exit)` first.
+    tauri::async_runtime::block_on(crate::activity_record::record_app_exit(app));
     if let Some(host) = app.try_state::<crate::ServiceHost>() {
         tauri::async_runtime::block_on(host.stop_all());
     }

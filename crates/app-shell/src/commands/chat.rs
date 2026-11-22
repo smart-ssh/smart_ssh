@@ -508,8 +508,6 @@ pub async fn respond_to_action(
     action_id: ActionId,
     decision: ActionUserDecision,
 ) -> CommandResult<()> {
-    let _ = session_id;
-
     // Spec 0010: dieser Command wird jetzt auch für die Bestätigung eines
     // Notiz-Vorschlags nach `disconnect()` verwendet (s.
     // `app_logic::orchestration::suggest_note_update_on_disconnect`) — zu
@@ -526,6 +524,11 @@ pub async fn respond_to_action(
         &action_id,
         decision,
     )?;
+    // Issue #1447: a confirmation is user activity (the session may already
+    // be gone, e.g. a note suggestion after disconnect).
+    if let Ok(session) = app_logic::session::require_session(&state.sessions, session_id) {
+        app_logic::session::activity::note_activity(&session);
+    }
     Ok(())
 }
 

@@ -241,6 +241,7 @@ async fn run_with_lookup(
             second_opinion_setup_failed: false,
             injection_check: None,
             red_risk_always_confirm: true,
+            active_minutes: crate::session::activity::new_active_minutes_flag(),
         },
     )
     .await;

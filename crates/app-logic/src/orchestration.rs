@@ -101,7 +101,7 @@ pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHA
 pub use chat_turn::{push_history, PENDING_ACTION_CONFIRM_TIMEOUT};
 pub(crate) use chat_turn::{
     seal_session_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    SIDE_CALL_MAX_TOKENS,
+    write_ledger_entry, SIDE_CALL_MAX_TOKENS,
 };
 
 // `app-shell::mcp_backend` ruft dies direkt auf.

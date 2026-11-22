@@ -168,6 +168,29 @@ impl SqliteLedgerStore {
         }
     }
 
+    /// Appends one content-free `activity_tick` entry and moves
+    /// `activity_sessions.last_activity_at` to now (issue #1447). The entry
+    /// has no content; the session's own source is `source`.
+    pub async fn append_activity_tick(
+        &self,
+        session_id: Uuid,
+        source: ssh_manager_core::audit::LedgerSource,
+    ) -> Result<(), LedgerStoreError> {
+        self.append_entry(
+            session_id,
+            source,
+            &ssh_manager_core::audit::LedgerEntryContent::ActivityTick,
+        )
+        .await?;
+        sqlx::query("UPDATE activity_sessions SET last_activity_at = ? WHERE id = ?")
+            .bind(Utc::now().to_rfc3339())
+            .bind(session_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(backend_err)?;
+        Ok(())
+    }
+
     async fn try_append(
         &self,
         session_id: Uuid,

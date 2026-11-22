@@ -403,6 +403,7 @@ pub(crate) fn session_with_ai_provider(
             chat_session_id: AsyncMutex::new(None),
             activity_session_store: None,
             mcp_activity_session_id: AsyncMutex::new(None),
+            activity: Default::default(),
         },
         conn: TransportState {
             terminal: StdMutex::new(None),

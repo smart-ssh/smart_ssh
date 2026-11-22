@@ -126,7 +126,15 @@ pub async fn attach_recorded_session(
         return;
     }
     match store.create_mcp_session(server_id, client_name).await {
-        Ok(id) => *session.persistence.mcp_activity_session_id.lock().await = Some(id),
+        Ok(id) => {
+            *session.persistence.mcp_activity_session_id.lock().await = Some(id);
+            crate::session::activity::record_connection_event(
+                session,
+                ssh_manager_core::audit::LedgerConnectionEvent::Connected,
+                None,
+            )
+            .await;
+        }
         Err(err) => tracing::warn!(error = %err, "MCP recorded session could not be created"),
     }
 }

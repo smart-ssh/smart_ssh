@@ -86,6 +86,9 @@ pub fn spawn_terminal_actor_with_idle(
                     match cmd {
                         Some(TerminalCommand::Write(data)) => {
                             idle.touch();
+                            // Issue #1447: only the fact that input happened
+                            // is noted; the bytes are never looked at.
+                            super::activity::note_activity(&session);
                             if let Err(err) = shell.write(&data).await {
                                 break Some(Some(err.to_string()));
                             }

@@ -104,6 +104,7 @@ fn test_session(server_id: ServerId) -> Session {
             chat_session_id: AsyncMutex::new(None),
             activity_session_store: None,
             mcp_activity_session_id: AsyncMutex::new(None),
+            activity: Default::default(),
         },
         conn: app_logic::session::TransportState {
             terminal: std::sync::Mutex::new(None),
