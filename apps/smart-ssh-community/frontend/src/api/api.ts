@@ -220,7 +220,10 @@ export const listRecordedSessions = (
     page: { page_size: pageSize, cursor },
   });
 
-/** Entries of the activity record across sessions, in recording order; paging as for `listRecordedSessions`. */
+/**
+ * Entries of the activity record across sessions, in recording order; paging as for `listRecordedSessions`.
+ * Check `unreadable` first on every item: if it is set, the row is damaged and all other fields are placeholders.
+ */
 export const listRecordEntries = (
   filter: Partial<RecordEntryFilter> = {},
   cursor: string | null = null,
@@ -231,7 +234,7 @@ export const listRecordEntries = (
     page: { page_size: pageSize, cursor },
   });
 
-/** All entries of one recorded session, in sequence order. */
+/** All entries of one recorded session, in sequence order. Check `unreadable` first on every item (other fields of a damaged row are placeholders). */
 export const recordEntriesOfSession = (sessionId: string) =>
   invoke<RecordEntryInfo[]>("record_session_entries", { sessionId });
 

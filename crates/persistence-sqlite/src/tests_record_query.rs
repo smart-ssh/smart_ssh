@@ -622,6 +622,48 @@ async fn test_damaged_row_is_marked_not_fatal_for_every_kind_of_damage() {
     }
 }
 
+/// Issue #1496: content filters over a row with invalid JSON neither fail nor
+/// stop the keyset walk; the damaged row matches none of them.
+#[tokio::test]
+async fn test_content_filters_survive_a_row_with_invalid_content() {
+    let s = with_damaged("content").await;
+    let q = s.ledger_store().record_query();
+    let filters = [
+        EntryFilter {
+            text_contains: Some("ls".to_owned()),
+            ..Default::default()
+        },
+        EntryFilter {
+            decision_outcomes: vec!["allowed".to_owned()],
+            ..Default::default()
+        },
+        EntryFilter {
+            exit_code_nonzero: true,
+            ..Default::default()
+        },
+    ];
+    for (i, f) in filters.iter().enumerate() {
+        let (mut seen, mut after) = (Vec::new(), None);
+        loop {
+            let p = q
+                .list_entries(f, PageRequest { limit: 1, after })
+                .await
+                .unwrap();
+            seen.extend(describe(&p.items));
+            match p.next {
+                Some(c) => after = Some(c),
+                None => break,
+            }
+        }
+        let want: Vec<(i64, bool)> = if i == 0 {
+            vec![(0, true), (1, true), (3, true), (4, true)]
+        } else {
+            vec![]
+        };
+        assert_eq!(seen, want, "filter {i}");
+    }
+}
+
 /// Issue #1496: an unknown `source` is damage, not an AI entry.
 #[tokio::test]
 async fn test_unknown_source_reason_is_reported() {

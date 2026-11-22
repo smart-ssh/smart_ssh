@@ -12,7 +12,10 @@
 //! session in keyset chunks on `sequence` for the same reason.
 //!
 //! A damaged row never fails a page or a session: it is returned as
-//! [`RecordedRow::Unreadable`] at its position and the walk continues.
+//! [`RecordedRow::Unreadable`] at its position and the walk continues. A row
+//! with invalid content JSON matches no content filter (text, decision
+//! outcome, non-zero exit code) but still shows up under filters that do not
+//! look at the content.
 
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqlitePool, SqliteRow};
@@ -311,9 +314,10 @@ impl SqliteRecordQuery {
         });
         if with_text {
             qb.push(
-                ", COALESCE(json_extract(e.content, '$.CommandProposed.command'), \
+                ", CASE WHEN json_valid(e.content) THEN \
+                 COALESCE(json_extract(e.content, '$.CommandProposed.command'), \
                  json_extract(e.content, '$.CommandExecuted.command'), \
-                 json_extract(e.content, '$.AiMessage.text'), '') AS txt",
+                 json_extract(e.content, '$.AiMessage.text'), '') ELSE '' END AS txt",
             );
         }
         qb.push(
@@ -354,14 +358,15 @@ impl SqliteRecordQuery {
             qb.push(" AND e.entry_type = 'decision'");
             push_in(
                 &mut qb,
-                "json_extract(e.content, '$.Decision.outcome')",
+                "CASE WHEN json_valid(e.content) THEN \
+                 json_extract(e.content, '$.Decision.outcome') END",
                 &filter.decision_outcomes,
             );
         }
         if filter.exit_code_nonzero {
             qb.push(
                 " AND e.entry_type = 'command_executed' AND \
-                 COALESCE(json_extract(e.content, '$.CommandExecuted.output.exit_code'), -1) <> 0",
+                 json_valid(e.content) AND COALESCE(json_extract(e.content, '$.CommandExecuted.output.exit_code'), -1) <> 0",
             );
         }
         qb.push(" ORDER BY e.rowid ASC LIMIT ").push_bind(limit);
