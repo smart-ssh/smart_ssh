@@ -117,6 +117,10 @@ mod tests_files_and_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 mod tests_mcp_recording;
+// Test code exception to the `deny` (see `orchestration.rs`, module head).
+#[cfg(test)]
+#[expect(clippy::expect_used, reason = "test code")]
+mod tests_activity;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 mod tests_file_ledger;

@@ -330,6 +330,18 @@ server only the generic patterns apply, and the result says so ("generic
 only"); callers must treat such text as less protected. A failed secret lookup
 is reported as "incomplete" instead of being hidden.
 
+**Activity observers.** An edition can register observers that receive each
+ledger-relevant event of a session as it happens (commands, decisions, AI
+messages, file reads and writes, session start and end). The core builds these
+events from the same redacted content that goes into the ledger, so an observer
+never receives more than the record holds; file events carry path, size and
+hashes, never content. Delivery runs on its own worker behind a bounded queue
+and never blocks a command: a slow observer makes events drop (counted), a
+panicking observer is caught. With no observer registered no event is built.
+What an observer does with an event is outside the core; it is trusted code
+inside the process, and the rule for anything that leaves the device above
+applies to it.
+
 ---
 
 ## 4. Network connections

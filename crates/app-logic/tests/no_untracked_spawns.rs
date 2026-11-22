@@ -25,6 +25,7 @@ const PATTERNS: &[&str] = &[
 /// (file relative to `crates/`, number of sites, reason). May only shrink.
 const ALLOWLIST: &[(&str, usize, &str)] = &[
     ("app-logic/src/ai_usage.rs", 1, "the one usage worker, a tracked blocking task of the app scope"),
+    ("app-logic/src/activity.rs", 2, "the one activity worker, a tracked blocking task of the app scope; plus a test-support-only detached thread"),
     ("app-logic/src/backup/import.rs", 1, "awaited"),
     ("app-logic/src/backup/key.rs", 1, "awaited by the caller (blocking key derivation helper)"),
     ("persistence-sqlite/src/test_exit_guard.rs", 1, "awaited (test builds only: exit handler joins its close thread)"),

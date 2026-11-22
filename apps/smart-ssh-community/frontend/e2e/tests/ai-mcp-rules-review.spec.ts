@@ -141,6 +141,11 @@ test("settings: AI Provider risk switches are labelled, in Tab order and toggle"
   await expect(red).toBeFocused();
   await page.keyboard.press("Space");
   await expect(red).toBeChecked();
+  // The switch stays disabled while the save runs; wait for it to be usable and focused again.
+  await expect(red).toBeEnabled();
+  // The browser drops focus from a disabled control; restore it explicitly.
+  await red.focus();
+  await expect(red).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(second).toBeFocused();

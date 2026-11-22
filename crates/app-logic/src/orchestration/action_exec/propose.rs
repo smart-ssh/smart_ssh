@@ -23,8 +23,7 @@ use crate::state::{ActionId, SessionId};
 use super::super::approval::ApprovedAction;
 use super::super::chat_turn::{
     ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, write_ledger_entry_for_action,
-    PENDING_ACTION_CONFIRM_TIMEOUT,
+    wait_for_rate_limit_budget, write_ledger_entry_and_event, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 use super::super::notes::note_target_preview_for_action;
 use super::super::pending_confirmation::{
@@ -203,12 +202,14 @@ pub(super) enum ConfirmationSettlement {
 pub(super) async fn prepare_action(ctx: &ProposeCtx<'_>, action: &mut AiAction) {
     announce_second_opinion_setup_failure(ctx.session, ctx.session_id, ctx.emitter);
     if let AiAction::SuggestCommand { command } = &*action {
-        write_ledger_entry(
+        write_ledger_entry_and_event(
             ctx.session,
             ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::CommandProposed {
                 command: command.clone(),
             },
+            None,
+            Some(ctx.action_id),
         )
         .await;
     }
@@ -531,7 +532,7 @@ async fn run_approved(
     uses_password: bool,
 ) -> bool {
     if records_decision(&action) {
-        write_ledger_entry_for_action(
+        write_ledger_entry_and_event(
             ctx.session,
             ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::Decision {
@@ -542,6 +543,7 @@ async fn run_approved(
                 matched_rule_origin,
             },
             decision_link(&action, ctx.action_id),
+            Some(ctx.action_id),
         )
         .await;
     }
@@ -573,7 +575,7 @@ async fn report_denied(
     ctx.earlier_rejection
         .store(true, std::sync::atomic::Ordering::SeqCst);
     if records_decision(action) {
-        write_ledger_entry_for_action(
+        write_ledger_entry_and_event(
             ctx.session,
             ledger_source_for_origin(&ctx.origin),
             LedgerEntryContent::Decision {
@@ -584,6 +586,7 @@ async fn report_denied(
                 matched_rule_origin,
             },
             decision_link(action, ctx.action_id),
+            Some(ctx.action_id),
         )
         .await;
     }

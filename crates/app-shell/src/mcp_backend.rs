@@ -90,6 +90,13 @@ impl AppMcpBackend {
                             client_name,
                         )
                         .await;
+                        // Issue #1505: activity observers learn the client.
+                        session
+                            .emit_session_started(
+                                app_logic::activity::ActivitySessionKind::Mcp,
+                                client_name,
+                            )
+                            .await;
                     }
                 }
                 connected

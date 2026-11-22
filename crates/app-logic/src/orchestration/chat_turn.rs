@@ -23,10 +23,11 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
-use self::ledger_redaction::redact_ledger_entry_content;
+pub(super) use self::ledger_funnel::write_ledger_entry_and_event;
 use super::action_exec::handle_action_proposed;
 use super::notes::handle_document_generated;
 
+mod ledger_funnel;
 mod ledger_redaction;
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
@@ -236,36 +237,14 @@ pub(crate) async fn write_ledger_entry(
 }
 
 /// Like [`write_ledger_entry`], but links the entry to the action it belongs
-/// to (`action_id`, Spec 0057).
+/// to (`action_id`, Spec 0057). The activity event carries the same id.
 pub(crate) async fn write_ledger_entry_for_action(
     session: &Session,
     source: LedgerSource,
     content: LedgerEntryContent,
     action_id: Option<ActionId>,
 ) {
-    let Some(store) = &session.persistence.ledger_store else {
-        return;
-    };
-    // A chat session records under its own id; an MCP session (no chat
-    // session) under its recorded session (issue #1444). Same redaction.
-    let recorded_session_id = match *session.persistence.chat_session_id.lock().await {
-        Some(id) => Some(id),
-        None => *session.persistence.mcp_activity_session_id.lock().await,
-    };
-    let Some(chat_session_id) = recorded_session_id else {
-        return;
-    };
-    let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
-    let meta = ssh_manager_core::audit::LedgerEntryMeta {
-        action_id: action_id.map(|id| id.to_string()),
-        ..Default::default()
-    };
-    if let Err(err) = store
-        .append(chat_session_id, source, &redacted, &meta)
-        .await
-    {
-        tracing::warn!(error = %err, "ledger entry persistence failed");
-    }
+    write_ledger_entry_and_event(session, source, content, action_id, action_id).await;
 }
 
 /// Spec 0051, Teil 2: Mindestabstand zwischen zwei `AiProvider::send()`-
