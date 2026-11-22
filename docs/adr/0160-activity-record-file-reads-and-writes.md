@@ -20,7 +20,7 @@ ADR 0047 point 3 limited the ledger to `SuggestCommand`. A file read or write by
 | "After" values | Computed over the bytes sent to the server (after the edition's outgoing transform). | These are the bytes that were written. |
 | Redaction | Path and backup path go through the same central redaction as command text. | Spec 0057 §1.2. |
 | Link to the action | Entries carry the `action_id` of the proposed action. | Spec 0057 §1. |
-| Decision entries for file actions | Not added here; the confirmation flow is unchanged. | Out of scope of this issue. |
+| Decision entries for file actions | File writes get confirmed, rejected, auto-approved or blocked decision entries, linked by `action_id` to the `file_written` entry. File reads get none. | Reads need no confirmation; a write's decision is part of the record of who allowed it. |
 
 ## Consequences
 
