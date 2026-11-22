@@ -79,6 +79,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 - `crates/persistence-sqlite/src/extension_db.rs` — `ExtensionDb`, `ExtensionMigration`, `validate_prefix`: namespaced tables with their own migrations.
 - `crates/persistence-sqlite/src/extension_store.rs` — `ExtensionStore`, `NamespacedStore`: namespaced key-value store.
 - `crates/app-logic/src/record_query.rs` — `list_recorded_sessions`, `list_record_entries`, `record_entries_of_session`, `redact_for_server`: read-only access to the activity record across servers with filters and keyset paging, and redaction with a server's current redactor; extensions reach them only through the facade module of this crate.
+- `crates/app-logic/src/activity.rs` — `ActivityObserver`, `ActivityEvent`, `ActivityHub`: hook that delivers redacted session events to registered observers through a bounded queue; registered through the observer list in the shell wiring, emitted from `crates/app-logic/src/session/activity_events.rs`.
 - `crates/persistence-sqlite/src/record_query.rs` — `SqliteRecordQuery`: the SQL behind that read API.
 - `crates/core/src/entitlements.rs` — `Feature`, `EntitlementProvider`: which features an edition unlocks.
 

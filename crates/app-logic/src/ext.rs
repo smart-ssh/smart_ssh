@@ -42,6 +42,18 @@ pub use crate::orchestration::accept_extension_content;
 // --- AI usage ------------------------------------------------------------
 pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 
+// --- Activity observers (issue #1505) --------------------------------------
+pub use crate::activity::{
+    ActivityDecisionOutcome, ActivityEvent, ActivityEventKind, ActivityObserver,
+    ActivitySessionKind, ActivitySource, RuleSnapshot, ServerSnapshot, SessionEndReason,
+    SessionRef,
+};
+
+/// Activity events dropped so far because the delivery queue was full.
+pub fn dropped_activity_events(state: &AppState) -> u64 {
+    state.activity.dropped_events()
+}
+
 // --- AI provider decorators ----------------------------------------------
 pub use crate::ai_provider_decorator::{apply_decorators, AiProviderDecorator, AiProviderInfo};
 pub use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, ProviderType, RedactedContext};

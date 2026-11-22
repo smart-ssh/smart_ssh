@@ -12,7 +12,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::super::approval::{ApprovedAction, ApprovedCommand};
-use super::super::chat_turn::{push_history_scoped, write_ledger_entry};
+use super::super::chat_turn::{push_history_scoped, write_ledger_entry_and_event};
 use super::super::notes::execute_note_update;
 use super::super::remote_files::{execute_read_remote_file, execute_write_remote_file};
 
@@ -377,7 +377,7 @@ impl CommandReport<'_> {
         // `write_ledger_entry` redacts centrally. `ledger_source` comes from
         // the caller, not derived from `persist` (which means something else:
         // MCP chat-persistence exclusion).
-        write_ledger_entry(
+        write_ledger_entry_and_event(
             session,
             self.ledger_source,
             LedgerEntryContent::CommandExecuted {
@@ -385,6 +385,8 @@ impl CommandReport<'_> {
                 output: output.clone(),
                 cancelled,
             },
+            None,
+            Some(self.action_id),
         )
         .await;
         let redacted = session.redactor.redact(&output);
@@ -455,7 +457,7 @@ impl CommandReport<'_> {
         // entry. `exit_code: None` means "result unknown"; the message goes
         // into `stderr` so the central redaction in `write_ledger_entry`
         // treats it like real command output.
-        write_ledger_entry(
+        write_ledger_entry_and_event(
             session,
             self.ledger_source,
             LedgerEntryContent::CommandExecuted {
@@ -468,6 +470,8 @@ impl CommandReport<'_> {
                 },
                 cancelled: false,
             },
+            None,
+            Some(self.action_id),
         )
         .await;
         // Spec 0016/0027: redact the command for the log as in the success case.
