@@ -79,7 +79,10 @@ vier Reiter verteilt: **Allgemein**, **Verbindung**, **Sicherheit** und
   Erhöhte-Rechte-Option mit Hinweis, SFTP-Server-Pfad). Technische Werte
   (Host, Port, Benutzer, Pfade) stehen in Festbreitenschrift. Das Testergebnis
   ist eine umrandete Marke mit Statusquadrat: „OK · 142 ms" (Summe der
-  Schrittdauern) bei Erfolg, sonst die bisherige Fehlermeldung.
+  Schrittdauern, Einheit „ms" klein geschrieben wie die gemischt geschriebenen
+  Fehlertexte) bei Erfolg; wurde bei keinem Schritt eine Dauer gemessen, zeigt
+  die Marke stattdessen den schlichten Erfolgstext ohne Zeit. Bei einem
+  Fehler steht die bisherige Fehlermeldung.
 - *Sicherheit*: Bestätigung nach Serverzugriff (Spec 0039), KI-Prüfung auf
   Prompt-Injection und die gespeicherten Host-Keys.
 - *Notizen*: Notizen und Kontext-Vorschau. Die Notizen haben wie bisher ihren

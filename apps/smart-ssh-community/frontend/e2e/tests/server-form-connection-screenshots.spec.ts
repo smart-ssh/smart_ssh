@@ -36,7 +36,11 @@ async function captureAt1440And390(page: Page, name: string) {
       await captureCurrent(page, name);
     }
   } finally {
-    if (original) await page.setViewportSize(original);
+    if (original) {
+      await page.setViewportSize(original);
+      // Let the layout settle (two animation frames) before the next click.
+      await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    }
   }
 }
 
