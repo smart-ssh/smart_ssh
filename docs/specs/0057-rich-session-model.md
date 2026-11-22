@@ -169,6 +169,13 @@ Schnittstelle abfragen (Umsetzung: #1449, #1450). Die Schnittstelle liefert
 die redigierten Einträge und die Schnappschüsse, nie mehr als im Protokoll
 steht.
 
+Erweiterungen können außerdem Beobachter für Sitzungsaktivität registrieren
+(Umsetzung: #1505). Ein Beobachter erhält jedes Ereignis, für das ein
+Protokolleintrag entsteht (Befehle, Entscheidungen, KI-Nachrichten, Dateizugriffe
+ohne Inhalt, Sitzungsbeginn und -ende), aus demselben redigierten Inhalt wie das
+Protokoll. Die Zustellung blockiert nie einen Befehl: Bei langsamen Beobachtern
+gehen Ereignisse verloren (gezählt); ohne Beobachter ändert sich nichts.
+
 ## 2. Die Summary
 
 Wenn die Kompaktierung alte Runden aus dem KI-Kontext entfernt, ersetzt eine
