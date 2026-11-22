@@ -266,6 +266,15 @@ impl SqliteChatSessionStore {
             .collect()
     }
 
+    /// Whether a `chat_sessions` row with this id exists.
+    pub async fn session_exists(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count > 0)
+    }
+
     /// Spec 0034, Abschnitt 4: "endet bei `disconnect()`".
     pub async fn mark_ended(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
         sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")

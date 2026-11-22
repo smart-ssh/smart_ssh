@@ -76,7 +76,7 @@ impl Session {
     /// Emits the event matching `redacted`, content that already went
     /// through the central ledger redaction. Content kinds without an event
     /// (connection events, activity ticks) emit nothing.
-    pub(crate) async fn emit_activity_for_ledger_content(
+    pub(crate) async fn emit_activity_for_content(
         &self,
         source: LedgerSource,
         redacted: &LedgerEntryContent,

@@ -332,14 +332,9 @@ pub async fn build_session(
     let (mut initial_history, chat_session_id, initial_summary) = if let Some(existing_id) = resume
     {
         let store = &state.chat_session_store;
-        // Issue #1444: only a real chat session can be resumed. The id of an
-        // MCP recorded session (or any unknown id) has no `chat_sessions`
-        // row and must never become the chat session of a human tab.
-        match state
-            .activity_session_store
-            .is_chat_session(existing_id)
-            .await
-        {
+        // Only an existing chat session can be resumed; an unknown id must
+        // never become the chat session of a human tab.
+        match store.session_exists(existing_id).await {
             Ok(true) => {}
             Ok(false) => {
                 transport.disconnect().await.ok();
@@ -350,9 +345,7 @@ pub async fn build_session(
             }
             Err(err) => {
                 transport.disconnect().await.ok();
-                return Err(
-                    persistence_sqlite::ChatSessionStoreError::Backend(err.to_string()).into(),
-                );
+                return Err(err.into());
             }
         }
         let loaded = match store.load_session(existing_id).await {
@@ -475,14 +468,7 @@ pub async fn build_session(
             chat_content: state.chat_content.clone(),
             title_attempts: state.title_attempts.clone(),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
-            // Spec 0057, §1: the ledger needs a recorded session to write to
-            // (a chat session's, or the MCP one attached later); without one
-            // `write_ledger_entry` writes nothing. The local pseudo-server
-            // has no `servers` row and therefore never gets one.
-            ledger_store: (!is_local).then(|| state.ledger_store.clone()),
             chat_session_id: tokio::sync::Mutex::new(chat_session_id),
-            activity_session_store: Some(state.activity_session_store.clone()),
-            mcp_activity_session_id: tokio::sync::Mutex::new(None),
         },
         conn: TransportState {
             terminal: std::sync::Mutex::new(None),

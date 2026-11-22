@@ -51,7 +51,7 @@ fn summary_marker(language: crate::system_prompt::PromptLanguage) -> &'static st
 /// gesendeten Kontext, nie den Ledger." End-to-End-Beweis: Runde 1
 /// führt ein Kommando mit einer riesigen Ausgabe aus (landet
 /// VOLLSTÄNDIG im Ledger, s. `execute_suggested_command`s
-/// `write_ledger_entry`-Aufruf mit dem noch unkomprimierten `output`).
+/// `emit_activity`-Aufruf mit dem noch unkomprimierten `output`).
 /// Ein winziges `model_context_window_tokens` zwingt Runde 2s
 /// `send()`-Aufruf dazu, genau diese Ausgabe für die gesendete Kopie zu
 /// kürzen (Schritt 2, Spec 0057 §3.2) — der `MockAiProvider` zeichnet

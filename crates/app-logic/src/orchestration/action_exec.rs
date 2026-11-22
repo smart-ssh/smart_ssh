@@ -83,8 +83,8 @@ use super::approval::{ApprovedAction, ApprovedCommand};
 #[cfg(test)]
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::chat_turn::{
-    ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
+    emit_activity, ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
+    wait_for_rate_limit_budget, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 #[cfg(test)]
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]

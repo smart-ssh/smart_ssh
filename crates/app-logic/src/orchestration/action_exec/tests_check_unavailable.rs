@@ -597,7 +597,7 @@ async fn test_ledger_redacts_fake_secret_in_file_paths_and_connection_detail() {
             detail: Some("failed: password=hunter2geheim".to_string()),
         },
     ] {
-        super::super::chat_turn::write_ledger_entry(&session, LedgerSource::Ai, content).await;
+        super::super::chat_turn::emit_activity(&session, LedgerSource::Ai, content).await;
     }
     let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
     assert_eq!(entries.len(), 3);

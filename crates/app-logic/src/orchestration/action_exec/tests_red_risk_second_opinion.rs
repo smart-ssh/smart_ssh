@@ -198,7 +198,7 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
 /// **Regressionstest zum spec-reviewer-Fund (Runde 1).** Die Zweitmeinung
 /// zitiert in ihrer Begründung ein Passwort aus dem Kommando. Landet ihr
 /// Wortlaut im `Decision.reason`, steht das Passwort danach **im Klartext**
-/// in der SQLite-Datei: `redact_ledger_entry_content` lässt
+/// in der SQLite-Datei: `redact_activity_content` lässt
 /// `LedgerEntryContent::Decision` bewusst unredigiert durch (Doc-Kommentar
 /// dort: „nur von der Filter-Engine selbst erzeugte Texte"), und der
 /// Redactor würde ein Ad-hoc-Passwort ohnehin nicht als Muster erkennen.

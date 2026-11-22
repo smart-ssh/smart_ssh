@@ -75,13 +75,8 @@ pub use crate::tasks::{ScopeKey, ShutdownReport, TaskScope, TaskSupervisor};
 // --- Events --------------------------------------------------------------
 pub use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 
-// --- Activity record (read-only, issue #1449) ----------------------------
-// The data types of the read API; the functions are the wrappers below.
-pub use crate::record_query::{
-    RecordDecisionOutcome, RecordEntryFilter, RecordEntryInfo, RecordEntryType, RecordPage,
-    RecordPageRequest, RecordSessionKind, RecordSource, RecordedSessionFilter, RecordedSessionInfo,
-    RedactedText, MAX_RECORD_PAGE_SIZE,
-};
+// --- Redaction service ---------------------------------------------------
+pub use crate::redact_for_server::RedactedText;
 
 // --- Errors and helpers --------------------------------------------------
 pub use crate::dto::{is_local, DocumentFormat};
@@ -118,46 +113,12 @@ pub async fn rebuild_redactors_for_open_sessions(state: &AppState) {
     }
 }
 
-/// Recorded sessions of all servers, oldest first, with filters and keyset
-/// paging (page size at most [`MAX_RECORD_PAGE_SIZE`]). Read-only; the
-/// server snapshot in each item stays readable after the server is deleted.
-pub async fn list_recorded_sessions(
-    state: &AppState,
-    filter: &RecordedSessionFilter,
-    page: &RecordPageRequest,
-) -> Result<RecordPage<RecordedSessionInfo>, CommandError> {
-    crate::record_query::list_recorded_sessions(&state.ledger_store.record_query(), filter, page)
-        .await
-}
-
-/// Entries of the activity record across sessions and servers, in recording
-/// order, with filters and keyset paging. Entries are returned as stored
-/// (redacted by the writer); text that leaves the device must be redacted
-/// again with [`redact_for_server`]. With a text filter a page can be short or
-/// empty while `next_cursor` is still `Some`: keep paging while it is `Some`.
-pub async fn list_record_entries(
-    state: &AppState,
-    filter: &RecordEntryFilter,
-    page: &RecordPageRequest,
-) -> Result<RecordPage<RecordEntryInfo>, CommandError> {
-    crate::record_query::list_record_entries(&state.ledger_store.record_query(), filter, page).await
-}
-
-/// All entries of one recorded session, in sequence order.
-pub async fn record_entries_of_session(
-    state: &AppState,
-    session_id: uuid::Uuid,
-) -> Result<Vec<RecordEntryInfo>, CommandError> {
-    crate::record_query::record_entries_of_session(&state.ledger_store.record_query(), session_id)
-        .await
-}
-
 /// Redacts `text` with the **current** redactor of `server_id`, including
 /// the secrets session extensions contribute via `known_secrets`. For a
 /// deleted server only the generic patterns apply and
 /// [`RedactedText::generic_only`] is set.
 pub async fn redact_for_server(state: &AppState, server_id: ServerId, text: &str) -> RedactedText {
-    crate::record_query::redact_for_server(
+    crate::redact_for_server::redact_for_server(
         state.profile_store.as_ref(),
         state.credential_store.clone(),
         state.session_extension.as_deref(),

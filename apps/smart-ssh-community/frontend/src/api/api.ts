@@ -5,11 +5,6 @@ import { publishFeatureLocked } from "../extensions/featureLockedBus";
 import type {
   ActionUserDecision,
   KeepGroupResult,
-  RecordEntryFilter,
-  RecordEntryInfo,
-  RecordPage,
-  RecordedSessionFilter,
-  RecordedSessionInfo,
   AiProviderConfigDto,
   AiProviderConfigInput,
   AppInfoDto,
@@ -200,40 +195,6 @@ export const cancelConnect = (attemptId: string) =>
 
 export const listChatSessions = (serverId: string) =>
   invoke<ChatSessionSummaryDto[]>("list_chat_sessions", { serverId });
-
-/** Largest page the backend returns (`MAX_RECORD_PAGE_SIZE`); also the default. */
-export const MAX_RECORD_PAGE_SIZE = 200;
-
-/**
- * Activity record (issue #1450): recorded sessions of all servers, oldest
- * first. Omitted filter fields mean "no restriction". Pass the previous
- * page's `next_cursor` as `cursor`; with a text filter a page can be short or
- * empty while `next_cursor` is still set, so keep paging until it is `null`.
- */
-export const listRecordedSessions = (
-  filter: Partial<RecordedSessionFilter> = {},
-  cursor: string | null = null,
-  pageSize: number = MAX_RECORD_PAGE_SIZE,
-) =>
-  invoke<RecordPage<RecordedSessionInfo>>("record_list_sessions", {
-    filter,
-    page: { page_size: pageSize, cursor },
-  });
-
-/** Entries of the activity record across sessions, in recording order; paging as for `listRecordedSessions`. */
-export const listRecordEntries = (
-  filter: Partial<RecordEntryFilter> = {},
-  cursor: string | null = null,
-  pageSize: number = MAX_RECORD_PAGE_SIZE,
-) =>
-  invoke<RecordPage<RecordEntryInfo>>("record_list_entries", {
-    filter,
-    page: { page_size: pageSize, cursor },
-  });
-
-/** All entries of one recorded session, in sequence order. */
-export const recordEntriesOfSession = (sessionId: string) =>
-  invoke<RecordEntryInfo[]>("record_session_entries", { sessionId });
 
 /** Issue #568: `attemptId` as for `connect` (progress events, cancel). */
 export const resumeChatSession = (serverId: string, sessionId: string, attemptId: string) =>

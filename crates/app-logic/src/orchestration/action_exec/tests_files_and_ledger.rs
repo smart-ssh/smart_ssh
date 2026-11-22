@@ -1843,7 +1843,7 @@ async fn test_ledger_captures_mcp_origin_independent_of_chat_persist_flag() {
 /// spec-reviewer-Fund (Review dieses Schritts): der bisherige
 /// Redaction-Test deckte nur `CommandExecuted.output` ab —
 /// `CommandProposed.command` und `AiMessage.text` laufen ebenfalls
-/// durch `redact_ledger_entry_content`, waren aber ungetestet. Ein
+/// durch `redact_activity_content`, waren aber ungetestet. Ein
 /// Fake-Secret sowohl im vorgeschlagenen Kommandotext als auch in der
 /// abschließenden KI-Antwort darf in keinem der beiden Einträge
 /// unredigiert landen.
@@ -1961,7 +1961,7 @@ async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_ou
         // liefe genau dieser nachfolgende Schreibzugriff noch unter
         // pausierter Zeit — derselbe `PoolTimedOut`-Mechanismus wie
         // unten beschrieben, nur diesmal beim Schreiben statt beim
-        // Lesen, und wird von `write_ledger_entry` nicht-fatal nur
+        // Lesen, und wird von `emit_activity` nicht-fatal nur
         // geloggt (kein Panic) — das Ergebnis war ein gelegentlich
         // fehlender zweiter Ledger-Eintrag unter `cargo test
         // --workspace`, nicht reproduzierbar bei isoliertem Lauf dieses

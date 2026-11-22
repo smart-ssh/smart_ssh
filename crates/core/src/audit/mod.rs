@@ -9,7 +9,7 @@
 //! `persistence-sqlite::SqliteLedgerStore` (additive Migration, Spec 0057
 //! §5), das Einhängen ins Geschehen in `app-shell::orchestration` (an
 //! denselben Stellen, an denen die Redaction für den KI-Kontext bereits
-//! läuft, s. dortige Doc-Kommentare zu `write_ledger_entry`).
+//! läuft, s. dortige Doc-Kommentare zu `emit_activity`).
 //!
 //! **Abgrenzung zu `crate::session::LedgerEntry`** (Spec 0037, Abschnitt
 //! 7): jenes Modul ist explizit unbenutztes Zielbild-Vokabular für eine
@@ -78,7 +78,7 @@ pub enum LedgerDecisionOutcome {
 ///
 /// **Redaction ist NICHT Aufgabe dieses Typs** — er transportiert nur die
 /// Daten, redigiert werden sie zentral in `app-shell::orchestration::
-/// write_ledger_entry`, unmittelbar bevor ein Eintrag den Store erreicht
+/// emit_activity`, unmittelbar bevor ein Eintrag den Store erreicht
 /// (Spec 0057, §1.2 "PFLICHT"). Wer diesen Typ direkt konstruiert (z. B. in
 /// Tests), muss also selbst redigieren, falls das Ergebnis in einen
 /// echten Store geschrieben werden soll.
@@ -106,7 +106,7 @@ pub enum LedgerEntryContent {
     /// Ein Kommando wurde ausgeführt, mit Ergebnis (Spec 0057, §1.1,
     /// dritter Punkt — "stdout/stderr/exit — redigiert"). `output` MUSS
     /// bereits redigiert sein, bevor dieser Wert konstruiert wird (bzw.
-    /// wird von `write_ledger_entry` redigiert, s. Typ-Doc-Kommentar
+    /// wird von `emit_activity` redigiert, s. Typ-Doc-Kommentar
     /// oben).
     CommandExecuted {
         command: String,
