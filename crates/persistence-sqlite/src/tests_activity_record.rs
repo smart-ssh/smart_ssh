@@ -424,3 +424,52 @@ async fn test_create_session_terminates_on_cyclic_group_chain() {
         .unwrap()
         .is_some());
 }
+
+#[tokio::test]
+async fn test_restore_as_copy_moves_activity_record_to_the_server_copy() {
+    use crate::backup_store::{DatabaseSnapshot, ImportPlan};
+    let (store, server, chat) = store_with_chat().await;
+    // A record of a server that is not part of the archive (already deleted).
+    let gone = Uuid::new_v4();
+    sqlx::query("INSERT INTO activity_sessions (id,kind,server_id,server_name,server_host,server_port,server_user,started_at) VALUES (?, 'mcp', ?, 'Gone', 'gone.example', 22, 'u', 't')")
+        .bind(Uuid::new_v4().to_string())
+        .bind(gone.to_string())
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+    store
+        .backup_store()
+        .apply_import(&ImportPlan {
+            data: DatabaseSnapshot::default(),
+            archive_folder: Some("Previous data".into()),
+            now: "2026-01-01T00:00:00+00:00".into(),
+            pending_host_keys: "[]".into(),
+        })
+        .await
+        .unwrap();
+
+    let chat_server: String =
+        sqlx::query_scalar("SELECT server_id FROM chat_sessions WHERE id = ?")
+            .bind(chat.to_string())
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    assert_ne!(chat_server, server.id.0.to_string());
+    let row = sqlx::query(
+        "SELECT server_id, server_name, server_host FROM activity_sessions WHERE id = ?",
+    )
+    .bind(chat.to_string())
+    .fetch_one(&store.pool)
+    .await
+    .unwrap();
+    assert_eq!(row.get::<String, _>("server_id"), chat_server);
+    assert_eq!(row.get::<String, _>("server_name"), "Snapshot-Server");
+    assert_eq!(row.get::<String, _>("server_host"), "snap.example");
+    let other: String =
+        sqlx::query_scalar("SELECT server_id FROM activity_sessions WHERE server_name = 'Gone'")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    assert_eq!(other, gone.to_string());
+}

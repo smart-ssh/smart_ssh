@@ -996,6 +996,9 @@ async fn archive(
         for sql in [
             "UPDATE chat_sessions SET server_id = ? WHERE server_id = ?",
             "UPDATE prompt_history SET server_id = ? WHERE server_id = ?",
+            // The activity record has no FK to servers; its snapshot columns
+            // (name, host, ...) stay as recorded.
+            "UPDATE activity_sessions SET server_id = ? WHERE server_id = ?",
         ] {
             sqlx::query(sql)
                 .bind(new.to_string())
