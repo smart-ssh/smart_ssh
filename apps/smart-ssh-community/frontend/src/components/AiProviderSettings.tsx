@@ -43,12 +43,14 @@ type OllamaProbeState =
  * semantics (name, checked state, keyboard), the track is decoration. */
 function SwitchRow({
   checked,
-  disabled,
+  busy,
   onChange,
   children,
 }: {
   checked: boolean;
-  disabled?: boolean;
+  /** Save in progress: changes are ignored, but the input is not `disabled`
+   * (a disabled input drops keyboard focus), so it is `aria-disabled`. */
+  busy?: boolean;
   onChange: (checked: boolean) => void;
   children: ReactNode;
 }) {
@@ -57,10 +59,12 @@ function SwitchRow({
       <span className="relative inline-block h-4 w-8 shrink-0">
         <input
           type="checkbox"
-          className="focus-ring peer absolute inset-0 m-0 cursor-pointer appearance-none border border-border-strong bg-surface-sunken checked:border-accent-border checked:bg-accent-subtle disabled:opacity-50"
+          className="focus-ring peer absolute inset-0 m-0 cursor-pointer appearance-none border border-border-strong bg-surface-sunken checked:border-accent-border checked:bg-accent-subtle aria-disabled:opacity-50"
           checked={checked}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked)}
+          aria-disabled={busy || undefined}
+          onChange={(e) => {
+            if (!busy) onChange(e.target.checked);
+          }}
         />
         <span
           aria-hidden="true"
@@ -140,6 +144,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
    * wirksam (s. `riskSettings.ts`-Doc-Kommentar) — trotzdem sofort
    * gespeichert, damit die Einstellung nicht verloren geht. */
   const handleRiskClassifierChange = async (enabled: boolean, providerId: string | null) => {
+    if (riskSettingsSaving) return;
     setRiskClassifierEnabled(enabled);
     setRiskClassifierProviderId(providerId);
     setRiskSettingsSaving(true);
@@ -165,11 +170,13 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
    * sofort gespeichert (dasselbe Muster wie `handleRiskClassifierChange`
    * oben). */
   const handleRedRiskAlwaysConfirmChange = async (value: boolean) => {
+    if (redRiskSettingSaving) return;
     setRedRiskAlwaysConfirm(value);
     setRedRiskSettingSaving(true);
     try {
       await saveRedRiskAlwaysConfirm(value);
     } catch (err) {
+      setRedRiskAlwaysConfirm(!value);
       setError(commandErrorText(t, err));
     } finally {
       setRedRiskSettingSaving(false);
@@ -522,6 +529,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <SwitchRow
           checked={riskClassifierEnabled}
           onChange={(checked) => handleRiskClassifierChange(checked, riskClassifierProviderId)}
+          busy={riskSettingsSaving}
         >
           {t("aiProvider.riskClassifierEnable")}
         </SwitchRow>
@@ -533,8 +541,8 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               {...control}
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
-              disabled={riskSettingsSaving}
-              className={`w-full md:w-auto ${FIELD_CLASS}`}
+              aria-disabled={riskSettingsSaving || undefined}
+              className={`w-full aria-disabled:opacity-50 md:w-auto ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -555,7 +563,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         </h3>
         <SwitchRow
           checked={redRiskAlwaysConfirm}
-          disabled={redRiskSettingSaving}
+          busy={redRiskSettingSaving}
           onChange={handleRedRiskAlwaysConfirmChange}
         >
           {t("aiProvider.redRiskAlwaysConfirmEnable")}
