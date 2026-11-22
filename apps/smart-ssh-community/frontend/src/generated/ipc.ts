@@ -242,7 +242,7 @@ export type RecordDecisionOutcome = "Confirmed" | "Rejected" | "AutoApproved";
 
 export type RecordEntryFilter = { from: string | null, until: string | null, session_ids: Array<string>, server_ids: Array<ServerId>, group_id: string | null, sources: Array<RecordSource>, entry_types: Array<RecordEntryType>, decision_outcomes: Array<RecordDecisionOutcome>, exit_code_nonzero: boolean, text_contains: string | null, };
 
-export type RecordEntryInfo = { id: string, session_id: string, sequence: number, created_at: string, source: RecordSource, entry_type: RecordEntryType, text: string | null, outcome: RecordDecisionOutcome | null, reason: string | null, code: string | null, exit_code: number | null, stdout: string | null, stderr: string | null, cancelled: boolean | null, path: string | null, bytes: number | null, connection_event: string | null, detail: string | null, action_id: string | null, redaction_incomplete: boolean, };
+export type RecordEntryInfo = { id: string, session_id: string, sequence: number, created_at: string, source: RecordSource, entry_type: RecordEntryType, text: string | null, outcome: RecordDecisionOutcome | null, reason: string | null, code: string | null, exit_code: number | null, stdout: string | null, stderr: string | null, cancelled: boolean | null, path: string | null, bytes: number | null, connection_event: string | null, detail: string | null, action_id: string | null, redaction_incomplete: boolean, unreadable: string | null, };
 
 export type RecordEntryType = "CommandProposed" | "Decision" | "CommandExecuted" | "AiMessage" | "FileRead" | "FileWritten" | "Connection" | "ActivityTick";
 
