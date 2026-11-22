@@ -177,3 +177,27 @@ test("settings: red-risk switch keeps focus while saving, ignores repeats, rever
   await expect(red).toBeFocused();
   expect((await app.calls("set_red_risk_always_confirm")).length).toBe(1);
 });
+
+// Issue #1526 (review): the second-opinion switch shows the busy state too
+// while its own save is held, and ignores further toggles.
+test("settings: second-opinion switch is aria-disabled while saving and ignores repeats", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    commands: { ...base.commands, set_risk_second_opinion_settings: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  await expect(second).not.toBeChecked();
+  await second.focus();
+  await page.keyboard.press("Space");
+  await expect(second).toBeChecked();
+  await expect(second).toHaveAttribute("aria-disabled", "true");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).toBeChecked();
+  await app.release("set_risk_second_opinion_settings", { result: null });
+  await expect(second).not.toHaveAttribute("aria-disabled", "true");
+  expect((await app.calls("set_risk_second_opinion_settings")).length).toBe(1);
+});

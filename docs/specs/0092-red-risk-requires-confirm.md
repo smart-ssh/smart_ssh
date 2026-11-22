@@ -46,6 +46,10 @@ Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
 - A1.5 Der Wert wird ausschließlich vom Backend geschrieben, nicht von der
   Oberfläche direkt in die Einstellungsdatei. Das Lesen ändert sich nicht
   (A1.2 gilt unverändert).
+- A1.6 Während der Schalter speichert, behält er den Fokus und ignoriert
+  weitere Umschaltungen (er ist als nicht bedienbar gekennzeichnet und
+  abgedunkelt). Schlägt das Speichern fehl, zeigt er wieder den bisherigen
+  Wert, und eine Fehlermeldung erscheint.
 
 **A2 — Eskalation bei regelbasiertem Rot**
 
@@ -171,4 +175,5 @@ Hard-Blacklist noch an Secret-Pfad oder `sftp-server` hängen.
 | U1 | Oberfläche: Karte erhält das Ereignis | zeigt Dialog mit übersetztem Text; Klick sendet die Antwort |
 | U2 | Oberfläche: Hintergrund-Tab erhält das Ereignis | Hinweis auf wartende Aktion; Tab schließen lehnt genau diese Aktion ab |
 | U3 | Oberfläche: Schalter — Wert fehlt / `false` / kein boolescher Wert | an / aus / an, wie im Backend (A1.2) |
+| U3a | Oberfläche: Schalter während des Speicherns / Speichern schlägt fehl | Fokus bleibt, weitere Umschaltung ignoriert; bei Fehler bisheriger Wert und Fehlermeldung |
 | U4 | Sprachdateien de/en enthalten den neuen Code | Parität |

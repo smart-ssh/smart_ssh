@@ -529,6 +529,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <SwitchRow
           checked={riskClassifierEnabled}
           onChange={(checked) => handleRiskClassifierChange(checked, riskClassifierProviderId)}
+          busy={riskSettingsSaving}
         >
           {t("aiProvider.riskClassifierEnable")}
         </SwitchRow>
@@ -541,7 +542,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
               aria-disabled={riskSettingsSaving || undefined}
-              className={`w-full md:w-auto ${FIELD_CLASS}`}
+              className={`w-full aria-disabled:opacity-50 md:w-auto ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
