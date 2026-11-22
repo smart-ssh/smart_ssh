@@ -17,7 +17,8 @@ Kopfleiste (44 px) zeigt den Titel „Einstellungen“ und eine Schaltfläche
 Fokus kehrt dorthin zurück, wo er vorher stand. Links steht eine 260 px breite
 Liste der Kategorien: jede Zeile trägt eine nach Position gezählte Nummer
 („01“, „02“ …) und den übersetzten Namen; die aktive Zeile ist hervorgehoben
-und hat links eine 2 px breite Akzentlinie. Rechts steht der Inhalt der
+und hat links eine 2 px breite Akzentlinie; ihre Nummer erscheint in der
+Akzentfarbe (in beiden Themen kontrastsicher). Rechts steht der Inhalt der
 gewählten Kategorie unter einer Bereichskopfzeile mit Nummer, Titel (die
 einzige Überschrift des Bereichs) und rechts einem Platz für eine Aktion,
 die der Bereich selbst vorgibt.
