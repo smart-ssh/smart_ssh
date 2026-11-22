@@ -1622,5 +1622,9 @@
     "summaryInterrupted_other": "{{count}} terhenti",
     "summaryFailed_other": "{{count}} gagal",
     "remaining": "sisa {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Catat menit aktif",
+    "hint": "Menyimpan satu penanda tanpa isi untuk setiap menit Anda bekerja di sesi terminal, sehingga catatan aktivitas menunjukkan kapan Anda aktif. Apa yang Anda ketik tidak disimpan."
   }
 }

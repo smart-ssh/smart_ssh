@@ -3,7 +3,13 @@ import { useTranslation } from "react-i18next";
 import { AutoReconnectSettings } from "./AutoReconnectSettings";
 import { ElevatedIdleSettings } from "./ElevatedIdleSettings";
 import { FIELD_CONTROL_CLASS, StatusSquare } from "./ui";
-import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api/api";
+import {
+  commandErrorMessage,
+  getChatSessionRetentionDays,
+  getRecordActiveMinutes,
+  setChatSessionRetentionDays,
+  setRecordActiveMinutes,
+} from "../api/api";
 
 /** Spec 0034, Abschnitt 5: optionale Aufbewahrungsdauer für persistente
  * Chat-Sitzungen — Default "nie automatisch löschen" (`null`). Reines
@@ -15,6 +21,7 @@ export function ChatRetentionSettings() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recordActive, setRecordActive] = useState(true);
 
   useEffect(() => {
     getChatSessionRetentionDays()
@@ -23,7 +30,23 @@ export function ChatRetentionSettings() {
         setLoaded(true);
       })
       .catch((err) => setError(commandErrorMessage(err)));
+    getRecordActiveMinutes()
+      .then(setRecordActive)
+      .catch((err) => setError(commandErrorMessage(err)));
   }, []);
+
+  const handleToggleRecordActive = async (value: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await setRecordActiveMinutes(value);
+      setRecordActive(value);
+    } catch (err) {
+      setError(commandErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setBusy(true);
@@ -101,6 +124,19 @@ export function ChatRetentionSettings() {
       )}
       <p className="mt-1 text-xs text-fg-subtle">{t("chatRetention.hint")}</p>
       </fieldset>
+      <div className="mt-3 border-t border-border pt-3">
+        <label className="mb-1 flex items-center gap-3 text-sm text-fg-muted narrow:min-h-11">
+          <input
+            type="checkbox"
+            className="switch"
+            checked={recordActive}
+            disabled={busy}
+            onChange={(e) => handleToggleRecordActive(e.target.checked)}
+          />
+          {t("recordActiveMinutes.label")}
+        </label>
+        <p className="text-xs text-fg-subtle">{t("recordActiveMinutes.hint")}</p>
+      </div>
       <AutoReconnectSettings />
       <ElevatedIdleSettings />
     </div>

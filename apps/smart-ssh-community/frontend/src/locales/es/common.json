@@ -1652,5 +1652,9 @@
     "summaryFailed_many": "{{count}} fallidas",
     "summaryFailed_other": "{{count}} fallidas",
     "remaining": "quedan {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Registrar los minutos activos",
+    "hint": "Guarda una marca sin contenido por cada minuto en que trabajas en una sesión de terminal, para que el registro de actividad muestre cuándo estuviste activo. Lo que escribes no se guarda."
   }
 }

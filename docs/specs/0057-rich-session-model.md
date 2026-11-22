@@ -140,8 +140,33 @@ ihrem Ledger, mit derselben Redaction wie im Chat. Sie erscheinen weder in der
 Liste der Chat-Sitzungen noch im Dialog zum Fortsetzen, lassen sich nicht als
 Chat fortsetzen und fließen nie in den Kontext eines Chats. Ein Chat und eine
 MCP-Sitzung auf demselben Server schreiben in zwei verschiedene aufgezeichnete
-Sitzungen. Beim Schließen der MCP-Sitzung wird ihr Ende gesetzt. Terminal-
-Sitzungen bekommen ihre eigene aufgezeichnete Sitzung mit #1447.
+Sitzungen. Beim Schließen der MCP-Sitzung wird ihr Ende gesetzt.
+
+**Terminal-Sitzungen:** Eine Verbindung, in der nie etwas in den Chat
+geschrieben wird, bleibt trotzdem im Protokoll: Wird eine Chat-Sitzung ohne
+Nachricht und ohne Ledger-Inhalt beendet, wird sie als Chat verworfen, ihre
+aufgezeichnete Sitzung bleibt als Art `terminal` erhalten. Sie erscheint nie
+im Dialog zum Fortsetzen. Ein Verbindungsversuch, der scheitert, bevor eine
+Sitzung entsteht, schreibt eine beendete `terminal`-Sitzung mit einem
+`failed`-Eintrag (nur der stabile Fehlercode, kein Meldungstext).
+Abgebrochene Versuche, der lokale Pseudo-Server und MCP-Verbindungen schreiben
+diesen Eintrag nicht.
+
+**Verbindungseinträge:** Im Ledger stehen Einträge der Art `connection`:
+`connected`, `disconnected` (Grund: Nutzer, Netzverlust oder App-Ende),
+`reconnected` und `failed` (mit Fehlercode). Sie zählen nicht als Inhalt einer
+Sitzung. Eine Wiederverbindung bleibt in derselben aufgezeichneten Sitzung.
+
+**Aktive Minuten:** Solange in einer Terminal-Sitzung gearbeitet wird (Eingabe
+oder laufender Befehl), schreibt die Anwendung höchstens einmal pro Minute
+einen inhaltsfreien Eintrag `activity_tick` und setzt den Zeitpunkt der letzten
+Aktivität. Was getippt wird, steht nirgends. In den Einstellungen („Sitzungen &
+Daten") lässt sich das abschalten; Standard ist an. Beim Abschalten entstehen
+keine neuen Einträge, vorhandene bleiben.
+
+**Absturz:** Beim Start schließt die Anwendung aufgezeichnete Sitzungen, die ein
+früherer Lauf offen hinterlassen hat: Ende = letzte Aktivität, sonst Beginn.
+Eine abgestürzte Chat-Sitzung ohne Inhalt wird dabei zu `terminal`.
 
 ### 1.6 Löschen
 

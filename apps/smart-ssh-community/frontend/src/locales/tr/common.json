@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} başarısız",
     "summaryFailed_other": "{{count}} başarısız",
     "remaining": "{{time}} kaldı"
+  },
+  "recordActiveMinutes": {
+    "label": "Etkin dakikaları kaydet",
+    "hint": "Bir terminal oturumunda çalıştığınız her dakika için içeriksiz bir işaret saklar; böylece etkinlik kaydı ne zaman etkin olduğunuzu gösterir. Yazdığınız hiçbir şey saklanmaz."
   }
 }

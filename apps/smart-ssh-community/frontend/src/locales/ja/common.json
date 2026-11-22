@@ -1622,5 +1622,9 @@
     "summaryInterrupted_other": "中断 {{count}} 件",
     "summaryFailed_other": "失敗 {{count}} 件",
     "remaining": "残り {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "アクティブな時間を記録する",
+    "hint": "ターミナルセッションで作業した1分ごとに、内容を含まない印を1つ保存します。これにより、アクティビティ記録で操作していた時間がわかります。入力した内容は保存されません。"
   }
 }

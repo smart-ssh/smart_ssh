@@ -1652,5 +1652,9 @@
     "summaryFailed_few": "{{count}} eșuate",
     "summaryFailed_other": "{{count}} eșuate",
     "remaining": "mai rămân {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Înregistrează minutele active",
+    "hint": "Salvează un marcaj fără conținut pentru fiecare minut în care lucrezi într-o sesiune de terminal, astfel încât jurnalul de activitate să arate când ai fost activ. Ce tastezi nu este salvat."
   }
 }

@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} epäonnistui",
     "summaryFailed_other": "{{count}} epäonnistui",
     "remaining": "{{time}} jäljellä"
+  },
+  "recordActiveMinutes": {
+    "label": "Tallenna aktiiviset minuutit",
+    "hint": "Tallentaa sisällöttömän merkinnän jokaisesta minuutista, jonka työskentelet pääteistunnossa, jotta toimintaloki näyttää, milloin olit aktiivinen. Kirjoittamaasi ei tallenneta."
   }
 }

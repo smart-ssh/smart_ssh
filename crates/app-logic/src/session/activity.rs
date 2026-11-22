@@ -99,15 +99,24 @@ pub async fn record_connection_event(
     detail: Option<&str>,
 ) {
     let source = event_source(session).await;
-    crate::orchestration::write_ledger_entry(
-        session,
-        source,
-        LedgerEntryContent::Connection {
-            event,
-            detail: detail.map(str::to_owned),
-        },
-    )
-    .await;
+    let (Some(store), Some(id)) = (
+        session.persistence.ledger_store.as_ref(),
+        recorded_session_id(session).await,
+    ) else {
+        return;
+    };
+    // The detail is a stable code, so no redaction pass is needed (and the
+    // session module stays independent of `orchestration`).
+    let content = LedgerEntryContent::Connection {
+        event,
+        detail: detail.map(str::to_owned),
+    };
+    if let Err(err) = store
+        .append(id, source, &content, &Default::default())
+        .await
+    {
+        tracing::warn!(error = %err, "connection entry persistence failed");
+    }
 }
 
 /// Like [`record_connection_event`] from synchronous code: runs as a small

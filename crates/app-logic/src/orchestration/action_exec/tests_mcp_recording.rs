@@ -109,7 +109,16 @@ async fn test_mcp_confirmed_action_records_proposed_decision_executed_as_mcp_age
         .ledger_store()
         .load_entries(fx.mcp_id)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(entries.len(), 3, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -172,7 +181,16 @@ async fn test_mcp_action_rejected_by_rule_records_proposed_and_rejected_only() {
         .ledger_store()
         .load_entries(fx.mcp_id)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(entries.len(), 2, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -226,7 +244,16 @@ async fn test_mcp_timeout_decision_is_attributed_to_the_mcp_agent_with_timeout_c
         .ledger_store()
         .load_entries(fx.mcp_id)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(entries.len(), 2, "{entries:?}");
     assert_eq!(entries[0].source, LedgerSource::McpAgent);
     assert!(matches!(
@@ -305,8 +332,32 @@ async fn test_chat_and_mcp_session_on_one_server_are_two_recorded_sessions() {
     chat_action.await;
 
     let ledger = mcp.profiles.ledger_store();
-    let mcp_entries = ledger.load_entries(mcp.mcp_id).await.unwrap();
-    let chat_entries = ledger.load_entries(chat_id).await.unwrap();
+    let mcp_entries = ledger
+        .load_entries(mcp.mcp_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+    let chat_entries = ledger
+        .load_entries(chat_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     assert!(!mcp_entries.is_empty() && !chat_entries.is_empty());
     assert!(mcp_entries
         .iter()
@@ -425,7 +476,16 @@ async fn test_mcp_run_output_secret_is_redacted_in_the_stored_entry() {
         .ledger_store()
         .load_entries(fx.mcp_id)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+                    | ssh_manager_core::audit::LedgerEntryContent::Connection { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     for e in &entries {
         let raw = serde_json::to_string(&e.content).unwrap();
         assert!(!raw.contains("hunter2geheim"), "{raw}");

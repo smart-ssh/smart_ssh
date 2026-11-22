@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} failed",
     "summaryFailed_other": "{{count}} failed",
     "remaining": "{{time}} left"
+  },
+  "recordActiveMinutes": {
+    "label": "Record active minutes",
+    "hint": "Stores one content-free marker per minute in which you work in a terminal session, so the activity record shows when you were active. Nothing you type is stored."
   }
 }

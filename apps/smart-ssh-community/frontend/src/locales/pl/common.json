@@ -1667,5 +1667,9 @@
     "summaryFailed_many": "nieudane: {{count}}",
     "summaryFailed_other": "nieudane: {{count}}",
     "remaining": "pozostało {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Zapisuj aktywne minuty",
+    "hint": "Zapisuje jeden znacznik bez treści na każdą minutę pracy w sesji terminala, aby rejestr aktywności pokazywał, kiedy byłeś aktywny. To, co wpisujesz, nie jest zapisywane."
   }
 }

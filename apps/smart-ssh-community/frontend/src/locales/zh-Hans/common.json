@@ -1622,5 +1622,9 @@
     "summaryInterrupted_other": "{{count}} 个已中断",
     "summaryFailed_other": "{{count}} 个失败",
     "remaining": "剩余 {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "记录活跃分钟",
+    "hint": "在终端会话中每工作一分钟,就保存一个不含内容的标记,使活动记录能显示你何时处于活跃状态。你输入的内容不会被保存。"
   }
 }

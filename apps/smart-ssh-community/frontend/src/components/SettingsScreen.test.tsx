@@ -34,6 +34,8 @@ vi.mock("../api/api", async () =>
     // echte Daten.
     getChatSessionRetentionDays: vi.fn(() => Promise.resolve(null)),
     setChatSessionRetentionDays: vi.fn(),
+    getRecordActiveMinutes: vi.fn(() => Promise.resolve(true)),
+    setRecordActiveMinutes: vi.fn(),
     getMcpServerSettings: vi.fn(() =>
       Promise.resolve({
         enabled: false,

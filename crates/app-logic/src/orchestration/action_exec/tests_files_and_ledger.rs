@@ -1472,7 +1472,18 @@ async fn test_ledger_captures_proposed_decision_executed_and_ai_message_for_auto
     )
     .await;
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
         entries.len(),
         4,
@@ -1558,7 +1569,18 @@ async fn test_ledger_redacts_fake_secret_in_command_executed_output() {
     )
     .await;
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     let serialized: Vec<String> = entries
         .iter()
         .map(|e| serde_json::to_string(&e.content).unwrap())
@@ -1625,7 +1647,18 @@ async fn test_ledger_records_rejected_decision_for_auto_deny_rule() {
     )
     .await;
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
         entries.len(),
         2,
@@ -1686,7 +1719,18 @@ async fn test_ledger_records_user_source_for_confirmed_decision() {
         responder
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
         entries.len(),
         3,
@@ -1737,7 +1781,18 @@ async fn test_ledger_records_user_source_for_rejected_decision() {
         responder
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(entries.len(), 2, "vorgeschlagen + abgelehnt: {entries:?}");
     assert_eq!(entries[1].source, LedgerSource::User);
     // spec-reviewer-Fund (Review dieses Schritts): `reason`/`code`
@@ -1809,7 +1864,18 @@ async fn test_ledger_captures_mcp_origin_independent_of_chat_persist_flag() {
     );
 
     // Kernaussage: das Ledger erfasst es trotzdem.
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
         entries.len(),
         3,
@@ -1876,7 +1942,18 @@ async fn test_ledger_redacts_fake_secret_in_command_proposed_and_ai_message() {
     )
     .await;
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     let serialized: Vec<String> = entries
         .iter()
         .map(|e| serde_json::to_string(&e.content).unwrap())
@@ -1970,7 +2047,18 @@ async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_ou
     };
     tokio::join!(action_future, advancer);
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
         entries.len(),
         2,
@@ -2053,7 +2141,18 @@ async fn test_ledger_records_edit_then_approve_auto_blocked_edit() {
         responder
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     // vorgeschlagen ("ls -la") — KEIN Decision-Eintrag dafür: der
     // Nutzer hat den ursprünglichen Vorschlag weder bestätigt noch
     // abgelehnt, sondern per `EditThenApprove` durch einen neuen Text
@@ -2126,7 +2225,18 @@ async fn test_ledger_records_edit_then_approve_accepted_edit() {
         responder
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = ledger_store
+        .load_entries(chat_session_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|e| {
+            !matches!(
+                e.content,
+                ssh_manager_core::audit::LedgerEntryContent::ActivityTick
+            )
+        })
+        .collect::<Vec<_>>();
     // vorgeschlagen ("ls -la") — kein Decision-Eintrag dafür (s.
     // Kommentar im Auto-Blocked-Gegenstück oben) —, vorgeschlagen
     // (bearbeiteter Text "ls -lah"), bestätigt, ausgeführt.

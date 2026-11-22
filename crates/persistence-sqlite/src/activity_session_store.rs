@@ -146,6 +146,31 @@ pub(crate) async fn create_chat_session(
     tx.commit().await
 }
 
+/// Sets (`Some`) or clears (`None`) the end of a chat session and of its
+/// recorded session in one transaction (issue #1447).
+pub(crate) async fn set_chat_session_ended(
+    pool: &SqlitePool,
+    session_id: Uuid,
+    ended_at: Option<chrono::DateTime<Utc>>,
+) -> Result<(), sqlx::Error> {
+    let ended = ended_at.map(|t| t.to_rfc3339());
+    let mut tx = pool.begin().await?;
+    sqlx::query("UPDATE chat_sessions SET ended_at = ?1 WHERE id = ?2")
+        .bind(&ended)
+        .bind(session_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(
+        "UPDATE activity_sessions SET ended_at = ?1 \
+         WHERE id = (SELECT activity_session_id FROM chat_sessions WHERE id = ?2)",
+    )
+    .bind(&ended)
+    .bind(session_id.to_string())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await
+}
+
 /// Ends a chat session that has no messages and no content entries (only
 /// `connection` / `activity_tick` entries do not count as content). Its
 /// `chat_sessions` row is deleted. The recorded session is kept as a

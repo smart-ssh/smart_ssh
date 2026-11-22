@@ -1652,5 +1652,9 @@
     "summaryFailed_many": "{{count}} non riuscite",
     "summaryFailed_other": "{{count}} non riuscite",
     "remaining": "{{time}} rimanenti"
+  },
+  "recordActiveMinutes": {
+    "label": "Registra i minuti attivi",
+    "hint": "Salva un indicatore senza contenuto per ogni minuto in cui lavori in una sessione terminale, così il registro attività mostra quando eri attivo. Ciò che digiti non viene salvato."
   }
 }

@@ -1667,5 +1667,9 @@
     "summaryFailed_many": "selhalo: {{count}}",
     "summaryFailed_other": "selhalo: {{count}}",
     "remaining": "zbývá {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Zaznamenávat aktivní minuty",
+    "hint": "Ukládá jednu značku bez obsahu za každou minutu, kdy pracujete v relaci terminálu, aby záznam aktivity ukazoval, kdy jste byli aktivní. To, co píšete, se neukládá."
   }
 }

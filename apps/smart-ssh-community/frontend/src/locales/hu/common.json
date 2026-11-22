@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} sikertelen",
     "summaryFailed_other": "{{count}} sikertelen",
     "remaining": "{{time}} van hátra"
+  },
+  "recordActiveMinutes": {
+    "label": "Aktív percek rögzítése",
+    "hint": "Minden percről, amelyben terminálmunkamenetben dolgozik, egy tartalom nélküli jelölést tárol, így a tevékenységnapló mutatja, mikor volt aktív. A beírt szöveg nem kerül mentésre."
   }
 }

@@ -1622,5 +1622,9 @@
     "summaryInterrupted_other": "중단됨 {{count}}",
     "summaryFailed_other": "실패 {{count}}",
     "remaining": "{{time}} 남음"
+  },
+  "recordActiveMinutes": {
+    "label": "활성 시간 기록",
+    "hint": "터미널 세션에서 작업한 1분마다 내용 없는 표시를 하나 저장하여 활동 기록에 활성 상태였던 시간을 보여 줍니다. 입력한 내용은 저장되지 않습니다."
   }
 }

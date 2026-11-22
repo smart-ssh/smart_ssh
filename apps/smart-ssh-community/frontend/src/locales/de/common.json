@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} fehlgeschlagen",
     "summaryFailed_other": "{{count}} fehlgeschlagen",
     "remaining": "noch {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Aktive Minuten aufzeichnen",
+    "hint": "Speichert pro Minute, in der du in einer Terminal-Sitzung arbeitest, eine inhaltsfreie Markierung, damit die Aktivitätsaufzeichnung zeigt, wann du aktiv warst. Was du tippst, wird nicht gespeichert."
   }
 }

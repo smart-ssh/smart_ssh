@@ -281,23 +281,12 @@ impl SqliteChatSessionStore {
 
     /// Spec 0034, Abschnitt 4: "endet bei `disconnect()`".
     pub async fn mark_ended(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
-        let now = Utc::now().to_rfc3339();
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")
-            .bind(&now)
-            .bind(session_id.to_string())
-            .execute(&mut *tx)
-            .await?;
-        // Issue #1447: the recorded session ends with its chat session.
-        sqlx::query(
-            "UPDATE activity_sessions SET ended_at = ?1 \
-             WHERE id = (SELECT activity_session_id FROM chat_sessions WHERE id = ?2)",
+        crate::activity_session_store::set_chat_session_ended(
+            &self.pool,
+            session_id,
+            Some(Utc::now()),
         )
-        .bind(&now)
-        .bind(session_id.to_string())
-        .execute(&mut *tx)
         .await?;
-        tx.commit().await?;
         Ok(())
     }
 
@@ -327,19 +316,7 @@ impl SqliteChatSessionStore {
     /// `MAX(sequence) + 1`-Logik, ohne einen eigenen Zähler
     /// zurücksetzen/fortführen zu müssen.
     pub async fn mark_resumed(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("UPDATE chat_sessions SET ended_at = NULL WHERE id = ?")
-            .bind(session_id.to_string())
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query(
-            "UPDATE activity_sessions SET ended_at = NULL \
-             WHERE id = (SELECT activity_session_id FROM chat_sessions WHERE id = ?1)",
-        )
-        .bind(session_id.to_string())
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
+        crate::activity_session_store::set_chat_session_ended(&self.pool, session_id, None).await?;
         Ok(())
     }
 

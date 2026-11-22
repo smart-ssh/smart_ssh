@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} mislukt",
     "summaryFailed_other": "{{count}} mislukt",
     "remaining": "nog {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Actieve minuten vastleggen",
+    "hint": "Slaat per minuut waarin je in een terminalsessie werkt een markering zonder inhoud op, zodat het activiteitenlogboek laat zien wanneer je actief was. Wat je typt wordt niet opgeslagen."
   }
 }

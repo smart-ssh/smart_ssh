@@ -259,6 +259,13 @@ export const getChatSessionRetentionDays = () =>
 export const setChatSessionRetentionDays = (days: number | null) =>
   invoke<void>("set_chat_session_retention_days", { days });
 
+/** Issue #1447: whether active minutes of terminal sessions are recorded in the
+ * activity record (content-free markers only). Default on. */
+export const getRecordActiveMinutes = () => invoke<boolean>("get_record_active_minutes");
+
+export const setRecordActiveMinutes = (value: boolean) =>
+  invoke<void>("set_record_active_minutes", { value });
+
 /** Issue #856: security switches are written by the backend only; it rejects
  * an unknown provider id (`RISK_SETTINGS_PROVIDER_UNKNOWN`) and enabling
  * without a provider (`RISK_SETTINGS_PROVIDER_REQUIRED`). */

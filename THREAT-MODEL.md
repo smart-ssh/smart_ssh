@@ -306,6 +306,14 @@ size, never content), connection events and activity ticks. It is written
 redacted, in the encrypted database file, and outlives deleting a chat or a
 server.
 
+**Connection events and activity ticks (#1447).** Connection entries carry
+only an event name and a stable error code, never a message text. An activity
+tick has no content: the terminal input path only signals "input happened"
+(no keystrokes, no text) and at most one tick per minute is written. The two IPC
+commands `get_record_active_minutes` / `set_record_active_minutes` only read and
+toggle that recording setting; they have no other side effect. Disabling the
+setting stops new ticks.
+
 **Who can read it.** Extensions of an edition read it through the read-only
 extension API (`app_logic::ext`: `list_recorded_sessions`,
 `list_record_entries`, `record_entries_of_session`). The API has no write path,

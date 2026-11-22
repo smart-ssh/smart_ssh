@@ -1637,5 +1637,9 @@
     "summaryFailed_one": "{{count}} mislyktes",
     "summaryFailed_other": "{{count}} mislyktes",
     "remaining": "{{time}} igjen"
+  },
+  "recordActiveMinutes": {
+    "label": "Lagre aktive minutter",
+    "hint": "Lagrer en innholdsfri markering for hvert minutt du jobber i en terminaløkt, slik at aktivitetsloggen viser når du var aktiv. Det du skriver, lagres ikke."
   }
 }

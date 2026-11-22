@@ -1652,5 +1652,9 @@
     "summaryFailed_many": "{{count}} en échec",
     "summaryFailed_other": "{{count}} en échec",
     "remaining": "{{time}} restantes"
+  },
+  "recordActiveMinutes": {
+    "label": "Enregistrer les minutes d'activité",
+    "hint": "Enregistre un repère sans contenu par minute de travail dans une session de terminal, afin que l'historique d'activité indique quand vous étiez actif. Rien de ce que vous tapez n'est enregistré."
   }
 }

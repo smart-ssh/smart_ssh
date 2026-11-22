@@ -1622,5 +1622,9 @@
     "summaryInterrupted_other": "{{count}} bị gián đoạn",
     "summaryFailed_other": "{{count}} thất bại",
     "remaining": "còn {{time}}"
+  },
+  "recordActiveMinutes": {
+    "label": "Ghi lại các phút hoạt động",
+    "hint": "Lưu một dấu không có nội dung cho mỗi phút bạn làm việc trong phiên terminal, để nhật ký hoạt động cho biết khi nào bạn hoạt động. Những gì bạn gõ không được lưu."
   }
 }
