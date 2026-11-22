@@ -515,6 +515,11 @@ where
     }
 
     if !registry.is_mcp_session(session_id) {
+        // Issue #1444: the tab was closed while connecting; the recorded
+        // session attached by `connect` must not stay open forever.
+        if let Some(orphan) = sessions.get(session_id) {
+            end_recorded_session(&orphan).await;
+        }
         disconnect_orphan(session_id).await;
         return Err(EnsureMcpSessionError::Closed);
     }

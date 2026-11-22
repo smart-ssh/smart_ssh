@@ -184,34 +184,217 @@ async fn test_mcp_action_rejected_by_rule_records_proposed_and_rejected_only() {
     ));
 }
 
-/// The confirmation wait itself needs a 5-minute clock, which cannot be
-/// paused while a real database is open (pool timeouts use the clock). The
-/// timeout's ledger fields are therefore checked on the record that
-/// `handle_user_decision` writes for `RejectionReason::Timeout`.
-#[test]
-fn test_mcp_timeout_decision_is_attributed_to_the_mcp_agent_with_timeout_code() {
-    let record = super::decision::DecisionRecord::new(
-        &RejectionReason::Timeout,
-        &ActionOrigin::Mcp {
+/// A real MCP confirmation timeout on a real database (paused clock set up
+/// after the database, as in the chat counterpart
+/// `test_ledger_records_origin_derived_source_and_timeout_code_for_timed_out_confirmation`).
+#[tokio::test]
+async fn test_mcp_timeout_decision_is_attributed_to_the_mcp_agent_with_timeout_code() {
+    let fx = mcp_fixture(MockSshTransport::default(), Some("Claude Code")).await;
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+    let profile_store = InMemoryProfileStore::default();
+    tokio::time::pause();
+    let action_future = handle_action_proposed(
+        &fx.session,
+        Uuid::new_v4(),
+        suggest("ls -la"),
+        &emitter,
+        &profile_store,
+        &confirmations,
+        ActionOrigin::Mcp {
             client_name: Some("Claude Code".to_string()),
         },
-        "confirm".to_string(),
-        "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM".to_string(),
-        None,
-        None,
+        test_fresh_rejection_flag(),
     );
-    assert_eq!(record.source, LedgerSource::McpAgent);
-    assert_eq!(record.code.as_deref(), Some("TIMEOUT"));
-    // A human's denial keeps the user as the source.
-    let user = super::decision::DecisionRecord::new(
-        &RejectionReason::User,
-        &ActionOrigin::Mcp { client_name: None },
-        "confirm".to_string(),
-        "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM".to_string(),
-        None,
-        None,
+    let advancer = async {
+        loop {
+            if fx.session.conn.pending_action.lock().unwrap().is_some() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
+            .await;
+        // Resume before the timeout branch writes its ledger entry (real
+        // SQLite I/O must not run on the paused clock).
+        tokio::time::resume();
+    };
+    tokio::join!(action_future, advancer);
+
+    let entries = fx
+        .profiles
+        .ledger_store()
+        .load_entries(fx.mcp_id)
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(entries[0].source, LedgerSource::McpAgent);
+    assert!(matches!(
+        entries[0].content,
+        LedgerEntryContent::CommandProposed { .. }
+    ));
+    assert_eq!(entries[1].source, LedgerSource::McpAgent);
+    assert!(matches!(
+        &entries[1].content,
+        LedgerEntryContent::Decision {
+            outcome: LedgerDecisionOutcome::Rejected,
+            code: Some(code),
+            ..
+        } if code == "TIMEOUT"
+    ));
+}
+
+/// A chat session and an MCP session on one server write to two separate
+/// recorded sessions; each ledger holds only its own entries.
+#[tokio::test]
+async fn test_chat_and_mcp_session_on_one_server_are_two_recorded_sessions() {
+    let mcp = mcp_fixture(
+        MockSshTransport::default().with_response("ls -la", output("total 0")),
+        Some("Claude Code"),
+    )
+    .await;
+    let chat_id = mcp
+        .profiles
+        .chat_session_store()
+        .create_session(&mcp.server_id, None)
+        .await
+        .unwrap();
+    let mut chat = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default().with_response("pwd", output("/")),
     );
-    assert_eq!(user.source, LedgerSource::User);
+    chat.set_server_id_for_tests(mcp.server_id);
+    chat.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
+    chat.set_ledger_store_for_tests(Some(mcp.profiles.ledger_store()));
+    chat.set_chat_session_store_for_tests(Some(mcp.profiles.chat_session_store()));
+    chat.set_chat_session_id_for_tests(tokio::sync::Mutex::new(Some(chat_id)));
+    assert_ne!(chat_id, mcp.mcp_id);
+
+    let confirmations = ConfirmationRegistry::new();
+    let profile_store = InMemoryProfileStore::default();
+    let emitter = TestEmitter::default();
+    let mcp_action = handle_action_proposed(
+        &mcp.session,
+        Uuid::new_v4(),
+        suggest("ls -la"),
+        &emitter,
+        &profile_store,
+        &confirmations,
+        ActionOrigin::Mcp {
+            client_name: Some("Claude Code".to_string()),
+        },
+        test_fresh_rejection_flag(),
+    );
+    tokio::join!(
+        mcp_action,
+        approve_first_proposed_action(&emitter, &confirmations)
+    );
+    // The chat side runs without a confirmation (allow-everything policy).
+    let chat_emitter = TestEmitter::default();
+    let chat_confirmations = ConfirmationRegistry::new();
+    let chat_action = handle_action_proposed(
+        &chat,
+        Uuid::new_v4(),
+        suggest("pwd"),
+        &chat_emitter,
+        &profile_store,
+        &chat_confirmations,
+        ActionOrigin::Internal,
+        test_fresh_rejection_flag(),
+    );
+    chat_action.await;
+
+    let ledger = mcp.profiles.ledger_store();
+    let mcp_entries = ledger.load_entries(mcp.mcp_id).await.unwrap();
+    let chat_entries = ledger.load_entries(chat_id).await.unwrap();
+    assert!(!mcp_entries.is_empty() && !chat_entries.is_empty());
+    assert!(mcp_entries
+        .iter()
+        .all(|e| e.source == LedgerSource::McpAgent || e.source == LedgerSource::User));
+    assert!(mcp_entries.iter().any(|e| matches!(
+        &e.content,
+        LedgerEntryContent::CommandProposed { command, .. } if command == "ls -la"
+    )));
+    assert!(chat_entries
+        .iter()
+        .all(|e| e.source != LedgerSource::McpAgent));
+    assert!(chat_entries.iter().any(|e| matches!(
+        &e.content,
+        LedgerEntryContent::CommandProposed { command, .. } if command == "pwd"
+    )));
+    assert!(!mcp_entries.iter().any(|e| matches!(
+        &e.content,
+        LedgerEntryContent::CommandProposed { command, .. } if command == "pwd"
+    )));
+    assert!(!chat_entries.iter().any(|e| matches!(
+        &e.content,
+        LedgerEntryContent::CommandProposed { command, .. } if command == "ls -la"
+    )));
+}
+
+/// Closing the MCP tab while it is still connecting ends the recorded
+/// session attached by `connect`.
+#[tokio::test]
+async fn test_mcp_tab_closed_during_connect_ends_the_recorded_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles =
+        persistence_sqlite::SqliteProfileStore::connect_plaintext(&tmp.path().join("t.sqlite3"))
+            .await
+            .unwrap();
+    let server = ServerBuilder::new().name("Test-Server").build();
+    profiles.create_server(&server).await.unwrap();
+    let sessions = crate::session::SessionManager::new();
+    let registry = crate::mcp_sessions::McpSessionRegistry::new();
+    let key = crate::mcp_sessions::McpSessionKey::new(server.id, Some("Claude Code"));
+    let emitter = TestEmitter::default();
+    let recorded = std::sync::Mutex::new(None);
+
+    let result = crate::mcp_sessions::ensure_mcp_session(
+        &registry,
+        &sessions,
+        &key,
+        &emitter,
+        |id| {
+            let (registry, sessions, profiles, recorded) =
+                (&registry, &sessions, &profiles, &recorded);
+            async move {
+                let mut session = session_with_ai_provider(
+                    MockAiProvider::new(vec![AiEvent::Done]),
+                    MockSshTransport::default(),
+                );
+                session.set_server_id_for_tests(server.id);
+                session
+                    .set_activity_session_store_for_tests(Some(profiles.activity_session_store()));
+                let session = std::sync::Arc::new(session);
+                sessions.insert(id, session.clone());
+                crate::mcp_sessions::attach_recorded_session(
+                    &session,
+                    &server.id,
+                    Some("Claude Code"),
+                )
+                .await;
+                *recorded.lock().unwrap() =
+                    *session.persistence.mcp_activity_session_id.lock().await;
+                // The user closes the tab while connecting.
+                registry.unregister(id);
+                Ok::<(), ()>(())
+            }
+        },
+        |id| {
+            sessions.remove(id);
+            async {}
+        },
+    )
+    .await;
+    assert!(result.is_err());
+    let mcp_id = recorded.lock().unwrap().expect("recorded session attached");
+    let row = profiles
+        .activity_session_store()
+        .load(mcp_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(row.ended_at.is_some());
 }
 
 #[tokio::test]

@@ -1,6 +1,6 @@
 # Spec 0057 — Reiches Session-Modell (Ledger, Summary, Kompaktierung)
 
-Status: umgesetzt, Aktivitätsprotokoll (§1.5–§1.8) in Umsetzung (Epic #1442): aufgezeichnete Sitzungen und Ledger-Tabelle vorhanden (#1443), Rest offen
+Status: umgesetzt, Aktivitätsprotokoll (§1.5–§1.8) in Umsetzung (Epic #1442): aufgezeichnete Sitzungen und Ledger-Tabelle (#1443), Dateilese-/Schreibaktionen (#1446) und MCP-ausgelöste Aktionen (#1444) vorhanden, Rest offen
 Zweck: Lange Sitzungen und große Notizen lassen den KI-Kontext nicht mehr anwachsen, bis die Sitzung hängt: Der an die KI gesendete Kontext wird vor jeder Anfrage bei Bedarf verkleinert (Zusammenfassung alter Runden, Kürzung einzelner Ausgaben, verkürzte Notiz), während ein dauerhaftes, redigiertes Ledger alle Vorgänge der Sitzung vollständig festhält.
 Bezüge: Spec 0004 (Persistenz und Migrationen), Spec 0034 (Chat-Sitzungen), Spec 0036 (Chat-Inhalte), Spec 0101 (verschlüsselte Datenbank), Spec 0039 (Fencing), Spec 0051 (Rate-Limit-Handling), Spec 0024 (Sprache), Spec 0003 und 0023 (Notiz-Vorschläge, Diff-Bestätigung), Spec 0058 und 0079 (Notiz-Oberfläche), ADR 0003 und 0004 (Notiz-Scopes), ADR 0047 (Ledger), ADR 0048 (Token-Schätzung, Kontextaufbau), ADR 0049 (Summary-Fallback), ADR 0050 (Notiz-Kürzungs-Dialog).
 Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
