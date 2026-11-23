@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ssh_manager_core::ai::AiEvent;
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::ssh::mock::MockSftpSession;
 
 use crate::activity::{
@@ -897,9 +898,13 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
             fn drop(&mut self) {
                 // Synchronous, so the push is queued before the scope's
                 // cancellation completes.
-                futures::executor::block_on(
-                    self.0.emit_session_started(ActivitySessionKind::Mcp, None),
-                );
+                futures::executor::block_on(self.0.emit_activity_for_content(
+                    LedgerSource::Ai,
+                    &LedgerEntryContent::AiMessage {
+                        text: "late".into(),
+                    },
+                    None,
+                ));
             }
         }
         let _g = OnDrop(pusher);
@@ -936,15 +941,7 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
         .expect("end delivered");
     let mcp_start = kinds
         .iter()
-        .position(|k| {
-            matches!(
-                k,
-                ActivityEventKind::SessionStarted {
-                    kind: ActivitySessionKind::Mcp,
-                    ..
-                }
-            )
-        })
+        .position(|k| matches!(k, ActivityEventKind::AiMessage { .. }))
         .unwrap_or_else(|| panic!("pushed event delivered: {kinds:?}"));
     assert!(mcp_start < end, "{kinds:?}");
     drop(release);
@@ -989,4 +986,71 @@ async fn test_no_event_follows_the_session_end_when_its_own_scope_times_out() {
         .expect("end delivered");
     assert_eq!(end, kinds.len() - 1, "{kinds:?}");
     drop(release);
+}
+
+/// Issue #1545: a start emitted after the exit began (between phase 1 and
+/// the end step, or after the end step) queues nothing, so no start is left
+/// without an end; a session started before still gets one start and one end.
+#[tokio::test]
+async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let manager = manager_with_two(&hub).await;
+    let mk = || {
+        Arc::new(with_hub(
+            session_allowing_all(MockSshTransport::default()),
+            &hub,
+            false,
+        ))
+    };
+    // Connect in flight: inserted before the exit, starts after it began.
+    let before_end = mk();
+    manager.insert(Uuid::new_v4(), before_end.clone());
+    let after_end = mk();
+    manager.insert(Uuid::new_v4(), after_end.clone());
+    let budget = crate::tasks::ExitBudget::default();
+    // A task of a session scope that emits its start while `shutdown_sessions`
+    // is still waiting for it, i.e. between phase 1 and the end step.
+    let (go, go_rx) = channel::<()>();
+    let handle = tokio::runtime::Handle::current();
+    let in_flight = before_end.clone();
+    let spawned = sup
+        .session_scope(Uuid::new_v4())
+        .spawn_blocking("late-start", move || {
+            let _ = go_rx.recv();
+            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Chat, None));
+        });
+    assert!(spawned);
+    let exit = manager.shutdown_for_exit(&sup, budget);
+    tokio::pin!(exit);
+    // Poll the exit once: it sets the flag synchronously, then waits for the
+    // blocking task. No manual `begin_exit` here.
+    tokio::select! {
+        biased;
+        () = &mut exit => panic!("exit must wait for the blocking task"),
+        () = std::future::ready(()) => {}
+    }
+    go.send(()).expect("task alive");
+    exit.await;
+    after_end
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    // Inserted after the exit began.
+    let late = mk();
+    manager.insert(Uuid::new_v4(), late.clone());
+    late.emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    sup.shutdown_app(Duration::from_secs(3)).await;
+    let events: Vec<_> = rx.try_iter().collect();
+    let starts = events
+        .iter()
+        .filter(|e| matches!(e.kind, ActivityEventKind::SessionStarted { .. }))
+        .count();
+    let ends = events
+        .iter()
+        .filter(|e| matches!(e.kind, ActivityEventKind::SessionEnded { .. }))
+        .count();
+    assert_eq!((starts, ends), (2, 2), "{events:?}");
 }

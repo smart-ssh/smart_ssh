@@ -593,6 +593,9 @@ pub struct Session {
     /// Issue #1539: `true` once `SessionEnded` was queued; later events of
     /// this session are dropped so none follows its end.
     activity_ended: std::sync::Mutex<bool>,
+    /// Issue #1545: set once the app exit began; `SessionStarted` is then
+    /// refused. Only written while holding the `activity_ended` lock.
+    activity_exiting: std::sync::atomic::AtomicBool,
 }
 
 impl std::ops::Deref for Session {
@@ -675,6 +678,7 @@ impl Session {
             activity: None,
             activity_started: std::sync::atomic::AtomicBool::new(false),
             activity_ended: std::sync::Mutex::new(false),
+            activity_exiting: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
