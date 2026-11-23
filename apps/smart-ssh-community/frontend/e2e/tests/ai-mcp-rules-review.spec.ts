@@ -141,14 +141,102 @@ test("settings: AI Provider risk switches are labelled, in Tab order and toggle"
   await expect(red).toBeFocused();
   await page.keyboard.press("Space");
   await expect(red).toBeChecked();
-  // The switch stays disabled while the save runs; wait for it to be usable and focused again.
-  await expect(red).toBeEnabled();
-  // The browser drops focus from a disabled control; restore it explicitly.
-  await red.focus();
+  // The switch keeps focus while the save runs and afterwards (no `disabled`).
   await expect(red).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(second).toBeFocused();
   await page.keyboard.press("Space");
   await expect(second).not.toBeChecked();
+});
+
+// Issue #1526: the red-risk switch keeps keyboard focus during a slow save,
+// ignores a second toggle meanwhile and reverts (keeping focus) on failure.
+test("settings: red-risk switch keeps focus while saving, ignores repeats, reverts on failure", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, redRiskAlwaysConfirm: false },
+    commands: { ...base.commands, set_red_risk_always_confirm: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
+  await expect(red).not.toBeChecked();
+  await red.focus();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toBeFocused();
+  await app.release("set_red_risk_always_confirm", { error: { code: "E2E", message: "save failed" } });
+  await expect(red).not.toBeChecked();
+  await expect(red).not.toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  expect((await app.calls("set_red_risk_always_confirm")).length).toBe(1);
+});
+
+// Issue #1526 (review): the second-opinion switch shows the busy state too
+// while its own save is held, and ignores further toggles.
+test("settings: second-opinion switch is aria-disabled while saving and ignores repeats", async ({ app }) => {
+  const base = longContent();
+  // Start from a loaded, non-default state so the test never races the load.
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true },
+    commands: { ...base.commands, set_risk_second_opinion_settings: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  await expect(second).toBeChecked();
+  await second.focus();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await expect(second).toHaveAttribute("aria-disabled", "true");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await expect(second).toBeFocused();
+  await app.release("set_risk_second_opinion_settings", { result: null });
+  await expect(second).not.toHaveAttribute("aria-disabled", "true");
+  await expect(second).not.toBeChecked();
+  expect((await app.calls("set_risk_second_opinion_settings")).length).toBe(1);
+});
+
+// Issue #1536: a failed save restores the previous switch and provider values.
+test("settings: failed second-opinion save reverts switch and provider select and keeps focus", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true, riskClassifierProviderId: "p1" },
+    commands: { ...base.commands, set_risk_second_opinion_settings: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  const select = dialog.getByRole("combobox", { name: "Provider for the second opinion" });
+  await expect(second).toBeChecked();
+  await expect(select).toHaveValue("p1");
+
+  // Provider change fails: select goes back to p1.
+  await select.focus();
+  await select.selectOption("p2");
+  await expect(select).toHaveValue("p2");
+  await app.release("set_risk_second_opinion_settings", { error: { code: "E2E", message: "save failed" } });
+  await expect(select).toHaveValue("p1");
+  await expect(select).toBeFocused();
+  await expect(dialog.getByText("save failed")).toBeVisible();
+
+  // Switch toggle fails: switch is on again.
+  await second.focus();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await app.release("set_risk_second_opinion_settings", { error: { code: "E2E", message: "save failed" } });
+  await expect(second).toBeChecked();
+  await expect(second).not.toHaveAttribute("aria-disabled", "true");
+  await expect(second).toBeFocused();
+  await expect(select).toHaveValue("p1");
 });

@@ -82,7 +82,12 @@ begrenzte Warteschlange an einen eigenen Arbeitsfaden. Ist ein Beobachter zu
 langsam, gehen Ereignisse verloren (gezählt, ohne Inhalt protokolliert); ein
 Beobachter, der abstürzt, stört weder die Sitzung noch andere Beobachter.
 Ohne registrierten Beobachter wird kein Ereignis gebaut, und es ändert sich
-nichts. Eine Chat-Sitzung wird beim Verwerfen ohne Nachricht samt ihrer Zeile
+nichts. Das Sitzungsende trägt einen Grund: „geschlossen" (ausdrücklich
+geschlossen) oder „App beendet". Beim Beenden der App erhält ein Beobachter für
+jede noch offene Sitzung ein Sitzungsende mit dem Grund „App beendet"; bereits
+eingereihte Ereignisse werden noch zugestellt, höchstens bis zur Zeitgrenze des
+Beendens (3 s), sodass ein blockierender Beobachter das Beenden nicht länger
+aufhält. Eine Chat-Sitzung wird beim Verwerfen ohne Nachricht samt ihrer Zeile
 entfernt; nichts bleibt zurück.
 
 ### 1.4 Frühere Protokolldaten

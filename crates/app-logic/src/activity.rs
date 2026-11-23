@@ -9,7 +9,7 @@
 //!
 //! The core keeps no activity record of its own in this module. Events are
 //! built from the content that was already redacted by the central
-//! redaction of the ledger funnel (`emit_activity_event` in `chat_turn/activity_funnel.rs`), so an
+//! redaction in the activity funnel (`emit_activity_event` in `chat_turn/activity_funnel.rs`), so an
 //! observer only ever sees redacted text. With no observer registered no
 //! event is built and nothing is queued.
 //!
@@ -73,8 +73,12 @@ pub enum ActivitySessionKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SessionEndReason {
-    /// The session was closed (by the user or because the app shut down).
+    /// The session was closed explicitly (by the user, or by the app for
+    /// that session alone, e.g. a failed reconnect).
     Closed,
+    /// The app is quitting: the session was still open at exit and is not
+    /// closed individually.
+    AppExit,
 }
 
 /// The server as it was when the session started.
@@ -312,15 +316,8 @@ impl ActivityHub {
     }
 }
 
-fn deliver(observers: &[Arc<dyn ActivityObserver>], event: &ActivityEvent) {
-    for observer in observers {
-        if catch_unwind(AssertUnwindSafe(|| observer.on_event(event))).is_err() {
-            tracing::warn!("an activity observer panicked");
-        }
-    }
-}
-
-/// Delivers events until the sender is gone or `scope` is cancelled. A
+/// Delivers events until the sender is gone or `scope` is cancelled (then the
+/// queue is drained once). A
 /// panicking observer is logged (no content) and does not stop the others.
 fn run_worker(
     rx: Receiver<ActivityEvent>,
@@ -329,12 +326,26 @@ fn run_worker(
 ) {
     loop {
         if scope.is_some_and(TaskScope::is_cancelled) {
+            // App exit: deliver what is already queued (the exit sequence
+            // queues the `SessionEnded` events before it cancels). The
+            // supervisor's shutdown timeout bounds a blocking observer.
+            while let Ok(event) = rx.try_recv() {
+                deliver(observers, &event);
+            }
             return;
         }
         match rx.recv_timeout(WORKER_POLL) {
             Ok(event) => deliver(observers, &event),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
+        }
+    }
+}
+
+fn deliver(observers: &[Arc<dyn ActivityObserver>], event: &ActivityEvent) {
+    for observer in observers {
+        if catch_unwind(AssertUnwindSafe(|| observer.on_event(event))).is_err() {
+            tracing::warn!("an activity observer panicked");
         }
     }
 }
