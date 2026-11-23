@@ -9,7 +9,6 @@ Bezüge: Spec 0034 (Chat-Sitzungen), Spec 0101 (Datenbankverschlüsselung), Spec
 Diese Inhalte liegen dauerhaft in der Datenbank:
 
 - Chat-Nachrichten einer Sitzung (Spec 0034),
-- das Ausführungsprotokoll einer Sitzung (Spec 0057),
 - die Eingabe-Historie je Server (Spec 0015),
 - die rollierende Zusammenfassung einer Sitzung (Spec 0057).
 

@@ -400,10 +400,7 @@ pub(crate) fn session_with_ai_provider(
             // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
             // no-opt bei `None` bereits vollständig.
             chat_session_store: None,
-            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
-            activity_session_store: None,
-            mcp_activity_session_id: AsyncMutex::new(None),
         },
         conn: TransportState {
             terminal: StdMutex::new(None),
@@ -641,27 +638,6 @@ pub(crate) async fn session_with_real_chat_persistence(
     Uuid,
     tempfile::TempDir,
 ) {
-    let (session, chat_store, chat_session_id, tmp_dir, _ledger_store) =
-        session_with_real_chat_and_ledger_persistence(ai_events, transport).await;
-    (session, chat_store, chat_session_id, tmp_dir)
-}
-
-/// Wie [`session_with_real_chat_persistence`], zusätzlich mit einem
-/// echten, migrierten In-Memory-`SqliteLedgerStore` (Spec 0057, §1) —
-/// derselbe Verschlüsselungs-Cipher wie für `chat_session_store`
-/// (Spec 0057, §1.3: "wie die Chat-Historie", kein zweiter
-/// Mechanismus), auf dieselbe `chat_sessions`-Zeile gebunden (Migration
-/// 0011: `ledger_entries.session_id` referenziert `chat_sessions(id)`).
-pub(crate) async fn session_with_real_chat_and_ledger_persistence(
-    ai_events: Vec<AiEvent>,
-    transport: MockSshTransport,
-) -> (
-    Session,
-    persistence_sqlite::SqliteChatSessionStore,
-    Uuid,
-    tempfile::TempDir,
-    persistence_sqlite::SqliteLedgerStore,
-) {
     // Nur die öffentliche `connect(db_path)`-API steht app-shell zur
     // Verfügung (`connect_with`/`:memory:` sind `pub(crate)` in
     // `persistence-sqlite`, s. dortiger Doc-Kommentar) — eine echte,
@@ -699,15 +675,13 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
         .unwrap();
     let chat_store = profile_store.chat_session_store();
     let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
-    let ledger_store = profile_store.ledger_store();
 
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
     session.set_server_id_for_tests(server_id);
     session.set_chat_session_store_for_tests(Some(chat_store.clone()));
-    session.set_ledger_store_for_tests(Some(ledger_store.clone()));
     session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
-    (session, chat_store, chat_session_id, tmp_dir, ledger_store)
+    (session, chat_store, chat_session_id, tmp_dir)
 }
 
 /// Beantwortet den ersten Bestätigungsdialog (Spec 0068: Secret-Pfade
@@ -730,4 +704,55 @@ pub(crate) async fn resolve_first_confirm(
         }
         tokio::task::yield_now().await;
     }
+}
+
+/// Records every activity event a session reports (issue #1506: the core
+/// keeps no record, so tests read what observers receive).
+#[derive(Default)]
+pub(crate) struct ActivityProbe(std::sync::Mutex<Vec<crate::activity::ActivityEvent>>);
+
+impl crate::activity::ActivityObserver for ActivityProbe {
+    fn on_event(&self, event: &crate::activity::ActivityEvent) {
+        self.0.lock().unwrap().push(event.clone());
+    }
+}
+
+impl ActivityProbe {
+    pub(crate) fn events(&self) -> Vec<crate::activity::ActivityEvent> {
+        self.0.lock().unwrap().clone()
+    }
+
+    /// The kinds of all events, session start/end left out.
+    pub(crate) fn kinds(&self) -> Vec<crate::activity::ActivityEventKind> {
+        use crate::activity::ActivityEventKind as K;
+        self.events()
+            .into_iter()
+            .map(|e| e.kind)
+            .filter(|k| !matches!(k, K::SessionStarted { .. } | K::SessionEnded { .. }))
+            .collect()
+    }
+}
+
+/// Reports `session`'s activity to a probe, delivered synchronously.
+pub(crate) fn with_activity_probe(session: Session) -> (Session, Arc<ActivityProbe>) {
+    let probe = Arc::new(ActivityProbe::default());
+    let hub = Arc::new(crate::activity::ActivityHub::new_inline_for_tests(vec![
+        probe.clone(),
+    ]));
+    let snapshot = crate::activity::ServerSnapshot {
+        id: "srv".into(),
+        name: "Test".into(),
+        host: "example.test".into(),
+        port: 22,
+        user: "deploy".into(),
+        group_ids: vec![],
+        group_names: vec![],
+        tags: vec![],
+    };
+    let session = session.with_activity_reporting(crate::activity::ActivityReporting::new(
+        &hub,
+        "runtime-1".into(),
+        snapshot,
+    ));
+    (session, probe)
 }

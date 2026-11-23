@@ -42,9 +42,6 @@ export {
   listGroups,
   listAiProviders,
   listChatSessions,
-  listRecordedSessions,
-  listRecordEntries,
-  recordEntriesOfSession,
 } from "./api/api";
 
 export { TECHNICAL_INPUT_PROPS } from "./lib/technicalInputProps";
@@ -66,16 +63,6 @@ export type {
   AiProviderConfigDto,
   ChatSessionSummaryDto,
   GroupDto,
-  RecordDecisionOutcome,
-  RecordEntryFilter,
-  RecordEntryInfo,
-  RecordEntryType,
-  RecordPage,
-  RecordPageRequest,
-  RecordSessionKind,
-  RecordSource,
-  RecordedSessionFilter,
-  RecordedSessionInfo,
   StartupStateDto,
 } from "./api/types";
 export type { ComposerContext, ComposerAction } from "./extensions/registry";

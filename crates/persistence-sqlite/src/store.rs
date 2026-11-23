@@ -497,17 +497,6 @@ impl SqliteProfileStore {
             .collect())
     }
 
-    /// Store for recorded sessions (Spec 0057, activity record).
-    pub fn activity_session_store(&self) -> crate::SqliteActivitySessionStore {
-        crate::SqliteActivitySessionStore::new(self.pool.clone())
-    }
-
-    /// Wie [`Self::chat_session_store`], für das Session-Ledger (Spec
-    /// 0057, §1).
-    pub fn ledger_store(&self) -> crate::SqliteLedgerStore {
-        crate::SqliteLedgerStore::new(self.pool.clone())
-    }
-
     async fn fetch_tags(&self, server_id: &str) -> ProfileResult<Vec<String>> {
         let rows = sqlx::query("SELECT tag FROM server_tags WHERE server_id = ? ORDER BY tag")
             .bind(server_id)

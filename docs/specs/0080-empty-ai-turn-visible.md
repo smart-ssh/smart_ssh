@@ -39,7 +39,7 @@ anderen Endungen verhalten sich wie zuvor.
 
 **A2 — Leere Runde melden.** Endet eine Runde regulär, ohne dass in dieser
 Runde Text angefallen oder eine Aktion vorgeschlagen wurde, meldet das
-Backend das der Oberfläche. Nichts davon landet in Ledger oder Verlauf. Auf
+Backend das der Oberfläche. Nichts davon landet im Verlauf. Auf
 einen Fehler folgt keine solche Meldung.
 
 Die Meldung gilt nur für eine Runde, die eine Nutzer-Nachricht beantwortet:
@@ -71,7 +71,7 @@ weitergegeben und nie dem Aktions-Parser des Fallback-Modus zugeführt.
 
 ## 4. Invarianten
 
-- Denkinhalte erreichen weder Oberfläche, Ledger, Verlauf, Aktions-Parser
+- Denkinhalte erreichen weder Oberfläche, Verlauf, Aktions-Parser
   noch Log; geloggt wird nur ihre Länge.
 - Der Retry aus A1 wiederholt nie eine Runde, die schon Text geliefert hat.
 - Höchstens ein Retry je Anfrage.
@@ -99,7 +99,7 @@ Anbieter:
 
 Orchestrierung:
 
-- T11 Runde nur mit Ende → eine Leer-Meldung, keine Ledger-Zeile.
+- T11 Runde nur mit Ende → eine Leer-Meldung.
 - T12 Text und Ende → keine Leer-Meldung. T13 Aktion und Ende ohne Text →
   keine. T14 Fehler → keine.
 - Aktion in Runde 1 ausgeführt oder blockiert, Folgerunde ohne Text →

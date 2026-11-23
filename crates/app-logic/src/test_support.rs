@@ -147,10 +147,7 @@ fn session_with_ai_transport_and_server_id(
             chat_content: Default::default(),
             title_attempts: Default::default(),
             chat_session_store: None,
-            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
-            activity_session_store: None,
-            mcp_activity_session_id: AsyncMutex::new(None),
         },
         conn: crate::session::TransportState {
             terminal: std::sync::Mutex::new(None),

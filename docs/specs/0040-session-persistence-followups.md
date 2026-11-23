@@ -92,7 +92,7 @@ und Audit-Log bleiben getrennt.
 
 ## 9. Nicht Teil dieser Spec
 
-- Das reiche Session-Modell (Ledger, Zusammenfassung, Kompaktierung)
+- Das reiche Session-Modell (Zusammenfassung, Kompaktierung)
   beschreibt Spec 0057.
 
 ## 10. Sicherheitszusagen

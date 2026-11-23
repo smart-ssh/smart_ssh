@@ -51,22 +51,22 @@ fn summary_marker(language: crate::system_prompt::PromptLanguage) -> &'static st
 /// gesendeten Kontext, nie den Ledger." End-to-End-Beweis: Runde 1
 /// führt ein Kommando mit einer riesigen Ausgabe aus (landet
 /// VOLLSTÄNDIG im Ledger, s. `execute_suggested_command`s
-/// `write_ledger_entry`-Aufruf mit dem noch unkomprimierten `output`).
+/// `emit_activity`-Aufruf mit dem noch unkomprimierten `output`).
 /// Ein winziges `model_context_window_tokens` zwingt Runde 2s
 /// `send()`-Aufruf dazu, genau diese Ausgabe für die gesendete Kopie zu
 /// kürzen (Schritt 2, Spec 0057 §3.2) — der `MockAiProvider` zeichnet
 /// den tatsächlich empfangenen Kontext auf, das Ledger bleibt davon
 /// unberührt.
 #[tokio::test]
-async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
+async fn test_compaction_shrinks_sent_copy_but_activity_event_keeps_full_output() {
     let huge_output = "L".repeat(100_000);
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done], // wird unten sofort durch den echten Mehr-Runden-Provider ersetzt
-            MockSshTransport::default().with_response("cat big.log", output(&huge_output)),
-        )
-        .await;
-    // `session_with_real_chat_and_ledger_persistence` konfiguriert nur
+    let (session, _chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done], // wird unten sofort durch den echten Mehr-Runden-Provider ersetzt
+        MockSshTransport::default().with_response("cat big.log", output(&huge_output)),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
+    // `session_with_real_chat_persistence` konfiguriert nur
     // einen `MockAiProvider::new` (eine Runde) — hier wird stattdessen
     // ein waschechter Mehr-Runden-Provider gebraucht (Runde 1: Kommando
     // vorschlagen, Runde 2: nur noch Text antworten).
@@ -151,16 +151,16 @@ async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
 
     // Das Ledger dagegen muss die VOLLE, unkomprimierte Ausgabe
     // enthalten — Kompaktierung betrifft nie das Ledger.
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    let ledger_stdout_len = entries
+    let ledger_stdout_len = probe
+        .kinds()
         .iter()
-        .find_map(|e| match &e.content {
-            ssh_manager_core::audit::LedgerEntryContent::CommandExecuted { output, .. } => {
-                Some(output.stdout.len())
+        .find_map(|k| match k {
+            crate::activity::ActivityEventKind::CommandExecuted { stdout, .. } => {
+                Some(stdout.len())
             }
             _ => None,
         })
-        .expect("ein CommandExecuted-Eintrag muss existieren");
+        .expect("ein CommandExecuted-Event muss existieren");
     assert_eq!(
         ledger_stdout_len, 100_000,
         "das Ledger muss die volle Ausgabe behalten, unabhängig von der Kompaktierung \
@@ -181,8 +181,8 @@ async fn test_compaction_shrinks_sent_copy_but_ledger_keeps_full_output() {
 async fn test_compaction_does_not_bypass_redaction_for_truncated_output() {
     let mut huge_output = "password=hunter2geheim\n".to_string();
     huge_output.push_str(&"X".repeat(100_000));
-    let (mut session, _chat_store, _chat_session_id, _tmp_dir, _ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
+    let (mut session, _chat_store, _chat_session_id, _tmp_dir) =
+        session_with_real_chat_persistence(
             vec![AiEvent::Done],
             MockSshTransport::default().with_response("cat secret.log", output(&huge_output)),
         )
@@ -875,15 +875,14 @@ async fn test_summary_round_trips_through_persistence() {
     // ein echter `compact_for_send`-Lauf erzeugt über
     // `persist_rolling_summary` einen DB-Eintrag, den `load_summary`
     // danach unabhängig wiederfindet.
-    let (mut session, chat_store, chat_session_id, _tmp_dir, _ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![
-                AiEvent::TextDelta("Persistierte Zusammenfassung.".to_string()),
-                AiEvent::Done,
-            ],
-            MockSshTransport::default(),
-        )
-        .await;
+    let (mut session, chat_store, chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![
+            AiEvent::TextDelta("Persistierte Zusammenfassung.".to_string()),
+            AiEvent::Done,
+        ],
+        MockSshTransport::default(),
+    )
+    .await;
     session.set_model_context_window_tokens_for_tests(2_000);
     push_synthetic_rounds(&session, 6, 5_000).await;
 
@@ -913,13 +912,13 @@ async fn test_summary_round_trips_through_persistence() {
 /// Kompaktierung — egal ob mit oder ohne Zusammenfassung — nichts zu
 /// Gesicht, und die gespeicherte Notiz bleibt unangetastet.
 #[tokio::test]
-async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done], // wird unten sofort ersetzt
-            MockSshTransport::default().with_response("cat notes.log", output("ok")),
-        )
-        .await;
+async fn test_summarization_leaves_activity_events_and_stored_note_untouched() {
+    let (session, _chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done], // wird unten sofort ersetzt
+        MockSshTransport::default().with_response("cat notes.log", output("ok")),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
     // Zwei Runden: die ERSTE wird von der Kompaktierung selbst
     // verbraucht (die 6 synthetischen Runden unten lösen vor dem
     // eigentlichen Chat-Aufruf eine Zusammenfassung aus), erst die
@@ -977,11 +976,11 @@ async fn test_summarization_leaves_ledger_and_stored_note_untouched() {
     // echten Chat-Turns) muss weiterhin vollständig vorhanden sein —
     // die Kompaktierung der VORHER synthetisch angehängten Runden darf
     // daran nichts ändern.
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = probe.kinds();
     assert!(
-        entries.iter().any(|e| matches!(
-            &e.content,
-            ssh_manager_core::audit::LedgerEntryContent::CommandExecuted { command, .. }
+        entries.iter().any(|k| matches!(
+            k,
+            crate::activity::ActivityEventKind::CommandExecuted { command, .. }
                 if command == "cat notes.log"
         )),
         "das Ledger muss den ausgeführten Befehl unabhängig von der Kompaktierung \
@@ -1200,14 +1199,14 @@ async fn test_mcp_action_on_shared_human_session_writes_no_persisted_history() {
 /// MCP-Content (Audit-Funktion, Etappe 1, unberührt von diesem
 /// Ausschluss).
 #[tokio::test]
-async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger() {
-    let (mut session, chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done], // unten sofort ersetzt, s. `received_contexts`
-            MockSshTransport::default()
-                .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_42")),
-        )
-        .await;
+async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_activity_events() {
+    let (session, chat_store, chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done], // unten sofort ersetzt, s. `received_contexts`
+        MockSshTransport::default()
+            .with_response("cat mcp_secret.log", output("MCP_GEHEIM_KENNUNG_42")),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     session.set_model_context_window_tokens_for_tests(2_000);
     // `received_contexts` erfasst den TATSÄCHLICH an den Provider
@@ -1312,25 +1311,25 @@ async fn test_mcp_rounds_excluded_from_persisted_summary_but_retained_in_ledger(
     // chat_persist_flag` oben: die AUSFÜHRUNG selbst trägt `source:
     // User`, weil ein Mensch bestätigt hat, das Kommando blieb aber
     // MCP-initiiert) als auch die tatsächliche Kommandoausgabe.
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = probe.events();
     let mcp_proposal_present = entries.iter().any(|e| {
-        e.source == LedgerSource::McpAgent
+        e.source == crate::activity::ActivitySource::McpAgent
             && matches!(
-                &e.content,
-                LedgerEntryContent::CommandProposed { command }
+                &e.kind,
+                crate::activity::ActivityEventKind::CommandProposed { command, .. }
                     if command == "cat mcp_secret.log"
             )
     });
     assert!(
         mcp_proposal_present,
-        "das Ledger muss den MCP-originierten Vorschlag mit `source: McpAgent` behalten: \
+        "the observer must still get the MCP-originated proposal with source McpAgent: \
          {entries:?}"
     );
     let executed_output_present = entries.iter().any(|e| {
         matches!(
-            &e.content,
-            LedgerEntryContent::CommandExecuted { output, .. }
-                if String::from_utf8_lossy(&output.stdout).contains("MCP_GEHEIM_KENNUNG_42")
+            &e.kind,
+            crate::activity::ActivityEventKind::CommandExecuted { stdout, .. }
+                if stdout.contains("MCP_GEHEIM_KENNUNG_42")
         )
     });
     assert!(

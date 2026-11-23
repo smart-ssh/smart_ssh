@@ -156,15 +156,15 @@ umgewandelten Text. Lässt sich schon das Original nicht zerlegen, wird der
 umgewandelte Text nur gesendet, wenn er dem Original gleicht.
 
 **Wer was sieht.** Filter, Risiko-Einstufung, Zweitmeinung, Bestätigungsdialog,
-Ledger, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
+Aktivitäts-Ereignisse, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
 ursprünglichen Text. Der umgewandelte Text existiert nur im Aufruf an den
-Transport und steht in keiner Anzeige, keinem Verlauf, keinem Ledger und
+Transport und steht in keiner Anzeige, keinem Verlauf, keinem Aktivitäts-Ereignis und
 keiner Log-Zeile; auch die Debug-Ausgabe des Ergebnisses der Umwandlung zeigt
 ihn nicht.
 
 **Geheimnisse.** Die gemeldeten eingesetzten Werte werden dem Redactor der
 Sitzung hinzugefügt, bevor das Kommando startet. Bereits die Ausgabe genau
-dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Ledger, Verlauf,
+dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Aktivitäts-Ereignis, Verlauf,
 Logs).
 
 **Ablehnung.** Lehnt die Umwandlung ab, wird nichts gesendet und nichts
@@ -499,7 +499,7 @@ exportiert: die Registrierungsfunktionen und Typen, Berechtigungs-Typen,
 `bootstrap`, die UI-Bausteine samt `ErrorBoundary`, der zentrale
 Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
 die Fehler-Helfer, `listServers`, `listGroups`, `listAiProviders`,
-`listChatSessions`, `getStartupState`, die schreibgeschützten Zugriffe auf die Aktivitätsaufzeichnung (`listRecordedSessions`, `listRecordEntries`, `recordEntriesOfSession`, nur nach dem Entsperren; Filter und Seitenaufteilung wie in der Aufzeichnungs-API von Spec 0057), einige Hilfen
+`listChatSessions`, `getStartupState`, einige Hilfen
 (`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
 `pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`, `setUiPreference`), `showToast` (zeigt die regulären Erfolgs-, Fehler- und Info-Hinweise) und
 DTO-Typen (u. a. `GroupDto`) sowie die Typen `ComposerContext` und

@@ -6,7 +6,6 @@
 //! `ssh-manager-core` — siehe Spec 0004 Abschnitt 1: `core` bleibt frei von
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
-mod activity_session_store;
 mod ai_provider_store;
 mod backup_store;
 mod chat_session_store;
@@ -27,12 +26,10 @@ mod extension_store;
 mod field_content_decryption;
 /// Issue #19: exklusive Sperre auf das Datenverzeichnis.
 mod instance_lock;
-mod ledger_store;
 mod mapping;
 mod paths;
 mod policy_store;
 mod prompt_history_store;
-mod record_query;
 pub mod runtime_bridge;
 mod server_columns;
 mod store;
@@ -43,11 +40,11 @@ mod test_exit_guard;
 /// `test-support`, wie `SqliteProfileStore::connect_plaintext`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+mod time_zone;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_activity_record;
 #[cfg(test)]
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
@@ -80,19 +77,16 @@ mod tests_fixture_t0;
 #[cfg(test)]
 mod tests_raw_file;
 #[cfg(test)]
-mod tests_record_query;
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
+#[cfg(test)]
+mod tests_remove_activity_record;
 #[cfg(test)]
 mod tests_runtime_bridge_guard;
 #[cfg(test)]
 mod tests_server_columns;
 
-pub use activity_session_store::{
-    device_time_zone_source, ActivitySession, ActivitySessionKind, SqliteActivitySessionStore,
-    TimeZoneSource, UNKNOWN_MCP_CLIENT,
-};
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
@@ -125,7 +119,6 @@ pub use field_content_decryption::{
     ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,
 };
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
-pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::{
     android_cache_dir, android_cache_dir_for, android_files_dir, android_files_dir_for,
     android_user_id_from_uid, data_dir_flag_from, data_dir_override, data_dir_override_from,
@@ -136,8 +129,5 @@ pub use paths::{
 };
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
-pub use record_query::{
-    EntryFilter, Page, PageRequest, RecordCursor, RecordedEntry, SessionFilter, SqliteRecordQuery,
-    MAX_PAGE_SIZE,
-};
 pub use store::SqliteProfileStore;
+pub use time_zone::{device_time_zone_source, TimeZoneSource};
