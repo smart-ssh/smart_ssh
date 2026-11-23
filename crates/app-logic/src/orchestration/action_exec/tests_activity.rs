@@ -717,8 +717,9 @@ async fn test_complete_rebuild_clears_the_incomplete_flag_on_events() {
     assert!(!flag_after_rebuild(true, &store).await);
 }
 
-/// Two sessions in a manager, both reporting to `hub`.
-fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionManager {
+/// Two started sessions in a manager, both reporting to `hub`. Their
+/// `SessionStarted` events are queued already.
+async fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionManager {
     let manager = crate::session::SessionManager::default();
     for _ in 0..2 {
         let session = with_hub(
@@ -726,6 +727,9 @@ fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionManager {
             hub,
             false,
         );
+        session
+            .emit_session_started(ActivitySessionKind::Chat, None)
+            .await;
         manager.insert(Uuid::new_v4(), Arc::new(session));
     }
     manager
@@ -739,14 +743,18 @@ async fn test_app_exit_emits_one_session_ended_per_session_and_drains_the_queue(
     let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
     let sup = crate::tasks::TaskSupervisor::new();
     hub.start_worker(&sup.app_scope());
-    let manager = manager_with_two(&hub);
+    let manager = manager_with_two(&hub).await;
     manager.emit_app_exit_activity().await;
     let reports = sup.shutdown(Duration::from_secs(3)).await;
     assert!(reports.iter().all(|r| !r.timed_out));
     // Everything arrived by the time the shutdown returned.
     let events: Vec<_> = rx.try_iter().collect();
-    assert_eq!(events.len(), 2, "{events:?}");
-    for event in events {
+    assert_eq!(events.len(), 4, "{events:?}");
+    // Each start comes before any end.
+    assert!(events[..2]
+        .iter()
+        .all(|e| matches!(e.kind, ActivityEventKind::SessionStarted { .. })));
+    for event in &events[2..] {
         assert!(matches!(
             event.kind,
             ActivityEventKind::SessionEnded {
@@ -816,7 +824,7 @@ async fn test_blocking_observer_does_not_delay_exit_beyond_the_shutdown_timeout(
     )))]));
     let sup = crate::tasks::TaskSupervisor::new();
     hub.start_worker(&sup.app_scope());
-    let manager = manager_with_two(&hub);
+    let manager = manager_with_two(&hub).await;
     manager.emit_app_exit_activity().await;
     let started = std::time::Instant::now();
     let reports = sup.shutdown(Duration::from_millis(300)).await;
@@ -830,6 +838,155 @@ async fn test_blocking_observer_does_not_delay_exit_beyond_the_shutdown_timeout(
 async fn test_app_exit_without_observer_constructs_no_event() {
     crate::activity::CONSTRUCTED.with(|c| c.set(0));
     let hub = Arc::new(ActivityHub::default());
-    manager_with_two(&hub).emit_app_exit_activity().await;
+    manager_with_two(&hub).await.emit_app_exit_activity().await;
     assert_eq!(crate::activity::CONSTRUCTED.with(|c| c.get()), 0);
+}
+
+/// Issue #1539: a session still connecting (no `SessionStarted`) gets no end.
+#[tokio::test]
+async fn test_app_exit_skips_sessions_that_have_not_started() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let manager = manager_with_two(&hub).await;
+    manager.insert(
+        Uuid::new_v4(),
+        Arc::new(with_hub(
+            session_allowing_all(MockSshTransport::default()),
+            &hub,
+            false,
+        )),
+    );
+    manager.emit_app_exit_activity().await;
+    sup.shutdown_app(Duration::from_secs(3)).await;
+    let ends = rx
+        .try_iter()
+        .filter(|e| matches!(e.kind, ActivityEventKind::SessionEnded { .. }))
+        .count();
+    assert_eq!(ends, 2);
+}
+
+/// Issue #1539: a session scope that never ends does not use up the app
+/// scope's drain budget; a task pushing while it is cancelled delivers
+/// before the session's end event.
+#[tokio::test]
+async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede_the_end() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let session = Arc::new(with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    ));
+    session
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    let id = Uuid::new_v4();
+    let manager = crate::session::SessionManager::default();
+    manager.insert(id, session.clone());
+    let scope = sup.session_scope(id);
+    // Pushes an event once cancelled (a decision written during the cancel).
+    let pusher = session.clone();
+    let (armed_tx, armed_rx) = tokio::sync::oneshot::channel::<()>();
+    scope.spawn("push-on-cancel", async move {
+        struct OnDrop(Arc<Session>);
+        impl Drop for OnDrop {
+            fn drop(&mut self) {
+                // Synchronous, so the push is queued before the scope's
+                // cancellation completes.
+                futures::executor::block_on(
+                    self.0.emit_session_started(ActivitySessionKind::Mcp, None),
+                );
+            }
+        }
+        let _g = OnDrop(pusher);
+        let _ = armed_tx.send(());
+        std::future::pending::<()>().await;
+    });
+    // The guard exists before the cancel (a never-polled task has none).
+    tokio::time::timeout(WAIT, armed_rx)
+        .await
+        .expect("task started")
+        .unwrap();
+    // A second scope that never ends (blocking task ignores cancellation).
+    let (release, blocked) = channel::<()>();
+    let hang = sup.session_scope(Uuid::new_v4());
+    hang.spawn_blocking("hang", move || {
+        let _ = blocked.recv();
+    });
+    let t = std::time::Instant::now();
+    manager
+        .shutdown_for_exit(
+            &sup,
+            crate::tasks::ExitBudget {
+                sessions: Duration::from_millis(300),
+                end_events: Duration::from_secs(1),
+                drain: Duration::from_secs(3),
+            },
+        )
+        .await;
+    assert!(t.elapsed() < Duration::from_secs(5));
+    let kinds: Vec<_> = rx.try_iter().map(|e| e.kind).collect();
+    let end = kinds
+        .iter()
+        .position(|k| matches!(k, ActivityEventKind::SessionEnded { .. }))
+        .expect("end delivered");
+    let mcp_start = kinds
+        .iter()
+        .position(|k| {
+            matches!(
+                k,
+                ActivityEventKind::SessionStarted {
+                    kind: ActivitySessionKind::Mcp,
+                    ..
+                }
+            )
+        })
+        .unwrap_or_else(|| panic!("pushed event delivered: {kinds:?}"));
+    assert!(mcp_start < end, "{kinds:?}");
+    drop(release);
+}
+
+/// Issue #1539: a task of the same session that outlives its scope's
+/// deadline and pushes while the worker still drains is dropped once the
+/// end was queued.
+#[tokio::test]
+async fn test_no_event_follows_the_session_end_when_its_own_scope_times_out() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let session = Arc::new(with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    ));
+    session
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    let id = Uuid::new_v4();
+    let manager = crate::session::SessionManager::default();
+    manager.insert(id, session.clone());
+    // The same session's task ignores the cancellation (scope times out).
+    let (release, blocked) = channel::<()>();
+    sup.session_scope(id).spawn_blocking("hang", move || {
+        let _ = blocked.recv();
+    });
+    sup.shutdown_sessions(Duration::from_millis(200)).await;
+    manager.emit_app_exit_activity().await;
+    // The worker still drains: this late push must not follow the end.
+    session
+        .emit_session_started(ActivitySessionKind::Mcp, None)
+        .await;
+    sup.shutdown_app(Duration::from_secs(3)).await;
+    let kinds: Vec<_> = rx.try_iter().map(|e| e.kind).collect();
+    let end = kinds
+        .iter()
+        .position(|k| matches!(k, ActivityEventKind::SessionEnded { .. }))
+        .expect("end delivered");
+    assert_eq!(end, kinds.len() - 1, "{kinds:?}");
+    drop(release);
 }

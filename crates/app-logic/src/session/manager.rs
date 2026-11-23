@@ -164,18 +164,39 @@ impl SessionManager {
 
     /// Tells the observers that every session still open ended because the
     /// app quits (`SessionEndReason::AppExit`). Sessions without an observer
-    /// build nothing. Call before the app scope is cancelled, so the worker
-    /// drains the events.
+    /// build nothing; sessions that did not emit `SessionStarted` (connect
+    /// still running) get no end event. Call after the session scopes ended
+    /// and before the app scope is cancelled, so the worker drains the events.
     pub async fn emit_app_exit_activity(&self) {
         let sessions: Vec<Arc<Session>> = lock_tolerating_poison(&self.sessions)
             .values()
             .cloned()
             .collect();
-        for session in sessions {
+        for session in sessions.iter().filter(|s| s.activity_started()) {
             session
                 .emit_session_ended(crate::activity::SessionEndReason::AppExit)
                 .await;
         }
+    }
+
+    /// The exit sequence for the scopes and the activity stream (issues
+    /// #669, #1532, #1539): session scopes end first, then every started
+    /// session gets `SessionEnded { AppExit }`, last the app scope drains the
+    /// queue. Each step has its own budget from [`crate::tasks::ExitBudget`], so the total
+    /// stays within their sum even if a step hangs.
+    pub async fn shutdown_for_exit(
+        &self,
+        tasks: &crate::tasks::TaskSupervisor,
+        budget: crate::tasks::ExitBudget,
+    ) {
+        tasks.shutdown_sessions(budget.sessions).await;
+        if tokio::time::timeout(budget.end_events, self.emit_app_exit_activity())
+            .await
+            .is_err()
+        {
+            tracing::warn!("emitting the app-exit activity events timed out");
+        }
+        tasks.shutdown_app(budget.drain).await;
     }
 
     pub fn remove(&self, id: SessionId) -> Option<Arc<Session>> {
