@@ -753,7 +753,6 @@ pub(crate) fn with_activity_probe(session: Session) -> (Session, Arc<ActivityPro
         &hub,
         "runtime-1".into(),
         snapshot,
-        false,
     ));
     (session, probe)
 }
