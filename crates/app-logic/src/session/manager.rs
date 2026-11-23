@@ -164,14 +164,15 @@ impl SessionManager {
 
     /// Tells the observers that every session still open ended because the
     /// app quits (`SessionEndReason::AppExit`). Sessions without an observer
-    /// build nothing. Call before the app scope is cancelled, so the worker
-    /// drains the events.
+    /// build nothing; sessions that did not emit `SessionStarted` (connect
+    /// still running) get no end event. Call after the session scopes ended
+    /// and before the app scope is cancelled, so the worker drains the events.
     pub async fn emit_app_exit_activity(&self) {
         let sessions: Vec<Arc<Session>> = lock_tolerating_poison(&self.sessions)
             .values()
             .cloned()
             .collect();
-        for session in sessions {
+        for session in sessions.iter().filter(|s| s.activity_started()) {
             session
                 .emit_session_ended(crate::activity::SessionEndReason::AppExit)
                 .await;

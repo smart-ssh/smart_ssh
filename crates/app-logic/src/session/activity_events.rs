@@ -60,6 +60,14 @@ impl Session {
             time_zone: reporting.time_zone.clone(),
         };
         self.push_activity(source, kind).await;
+        self.activity_started
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// `true` once `SessionStarted` was queued for this session.
+    pub(crate) fn activity_started(&self) -> bool {
+        self.activity_started
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Tells the observers that this session ended.

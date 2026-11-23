@@ -554,6 +554,9 @@ pub struct Session {
     /// Issue #1505: where activity events go (observers an edition
     /// registered). `None` = nobody listens, nothing is built.
     activity: Option<crate::activity::ActivityReporting>,
+    /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
+    /// event is only sent for sessions the observers know.
+    activity_started: std::sync::atomic::AtomicBool,
 }
 
 impl std::ops::Deref for Session {
@@ -634,6 +637,7 @@ impl Session {
             id_names: tokio::sync::OnceCell::new(),
             usage_reporting: None,
             activity: None,
+            activity_started: std::sync::atomic::AtomicBool::new(false),
         }
     }
 

@@ -177,10 +177,15 @@ Protokoll. Die Zustellung blockiert nie einen Befehl: Bei langsamen Beobachtern
 gehen Ereignisse verloren (gezählt); ohne Beobachter ändert sich nichts.
 Das Sitzungsende trägt einen Grund: „geschlossen“ (ausdrücklich geschlossen)
 oder „App beendet“. Beim Beenden der App erhält ein Beobachter für jede noch
-offene Sitzung ein Sitzungsende mit dem Grund „App beendet“ (Umsetzung: #1532);
-bereits eingereihte Ereignisse werden noch zugestellt, höchstens bis zur
-Zeitgrenze des Beendens (3 s), sodass ein blockierender Beobachter das Beenden
-nicht länger aufhält.
+offene Sitzung, für die ein Sitzungsbeginn gemeldet wurde, ein Sitzungsende mit
+dem Grund „App beendet“ (Umsetzung: #1532, #1539); eine Sitzung, die noch
+verbindet, erhält kein Sitzungsende. Die Reihenfolge beim Beenden: zuerst enden
+die Aufgaben aller Sitzungen, dann folgen die Sitzungsenden, zuletzt wird die
+Zustellung geleert. Ein Ereignis einer Sitzung kommt daher nie nach deren
+Sitzungsende. Jeder Schritt ist auf 3 s begrenzt und die Zustellung bekommt
+ihre eigene Zeitgrenze, auch wenn eine Sitzung nicht endet; bereits
+eingereihte Ereignisse werden noch zugestellt, sodass ein blockierender
+Beobachter das Beenden nicht länger aufhält.
 
 ## 2. Die Summary
 
