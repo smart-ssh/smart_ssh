@@ -456,25 +456,54 @@ pub async fn rebuild_redactors_for_sessions(
                 .or_else(|| session.safety.sudo_password.get().map(|p| (*p).clone()))
         };
         let (redactor, compiled) = redactor_with_secrets_checked(sudo_now.as_ref(), &secrets);
-        if lookup_complete {
-            // The only path that replaces (not extends) the literal secret set.
-            session.swap_redactor_with_literals(redactor, &secrets);
-        } else {
-            // The scope is not fully known: extend, never shrink (issue #843).
-            session.swap_redactor(redactor);
-            session.redactor.add_secret_values(&secrets);
-        }
-        // Issue #1533: the flag on activity events mirrors this rebuild.
-        session.safety.redaction_incomplete.store(
+        apply_rebuilt_redactor(
+            &session,
+            redactor,
+            &secrets,
+            lookup_complete,
             !(lookup_complete && compiled),
-            std::sync::atomic::Ordering::SeqCst,
+            || {},
         );
-        if !(lookup_complete && compiled) {
-            session
-                .safety
-                .redaction_incomplete_notice_pending
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-        }
+    }
+}
+
+/// Serialises "swap the redactor, then store the flag" across rebuilds, so
+/// the flag always mirrors the last applied swap (issue #1541). One lock for
+/// all sessions: it is held only around the swap and the store, never across
+/// an `.await`.
+static REDACTOR_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Swaps in a rebuilt redactor and stores the matching "redaction incomplete"
+/// flag as one step with respect to other rebuilds. `between` runs after the
+/// swap, before the store (a test hook).
+pub(crate) fn apply_rebuilt_redactor(
+    session: &crate::session::Session,
+    redactor: Box<dyn OutputRedactor>,
+    secrets: &[SecretString],
+    lookup_complete: bool,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    if lookup_complete {
+        // The only path that replaces (not extends) the literal secret set.
+        session.swap_redactor_with_literals(redactor, secrets);
+    } else {
+        // The scope is not fully known: extend, never shrink (issue #843).
+        session.swap_redactor(redactor);
+        session.redactor.add_secret_values(secrets);
+    }
+    between();
+    // Issue #1533: the flag on activity events mirrors this rebuild.
+    session
+        .safety
+        .redaction_incomplete
+        .store(incomplete, std::sync::atomic::Ordering::SeqCst);
+    if incomplete {
+        session
+            .safety
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -579,6 +608,9 @@ impl SessionExtension for RecordingExtension {
 
 #[cfg(test)]
 mod tests_connect;
+
+#[cfg(test)]
+mod tests_apply;
 
 #[cfg(test)]
 mod tests_sessionless;
