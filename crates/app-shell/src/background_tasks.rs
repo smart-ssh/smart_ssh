@@ -55,7 +55,9 @@ pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
         app.try_state::<app_logic::state::AppState>(),
     ) {
         tauri::async_runtime::block_on(
-            tasks.shutdown_for_exit(&state.sessions, app_logic::tasks::ExitBudget::default()),
+            state
+                .sessions
+                .shutdown_for_exit(&tasks, app_logic::tasks::ExitBudget::default()),
         );
     } else if let Some(tasks) = app.try_state::<Arc<TaskSupervisor>>() {
         tauri::async_runtime::block_on(tasks.shutdown(Duration::from_secs(3)));

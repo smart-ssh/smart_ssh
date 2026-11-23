@@ -861,15 +861,16 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
         let _ = blocked.recv();
     });
     let t = std::time::Instant::now();
-    sup.shutdown_for_exit(
-        &manager,
-        crate::tasks::ExitBudget {
-            sessions: Duration::from_millis(300),
-            end_events: Duration::from_secs(1),
-            drain: Duration::from_secs(3),
-        },
-    )
-    .await;
+    manager
+        .shutdown_for_exit(
+            &sup,
+            crate::tasks::ExitBudget {
+                sessions: Duration::from_millis(300),
+                end_events: Duration::from_secs(1),
+                drain: Duration::from_secs(3),
+            },
+        )
+        .await;
     assert!(t.elapsed() < Duration::from_secs(5));
     let kinds: Vec<_> = rx.try_iter().map(|e| e.kind).collect();
     let end = kinds

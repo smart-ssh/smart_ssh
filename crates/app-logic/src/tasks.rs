@@ -339,26 +339,6 @@ impl TaskSupervisor {
         reports
     }
 
-    /// The exit sequence for the scopes and the activity stream (issues
-    /// #669, #1532, #1539): session scopes end first, then every started
-    /// session gets `SessionEnded { AppExit }`, last the app scope drains the
-    /// queue. Each step has its own budget from [`ExitBudget`], so the total
-    /// stays within their sum even if a step hangs.
-    pub async fn shutdown_for_exit(
-        &self,
-        sessions: &crate::session::SessionManager,
-        budget: ExitBudget,
-    ) {
-        self.shutdown_sessions(budget.sessions).await;
-        if tokio::time::timeout(budget.end_events, sessions.emit_app_exit_activity())
-            .await
-            .is_err()
-        {
-            tracing::warn!("emitting the app-exit activity events timed out");
-        }
-        self.shutdown_app(budget.drain).await;
-    }
-
     async fn shutdown_matching(&self, timeout: Duration, sessions: bool) -> Vec<ShutdownReport> {
         let deadline = Instant::now() + timeout;
         let scopes: Vec<TaskScope> = lock_tolerating_poison(&self.scopes)
