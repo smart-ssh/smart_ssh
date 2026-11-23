@@ -175,6 +175,12 @@ Protokolleintrag entsteht (Befehle, Entscheidungen, KI-Nachrichten, Dateizugriff
 ohne Inhalt, Sitzungsbeginn und -ende), aus demselben redigierten Inhalt wie das
 Protokoll. Die Zustellung blockiert nie einen Befehl: Bei langsamen Beobachtern
 gehen Ereignisse verloren (gezählt); ohne Beobachter ändert sich nichts.
+Das Sitzungsende trägt einen Grund: „geschlossen“ (ausdrücklich geschlossen)
+oder „App beendet“. Beim Beenden der App erhält ein Beobachter für jede noch
+offene Sitzung ein Sitzungsende mit dem Grund „App beendet“ (Umsetzung: #1532);
+bereits eingereihte Ereignisse werden noch zugestellt, höchstens bis zur
+Zeitgrenze des Beendens (3 s), sodass ein blockierender Beobachter das Beenden
+nicht länger aufhält.
 
 ## 2. Die Summary
 

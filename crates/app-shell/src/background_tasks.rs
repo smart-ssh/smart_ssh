@@ -45,6 +45,16 @@ pub(crate) fn session_spawner<R: tauri::Runtime>(
 /// bounded, so a hanging one cannot block exit.
 pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
     use tauri::Manager;
+    // Issue #1532: before the app scope is cancelled, so the activity worker
+    // still delivers the events. Bounded like the other exit steps.
+    if let Some(state) = app.try_state::<app_logic::state::AppState>() {
+        let emit = state.sessions.emit_app_exit_activity();
+        if tauri::async_runtime::block_on(tokio::time::timeout(Duration::from_secs(3), emit))
+            .is_err()
+        {
+            tracing::warn!("emitting the app-exit activity events timed out");
+        }
+    }
     if let Some(host) = app.try_state::<crate::ServiceHost>() {
         tauri::async_runtime::block_on(host.stop_all());
     }
