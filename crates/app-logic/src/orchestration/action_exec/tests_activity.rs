@@ -861,12 +861,16 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
         let _ = blocked.recv();
     });
     let t = std::time::Instant::now();
-    let sessions = sup.shutdown_sessions(Duration::from_millis(300)).await;
-    assert!(sessions.iter().any(|r| r.timed_out));
-    manager.emit_app_exit_activity().await;
-    let app = sup.shutdown_app(Duration::from_secs(3)).await;
-    assert!(app.iter().all(|r| !r.timed_out), "{app:?}");
-    assert!(t.elapsed() < Duration::from_secs(10));
+    sup.shutdown_for_exit(
+        &manager,
+        crate::tasks::ExitBudget {
+            sessions: Duration::from_millis(300),
+            end_events: Duration::from_secs(1),
+            drain: Duration::from_secs(3),
+        },
+    )
+    .await;
+    assert!(t.elapsed() < Duration::from_secs(5));
     let kinds: Vec<_> = rx.try_iter().map(|e| e.kind).collect();
     let end = kinds
         .iter()
@@ -878,5 +882,46 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
             .all(|k| !matches!(k, ActivityEventKind::SessionStarted { .. })),
         "{kinds:?}"
     );
+    drop(release);
+}
+
+/// Issue #1539: a task of the same session that outlives its scope's
+/// deadline and pushes while the worker still drains is dropped once the
+/// end was queued.
+#[tokio::test]
+async fn test_no_event_follows_the_session_end_when_its_own_scope_times_out() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let session = Arc::new(with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    ));
+    session
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    let id = Uuid::new_v4();
+    let manager = crate::session::SessionManager::default();
+    manager.insert(id, session.clone());
+    // The same session's task ignores the cancellation (scope times out).
+    let (release, blocked) = channel::<()>();
+    sup.session_scope(id).spawn_blocking("hang", move || {
+        let _ = blocked.recv();
+    });
+    sup.shutdown_sessions(Duration::from_millis(200)).await;
+    manager.emit_app_exit_activity().await;
+    // The worker still drains: this late push must not follow the end.
+    session
+        .emit_session_started(ActivitySessionKind::Mcp, None)
+        .await;
+    sup.shutdown_app(Duration::from_secs(3)).await;
+    let kinds: Vec<_> = rx.try_iter().map(|e| e.kind).collect();
+    let end = kinds
+        .iter()
+        .position(|k| matches!(k, ActivityEventKind::SessionEnded { .. }))
+        .expect("end delivered");
+    assert_eq!(end, kinds.len() - 1, "{kinds:?}");
     drop(release);
 }

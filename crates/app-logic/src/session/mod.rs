@@ -557,6 +557,9 @@ pub struct Session {
     /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
     /// event is only sent for sessions the observers know.
     activity_started: std::sync::atomic::AtomicBool,
+    /// Issue #1539: `true` once `SessionEnded` was queued; later events of
+    /// this session are dropped so none follows its end.
+    activity_ended: std::sync::Mutex<bool>,
 }
 
 impl std::ops::Deref for Session {
@@ -638,6 +641,7 @@ impl Session {
             usage_reporting: None,
             activity: None,
             activity_started: std::sync::atomic::AtomicBool::new(false),
+            activity_ended: std::sync::Mutex::new(false),
         }
     }
 

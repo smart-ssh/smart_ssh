@@ -7,6 +7,7 @@ use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::filter::EvalContext;
 
 use chrono::Utc;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 use super::Session;
 use crate::activity::{
@@ -23,8 +24,16 @@ impl Session {
         };
         let chat_session_id =
             (*self.persistence.chat_session_id.lock().await).map(|i| i.to_string());
+        let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
         #[cfg(test)]
         crate::activity::CONSTRUCTED.with(|c| c.set(c.get() + 1));
+        // Held across the check and the push, so no event can slip in after
+        // the end event is queued (issue #1539).
+        let mut ended = lock_tolerating_poison(&self.activity_ended);
+        if *ended {
+            return;
+        }
+        *ended = is_end;
         reporting.hub.push(ActivityEvent {
             at: Utc::now(),
             session: SessionRef {

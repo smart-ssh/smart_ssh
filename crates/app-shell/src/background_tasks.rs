@@ -50,20 +50,15 @@ pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
     if let Some(host) = app.try_state::<crate::ServiceHost>() {
         tauri::async_runtime::block_on(host.stop_all());
     }
-    let tasks = app.try_state::<Arc<TaskSupervisor>>();
-    if let Some(tasks) = &tasks {
-        tauri::async_runtime::block_on(tasks.shutdown_sessions(Duration::from_secs(3)));
-    }
-    if let Some(state) = app.try_state::<app_logic::state::AppState>() {
-        let emit = state.sessions.emit_app_exit_activity();
-        if tauri::async_runtime::block_on(tokio::time::timeout(Duration::from_secs(3), emit))
-            .is_err()
-        {
-            tracing::warn!("emitting the app-exit activity events timed out");
-        }
-    }
-    if let Some(tasks) = &tasks {
-        tauri::async_runtime::block_on(tasks.shutdown_app(Duration::from_secs(3)));
+    if let (Some(tasks), Some(state)) = (
+        app.try_state::<Arc<TaskSupervisor>>(),
+        app.try_state::<app_logic::state::AppState>(),
+    ) {
+        tauri::async_runtime::block_on(
+            tasks.shutdown_for_exit(&state.sessions, app_logic::tasks::ExitBudget::default()),
+        );
+    } else if let Some(tasks) = app.try_state::<Arc<TaskSupervisor>>() {
+        tauri::async_runtime::block_on(tasks.shutdown(Duration::from_secs(3)));
     }
 }
 

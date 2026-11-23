@@ -186,6 +186,26 @@ impl TaskScope {
 }
 
 /// One per process. Hands out scopes by key.
+/// Time budget of the steps in [`TaskSupervisor::shutdown_for_exit`]; the
+/// drain slice is reserved for the app scope.
+#[derive(Debug, Clone, Copy)]
+pub struct ExitBudget {
+    pub sessions: Duration,
+    pub end_events: Duration,
+    pub drain: Duration,
+}
+
+impl Default for ExitBudget {
+    /// 2 s + 1 s + 3 s: the 6 s the exit sequence had before #1539.
+    fn default() -> Self {
+        Self {
+            sessions: Duration::from_secs(2),
+            end_events: Duration::from_secs(1),
+            drain: Duration::from_secs(3),
+        }
+    }
+}
+
 pub struct TaskSupervisor {
     root: CancellationToken,
     handle: Handle,
@@ -317,6 +337,26 @@ impl TaskSupervisor {
         let reports = self.shutdown_matching(timeout, false).await;
         self.root.cancel();
         reports
+    }
+
+    /// The exit sequence for the scopes and the activity stream (issues
+    /// #669, #1532, #1539): session scopes end first, then every started
+    /// session gets `SessionEnded { AppExit }`, last the app scope drains the
+    /// queue. Each step has its own budget from [`ExitBudget`], so the total
+    /// stays within their sum even if a step hangs.
+    pub async fn shutdown_for_exit(
+        &self,
+        sessions: &crate::session::SessionManager,
+        budget: ExitBudget,
+    ) {
+        self.shutdown_sessions(budget.sessions).await;
+        if tokio::time::timeout(budget.end_events, sessions.emit_app_exit_activity())
+            .await
+            .is_err()
+        {
+            tracing::warn!("emitting the app-exit activity events timed out");
+        }
+        self.shutdown_app(budget.drain).await;
     }
 
     async fn shutdown_matching(&self, timeout: Duration, sessions: bool) -> Vec<ShutdownReport> {

@@ -182,8 +182,10 @@ dem Grund „App beendet“ (Umsetzung: #1532, #1539); eine Sitzung, die noch
 verbindet, erhält kein Sitzungsende. Die Reihenfolge beim Beenden: zuerst enden
 die Aufgaben aller Sitzungen, dann folgen die Sitzungsenden, zuletzt wird die
 Zustellung geleert. Ein Ereignis einer Sitzung kommt daher nie nach deren
-Sitzungsende. Jeder Schritt ist auf 3 s begrenzt und die Zustellung bekommt
-ihre eigene Zeitgrenze, auch wenn eine Sitzung nicht endet; bereits
+Sitzungsende. Das Beenden insgesamt bleibt bei etwa 6 s: die Aufgaben der Sitzungen
+bekommen 2 s, die Sitzungsenden 1 s und die Zustellung ihre eigenen 3 s, auch
+wenn eine Sitzung nicht endet. Nach dem Sitzungsende einer Sitzung wird kein
+weiteres Ereignis dieser Sitzung mehr eingereiht; bereits
 eingereihte Ereignisse werden noch zugestellt, sodass ein blockierender
 Beobachter das Beenden nicht länger aufhält.
 
