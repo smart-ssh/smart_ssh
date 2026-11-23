@@ -219,6 +219,38 @@ impl NormalSftpGuard<'_> {
     }
 }
 
+/// Serialises "swap the redactor, then store the flag" across rebuilds, so
+/// the flag always mirrors the last applied swap (issue #1541). One lock for
+/// all sessions: it is held only around the swap and the store, never across
+/// an `.await`.
+pub(crate) static REDACTOR_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Swaps in a reconnect redactor and, if its lookup was incomplete, raises
+/// the "redaction incomplete" flag in the same locked step (issue #1543).
+/// Keeps the session's literal set and never lowers the flag: a reconnect
+/// keeps the literal set, so a complete lookup proves nothing. `between` runs
+/// after the swap, before the flag (a test hook). Never held across `.await`.
+pub(crate) fn apply_reconnect_redactor(
+    session: &Session,
+    redactor: Box<dyn OutputRedactor>,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    session.swap_redactor(redactor);
+    between();
+    if incomplete {
+        session
+            .safety
+            .redaction_incomplete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        session
+            .safety
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// Issue #355: proof that this caller owns the running reconnect of a
 /// session. Dropped without [`ReconnectClaim::succeed`], the session goes
 /// back to `Disconnected`, so the button stays usable after a failure.
@@ -233,10 +265,11 @@ impl ReconnectClaim<'_> {
         mut self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         self.session
-            .replace_connection(transport, redactor, sudo_password)
+            .replace_connection(transport, redactor, redaction_incomplete, sudo_password)
             .await;
         *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
             ConnectionStatus::Connected;
@@ -776,6 +809,7 @@ impl Session {
         &self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         *self.sftp.inner.lock().await = None;
@@ -783,7 +817,8 @@ impl Session {
         // One read feeds both: the password sent to `sudo -S` and the
         // redactor always agree.
         self.safety.sudo_password.replace(sudo_password);
-        self.redactor.replace(redactor);
+        // Issue #1543: swap and flag under one lock, after the awaits above.
+        apply_reconnect_redactor(self, redactor, redaction_incomplete, || {});
     }
 
     /// Replaces the redactor of the open session (an extension's secret
