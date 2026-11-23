@@ -105,16 +105,17 @@ async fn test_app_exit_emits_disconnect_app_exit_then_session_ended() {
     let recorder = Arc::new(Recorder::default());
     let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![recorder.clone()]));
     let manager = crate::session::SessionManager::default();
-    manager.insert(
-        Uuid::new_v4(),
-        Arc::new(with_hub(
-            session_allowing_all(MockSshTransport::default()),
-            &hub,
-            false,
-        )),
+    let session = with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
     );
+    session
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    manager.insert(Uuid::new_v4(), Arc::new(session));
     manager.emit_app_exit_activity().await;
-    let kinds = recorder.kinds();
+    let kinds = recorder.kinds()[1..].to_vec();
     assert_eq!(kinds.len(), 2, "{kinds:?}");
     assert_eq!(
         kinds[0],

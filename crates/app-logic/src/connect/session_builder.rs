@@ -492,7 +492,8 @@ pub async fn build_session(
 }
 
 /// Reconnect (Spec 0105): the sudo password is read again so the redactor
-/// knows the current value. Returns the new redactor and the sudo password.
+/// knows the current value. Returns the new redactor, whether it is "redaction incomplete" and the sudo
+/// password; the flag is raised when the redactor is swapped in.
 pub async fn redaction_for_reconnect(
     state: &AppState,
     session: &Session,
@@ -500,6 +501,7 @@ pub async fn redaction_for_reconnect(
     scope_lookup: &ScopeLookup,
 ) -> (
     Box<dyn ssh_manager_core::ai::OutputRedactor>,
+    bool,
     Option<secrecy::SecretString>,
 ) {
     let sudo = crate::server_redaction::read_sudo_password_checked_async(
@@ -511,13 +513,13 @@ pub async fn redaction_for_reconnect(
         state.session_extension.as_deref(),
         scope_lookup.scope.as_ref(),
     );
-    let redactor = crate::session_extension::redactor_for_reconnect(
+    let (redactor, incomplete) = crate::session_extension::redactor_for_reconnect(
         session,
         &sudo,
         scope_lookup,
         &extension_secrets,
     );
-    (redactor, sudo.0)
+    (redactor, incomplete, sudo.0)
 }
 
 #[cfg(test)]

@@ -104,9 +104,16 @@ Beobachter, der abstürzt, stört weder die Sitzung noch andere Beobachter.
 Ohne registrierten Beobachter wird kein Ereignis gebaut, und es ändert sich
 nichts. Das Sitzungsende trägt einen Grund: „geschlossen" (ausdrücklich
 geschlossen) oder „App beendet". Beim Beenden der App erhält ein Beobachter für
-jede noch offene Sitzung ein Sitzungsende mit dem Grund „App beendet"; bereits
-eingereihte Ereignisse werden noch zugestellt, höchstens bis zur Zeitgrenze des
-Beendens (3 s), sodass ein blockierender Beobachter das Beenden nicht länger
+jede noch offene Sitzung, für die ein Sitzungsbeginn gemeldet wurde, ein
+Sitzungsende mit dem Grund „App beendet" (Umsetzung: #1532, #1539); eine Sitzung,
+die noch verbindet, erhält keins. Die Reihenfolge beim Beenden: zuerst enden die
+Aufgaben aller Sitzungen, dann folgen die Sitzungsenden, zuletzt wird die
+Zustellung geleert. Ein Ereignis einer Sitzung kommt daher nie nach deren
+Sitzungsende; nach dem Sitzungsende wird kein weiteres Ereignis dieser Sitzung
+mehr eingereiht. Das Beenden insgesamt bleibt bei etwa 6 s: die Aufgaben der
+Sitzungen bekommen 2 s, die Sitzungsenden 1 s und die Zustellung ihre eigenen
+3 s, auch wenn eine Sitzung nicht endet. Bereits eingereihte Ereignisse werden
+noch zugestellt, sodass ein blockierender Beobachter das Beenden nicht länger
 aufhält. Eine Chat-Sitzung wird beim Verwerfen ohne Nachricht samt ihrer Zeile
 entfernt; nichts bleibt zurück.
 
