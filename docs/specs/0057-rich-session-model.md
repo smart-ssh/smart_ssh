@@ -86,7 +86,9 @@ nichts. Das Sitzungsende trägt einen Grund: „geschlossen" (ausdrücklich
 geschlossen) oder „App beendet". Beim Beenden der App erhält ein Beobachter für
 jede noch offene Sitzung, für die ein Sitzungsbeginn gemeldet wurde, ein
 Sitzungsende mit dem Grund „App beendet" (Umsetzung: #1532, #1539); eine Sitzung,
-die noch verbindet, erhält keins. Die Reihenfolge beim Beenden: zuerst enden die
+die noch verbindet, erhält keins. Sobald das Beenden begonnen hat, wird auch kein
+Sitzungsbeginn mehr gemeldet: eine Sitzung, die erst dabei fertig verbindet,
+erzeugt weder Beginn noch Ende, sodass nie ein Beginn ohne Ende zurückbleibt (#1545). Die Reihenfolge beim Beenden: zuerst enden die
 Aufgaben aller Sitzungen, dann folgen die Sitzungsenden, zuletzt wird die
 Zustellung geleert. Ein Ereignis einer Sitzung kommt daher nie nach deren
 Sitzungsende; nach dem Sitzungsende wird kein weiteres Ereignis dieser Sitzung
