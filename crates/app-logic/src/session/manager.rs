@@ -172,6 +172,16 @@ impl SessionManager {
             .cloned()
             .collect();
         for session in sessions {
+            if *lock_tolerating_poison(&session.conn.status) == ConnectionStatus::Connected {
+                session
+                    .emit_connection(
+                        crate::activity::ConnectionChange::Disconnected(
+                            crate::activity::DisconnectReason::AppExit,
+                        ),
+                        crate::activity::ActivitySource::User,
+                    )
+                    .await;
+            }
             session
                 .emit_session_ended(crate::activity::SessionEndReason::AppExit)
                 .await;

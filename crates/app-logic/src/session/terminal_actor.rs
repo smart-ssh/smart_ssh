@@ -116,7 +116,7 @@ pub fn spawn_terminal_actor_with_idle(
             // noch offen ist — sonst zeigt eine wiederhergestellte Tab-Leiste
             // (Abschnitt 2, "Backend ist maßgebliche Quelle") eine tote
             // Session fälschlich als weiterhin verbunden an.
-            report_connection_lost(session_id, &session, emitter.as_ref(), reason);
+            report_connection_lost(session_id, &session, emitter.as_ref(), reason).await;
         }
     });
 }

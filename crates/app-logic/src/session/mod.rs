@@ -49,6 +49,7 @@ use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitt
 use crate::state::{ActionId, SessionId};
 
 mod activity_events;
+pub use activity_events::{spawn_user_activity_tick, USER_ACTIVITY_INTERVAL};
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -1053,7 +1054,7 @@ pub use terminal_actor::{spawn_terminal_actor, spawn_terminal_actor_with_idle};
 /// `connection-status-changed` — exactly once per session: later reports
 /// find the status already `Disconnected` and do nothing. Returns whether
 /// this call made the transition.
-pub fn report_connection_lost(
+pub async fn report_connection_lost(
     session_id: SessionId,
     session: &Session,
     emitter: &dyn EventEmitter,
@@ -1078,6 +1079,15 @@ pub fn report_connection_lost(
     // The hook runs first: it announces the automatic attempts before the
     // status event, so the UI never shows "lost" for a moment.
     session.conn.auto_reconnect.fire_hook(session_id);
+    // Issue #1507: observers learn of the loss (no reason text).
+    session
+        .emit_connection(
+            crate::activity::ConnectionChange::Disconnected(
+                crate::activity::DisconnectReason::Network,
+            ),
+            crate::activity::ActivitySource::User,
+        )
+        .await;
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1111,7 +1121,7 @@ pub fn spawn_connection_watch(
         if session.transport.is_closed() || session.transport.epoch() != epoch {
             return;
         }
-        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason).await;
     });
 }
 

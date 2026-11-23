@@ -68,6 +68,8 @@ pub async fn terminal_input(
     data: Vec<u8>,
 ) -> CommandResult<()> {
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    // Issue #1507: only a flag is set; `data` is never looked at.
+    session.note_user_input();
     terminal_sender(&session)?
         .send(TerminalCommand::Write(data))
         .await

@@ -18,10 +18,10 @@ use crate::events::TestEmitter;
 use super::super::test_support::*;
 use super::*;
 
-const WAIT: Duration = Duration::from_secs(30);
+pub(super) const WAIT: Duration = Duration::from_secs(30);
 
 /// Forwards every event to a channel the test reads.
-struct Forward(Mutex<Sender<ActivityEvent>>);
+pub(super) struct Forward(Mutex<Sender<ActivityEvent>>);
 
 impl ActivityObserver for Forward {
     fn on_event(&self, event: &ActivityEvent) {
@@ -46,7 +46,7 @@ impl ActivityObserver for Blocking {
     }
 }
 
-fn snapshot() -> ServerSnapshot {
+pub(super) fn snapshot() -> ServerSnapshot {
     ServerSnapshot {
         id: "srv".into(),
         name: "Test".into(),
@@ -59,7 +59,7 @@ fn snapshot() -> ServerSnapshot {
     }
 }
 
-fn with_hub(session: Session, hub: &Arc<ActivityHub>, incomplete: bool) -> Session {
+pub(super) fn with_hub(session: Session, hub: &Arc<ActivityHub>, incomplete: bool) -> Session {
     session
         .safety
         .redaction_incomplete
@@ -96,13 +96,13 @@ async fn assert_drained(session: &Session, rx: &Receiver<ActivityEvent>) {
     );
 }
 
-fn suggest(command: &str) -> AiAction {
+pub(super) fn suggest(command: &str) -> AiAction {
     AiAction::SuggestCommand {
         command: command.to_string(),
     }
 }
 
-async fn propose(
+pub(super) async fn propose(
     session: &Session,
     action: AiAction,
     origin: ActionOrigin,
@@ -141,7 +141,7 @@ fn action_id_of(kind: &ActivityEventKind) -> &str {
     }
 }
 
-fn session_allowing_all(transport: MockSshTransport) -> Session {
+pub(super) fn session_allowing_all(transport: MockSshTransport) -> Session {
     session_with_ai_provider_allowing_everything(
         MockAiProvider::new(vec![AiEvent::Done]),
         transport,
@@ -744,9 +744,15 @@ async fn test_app_exit_emits_one_session_ended_per_session_and_drains_the_queue(
     let reports = sup.shutdown(Duration::from_secs(3)).await;
     assert!(reports.iter().all(|r| !r.timed_out));
     // Everything arrived by the time the shutdown returned.
+    // Per session: the connection ends (issue #1507), then the session.
     let events: Vec<_> = rx.try_iter().collect();
-    assert_eq!(events.len(), 2, "{events:?}");
-    for event in events {
+    assert_eq!(events.len(), 4, "{events:?}");
+    let ended: Vec<_> = events
+        .into_iter()
+        .filter(|e| !matches!(e.kind, ActivityEventKind::Connection { .. }))
+        .collect();
+    assert_eq!(ended.len(), 2);
+    for event in ended {
         assert!(matches!(
             event.kind,
             ActivityEventKind::SessionEnded {

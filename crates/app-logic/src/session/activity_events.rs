@@ -10,9 +10,12 @@ use chrono::Utc;
 
 use super::Session;
 use crate::activity::{
-    ActivityEvent, ActivityEventKind, ActivitySessionKind, ActivitySource, RuleSnapshot,
-    SessionEndReason, SessionRef,
+    ActivityEvent, ActivityEventKind, ActivitySessionKind, ActivitySource, ConnectionChange,
+    RuleSnapshot, SessionEndReason, SessionRef,
 };
+
+/// How often the user-activity tick looks at the session.
+pub const USER_ACTIVITY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
 impl Session {
     /// Builds and queues one event. Callers check [`Session::activity_active`]
@@ -53,7 +56,7 @@ impl Session {
             return;
         };
         let source = match kind {
-            ActivitySessionKind::Chat => ActivitySource::User,
+            ActivitySessionKind::Chat | ActivitySessionKind::Terminal => ActivitySource::User,
             ActivitySessionKind::Mcp => ActivitySource::McpAgent,
         };
         let kind = ActivityEventKind::SessionStarted {
@@ -63,6 +66,45 @@ impl Session {
             time_zone: reporting.time_zone.clone(),
         };
         self.push_activity(source, kind).await;
+    }
+
+    /// Tells the observers that the connection of this session changed.
+    pub async fn emit_connection(&self, change: ConnectionChange, source: ActivitySource) {
+        if self.activity_active() {
+            self.push_activity(source, ActivityEventKind::Connection { change })
+                .await;
+        }
+    }
+
+    /// Notes that the user did something in this session (terminal input,
+    /// chat message, confirmation). Only sets a flag: it is cheap enough for
+    /// the keystroke path, stores nothing about the input and does nothing
+    /// without an observer.
+    pub fn note_user_input(&self) {
+        if let Some(reporting) = self.activity_reporting() {
+            reporting
+                .input_seen
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Tells the observers that a file write failed after it started.
+    pub(crate) async fn emit_file_write_failed(
+        &self,
+        source: LedgerSource,
+        action_id: uuid::Uuid,
+        path: &str,
+        error_code: &str,
+    ) {
+        if !self.activity_active() {
+            return;
+        }
+        let kind = ActivityEventKind::FileWriteFailed {
+            action_id: action_id.to_string(),
+            path: self.redactor.redact_text(path),
+            error_code: error_code.to_string(),
+        };
+        self.push_activity(source.into(), kind).await;
     }
 
     /// Tells the observers that this session ended.
@@ -216,4 +258,43 @@ impl Session {
 fn missing_action_id() {
     debug_assert!(false, "activity event for an action without an action id");
     tracing::warn!("activity event dropped: the action id is missing");
+}
+
+/// Starts the once-a-minute user-activity tick of `session` in `tasks` (its
+/// session scope). The tick runs off every input path: input only sets a
+/// flag, this task reads it. It emits one `UserActivity` per interval in
+/// which there was input or a command was running. Without an observer no
+/// task is started. Holds only a weak reference to the session.
+pub fn spawn_user_activity_tick(
+    session: &std::sync::Arc<Session>,
+    tasks: &crate::tasks::TaskScope,
+) {
+    if !session.activity_active() {
+        return;
+    }
+    let session = std::sync::Arc::downgrade(session);
+    tasks.spawn("activity-tick", async move {
+        let mut ticker = tokio::time::interval_at(
+            tokio::time::Instant::now() + USER_ACTIVITY_INTERVAL,
+            USER_ACTIVITY_INTERVAL,
+        );
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            let Some(session) = session.upgrade() else {
+                return;
+            };
+            let Some(reporting) = session.activity_reporting() else {
+                return;
+            };
+            let input = reporting
+                .input_seen
+                .swap(false, std::sync::atomic::Ordering::Relaxed);
+            if input || session.transport.running_action().is_some() {
+                session
+                    .push_activity(ActivitySource::User, ActivityEventKind::UserActivity)
+                    .await;
+            }
+        }
+    });
 }

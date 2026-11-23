@@ -35,7 +35,8 @@ in seiner Verantwortung.
 ### 1.1 Was ein Beobachter erhält
 
 Pro Ereignis: Zeitstempel, die Sitzung (Kennung der laufenden Verbindung,
-Art `chat`, `mcp` oder `terminal`), die **Quelle** (`user`, `ai` oder
+Art `chat`, `mcp` oder `terminal`; `terminal` ist eine Sitzung ohne Chat,
+z. B. der lokale Pseudo-Server), die **Quelle** (`user`, `ai` oder
 `mcp-agent`; bei `mcp-agent` nennt der Sitzungsbeginn den MCP-Client), das
 Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
 
@@ -60,6 +61,25 @@ Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
   abgelehnter oder fehlgeschlagener Schreibvorgang erzeugt kein „Datei
   geschrieben"-Ereignis; die Entscheidung dazu ist über dieselbe
   Aktions-Kennung verknüpft.
+- **Datei-Schreiben fehlgeschlagen** — Aktions-Kennung, Pfad (redigiert) und
+  stabiler Fehlercode, wenn ein Schreibvorgang begonnen hatte und scheiterte
+  (auch mit Sudo-Fallback); nie Inhalt. Scheitert schon die Vorbereitung
+  (kein SFTP-Kanal, Stat), entsteht kein solches Ereignis.
+- **Verbindung** — `connected`, `disconnected` (Grund: `user`, `network` für
+  jeden unerwarteten Verlust, `app_exit`), `reconnected` und `failed` mit dem
+  Schritt, an dem ein Verbindungsversuch scheiterte (`preparation`,
+  `transport`, `session_setup`), ohne Fehlertext und ohne Geheimnisse. Ein
+  gescheiterter Versuch hat keine Sitzung: sein Ereignis trägt die Kennung des
+  Versuchs und den Server, aber keine Chat-Sitzung. Abgebrochene Versuche und
+  der lokale Pseudo-Server melden kein `failed`; ein fehlgeschlagener
+  Wiederverbindungsversuch meldet nichts. Eine bereits verlorene Verbindung
+  meldet beim Schließen kein zweites `disconnected`.
+- **Nutzeraktivität** — höchstens einmal pro Minute und Sitzung, wenn in dieser
+  Minute eine Eingabe stattfand (Terminal-Taste, Chat-Nachricht, Bestätigung)
+  oder ein Befehl lief. Ohne jeden Inhalt, auch ohne Anzahl; getippte Zeichen
+  werden nie gespeichert, ausgewertet oder in ein Ereignis gelegt. Die
+  Berechnung läuft neben dem Eingabepfad (nur ein Merker), die Tastatur wird nie
+  aufgehalten.
 
 Vorschlag, Entscheidung, Ausführung und Dateizugriff derselben Aktion tragen
 dieselbe Aktions-Kennung. MCP-Aktivität erscheint mit Quelle `mcp-agent`,

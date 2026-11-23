@@ -89,6 +89,12 @@ impl AppMcpBackend {
                                 client_name,
                             )
                             .await;
+                        session
+                            .emit_connection(
+                                app_logic::activity::ConnectionChange::Connected,
+                                app_logic::activity::ActivitySource::McpAgent,
+                            )
+                            .await;
                     }
                 }
                 connected
