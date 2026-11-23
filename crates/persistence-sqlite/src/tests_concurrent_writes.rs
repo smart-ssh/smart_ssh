@@ -6,7 +6,6 @@ use std::path::Path;
 use chrono::Utc;
 use sqlx::{Connection, Row, SqliteConnection};
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
@@ -85,35 +84,6 @@ async fn test_concurrent_append_message_gets_distinct_consecutive_sequences() {
     b.unwrap();
     assert_eq!(
         sequences(&store, "chat_messages", session).await,
-        vec![0, 1]
-    );
-    store.pool.close().await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_concurrent_ledger_appends_get_distinct_consecutive_sequences() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = file_store(dir.path()).await;
-    let server = create_server(&store).await;
-    let session = store
-        .chat_session_store()
-        .create_session(&server, None)
-        .await
-        .unwrap();
-    let ledger = store.ledger_store();
-    let entry = |c: &str| LedgerEntryContent::CommandProposed {
-        command: c.to_string(),
-    };
-
-    let (ea, eb) = (entry("a"), entry("b"));
-    let (a, b) = tokio::join!(
-        ledger.append_entry(session, LedgerSource::Ai, &ea),
-        ledger.append_entry(session, LedgerSource::Ai, &eb),
-    );
-    a.unwrap();
-    b.unwrap();
-    assert_eq!(
-        sequences(&store, "ledger_entries", session).await,
         vec![0, 1]
     );
     store.pool.close().await;

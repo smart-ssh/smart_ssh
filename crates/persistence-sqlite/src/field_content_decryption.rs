@@ -1,7 +1,7 @@
 //! Issue #113 (ADR 0112): einmalige Umstellung der feldweise verschlüsselten
 //! Spalten auf Klartext innerhalb der verschlüsselten Datenbankdatei.
 //!
-//! Betroffen sind genau vier Spalten (s. [`COLUMNS`]). Eine Altzeile ist
+//! Betroffen sind genau drei Spalten (s. [`COLUMNS`]). Eine Altzeile ist
 //! eine Zeile, deren Wert die SQLite-Speicherklasse `BLOB` hat: Die Stores
 //! haben bis Issue #113 ausschließlich `nonce || ciphertext` als Blob
 //! geschrieben und schreiben seitdem ausschließlich `TEXT`. Ein Wert, der
@@ -14,7 +14,7 @@
 //!    Klartext zurückgeschrieben.
 //! 3. Eine Altzeile, die sich mit dem aktuellen K **nicht** entschlüsseln
 //!    lässt (z. B. nach „Neuen Schlüssel erzeugen", Spec 0101 D4), wird
-//!    entfernt — Nachricht, Ledger-Eintrag und Historie-Eintrag als Zeile,
+//!    entfernt — Nachricht und Historie-Eintrag als Zeile,
 //!    die Zusammenfassung als Feld (die Sitzung selbst bleibt). Nichts
 //!    bleibt halb lesbar liegen; die Anzahl geht an den Aufrufer, der den
 //!    Nutzer einmal darauf hinweist.
@@ -46,7 +46,7 @@ enum Unreadable {
     ClearSummary,
 }
 
-/// Eine der vier Spalten mit früherer feldweiser Verschlüsselung.
+/// Eine der drei Spalten mit früherer feldweiser Verschlüsselung.
 #[derive(Debug, Clone, Copy)]
 struct Column {
     table: &'static str,
@@ -54,16 +54,11 @@ struct Column {
     unreadable: Unreadable,
 }
 
-/// Die vier Spalten aus Spec 0036/0040/0057. Feste Namen, nie aus
+/// Die drei Spalten aus Spec 0036/0040. Feste Namen, nie aus
 /// Eingaben — deshalb dürfen sie in die SQL-Texte unten eingesetzt werden.
-const COLUMNS: [Column; 4] = [
+const COLUMNS: [Column; 3] = [
     Column {
         table: "chat_messages",
-        column: "content",
-        unreadable: Unreadable::DeleteRow,
-    },
-    Column {
-        table: "ledger_entries",
         column: "content",
         unreadable: Unreadable::DeleteRow,
     },
@@ -92,7 +87,6 @@ pub struct ColumnCounts {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FieldContentDecryptionReport {
     pub chat_messages: ColumnCounts,
-    pub ledger_entries: ColumnCounts,
     pub prompt_history: ColumnCounts,
     pub summaries: ColumnCounts,
 }
@@ -101,24 +95,17 @@ impl FieldContentDecryptionReport {
     /// Alle entfernten Einträge zusammen — die Zahl im Hinweis an den
     /// Nutzer.
     pub fn removed_total(&self) -> u64 {
-        self.chat_messages.removed
-            + self.ledger_entries.removed
-            + self.prompt_history.removed
-            + self.summaries.removed
+        self.chat_messages.removed + self.prompt_history.removed + self.summaries.removed
     }
 
     /// Alle entschlüsselten Einträge zusammen (fürs Log).
     pub fn decrypted_total(&self) -> u64 {
-        self.chat_messages.decrypted
-            + self.ledger_entries.decrypted
-            + self.prompt_history.decrypted
-            + self.summaries.decrypted
+        self.chat_messages.decrypted + self.prompt_history.decrypted + self.summaries.decrypted
     }
 
     fn counts_mut(&mut self, table: &str) -> &mut ColumnCounts {
         match table {
             "chat_messages" => &mut self.chat_messages,
-            "ledger_entries" => &mut self.ledger_entries,
             "prompt_history" => &mut self.prompt_history,
             _ => &mut self.summaries,
         }

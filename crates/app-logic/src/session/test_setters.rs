@@ -101,20 +101,6 @@ impl Session {
         self.parts.persistence.chat_session_store = value;
     }
 
-    pub fn set_activity_session_store_for_tests(
-        &mut self,
-        value: Option<persistence_sqlite::SqliteActivitySessionStore>,
-    ) {
-        self.parts.persistence.activity_session_store = value;
-    }
-
-    pub fn set_ledger_store_for_tests(
-        &mut self,
-        value: Option<persistence_sqlite::SqliteLedgerStore>,
-    ) {
-        self.parts.persistence.ledger_store = value;
-    }
-
     pub fn set_transport_for_tests(&mut self, value: SessionTransport) {
         self.parts.transport = value;
     }

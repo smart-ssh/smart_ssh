@@ -1,35 +1,18 @@
-//! Das Session-Ledger (Spec 0057, §1) — ein append-only, dauerhaftes
-//! Protokoll aller sicherheitsrelevanten Vorgänge einer Sitzung: was
-//! vorgeschlagen, wie entschieden und was tatsächlich ausgeführt wurde,
-//! plus die KI-Nachrichten selbst. Die dauerhafte Wahrheit, aus der später
-//! Audit-Log und Report schöpfen (Spec 0057, Einleitung).
+//! The content model of session activity: what was proposed, how it was
+//! decided and what was executed, plus the AI messages themselves.
 //!
-//! **Reine Typdefinitionen** — kein I/O, keine Persistenz-Logik hier (s.
-//! `crate`-Moduldoc zur `core`-Grenze). Die konkrete Speicherung lebt in
-//! `persistence-sqlite::SqliteLedgerStore` (additive Migration, Spec 0057
-//! §5), das Einhängen ins Geschehen in `app-shell::orchestration` (an
-//! denselben Stellen, an denen die Redaction für den KI-Kontext bereits
-//! läuft, s. dortige Doc-Kommentare zu `write_ledger_entry`).
+//! The core keeps no record of it (issue #1506, ADR 0161); these types only
+//! describe the content that is redacted once and handed to the activity
+//! observers (`app-logic::activity`). The `Ledger*` names are kept from the
+//! time when this content was stored, to avoid a workspace-wide rename.
 //!
-//! **Abgrenzung zu `crate::session::LedgerEntry`** (Spec 0037, Abschnitt
-//! 7): jenes Modul ist explizit unbenutztes Zielbild-Vokabular für eine
-//! künftige, vereinheitlichte Sitzungs-Persistenz und hält bewusst nur
-//! einen `OutputDigest` (Hash), nicht die volle Ausgabe — "das Ledger ...
-//! soll aber nicht zwangsläufig komplette ... Kommando-Ausgaben dauerhaft
-//! verdoppeln" (dortiger Kommentar). Spec 0057 §1.1 verlangt explizit das
-//! Gegenteil: "**Alles** rein (Kommandos, Ergebnisse, ...)" — die volle,
-//! redigierte `stdout`/`stderr`, nicht nur ein Digest, weil das Ledger
-//! später die Grundlage für Report/Audit-Log liefern soll, die einen
-//! bloßen Hash nicht sinnvoll anzeigen könnten. Diese beiden Typen sind
-//! deshalb bewusst getrennt gehalten (unterschiedliche Module,
-//! unterschiedlicher Name `LedgerEntryContent` statt `LedgerEntry`) statt
-//! den Namenskonflikt durch Wiederverwendung/Anpassung des unbenutzten
-//! Spec-0037-Typs aufzulösen — Letzterer bleibt unverändert, `core::session`
-//! ist laut seinem eigenen Moduldoc ohnehin noch an keiner Stelle verankert.
+//! Pure type definitions — no I/O. Not to be confused with
+//! `crate::session::LedgerEntry` (Spec 0037), which keeps only an output
+//! digest and is unused target vocabulary.
 
 use serde::{Deserialize, Serialize};
 
-use crate::filter::{Pattern, RuleAction, RuleId, RuleOrigin, Scope};
+use crate::filter::{RuleId, RuleOrigin};
 use crate::ssh::CommandOutput;
 
 /// Wer/was einen Ledger-Eintrag ausgelöst hat (Spec 0057, §1.1: "Quelle
@@ -73,12 +56,11 @@ pub enum LedgerDecisionOutcome {
 /// getaggtes Enum statt vier getrennter Tabellen/Typen: dieselbe, bereits
 /// etablierte Konvention wie `ai::MessageContent`
 /// (`persistence-sqlite::chat_session_store`s `content_type`-Spalte +
-/// JSON-`content`), hier von `persistence-sqlite::ledger_store`
-/// gespiegelt (`entry_type`-Spalte + verschlüsselter `content`-Blob).
+/// JSON-`content`).
 ///
 /// **Redaction ist NICHT Aufgabe dieses Typs** — er transportiert nur die
 /// Daten, redigiert werden sie zentral in `app-shell::orchestration::
-/// write_ledger_entry`, unmittelbar bevor ein Eintrag den Store erreicht
+/// emit_activity`, unmittelbar bevor ein Eintrag den Store erreicht
 /// (Spec 0057, §1.2 "PFLICHT"). Wer diesen Typ direkt konstruiert (z. B. in
 /// Tests), muss also selbst redigieren, falls das Ergebnis in einen
 /// echten Store geschrieben werden soll.
@@ -106,7 +88,7 @@ pub enum LedgerEntryContent {
     /// Ein Kommando wurde ausgeführt, mit Ergebnis (Spec 0057, §1.1,
     /// dritter Punkt — "stdout/stderr/exit — redigiert"). `output` MUSS
     /// bereits redigiert sein, bevor dieser Wert konstruiert wird (bzw.
-    /// wird von `write_ledger_entry` redigiert, s. Typ-Doc-Kommentar
+    /// wird von `emit_activity` redigiert, s. Typ-Doc-Kommentar
     /// oben).
     CommandExecuted {
         command: String,
@@ -158,44 +140,4 @@ pub enum LedgerConnectionEvent {
     Disconnected,
     Reconnected,
     Failed,
-}
-
-impl LedgerEntryContent {
-    /// Value of the `entry_type` column for this content.
-    pub fn entry_type(&self) -> &'static str {
-        match self {
-            LedgerEntryContent::CommandProposed { .. } => "command_proposed",
-            LedgerEntryContent::Decision { .. } => "decision",
-            LedgerEntryContent::CommandExecuted { .. } => "command_executed",
-            LedgerEntryContent::AiMessage { .. } => "ai_message",
-            LedgerEntryContent::FileRead { .. } => "file_read",
-            LedgerEntryContent::FileWritten { .. } => "file_written",
-            LedgerEntryContent::Connection { .. } => "connection",
-            LedgerEntryContent::ActivityTick => "activity_tick",
-        }
-    }
-}
-
-/// The rule that decided, as it was at decision time (stored with `decision`
-/// entries in the `rule_snapshot` column).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LedgerRuleSnapshot {
-    pub pattern: Pattern,
-    pub action: RuleAction,
-    pub scope: Scope,
-}
-
-/// Fields every ledger entry carries besides its content. All defaults apply
-/// to rows written before the activity record existed.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct LedgerEntryMeta {
-    /// Links proposal, decision and execution of one action.
-    #[serde(default)]
-    pub action_id: Option<String>,
-    /// Set when redaction could not be completed for this entry.
-    #[serde(default)]
-    pub redaction_incomplete: bool,
-    /// Only for `decision` entries.
-    #[serde(default)]
-    pub rule_snapshot: Option<LedgerRuleSnapshot>,
 }

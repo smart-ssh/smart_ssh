@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted · Issue: #1446 · Spec 0057 · Supersedes ADR 0047, point 3 (for file actions)
+Superseded by 0161
 
 ## Context
 

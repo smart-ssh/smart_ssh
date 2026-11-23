@@ -18,7 +18,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::action_exec::{check_for_injected_instructions, emit_action_error};
-use super::chat_turn::{push_history_scoped, write_ledger_entry_for_action};
+use super::chat_turn::{emit_activity_for_action, push_history_scoped};
 
 // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) --------
 
@@ -220,7 +220,7 @@ pub(crate) async fn execute_read_remote_file(
         Ok(bytes) => {
             // Activity record (Spec 0057): path, size and hash only — never
             // the content. Hash of the raw bytes, before redaction.
-            write_ledger_entry_for_action(
+            emit_activity_for_action(
                 session,
                 ledger_source,
                 LedgerEntryContent::FileRead {
@@ -617,7 +617,7 @@ pub(crate) async fn execute_write_remote_file(
     } = done;
     // Activity record (Spec 0057): written only now, when bytes were written.
     // The hash is of the bytes that went over the wire; no content, no diff.
-    write_ledger_entry_for_action(
+    emit_activity_for_action(
         session,
         ledger_source,
         LedgerEntryContent::FileWritten {

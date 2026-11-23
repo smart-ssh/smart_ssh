@@ -33,8 +33,8 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, seal_session_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    emit_activity, push_history, seal_session_for_send, wait_for_ai_request_slot,
+    wait_for_rate_limit_budget, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 use crate::second_opinion::{collect_side_call_text, SideCallEnd};
@@ -305,7 +305,7 @@ pub(crate) async fn handle_document_generated(
     // Gleichsetzung mit normalem Chat-Text wie unten bei `push_history`—
     // gilt genauso für den Ledger-Eintrag, s. `flush_text_buffer`s
     // identischer Kommentar.
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage {
@@ -369,7 +369,7 @@ pub(crate) async fn handle_question_asked(
         options.iter().map(QuestionOptionDto::from).collect(),
         multi_select,
     );
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage {

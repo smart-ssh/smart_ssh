@@ -149,8 +149,9 @@ fn all_event_text(emitter: &TestEmitter) -> String {
 async fn test_transform_changes_what_the_server_receives_but_sinks_keep_the_original() {
     let transport = MockSshTransport::default().with_response("echo Y", output("done"));
     let executed = transport.executed_handle();
-    let (mut session, _chat_store, chat_session_id, _tmp, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(propose("echo X"), transport).await;
+    let (session, _chat_store, _chat_session_id, _tmp) =
+        session_with_real_chat_persistence(propose("echo X"), transport).await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_outgoing_transform_for_tests(Some(ReplaceX::new()));
     let emitter = TestEmitter::default();
 
@@ -163,12 +164,9 @@ async fn test_transform_changes_what_the_server_receives_but_sinks_keep_the_orig
     let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(history.contains("echo X"), "{history}");
     assert!(!history.contains("echo Y"), "{history}");
-    let ledger = format!(
-        "{:?}",
-        ledger_store.load_entries(chat_session_id).await.unwrap()
-    );
-    assert!(ledger.contains("echo X"), "{ledger}");
-    assert!(!ledger.contains("echo Y"), "{ledger}");
+    let reported = format!("{:?}", probe.kinds());
+    assert!(reported.contains("echo X"), "{reported}");
+    assert!(!reported.contains("echo Y"), "{reported}");
 }
 
 #[test]
