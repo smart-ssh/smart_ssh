@@ -464,6 +464,11 @@ pub async fn rebuild_redactors_for_sessions(
             session.swap_redactor(redactor);
             session.redactor.add_secret_values(&secrets);
         }
+        // Issue #1533: the flag on activity events mirrors this rebuild.
+        session.safety.redaction_incomplete.store(
+            !(lookup_complete && compiled),
+            std::sync::atomic::Ordering::SeqCst,
+        );
         if !(lookup_complete && compiled) {
             session
                 .safety
@@ -540,6 +545,12 @@ pub fn redactor_for_reconnect(
         redactor_with_secrets_checked(sudo_for_redactor.as_ref(), extension_secrets);
     if !(*sudo_complete && !lookup.incomplete && compiled) {
         session.redactor.add_secret_values(extension_secrets);
+        // Issue #1533: activity events mirror it. Never cleared here: a
+        // reconnect keeps the literal set, so a complete one proves nothing.
+        session
+            .safety
+            .redaction_incomplete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         session
             .safety
             .redaction_incomplete_notice_pending

@@ -185,8 +185,7 @@ impl TaskScope {
     }
 }
 
-/// One per process. Hands out scopes by key.
-/// Time budget of the steps in [`TaskSupervisor::shutdown_for_exit`]; the
+/// Time budget of the steps in `SessionManager::shutdown_for_exit`; the
 /// drain slice is reserved for the app scope.
 #[derive(Debug, Clone, Copy)]
 pub struct ExitBudget {
@@ -206,6 +205,7 @@ impl Default for ExitBudget {
     }
 }
 
+/// One per process. Hands out scopes by key.
 pub struct TaskSupervisor {
     root: CancellationToken,
     handle: Handle,

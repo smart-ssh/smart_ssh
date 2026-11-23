@@ -145,12 +145,17 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
    * gespeichert, damit die Einstellung nicht verloren geht. */
   const handleRiskClassifierChange = async (enabled: boolean, providerId: string | null) => {
     if (riskSettingsSaving) return;
+    const previousEnabled = riskClassifierEnabled;
+    const previousProviderId = riskClassifierProviderId;
     setRiskClassifierEnabled(enabled);
     setRiskClassifierProviderId(providerId);
     setRiskSettingsSaving(true);
     try {
       await saveRiskClassifierSettings({ enabled, providerId });
     } catch (err) {
+      // Spec 0092, A1.6: never show a value that was not saved.
+      setRiskClassifierEnabled(previousEnabled);
+      setRiskClassifierProviderId(previousProviderId);
       setError(commandErrorText(t, err));
     } finally {
       setRiskSettingsSaving(false);

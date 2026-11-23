@@ -43,7 +43,10 @@ impl Session {
                     .then(|| self.server_id.0.to_string()),
             },
             source,
-            redaction_incomplete: reporting.redaction_incomplete,
+            redaction_incomplete: self
+                .safety
+                .redaction_incomplete
+                .load(std::sync::atomic::Ordering::SeqCst),
             kind,
         });
     }

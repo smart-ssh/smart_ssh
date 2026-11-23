@@ -95,6 +95,7 @@ fn test_session(server_id: ServerId) -> Session {
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(false),
         },
         persistence: app_logic::session::ChatPersistence {
             chat_content: Default::default(),
