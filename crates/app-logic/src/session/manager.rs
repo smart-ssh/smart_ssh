@@ -162,6 +162,22 @@ impl SessionManager {
         lock_tolerating_poison(&self.sessions).get(&id).cloned()
     }
 
+    /// Tells the observers that every session still open ended because the
+    /// app quits (`SessionEndReason::AppExit`). Sessions without an observer
+    /// build nothing. Call before the app scope is cancelled, so the worker
+    /// drains the events.
+    pub async fn emit_app_exit_activity(&self) {
+        let sessions: Vec<Arc<Session>> = lock_tolerating_poison(&self.sessions)
+            .values()
+            .cloned()
+            .collect();
+        for session in sessions {
+            session
+                .emit_session_ended(crate::activity::SessionEndReason::AppExit)
+                .await;
+        }
+    }
+
     pub fn remove(&self, id: SessionId) -> Option<Arc<Session>> {
         let mut sessions = lock_tolerating_poison(&self.sessions);
         let removed = sessions.remove(&id);

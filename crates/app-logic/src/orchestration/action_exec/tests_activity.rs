@@ -716,3 +716,120 @@ async fn test_complete_rebuild_clears_the_incomplete_flag_on_events() {
     let store = crate::test_support::InMemoryProfileStore::new();
     assert!(!flag_after_rebuild(true, &store).await);
 }
+
+/// Two sessions in a manager, both reporting to `hub`.
+fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionManager {
+    let manager = crate::session::SessionManager::default();
+    for _ in 0..2 {
+        let session = with_hub(
+            session_allowing_all(MockSshTransport::default()),
+            hub,
+            false,
+        );
+        manager.insert(Uuid::new_v4(), Arc::new(session));
+    }
+    manager
+}
+
+/// Issue #1532: the exit sequence emits one `AppExit` per open session and
+/// the worker delivers queued events before the shutdown completes.
+#[tokio::test]
+async fn test_app_exit_emits_one_session_ended_per_session_and_drains_the_queue() {
+    let (tx, rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Forward(Mutex::new(tx)))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let manager = manager_with_two(&hub);
+    manager.emit_app_exit_activity().await;
+    let reports = sup.shutdown(Duration::from_secs(3)).await;
+    assert!(reports.iter().all(|r| !r.timed_out));
+    // Everything arrived by the time the shutdown returned.
+    let events: Vec<_> = rx.try_iter().collect();
+    assert_eq!(events.len(), 2, "{events:?}");
+    for event in events {
+        assert!(matches!(
+            event.kind,
+            ActivityEventKind::SessionEnded {
+                reason: crate::activity::SessionEndReason::AppExit
+            }
+        ));
+    }
+}
+
+/// Events queued before the cancellation are delivered, not dropped: the
+/// observer holds the first event while the rest queues up and the scope is
+/// cancelled, so only the drain can deliver the others.
+#[tokio::test]
+async fn test_events_queued_before_cancellation_are_delivered_by_the_shutdown() {
+    struct Gate {
+        first: Mutex<Option<Receiver<()>>>,
+        seen: Mutex<Sender<()>>,
+        out: Mutex<Sender<ActivityEvent>>,
+    }
+    impl ActivityObserver for Gate {
+        fn on_event(&self, event: &ActivityEvent) {
+            if let Some(release) = self.first.lock().unwrap().take() {
+                let _ = self.seen.lock().unwrap().send(());
+                let _ = release.recv();
+            }
+            let _ = self.out.lock().unwrap().send(event.clone());
+        }
+    }
+    let (release_tx, release_rx) = channel();
+    let (seen_tx, seen_rx) = channel();
+    let (out_tx, out_rx) = channel();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Gate {
+        first: Mutex::new(Some(release_rx)),
+        seen: Mutex::new(seen_tx),
+        out: Mutex::new(out_tx),
+    })]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    let scope = sup.app_scope();
+    hub.start_worker(&scope);
+    let session = with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    );
+    session
+        .emit_session_started(ActivitySessionKind::Chat, None)
+        .await;
+    seen_rx.recv_timeout(WAIT).expect("worker holds event 1");
+    for _ in 0..4 {
+        session
+            .emit_session_started(ActivitySessionKind::Chat, None)
+            .await;
+    }
+    scope.cancel();
+    release_tx.send(()).unwrap();
+    let reports = sup.shutdown(Duration::from_secs(30)).await;
+    assert!(reports.iter().all(|r| !r.timed_out));
+    assert_eq!(out_rx.try_iter().count(), 5);
+}
+
+/// A blocking observer does not hold up the exit beyond the timeout.
+#[tokio::test]
+async fn test_blocking_observer_does_not_delay_exit_beyond_the_shutdown_timeout() {
+    let (release, blocked) = channel::<()>();
+    let hub = Arc::new(ActivityHub::new(vec![Arc::new(Blocking(Mutex::new(
+        blocked,
+    )))]));
+    let sup = crate::tasks::TaskSupervisor::new();
+    hub.start_worker(&sup.app_scope());
+    let manager = manager_with_two(&hub);
+    manager.emit_app_exit_activity().await;
+    let started = std::time::Instant::now();
+    let reports = sup.shutdown(Duration::from_millis(300)).await;
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(reports.iter().any(|r| r.timed_out));
+    drop(release);
+}
+
+/// Without an observer nothing is built at exit.
+#[tokio::test]
+async fn test_app_exit_without_observer_constructs_no_event() {
+    crate::activity::CONSTRUCTED.with(|c| c.set(0));
+    let hub = Arc::new(ActivityHub::default());
+    manager_with_two(&hub).emit_app_exit_activity().await;
+    assert_eq!(crate::activity::CONSTRUCTED.with(|c| c.get()), 0);
+}
