@@ -890,6 +890,7 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
     let scope = sup.session_scope(id);
     // Pushes an event once cancelled (a decision written during the cancel).
     let pusher = session.clone();
+    let (armed_tx, armed_rx) = tokio::sync::oneshot::channel::<()>();
     scope.spawn("push-on-cancel", async move {
         struct OnDrop(Arc<Session>);
         impl Drop for OnDrop {
@@ -902,8 +903,14 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
             }
         }
         let _g = OnDrop(pusher);
+        let _ = armed_tx.send(());
         std::future::pending::<()>().await;
     });
+    // The guard exists before the cancel (a never-polled task has none).
+    tokio::time::timeout(WAIT, armed_rx)
+        .await
+        .expect("task started")
+        .unwrap();
     // A second scope that never ends (blocking task ignores cancellation).
     let (release, blocked) = channel::<()>();
     let hang = sup.session_scope(Uuid::new_v4());
