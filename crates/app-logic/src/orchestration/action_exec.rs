@@ -36,7 +36,7 @@ use ssh_manager_core::ai::{
     Role, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 #[cfg(test)]
-use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent, LedgerSource};
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 #[cfg(test)]
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use ssh_manager_core::filter::{
@@ -83,8 +83,8 @@ use super::approval::{ApprovedAction, ApprovedCommand};
 #[cfg(test)]
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
 use super::chat_turn::{
-    ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
+    emit_activity, ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
+    wait_for_rate_limit_budget, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 #[cfg(test)]
 #[expect(unused_imports, reason = "reached by sibling tests via `use super::*`")]
@@ -116,14 +116,12 @@ mod tests_check_unavailable;
 mod tests_files_and_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-mod tests_mcp_recording;
 // Test code exception to the `deny` (see `orchestration.rs`, module head).
 #[cfg(test)]
 #[expect(clippy::expect_used, reason = "test code")]
 mod tests_activity;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-mod tests_file_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 mod tests_outgoing;

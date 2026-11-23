@@ -5,11 +5,11 @@ use ssh_manager_core::audit::LedgerEntryContent;
 
 /// Redigiert alle Inhalts-tragenden Varianten eines [`LedgerEntryContent`]
 /// (Spec 0057, §1.2 "PFLICHT") — zentral hier statt an jeder Aufrufstelle
-/// von [`write_ledger_entry`] einzeln, damit ein vergessener Aufrufer
+/// von [`emit_activity`] einzeln, damit ein vergessener Aufrufer
 /// keinen unredigierten Eintrag durchlassen kann. `Decision` trägt keine
 /// Ausgabedaten (nur `reason`/`code`, von der Filter-Engine selbst
 /// erzeugte Texte, kein Serverinhalt) und bleibt deshalb unverändert.
-pub(super) fn redact_ledger_entry_content(
+pub(super) fn redact_activity_content(
     redactor: &dyn OutputRedactor,
     content: LedgerEntryContent,
 ) -> LedgerEntryContent {

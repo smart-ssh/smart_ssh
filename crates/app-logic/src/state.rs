@@ -6,8 +6,7 @@ use uuid::Uuid;
 
 use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::{
-    SqliteAiProviderStore, SqliteChatSessionStore, SqliteLedgerStore, SqlitePolicyStore,
-    SqlitePromptHistoryStore,
+    SqliteAiProviderStore, SqliteChatSessionStore, SqlitePolicyStore, SqlitePromptHistoryStore,
 };
 use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
@@ -133,10 +132,6 @@ pub struct AppState {
     /// Spec 0034: persistente Chat-Sitzungen/-Nachrichten — wie
     /// `policy_store`/`prompt_history_store` `Clone` statt `Arc<dyn ...>`.
     pub chat_session_store: SqliteChatSessionStore,
-    /// Spec 0057, §1: das Session-Ledger.
-    pub ledger_store: SqliteLedgerStore,
-    /// Spec 0057: recorded sessions of the activity record (MCP sessions).
-    pub activity_session_store: persistence_sqlite::SqliteActivitySessionStore,
     /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
     /// Community Edition kennt aktuell nur den einen festen Zustand
     /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-

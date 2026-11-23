@@ -12,7 +12,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::super::approval::{ApprovedAction, ApprovedCommand};
-use super::super::chat_turn::{push_history_scoped, write_ledger_entry_and_event};
+use super::super::chat_turn::{emit_activity_event, push_history_scoped};
 use super::super::notes::execute_note_update;
 use super::super::remote_files::{execute_read_remote_file, execute_write_remote_file};
 
@@ -374,10 +374,10 @@ impl CommandReport<'_> {
     ) {
         let session = self.session;
         // Spec 0057, §1.1: deliberately called with the UNREDACTED `output`;
-        // `write_ledger_entry` redacts centrally. `ledger_source` comes from
+        // `emit_activity` redacts centrally. `ledger_source` comes from
         // the caller, not derived from `persist` (which means something else:
         // MCP chat-persistence exclusion).
-        write_ledger_entry_and_event(
+        emit_activity_event(
             session,
             self.ledger_source,
             LedgerEntryContent::CommandExecuted {
@@ -385,7 +385,6 @@ impl CommandReport<'_> {
                 output: output.clone(),
                 cancelled,
             },
-            None,
             Some(self.action_id),
         )
         .await;
@@ -455,9 +454,9 @@ impl CommandReport<'_> {
         // A transport/channel error says nothing about whether the command
         // reached the server, so the ledger still gets a `CommandExecuted`
         // entry. `exit_code: None` means "result unknown"; the message goes
-        // into `stderr` so the central redaction in `write_ledger_entry`
+        // into `stderr` so the central redaction in `emit_activity`
         // treats it like real command output.
-        write_ledger_entry_and_event(
+        emit_activity_event(
             session,
             self.ledger_source,
             LedgerEntryContent::CommandExecuted {
@@ -470,7 +469,6 @@ impl CommandReport<'_> {
                 },
                 cancelled: false,
             },
-            None,
             Some(self.action_id),
         )
         .await;

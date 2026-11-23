@@ -64,8 +64,6 @@ mod fixture {
             policy_store: db.policy_store(),
             prompt_history_store: db.prompt_history_store(),
             chat_session_store: db.chat_session_store(),
-            ledger_store: db.ledger_store(),
-            activity_session_store: db.activity_session_store(),
             profile_store: db.clone(),
             credential_store: Arc::new(NoCredentials),
             key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),

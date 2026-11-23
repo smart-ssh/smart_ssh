@@ -450,13 +450,11 @@ pub fn round_truncation_notice(language: PromptLanguage, cut_rounds: usize) -> S
     match language {
         PromptLanguage::De => format!(
             "[Hinweis: ältere Konversation gekürzt — {cut_rounds} frühere Gesprächsrunde(n) \
-             wurden aus Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf \
-             bleibt im Session-Ledger erhalten.]"
+             wurden aus Platzgründen aus diesem Kontext entfernt.]"
         ),
         PromptLanguage::En | PromptLanguage::Other(_) => format!(
             "[Note: older conversation truncated — {cut_rounds} earlier conversation round(s) \
-             were removed from this context to save space. The full history is kept in the \
-             session ledger.]"
+             were removed from this context to save space.]"
         ),
     }
 }
@@ -908,8 +906,7 @@ mod tests {
         assert_eq!(
             round_truncation_notice(PromptLanguage::De, 3),
             "[Hinweis: ältere Konversation gekürzt — 3 frühere Gesprächsrunde(n) wurden aus \
-             Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf bleibt im \
-             Session-Ledger erhalten.]"
+             Platzgründen aus diesem Kontext entfernt.]"
         );
         assert_eq!(
             summary_notice(PromptLanguage::De, "Logs geprüft."),
@@ -918,7 +915,7 @@ mod tests {
     }
 
     /// Issue #129: die englischen Hinweise tragen dieselbe Information
-    /// (Anzahl entfernter Runden, vollständiger Verlauf im Ledger) und
+    /// (Anzahl entfernter Runden) und
     /// keinen deutschen Text; der Zusammenfassungstext bleibt unverändert.
     #[test]
     fn test_english_compaction_notices_carry_the_same_information() {
@@ -926,8 +923,7 @@ mod tests {
         assert_eq!(
             truncation,
             "[Note: older conversation truncated — 3 earlier conversation round(s) were \
-             removed from this context to save space. The full history is kept in the \
-             session ledger.]"
+             removed from this context to save space.]"
         );
         assert!(!truncation.contains("ältere Konversation gekürzt"));
         let summary = summary_notice(PromptLanguage::En, "Logs geprüft.");

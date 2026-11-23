@@ -17,13 +17,20 @@ use sqlx::Connection;
 
 use ssh_manager_core::crypto::DatabaseKey;
 
-/// Issue #113: die vier Spalten, die bis dahin feldweise verschlüsselt
+/// Issue #113: die drei Spalten (the ledger column is gone with migration 0030, issue #1506), die bis dahin feldweise verschlüsselt
 /// geschrieben wurden und beim Start auf Klartext umgestellt werden.
-pub const FIELD_ENCRYPTED_COLUMNS: [(&str, &str); 4] = [
+pub const FIELD_ENCRYPTED_COLUMNS: [(&str, &str); 3] = [
     ("chat_messages", "content"),
-    ("ledger_entries", "content"),
     ("prompt_history", "content"),
     ("chat_sessions", "summary_text"),
+];
+
+/// Issue #1506: tables and columns that migration 0030 drops on purpose. The
+/// "nothing disappears" checks of the release chain tolerate exactly these.
+pub const INTENTIONALLY_REMOVED: [(&str, Option<&str>); 3] = [
+    ("ledger_entries", None),
+    ("activity_sessions", None),
+    ("chat_sessions", Some("activity_session_id")),
 ];
 
 /// Der Wurzelschlüssel K, unter dem jede Release-Fixture ihren feldweise
@@ -299,14 +306,23 @@ impl DatabaseSnapshot {
         changed: &[(&str, &str)],
     ) {
         for (name, before) in &self.tables {
+            if INTENTIONALLY_REMOVED.contains(&(name.as_str(), None))
+                && !later.tables.contains_key(name)
+            {
+                continue;
+            }
             let after = later
                 .tables
                 .get(name)
                 .unwrap_or_else(|| panic!("{step}: table {name} disappeared"));
+            let removed_columns: Vec<&str> = INTENTIONALLY_REMOVED
+                .iter()
+                .filter_map(|(t, c)| (*t == name.as_str()).then_some(*c).flatten())
+                .collect();
             let missing: BTreeSet<&String> = before
                 .columns
                 .iter()
-                .filter(|c| !after.columns.contains(c))
+                .filter(|c| !after.columns.contains(c) && !removed_columns.contains(&c.as_str()))
                 .collect();
             assert!(
                 missing.is_empty(),
@@ -327,7 +343,10 @@ impl DatabaseSnapshot {
             let compared: Vec<String> = before
                 .columns
                 .iter()
-                .filter(|c| !changed.contains(&(name.as_str(), c.as_str())))
+                .filter(|c| {
+                    !changed.contains(&(name.as_str(), c.as_str()))
+                        && !removed_columns.contains(&c.as_str())
+                })
                 .cloned()
                 .collect();
             assert_eq!(

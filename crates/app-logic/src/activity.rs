@@ -9,7 +9,7 @@
 //!
 //! The core keeps no activity record of its own in this module. Events are
 //! built from the content that was already redacted by the central
-//! redaction of the ledger funnel (`write_ledger_entry_and_event` in `chat_turn/ledger_funnel.rs`), so an
+//! redaction in the activity funnel (`emit_activity_event` in `chat_turn/activity_funnel.rs`), so an
 //! observer only ever sees redacted text. With no observer registered no
 //! event is built and nothing is queued.
 //!
@@ -218,6 +218,8 @@ pub struct ActivityHub {
     tx: SyncSender<ActivityEvent>,
     rx: Mutex<Option<Receiver<ActivityEvent>>>,
     dropped: AtomicU64,
+    /// Tests only: deliver in `push` instead of through the worker.
+    inline: bool,
 }
 
 impl Default for ActivityHub {
@@ -241,7 +243,17 @@ impl ActivityHub {
             tx,
             rx: Mutex::new(Some(rx)),
             dropped: AtomicU64::new(0),
+            inline: false,
         }
+    }
+
+    /// Delivers events synchronously inside `push`, so a test can read what
+    /// an observer received without waiting for a worker.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new_inline_for_tests(observers: Vec<Arc<dyn ActivityObserver>>) -> Self {
+        let mut hub = Self::new(observers);
+        hub.inline = true;
+        hub
     }
 
     /// `true` if at least one observer is registered.
@@ -286,6 +298,10 @@ impl ActivityHub {
     /// Never blocks. A full queue drops the event (counted, logged without
     /// content).
     pub(crate) fn push(&self, event: ActivityEvent) {
+        if self.inline {
+            deliver(&self.observers, &event);
+            return;
+        }
         match self.tx.try_send(event) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {

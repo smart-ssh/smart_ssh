@@ -47,7 +47,6 @@ pub async fn decrypt_field_encrypted_content(
                 decrypted = report.decrypted_total(),
                 removed = report.removed_total(),
                 removed_chat_messages = report.chat_messages.removed,
-                removed_ledger_entries = report.ledger_entries.removed,
                 removed_prompt_history = report.prompt_history.removed,
                 removed_summaries = report.summaries.removed,
                 "field-encrypted columns converted to plaintext inside the encrypted database"

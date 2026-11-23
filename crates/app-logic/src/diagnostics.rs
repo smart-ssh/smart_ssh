@@ -93,7 +93,6 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "chat session creation failed",
     "chat session mark_ended failed",
     "chat session retention cleanup failed",
-    "ledger entry persistence failed",
     "note shrink persistence failed",
     "note shrink summarization failed",
     "note shrink summarization timed out",

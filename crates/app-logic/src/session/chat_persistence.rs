@@ -45,13 +45,6 @@ pub struct ChatPersistence {
     /// 0015): kein `core`-Trait für diese Art Hilfs-Store, anders als
     /// `ProfileStore`/`PolicyStore`/`AiProvider`.
     pub chat_session_store: Option<persistence_sqlite::SqliteChatSessionStore>,
-    /// Spec 0057, §1: das Session-Ledger dieser Sitzung. Bewusst
-    /// UNABHÄNGIG vom `persist`-Flag von `push_history_scoped` (das MCP-
-    /// Herkunft von `chat_messages` ausschließt, Spec 0034/0040) — das
-    /// Ledger soll MCP-Aktivität gerade erfassen (Spec 0057, §1.1: Quelle
-    /// `mcp-agent`). Gleiches `None`-Verhalten wie `chat_session_store`
-    /// (Tests; Sitzungen ohne eigene `chat_sessions`-Zeile).
-    pub ledger_store: Option<persistence_sqlite::SqliteLedgerStore>,
     /// Die `chat_sessions.id`-Zeile dieser laufenden Sitzung — `None`, bis
     /// `app_shell::commands::connect_session` sie anlegt (bzw. bei
     /// `resume_chat_session`, Teil 2, auf die wiederverwendete Zeile
@@ -59,13 +52,6 @@ pub struct ChatPersistence {
     /// `history_push_and_persist` sie über einen `.await`-Punkt hinweg
     /// hält (der eigentliche `INSERT`).
     pub chat_session_id: AsyncMutex<Option<uuid::Uuid>>,
-    /// Store of recorded sessions (activity record); `None` in tests.
-    pub activity_session_store: Option<persistence_sqlite::SqliteActivitySessionStore>,
-    /// Issue #1444: the recorded session (`activity_sessions`, kind `mcp`) of
-    /// an MCP-driven connection. Set once by
-    /// `mcp_sessions::attach_recorded_session`; `None` for chat sessions,
-    /// which record under `chat_session_id`. Never a `chat_sessions` row.
-    pub mcp_activity_session_id: AsyncMutex<Option<uuid::Uuid>>,
     /// Issue #505: chat content extensions (`AppState.chat_content`); the
     /// send path seals extension parts through it.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,

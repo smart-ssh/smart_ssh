@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by 0161
 
 ## Kontext
 

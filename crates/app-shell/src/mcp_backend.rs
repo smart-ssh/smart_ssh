@@ -80,16 +80,8 @@ impl AppMcpBackend {
                 let connected = connect_session(app, state, server_id, session_id, None, false)
                     .await
                     .map(|_| ());
-                // Issue #1444: the activity record gets its own `mcp`
-                // recorded session, named after the MCP client.
                 if connected.is_ok() {
                     if let Some(session) = state.sessions.get(session_id) {
-                        app_logic::mcp_sessions::attach_recorded_session(
-                            &session,
-                            &server_id,
-                            client_name,
-                        )
-                        .await;
                         // Issue #1505: activity observers learn the client.
                         session
                             .emit_session_started(

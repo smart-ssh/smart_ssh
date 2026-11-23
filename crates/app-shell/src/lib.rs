@@ -299,10 +299,9 @@ pub(crate) async fn open_and_assemble(
     // Issue #504 (ADR 0141): removal callbacks and the one-time reconcile.
     chat_content::attach_chat_content(&profile_store, chat_content).await;
 
-    let (prompt_history_store, chat_session_store, ledger_store) = (
+    let (prompt_history_store, chat_session_store) = (
         profile_store.prompt_history_store(),
         profile_store.chat_session_store(),
-        profile_store.ledger_store(),
     );
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
@@ -362,7 +361,6 @@ pub(crate) async fn open_and_assemble(
         // Klarstellung 9: die Kennung des K, mit dem diese Datenbank geöffnet wurde —
         // damit das Einrichten aus den Einstellungen denselben Schlüssel prüfen kann (Fund 10).
         root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&root_key),
-        activity_session_store: profile_store.activity_session_store(),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
         // Spec 0076, §4.2: zustandslos — sie hält nichts fest, weil bei
@@ -379,7 +377,6 @@ pub(crate) async fn open_and_assemble(
         policy_store,
         prompt_history_store,
         chat_session_store,
-        ledger_store,
         // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen.
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
@@ -880,9 +877,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_stored_host_keys,
             commands::update_group_notes,
             commands::update_server_notes,
-            commands::record_list_sessions,
-            commands::record_list_entries,
-            commands::record_session_entries,
             commands::large_note_dialog_threshold_chars,
             commands::request_note_shrink,
             commands::update_local_server_notes,

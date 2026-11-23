@@ -122,10 +122,7 @@ impl<'a> CloseContext<'a> {
         // actor, connection watch, SFTP pumps, auto-reconnect, MCP action
         // task) are cancelled and awaited.
         self.close_task_scope(session_id).await;
-        // Issue #1444: after the scope closed, so a decision written by the
-        // cancelled action task is in the record before `ended_at`.
-        app_logic::mcp_sessions::end_recorded_session(&session).await;
-        // Issue #1505: same point, so events of the cancelled action task
+        // Issue #1505: after the scope closed, so events of the cancelled action task
         // reach the observers before the end.
         session
             .emit_session_ended(app_logic::activity::SessionEndReason::Closed)

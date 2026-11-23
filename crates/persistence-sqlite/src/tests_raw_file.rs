@@ -2,7 +2,7 @@
 //!
 //! Die bestehenden Store-Tests
 //! (`test_direct_sql_access_to_content_column_never_reveals_plaintext` in
-//! `chat_session_store`, `ledger_store`, `prompt_history_store`) prüfen je
+//! `chat_session_store`, `prompt_history_store`) prüfen je
 //! **eine Spalte** per `SELECT` — sie sehen die Datenbank also durch dieselbe
 //! SQLite-Brille, die auch beim Schreiben im Spiel war. Was sie nicht sehen
 //! können: Seiten, die SQLite zusätzlich in der `-wal`-Datei hält, und alles,
@@ -12,8 +12,8 @@
 //! echten Stores, schließt den Pool und durchsucht danach **jede Datei** des
 //! Datenbank-Verzeichnisses byteweise — ohne SQLite, ohne SQL.
 //!
-//! **Seit Issue #113** schreiben die Stores die vier Spalten (Chat,
-//! Zusammenfassung, Ledger, Historie) als Klartext; geschützt sind sie
+//! **Seit Issue #113** schreiben die Stores die drei Spalten (Chat,
+//! Zusammenfassung, Historie) als Klartext; geschützt sind sie
 //! allein durch die Verschlüsselung der ganzen Datei (Spec 0101). Der
 //! Nachweis schreibt deshalb in eine **mit Schlüssel geöffnete** Datenbank
 //! (T3) und als Gegenprobe in eine Klartext-Datenbank (T4) — dort muss die
@@ -29,7 +29,6 @@
 use ssh_manager_core::testing::ServerBuilder;
 use std::path::Path;
 
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
@@ -142,27 +141,7 @@ async fn write_secret_through_all_stores(
         .await
         .expect("Zusammenfassung schreiben");
 
-    // 4. Ausführungsprotokoll.
-    profile_store
-        .ledger_store()
-        .append_entry(
-            session_id,
-            LedgerSource::User,
-            &LedgerEntryContent::CommandExecuted {
-                command: format!("mysql --password={SECRET}"),
-                output: CommandOutput {
-                    stdout: format!("ok, password={SECRET}").into_bytes(),
-                    stderr: Vec::new(),
-                    exit_code: Some(0),
-                    truncated: false,
-                },
-                cancelled: false,
-            },
-        )
-        .await
-        .expect("Ledger-Eintrag schreiben");
-
-    // 5. Eingabe-Historie.
+    // 4. Eingabe-Historie.
     profile_store
         .prompt_history_store()
         .record(&server_id, &format!("mysql --password={SECRET}"))
