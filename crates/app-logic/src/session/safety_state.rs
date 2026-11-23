@@ -120,6 +120,11 @@ pub struct SafetyState {
     pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
     /// Issue #843: notice `REDACTION_INCOMPLETE` due (secrets not fully loaded).
     pub redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool,
+    /// Issue #1533: live "redaction incomplete" state, read when an activity
+    /// event is built. Unlike the notice flag it is never consumed: set at
+    /// connect, then mirrors the latest redactor rebuild (incomplete stays
+    /// `true` until a complete rebuild replaces the literal set).
+    pub redaction_incomplete: std::sync::atomic::AtomicBool,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
     /// §2.1, Entscheidung: die Summary bildet Chat-Kontinuität ab,
     /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
