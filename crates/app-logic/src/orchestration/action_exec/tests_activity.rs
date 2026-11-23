@@ -1011,13 +1011,28 @@ async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() 
     let after_end = mk();
     manager.insert(Uuid::new_v4(), after_end.clone());
     let budget = crate::tasks::ExitBudget::default();
+    // A task of a session scope that emits its start while `shutdown_sessions`
+    // is still waiting for it, i.e. between phase 1 and the end step.
+    let (go, go_rx) = channel::<()>();
+    let handle = tokio::runtime::Handle::current();
+    let in_flight = before_end.clone();
+    let spawned = sup
+        .session_scope(Uuid::new_v4())
+        .spawn_blocking("late-start", move || {
+            let _ = go_rx.recv();
+            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Chat, None));
+        });
+    assert!(spawned);
     let exit = manager.shutdown_for_exit(&sup, budget);
     tokio::pin!(exit);
-    // Exit began (flag set synchronously at the first poll of the future).
-    manager.begin_exit();
-    before_end
-        .emit_session_started(ActivitySessionKind::Chat, None)
-        .await;
+    // Poll the exit once: it sets the flag synchronously, then waits for the
+    // blocking task. No manual `begin_exit` here.
+    tokio::select! {
+        biased;
+        () = &mut exit => panic!("exit must wait for the blocking task"),
+        () = std::future::ready(()) => {}
+    }
+    go.send(()).expect("task alive");
     exit.await;
     after_end
         .emit_session_started(ActivitySessionKind::Chat, None)
