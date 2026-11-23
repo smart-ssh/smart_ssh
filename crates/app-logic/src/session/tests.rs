@@ -555,6 +555,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
         .succeed(
             Box::new(UnusedTransport),
             Box::new(DefaultOutputRedactor::new()),
+            false,
             None,
         )
         .await;
@@ -1086,15 +1087,24 @@ mod lookup_failures {
             incomplete: inc,
         };
         let sudo = (None, true);
-        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(false), &[]);
+        let reconnect = |inc| {
+            let (r, flag) = crate::session_extension::redactor_for_reconnect(
+                &session,
+                &sudo,
+                &incomplete(inc),
+                &[],
+            );
+            crate::session_extension::apply_reconnect_redactor(&session, r, flag, || {});
+        };
+        reconnect(false);
         assert!(!session.safety.redaction_incomplete.load(SeqCst));
-        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(true), &[]);
+        reconnect(true);
         assert!(session.safety.redaction_incomplete.load(SeqCst));
         assert!(session
             .safety
             .redaction_incomplete_notice_pending
             .load(SeqCst));
-        crate::session_extension::redactor_for_reconnect(&session, &sudo, &incomplete(false), &[]);
+        reconnect(false);
         assert!(session.safety.redaction_incomplete.load(SeqCst));
     }
 

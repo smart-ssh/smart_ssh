@@ -422,16 +422,18 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         )
         .await?;
         transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
-        let (redactor, sudo_password) =
+        let (redactor, incomplete, sudo_password) =
             redaction_for_reconnect(state, &session, server_id, &lookup).await;
-        Ok::<_, CommandError>((transport, redactor, sudo_password))
+        Ok::<_, CommandError>((transport, redactor, incomplete, sudo_password))
     }
     .await;
 
     match result {
-        Ok((transport, redactor, sudo_password)) => {
+        Ok((transport, redactor, incomplete, sudo_password)) => {
             let loss_watch = transport.connection_loss_watch();
-            claim.succeed(transport, redactor, sudo_password).await;
+            claim
+                .succeed(transport, redactor, incomplete, sudo_password)
+                .await;
             // Issue #565: the new connection gets its own loss watch; the
             // one of the replaced transport no longer reports.
             if let Some(watch) = loss_watch {

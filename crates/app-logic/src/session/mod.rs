@@ -233,10 +233,11 @@ impl ReconnectClaim<'_> {
         mut self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         self.session
-            .replace_connection(transport, redactor, sudo_password)
+            .replace_connection(transport, redactor, redaction_incomplete, sudo_password)
             .await;
         *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
             ConnectionStatus::Connected;
@@ -768,6 +769,7 @@ impl Session {
         &self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         *self.sftp.inner.lock().await = None;
@@ -775,7 +777,13 @@ impl Session {
         // One read feeds both: the password sent to `sudo -S` and the
         // redactor always agree.
         self.safety.sudo_password.replace(sudo_password);
-        self.redactor.replace(redactor);
+        // Issue #1543: swap and flag under one lock, after the awaits above.
+        crate::session_extension::apply_reconnect_redactor(
+            self,
+            redactor,
+            redaction_incomplete,
+            || {},
+        );
     }
 
     /// Replaces the redactor of the open session (an extension's secret

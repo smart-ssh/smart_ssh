@@ -556,12 +556,16 @@ pub fn notify_note_request_redaction_incomplete(
 /// determined (sudo read, scope lookup, literal compile), the secrets known
 /// now are added to the session's kept literal set and the session is flagged
 /// "redaction incomplete".
+///
+/// Returns the redactor and whether the lookup was incomplete. The flag is
+/// raised by [`apply_reconnect_redactor`] at swap time, under
+/// `REDACTOR_APPLY_LOCK` (issue #1543).
 pub fn redactor_for_reconnect(
     session: &crate::session::Session,
     sudo: &(Option<SecretString>, bool),
     lookup: &ScopeLookup,
     extension_secrets: &[SecretString],
-) -> Box<dyn OutputRedactor> {
+) -> (Box<dyn OutputRedactor>, bool) {
     let (sudo_password, sudo_complete) = sudo;
     let sudo_for_redactor = if *sudo_complete {
         sudo_password.clone()
@@ -572,10 +576,28 @@ pub fn redactor_for_reconnect(
     };
     let (redactor, compiled) =
         redactor_with_secrets_checked(sudo_for_redactor.as_ref(), extension_secrets);
-    if !(*sudo_complete && !lookup.incomplete && compiled) {
+    let incomplete = !(*sudo_complete && !lookup.incomplete && compiled);
+    if incomplete {
         session.redactor.add_secret_values(extension_secrets);
-        // Issue #1533: activity events mirror it. Never cleared here: a
-        // reconnect keeps the literal set, so a complete one proves nothing.
+    }
+    (redactor, incomplete)
+}
+
+/// Swaps in a reconnect redactor and, if its lookup was incomplete, raises
+/// the "redaction incomplete" flag in the same locked step (issue #1543).
+/// Keeps the session's literal set and never lowers the flag: a reconnect
+/// keeps the literal set, so a complete lookup proves nothing. `between` runs
+/// after the swap, before the flag (a test hook). Never held across `.await`.
+pub(crate) fn apply_reconnect_redactor(
+    session: &crate::session::Session,
+    redactor: Box<dyn OutputRedactor>,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    session.swap_redactor(redactor);
+    between();
+    if incomplete {
         session
             .safety
             .redaction_incomplete
@@ -585,7 +607,6 @@ pub fn redactor_for_reconnect(
             .redaction_incomplete_notice_pending
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
-    redactor
 }
 
 /// Test double recording the removal callbacks.
