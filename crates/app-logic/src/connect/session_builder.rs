@@ -311,12 +311,7 @@ pub async fn build_session(
     let activity_reporting = if state.activity.is_active() {
         let snapshot =
             crate::activity::server_snapshot(state.profile_store.as_ref(), &server).await;
-        crate::activity::ActivityReporting::new(
-            &state.activity,
-            session_id.to_string(),
-            snapshot,
-            redaction_incomplete,
-        )
+        crate::activity::ActivityReporting::new(&state.activity, session_id.to_string(), snapshot)
     } else {
         None
     };
@@ -463,6 +458,7 @@ pub async fn build_session(
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(
                 redaction_incomplete,
             ),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(redaction_incomplete),
         },
         persistence: ChatPersistence {
             chat_content: state.chat_content.clone(),

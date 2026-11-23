@@ -390,6 +390,7 @@ pub(crate) fn session_with_ai_provider(
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(false),
         },
         persistence: ChatPersistence {
             chat_content: Default::default(),
