@@ -13,6 +13,7 @@
 //! sense as notes. It is redacted first and fenced afterwards (Spec 0039,
 //! ADR 0034 order). Known secrets only ever extend the redactor.
 
+pub(crate) use crate::session::REDACTOR_APPLY_LOCK;
 use secrecy::{ExposeSecret, SecretString};
 
 use ssh_manager_core::ai::{fence_untrusted, DefaultOutputRedactor, OutputRedactor, UntrustedKind};
@@ -467,12 +468,6 @@ pub async fn rebuild_redactors_for_sessions(
     }
 }
 
-/// Serialises "swap the redactor, then store the flag" across rebuilds, so
-/// the flag always mirrors the last applied swap (issue #1541). One lock for
-/// all sessions: it is held only around the swap and the store, never across
-/// an `.await`.
-static REDACTOR_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 /// Swaps in a rebuilt redactor and stores the matching "redaction incomplete"
 /// flag as one step with respect to other rebuilds. `between` runs after the
 /// swap, before the store (a test hook).
@@ -581,32 +576,6 @@ pub fn redactor_for_reconnect(
         session.redactor.add_secret_values(extension_secrets);
     }
     (redactor, incomplete)
-}
-
-/// Swaps in a reconnect redactor and, if its lookup was incomplete, raises
-/// the "redaction incomplete" flag in the same locked step (issue #1543).
-/// Keeps the session's literal set and never lowers the flag: a reconnect
-/// keeps the literal set, so a complete lookup proves nothing. `between` runs
-/// after the swap, before the flag (a test hook). Never held across `.await`.
-pub(crate) fn apply_reconnect_redactor(
-    session: &crate::session::Session,
-    redactor: Box<dyn OutputRedactor>,
-    incomplete: bool,
-    between: impl FnOnce(),
-) {
-    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
-    session.swap_redactor(redactor);
-    between();
-    if incomplete {
-        session
-            .safety
-            .redaction_incomplete
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        session
-            .safety
-            .redaction_incomplete_notice_pending
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
 }
 
 /// Test double recording the removal callbacks.

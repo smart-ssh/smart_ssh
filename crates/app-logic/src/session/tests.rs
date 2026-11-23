@@ -1094,7 +1094,7 @@ mod lookup_failures {
                 &incomplete(inc),
                 &[],
             );
-            crate::session_extension::apply_reconnect_redactor(&session, r, flag, || {});
+            crate::session::apply_reconnect_redactor(&session, r, flag, || {});
         };
         reconnect(false);
         assert!(!session.safety.redaction_incomplete.load(SeqCst));

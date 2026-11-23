@@ -54,7 +54,7 @@ fn reconnect_redactor() -> Box<dyn OutputRedactor> {
 #[test]
 fn test_reconnect_apply_lock_is_held_between_swap_and_store() {
     let session = test_session(vec![], MockSshTransport::default());
-    apply_reconnect_redactor(&session, reconnect_redactor(), true, || {
+    crate::session::apply_reconnect_redactor(&session, reconnect_redactor(), true, || {
         assert!(REDACTOR_APPLY_LOCK.try_lock().is_err());
     });
     assert!(flag(&session));
@@ -69,7 +69,7 @@ fn test_incomplete_reconnect_swap_after_complete_rebuild_leaves_flag_raised() {
     // then lowers the flag; the reconnect swap comes last.
     apply(&session, false, || {});
     assert!(!flag(&session));
-    apply_reconnect_redactor(&session, reconnect_redactor(), true, || {});
+    crate::session::apply_reconnect_redactor(&session, reconnect_redactor(), true, || {});
     assert!(flag(&session));
 }
 
@@ -78,9 +78,9 @@ fn test_incomplete_reconnect_swap_after_complete_rebuild_leaves_flag_raised() {
 fn test_complete_reconnect_keeps_flag_as_rebuild_left_it() {
     let session = test_session(vec![], MockSshTransport::default());
     apply(&session, true, || {});
-    apply_reconnect_redactor(&session, reconnect_redactor(), false, || {});
+    crate::session::apply_reconnect_redactor(&session, reconnect_redactor(), false, || {});
     assert!(flag(&session));
     apply(&session, false, || {});
-    apply_reconnect_redactor(&session, reconnect_redactor(), false, || {});
+    crate::session::apply_reconnect_redactor(&session, reconnect_redactor(), false, || {});
     assert!(!flag(&session));
 }
