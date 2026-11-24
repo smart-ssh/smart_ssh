@@ -320,10 +320,7 @@ pub struct SessionTransport {
     epoch: std::sync::atomic::AtomicU64,
     /// Issue #328: action currently running as an AI command, so a
     /// disconnect can cancel it (Spec 0027).
-    running_action: std::sync::Mutex<Option<ActionId>>,
-    /// Whether the running action was started through MCP. Read by the
-    /// activity tick so an MCP command is not counted as user activity.
-    running_from_mcp: std::sync::atomic::AtomicBool,
+    running_action: std::sync::Mutex<Option<(ActionId, bool)>>,
 }
 
 /// Issue #328: proof that this AI command is the only one running in its
@@ -336,9 +333,6 @@ pub struct CommandSlot<'a> {
 impl Drop for CommandSlot<'_> {
     fn drop(&mut self) {
         *lock_tolerating_poison(&self.owner.running_action) = None;
-        self.owner
-            .running_from_mcp
-            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -353,7 +347,6 @@ impl SessionTransport {
             closed: std::sync::atomic::AtomicBool::new(false),
             epoch: std::sync::atomic::AtomicU64::new(0),
             running_action: std::sync::Mutex::new(None),
-            running_from_mcp: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -363,8 +356,7 @@ impl SessionTransport {
         self.begin_command_from(action_id, false).await
     }
 
-    /// Like [`Self::begin_command`], and records whether the command was
-    /// started through MCP (`from_mcp`), for the activity tick.
+    /// Like `begin_command`; `from_mcp` marks a command an MCP client started.
     pub async fn begin_command_from(
         &self,
         action_id: ActionId,
@@ -374,9 +366,7 @@ impl SessionTransport {
         if self.is_closed() {
             return None;
         }
-        self.running_from_mcp
-            .store(from_mcp, std::sync::atomic::Ordering::SeqCst);
-        *lock_tolerating_poison(&self.running_action) = Some(action_id);
+        *lock_tolerating_poison(&self.running_action) = Some((action_id, from_mcp));
         Some(CommandSlot {
             owner: self,
             _guard: guard,
@@ -385,15 +375,13 @@ impl SessionTransport {
 
     /// Issue #328: the AI command running right now, if any.
     pub fn running_action(&self) -> Option<ActionId> {
-        *lock_tolerating_poison(&self.running_action)
+        (*lock_tolerating_poison(&self.running_action)).map(|(id, _)| id)
     }
 
-    /// A command is running that was not started through MCP.
+    /// A running command not started through MCP (activity tick).
     pub fn user_command_running(&self) -> bool {
-        self.running_action().is_some()
-            && !self
-                .running_from_mcp
-                .load(std::sync::atomic::Ordering::SeqCst)
+        let running = *lock_tolerating_poison(&self.running_action);
+        matches!(running, Some((_, false)))
     }
 
     /// Issue #328: the session is being disconnected.
