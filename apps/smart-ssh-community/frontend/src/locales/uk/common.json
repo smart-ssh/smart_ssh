@@ -435,6 +435,7 @@
     "loadingSuggestions": "Завантаження пропозицій…",
     "noSuggestions": "Немає пропозицій.",
     "binaryFileHint": "Двійковий файл — текстове порівняння неможливе. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
+    "fileTooLargeHint": "Файл більший за {{limit}}, текстове порівняння недоступне. Новий розмір: {{newSize}}.",
     "diffTooLargeHint": "Вміст завеликий для порівняння рядків. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
     "noContentChange": "(вміст не змінено)",
     "quickRuleLabel": {

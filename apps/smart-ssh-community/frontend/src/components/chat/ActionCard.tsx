@@ -149,7 +149,9 @@ export function ActionCard({
        * ein Größenvergleich-Hinweis statt eines (sinnlosen) Text-Diffs. */}
       {"WriteRemoteFile" in item.action && (
         <div className="mt-2">
-          {item.previousFileContent === null && item.previousFileSize !== null ? (
+          {item.previousFileTooLarge ? (
+            <FileTooLargeHint newContent={item.action.WriteRemoteFile.content} />
+          ) : item.previousFileContent === null && item.previousFileSize !== null ? (
             <BinaryFileChangeHint
               oldSize={item.previousFileSize}
               newContent={item.action.WriteRemoteFile.content}
@@ -401,6 +403,24 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
       <Icon name="warn" className="mr-1 inline align-text-bottom" />
       {t("confirmDialog.binaryFileHint", {
         oldSize: formatBytes(oldSize),
+        newSize: formatBytes(newSize),
+      })}
+    </p>
+  );
+}
+
+/** Preview cap of the existing target file (mirrors `MAX_PREVIEW_FILE_BYTES` in app-logic). */
+const PREVIEW_FILE_LIMIT_LABEL = "1 MiB";
+
+/** Issue #1559: the existing target file is over the preview cap (not binary, real size unknown). */
+export function FileTooLargeHint({ newContent }: { newContent: string }) {
+  const { t } = useTranslation();
+  const newSize = new TextEncoder().encode(newContent).length;
+  return (
+    <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+      <Icon name="warn" className="mr-1 inline align-text-bottom" />
+      {t("confirmDialog.fileTooLargeHint", {
+        limit: PREVIEW_FILE_LIMIT_LABEL,
         newSize: formatBytes(newSize),
       })}
     </p>

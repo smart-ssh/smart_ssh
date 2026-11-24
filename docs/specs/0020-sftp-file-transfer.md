@@ -101,8 +101,10 @@ Die sicherheitskritischste Aktion dieser Spec. Ablauf:
    Dialog den vollen Inhalt als neue Datei ohne Hervorhebung. Ist die
    bestehende Datei nicht als Text lesbar (Binärdatei), zeigt der Dialog
    stattdessen einen Hinweis mit alter und neuer Größe. Die App liest dafür
-   höchstens 1 MiB der bestehenden Datei; ist sie größer, wird sie wie eine
-   Binärdatei behandelt (Hinweis statt Diff, keine Inhaltsanzeige). Für eine
+   höchstens 1 MiB der bestehenden Datei; ist sie größer, zeigt der Dialog
+   keinen Diff, sondern den ehrlichen Hinweis „Datei ist größer als 1 MiB,
+   kein Textvergleich“ mit der neuen Größe (kein Binärdatei-Hinweis, die alte
+   Größe wird nicht angezeigt). Für eine
    vom Filter abgelehnte Aktion liest die App die Zieldatei gar nicht. Auch
    `ReadRemoteFile` liest nie mehr als die Lese-Obergrenze, selbst wenn die
    Größenabfrage fehlschlägt oder 0 meldet (z. B. Spezialdateien).

@@ -433,6 +433,7 @@
     "loadingSuggestions": "Ladataan ehdotuksia…",
     "noSuggestions": "Ei ehdotuksia.",
     "binaryFileHint": "Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
+    "fileTooLargeHint": "Tiedosto on suurempi kuin {{limit}}, ei tekstivertailua. Uusi koko: {{newSize}}.",
     "diffTooLargeHint": "Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
     "noContentChange": "(ei sisällön muutosta)",
     "quickRuleLabel": {

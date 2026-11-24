@@ -433,6 +433,7 @@
     "loadingSuggestions": "Indlæser forslag…",
     "noSuggestions": "Ingen forslag.",
     "binaryFileHint": "Binær fil – tekstsammenligning er ikke mulig. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
+    "fileTooLargeHint": "Filen er større end {{limit}}, ingen tekstsammenligning. Ny størrelse: {{newSize}}.",
     "diffTooLargeHint": "Indholdet er for stort til en linjeforskel. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "noContentChange": "(ingen indholdsændring)",
     "quickRuleLabel": {

@@ -433,6 +433,7 @@
     "loadingSuggestions": "Laddar förslag…",
     "noSuggestions": "Inga förslag.",
     "binaryFileHint": "Binärfil — textjämförelse är inte möjlig. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
+    "fileTooLargeHint": "Filen är större än {{limit}}, ingen textjämförelse. Ny storlek: {{newSize}}.",
     "diffTooLargeHint": "Innehållet är för stort för en raddiff. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
     "noContentChange": "(ingen innehållsändring)",
     "quickRuleLabel": {

@@ -432,6 +432,7 @@
     "loadingSuggestions": "正在加载建议…",
     "noSuggestions": "没有建议。",
     "binaryFileHint": "二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
+    "fileTooLargeHint": "文件大于 {{limit}}，不提供文本比较。新大小：{{newSize}}。",
     "diffTooLargeHint": "内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
     "noContentChange": "（内容无变化）",
     "quickRuleLabel": {

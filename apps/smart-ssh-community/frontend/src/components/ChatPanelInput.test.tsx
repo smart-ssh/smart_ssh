@@ -445,6 +445,7 @@ describe("ChatPanel red-risk escalation (Spec 0092, A3.2/U1)", () => {
       autoExecRules: [],
       previousFileContent: null,
       previousFileSize: null,
+      previousFileTooLarge: false,
       targetName: null,
       riskAssessment: {
         serverRisk: "none",
@@ -679,6 +680,7 @@ describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
     autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: {
       serverRisk: "none",
