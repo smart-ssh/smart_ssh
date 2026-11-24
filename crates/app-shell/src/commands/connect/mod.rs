@@ -429,6 +429,8 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
     };
     emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Reconnecting, None);
 
+    // Issue #1560: the coarse step a failed attempt reached, for observers.
+    let mut step = app_logic::activity::ConnectFailureStep::Preparation;
     // From here every exit that is not a success reports `Disconnected`
     // again (the claim resets the session state when dropped).
     let result = async {
@@ -463,6 +465,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             &lookup,
         )
         .await?;
+        step = app_logic::activity::ConnectFailureStep::Transport;
         let mut transport = establish_transport(
             app,
             state,
@@ -473,6 +476,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             None,
         )
         .await?;
+        step = app_logic::activity::ConnectFailureStep::SessionSetup;
         transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
         let (redactor, incomplete, sudo_password) =
             redaction_for_reconnect(state, &session, server_id, &lookup).await;
@@ -512,6 +516,14 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         Err(err) => {
             drop(claim);
             tracing::warn!(session_id = %session_id, "reconnect failed");
+            // Issue #1560: the session still exists, so the event carries
+            // its ids; coarse step only, never the error text.
+            session
+                .emit_connection(
+                    app_logic::activity::ConnectionChange::Failed(step),
+                    app_logic::activity::ActivitySource::User,
+                )
+                .await;
             emit_connection_status_changed(
                 &emitter,
                 session_id,
