@@ -85,6 +85,23 @@ enum Closer {
     Paren,
     /// `}` in command position: `${ ...; }`, `${| ...; }`.
     Brace,
+    /// `esac`: the rest of a `case` statement. No substitution; its text is
+    /// at the top level wherever the statement is.
+    Esac,
+}
+
+/// Where a `case` statement is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Case {
+    /// Not in a `case` statement (any other list).
+    None,
+    /// `case WORD`, before `in`; `subject` once the word is read.
+    Head { subject: bool },
+    /// In a pattern list; `start` before its first word, the only place
+    /// where `esac` ends the statement.
+    Pattern { start: bool },
+    /// In the commands of a clause.
+    Body,
 }
 
 /// A command list being read.
@@ -98,8 +115,7 @@ struct List {
     parens: usize,
     /// Open `{` groups inside the list.
     braces: usize,
-    /// Open `case` statements; there a `)` ends a pattern, not the list.
-    cases: usize,
+    case: Case,
     /// A new word begins here; only there does `#` start a comment.
     word_start: bool,
     /// A command begins here; only there are `case`, `esac`, `{` and `}`
@@ -114,7 +130,7 @@ impl List {
             start: None,
             parens: 0,
             braces: 0,
-            cases: 0,
+            case: Case::None,
             word_start: true,
             command_start: true,
         }
@@ -133,7 +149,7 @@ enum Context {
 
 /// Reserved words after which a command follows.
 const COMMAND_PREFIX_WORDS: &[&str] = &[
-    "if", "then", "else", "elif", "do", "while", "until", "!", "time", "{",
+    "if", "then", "else", "elif", "do", "while", "until", "!", "time", "coproc", "{",
 ];
 
 /// Lexes `cmd` as a shell would read it. Returns `None` if a quote, an
@@ -146,6 +162,8 @@ pub(super) fn lex(cmd: &str, mode: CommentMode) -> Option<Lexed> {
         chars: &chars,
         mode,
         stack: vec![Context::Commands(List::new(Closer::End))],
+        substitutions: 0,
+        enclosed: 0,
         len: 0,
         out: Lexed {
             canonical: String::with_capacity(cmd.len()),
@@ -161,7 +179,10 @@ pub(super) fn lex(cmd: &str, mode: CommentMode) -> Option<Lexed> {
     let mut i = 0usize;
     while i < chars.len() {
         i = match *lexer.stack.last()? {
-            Context::Commands(list) => lexer.in_commands(i, list)?,
+            Context::Commands(list) => match list.case {
+                Case::Head { .. } | Case::Pattern { .. } => lexer.in_case(i, list)?,
+                Case::None | Case::Body => lexer.in_commands(i, list)?,
+            },
             Context::DoubleQuoted => lexer.in_double_quotes(i)?,
             Context::Parameter { quoted } => lexer.in_parameter(i, quoted)?,
         };
@@ -175,6 +196,11 @@ struct Lexer<'a> {
     /// Innermost context last; the top-level command list stays at the
     /// bottom.
     stack: Vec<Context>,
+    /// Substitutions on the stack.
+    substitutions: usize,
+    /// Contexts on the stack other than the bottom one and `case`
+    /// statements: inside them nothing is at the top level.
+    enclosed: usize,
     /// Length of `out.canonical` in chars.
     len: usize,
     out: Lexed,
@@ -209,13 +235,11 @@ impl Lexer<'_> {
             ')' if list.parens > 0 => {
                 self.push(c);
                 self.update(|list| list.parens -= 1);
-                self.mark(true, false);
+                // The body of `f()` is in command position.
+                let definition = i > 0 && self.chars[i - 1] == '(';
+                self.mark(true, definition);
             }
-            ')' if list.cases > 0 => {
-                self.push(c);
-                self.mark(true, true);
-            }
-            ')' if list.closer == Closer::Paren => self.close(c),
+            ')' if list.closer == Closer::Paren => self.close(&[c]),
             ')' | '<' | '>' => {
                 self.push(c);
                 self.mark(true, false);
@@ -224,12 +248,15 @@ impl Lexer<'_> {
                 self.push(c);
                 self.mark(true, list.command_start);
             }
+            ';' if list.case == Case::Body && matches!(next, Some(';' | '&')) => {
+                return Some(self.end_clause(i));
+            }
             '\n' | ';' | '&' | '|' => {
                 self.push(c);
                 self.mark(true, true);
             }
             _ if list.word_start && list.command_start => {
-                if let Some(word) = self.reserved_word(i) {
+                if let Some(word) = self.reserved_word(i, list) {
                     return Some(self.reserved(i, word, list));
                 }
                 self.push(c);
@@ -243,10 +270,80 @@ impl Lexer<'_> {
         Some(i + 1)
     }
 
+    /// The head and the patterns of a `case` statement: no command
+    /// position, so no reserved words but `in` after the subject and `esac`
+    /// at the start of a pattern list. `(`, `|` and `)` belong to the
+    /// patterns; anything else is read as a word.
+    fn in_case(&mut self, i: usize, list: List) -> Option<usize> {
+        let c = self.chars[i];
+        match (c, list.case) {
+            (' ' | '\t' | '\n', Case::Head { subject }) => {
+                self.push(c);
+                let subject = subject || !list.word_start;
+                self.update(|list| list.case = Case::Head { subject });
+                self.mark(true, false);
+            }
+            (' ' | '\t' | '\n', _) => {
+                self.push(c);
+                self.mark(true, false);
+            }
+            ('i', Case::Head { subject: true }) if list.word_start && self.word_at(i, "in") => {
+                self.push_str("in");
+                self.update(|list| list.case = Case::Pattern { start: true });
+                self.mark(false, false);
+                return Some(i + 2);
+            }
+            ('e', Case::Pattern { start: true }) if list.word_start && self.word_at(i, "esac") => {
+                self.push_str("esac");
+                self.close(&[]);
+                return Some(i + 4);
+            }
+            ('#', _) if list.word_start => return Some(self.comment(i)),
+            ('(' | '|', Case::Pattern { .. }) => {
+                self.push(c);
+                self.update(|list| list.case = Case::Pattern { start: false });
+                self.mark(true, false);
+            }
+            (')', Case::Pattern { .. }) => {
+                self.push(c);
+                self.update(|list| list.case = Case::Body);
+                self.mark(true, true);
+            }
+            _ => {
+                if let Case::Pattern { .. } = list.case {
+                    self.update(|list| list.case = Case::Pattern { start: false });
+                }
+                return self.in_commands(
+                    i,
+                    List {
+                        command_start: false,
+                        ..list
+                    },
+                );
+            }
+        }
+        Some(i + 1)
+    }
+
+    /// `;;`, `;&` or `;;&` at `i` ends a clause; a pattern list follows.
+    /// Returns the index after it.
+    fn end_clause(&mut self, i: usize) -> usize {
+        let len = match (self.chars.get(i + 1), self.chars.get(i + 2)) {
+            (Some(';'), Some('&')) => 3,
+            _ => 2,
+        };
+        for &c in &self.chars[i..i + len] {
+            self.push(c);
+        }
+        self.update(|list| list.case = Case::Pattern { start: true });
+        self.mark(true, false);
+        i + len
+    }
+
     fn in_double_quotes(&mut self, i: usize) -> Option<usize> {
         let c = self.chars[i];
         match (c, self.chars.get(i + 1).copied()) {
-            ('"', _) => self.close(c),
+            ('"', _) => self.close(&[c]),
             ('\\', next) => return self.quoted_escape(i, next?),
             ('$', Some('(')) => {
                 self.open_list(&['$', '('], Closer::Paren);
@@ -264,7 +361,7 @@ impl Lexer<'_> {
     fn in_parameter(&mut self, i: usize, quoted: bool) -> Option<usize> {
         let c = self.chars[i];
         match (c, self.chars.get(i + 1).copied()) {
-            ('}', _) => self.close(c),
+            ('}', _) => self.close(&[c]),
             ('\\', next) if quoted => return self.quoted_escape(i, next?),
             ('\\', _) => return self.unquoted_escape(i),
             ('\'', _) => return self.single_quoted(i),
@@ -287,38 +384,69 @@ impl Lexer<'_> {
     }
 
     /// The reserved word starting at `i`, if it is a whole word.
-    fn reserved_word(&self, i: usize) -> Option<&'static str> {
+    fn reserved_word(&self, i: usize, list: List) -> Option<&'static str> {
+        // The `}` of a function substitution needs no delimiter after it:
+        // `${ echo a; }x`.
+        if self.chars[i] == '}' && list.braces == 0 && list.closer == Closer::Brace {
+            return Some("}");
+        }
         ["case", "esac", "}"]
             .iter()
             .chain(COMMAND_PREFIX_WORDS)
             .copied()
-            .find(|word| {
-                let end = i + word.chars().count();
-                // `}` needs no delimiter after it: `${ echo a; }x`.
-                self.chars
-                    .get(i..end)
-                    .is_some_and(|text| text.iter().copied().eq(word.chars()))
-                    && (*word == "}"
-                        || self.chars.get(end).is_none_or(|&c| {
-                            c.is_whitespace()
-                                || matches!(c, ';' | '&' | '|' | '(' | ')' | '<' | '>')
-                        }))
+            .find(|word| self.word_at(i, word))
+    }
+
+    /// Whether `word` stands at `i`, followed by a blank, an operator or the
+    /// end.
+    fn word_at(&self, i: usize, word: &str) -> bool {
+        let end = i + word.chars().count();
+        self.chars
+            .get(i..end)
+            .is_some_and(|text| text.iter().copied().eq(word.chars()))
+            && self.chars.get(end).is_none_or(|c| {
+                matches!(
+                    c,
+                    ' ' | '\t' | '\n' | ';' | '&' | '|' | '(' | ')' | '<' | '>'
+                )
             })
     }
 
     /// Reads the reserved `word` at `i` in command position. Returns the
     /// index after it.
     fn reserved(&mut self, i: usize, word: &str, list: List) -> usize {
-        let end = i + word.chars().count();
+        let mut end = i + word.chars().count();
         match word {
             "}" if list.braces == 0 && list.closer == Closer::Brace => {
-                self.close('}');
+                self.close(&['}']);
+                return end;
+            }
+            "esac" if list.closer == Closer::Esac => {
+                self.push_str(word);
+                self.close(&[]);
+                return end;
+            }
+            "case" => {
+                self.push_str(word);
+                self.push_context(Context::Commands(List {
+                    case: Case::Head { subject: false },
+                    command_start: false,
+                    ..List::new(Closer::Esac)
+                }));
                 return end;
             }
             "}" => self.update(|list| list.braces = list.braces.saturating_sub(1)),
             "{" => self.update(|list| list.braces += 1),
-            "case" => self.update(|list| list.cases += 1),
-            "esac" => self.update(|list| list.cases = list.cases.saturating_sub(1)),
+            // `time -p` is still followed by a command.
+            "time" => {
+                let blanks = self.chars[end..]
+                    .iter()
+                    .take_while(|&&c| matches!(c, ' ' | '\t'))
+                    .count();
+                if self.word_at(end + blanks, "-p") {
+                    end += blanks + 2;
+                }
+            }
             _ => {}
         }
         for &c in &self.chars[i..end] {
@@ -462,7 +590,7 @@ impl Lexer<'_> {
     }
 
     fn open(&mut self, context: Context, opener: &[char]) {
-        self.stack.push(context);
+        self.push_context(context);
         for &c in opener {
             self.push(c);
         }
@@ -471,7 +599,7 @@ impl Lexer<'_> {
     fn open_list(&mut self, opener: &[char], closer: Closer) {
         let nested = self.in_substitution();
         let whole = self.len;
-        self.stack.push(Context::Commands(List::new(closer)));
+        self.push_context(Context::Commands(List::new(closer)));
         for &c in opener {
             self.push(c);
         }
@@ -483,13 +611,15 @@ impl Lexer<'_> {
 
     /// Ends the innermost context with `closer`; the word it is part of
     /// goes on.
-    fn close(&mut self, closer: char) {
+    fn close(&mut self, closer: &[char]) {
         let inner_end = self.len;
-        self.push(closer);
+        for &c in closer {
+            self.push(c);
+        }
         if let Some(Context::Commands(List {
             start: Some((whole, inner)),
             ..
-        })) = self.stack.pop()
+        })) = self.pop_context()
         {
             self.out.substitutions.push(Substitution {
                 whole: whole..self.len,
@@ -499,12 +629,43 @@ impl Lexer<'_> {
         self.mark(false, false);
     }
 
+    fn push_context(&mut self, context: Context) {
+        match context {
+            Context::Commands(List {
+                closer: Closer::Esac,
+                ..
+            }) => {}
+            Context::Commands(_) => {
+                self.substitutions += 1;
+                self.enclosed += 1;
+            }
+            Context::DoubleQuoted | Context::Parameter { .. } => self.enclosed += 1,
+        }
+        self.stack.push(context);
+    }
+
+    /// Pops the innermost context; the bottom one stays.
+    fn pop_context(&mut self) -> Option<Context> {
+        if self.stack.len() < 2 {
+            return None;
+        }
+        let context = self.stack.pop()?;
+        match context {
+            Context::Commands(List {
+                closer: Closer::Esac,
+                ..
+            }) => {}
+            Context::Commands(_) => {
+                self.substitutions -= 1;
+                self.enclosed -= 1;
+            }
+            Context::DoubleQuoted | Context::Parameter { .. } => self.enclosed -= 1,
+        }
+        Some(context)
+    }
+
     fn in_substitution(&self) -> bool {
-        self.stack
-            .iter()
-            .filter(|context| matches!(context, Context::Commands(_)))
-            .nth(1)
-            .is_some()
+        self.substitutions > 0
     }
 
     fn note_single_quoted(&mut self, content: usize) {
@@ -528,8 +689,14 @@ impl Lexer<'_> {
     }
 
     fn push(&mut self, c: char) {
-        let top_level = self.stack.len() == 1;
+        let top_level = self.enclosed == 0;
         self.emit(c, top_level);
+    }
+
+    fn push_str(&mut self, text: &str) {
+        for c in text.chars() {
+            self.push(c);
+        }
     }
 
     fn push_quoted(&mut self, text: impl IntoIterator<Item = char>) {
@@ -747,6 +914,54 @@ mod tests {
             !lex("echo $(ls)#x <(ls)#y", CommentMode::Strip)
                 .unwrap()
                 .comment
+        );
+    }
+
+    #[test]
+    fn case_patterns_are_no_command_position() {
+        // `esac` ends the statement only at the start of a pattern list or in
+        // command position; `case`, `{`, `}` and `esac` elsewhere in a
+        // pattern are words.
+        for (text, inner) in [
+            ("echo \"$(case x in esac)\"; rm x", "case x in esac"),
+            (
+                "echo \"$(case x in (esac) ;; y) echo \")\";; esac)\"",
+                "case x in (esac) ;; y) echo \")\";; esac",
+            ),
+            (
+                "echo \"$(case x in a|esac) echo \")\";; esac)\"",
+                "case x in a|esac) echo \")\";; esac",
+            ),
+            (
+                "echo \"$(case x in\ncase) ;; esac)\"; rm x",
+                "case x in\ncase) ;; esac",
+            ),
+            ("echo \"$(case x in a) ls; esac)\"", "case x in a) ls; esac"),
+            (
+                "echo \"$(time -p case x in a) echo \")\";; esac)\"",
+                "time -p case x in a) echo \")\";; esac",
+            ),
+            (
+                "echo \"$(f() case x in a) echo \")\";; esac)\"",
+                "f() case x in a) echo \")\";; esac",
+            ),
+            ("echo \"$(echo case in esac)\"", "echo case in esac"),
+        ] {
+            assert_eq!(substitutions(text), [inner], "{text:?}");
+        }
+        assert_eq!(
+            substitutions("echo \"${ case x in a) ;; {) ;; esac; }\"; rm x"),
+            ["case x in a) ;; {) ;; esac; "]
+        );
+        // A carriage return is no blank: `case\r` is an ordinary word.
+        assert_eq!(
+            substitutions("echo \"$(case\r x in x)\"; rm x"),
+            ["case\r x in x"]
+        );
+        // The clauses of a top-level `case` stay at the top level.
+        assert_eq!(
+            lexed_segments("case x in a) ls;; esac; rm x").unwrap(),
+            ["case x in a) ls", "esac", "rm x"]
         );
     }
 

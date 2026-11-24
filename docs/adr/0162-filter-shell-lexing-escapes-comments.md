@@ -116,9 +116,15 @@ see the inner `rm`.
    nesting the shell reads instead of counting quotes and parentheses: inside
    `$(...)`, `<(...)`, `>(...)` and bash 5.3's function substitutions
    `${ ...; }` / `${| ...; }` it reads a command list with its own quotes,
-   comments, escapes, subshells, `{ ...; }` groups and `case` patterns, also
-   when the substitution stands in double quotes or in a parameter
-   expansion (`"${x:-"a"}"`, where quotes nest as well). It reports which
+   comments, escapes, subshells and `{ ...; }` groups, also when the
+   substitution stands in double quotes or in a parameter expansion
+   (`"${x:-"a"}"`, where quotes nest as well). A `case` statement is read as
+   head, pattern lists and clauses, since its `)` must not end a
+   substitution: in a pattern `(`, `|`, `{`, `}` and `case` are words, and
+   `esac` ends the statement only at the start of a pattern list or in
+   command position. Reserved words count only in command position (also
+   after `time -p`, `coproc` and the `()` of a function definition), and
+   only space, tab and newline delimit them (`case<CR>` is a plain word). It reports which
    chars are at the top level and where each substitution starts and ends.
    The segment scanner splits only at top-level operators, and
    `strip_substitutions` takes the substitution bounds from the same lexer,

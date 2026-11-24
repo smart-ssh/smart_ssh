@@ -264,6 +264,34 @@ async fn test_adv_quotes_and_comments_inside_quoted_substitution() {
     }
 }
 
+/// `case` patterns and reserved words inside a substitution: the lexer must
+/// end the substitution where bash does, or the quote parity flips and a
+/// top-level `rm` lands in what looks like a quoted string.
+#[tokio::test]
+async fn test_adv_case_and_reserved_words_inside_substitution() {
+    for cmd in [
+        "echo \"$(case x in esac)\"; rm -rf /; echo \";esac)\"",
+        "echo \"$(case x in (esac) ;; x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(case x in a|esac) ;; x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(case x in\ncase) ;; esac)\"; rm -rf /; echo \";esac)\"",
+        "echo \"${ case } in a) ;; }) echo \"}\"; rm -rf /;; esac; }\"",
+        "echo \"${ case x in\n}|x) echo \"}\"; rm -rf /;; esac; }\"",
+        "echo \"${ case x in a) ;; {) ;; esac; }\"; rm -rf /; echo \"; }\"",
+        "echo \"$(time -p case x in x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(coproc case x in x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(f() case x in x) echo \")\"; rm -rf /;; esac; f)\"",
+        "echo \"$(case\r x in x)\"; rm -rf /; echo \";esac)\"",
+        "echo \"$(case x in x) echo \")\"; esac; rm -rf /)\"",
+        "echo \"$(case x\nin x) echo \")\";;\nesac; rm -rf /)\"",
+        "echo \"$(case x in x) case y in y) echo \")\";; esac;; esac; rm -rf /)\"",
+        "echo \"$(case x in #c)\nx) echo \")\";; esac; rm -rf /)\"",
+        "echo \"$(case x in x) echo \")\" ;;& y) ;& z) ;; esac; rm -rf /)\"",
+        "echo \"$(if true; then case x in x) echo \")\";; esac; fi; rm -rf /)\"",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
 /// The counter-check: ordinary escapes, quotes, `#` in words and parameter
 /// expansions stay `AutoExec` under `Allow "*"`.
 #[tokio::test]
@@ -363,7 +391,7 @@ fn test_adv_segments_match_bash() {
         "probe_hid\\\nden -rf /",
         "\\probe_hidden x",
         "probe_\\hidden x",
-        "echo \\; probe_hidden",
+        "echo \\; probe_not_run",
         "echo a\\\n; probe_hidden",
         "echo \"a\\\nb\"; probe_hidden",
         "echo a # x; probe_not_run\nprobe_hidden",
@@ -397,6 +425,14 @@ fn test_adv_segments_match_bash() {
         "echo \"$(case x in x) echo \")\";; esac; probe_hidden)\"",
         "echo \"${x:-$(echo \"}\"; probe_hidden)}\"",
         "echo \"`probe_hidden`\"",
+        // `case` patterns and reserved words inside a substitution.
+        "echo \"$(case x in esac)\"; probe_hidden; echo \";esac)\"",
+        "echo \"$(case x in (esac) ;; x) echo \")\"; probe_hidden;; esac)\"",
+        "echo \"$(case x in a|esac) ;; x) echo \")\"; probe_hidden;; esac)\"",
+        "echo \"$(case x in\ncase) ;; esac)\"; probe_hidden; echo \";esac)\"",
+        "echo \"$(case x\nin x) echo \")\";;\nesac; probe_hidden)\"",
+        "echo \"$(case x in x) case y in y) echo \")\";; esac;; esac; probe_hidden)\"",
+        "echo \"$(case x in x) echo \")\" ;;& y) ;& z) ;; esac; probe_hidden)\"",
     ];
     // Function substitutions exist since bash 5.3.
     if bash_commands("echo ${ true; }").is_some_and(|run| run.len() > 1) {
@@ -407,6 +443,8 @@ fn test_adv_segments_match_bash() {
             "echo \"${ echo \")\"; probe_hidden; }\"",
             "echo \"${ { echo a; }; probe_hidden; }x\"",
             "echo ${ echo a }; probe_hidden; }",
+            "echo \"${ case } in a) ;; }) echo \"}\"; probe_hidden;; esac; }\"",
+            "echo \"${ case x in a) ;; {) ;; esac; }\"; probe_hidden; echo \"; }\"",
         ]);
     } else {
         eprintln!("bash without function substitution, those cases skipped");
@@ -419,6 +457,13 @@ fn test_adv_segments_match_bash() {
         let seen: Vec<String> = commands.iter().map(|s| command_word(s)).collect();
         let run = bash_commands(cmd).expect("bash ran before");
         assert!(!run.is_empty(), "{cmd:?}: bash ran nothing");
+        if cmd.contains("probe_hidden") {
+            assert!(
+                run.iter()
+                    .any(|command| command_word(command) == "probe_hidden"),
+                "{cmd:?}: bash does not run probe_hidden, the case proves nothing: {run:?}"
+            );
+        }
         for command in &run {
             let word = command_word(command);
             // Assignments are not matched by their word.
