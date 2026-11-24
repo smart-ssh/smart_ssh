@@ -1549,6 +1549,7 @@ async fn preview_read_is_capped() {
         "uncapped read: {calls:?}"
     );
     assert!(calls.contains(&format!("read_file_capped {path}")));
+    assert_eq!(sftp.capped_read_limits(), vec![MAX_PREVIEW_FILE_BYTES + 1]);
     let events = emitter.events.lock().unwrap().clone();
     assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
     assert_eq!(
@@ -1649,5 +1650,9 @@ async fn read_remote_file_without_usable_stat_uses_capped_read_only() {
             "{calls:?}"
         );
         assert!(!calls.contains(&format!("read_file {path}")), "{calls:?}");
+        assert_eq!(
+            sftp.capped_read_limits(),
+            vec![crate::orchestration::remote_files::MAX_READ_FILE_BYTES + 1]
+        );
     }
 }

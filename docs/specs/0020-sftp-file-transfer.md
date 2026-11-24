@@ -77,7 +77,9 @@ vertrauenswürdig gekennzeichnet (Spec 0039).
 Dateien über **256 KB** werden mit klarer Meldung an Nutzer und KI abgelehnt,
 statt vollständig in den KI-Kontext geladen zu werden. Die Grenze ist fest,
 nicht einstellbar. Sie wird anhand der vorab abgefragten Größe geprüft;
-liefert diese Abfrage keinen Wert, wird trotzdem gelesen.
+zusätzlich begrenzt das Lesen selbst die Datenmenge, sodass auch eine Datei
+ohne verwertbare Größenangabe oder eine zwischen Abfrage und Lesen gewachsene
+Datei nie vollständig geladen wird, sondern abgelehnt wird.
 
 ### 4.2 Schreiben
 
@@ -299,6 +301,5 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
   räumt sie nicht auf und listet sie nicht gesondert.
 - **Große Verzeichnisse** (mehrere tausend Einträge) werden vollständig
   geladen, ohne Seitenaufteilung.
-- Die 256-KB-Grenze für die KI gilt nur anhand der vorab abgefragten Größe
-  (4.1); eine zwischen Abfrage und Lesen gewachsene Datei wird dort nicht
-  erneut geprüft. Für den Dateibrowser gilt die engere Regel aus Spec 0086.
+- Die 256-KB-Grenze für die KI wird beim Lesen selbst durchgesetzt (4.1);
+  eine zwischen Abfrage und Lesen gewachsene Datei wird abgelehnt. Für den Dateibrowser gilt die engere Regel aus Spec 0086.
