@@ -32,6 +32,8 @@ pub async fn send_chat_message(
     // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
     let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    // Issue #1507: the user is active (a flag only, no content).
+    session.note_user_input();
     // Resolved and checked before anything else: an error sends nothing.
     // Registered chat content extensions take the ids (Issue #505, ADR 0141).
     let ids = attachment_ids.as_deref().unwrap_or(&[]);
@@ -164,6 +166,8 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
+    // Issue #1507: the first chat message turns the session into a chat.
+    session.emit_chat_started_once().await;
     send_turn_impl(
         app,
         emitter,
@@ -508,7 +512,11 @@ pub async fn respond_to_action(
     action_id: ActionId,
     decision: ActionUserDecision,
 ) -> CommandResult<()> {
-    let _ = session_id;
+    // Issue #1507: a confirmation click is user activity. The session may be
+    // gone already (note suggestion after `disconnect()`): then nothing.
+    if let Some(session) = state.sessions.get(session_id) {
+        session.note_user_input();
+    }
 
     // Spec 0010: dieser Command wird jetzt auch für die Bestätigung eines
     // Notiz-Vorschlags nach `disconnect()` verwendet (s.

@@ -179,6 +179,44 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     persist_chat_session: bool,
     progress: Option<&ConnectProgress>,
 ) -> CommandResult<SessionId> {
+    let mut step = app_logic::activity::ConnectFailureStep::Preparation;
+    let result = connect_session_steps(
+        app,
+        state,
+        server_id,
+        session_id,
+        resume,
+        persist_chat_session,
+        progress,
+        &mut step,
+    )
+    .await;
+    // Issue #1507: a failed attempt has no session; observers learn of it
+    // directly (a cancelled attempt and the local pseudo-server are not
+    // failures worth reporting).
+    if let Err(err) = &result {
+        if err.code != Some("SSH_CONNECT_CANCELLED") && !app_logic::dto::is_local(server_id) {
+            state.activity.report_connect_failed(
+                session_id.to_string(),
+                Some(server_id.0.to_string()),
+                step,
+            );
+        }
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn connect_session_steps<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    server_id: ServerId,
+    session_id: SessionId,
+    resume: Option<uuid::Uuid>,
+    persist_chat_session: bool,
+    progress: Option<&ConnectProgress>,
+    step: &mut app_logic::activity::ConnectFailureStep,
+) -> CommandResult<SessionId> {
     // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
     // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
     // Frontend-Sperre wäre umgehbar (z. B. ein direkter
@@ -246,8 +284,10 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
     // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
     // `russh`/Host-Key-Schleife unten zu durchlaufen.
+    *step = app_logic::activity::ConnectFailureStep::Transport;
     let mut transport =
         establish_transport(app, state, server_id, session_id, &server, true, progress).await?;
+    *step = app_logic::activity::ConnectFailureStep::SessionSetup;
     // Issue #881: the transport's own tasks run in the session scope.
     transport.set_task_spawner(crate::background_tasks::session_spawner(app, session_id));
 
@@ -311,10 +351,22 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Issue #1505: an MCP-driven session (`persist_chat_session: false`)
     // announces itself with its client name from `mcp_backend`.
     if persist_chat_session {
+        // Issue #1507: every user session starts as a terminal session;
+        // `ChatStarted` follows with the first chat message.
         session
-            .emit_session_started(app_logic::activity::ActivitySessionKind::Chat, None)
+            .emit_session_started(app_logic::activity::ActivitySessionKind::Terminal, None)
+            .await;
+        session
+            .emit_connection(
+                app_logic::activity::ConnectionChange::Connected,
+                app_logic::activity::ActivitySource::User,
+            )
             .await;
     }
+    app_logic::session::spawn_user_activity_tick(
+        &session,
+        &crate::background_tasks::session_scope(app, session_id),
+    );
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(
@@ -445,6 +497,12 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
                     &crate::background_tasks::session_scope(app, session_id),
                 );
             }
+            session
+                .emit_connection(
+                    app_logic::activity::ConnectionChange::Reconnected,
+                    app_logic::activity::ActivitySource::User,
+                )
+                .await;
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
             let current = *session.persistence.chat_session_id.lock().await;
