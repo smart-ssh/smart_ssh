@@ -19,10 +19,10 @@ use crate::events::TestEmitter;
 use super::super::test_support::*;
 use super::*;
 
-const WAIT: Duration = Duration::from_secs(30);
+pub(super) const WAIT: Duration = Duration::from_secs(30);
 
 /// Forwards every event to a channel the test reads.
-struct Forward(Mutex<Sender<ActivityEvent>>);
+pub(super) struct Forward(Mutex<Sender<ActivityEvent>>);
 
 impl ActivityObserver for Forward {
     fn on_event(&self, event: &ActivityEvent) {
@@ -47,7 +47,7 @@ impl ActivityObserver for Blocking {
     }
 }
 
-fn snapshot() -> ServerSnapshot {
+pub(super) fn snapshot() -> ServerSnapshot {
     ServerSnapshot {
         id: "srv".into(),
         name: "Test".into(),
@@ -60,7 +60,7 @@ fn snapshot() -> ServerSnapshot {
     }
 }
 
-fn with_hub(session: Session, hub: &Arc<ActivityHub>, incomplete: bool) -> Session {
+pub(super) fn with_hub(session: Session, hub: &Arc<ActivityHub>, incomplete: bool) -> Session {
     session
         .safety
         .redaction_incomplete
@@ -97,13 +97,13 @@ async fn assert_drained(session: &Session, rx: &Receiver<ActivityEvent>) {
     );
 }
 
-fn suggest(command: &str) -> AiAction {
+pub(super) fn suggest(command: &str) -> AiAction {
     AiAction::SuggestCommand {
         command: command.to_string(),
     }
 }
 
-async fn propose(
+pub(super) async fn propose(
     session: &Session,
     action: AiAction,
     origin: ActionOrigin,
@@ -142,7 +142,7 @@ fn action_id_of(kind: &ActivityEventKind) -> &str {
     }
 }
 
-fn session_allowing_all(transport: MockSshTransport) -> Session {
+pub(super) fn session_allowing_all(transport: MockSshTransport) -> Session {
     session_with_ai_provider_allowing_everything(
         MockAiProvider::new(vec![AiEvent::Done]),
         transport,
@@ -583,7 +583,7 @@ async fn test_without_observer_no_event_is_constructed() {
     )
     .await;
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     assert_eq!(crate::activity::CONSTRUCTED.with(|c| c.get()), 0);
 
@@ -729,7 +729,7 @@ async fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionMana
             false,
         );
         session
-            .emit_session_started(ActivitySessionKind::Chat, None)
+            .emit_session_started(ActivitySessionKind::Terminal, None)
             .await;
         manager.insert(Uuid::new_v4(), Arc::new(session));
     }
@@ -749,13 +749,19 @@ async fn test_app_exit_emits_one_session_ended_per_session_and_drains_the_queue(
     let reports = sup.shutdown(Duration::from_secs(3)).await;
     assert!(reports.iter().all(|r| !r.timed_out));
     // Everything arrived by the time the shutdown returned.
+    // Per session: the connection ends (issue #1507), then the session.
     let events: Vec<_> = rx.try_iter().collect();
-    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events.len(), 6, "{events:?}");
     // Each start comes before any end.
     assert!(events[..2]
         .iter()
         .all(|e| matches!(e.kind, ActivityEventKind::SessionStarted { .. })));
-    for event in &events[2..] {
+    let ended: Vec<_> = events[2..]
+        .iter()
+        .filter(|e| !matches!(e.kind, ActivityEventKind::Connection { .. }))
+        .collect();
+    assert_eq!(ended.len(), 2);
+    for event in ended {
         assert!(matches!(
             event.kind,
             ActivityEventKind::SessionEnded {
@@ -801,12 +807,12 @@ async fn test_events_queued_before_cancellation_are_delivered_by_the_shutdown() 
         false,
     );
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     seen_rx.recv_timeout(WAIT).expect("worker holds event 1");
     for _ in 0..4 {
         session
-            .emit_session_started(ActivitySessionKind::Chat, None)
+            .emit_session_started(ActivitySessionKind::Terminal, None)
             .await;
     }
     scope.cancel();
@@ -883,7 +889,7 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
         false,
     ));
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     let id = Uuid::new_v4();
     let manager = crate::session::SessionManager::default();
@@ -962,7 +968,7 @@ async fn test_no_event_follows_the_session_end_when_its_own_scope_times_out() {
         false,
     ));
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     let id = Uuid::new_v4();
     let manager = crate::session::SessionManager::default();
@@ -1020,7 +1026,7 @@ async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() 
         .session_scope(Uuid::new_v4())
         .spawn_blocking("late-start", move || {
             let _ = go_rx.recv();
-            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Chat, None));
+            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Terminal, None));
         });
     assert!(spawned);
     let exit = manager.shutdown_for_exit(&sup, budget);
@@ -1035,12 +1041,12 @@ async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() 
     go.send(()).expect("task alive");
     exit.await;
     after_end
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     // Inserted after the exit began.
     let late = mk();
     manager.insert(Uuid::new_v4(), late.clone());
-    late.emit_session_started(ActivitySessionKind::Chat, None)
+    late.emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     sup.shutdown_app(Duration::from_secs(3)).await;
     let events: Vec<_> = rx.try_iter().collect();

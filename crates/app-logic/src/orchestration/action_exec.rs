@@ -120,6 +120,9 @@ mod tests_files_and_ledger;
 #[cfg(test)]
 #[expect(clippy::expect_used, reason = "test code")]
 mod tests_activity;
+#[cfg(test)]
+#[expect(clippy::expect_used, reason = "test code")]
+mod tests_activity_connection;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.

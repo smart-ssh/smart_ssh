@@ -1994,5 +1994,6 @@ mod decorator_sites {
         reset(app.handle());
     }
 }
+mod tests_activity;
 mod tests_host_key_hop_name;
 mod tests_reconnect_refusal;

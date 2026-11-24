@@ -19,7 +19,7 @@
 //! logged; a slow observer only delays later events, never the session.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 
@@ -65,8 +65,10 @@ pub struct SessionRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ActivitySessionKind {
-    Chat,
     Mcp,
+    /// Every user session starts as this; `ChatStarted` follows with the
+    /// first chat message.
+    Terminal,
 }
 
 /// Why a session ended.
@@ -79,6 +81,40 @@ pub enum SessionEndReason {
     /// The app is quitting: the session was still open at exit and is not
     /// closed individually.
     AppExit,
+}
+
+/// Why a connection went away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DisconnectReason {
+    /// The user closed the session.
+    User,
+    /// The connection was lost (network, keepalive, remote end closed).
+    Network,
+    /// The app is quitting.
+    AppExit,
+}
+
+/// Where a connect attempt failed (no secrets, no error text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ConnectFailureStep {
+    /// Before a connection was tried (checks, settings, lookups).
+    Preparation,
+    /// Establishing the connection (network, host key, authentication).
+    Transport,
+    /// The connection stood, but the session could not be set up.
+    SessionSetup,
+}
+
+/// A change of a session's connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ConnectionChange {
+    Connected,
+    Disconnected(DisconnectReason),
+    Reconnected,
+    Failed(ConnectFailureStep),
 }
 
 /// The server as it was when the session started.
@@ -186,6 +222,28 @@ pub enum ActivityEventKind {
         sha256_after: Option<String>,
         sudo: bool,
     },
+    /// A file write failed after it started (nothing was reported as
+    /// written). Never carries file content.
+    FileWriteFailed {
+        action_id: String,
+        path: String,
+        error_code: String,
+    },
+    /// Connect, disconnect, reconnect or a failed connect. Carries no
+    /// secret and no error text.
+    Connection {
+        change: ConnectionChange,
+    },
+    /// The first chat message of a user session: from now on the events of
+    /// the session carry this chat session id. Once per chat session: not on
+    /// a reconnect or a resumed chat, but again after "new chat".
+    ChatStarted {
+        chat_session_id: String,
+    },
+    /// The user was active in the session during the last minute (terminal
+    /// input, chat message, confirmation) or a command was running. At most
+    /// one per minute and session; carries no content, not even a count.
+    UserActivity,
 }
 
 /// One thing that happened in a session. Text fields are redacted.
@@ -295,6 +353,35 @@ impl ActivityHub {
         std::thread::spawn(move || run_worker(rx, &observers, None));
     }
 
+    /// Reports a failed connect attempt, for which no session exists. Does
+    /// nothing without an observer. `runtime_session_id` is the id the
+    /// attempt would have had.
+    pub fn report_connect_failed(
+        &self,
+        runtime_session_id: String,
+        server_id: Option<String>,
+        step: ConnectFailureStep,
+    ) {
+        if !self.is_active() {
+            return;
+        }
+        #[cfg(test)]
+        CONSTRUCTED.with(|c| c.set(c.get() + 1));
+        self.push(ActivityEvent {
+            at: Utc::now(),
+            session: SessionRef {
+                runtime_session_id,
+                chat_session_id: None,
+                server_id,
+            },
+            source: ActivitySource::User,
+            redaction_incomplete: false,
+            kind: ActivityEventKind::Connection {
+                change: ConnectionChange::Failed(step),
+            },
+        });
+    }
+
     /// Never blocks. A full queue drops the event (counted, logged without
     /// content).
     pub(crate) fn push(&self, event: ActivityEvent) {
@@ -358,11 +445,14 @@ pub struct ActivityReporting {
     pub(crate) runtime_session_id: String,
     pub(crate) server: ServerSnapshot,
     pub(crate) time_zone: Option<String>,
+    /// Set by an input of the user (a flag only: no content, no count);
+    /// read and reset by the once-a-minute tick.
+    pub(crate) input_seen: Arc<AtomicBool>,
 }
 
 impl ActivityReporting {
     /// `None` without an observer: nothing is built for such a session.
-    pub(crate) fn new(
+    pub fn new(
         hub: &Arc<ActivityHub>,
         runtime_session_id: String,
         server: ServerSnapshot,
@@ -372,6 +462,7 @@ impl ActivityReporting {
             runtime_session_id,
             server,
             time_zone: persistence_sqlite::device_time_zone_source()(),
+            input_seen: Arc::new(AtomicBool::new(false)),
         })
     }
 }
