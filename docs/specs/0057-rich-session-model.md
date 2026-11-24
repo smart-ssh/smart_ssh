@@ -43,9 +43,11 @@ Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
 
 - **Sitzungsbeginn / -ende** — Server-Schnappschuss (Name, Host, Port,
   Benutzer, Gruppen, Tags) und Zeitzone des Geräts; beim Ende der Grund.
-- **Chat begonnen** — kommt genau einmal je Sitzung mit der ersten
+- **Chat begonnen** — kommt genau einmal je Chat-Sitzung mit der ersten
   Chat-Nachricht des Nutzers und nennt die Chat-Sitzung; alle späteren
-  Ereignisse der Sitzung tragen deren Kennung, die früheren keine. Eine
+  Ereignisse tragen deren Kennung, die früheren keine. „Neuer Chat“ beginnt
+  eine neue Chat-Sitzung: Ereignisse danach tragen keine Kennung, bis die
+  erste Nachricht des neuen Chats wieder „Chat begonnen“ erzeugt. Eine
   Wiederverbindung oder eine fortgesetzte Chat-Sitzung erzeugt kein zweites
   „Chat begonnen". Eine Sitzung ohne Chat-Sitzung (lokaler Pseudo-Server)
   erzeugt es nie.

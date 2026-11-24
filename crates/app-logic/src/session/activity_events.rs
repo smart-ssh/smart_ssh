@@ -26,13 +26,18 @@ impl Session {
             return;
         };
         // The chat id is only known to observers from `ChatStarted` on.
-        let chat_session_id = if self
-            .activity_chat_announced
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            (*self.persistence.chat_session_id.lock().await).map(|i| i.to_string())
-        } else {
-            None
+        // The flag is read under the chat id lock, which "new chat" holds while
+        // it swaps the id and resets the flag, so an unannounced id never leaks.
+        let chat_session_id = {
+            let id = self.persistence.chat_session_id.lock().await;
+            if self
+                .activity_chat_announced
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                (*id).map(|i| i.to_string())
+            } else {
+                None
+            }
         };
         let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
         let is_start = matches!(kind, ActivityEventKind::SessionStarted { .. });
@@ -112,6 +117,13 @@ impl Session {
     pub(crate) fn activity_started(&self) -> bool {
         self.activity_started
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Forgets that the chat was announced; called by "new chat" while it
+    /// holds the chat id lock.
+    pub fn reset_chat_announced(&self) {
+        self.activity_chat_announced
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Tells the observers that the first chat message of this session

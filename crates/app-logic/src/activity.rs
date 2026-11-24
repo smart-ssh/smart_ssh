@@ -235,7 +235,8 @@ pub enum ActivityEventKind {
         change: ConnectionChange,
     },
     /// The first chat message of a user session: from now on the events of
-    /// the session carry this chat session id. At most once per session.
+    /// the session carry this chat session id. Once per chat session: not on
+    /// a reconnect or a resumed chat, but again after "new chat".
     ChatStarted {
         chat_session_id: String,
     },
