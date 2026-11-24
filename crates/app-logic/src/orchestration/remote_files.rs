@@ -28,6 +28,11 @@ use super::chat_turn::{emit_activity_for_action, push_history_scoped};
 /// entsprechende Einstellungs-UI vorgesehen).
 pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 
+/// Issue #1550, Spec 0020 section 4.2 point 3: upper bound for reading the
+/// current target file for the diff preview. A larger file gets no content
+/// preview (reported like a binary file, with this cap as the size).
+pub(crate) const MAX_PREVIEW_FILE_BYTES: u64 = 1024 * 1024;
+
 /// Lowercase hex SHA-256 of `bytes` — the content fingerprint the activity
 /// record keeps instead of the content itself (Spec 0057).
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -90,7 +95,15 @@ pub(crate) async fn previous_file_content_for_action(
     let Some(sftp) = guard.sftp() else {
         return (None, None);
     };
-    match sftp.read_file(path).await {
+    // Issue #1550: bounded read (cap + 1 detects "larger than the cap"); the
+    // target may be a huge file or a special file such as /dev/zero.
+    match sftp
+        .read_file_capped(path, MAX_PREVIEW_FILE_BYTES + 1, &mut |_| {})
+        .await
+    {
+        Ok(bytes) if bytes.len() as u64 > MAX_PREVIEW_FILE_BYTES => {
+            (None, Some(MAX_PREVIEW_FILE_BYTES))
+        }
         Ok(bytes) => match String::from_utf8(bytes) {
             Ok(text) => (Some(text), None),
             Err(err) => (None, Some(err.into_bytes().len() as u64)),
@@ -208,7 +221,12 @@ pub(crate) async fn execute_read_remote_file(
     let raw = {
         let mut guard = session.lock_sftp().await;
         match guard.sftp_or_err() {
-            Ok(sftp) => sftp.read_file(&path).await,
+            // Issue #1550: capped even when `stat` failed or reported 0
+            // (special files such as /dev/zero); +1 detects "over the limit".
+            Ok(sftp) => {
+                sftp.read_file_capped(&path, MAX_READ_FILE_BYTES + 1, &mut |_| {})
+                    .await
+            }
             // Derselbe Fehlertyp wie `read_file` — der leere Kanal läuft
             // damit durch den bestehenden `Err`-Zweig unten, ohne dass hier
             // unter gehaltener SFTP-Sperre etwas emittiert wird.
@@ -217,6 +235,20 @@ pub(crate) async fn execute_read_remote_file(
     };
 
     match raw {
+        Ok(bytes) if bytes.len() as u64 > MAX_READ_FILE_BYTES => {
+            emit_action_error(
+                session,
+                emitter,
+                session_id,
+                format!(
+                    "Datei '{path}' ist zu groß (Obergrenze {MAX_READ_FILE_BYTES} Bytes) \
+                     — wird nicht gelesen."
+                ),
+                None,
+                persist,
+            )
+            .await
+        }
         Ok(bytes) => {
             // Activity record (Spec 0057): path, size and hash only — never
             // the content. Hash of the raw bytes, before redaction.
