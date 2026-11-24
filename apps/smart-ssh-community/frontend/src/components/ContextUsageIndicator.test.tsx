@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { testI18n } from "../testI18n";
 import { describe, expect, it } from "vitest";
-import { formatTokensK, isContextNearLimit } from "../contextUsage";
+import { contextSegments, formatTokensK, isContextNearLimit } from "../lib/contextUsage";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 
 const wrap = (n: number) => (
@@ -31,6 +31,28 @@ describe("context usage", () => {
     expect(screen.getByTestId("context-usage").dataset.nearLimit).toBe("false");
     rerender(wrap(160_000));
     expect(screen.getByTestId("context-usage").dataset.nearLimit).toBe("true");
-    expect(screen.getByTestId("context-usage").className).toContain("text-amber-300");
+    expect(screen.getByTestId("context-usage").className).toContain("text-warning-fg-soft");
+  });
+
+  it("fills ceil(used / window × 8) segments", () => {
+    expect(contextSegments(12_400, 200_000)).toBe(1);
+    expect(contextSegments(160_000, 200_000)).toBe(7);
+    expect(contextSegments(200_000, 200_000)).toBe(8);
+    expect(contextSegments(300_000, 200_000)).toBe(8);
+    expect(contextSegments(0, 200_000)).toBe(0);
+    expect(contextSegments(5, 0)).toBe(0);
+  });
+
+  it("renders 8 aria-hidden segments, 1 filled at 12.4k and 7 filled in warning colour at 160k", () => {
+    const { rerender } = render(wrap(12_400));
+    const seg = () => screen.getByTestId("context-segments");
+    expect(seg().getAttribute("aria-hidden")).toBe("true");
+    expect(seg().children).toHaveLength(8);
+    expect(seg().querySelectorAll('[data-filled="true"]')).toHaveLength(1);
+    expect(screen.getByTestId("context-usage").textContent).toContain("12.4k");
+    rerender(wrap(160_000));
+    expect(seg().querySelectorAll('[data-filled="true"]')).toHaveLength(7);
+    expect(seg().querySelector('[data-filled="true"]')!.className).toContain("bg-warning-fg-soft");
+    expect(screen.getByTestId("context-usage").dataset.nearLimit).toBe("true");
   });
 });

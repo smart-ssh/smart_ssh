@@ -1,6 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { locale as systemLocale } from "@tauri-apps/plugin-os";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import i18next from "i18next";
+import { getAppInfo } from "./api/api";
 import { initReactI18next } from "react-i18next";
 import {
   DEFAULT_LANGUAGE,
@@ -9,7 +11,7 @@ import {
   languageForLocale,
   SUPPORTED_LANGUAGES,
   type SupportedLanguage,
-} from "./languages";
+} from "./lib/languages";
 
 export { SUPPORTED_LANGUAGES, type SupportedLanguage };
 
@@ -18,6 +20,15 @@ export { SUPPORTED_LANGUAGES, type SupportedLanguage };
 // läuft ohnehin nur lokal) und einem einzigen `common`-Namensraum, solange
 // der nicht zu unübersichtlich wird (Spec nennt `servers.json` etc. als
 // spätere Option, aktuell nicht nötig).
+
+// Issue #911: translation keys are type-checked. `src/i18next.d.ts` declares
+// the English `common` bundle as the key set, so `t("unknown.key")` fails
+// `tsc`. Keys assembled at run time go through `dynamicKey()` from
+// `i18nTypes.ts` (a documented cast to `TranslationKey`); helpers that take
+// `t` as a parameter use `TranslateFn`. An extension namespace is added to the
+// types by merging into `ExtensionNamespaces` (`i18nTypes.ts`) and is then
+// used with `useTranslation("ns")` or `t(key, { ns: "ns" })`. In development
+// builds a key that is missing at run time is logged once (see `initI18n`).
 
 /** Spec 0024, Abschnitt 4: eigene Store-Datei statt der SQLite-Datenbank —
  * eine einzelne, nicht sicherheitsrelevante UI-Einstellung braucht keine
@@ -42,12 +53,27 @@ export function settingsStore(): Promise<Store> {
     // für den ganzen Programmlauf kaputt bleibt: Nach dem Entsperren wären
     // Sprachwahl (Spec 0024) und Risiko-Einstellungen (Spec 0026) dauerhaft
     // nicht speicherbar, obwohl das Plugin längst da ist.
-    storePromise = load(STORE_FILE, { autoSave: false }).catch((err: unknown) => {
-      storePromise = null;
-      throw err;
-    });
+    // Issue #1313: with a data-directory override the store lives inside it;
+    // the backend hands out the absolute path (an absolute path is not
+    // re-based onto the app data dir). Without one the bare name is unchanged.
+    // `get_app_info` is on the startup gate's allow list, so it also works
+    // before the password-mode unlock; a failure is not cached (see above) and
+    // never falls back to the default directory.
+    storePromise = getAppInfo()
+      .then((info) => load(info.settingsStorePath ?? STORE_FILE, { autoSave: false }))
+      .catch((err: unknown) => {
+        storePromise = null;
+        throw err;
+      });
   }
   return storePromise;
+}
+
+/** Issue #862: the webview can only read the settings store. A UI preference
+ * is written by the backend, which accepts registered keys and value shapes
+ * only (`set_ui_preference`, rejects with `UI_PREFERENCE_REJECTED`). */
+export function setUiPreference(key: string, value: unknown): Promise<void> {
+  return invoke<void>("set_ui_preference", { key, value });
 }
 
 /** Erster Teil der Spec-0024-Abschnitt-4-Ermittlung: gespeicherte
@@ -85,6 +111,15 @@ async function resolveInitialLanguage(): Promise<SupportedLanguage> {
   return detectedSystemLanguage();
 }
 
+const warnedMissingKeys = new Set<string>();
+/** Development builds only: logs each missing key once per run. */
+function warnMissingKeyOnce(languages: readonly string[], ns: string, key: string): void {
+  const id = `${ns}:${key}`;
+  if (warnedMissingKeys.has(id)) return;
+  warnedMissingKeys.add(id);
+  console.warn(`[i18n] missing translation key "${key}" (namespace "${ns}", languages ${languages.join(", ")})`);
+}
+
 /** Muss vor dem ersten Render abgeschlossen sein (s. `main.tsx`, awaitet
  * dies vor `createRoot(...).render(...)`) — vermeidet ein sichtbares
  * Umschalten der Sprache kurz nach dem Start.
@@ -106,6 +141,7 @@ export async function initI18n(forced?: SupportedLanguage): Promise<void> {
     lng: language,
     fallbackLng: DEFAULT_LANGUAGE,
     defaultNS: "common",
+    ...(import.meta.env.DEV ? { saveMissing: true, missingKeyHandler: warnMissingKeyOnce } : {}),
     interpolation: { escapeValue: false }, // React escaped bereits selbst
   });
   // `lang` am Wurzelelement: wählt die passende CJK-Glyphenvariante und
@@ -136,7 +172,5 @@ export async function applyStoredLanguage(): Promise<void> {
 
 export async function setLanguage(language: SupportedLanguage): Promise<void> {
   await i18next.changeLanguage(language);
-  const store = await settingsStore();
-  await store.set(LANGUAGE_KEY, language);
-  await store.save();
+  await setUiPreference(LANGUAGE_KEY, language);
 }

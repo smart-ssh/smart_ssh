@@ -13,9 +13,9 @@ use ssh_manager_core::profiles::AiAction;
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{EventEmitter, TestEmitter};
-use crate::poison::{lock_tolerating_poison, poison_for_test};
 use crate::session::{Session, SessionManager};
 use crate::state::{ActionId, SessionId};
+use ssh_manager_core::sync::{lock_tolerating_poison, poison_for_test};
 
 use super::super::test_support::{
     output, session_with_ai_provider, session_with_second_opinion, test_fresh_rejection_flag,
@@ -93,7 +93,7 @@ impl Fixture {
     /// Der Indikator, vergiftungstolerant gelesen — die Tests zu A2 lesen
     /// ihn, nachdem sie die Sperre absichtlich vergiftet haben.
     fn pending_action(&self) -> Option<ActionId> {
-        *lock_tolerating_poison(&self.session.pending_action)
+        *lock_tolerating_poison(&self.session.conn.pending_action)
     }
 
     fn proposed_action_id(&self) -> Option<ActionId> {
@@ -270,7 +270,7 @@ async fn test_aborting_during_the_second_opinion_removes_the_registry_entry() {
     impl ssh_manager_core::ai::AiProvider for HangingProvider {
         fn send(
             &self,
-            _context: ssh_manager_core::ai::SessionContext,
+            _context: ssh_manager_core::ai::RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::pending())
         }
@@ -325,7 +325,7 @@ async fn test_a_poisoned_pending_action_lock_breaks_neither_snapshot_nor_confirm
         MockAiProvider::new(vec![AiEvent::Done]),
         MockSshTransport::default().with_response(TEST_COMMAND, output("weg")),
     ));
-    poison_for_test(&fixture.session.pending_action);
+    poison_for_test(&fixture.session.conn.pending_action);
 
     let manager = fixture.manager();
     assert!(
@@ -390,7 +390,7 @@ async fn test_a_panic_in_the_wait_path_does_not_abort_the_process_when_the_lock_
     }
 
     let fixture = Fixture::new();
-    poison_for_test(&fixture.session.pending_action);
+    poison_for_test(&fixture.session.conn.pending_action);
 
     let emitter = Arc::new(PanicOnProposedEmitter {
         seen: std::sync::Mutex::new(None),
@@ -427,7 +427,7 @@ async fn test_a_panic_in_the_wait_path_does_not_abort_the_process_when_the_lock_
 #[tokio::test]
 async fn test_aborting_with_a_poisoned_lock_cancels_instead_of_panicking() {
     let fixture = Fixture::new();
-    poison_for_test(&fixture.session.pending_action);
+    poison_for_test(&fixture.session.conn.pending_action);
 
     let task = fixture.spawn_proposal();
     let _action_id = fixture.await_pending_indicator().await;
@@ -588,7 +588,7 @@ async fn test_closing_a_user_session_rejects_its_pending_confirmation_in_the_bac
         "nach dem Schließen darf sich die Aktion nicht mehr genehmigen lassen"
     );
 
-    let history = fixture.session.context.lock().await.history.clone();
+    let history = fixture.session.ai.context.lock().await.history.clone();
     assert!(
         history.iter().any(|m| matches!(
             &m.content,
@@ -628,7 +628,7 @@ async fn test_closing_after_the_confirmation_was_settled_is_a_no_op() {
         .await
         .expect("die Task endet regulär");
     assert!(executed.lock().unwrap().is_empty());
-    let history = fixture.session.context.lock().await.history.clone();
+    let history = fixture.session.ai.context.lock().await.history.clone();
     let rejections = history
         .iter()
         .filter(|m| {
@@ -799,4 +799,97 @@ async fn test_issue_108_closing_the_session_rejects_the_waiting_mcp_confirmation
         .await
         .expect("Task ohne Panic");
     assert!(!fixture.snapshot_has_pending_action(&manager));
+}
+
+/// Issue #1019: a reconnect discards the pending confirmation as its own
+/// reason (not "the user rejected"), tells the chat card, and runs nothing.
+#[tokio::test]
+async fn test_reconnect_discards_pending_confirmation_with_its_own_reason_and_event() {
+    let (fixture, executed) = fixture_recording_execution();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    assert!(fixture
+        .session
+        .discard_pending_confirmation_for_reconnect(&fixture.confirmations));
+
+    with_timeout("the confirmation was not discarded", task)
+        .await
+        .expect("task ends normally");
+    assert!(executed.lock().unwrap().is_empty(), "action ran");
+    let history = fixture.session.ai.context.lock().await.history.clone();
+    assert!(
+        history.iter().any(|m| matches!(
+            &m.content,
+            ssh_manager_core::ai::MessageContent::ActionRejected {
+                reason: ssh_manager_core::ai::RejectionReason::Reconnect,
+                ..
+            }
+        )),
+        "history lacks the reconnect reason: {history:?}"
+    );
+    let events = fixture.emitter.events.lock().unwrap();
+    let settled: Vec<_> = events
+        .iter()
+        .filter(|(name, _)| name == "action-confirmation-settled")
+        .collect();
+    assert_eq!(settled.len(), 1);
+    assert_eq!(settled[0].1["actionId"], action_id.to_string());
+    assert_eq!(settled[0].1["reason"], "reconnect");
+}
+
+/// Issue #1019: a frontend can never send the internal reconnect decision.
+#[test]
+fn test_deny_reconnect_is_not_deserializable_from_the_frontend() {
+    assert!(
+        serde_json::from_value::<ActionUserDecision>(serde_json::json!({
+            "decision": "denyReconnect"
+        }))
+        .is_err()
+    );
+}
+
+/// Issue #1019: when the confirmation times out, the chat card is told.
+#[tokio::test(start_paused = true)]
+async fn test_timeout_tells_the_chat_card_the_confirmation_expired() {
+    let (fixture, executed) = fixture_recording_execution();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    tokio::time::advance(super::PENDING_ACTION_CONFIRM_TIMEOUT + Duration::from_secs(1)).await;
+    task.await.expect("task ends normally");
+
+    assert!(executed.lock().unwrap().is_empty(), "action ran");
+    let events = fixture.emitter.events.lock().unwrap();
+    let settled: Vec<_> = events
+        .iter()
+        .filter(|(name, _)| name == "action-confirmation-settled")
+        .collect();
+    assert_eq!(settled.len(), 1);
+    assert_eq!(settled[0].1["actionId"], action_id.to_string());
+    assert_eq!(settled[0].1["reason"], "timeout");
+}
+
+/// Issue #1020: the card data of a waiting confirmation is kept for a chat
+/// re-sync while it waits, and is gone once the waiting task is aborted.
+#[tokio::test]
+async fn test_waiting_confirmation_keeps_its_proposal_until_cleaned_up() {
+    let fixture = Fixture::new();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    let (stored_id, payload) = fixture
+        .session
+        .pending_proposal()
+        .expect("a waiting confirmation keeps its proposal");
+    assert_eq!(stored_id, action_id);
+    assert_eq!(payload["actionId"], action_id.to_string());
+    assert!(payload["decision"].get("Confirm").is_some());
+
+    task.abort();
+    let _ = with_timeout("the aborted task did not end", task).await;
+    assert!(
+        fixture.session.pending_proposal().is_none(),
+        "the proposal must go with the confirmation"
+    );
 }

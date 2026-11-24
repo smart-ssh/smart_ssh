@@ -1,6 +1,8 @@
 # ADR 0133 — Automatisch neu verbinden: Ablauf im Backend, Abbruch nach Erlaubnisliste
 
-Status: angenommen · Issue: #356 · Spec 0107 §8
+## Status
+
+Accepted · Issue: #356 · Spec 0107 §8
 
 ## Entscheidungen
 

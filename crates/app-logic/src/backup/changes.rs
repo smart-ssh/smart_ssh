@@ -18,7 +18,9 @@ use persistence_sqlite::{
 use uuid::Uuid;
 
 use super::validate::validate;
-use super::{complete_pending_host_keys, BackupOpError, HostKeyRow, Snapshot, SnapshotCounts};
+use super::{
+    complete_pending_host_keys, BackupOpError, HostKeyRow, Snapshot, SnapshotCounts, SnapshotToken,
+};
 use crate::host_key_store::FileHostKeyStore;
 
 /// One per-entry operation: insert-or-update the whole entry, or delete it
@@ -92,7 +94,31 @@ pub async fn apply_changes_with(
     changes: &ChangeSet,
     abort_after: &mut (dyn FnMut(&'static str) -> bool + Send),
 ) -> Result<ApplySummary, BackupOpError> {
-    let result = run(store, host_keys, changes, abort_after).await;
+    let result = run(store, host_keys, changes, None, abort_after).await;
+    if let Err(err) = &result {
+        tracing::warn!(result = ?err, "change set rejected; data unchanged");
+    }
+    result
+}
+
+/// As [`apply_changes`], with a precondition: `expected` is the
+/// [`Snapshot::token`] of the snapshot the change set was computed from. The
+/// token is compared with the content read inside the apply transaction (the
+/// read that feeds the target); on a mismatch nothing is written, no
+/// notification fires and the result is [`BackupOpError::Conflict`]. The check
+/// only rejects; validation of the result is unchanged.
+///
+/// Host keys live in a file outside the database transaction: they are read
+/// once at the start of the apply and are part of the token, so an edit made
+/// before the apply starts is caught, but one racing in between that read and
+/// the commit is not (the same window the host-key write itself has).
+pub async fn apply_changes_expecting(
+    store: &SqliteBackupStore,
+    host_keys: &FileHostKeyStore,
+    changes: &ChangeSet,
+    expected: &SnapshotToken,
+) -> Result<ApplySummary, BackupOpError> {
+    let result = run(store, host_keys, changes, Some(expected), &mut |_| false).await;
     if let Err(err) = &result {
         tracing::warn!(result = ?err, "change set rejected; data unchanged");
     }
@@ -103,6 +129,7 @@ async fn run(
     store: &SqliteBackupStore,
     host_keys: &FileHostKeyStore,
     changes: &ChangeSet,
+    expected: Option<&SnapshotToken>,
     abort_after: &mut (dyn FnMut(&'static str) -> bool + Send),
 ) -> Result<ApplySummary, BackupOpError> {
     let b64 = base64::engine::general_purpose::STANDARD;
@@ -126,6 +153,9 @@ async fn run(
         .apply_changes_with(
             |current| {
                 let current = Snapshot::from_parts(current.clone(), current_keys.clone());
+                if expected.is_some_and(|t| *t != current.token()) {
+                    return Err(BackupOpError::Conflict);
+                }
                 let target = target_snapshot(current, changes, target_keys.clone());
                 validate(&target)?;
                 let pending = host_keys_changed

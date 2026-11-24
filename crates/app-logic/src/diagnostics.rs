@@ -93,7 +93,6 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "chat session creation failed",
     "chat session mark_ended failed",
     "chat session retention cleanup failed",
-    "ledger entry persistence failed",
     "note shrink persistence failed",
     "note shrink summarization failed",
     "note shrink summarization timed out",
@@ -104,7 +103,7 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "session summary generation failed, falling back to plain round truncation",
     "skipping note-update suggestion on disconnect: context compaction shortened the \
      note for this request, a proposal based on it could drop content",
-    "policy source unavailable, skipped",
+    "policy source unavailable, rule set incomplete",
     // ai_providers — nur request_id/Status-Metadaten, keine Prompt-/
     // Tool-Argument-Inhalte
     "AI request future started executing",

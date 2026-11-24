@@ -1,31 +1,14 @@
-//! Das Session-Ledger (Spec 0057, §1) — ein append-only, dauerhaftes
-//! Protokoll aller sicherheitsrelevanten Vorgänge einer Sitzung: was
-//! vorgeschlagen, wie entschieden und was tatsächlich ausgeführt wurde,
-//! plus die KI-Nachrichten selbst. Die dauerhafte Wahrheit, aus der später
-//! Audit-Log und Report schöpfen (Spec 0057, Einleitung).
+//! The content model of session activity: what was proposed, how it was
+//! decided and what was executed, plus the AI messages themselves.
 //!
-//! **Reine Typdefinitionen** — kein I/O, keine Persistenz-Logik hier (s.
-//! `crate`-Moduldoc zur `core`-Grenze). Die konkrete Speicherung lebt in
-//! `persistence-sqlite::SqliteLedgerStore` (additive Migration, Spec 0057
-//! §5), das Einhängen ins Geschehen in `app-shell::orchestration` (an
-//! denselben Stellen, an denen die Redaction für den KI-Kontext bereits
-//! läuft, s. dortige Doc-Kommentare zu `write_ledger_entry`).
+//! The core keeps no record of it (issue #1506, ADR 0161); these types only
+//! describe the content that is redacted once and handed to the activity
+//! observers (`app-logic::activity`). The `Ledger*` names are kept from the
+//! time when this content was stored, to avoid a workspace-wide rename.
 //!
-//! **Abgrenzung zu `crate::session::LedgerEntry`** (Spec 0037, Abschnitt
-//! 7): jenes Modul ist explizit unbenutztes Zielbild-Vokabular für eine
-//! künftige, vereinheitlichte Sitzungs-Persistenz und hält bewusst nur
-//! einen `OutputDigest` (Hash), nicht die volle Ausgabe — "das Ledger ...
-//! soll aber nicht zwangsläufig komplette ... Kommando-Ausgaben dauerhaft
-//! verdoppeln" (dortiger Kommentar). Spec 0057 §1.1 verlangt explizit das
-//! Gegenteil: "**Alles** rein (Kommandos, Ergebnisse, ...)" — die volle,
-//! redigierte `stdout`/`stderr`, nicht nur ein Digest, weil das Ledger
-//! später die Grundlage für Report/Audit-Log liefern soll, die einen
-//! bloßen Hash nicht sinnvoll anzeigen könnten. Diese beiden Typen sind
-//! deshalb bewusst getrennt gehalten (unterschiedliche Module,
-//! unterschiedlicher Name `LedgerEntryContent` statt `LedgerEntry`) statt
-//! den Namenskonflikt durch Wiederverwendung/Anpassung des unbenutzten
-//! Spec-0037-Typs aufzulösen — Letzterer bleibt unverändert, `core::session`
-//! ist laut seinem eigenen Moduldoc ohnehin noch an keiner Stelle verankert.
+//! Pure type definitions — no I/O. Not to be confused with
+//! `crate::session::LedgerEntry` (Spec 0037), which keeps only an output
+//! digest and is unused target vocabulary.
 
 use serde::{Deserialize, Serialize};
 
@@ -73,12 +56,11 @@ pub enum LedgerDecisionOutcome {
 /// getaggtes Enum statt vier getrennter Tabellen/Typen: dieselbe, bereits
 /// etablierte Konvention wie `ai::MessageContent`
 /// (`persistence-sqlite::chat_session_store`s `content_type`-Spalte +
-/// JSON-`content`), hier von `persistence-sqlite::ledger_store`
-/// gespiegelt (`entry_type`-Spalte + verschlüsselter `content`-Blob).
+/// JSON-`content`).
 ///
 /// **Redaction ist NICHT Aufgabe dieses Typs** — er transportiert nur die
 /// Daten, redigiert werden sie zentral in `app-shell::orchestration::
-/// write_ledger_entry`, unmittelbar bevor ein Eintrag den Store erreicht
+/// emit_activity`, unmittelbar bevor ein Eintrag den Store erreicht
 /// (Spec 0057, §1.2 "PFLICHT"). Wer diesen Typ direkt konstruiert (z. B. in
 /// Tests), muss also selbst redigieren, falls das Ergebnis in einen
 /// echten Store geschrieben werden soll.
@@ -106,7 +88,7 @@ pub enum LedgerEntryContent {
     /// Ein Kommando wurde ausgeführt, mit Ergebnis (Spec 0057, §1.1,
     /// dritter Punkt — "stdout/stderr/exit — redigiert"). `output` MUSS
     /// bereits redigiert sein, bevor dieser Wert konstruiert wird (bzw.
-    /// wird von `write_ledger_entry` redigiert, s. Typ-Doc-Kommentar
+    /// wird von `emit_activity` redigiert, s. Typ-Doc-Kommentar
     /// oben).
     CommandExecuted {
         command: String,
@@ -119,4 +101,43 @@ pub enum LedgerEntryContent {
     /// Assistant-Nachricht ... übernommen, wie ein normaler Chat-Text" —
     /// dieselbe Gleichsetzung gilt hier für den Ledger-Eintrag).
     AiMessage { text: String },
+    /// An AI file read (Spec 0057). The file content is never stored here,
+    /// only the path, the size and a SHA-256 (lowercase hex) of the bytes read.
+    FileRead {
+        path: String,
+        bytes: Option<u64>,
+        sha256: Option<String>,
+    },
+    /// An AI file write (Spec 0057): written only when bytes were actually
+    /// written. Neither content nor diff is stored; `None` in a before/after
+    /// field means "not known" (e.g. a new file has no "before"; the old
+    /// content of a file only readable with elevated rights is not read).
+    FileWritten {
+        path: String,
+        /// Server-side backup of the previous content, if one was made.
+        backup_path: Option<String>,
+        bytes_before: Option<u64>,
+        bytes_after: Option<u64>,
+        sha256_before: Option<String>,
+        sha256_after: Option<String>,
+        /// Whether the sudo fallback was used for this write.
+        sudo: bool,
+    },
+    /// A connection event of the recorded session (issue #1447).
+    Connection {
+        event: LedgerConnectionEvent,
+        detail: Option<String>,
+    },
+    /// Proof of life of a running session. Carries no content at all.
+    ActivityTick,
+}
+
+/// Kind of a [`LedgerEntryContent::Connection`] entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LedgerConnectionEvent {
+    Connected,
+    Disconnected,
+    Reconnected,
+    Failed,
 }

@@ -2,9 +2,9 @@
 // live step list (same component as the connecting tab), a Cancel button while
 // the test runs and a Close button with the final result once it is done.
 import { useTranslation } from "react-i18next";
-import type { ConnectStepSnapshot, TestConnectionReport } from "../types";
+import type { ConnectStepSnapshot, TestConnectionReport } from "../api/types";
 import { ConnectProgressList } from "./ConnectProgressList";
-import { TestResultBadge } from "./ServerForm";
+import { TestResultBadge } from "./serverForm/TestResultBadge";
 import { Button, DialogFrame, Spinner } from "./ui";
 
 interface Props {
@@ -42,9 +42,11 @@ export function TestConnectionDialog({ steps, result, onCancel, onClose }: Props
     >
       <div className="space-y-3">
         {steps.length > 0 ? (
-          <ConnectProgressList steps={steps} />
+          <div className="rounded border border-border-strong bg-surface-sunken p-2">
+            <ConnectProgressList steps={steps} />
+          </div>
         ) : (
-          running && <p className="text-slate-400">{t("connectTab.stepsRunning")}</p>
+          running && <p className="text-label text-fg-subtle">{t("connectTab.stepsRunning")}</p>
         )}
         {result && (
           <output className="block" data-testid="test-connection-result">

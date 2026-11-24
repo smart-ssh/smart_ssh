@@ -1,6 +1,9 @@
 # ADR 0103 — MCP-Notizen redigiert und gefenct wie im KI-Kontext
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0039, ADR 0034, Spec 0028 (`get_server_notes`), Issue #18
 
 ## Problem
@@ -27,7 +30,9 @@ externer Client gibt sie ebenso an ein Modell weiter.
    zweimal inline in `app_shell::commands::connect` und `…::notes`; er liegt
    jetzt einmal in `server_redaction::redactor_with_sudo_password`, und alle
    drei Aufrufer nutzen ihn. Verhalten von `connect` und `notes` bleibt
-   gleich.
+   gleich. (Nachtrag, Issue #1005: `redactor_with_sudo_password` wurde
+   entfernt, weil es keinen Aufrufer hatte; der Bauplan liegt in
+   `session_extension::redactor_with_secrets`.)
 3. **Format für den Client:** statt der bisherigen `## Kontext: <Quelle>`-
    Überschriften (aus `effective_notes`) trägt jeder Abschnitt seine Quelle
    im `<source>`-Element des Fence. Keine Notizen ergeben weiterhin einen

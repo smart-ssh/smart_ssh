@@ -6,7 +6,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { NoteRevisionDto } from "../types";
+import type { NoteRevisionDto } from "../api/types";
 import { NotesPanel } from "./NotesPanel";
 
 // spec-reviewer-Fund (Spec 0058, Review des Politur-Pakets): jsdom kennt
@@ -48,15 +48,16 @@ const revisions: NoteRevisionDto[] = [
 const mockLargeNoteDialogThresholdChars = vi.fn(() => Promise.resolve(1_000_000));
 const mockRequestNoteShrink = vi.fn((_serverId: string) => Promise.resolve());
 
-vi.mock("../api", () => ({
-  listNoteRevisions: vi.fn(() => Promise.resolve(revisions)),
-  rollbackNote: vi.fn(() => Promise.resolve()),
-  updateServerNotes: vi.fn(() => Promise.resolve()),
-  updateGroupNotes: vi.fn(() => Promise.resolve()),
-  largeNoteDialogThresholdChars: () => mockLargeNoteDialogThresholdChars(),
-  requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
-  commandErrorMessage: (err: unknown) => String(err),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listNoteRevisions: vi.fn(() => Promise.resolve(revisions)),
+    rollbackNote: vi.fn(() => Promise.resolve()),
+    updateServerNotes: vi.fn(() => Promise.resolve()),
+    updateGroupNotes: vi.fn(() => Promise.resolve()),
+    largeNoteDialogThresholdChars: () => mockLargeNoteDialogThresholdChars(),
+    requestNoteShrink: (serverId: string) => mockRequestNoteShrink(serverId),
+  }),
+);
 
 async function renderWithHistoryOpen() {
   render(

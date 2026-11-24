@@ -4,19 +4,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteUnusableServer } from "../api";
+import { deleteUnusableServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
+import type { DeleteUnusableServerResult, UnusableServerDto } from "../api/types";
 import { UnusableServerPanel } from "./UnusableServerPanel";
 
-vi.mock("../api", async () => {
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
-    deleteUnusableServer: vi.fn(),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-  };
-});
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({ deleteUnusableServer: vi.fn() }),
+);
 
 const SERVER: UnusableServerDto = {
   id: "unusable-1",
@@ -47,6 +42,15 @@ function renderPanel(onDeleted = vi.fn()) {
 
 describe("UnusableServerPanel", () => {
   beforeEach(() => vi.mocked(deleteUnusableServer).mockReset());
+
+  it("renders the warning block with a warn icon", () => {
+    renderPanel();
+    const panel = screen.getByTestId("unusable-server-panel");
+    const icon = panel.querySelector('[data-icon="warn"]');
+    expect(icon).not.toBeNull();
+    const block = icon!.parentElement!;
+    expect(block).toHaveClass("border", "border-warning-border-strong", "bg-warning-subtle");
+  });
 
   it("shows the reason and offers no edit or connect action", () => {
     renderPanel();

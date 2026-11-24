@@ -18,12 +18,12 @@ use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
 
 use crate::event_emitter::TauriEventEmitter;
-use crate::settings_store::SETTINGS_STORE_FILE;
 
 /// Registers the loss hook of a freshly connected session.
 pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
     let app = app.clone();
     session
+        .conn
         .auto_reconnect
         .set_hook(Arc::new(move |session_id| start(&app, session_id)));
 }
@@ -31,7 +31,7 @@ pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
 /// Read at every drop, so a changed setting applies from the next drop on.
 /// `None` = off. A missing, unreadable or unknown value means the default.
 fn read_budget<R: Runtime>(app: &AppHandle<R>) -> Option<Duration> {
-    match app.store(SETTINGS_STORE_FILE) {
+    match app.store(crate::settings_store::settings_store_file()) {
         Ok(store) => budget_from_stored(store.get(SETTING_KEY).as_ref()),
         Err(_) => budget_from_stored(None),
     }
@@ -51,7 +51,7 @@ fn start<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) {
     let Some(budget) = read_budget(app) else {
         return;
     };
-    let stop = session.auto_reconnect.begin_run();
+    let stop = session.conn.auto_reconnect.begin_run();
     emit_auto_reconnect_changed(
         &TauriEventEmitter(app.clone()),
         session_id,
@@ -59,7 +59,11 @@ fn start<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) {
         1,
     );
     let app = app.clone();
-    tauri::async_runtime::spawn(async move { run(app, session, session_id, budget, stop).await });
+    // Issue #881: ends with the session; the stop flag of `begin_run` stays
+    // for the close path that runs before the scope is cancelled.
+    crate::background_tasks::session_scope(&app, session_id).spawn("auto-reconnect", async move {
+        run(app, session, session_id, budget, stop).await
+    });
 }
 
 async fn run<R: Runtime>(
@@ -80,7 +84,7 @@ async fn run<R: Runtime>(
         },
     )
     .await;
-    session.auto_reconnect.finish_run(&stop);
+    session.conn.auto_reconnect.finish_run(&stop);
     emit_auto_reconnect_changed(&emitter, session_id, end.into(), 0);
     tracing::info!(session_id = %session_id, end = ?end, "automatic reconnect ended");
 
@@ -92,7 +96,10 @@ async fn run<R: Runtime>(
 
 /// One automatic attempt: never opens the host key dialog, never accepts a
 /// key. Only errors that waiting can fix are retried.
-async fn attempt<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) -> AttemptResult {
+pub(crate) async fn attempt<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: SessionId,
+) -> AttemptResult {
     let state = app.state::<AppState>();
     let elevated = app.state::<crate::elevated_sftp::ElevatedSftpRegistry>();
     let grants = app.state::<app_logic::local_path_grants::LocalPathGrants>();
@@ -111,16 +118,17 @@ async fn attempt<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) -> Attem
 /// drop and the user did not press Stop in the meantime. Takes the
 /// "interrupted" flag, so a drop leads to at most one continuation.
 pub(crate) async fn continuation_note(session: &Session) -> Option<String> {
-    if !session.auto_reconnect.take_ai_turn_interrupted() {
+    if !session.conn.auto_reconnect.take_ai_turn_interrupted() {
         return None;
     }
     if session
+        .conn
         .auto_continue_stop
         .load(std::sync::atomic::Ordering::SeqCst)
     {
         return None;
     }
-    let language = session.system_context_parts.lock().await.language;
+    let language = session.ai.system_context_parts.lock().await.language;
     Some(app_logic::system_prompt::connection_restored_notice(language).to_string())
 }
 

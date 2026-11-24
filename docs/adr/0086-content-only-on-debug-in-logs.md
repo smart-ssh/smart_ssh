@@ -1,6 +1,8 @@
 # ADR 0086 — Inhalt in der Logdatei nur noch auf `debug`
 
-Status: akzeptiert · Spec: [0094](../specs/0094-no-content-in-default-logs.md) · Backlog: BL-0029
+## Status
+
+Accepted · Spec: [0094](../specs/0094-no-content-in-default-logs.md) · Backlog: BL-0029
 
 ## Kontext
 

@@ -47,7 +47,7 @@ Anmeldeart der Server). Bei fehlendem K wurde früher still ein neuer erzeugt.
 
 **Messungen** (macOS; Linux wo genannt):
 
-- SQLCipher 4.10 mit mitgebautem OpenSSL neben dem SQL-Treiber: alle
+- SQLCipher mit mitgebautem OpenSSL neben dem SQL-Treiber: alle
   Migrationen laufen, WAL ist mitverschlüsselt, alle Tests grün, `cargo audit`
   ohne Funde (macOS, Linux). Die CI baut und testet mit SQLCipher auf Ubuntu,
   Windows und macOS grün. Ungemessen bleiben die Release-Ziele
@@ -63,7 +63,10 @@ Anmeldeart der Server). Bei fehlendem K wurde früher still ein neuer erzeugt.
 - Der Export in eine verschlüsselte Kopie überträgt weder `journal_mode`
   (danach `delete`) noch `user_version` (danach 0); auf der geöffneten Kopie
   gesetzt, bleiben beide erhalten.
-- SQLite sinkt durch SQLCipher von 3.51.3 auf 3.50.4.
+- Stand der Messungen: Sie entstanden mit SQLCipher 4.10; der Build nutzt
+  seit dem SQLite-3.54-Update SQLCipher 4.20.0 auf SQLite 3.54.1 (die
+  Werte dieses Abschnitts gelten unverändert). Die ältere Angabe, SQLite sinke
+  durch SQLCipher von 3.51.3 auf 3.50.4, ist damit überholt.
 
 ## 2. Vorab geklärte Fragen
 
@@ -277,6 +280,21 @@ Nicht-Ziele:
   Instanz nach vorn: Mit einem anderen Datenverzeichnis startet er normal und
   läuft daneben, mit demselben endet er an der Sperre (A23; ADR 0121).
 
+- **A25** (Issue #1314) Schlüsselbund-Namensraum: Ohne Datenverzeichnis-
+  Override (Spec 0115) liegen alle Einträge der Instanz (Wurzelschlüssel K,
+  SSH-Zugangsdaten, KI-Schlüssel, Secrets einer Edition) unverändert unter dem
+  Service `Smart SSH`; es gibt keine Migration. Mit Override heißt der Service
+  `Smart SSH (<id>)`, wobei `<id>` die ersten 12 Hex-Zeichen des SHA-256 über
+  den kanonischen, absoluten Pfad des Datenverzeichnisses sind (`/a/b/` und
+  `/a/./b` ergeben dieselbe ID). Jeder Schlüsselbund-Zugriff des Prozesses
+  nutzt diesen einen Service; eine Instanz mit eigenem Verzeichnis liest,
+  ersetzt oder löscht nie Einträge des Standard-Service, auch nicht bei
+  „Neu beginnen" im Schlüsselbund-Modus. Wird das Override-Verzeichnis
+  verschoben oder umbenannt, ändert sich die ID: Die Instanz startet dann wie
+  mit einem leeren Schlüsselbund (fehlendes K, siehe A3/A5). Der Name des
+  Service steht unter Einstellungen → Diagnose neben den Datenpfaden (nur der
+  Name, nie ein Geheimnis).
+
 ## 5. Startablauf
 
 1. Log. 2. Dateizustand (A3). 3. K beschaffen: Verpackungsdatei vorhanden →
@@ -396,6 +414,21 @@ Adversarial (ERHÖHT):
 
 ## 8. Grenzen
 
+- **Android:** Der Schlüsselbund ist der Android-Schlüsselspeicher (Keystore). Lässt sich der Schlüsselspeicher nicht nutzen, zeigt die Diagnose-Zeile zum Systemschlüsselbund einen eigenen Android-Text (Keystore nicht verfügbar, Master-Passwort als Alternative) statt des allgemeinen „Ursache unbekannt“-Texts, der auf einen Secret Service verweist.
+  Der Startablauf ist derselbe wie auf dem Desktop: Beim ersten Start wird K
+  dort abgelegt, danach öffnet sich die Datenbank ohne Eingabe. Fehlt der
+  Eintrag (z. B. gelöscht), gilt derselbe Wiederherstellungsweg wie bei einem
+  fehlenden Schlüsselbund-Eintrag auf dem Desktop (Tabelle A3). Lässt sich der
+  Schlüsselspeicher nicht öffnen, gilt er als nicht verfügbar; Dialog D1 bietet
+  dann „Master-Passwort einrichten“ an (wie bei fehlendem Secret-Service unter
+  Linux), die Eingabe erfolgt im Fenster. Der Master-Passwort-Modus bleibt
+  jederzeit verfügbar.
+  Umsetzung auf Android: Weil das Betriebssystem keine nativen Dialoge vor dem
+  Fenster zeigt, läuft der gesamte Startablauf im Schlüsselbund-Modus im
+  Fenster; bis zur Antwort wird nichts geöffnet oder verändert. Alle Dialoge
+  (D1–D4, Unlesbarer Verlauf), beide zweiten Bestätigungen (A5) und beide
+  Hinweise erscheinen dort mit denselben Texten und Knöpfen wie auf dem
+  Desktop. Gewählt wird nur, was der Nutzer drückt. „Beenden“ bricht den Startversuch ab (nichts wird verändert); das Fenster zeigt dann die Maske „Der Start wurde abgebrochen“ mit „Erneut versuchen“ und „Beenden“, und dieses „Beenden“ schließt die App.
 - Wer Zugriff auf das entsperrte Benutzerkonto hat, kann die Daten lesen.
 - Ohne Master-Passwort oder Schlüsselbund-Schlüssel gibt es keine
   Wiederherstellung (E10).
@@ -441,7 +474,10 @@ Adversarial (ERHÖHT):
    - A16 gilt für **alle** Kommandos, auch die der Plugins: Vor der
      Entsperrung ist kein Plugin-Kommando erreichbar, das Dateien,
      Einstellungen oder das Betriebssystem berührt. Einstellungsdateien sind
-     vor der Entsperrung nicht lesbar.
+     vor der Entsperrung nicht lesbar. Das gilt auch für Plugins einer
+     Erweiterung, die in der Verdrahtung als „nach dem Entsperren" angemeldet
+     sind (Spec 0038, Abschnitt 2): Ihre Befehle melden vor der Entsperrung
+     „Plugin nicht gefunden" und sind erst danach erreichbar.
    - Passwort ändern und Einrichten prüfen die neue Verpackung, **bevor** sie
      die alte ersetzt bzw. K aus dem Schlüsselbund entfernt; Reste einer
      abgebrochenen Verpackung bleiben nicht liegen; nach dem Umbenennen wird

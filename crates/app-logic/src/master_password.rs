@@ -297,6 +297,7 @@ pub fn unlock(db_path: &Path, password: &SecretString) -> Result<RootKey, Master
 ///
 /// Scheitert nie: Jeder Ausgang außer dem Löschen ist eine Log-Zeile. Der
 /// Rückgabewert sagt nur, ob gelöscht wurde — für T16.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub fn tidy_up_keychain_after_unlock(
     keyring: &dyn CredentialStore,
     root_key: &RootKey,

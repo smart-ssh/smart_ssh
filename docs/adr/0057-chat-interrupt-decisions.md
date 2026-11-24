@@ -1,6 +1,9 @@
 # ADR 0057: Entscheidungen bei der Umsetzung von Spec 0066 (Chat unterbrechbar)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0066-chat-interrupt-and-sensitive-data-prompt.md, Commits
 `89d0dc9`, `51439cb`, `caa622a`, Review-Nacharbeit `b2756e0`
 

@@ -1,26 +1,34 @@
 // Issue #666, Spec 0109 (K2, K5, I3, I8, T4; tests 14, 17, 18): the "Data and
 // backup" section — code display and confirmation, passphrase validation,
 // counts confirmation, summary and the narrow layout.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import * as api from "../api";
+import * as api from "../api/api";
 import { testI18n } from "../testI18n";
 import { BackupSettings } from "./BackupSettings";
 
-vi.mock("../api", () => ({
-  backupKeyStatus: vi.fn(),
-  createBackupKeyWithCode: vi.fn(),
-  newBackupCode: vi.fn(),
-  setBackupPassphrase: vi.fn(() => Promise.resolve()),
-  exportEncryptedBackup: vi.fn(),
-  pickBackupImportFile: vi.fn(),
-  startBackupImport: vi.fn(),
-  confirmBackupImport: vi.fn(),
-  cancelBackupImport: vi.fn(() => Promise.resolve()),
-  clipboardWriteText: vi.fn(() => Promise.resolve()),
-  commandErrorMessage: (e: unknown) => (e as { message?: string }).message ?? String(e),
-  commandErrorCode: (e: unknown) => (e as { code?: string | null }).code ?? null,
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    backupKeyStatus: vi.fn(),
+    createBackupKeyWithCode: vi.fn(),
+    newBackupCode: vi.fn(),
+    setBackupPassphrase: vi.fn(() => Promise.resolve()),
+    exportEncryptedBackup: vi.fn(),
+    pickBackupImportFile: vi.fn(),
+    pickBackupSafetyDir: vi.fn(),
+    startBackupImport: vi.fn(),
+    confirmBackupImport: vi.fn(),
+    cancelBackupImport: vi.fn(() => Promise.resolve()),
+    clipboardWriteText: vi.fn(() => Promise.resolve()),
+  }),
+);
+
+const platformState = vi.hoisted(() => ({ value: "linux" }));
+vi.mock("../lib/platform", async (orig) => ({
+  ...(await orig<typeof import("../lib/platform")>()),
+  usePlatform: () => platformState.value,
 }));
 
 const COUNTS = { servers: 12, groups: 2, rules: 30, notes: 8, aiProviders: 1 };
@@ -40,6 +48,7 @@ beforeAll(() => testI18n.changeLanguage("en"));
 afterAll(() => testI18n.changeLanguage("de"));
 beforeEach(() => {
   vi.clearAllMocks();
+  platformState.value = "linux";
   localStorage.clear();
   vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: false, hasCode: false, hasPassphrase: false });
   vi.mocked(api.createBackupKeyWithCode).mockResolvedValue("ABCDE-FGHJK-MNPQR");
@@ -64,7 +73,7 @@ describe("BackupSettings", () => {
     expect(screen.getByTestId("backup-recovery-code").textContent).toBe("ABCDEFGHJKMNPQR");
     expect(screen.getAllByText(/^[A-Z]{5}$/)).toHaveLength(3);
     expect((next as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(next);
+    clickDisabled(next);
     expect(api.exportEncryptedBackup).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "I have noted the code" }));
@@ -79,13 +88,18 @@ describe("BackupSettings", () => {
     renderSection();
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create a recovery code" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    // Wait for the recovery-code dialog itself: the key-setup dialog, which is
+    // still on screen while the code is pending, also has a "Cancel" button.
+    const codeDialog = (await screen.findByTestId("backup-recovery-code")).closest('[role="dialog"]') as HTMLElement;
+    expect(codeDialog).toBeTruthy();
+    fireEvent.click(within(codeDialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByTestId("backup-recovery-code")).toBeNull());
     expect(api.exportEncryptedBackup).not.toHaveBeenCalled();
 
     vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: true, hasCode: true, hasPassphrase: false });
     vi.mocked(api.newBackupCode).mockResolvedValue("23456-789AB-CDEFG");
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
-    await screen.findByTestId("backup-recovery-code");
+    await waitFor(() => expect(screen.getByTestId("backup-recovery-code").textContent).toBe("23456789ABCDEFG"));
     expect(api.newBackupCode).toHaveBeenCalled();
   });
 
@@ -93,7 +107,8 @@ describe("BackupSettings", () => {
     vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: true, hasCode: true, hasPassphrase: false });
     renderSection();
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
-    await waitFor(() => expect(api.exportEncryptedBackup).toHaveBeenCalled());
+    expect(await screen.findByText(/Backup saved to \/tmp\/b.sshbackup/)).toBeTruthy();
+    expect(api.exportEncryptedBackup).toHaveBeenCalled();
     expect(screen.queryByTestId("backup-recovery-code")).toBeNull();
     expect(api.createBackupKeyWithCode).not.toHaveBeenCalled();
   });
@@ -143,6 +158,18 @@ describe("BackupSettings", () => {
       expect(await screen.findByText("Wrong code or passphrase, or the file is damaged.")).toBeTruthy();
     });
 
+    it("shows the dedicated not-a-backup message for an ssh_config file (Spec 0109 T3)", async () => {
+      renderSection();
+      vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_NOT_A_BACKUP" });
+      await open();
+      expect(
+        await screen.findByText(
+          "This is not a Smart SSH backup file. Server lists in ssh_config format are imported from the server list.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText("Wrong code or passphrase, or the file is damaged.")).toBeNull();
+    });
+
     it("sends the code once and clears the field", async () => {
       renderSection();
       vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_CANNOT_OPEN" });
@@ -186,6 +213,37 @@ describe("BackupSettings", () => {
       expect(restored).toHaveBeenCalledTimes(1);
     });
 
+    it("Android: no Change… button, default folder still shown, Replace data works", async () => {
+      platformState.value = "android";
+      vi.mocked(api.startBackupImport).mockResolvedValue({
+        imported: null,
+        preview: { local: COUNTS, file: FILE_COUNTS, openSessions: 0, safetyBackupDir: "/docs/Smart SSH backups" },
+      });
+      renderSection();
+      await open();
+      await screen.findByText(/\/docs\/Smart SSH backups/);
+      expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Replace data" })).toBeTruthy();
+    });
+
+    it("Change… updates the shown safety folder; cancelling the picker keeps it", async () => {
+      vi.mocked(api.startBackupImport).mockResolvedValue({
+        imported: null,
+        preview: { local: COUNTS, file: FILE_COUNTS, openSessions: 0, safetyBackupDir: "/docs/Smart SSH backups" },
+      });
+      renderSection();
+      await open();
+      await screen.findByText(/\/docs\/Smart SSH backups/);
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce(null);
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      await waitFor(() => expect(api.pickBackupSafetyDir).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/\/docs\/Smart SSH backups/)).toBeTruthy();
+      vi.mocked(api.pickBackupSafetyDir).mockResolvedValueOnce("/mnt/safe");
+      fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+      expect(await screen.findByText(/\/mnt\/safe/)).toBeTruthy();
+      expect(screen.queryByText(/\/docs\/Smart SSH backups/)).toBeNull();
+    });
+
     it("an empty device imports directly and shows the summary", async () => {
       vi.mocked(api.startBackupImport).mockResolvedValue({
         imported: { counts: FILE_COUNTS, safetyBackup: null, previousDataFolder: null, hostKeysPending: false },
@@ -195,6 +253,22 @@ describe("BackupSettings", () => {
       await open();
       expect(await screen.findByText("Backup restored")).toBeTruthy();
       expect(api.confirmBackupImport).not.toHaveBeenCalled();
+    });
+
+    it("keeps a failed file choice visible across code/passphrase and re-opens the picker", async () => {
+      renderSection();
+      vi.mocked(api.pickBackupImportFile).mockRejectedValueOnce({ message: "no path" });
+      fireEvent.click(screen.getByRole("button", { name: "Restore from backup…" }));
+      const msg = "The file could not be opened from the chosen location.";
+      expect(await screen.findByText(msg)).toBeTruthy();
+      fireEvent.click(screen.getByRole("radio", { name: "Passphrase" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Recovery code" }));
+      expect(screen.getByText(msg)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Open backup" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Choose file again" }));
+      await waitFor(() => expect(screen.queryByText(msg)).toBeNull());
+      expect(api.pickBackupImportFile).toHaveBeenCalledTimes(2);
+      expect(await screen.findByText("File: b.sshbackup")).toBeTruthy();
     });
   });
 });

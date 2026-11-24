@@ -38,6 +38,7 @@ Ein Server hat:
 - eine Stufe für die Eskalation nach eingelesenem Serverinhalt und einen Schalter
   für die KI-Prüfung auf eingeschleuste Anweisungen (Spec 0039)
 - optional einen Pfad für den erhöhten Dateibrowser-Modus (Spec 0067)
+- einen Schalter „Erhöhte Rechte im Dateibrowser erlauben“ (Standard an, Spec 0067)
 - optional ein Startverzeichnis (Spec 0102)
 - Erstell- und Änderungszeitpunkt
 

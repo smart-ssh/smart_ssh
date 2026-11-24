@@ -1,0 +1,169 @@
+/* Dark theme — the ONLY file with colour values (Spec 0055, issue #805).
+   Layer 1: palette primitives (--palette-*). Layer 2: semantic tokens that
+   components use via Tailwind utilities (bg-surface, text-fg-muted, …).
+   A new theme is another file that overrides the layer-2 variables under its
+   own [data-theme="…"] selector. See ../THEMING.md. */
+:root,
+[data-theme="dark"] {
+  --palette-graphite-950: #080a0d;
+  --palette-graphite-900: #0e1116;
+  --palette-graphite-800: #151a21;
+  --palette-graphite-750: #1e252f;
+  --palette-graphite-700: #242b35;
+  --palette-graphite-600: #3a4452;
+  --palette-graphite-500: #7d8796;
+  --palette-graphite-400: #96a0ae;
+  --palette-graphite-300: #aeb6c2;
+  --palette-graphite-200: #c9cfd8;
+  --palette-graphite-100: #e3e7ed;
+  --palette-graphite-50: #f2f4f7;
+  --palette-cyan-950: #0a2630;
+  --palette-cyan-900: #0e3442;
+  --palette-cyan-800: #134a59;
+  --palette-cyan-700: #1b6b80;
+  --palette-cyan-600: #2cc6e8;
+  --palette-cyan-500: #5ad4ee;
+  --palette-cyan-400: #6fdcf2;
+  --palette-cyan-300: #8fe5f5;
+  --palette-cyan-200: #b4eefa;
+  --palette-cyan-100: #d3f6fc;
+  --palette-cyan-50: #ebfbfe;
+  --palette-emerald-950: #0a2418;
+  --palette-emerald-900: #0f3322;
+  --palette-emerald-800: #175536;
+  --palette-emerald-700: #1f7a4d;
+  --palette-emerald-600: #3dd68c;
+  --palette-emerald-500: #5fdea0;
+  --palette-emerald-400: #7be5ae;
+  --palette-emerald-300: #9aedc2;
+  --palette-emerald-200: #bff5d8;
+  --palette-emerald-100: #def9ea;
+  --palette-amber-950: #2a1d06;
+  --palette-amber-900: #3a2808;
+  --palette-amber-800: #5a3e0e;
+  --palette-amber-700: #8a651f;
+  --palette-amber-600: #f5a524;
+  --palette-amber-500: #f8b64a;
+  --palette-amber-400: #ffc266;
+  --palette-amber-300: #ffd08a;
+  --palette-amber-200: #ffe0b3;
+  --palette-amber-100: #fff0d9;
+  --palette-red-950: #2a0d0e;
+  --palette-red-900: #3a1214;
+  --palette-red-800: #5c1c1d;
+  --palette-red-700: #8a2c2f;
+  --palette-red-600: #f04848;
+  --palette-red-500: #f46363;
+  --palette-red-400: #ff8a85;
+  --palette-red-300: #ffa8a4;
+  --palette-red-200: #ffc6c3;
+  --palette-red-100: #ffe1e0;
+  --palette-red-50: #fef2f2;
+  --palette-fuchsia-900: #5a2366;
+  --palette-fuchsia-500: #d86cf0;
+  --palette-fuchsia-300: #e9a6f7;
+  --palette-steel-600: #8a9bb8;
+  --palette-steel-400: #b5c2d8;
+
+  /* Semantic tokens */
+  --surface-sunken: var(--palette-graphite-950);
+  --surface: var(--palette-graphite-900);
+  --surface-raised: var(--palette-graphite-800);
+  --border: var(--palette-graphite-700);
+  --border-strong: var(--palette-graphite-600);
+  --fg-faint: var(--palette-graphite-500);
+  --fg-subtle: var(--palette-graphite-400);
+  --fg-muted: var(--palette-graphite-300);
+  --fg-soft: var(--palette-graphite-200);
+  --fg: var(--palette-graphite-100);
+  --fg-strong: var(--palette-graphite-50);
+  --accent-subtle: var(--palette-cyan-950);
+  --accent-subtle-hover: var(--palette-cyan-900);
+  --accent-border: var(--palette-cyan-800);
+  --accent-border-strong: var(--palette-cyan-700);
+  --accent: var(--palette-cyan-600);
+  --accent-strong: var(--palette-cyan-500);
+  --accent-fg: var(--palette-cyan-400);
+  --accent-fg-soft: var(--palette-cyan-300);
+  --accent-fg-softer: var(--palette-cyan-200);
+  --accent-fg-faint: var(--palette-cyan-100);
+  --accent-fg-faintest: var(--palette-cyan-50);
+  --danger-subtle: var(--palette-red-950);
+  --danger-subtle-hover: var(--palette-red-900);
+  --danger-border: var(--palette-red-800);
+  --danger-border-strong: var(--palette-red-700);
+  --danger: var(--palette-red-600);
+  --danger-strong: var(--palette-red-500);
+  --danger-fg: var(--palette-red-400);
+  --danger-fg-soft: var(--palette-red-300);
+  --danger-fg-softer: var(--palette-red-200);
+  --danger-fg-faint: var(--palette-red-100);
+  --danger-fg-faintest: var(--palette-red-50);
+  --warning-subtle: var(--palette-amber-950);
+  --warning-subtle-hover: var(--palette-amber-900);
+  --warning-border: var(--palette-amber-800);
+  --warning-border-strong: var(--palette-amber-700);
+  --warning: var(--palette-amber-600);
+  --warning-strong: var(--palette-amber-500);
+  --warning-fg: var(--palette-amber-400);
+  --warning-fg-soft: var(--palette-amber-300);
+  --warning-fg-softer: var(--palette-amber-200);
+  --warning-fg-faint: var(--palette-amber-100);
+  --success-subtle: var(--palette-emerald-950);
+  --success-subtle-hover: var(--palette-emerald-900);
+  --success-border: var(--palette-emerald-800);
+  --success-border-strong: var(--palette-emerald-700);
+  --success: var(--palette-emerald-600);
+  --success-strong: var(--palette-emerald-500);
+  --success-fg: var(--palette-emerald-400);
+  --success-fg-soft: var(--palette-emerald-300);
+  --success-fg-softer: var(--palette-emerald-200);
+  --success-fg-faint: var(--palette-emerald-100);
+  --info: var(--palette-steel-600);
+  --info-fg: var(--palette-steel-400);
+  --local-border: var(--palette-fuchsia-900); /* local-session badge/header */
+  --local: var(--palette-fuchsia-500);
+  --local-fg: var(--palette-fuchsia-300);
+  --on-accent: #041015; /* text on a solid accent fill */
+  --surface-hover: var(--palette-graphite-750); /* hover fill on raised surfaces */
+  --fg-bright: #ffffff; /* was `white` */
+  --on-solid: #041015; /* text on a solid accent fill (dark on the bright dark-theme cyan, white in light) */
+  --overlay: #000000; /* modal scrim base colour (use with /70) */
+  --web-border: #075985; /* web activity card outline */
+  --web-fg: #7dd3fc; /* web activity card title */
+  --mcp-subtle: #3b0764; /* "external tool (MCP)" badge fill */
+  --mcp-fg: #d8b4fe; /* "external tool (MCP)" badge text */
+  --focus: var(--palette-cyan-600); /* = accent: >= 3:1 on every surface */
+  --shadow-offset: #000000; /* hard offset shadow of floating layers (no blur) */
+  --grid-line: rgba(255, 255, 255, 0.04); /* 1 px grid of the start screens */
+  --selection: rgba(44, 198, 232, 0.3);
+
+  /* Window controls (tauri-plugin-decoration) */
+  --decoration-fg: #f5f5f5;
+  --decoration-hover-bg: rgba(255, 255, 255, 0.1);
+  --decoration-icon-bg: rgba(255, 255, 255, 0.18);
+  --decoration-icon-active-bg: rgba(255, 255, 255, 0.32);
+
+  /* Terminal */
+  --term-bg: #07090c;
+  --term-fg: #d8dee6;
+  --term-cursor: #2cc6e8;
+  --term-cursor-accent: #07090c;
+  --term-selection: rgba(44, 198, 232, 0.3);
+  --term-ansi-black: #07090c;
+  --term-ansi-red: #f04848;
+  --term-ansi-green: #3dd68c;
+  --term-ansi-yellow: #f5a524;
+  --term-ansi-blue: #2cc6e8;
+  --term-ansi-magenta: #e9a6f7;
+  --term-ansi-cyan: #3ab5cc;
+  --term-ansi-white: #aeb6c2;
+  --term-ansi-bright-black: #4f596e;
+  --term-ansi-bright-red: #ff8a85;
+  --term-ansi-bright-green: #7be5ae;
+  --term-ansi-bright-yellow: #ffc266;
+  --term-ansi-bright-blue: #6fdcf2;
+  --term-ansi-bright-magenta: #f4c4fb;
+  --term-ansi-bright-cyan: #8fe5f5;
+  --term-ansi-bright-white: #f2f4f7;
+}

@@ -20,7 +20,7 @@ pub(crate) async fn attach_chat_content(
     }
     store.set_chat_removal_observer(chat_content.clone());
     match store.chat_session_ids().await {
-        Ok(ids) => chat_content.reconcile(&ids),
+        Ok(ids) => chat_content.reconcile(&ids).await,
         Err(err) => {
             tracing::warn!(error = %err, "chat content reconcile skipped: sessions not readable");
         }
@@ -39,11 +39,12 @@ mod tests {
         reconciled: Mutex<Vec<Vec<Uuid>>>,
     }
     struct Ext(Arc<Seen>);
+    #[async_trait::async_trait]
     impl ChatContentExtension for Ext {
         fn name(&self) -> &str {
             "files"
         }
-        fn reconcile(&self, live: &[Uuid]) {
+        async fn reconcile(&self, live: &[Uuid]) {
             self.0.reconciled.lock().unwrap().push(live.to_vec());
         }
     }

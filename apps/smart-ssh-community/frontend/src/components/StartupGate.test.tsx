@@ -10,32 +10,23 @@ import {
   quitApplication,
   startOverFromUnlockScreen,
   unlockWithMasterPassword,
-} from "../api";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
-import type { StartupPromptRequest, StartupStateDto } from "../types";
+} from "../api/api";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
+import type { StartupPromptRequest, StartupStateDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { StartupGate } from "./StartupGate";
 
-vi.mock("../api", () => ({
-  getStartupState: vi.fn(),
-  unlockWithMasterPassword: vi.fn(),
-  startOverFromUnlockScreen: vi.fn(),
-  answerStartupPrompt: vi.fn(() => Promise.resolve()),
-  quitApplication: vi.fn(() => Promise.resolve()),
-  // Die echten Extraktionen: Der Test prüft unter anderem, dass ein
-  // `code` übersetzt wird (A20) — mit einer vereinfachten Attrappe prüfte
-  // er nur die Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getStartupState: vi.fn(),
+    unlockWithMasterPassword: vi.fn(),
+    startOverFromUnlockScreen: vi.fn(),
+    answerStartupPrompt: vi.fn(() => Promise.resolve()),
+    quitApplication: vi.fn(() => Promise.resolve()),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
   onStartupUnlocked: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -119,6 +110,33 @@ describe("StartupGate", () => {
     // Klarstellung 11: Der Zähler wird nachgefragt, damit der Ausweg nicht
     // erst beim nächsten Start erscheint.
     await waitFor(() => expect(getStartupState).toHaveBeenCalled());
+  });
+
+  it("zeigt die Entsperrkarte mit Eckmarken, Überschrift, Warnzeile und immer mit Beenden (#1383)", async () => {
+    renderGate(state({ failedUnlockAttempts: 1 }));
+    const card = screen.getByTestId("startup-card");
+    expect(card.querySelectorAll("[data-corner-tick]")).toHaveLength(4);
+    expect(screen.getByRole("heading", { name: "Entsperren" })).toBeTruthy();
+    const warning = screen.getByText(/1/, { selector: "span.text-warning-fg" });
+    expect(warning.querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Neu anfangen" })).toBeNull();
+    // Narrow: the way-out area is pushed to the bottom and its buttons are full width.
+    const wayOut = screen.getByTestId("unlock-way-out");
+    expect(wayOut.className).toContain("narrow:mt-auto");
+    expect(wayOut.className).toContain("narrow:[&_button]:w-full");
+    expect(card.className).toContain("narrow:flex-1");
+    expect(card.className).toContain("narrow:my-0");
+  });
+
+  it("lässt die Karte in allen anderen Zuständen auf schmalen Bildschirmen inhaltshoch (#1434)", async () => {
+    for (const screenName of ["unusableWrapping", "unreachableWrapping"] as const) {
+      const r = renderGate(state({ screen: screenName, offersStartOver: true }));
+      const card = screen.getByTestId("startup-card");
+      expect(card.className).not.toContain("narrow:flex-1");
+      expect(card.className).not.toContain("narrow:my-0");
+      r.unmount();
+    }
   });
 
   it("bietet „Neu anfangen“ nur an, wenn das Backend es anbietet (Klarstellung 11)", async () => {
@@ -215,6 +233,7 @@ describe("StartupGate", () => {
     // Beide Zuhörer: genau zweimal angemeldet (ein Versuch, ein Neuversuch).
     expect(onStartupUnlocked).toHaveBeenCalledTimes(2);
     // Erst nach der erfolgreichen Anmeldung läuft das Kommando.
+    // wait-ok: the "no listener" error is set by a failed attempt before the unlock call, so it is already rendered if it applies
     await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/kein Zuhörer/)).toBeNull();
 
@@ -307,7 +326,7 @@ describe("StartupGate", () => {
     );
     renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeTruthy();
 
@@ -323,6 +342,8 @@ describe("StartupGate", () => {
     renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
 
     await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
+    // The retry button is disabled while the first attempt runs; re-query once it is enabled again.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
     // Ohne das Zurücksetzen des Merkers **und** eine Abhängigkeit, die sich
     // ändert, bliebe es bei einem Aufruf — der Knopf wäre dann wirkungslos.
@@ -345,7 +366,7 @@ describe("StartupGate", () => {
 
     // Der neue Dateiname darf nicht mit dem Wechsel zur App verschwinden —
     // sonst erfährt ihn der Nutzer nirgends.
-    await waitFor(() => expect(screen.getByText("DIE-APP-0101")).toBeTruthy());
+    expect(await screen.findByText("DIE-APP-0101")).toBeTruthy();
     expect(screen.getByText(/smart-ssh.db.unreadable-0101/)).toBeTruthy();
   });
 
@@ -353,7 +374,7 @@ describe("StartupGate", () => {
     vi.mocked(getStartupState).mockRejectedValue({ message: "kaputt", code: null });
     renderGate(null);
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByText("DIE-APP-0101")).toBeNull();
     expect(screen.getByText(/Startzustand nicht lesen/)).toBeTruthy();
   });

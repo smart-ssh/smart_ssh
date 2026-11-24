@@ -1,6 +1,7 @@
 //! Spec 0010/0017/0021/0027/0065/0066: Chat-Nachrichten, laufende Sitzungen,
 //! Trennen — Teil der Spec-0083-Aufteilung von `commands.rs`.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use tauri::{AppHandle, Manager, State};
 
 use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
@@ -10,16 +11,13 @@ use crate::event_emitter::TauriEventEmitter;
 use app_logic::confirmation::ConfirmationRegistry;
 use app_logic::dto::{ActionUserDecision, SessionSummaryDto};
 use app_logic::error::{CommandError, CommandResult};
-use app_logic::events::{
-    emit_chat_queued_messages_sent, emit_connection_status_changed, ConnectionStatus, EventEmitter,
-};
+use app_logic::events::{emit_chat_queued_messages_sent, EventEmitter};
 use app_logic::orchestration::run_chat_turn;
 use app_logic::session::Session;
 use app_logic::state::{ActionId, AppState, SessionId};
 
 use super::connect::build_session_system_context;
 use super::servers::resolve_server_for_note_shrink;
-use super::sftp::edit_session_dir;
 
 #[tauri::command]
 pub async fn send_chat_message(
@@ -33,10 +31,9 @@ pub async fn send_chat_message(
 ) -> CommandResult<()> {
     // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    // Issue #1507: the user is active (a flag only, no content).
+    session.note_user_input();
     // Resolved and checked before anything else: an error sends nothing.
     // Registered chat content extensions take the ids (Issue #505, ADR 0141).
     let ids = attachment_ids.as_deref().unwrap_or(&[]);
@@ -76,10 +73,7 @@ pub async fn continue_truncated_response(
 ) -> CommandResult<()> {
     // Spec 0104, §4: wie `send_chat_message`.
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     send_chat_message_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -104,10 +98,7 @@ pub async fn retry_chat_turn(
     session_id: SessionId,
 ) -> CommandResult<()> {
     state.mcp.sessions.ensure_user_session(session_id)?;
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     retry_chat_turn_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -132,7 +123,7 @@ pub async fn retry_chat_turn(
 /// mit `MockRuntime` braucht daher einen separaten `TestEmitter` statt
 /// `app` doppelt zu verwenden — in Produktion sind `app`/`emitter` einfach
 /// derselbe Wert (s. Aufrufer oben).
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -162,7 +153,7 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
 /// Wie [`send_chat_message_impl`], mit bereits aufgelösten Anhängen
 /// (Issue #469). Die Grenzen werden hier erneut geprüft, bevor irgendein
 /// Zustand verändert wird.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -194,7 +185,6 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
 /// current history WITHOUT adding the user message again. Only allowed when
 /// the history ends with the user's own message (so no tool call, command or
 /// partial answer follows it) and no turn is running.
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -219,8 +209,36 @@ pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
     .await
 }
 
+/// Appends the accepted user texts and extension parts to the history.
+/// Issue #1507/#1562: the first message that made it into the history turns
+/// the session into a chat; a rejected message never gets here.
+async fn push_accepted_message(
+    session: &Session,
+    texts: Vec<String>,
+    parts: Option<app_logic::orchestration::PreparedExtensionParts>,
+) {
+    let accepted_text = !texts.is_empty();
+    for text in texts {
+        app_logic::orchestration::push_history(
+            session,
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text(text),
+            },
+        )
+        .await;
+    }
+    if let Some(parts) = parts {
+        app_logic::orchestration::push_extension_parts(session, parts).await;
+    }
+    if accepted_text {
+        session.emit_chat_started_once().await;
+    }
+}
+
 /// Shared turn entry. `text == None` means "resend the last user turn".
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn send_turn_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
@@ -236,7 +254,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
     let resend = text.is_none();
     if resend {
         let last_is_user_text = {
-            let ctx = session.context.lock().await;
+            let ctx = session.ai.context.lock().await;
             matches!(
                 ctx.history.last(),
                 Some(ChatMessage {
@@ -262,7 +280,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // früh gedrückter Stopp für diesen Turn kann dadurch nicht mehr von
     // einem späteren Reset verschluckt werden.
     let queued_only = {
-        let mut turn = session.chat_turn.lock().unwrap();
+        let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
         // Issue #315: während „Neuer Chat" den Chat austauscht, nichts
         // einreihen — die Nachricht würde sonst unbemerkt der ersten Anfrage
         // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
@@ -289,6 +307,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
         } else {
             turn.running = true;
             session
+                .conn
                 .auto_continue_stop
                 .store(false, std::sync::atomic::Ordering::SeqCst);
             false
@@ -301,7 +320,9 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // Issue #505: hand the checked blocks to their extension only now, after
     // the busy check; an error sends nothing (the guard resets the turn).
     if !queued_only {
-        extension_parts.persist(session.extension_content_key(session_id).await)?;
+        extension_parts
+            .persist(session.extension_content_key(session_id).await)
+            .await?;
     }
     let mut extension_parts = Some(extension_parts);
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
@@ -354,8 +375,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
             .try_state::<AppState>()
             .and_then(|state| state.session_extension.clone());
         let notes_present = if let Some(extension) = session_extension.as_deref() {
-            let scope =
-                super::connect::extension_scope(app, profile_store, session.server_id).await;
+            let scope = super::scope::extension_scope(app, profile_store, session.server_id).await;
             let present = app_logic::session_extension::append_extension_section(
                 &mut updated_system_context_parts,
                 Some(extension),
@@ -374,13 +394,14 @@ async fn send_turn_impl<R: tauri::Runtime>(
         // Bedarf, ein bereits gesetztes Flag wird nie zurückgesetzt.
         if notes_present {
             session
+                .safety
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
 
         let updated_system_context = updated_system_context_parts.assemble();
         {
-            let mut ctx = session.context.lock().await;
+            let mut ctx = session.ai.context.lock().await;
             ctx.system_context = updated_system_context;
             // Issue #323: ein Wechsel der UI-Sprache gilt ab der nächsten
             // Nachricht auch für die `suggest_command`-Beschreibung — sonst
@@ -389,26 +410,14 @@ async fn send_turn_impl<R: tauri::Runtime>(
                 updated_system_context_parts.language,
             );
         }
-        *session.system_context_parts.lock().await = updated_system_context_parts;
+        *session.ai.system_context_parts.lock().await = updated_system_context_parts;
         // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
         // `ctx.history.push(...)`, sonst umgeht die Nutzer-Nachricht die
         // Persistenz (Spec 0034, Abschnitt 4 verlangt ausdrücklich, dass auch
         // Nutzertext fortlaufend in `chat_messages` landet — verschlüsselt,
         // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
         // in der DB steht, bevor der KI-Aufruf überhaupt startet.
-        for text in texts {
-            app_logic::orchestration::push_history(
-                session,
-                ChatMessage {
-                    role: Role::User,
-                    content: MessageContent::Text(text),
-                },
-            )
-            .await;
-        }
-        if let Some(parts) = extension_parts.take() {
-            app_logic::orchestration::push_extension_parts(session, parts).await;
-        }
+        push_accepted_message(session, texts, extension_parts.take()).await;
 
         let unanswered_injected_messages = run_chat_turn(
             session,
@@ -426,12 +435,13 @@ async fn send_turn_impl<R: tauri::Runtime>(
         // Start oben) atomar zurückgesetzt — eingereihte Nachrichten werden
         // auch nach einem Stopp noch beantwortet (Spec 0066, §1).
         let next = {
-            let mut turn = session.chat_turn.lock().unwrap();
+            let mut turn = lock_tolerating_poison(&session.conn.chat_turn);
             if turn.queued.is_empty() && !unanswered_injected_messages {
                 turn.running = false;
                 None
             } else {
                 session
+                    .conn
                     .auto_continue_stop
                     .store(false, std::sync::atomic::Ordering::SeqCst);
                 Some(std::mem::take(&mut turn.queued))
@@ -466,11 +476,7 @@ struct ChatTurnRunningGuard<'a> {
 impl Drop for ChatTurnRunningGuard<'_> {
     fn drop(&mut self) {
         if self.armed {
-            let mut turn = self
-                .session
-                .chat_turn
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut turn = lock_tolerating_poison(&self.session.conn.chat_turn);
             turn.running = false;
         }
     }
@@ -491,10 +497,7 @@ pub async fn take_chat_content_into_note(
     session_id: SessionId,
     content: String,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     app_logic::orchestration::propose_note_from_chat_content(
         &session,
         session_id,
@@ -522,7 +525,11 @@ pub async fn respond_to_action(
     action_id: ActionId,
     decision: ActionUserDecision,
 ) -> CommandResult<()> {
-    let _ = session_id;
+    // Issue #1507: a confirmation click is user activity. The session may be
+    // gone already (note suggestion after `disconnect()`): then nothing.
+    if let Some(session) = state.sessions.get(session_id) {
+        session.note_user_input();
+    }
 
     // Spec 0010: dieser Command wird jetzt auch für die Bestätigung eines
     // Notiz-Vorschlags nach `disconnect()` verwendet (s.
@@ -570,10 +577,7 @@ pub async fn stop_auto_continuation(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     session.request_auto_continue_stop();
     Ok(())
 }
@@ -586,9 +590,30 @@ pub async fn stop_auto_reconnect(
     session_id: SessionId,
 ) -> CommandResult<()> {
     if let Some(session) = state.sessions.get(session_id) {
-        session.auto_reconnect.stop();
+        session.conn.auto_reconnect.stop();
     }
     Ok(())
+}
+
+/// Issue #1372: name and model of the provider this session was pinned to at
+/// connect time (the one its requests actually use), for the chat header.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionAiProviderDto {
+    pub display_name: String,
+    pub model: String,
+}
+
+#[tauri::command]
+pub async fn get_session_ai_provider(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<SessionAiProviderDto> {
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    Ok(SessionAiProviderDto {
+        display_name: session.ai.label.clone(),
+        model: session.ai.model.clone(),
+    })
 }
 
 /// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
@@ -600,10 +625,7 @@ pub async fn start_new_chat(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Option<String>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
     // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
     // bleibt die Spalte leer, statt den Chat zu verhindern.
     let provider_id = super::ai_providers::active_ai_provider_config(&state)
@@ -625,81 +647,14 @@ pub async fn start_new_chat(
 }
 
 #[tauri::command]
-pub async fn disconnect(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
-    grants: State<'_, app_logic::local_path_grants::LocalPathGrants>,
-    session_id: SessionId,
-) -> CommandResult<()> {
-    // Spec 0084, A2.1: Sitzung UND erhöhter Kanal gehen in einer einzigen
-    // Funktion weg — `SessionManager::remove` wird außer dort und in Tests
-    // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
-    // bleibt unten in diesem Befehl.
-    let session = elevated.remove_session(&state.sessions, session_id);
-    // Issue #356: closing the tab ends automatic reconnect attempts.
-    if let Some(session) = &session {
-        session.auto_reconnect.stop();
-    }
-    // Issue #89: picked and dropped local paths are granted per session and
-    // expire with it. Every reader also checks that the session still
-    // exists, so this is the explicit cleanup, not the only guard.
-    grants.remove_session(session_id);
-
-    // Spec 0017, §5 / Spec 0104, §5 (Issue #66): Schließen lehnt die
-    // wartende Bestätigung JEDER Sitzung ab (fail closed) — vor dem
-    // Trennen, damit die Aktion nicht mehr genehmigt werden kann, und ohne
-    // dass das Frontend die einzige Stelle dafür ist. Eine MCP-Sitzung wird
-    // dabei zusätzlich ausgetragen, auch ohne gefundene `Session`
-    // (Schließen während des Host-Key-Dialogs), damit die nächste
-    // MCP-Anfrage eine neue Sitzung anlegt statt auf diese zu warten.
-    app_logic::session::reject_pending_confirmation_on_close(
-        session_id,
-        session.as_deref(),
-        &state.mcp.sessions,
-        &state.pending_action_confirmations,
-    );
-    let session = session.ok_or("Session nicht gefunden")?;
-
-    // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
-    // tot) soll `disconnect()` nicht scheitern lassen — die Session wird in
-    // jedem Fall aus `state.sessions` entfernt.
-    // Issue #328: a running AI command does not hold the transport any more;
-    // cancel it (Spec 0027) and give it a moment to wind down, then
-    // disconnect. Closing the connection ends the command channel anyway.
-    session.transport.mark_closed();
-    if let Some(action_id) = session.transport.running_action() {
-        let _ = state.running_command_cancellations.resolve(&action_id, ());
-    }
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        session.transport.wait_until_idle(),
-    )
-    .await;
-    let _ = session.transport.lock().await.disconnect().await;
-    // Droppt den Sender -> der Terminal-Aktor (falls einer läuft) beendet
-    // sich selbst beim nächsten `commands.recv()` (s. dortiger Kommentar),
-    // ohne hier ein zweites `connection-status-changed`-Event auszulösen.
-    *session.terminal.lock().unwrap() = None;
-
-    tracing::info!(session_id = %session_id, "session disconnected");
-    emit_connection_status_changed(
-        &TauriEventEmitter(app.clone()),
-        session_id,
-        ConnectionStatus::Disconnected,
-        None,
-    );
-
-    // Spec 0054, Teil 4, Punkt 6: "Temp aufräumen (bei Session-Ende
-    // spätestens)" — Fallback-Netz für einen "Lokal öffnen"-Flow, den der
-    // Nutzer nie explizit über `close_edit_session` beendet hat (z. B.
-    // Tab einfach geschlossen, während eine Datei noch offen war). Rein
-    // best-effort: `edit_session_dir` existiert typischerweise gar nicht
-    // (kein Datei-Editier-Flow in dieser Session genutzt), das ist kein
-    // Fehler.
-    if let Ok(dir) = edit_session_dir(session_id) {
-        let _ = tokio::fs::remove_dir_all(dir).await;
-    }
+pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<()> {
+    // Issue #816: the one complete close path (elevated channel, grants,
+    // pending confirmation, running command, transport, status event, edit
+    // copies) lives in `crate::sessions`; only disconnect-specific work
+    // follows here.
+    let session = crate::sessions::close_session_returning(&app, session_id)
+        .await
+        .ok_or_else(app_logic::session::session_not_found)?;
 
     // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
     // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`
@@ -708,8 +663,8 @@ pub async fn disconnect(
     // Transport-Trennvorgang oben: ein Schreibfehler hier blockiert
     // `disconnect()` nicht.
     if let (Some(store), Some(chat_session_id)) = (
-        &session.chat_session_store,
-        *session.chat_session_id.lock().await,
+        &session.persistence.chat_session_store,
+        *session.persistence.chat_session_id.lock().await,
     ) {
         if let Err(err) = store.end_or_discard(chat_session_id).await {
             tracing::warn!(error = %err, "chat session mark_ended failed");
@@ -725,7 +680,9 @@ pub async fn disconnect(
     // potenziell noch, nachdem `disconnect()` selbst längst zurückgekehrt
     // ist (wartet auf eine KI-Antwort plus ggf. auf die Nutzerbestätigung).
     let app_for_suggestion = app.clone();
-    tokio::spawn(async move {
+    // Issue #879: app scope, not session scope — outlives the session, but a
+    // pending confirmation is dropped (rejected) when the app exits.
+    crate::background_tasks::app_scope(&app).spawn("on-disconnect-suggestions", async move {
         let state = app_for_suggestion.state::<AppState>();
         // Spec 0034, Abschnitt 7: läuft vor dem Notiz-Vorschlag im selben
         // Hintergrund-Task (sequentiell, keine zweite parallele
@@ -796,6 +753,7 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
             .unwrap_or_else(|_| "Unbekannter Server".to_string());
         let chat_session_id = match state.sessions.get(entry.session_id) {
             Some(session) => session
+                .persistence
                 .chat_session_id
                 .lock()
                 .await
@@ -831,11 +789,8 @@ pub async fn get_chat_history(
     state: State<'_, AppState>,
     session_id: SessionId,
 ) -> CommandResult<Vec<app_logic::dto::ChatHistoryEntryDto>> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
-    let history = session.context.lock().await.history.clone();
+    let session = app_logic::session::require_session(&state.sessions, session_id)?;
+    let history = session.ai.context.lock().await.history.clone();
     Ok(history
         .into_iter()
         .map(app_logic::dto::ChatHistoryEntryDto::from)
@@ -843,886 +798,4 @@ pub async fn get_chat_history(
 }
 
 #[cfg(test)]
-mod send_chat_message_persistence_tests {
-    use std::sync::Arc;
-
-    use async_trait::async_trait;
-    use futures::StreamExt;
-    use tokio::sync::Mutex as AsyncMutex;
-
-    use chrono::Utc;
-
-    use ssh_manager_core::ai::{
-        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
-    };
-    use ssh_manager_core::filter::FilterEngine;
-    use ssh_manager_core::profiles::Server;
-    use ssh_manager_core::shared::ServerId;
-    use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
-
-    use crate::first_run_notice::test_support::{lock_async, test_app};
-    use app_logic::confirmation::ConfirmationRegistry;
-    use app_logic::events::TestEmitter;
-    use app_logic::session::SessionParts;
-    use app_logic::test_support::InMemoryProfileStore;
-
-    use super::*;
-
-    /// Nie tatsächlich aufgerufen — dieser Test führt kein Kommando aus,
-    /// die KI schlägt keins vor (s. `NoopAiProvider`).
-    struct UnusedTransport;
-    #[async_trait]
-    impl SshTransport for UnusedTransport {
-        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
-            unreachable!("dieser Test ruft SshTransport::execute nie auf")
-        }
-        async fn open_shell(
-            &mut self,
-            _size: PtySize,
-        ) -> Result<Box<dyn InteractiveShell>, SshError> {
-            unreachable!("dieser Test ruft SshTransport::open_shell nie auf")
-        }
-        async fn disconnect(&mut self) -> Result<(), SshError> {
-            Ok(())
-        }
-    }
-
-    struct NoopAiProvider;
-    impl AiProvider for NoopAiProvider {
-        fn send(
-            &self,
-            _context: SessionContext,
-        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
-            Box::pin(futures::stream::iter(vec![AiEvent::Done]))
-        }
-    }
-
-    fn test_session(server_id: ServerId) -> Session {
-        Session::new(SessionParts {
-            transport: app_logic::session::SessionTransport::new(Box::new(UnusedTransport)),
-            ai_provider: Box::new(NoopAiProvider),
-            ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
-            context: AsyncMutex::new(SessionContext {
-                system_context: String::new(),
-                history: Vec::new(),
-                available_actions: default_action_schemas(),
-                max_tokens_hint: None,
-            }),
-            filter_engine: Box::new(FilterEngine::new(app_logic::policy::NoRulesPolicyStore)),
-            server_id,
-            tags: Vec::new(),
-            terminal: std::sync::Mutex::new(None),
-            redactor: app_logic::session::SwappableRedactor::new(Box::new(
-                DefaultOutputRedactor::new(),
-            )),
-            ai_provider_label: "test-provider".to_string(),
-            ai_model: "test-model".to_string(),
-            system_context_parts: AsyncMutex::new(
-                app_logic::compaction::SystemContextParts::default(),
-            ),
-            model_context_window_tokens: usize::MAX / 1_000,
-            summary: AsyncMutex::new(None),
-            context_usage: Default::default(),
-            mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
-            sudo_password: app_logic::session::SwappableSudoPassword::new(None),
-            status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
-            pending_action: std::sync::Mutex::new(None),
-            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
-            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-            auto_continue_stop_notify: tokio::sync::Notify::new(),
-            chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
-            risk_second_opinion_provider: None,
-            risk_second_opinion_budget: None,
-            // Spec 0092, A1.2: standardmäßig „an", wie in der App.
-            red_risk_always_confirm: true,
-            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
-            outgoing_transform: None,
-            chat_content: Default::default(),
-            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
-            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-            injection_check_provider: None,
-            injection_check_budget: None,
-            injection_suspected: std::sync::atomic::AtomicBool::new(false),
-            injection_suspected_reason: std::sync::Mutex::new(None),
-            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
-            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
-            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
-            chat_session_store: None,
-            ledger_store: None,
-            chat_session_id: AsyncMutex::new(None),
-            ai_request_paced_at: AsyncMutex::new(None),
-            auto_reconnect: Default::default(),
-        })
-    }
-
-    /// Baut eine echte, migrierte temporäre SQLite-DB samt `servers`-Zeile
-    /// und daran gebundenem `SqliteChatSessionStore` — derselbe Aufbau wie
-    /// `orchestration::tests::session_with_real_chat_persistence`
-    /// (dortiges Modul ist nicht von hier erreichbar, daher lokal
-    /// nachgebaut statt geteilt — reines Test-Setup, keine Produktionslogik).
-    async fn session_with_real_persistence() -> (
-        Session,
-        persistence_sqlite::SqliteProfileStore,
-        persistence_sqlite::SqliteChatSessionStore,
-        tempfile::TempDir,
-    ) {
-        let tmp_dir = tempfile::tempdir().expect("TempDir konnte nicht angelegt werden");
-        let db_path = tmp_dir.path().join("test.sqlite3");
-        let profile_store = persistence_sqlite::SqliteProfileStore::connect_plaintext(&db_path)
-            .await
-            .expect("frische DB sollte immer aufbaubar sein");
-
-        let server_id = ServerId::new();
-        let now = Utc::now();
-        profile_store
-            .create_server(&Server {
-                id: server_id,
-                name: "Test-Server".to_string(),
-                host: "example.invalid".to_string(),
-                port: 22,
-                username: "deploy".to_string(),
-                group_id: None,
-                tags: Vec::new(),
-                auth: ssh_manager_core::profiles::AuthMethod::Agent,
-                notes: String::new(),
-                jump_host: None,
-                post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-                ai_injection_check_enabled: false,
-                sftp_server_path: None,
-                start_directory: None,
-                created_at: now,
-                updated_at: now,
-            })
-            .await
-            .unwrap();
-
-        let chat_store = profile_store.chat_session_store();
-        let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
-
-        let mut session = test_session(server_id);
-        session.set_chat_session_store_for_tests(Some(chat_store.clone()));
-        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
-
-        (session, profile_store, chat_store, tmp_dir)
-    }
-
-    /// Der eigentliche Regressionstest: ruft `send_chat_message_impl`
-    /// direkt auf (genau die Funktion, die vorher den Nutzertext nur in
-    /// den In-Memory-Kontext schrieb) und prüft, dass die Nachricht
-    /// tatsächlich in `chat_messages` landet — nicht nur in
-    /// `session.context`.
-    #[tokio::test]
-    async fn test_send_chat_message_persists_user_text_via_push_history() {
-        let _guard = lock_async().await;
-        let (session, profile_store, chat_store, _tmp_dir) = session_with_real_persistence().await;
-        let chat_session_id = session.chat_session_id.lock().await.unwrap();
-        let app = test_app();
-        let handle = app.handle();
-        let emitter = TestEmitter::default();
-        let in_memory_profile_store = InMemoryProfileStore::default();
-        let policy_store = profile_store.policy_store();
-        let confirmations = ConfirmationRegistry::new();
-
-        send_chat_message_impl(
-            handle,
-            &emitter,
-            &session,
-            uuid::Uuid::new_v4(),
-            "räum mal /tmp auf".to_string(),
-            Some(&profile_store.prompt_history_store()),
-            &in_memory_profile_store,
-            &policy_store,
-            &confirmations,
-        )
-        .await
-        .unwrap();
-
-        let loaded = chat_store.load_session(chat_session_id).await.unwrap();
-        assert!(
-            loaded.iter().any(|m| matches!(
-                &m.content,
-                MessageContent::Text(t) if t == "räum mal /tmp auf"
-            ) && m.role == Role::User),
-            "die Nutzer-Nachricht muss in chat_messages persistiert sein, geladen: {loaded:?}"
-        );
-    }
-
-    /// Issue #600: "Try again" runs a turn over the existing history; the
-    /// user message is not added a second time.
-    #[tokio::test]
-    async fn test_retry_chat_turn_does_not_duplicate_user_message() {
-        let _guard = lock_async().await;
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let gate = Arc::new(tokio::sync::Notify::new());
-        gate.notify_one();
-        let mut session = test_session(ServerId::new());
-        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
-            gate,
-            contexts: contexts.clone(),
-        }));
-        session.context.lock().await.history.push(ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text("hello".to_string()),
-        });
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        retry_chat_turn_impl(
-            app.handle(),
-            &TestEmitter::default(),
-            &session,
-            uuid::Uuid::new_v4(),
-            &InMemoryProfileStore::default(),
-            &policy_store,
-            &ConfirmationRegistry::new(),
-        )
-        .await
-        .unwrap();
-        {
-            let sent = contexts.lock().unwrap();
-            assert_eq!(sent.len(), 1);
-            assert_eq!(history_texts(&sent[0]), vec!["hello".to_string()]);
-        }
-
-        // The history now ends with something else (the turn ran): refused.
-        session.context.lock().await.history.push(ChatMessage {
-            role: Role::Assistant,
-            content: MessageContent::Text("partial".to_string()),
-        });
-        let err = retry_chat_turn_impl(
-            app.handle(),
-            &TestEmitter::default(),
-            &session,
-            uuid::Uuid::new_v4(),
-            &InMemoryProfileStore::default(),
-            &policy_store,
-            &ConfirmationRegistry::new(),
-        )
-        .await
-        .unwrap_err();
-        assert_eq!(err.code, Some(app_logic::orchestration::RETRY_NOT_POSSIBLE));
-        assert_eq!(contexts.lock().unwrap().len(), 1);
-    }
-
-    /// Spec 0066, §2: erster `send()` hängt, bis `gate` geöffnet wird; jeder
-    /// weitere liefert sofort `Done`. Zeichnet jeden gesendeten Kontext auf.
-    struct GatedRecordingProvider {
-        gate: Arc<tokio::sync::Notify>,
-        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
-    }
-    impl AiProvider for GatedRecordingProvider {
-        fn send(
-            &self,
-            context: SessionContext,
-        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
-            let mut contexts = self.contexts.lock().unwrap();
-            let first = contexts.is_empty();
-            contexts.push(context);
-            if first {
-                let gate = self.gate.clone();
-                Box::pin(futures::stream::once(async move {
-                    gate.notified().await;
-                    AiEvent::Done
-                }))
-            } else {
-                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
-            }
-        }
-    }
-
-    fn history_texts(context: &SessionContext) -> Vec<String> {
-        context
-            .history
-            .iter()
-            .filter_map(|m| match (&m.role, &m.content) {
-                (Role::User, MessageContent::Text(t)) => Some(t.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Issue #315: eine Nachricht, die eintrifft, während „Neuer Chat" den
-    /// Turn-Slot hält, wird abgelehnt und nicht eingereiht — sonst hinge sie
-    /// unbemerkt an der ersten Anfrage des neuen Chats.
-    #[tokio::test]
-    async fn test_message_sent_during_new_chat_swap_is_rejected_not_queued() {
-        let _guard = lock_async().await;
-        let session = test_session(ServerId::new());
-        {
-            let mut turn = session.chat_turn.lock().unwrap();
-            turn.running = true;
-            turn.swapping = true;
-        }
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let err = send_chat_message_impl(
-            app.handle(),
-            &TestEmitter::default(),
-            &session,
-            uuid::Uuid::new_v4(),
-            "während des Wechsels".to_string(),
-            None,
-            &InMemoryProfileStore::default(),
-            &policy_store,
-            &ConfirmationRegistry::new(),
-        )
-        .await
-        .unwrap_err();
-        assert_eq!(err.code, Some(app_logic::orchestration::CHAT_SWITCHING));
-        let turn = session.chat_turn.lock().unwrap();
-        assert!(turn.queued.is_empty(), "nothing may leak into the new chat");
-        assert!(turn.running, "the swap's claim stays untouched");
-    }
-
-    /// Issue #505: extension content while a turn runs is rejected with
-    /// `ATTACHMENTS_WHILE_BUSY`, nothing is queued and nothing is persisted.
-    #[tokio::test]
-    async fn test_extension_content_while_turn_running_is_rejected() {
-        use app_logic::chat_content_extension::{
-            ChatContentExtension, ChatContentRegistry, PendingContent,
-        };
-        use std::sync::atomic::{AtomicBool, Ordering};
-        struct Ext(std::sync::Arc<AtomicBool>);
-        impl ChatContentExtension for Ext {
-            fn name(&self) -> &str {
-                "files"
-            }
-            fn take_pending(&self, _s: uuid::Uuid, _id: &str) -> Option<PendingContent> {
-                Some(PendingContent {
-                    label: "a.txt".into(),
-                    kind: "doc".into(),
-                    blocks: vec![ssh_manager_core::ai::ResolvedBlock::Text { text: "x".into() }],
-                })
-            }
-            fn persist(
-                &self,
-                _s: uuid::Uuid,
-                _p: &str,
-                _b: Vec<ssh_manager_core::ai::RedactedBlock>,
-            ) -> Result<(), app_logic::chat_content_extension::ChatContentError> {
-                self.0.store(true, Ordering::SeqCst);
-                Ok(())
-            }
-        }
-        let _guard = lock_async().await;
-        let session = test_session(ServerId::new());
-        session.chat_turn.lock().unwrap().running = true;
-        let persisted = std::sync::Arc::new(AtomicBool::new(false));
-        let registry = ChatContentRegistry::new(vec![std::sync::Arc::new(Ext(persisted.clone()))]);
-        let parts = app_logic::orchestration::accept_extension_content(
-            &registry,
-            session.redactor.as_ref(),
-            uuid::Uuid::new_v4(),
-            &["id".to_string()],
-        )
-        .unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let err = send_chat_message_with_attachments_impl(
-            app.handle(),
-            &TestEmitter::default(),
-            &session,
-            uuid::Uuid::new_v4(),
-            "hi".to_string(),
-            parts,
-            None,
-            &InMemoryProfileStore::default(),
-            &policy_store,
-            &ConfirmationRegistry::new(),
-        )
-        .await
-        .unwrap_err();
-        assert_eq!(
-            err.code,
-            Some(app_logic::orchestration::ATTACHMENTS_WHILE_BUSY)
-        );
-        assert!(session.chat_turn.lock().unwrap().queued.is_empty());
-        assert!(!persisted.load(Ordering::SeqCst));
-    }
-
-    /// Spec 0066, §2: eine Nachricht, die während eines laufenden Turns
-    /// gesendet wird, kehrt sofort zurück (Eingabe nie blockiert), wird
-    /// eingereiht und nach Turn-Ende als normale Nachricht gesendet — über
-    /// denselben Pfad, also auch mit Redaction vor dem Versand.
-    #[tokio::test]
-    async fn test_message_sent_during_running_turn_is_queued_then_sent_redacted() {
-        let _guard = lock_async().await;
-        let gate = Arc::new(tokio::sync::Notify::new());
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut session = test_session(ServerId::new());
-        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
-            gate: gate.clone(),
-            contexts: contexts.clone(),
-        }));
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let handle = app.handle();
-        let emitter = TestEmitter::default();
-        let profile_store = InMemoryProfileStore::default();
-        let confirmations = ConfirmationRegistry::new();
-        let session_id = uuid::Uuid::new_v4();
-
-        let first = send_chat_message_impl(
-            handle,
-            &emitter,
-            &session,
-            session_id,
-            "erste Frage".to_string(),
-            None,
-            &profile_store,
-            &policy_store,
-            &confirmations,
-        );
-        let second = async {
-            while contexts.lock().unwrap().is_empty() {
-                tokio::task::yield_now().await;
-            }
-            tokio::time::timeout(
-                std::time::Duration::from_secs(1),
-                send_chat_message_impl(
-                    handle,
-                    &emitter,
-                    &session,
-                    session_id,
-                    "Korrektur: nimm AKIAABCDEFGHIJKLMNOP nicht".to_string(),
-                    None,
-                    &profile_store,
-                    &policy_store,
-                    &confirmations,
-                ),
-            )
-            .await
-            .expect("Senden während eines laufenden Turns darf nicht blockieren")
-            .unwrap();
-            assert_eq!(
-                contexts.lock().unwrap().len(),
-                1,
-                "die eingereihte Nachricht darf den laufenden Request nicht unterbrechen"
-            );
-            gate.notify_waiters();
-        };
-        let (first_result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            tokio::join!(first, second)
-        })
-        .await
-        .expect("beide Turns müssen enden");
-        first_result.unwrap();
-
-        let contexts = contexts.lock().unwrap().clone();
-        assert_eq!(
-            contexts.len(),
-            2,
-            "eingereihte Nachricht → genau ein Folge-Request"
-        );
-        let sent = history_texts(&contexts[1]);
-        assert!(
-            sent.iter().any(|t| t.starts_with("Korrektur: nimm")),
-            "eingereihte Nachricht muss im Folge-Request stehen: {sent:?}"
-        );
-        assert!(
-            !sent.iter().any(|t| t.contains("AKIAABCDEFGHIJKLMNOP")),
-            "Secret in eingereihter Nachricht muss vor dem Versand redigiert sein: {sent:?}"
-        );
-        assert!(emitter
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(name, _)| name == "chat-queued-messages-sent"));
-        let turn = session.chat_turn.lock().unwrap();
-        assert!(!turn.running && turn.queued.is_empty());
-    }
-
-    struct AllowEverythingPolicyStore;
-    #[async_trait]
-    impl ssh_manager_core::filter::PolicyStore for AllowEverythingPolicyStore {
-        async fn rules_for(
-            &self,
-            _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> Vec<ssh_manager_core::filter::Rule> {
-            vec![ssh_manager_core::filter::Rule {
-                id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
-                pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
-                action: ssh_manager_core::filter::RuleAction::Allow,
-                scope: ssh_manager_core::filter::Scope::Global,
-                priority: 0,
-                origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
-        }
-    }
-
-    /// Führt jedes Kommando sofort mit fester Ausgabe aus.
-    struct EchoTransport;
-    #[async_trait]
-    impl SshTransport for EchoTransport {
-        async fn execute(&mut self, _command: &str) -> Result<CommandOutput, SshError> {
-            Ok(CommandOutput {
-                stdout: b"ok".to_vec(),
-                stderr: Vec::new(),
-                exit_code: Some(0),
-                truncated: false,
-            })
-        }
-        async fn open_shell(
-            &mut self,
-            _size: PtySize,
-        ) -> Result<Box<dyn InteractiveShell>, SshError> {
-            unreachable!()
-        }
-        async fn disconnect(&mut self) -> Result<(), SshError> {
-            Ok(())
-        }
-    }
-
-    /// Runde 1 hängt bis `gate`, schlägt dann ein Kommando vor; jeder
-    /// weitere Request liefert sofort `Done`.
-    struct GatedActionProvider {
-        gate: Arc<tokio::sync::Notify>,
-        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
-    }
-    impl AiProvider for GatedActionProvider {
-        fn send(
-            &self,
-            context: SessionContext,
-        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
-            let mut contexts = self.contexts.lock().unwrap();
-            let first = contexts.is_empty();
-            contexts.push(context);
-            if first {
-                let gate = self.gate.clone();
-                Box::pin(
-                    futures::stream::once(async move {
-                        gate.notified().await;
-                        futures::stream::iter(vec![
-                            AiEvent::ActionProposed(
-                                ssh_manager_core::profiles::AiAction::SuggestCommand {
-                                    command: "echo eins".to_string(),
-                                },
-                            ),
-                            AiEvent::Done,
-                        ])
-                    })
-                    .flatten(),
-                )
-            } else {
-                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
-            }
-        }
-    }
-
-    /// Spec 0066, spec-reviewer-Fund: wird eine eingereihte Nachricht an der
-    /// Rundengrenze in den Verlauf gelegt und der Request danach (vor dem
-    /// Versand) gestoppt, muss sie trotzdem noch beantwortet werden — per
-    /// Folge-Turn.
-    #[tokio::test]
-    async fn test_queued_message_injected_then_stopped_before_send_is_still_answered() {
-        let _guard = lock_async().await;
-        let gate = Arc::new(tokio::sync::Notify::new());
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut session = test_session(ServerId::new());
-        session.set_transport_for_tests(app_logic::session::SessionTransport::new(Box::new(
-            EchoTransport,
-        )));
-        session
-            .set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-        session.set_ai_provider_for_tests(Box::new(GatedActionProvider {
-            gate: gate.clone(),
-            contexts: contexts.clone(),
-        }));
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let handle = app.handle();
-        let emitter = TestEmitter::default();
-        let profile_store = InMemoryProfileStore::default();
-        let confirmations = ConfirmationRegistry::new();
-        let session_id = uuid::Uuid::new_v4();
-
-        let first = send_chat_message_impl(
-            handle,
-            &emitter,
-            &session,
-            session_id,
-            "erste".to_string(),
-            None,
-            &profile_store,
-            &policy_store,
-            &confirmations,
-        );
-        let driver = async {
-            while contexts.lock().unwrap().is_empty() {
-                tokio::task::yield_now().await;
-            }
-            send_chat_message_impl(
-                handle,
-                &emitter,
-                &session,
-                session_id,
-                "Korrektur".to_string(),
-                None,
-                &profile_store,
-                &policy_store,
-                &confirmations,
-            )
-            .await
-            .unwrap();
-            gate.notify_waiters();
-            // Sobald die Nachricht an der Rundengrenze übergeben ist, steckt
-            // Runde 2 in der Wartezeit vor dem Send (Pacing) — genau dann
-            // Stopp.
-            while !emitter
-                .events
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|(name, _)| name == "chat-queued-messages-sent")
-            {
-                tokio::task::yield_now().await;
-            }
-            session.request_auto_continue_stop();
-        };
-        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            tokio::join!(first, driver)
-        })
-        .await
-        .expect("Turns müssen enden");
-        result.unwrap();
-
-        let contexts = contexts.lock().unwrap().clone();
-        assert_eq!(
-            contexts.len(),
-            2,
-            "Runde 2 wurde gestoppt, die Korrektur braucht trotzdem einen Request"
-        );
-        assert!(history_texts(&contexts[1]).iter().any(|t| t == "Korrektur"));
-        assert!(!session.chat_turn.lock().unwrap().running);
-    }
-
-    /// Spec 0066, spec-reviewer-Fund: ein Stopp, der vor dem eigentlichen
-    /// Rundenbeginn eintrifft, darf nicht verschluckt werden — `run_chat_turn`
-    /// setzt das Flag nicht mehr selbst zurück.
-    #[tokio::test]
-    async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut session = test_session(ServerId::new());
-        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
-            gate: Arc::new(tokio::sync::Notify::new()),
-            contexts: contexts.clone(),
-        }));
-        session.request_auto_continue_stop();
-        let emitter = TestEmitter::default();
-        let profile_store = InMemoryProfileStore::default();
-        let confirmations = ConfirmationRegistry::new();
-
-        tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            run_chat_turn(
-                &session,
-                uuid::Uuid::new_v4(),
-                &emitter,
-                &profile_store,
-                &confirmations,
-            ),
-        )
-        .await
-        .expect("ein bereits gesetzter Stopp muss den Turn sofort beenden");
-
-        assert!(
-            contexts.lock().unwrap().is_empty(),
-            "nach einem früh gedrückten Stopp darf kein Request rausgehen"
-        );
-    }
-
-    /// Gegenstück: eine neue Nachricht nach einem alten Stopp läuft normal —
-    /// `send_chat_message_impl` setzt das Flag beim Turn-Start zurück.
-    #[tokio::test]
-    async fn test_new_message_after_an_old_stop_runs_normally() {
-        let _guard = lock_async().await;
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut session = test_session(ServerId::new());
-        let gate = Arc::new(tokio::sync::Notify::new());
-        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
-            gate: gate.clone(),
-            contexts: contexts.clone(),
-        }));
-        session.request_auto_continue_stop();
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let emitter = TestEmitter::default();
-        let profile_store = InMemoryProfileStore::default();
-        let confirmations = ConfirmationRegistry::new();
-
-        let send = send_chat_message_impl(
-            app.handle(),
-            &emitter,
-            &session,
-            uuid::Uuid::new_v4(),
-            "neue Frage".to_string(),
-            None,
-            &profile_store,
-            &policy_store,
-            &confirmations,
-        );
-        let opener = async {
-            while contexts.lock().unwrap().is_empty() {
-                tokio::task::yield_now().await;
-            }
-            gate.notify_waiters();
-        };
-        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            tokio::join!(send, opener)
-        })
-        .await
-        .expect("Turn muss enden");
-        result.unwrap();
-        assert_eq!(contexts.lock().unwrap().len(), 1);
-    }
-
-    // --- Issue #356: AI continuation after an automatic reconnect ----------
-
-    /// Proposes `echo next` as soon as the connection-restored note is the
-    /// last history entry; otherwise just ends the round.
-    struct ProposeAfterNoteProvider {
-        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
-    }
-    impl AiProvider for ProposeAfterNoteProvider {
-        fn send(
-            &self,
-            context: SessionContext,
-        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
-            let mut contexts = self.contexts.lock().unwrap();
-            let after_note = contexts.is_empty()
-                && history_texts(&context)
-                    .last()
-                    .is_some_and(|t| t.contains("wiederhergestellt"));
-            contexts.push(context);
-            if after_note {
-                Box::pin(futures::stream::iter(vec![
-                    AiEvent::ActionProposed(ssh_manager_core::profiles::AiAction::SuggestCommand {
-                        command: "echo next".to_string(),
-                    }),
-                    AiEvent::Done,
-                ]))
-            } else {
-                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_ai_gets_the_note_after_reconnect_and_its_next_command_needs_confirmation() {
-        let _guard = lock_async().await;
-        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut session = test_session(ServerId::new());
-        // `UnusedTransport` panics if a command is executed: the proposal
-        // must wait for the user instead.
-        session.set_ai_provider_for_tests(Box::new(ProposeAfterNoteProvider {
-            contexts: contexts.clone(),
-        }));
-        let dir = tempfile::tempdir().unwrap();
-        let policy_store =
-            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
-                .await
-                .unwrap()
-                .policy_store();
-        let app = test_app();
-        let emitter = TestEmitter::default();
-        let profile_store = InMemoryProfileStore::default();
-        let confirmations = ConfirmationRegistry::new();
-        let session_id = uuid::Uuid::new_v4();
-
-        // A turn was active at the drop.
-        session.auto_reconnect.set_ai_turn_interrupted(true);
-        let note = crate::auto_reconnect::continuation_note(&session)
-            .await
-            .expect("an interrupted turn leads to a note");
-        assert!(note.contains("wiederhergestellt"), "{note}");
-        // At most once per drop.
-        assert!(crate::auto_reconnect::continuation_note(&session)
-            .await
-            .is_none());
-
-        let send = send_chat_message_impl(
-            app.handle(),
-            &emitter,
-            &session,
-            session_id,
-            note.clone(),
-            None,
-            &profile_store,
-            &policy_store,
-            &confirmations,
-        );
-        let observe = async {
-            // The proposal arrives and waits for the user's confirmation.
-            let id = loop {
-                let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
-                    (n == "chat-action-proposed" && p["decision"].get("Confirm").is_some())
-                        .then(|| p["actionId"].as_str().unwrap().to_string())
-                });
-                if let Some(id) = pending {
-                    break id;
-                }
-                tokio::task::yield_now().await;
-            };
-            // The user denies; `UnusedTransport` would panic on any execution.
-            let _ = confirmations.resolve(&id.parse().unwrap(), ActionUserDecision::Deny);
-        };
-        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            tokio::join!(send, observe)
-        })
-        .await
-        .expect("the turn must end");
-        result.unwrap();
-
-        let contexts = contexts.lock().unwrap().clone();
-        assert!(
-            history_texts(&contexts[0]).contains(&note),
-            "the AI request carries the note"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_no_note_without_an_interrupted_turn_or_after_stop() {
-        let session = test_session(ServerId::new());
-        // No AI turn was active at the drop: nothing is sent.
-        session.auto_reconnect.set_ai_turn_interrupted(false);
-        assert!(crate::auto_reconnect::continuation_note(&session)
-            .await
-            .is_none());
-        // A turn was active, but the user pressed Stop during the drop.
-        session.auto_reconnect.set_ai_turn_interrupted(true);
-        session.request_auto_continue_stop();
-        assert!(crate::auto_reconnect::continuation_note(&session)
-            .await
-            .is_none());
-    }
-}
+mod tests_send_persistence;

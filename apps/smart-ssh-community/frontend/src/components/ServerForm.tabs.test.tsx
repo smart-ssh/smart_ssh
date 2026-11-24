@@ -3,51 +3,41 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createServer, getServer, updateServer } from "../api";
+import { createServer, getServer, updateServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { ServerDto } from "../types";
+import type { ServerDto } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  // Spec 0069, Teil B (echte `code`-Extraktion für `runOllamaProbe`,
-  // s. `ServerList.test.tsx`) und Spec 0071 (echte `.message`-Extraktion
-  // für `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte) — echte
-  // Implementierungen statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -72,6 +62,9 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
@@ -106,7 +99,7 @@ beforeEach(() => {
 describe("ServerForm tabs (issue #606)", () => {
   it("opens an existing server on General with four tabs and each field in its own tab", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen"]);
     expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
@@ -125,7 +118,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("keeps unsaved edits across tab switches and saves them with one updateServer call", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "web-02" } });
     openTab("Verbindung");
@@ -146,7 +139,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("shows Save on General, Connection and Security but not on Notes", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     for (const name of ["Allgemein", "Verbindung", "Sicherheit"]) {
       openTab(name);
       expect(screen.getByRole("button", { name: "Speichern" })).toBeInTheDocument();
@@ -157,7 +150,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("marks the Connection tab and jumps to it when Save finds an invalid field", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("example.invalid"), { target: { value: "" } });
     expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
@@ -177,7 +170,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("moves between tabs with the arrow keys, Home and End", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     const general = screen.getByRole("tab", { name: "Allgemein" });
     general.focus();
     fireEvent.keyDown(general, { key: "ArrowRight" });
@@ -207,7 +200,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("opens General again when another server is selected", async () => {
     const { rerender } = renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Sicherheit");
     rerender(
       <I18nextProvider i18n={testI18n}>

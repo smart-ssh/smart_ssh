@@ -43,6 +43,12 @@ Der Inhalt erscheint als eigene Karte im Chat.
 4. Geschrieben wird erst, wenn der Nutzer den Dialog bestätigt. Bricht er
    ab, passiert nichts. Nach dem Speichern zeigt die Karte „Als Markdown
    exportiert".
+5. Jeder Codeblock im Dokument (wie in jeder KI-Antwort im Chat) hat oben
+   rechts ein immer sichtbares Kopiersymbol. Ein Klick legt genau den Code des
+   Blocks in die lokale Zwischenablage (ohne Sprachkennzeichen und
+   Markdown-Zäune); nichts geht ans Terminal oder an die KI. Danach zeigt das
+   Symbol etwa 2 Sekunden ein Häkchen, bei einem Fehler einen Fehlerzustand.
+   Inline-Code hat kein Symbol.
 
 ## 4. Weitere Exportformate
 

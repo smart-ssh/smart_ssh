@@ -21,7 +21,7 @@ use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::ai::AiProvider;
 
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::state::AppState;
 
 /// Spec 0024, Abschnitt 4: derselbe `tauri-plugin-store`-Ablageort wie die
@@ -29,7 +29,6 @@ use app_logic::state::AppState;
 /// UI-/App-Einstellungen ohne Bezug zu Server-/Gruppen-Fachdaten, keine
 /// eigene SQLite-Migration nötig (Spec 0026, Abschnitt 1, Punkt 1 verlangt
 /// das explizit: "keine neue SQLite-Tabelle").
-use crate::settings_store::SETTINGS_STORE_FILE;
 const ENABLED_KEY: &str = "riskClassifierEnabled";
 const PROVIDER_ID_KEY: &str = "riskClassifierProviderId";
 /// Spec 0092, A1.1.
@@ -46,7 +45,7 @@ const RED_RISK_ALWAYS_CONFIRM_KEY: &str = "redRiskAlwaysConfirm";
 /// nicht öffenbarer Store, ein fehlender Schlüssel und ein nicht-boolescher
 /// Wert führen deshalb alle auf `true`.
 pub(crate) fn red_risk_always_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
-    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+    let Ok(store) = app.store(crate::settings_store::settings_store_file()) else {
         return true;
     };
     red_risk_always_confirm_from_stored(store.get(RED_RISK_ALWAYS_CONFIRM_KEY))
@@ -57,6 +56,94 @@ pub(crate) fn red_risk_always_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<
 /// ohne `tauri`-Store direkt prüfen kann.
 pub(crate) fn red_risk_always_confirm_from_stored(value: Option<serde_json::Value>) -> bool {
     value.is_none_or(|value| value.as_bool().unwrap_or(true))
+}
+
+/// Issue #856: the security switches are written only here, never by the
+/// webview directly.
+pub(crate) fn write_red_risk_always_confirm<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    value: bool,
+) -> app_logic::error::CommandResult<()> {
+    crate::settings_store::update(app, |changes| {
+        changes.set(RED_RISK_ALWAYS_CONFIRM_KEY, serde_json::json!(value))
+    })
+}
+
+#[tauri::command]
+pub fn set_red_risk_always_confirm(
+    app: tauri::AppHandle,
+    value: bool,
+) -> app_logic::error::CommandResult<()> {
+    write_red_risk_always_confirm(&app, value)
+}
+
+/// Validates the second-opinion settings before they are written: enabling
+/// needs a provider id, and a given id must be a configured provider
+/// (`known`). Returns the provider id string to store (`None` = null).
+pub(crate) fn validate_second_opinion_settings(
+    enabled: bool,
+    provider_id: Option<&str>,
+    known: impl FnOnce(&ssh_manager_core::ai::ProviderId) -> bool,
+) -> app_logic::error::CommandResult<Option<String>> {
+    use app_logic::error::{
+        CommandError, RISK_SETTINGS_PROVIDER_REQUIRED, RISK_SETTINGS_PROVIDER_UNKNOWN,
+    };
+    let Some(raw) = provider_id else {
+        if enabled {
+            return Err(CommandError::with_code(
+                "Enabling the risk second opinion requires an AI provider.",
+                RISK_SETTINGS_PROVIDER_REQUIRED,
+            ));
+        }
+        return Ok(None);
+    };
+    let unknown = || {
+        CommandError::with_code(
+            "The selected AI provider is not configured.",
+            RISK_SETTINGS_PROVIDER_UNKNOWN,
+        )
+    };
+    let id = uuid::Uuid::parse_str(raw)
+        .map(ssh_manager_core::ai::ProviderId)
+        .map_err(|_| unknown())?;
+    if !known(&id) {
+        return Err(unknown());
+    }
+    Ok(Some(id.0.to_string()))
+}
+
+/// Validates, then writes both keys in one atomic update. A rejected value
+/// leaves the settings file untouched.
+pub(crate) fn write_second_opinion_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    enabled: bool,
+    provider_id: Option<&str>,
+    known: impl FnOnce(&ssh_manager_core::ai::ProviderId) -> bool,
+) -> app_logic::error::CommandResult<()> {
+    let stored = validate_second_opinion_settings(enabled, provider_id, known)?;
+    crate::settings_store::update(app, |changes| {
+        changes.set(ENABLED_KEY, serde_json::json!(enabled));
+        changes.set(PROVIDER_ID_KEY, serde_json::json!(stored));
+    })
+}
+
+#[tauri::command]
+pub async fn set_risk_second_opinion_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+    provider_id: Option<String>,
+) -> app_logic::error::CommandResult<()> {
+    // Look the provider up first so the validation itself stays synchronous.
+    let known = match provider_id
+        .as_deref()
+        .and_then(|raw| uuid::Uuid::parse_str(raw).ok())
+        .map(ssh_manager_core::ai::ProviderId)
+    {
+        Some(id) => state.ai_provider_store.get(&id).await.is_ok(),
+        None => false,
+    };
+    write_second_opinion_settings(&app, enabled, provider_id.as_deref(), |_| known)
 }
 
 /// Ergebnis der Auflösung der Zweitmeinungs-Einstellungen (Issue #102):
@@ -131,7 +218,7 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
     state: &AppState,
 ) -> SecondOpinionSetup {
     // Ein nicht öffenbarer Store verhält sich wie bisher: "aus".
-    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+    let Ok(store) = app.store(crate::settings_store::settings_store_file()) else {
         return SecondOpinionSetup::Disabled;
     };
     let provider_id =
@@ -143,30 +230,18 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
     let Ok(config) = state.ai_provider_store.get(&provider_id).await else {
         return SecondOpinionSetup::Unavailable;
     };
-    let Ok(api_key) = state.credential_store.get(&config.credential_ref) else {
+    // Side call (second opinion / injection check): never web tools (#162).
+    let Ok((provider, budget)) = build_ai_provider_from_config_async(
+        &state.rate_limit_registry,
+        state.credential_store.clone(),
+        &config,
+        false,
+        &state.ai_provider_decorators,
+    )
+    .await
+    else {
         return SecondOpinionSetup::Unavailable;
     };
-
-    let (provider, budget) = build_ai_provider(
-        &state.rate_limit_registry,
-        config.provider_type,
-        config.base_url.as_deref(),
-        &config.model,
-        api_key,
-        config.supports_native_tool_calling,
-        config.extra_headers.clone(),
-        // Spec 0065, Teil 4: greift hier ohnehin nie — `build_second_
-        // opinion_context` (in `app_logic::second_opinion`) setzt
-        // `max_tokens_hint` immer explizit (`SIDE_CALL_MAX_TOKENS`), der
-        // laut Rangfolge Vorrang hat.
-        // Trotzdem korrekt durchgereicht statt hart `None`, für den Fall,
-        // dass dieser Provider künftig noch für einen zweiten,
-        // hint-losen Zweck wiederverwendet wird.
-        config.max_tokens_override,
-        // Issue #162: Nebenaufruf (Zweitmeinung/Injection-Check) — nie
-        // Web-Werkzeuge.
-        false,
-    );
     let source = app_logic::ai_usage::AiUsageSource {
         provider_config_id: config.id.0.to_string(),
         provider_type: config.provider_type,
@@ -180,7 +255,7 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
 /// „Einstellung" im Umsetzungsauftrag).
 // Testcode-Ausnahme zum `deny` — s. `lib.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests {
     use super::*;
     use crate::first_run_notice::test_support::{lock, test_app};
@@ -228,6 +303,77 @@ mod tests {
         assert!(!SecondOpinionSetup::Disabled.into_parts().1);
         let (provider, flagged) = SecondOpinionSetup::Unavailable.into_parts();
         assert!(provider.is_none() && flagged);
+    }
+
+    #[test]
+    fn test_validate_second_opinion_settings() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let code = |r: app_logic::error::CommandResult<Option<String>>| r.unwrap_err().code;
+        assert_eq!(
+            validate_second_opinion_settings(true, Some(&id), |_| true).unwrap(),
+            Some(id.clone())
+        );
+        assert_eq!(
+            validate_second_opinion_settings(false, None, |_| false).unwrap(),
+            None
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(true, None, |_| true)),
+            Some("RISK_SETTINGS_PROVIDER_REQUIRED")
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(true, Some(&id), |_| false)),
+            Some("RISK_SETTINGS_PROVIDER_UNKNOWN")
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(
+                false,
+                Some("junk"),
+                |_| true
+            )),
+            Some("RISK_SETTINGS_PROVIDER_UNKNOWN")
+        );
+    }
+
+    #[test]
+    fn test_write_second_opinion_settings_writes_keys() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let id = uuid::Uuid::new_v4().to_string();
+        write_second_opinion_settings(handle, true, Some(&id), |_| true).unwrap();
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
+        assert_eq!(store.get(ENABLED_KEY), Some(serde_json::json!(true)));
+        assert_eq!(store.get(PROVIDER_ID_KEY), Some(serde_json::json!(id)));
+        write_second_opinion_settings(handle, false, None, |_| false).unwrap();
+        assert_eq!(store.get(ENABLED_KEY), Some(serde_json::json!(false)));
+        assert_eq!(store.get(PROVIDER_ID_KEY), Some(serde_json::json!(null)));
+
+        // Rejected values leave the file unchanged.
+        let before = (store.get(ENABLED_KEY), store.get(PROVIDER_ID_KEY));
+        assert!(write_second_opinion_settings(handle, true, Some(&id), |_| false).is_err());
+        assert!(write_second_opinion_settings(handle, true, None, |_| true).is_err());
+        assert_eq!(before, (store.get(ENABLED_KEY), store.get(PROVIDER_ID_KEY)));
+    }
+
+    #[test]
+    fn test_write_red_risk_always_confirm_round_trips_through_reader() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        write_red_risk_always_confirm(handle, false).unwrap();
+        assert!(!red_risk_always_confirm(handle));
+        write_red_risk_always_confirm(handle, true).unwrap();
+        assert!(red_risk_always_confirm(handle));
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
+        assert_eq!(
+            store.get(RED_RISK_ALWAYS_CONFIRM_KEY),
+            Some(serde_json::json!(true))
+        );
     }
 
     #[test]
@@ -281,7 +427,7 @@ mod tests {
         let app = test_app();
         let handle = app.handle().clone();
         let store = handle
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("Store sollte sich öffnen lassen");
 
         store.delete(RED_RISK_ALWAYS_CONFIRM_KEY);

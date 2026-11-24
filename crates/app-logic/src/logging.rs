@@ -7,6 +7,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(target_os = "android"))]
 use directories::BaseDirs;
 use tracing_appender::non_blocking::WorkerGuard;
 
@@ -43,6 +44,28 @@ const LOG_FILE_SUFFIX: &str = "log";
 /// `data_dir()` — Logs sind laut XDG-Basisverzeichnis-Spezifikation "state
 /// data", nicht "data", und die Spec verlangt exakt diesen Pfad.
 pub fn default_log_dir() -> PathBuf {
+    // Issue #1313: with a data-directory override the logs live inside it.
+    if let Some(dir) = persistence_sqlite::data_dir_override() {
+        return log_dir_in(&dir);
+    }
+    // Android (Spec 0114): kein `HOME`, `BaseDirs` wäre `None` → Panic.
+    #[cfg(target_os = "android")]
+    {
+        persistence_sqlite::android_files_dir().join("logs")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        desktop_log_dir()
+    }
+}
+
+/// Log folder inside a data-directory override (issue #1313).
+fn log_dir_in(data_dir: &Path) -> PathBuf {
+    data_dir.join("logs")
+}
+
+#[cfg(not(target_os = "android"))]
+fn desktop_log_dir() -> PathBuf {
     let base =
         BaseDirs::new().expect("kein Home-Verzeichnis gefunden – kann Log-Ordner nicht ermitteln");
 

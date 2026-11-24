@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hovednavigasjon",
     "connect": "Koble til",
     "manage": "Administrer",
     "rules": "Filterregler"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Ingen server er lagt til ennå",
     "emptyStateHint": "Legg til den første serveren for å koble til via SSH.",
     "emptyStateCreateFirstServer": "Legg til første server",
-    "newServerInGroup": "Ny server i gruppen “{{name}}”",
-    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server."
+    "emptyStateTryLocalhost": "Prøv uten server: “Localhost” ovenfor åpner en økt på denne maskinen – med samme bekreftelser som på en ekte server.",
+    "localBadge": "Lokal",
+    "thisDevice": "denne enheten",
+    "sessionOpen": "Økt åpen",
+    "sessionPending": "Venter på bekreftelse",
+    "sessionDisconnected": "Økt frakoblet",
+    "sessionReconnecting": "Kobler til på nytt"
   },
   "settings": {
     "title": "Innstillinger",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Data og sikkerhetskopi"
     }
   },
+  "appearance": {
+    "heading": "Utseende",
+    "language": "Språk",
+    "system": "Følg systemet",
+    "light": "Lyst",
+    "dark": "Mørkt"
+  },
   "about": {
     "version": "Versjon",
     "copyHint": "Kopier til utklippstavlen",
@@ -57,6 +70,7 @@
     "copyFailed": "Kopiering mislyktes – teksten kan i stedet markeres.",
     "loadFailed": "Kunne ikke laste versjons- og byggeinformasjon.",
     "buildDev": "Utviklingsbygg",
+    "dataDirMarker": "Datamappe: {{path}}",
     "buildRelease": "Utgivelsesbygg",
     "thirdPartyLicenses": {
       "openButton": "Tredjepartslisenser",
@@ -79,6 +93,7 @@
       "no_session_bus": "utilgjengelig – ingen D-Bus-sesjonsbuss kan nås. Neste steg: `sudo apt install dbus-user-session`, og logg deretter inn på nytt.",
       "no_secret_service_provider": "utilgjengelig – ingen Secret Service-leverandør kjører. Neste steg: `sudo apt install gnome-keyring`, og logg deretter inn på nytt – dette fungerer også på KDE. Bruker du allerede KWallet (`kwallet6`) eller KeePassXC: Secret Service-integrasjonen deres må kjøre eller være slått på; det er ikke nok å installere dem.",
       "locked": "utilgjengelig – finnes, men er låst. Neste steg: lås den opp og start Smart SSH på nytt. Ingen pakke mangler.",
+      "no_keystore": "utilgjengelig – Android Keystore er ikke tilgjengelig. Neste steg: bruk et hovedpassord i stedet; hemmelighetene dine blir værende i den krypterte databasen.",
       "unknown": "utilgjengelig – ukjent årsak. Neste steg: sjekk om en Secret Service-leverandør kjører og er låst opp (gnome-keyring, eller KWallet eller KeePassXC med Secret Service-integrasjon slått på), og start deretter Smart SSH på nytt."
     },
     "keychainBlocked": "Dette påvirker ikke hemmelighetene dine – API-nøkler, serverpassord, passfraser og sudo-passord ligger i den krypterte databasen, ikke i nøkkelringen.",
@@ -91,8 +106,10 @@
       "hostKeys": "Vertsnøkler",
       "wrappingFile": "Nøkkelfil for hovedpassord",
       "mcpSettings": "MCP-innstillinger",
+      "speechModels": "Talemodeller",
       "sessions": "Økter",
       "sessionsInDatabase": "lagret i databasen",
+      "keychainService": "Nøkkelring-tjeneste",
       "copy": "Kopier",
       "copied": "Sti kopiert",
       "copyFailed": "Kopiering mislyktes:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importer …",
     "importSshConfigHint": "Importer servere fra en OpenSSH ssh_config-fil",
     "exportSshConfig": "Eksporter …",
-    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config"
+    "exportSshConfigHint": "Eksporter servere til OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Skjul gruppen «{{name}}»",
+    "expandGroup": "Vis gruppen «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
+    "current": "gjeldende",
     "hintGroup": "→ flytt inn i denne gruppen",
     "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
     "moveTo": "Flytt «{{name}}» til…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Dette sletter også serverens chatthistorikk, notater og merkelapper permanent.",
     "confirmDeleteServer": "Slett permanent",
     "testResult": {
-      "success": "✓ Tilkobling vellykket",
-      "authFailed": "✗ Pålogging avvist. Sjekk brukernavn og passord eller nøkkel.",
+      "success": "Tilkobling vellykket",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Pålogging avvist. Sjekk brukernavn og passord eller nøkkel.",
       "hostKeyUnknown": "Vertsnøkkel ukjent – bekreftelse kreves",
-      "hostKeyMismatch": "⚠ Vertsnøkkelen er endret",
-      "networkError": "✗ Nettverksfeil: {{message}}",
-      "timeout": "✗ Serveren svarer ikke. Sjekk adresse, port og brannmur."
+      "hostKeyMismatch": "Vertsnøkkelen er endret",
+      "networkError": "Nettverksfeil: {{message}}",
+      "timeout": "Serveren svarer ikke. Sjekk adresse, port og brannmur."
     },
     "largeNoteHint": "Dette notatet er svært stort og kan bli forkortet i AI-konteksten under lange økter. Det lagrede notatet forblir helt intakt.",
     "summarizeNow": "Oppsummer nå",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Sti til sftp-server (utvidet filtilgang)",
     "sftpServerPathPlaceholder": "Automatisk",
     "sftpServerPathHint": "Trengs bare hvis automatisk gjenkjenning mislykkes for filutforskeren med utvidede rettigheter, f.eks. /usr/lib/openssh/sftp-server. Tomt = automatisk.",
+    "elevationAllowedLabel": "Tillat forhøyede rettigheter i filleseren",
+    "elevationAllowedHint": "Når dette er av, tilbyr filleseren ikke forhøyede rettigheter for denne serveren.",
     "startDirectoryLabel": "Startkatalog (terminal og filutforsker)",
     "startDirectoryPlaceholder": "Hjemmekatalog",
     "startDirectoryHint": "Absolutt sti (/…) eller en sti som starter med ~/. Terminalen bytter dit med en synlig cd, filutforskeren åpnes der. AI-kommandoer kjøres alltid i hjemmekatalogen. Tomt = hjemmekatalog.",
@@ -294,6 +318,13 @@
       "connection": "Tilkobling",
       "security": "Sikkerhet",
       "invalid": "Inneholder feil"
+    },
+    "importKey": {
+      "title": "Importere nøkkelen til Smart SSH?",
+      "import": "Importer nøkkel",
+      "keep": "Behold filstien",
+      "importHint": "Nøkkelen lagres kryptert i Smart SSH og følger med sikkerhetskopier til de andre enhetene dine.",
+      "keepHint": "Bare filstien lagres og følger med til andre enheter. Filen må finnes på samme sti på hver enhet."
     }
   },
   "filterRules": {
@@ -337,10 +368,14 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Del {{index}}",
     "checksLabel": "Kontroller:",
-    "hardBlacklistLabel": "Hard svarteliste:"
+    "hardBlacklistLabel": "Hard svarteliste:",
+    "invalidPattern": "Ugyldig mønster",
+    "rowActions": "Radhandlinger",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regler"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatisk fortsettelse satt på pause etter {{limit}} trinn – send en melding for å fortsette.",
+    "autoContinuationLimitReached": "Automatisk fortsettelse satt på pause etter {{limit}} trinn uten din bekreftelse – send en melding for å fortsette.",
     "aiBudgetWaiting": "Venter på AI-budsjett – neste forsøk om {{seconds}} s…",
     "suggestCommand": "Foreslå kommando",
     "generateDocument": "Lag dokument: {{title}}",
@@ -354,8 +389,12 @@
     "blocked": "blokkert",
     "rejected": "avvist",
     "rejectedByUser": "Avvist av bruker.",
-    "usesStoredSudoPassword": "🔑 Kjøres med det lagrede sudo-passordet.",
-    "writeMayUseStoredSudoPassword": "🔑 Hvis skrivetillatelse mangler, skriver appen med det lagrede sudo-passordet (sudo).",
+    "expired": "utløpt",
+    "discardedAfterReconnect": "Forkastet etter at forbindelsen ble gjenopprettet. Ingenting ble kjørt.",
+    "expiredTimeout": "Ikke besvart i tide og forkastet. Ingenting ble kjørt.",
+    "expiredUnknown": "Forespørselen venter ikke lenger. Ingenting ble kjørt.",
+    "usesStoredSudoPassword": "Kjøres med det lagrede sudo-passordet.",
+    "writeMayUseStoredSudoPassword": "Hvis skrivetillatelse mangler, skriver appen med det lagrede sudo-passordet (sudo).",
     "takeIntoNote": "Ta inn i notat",
     "takeIntoNoteFailed": "Mislyktes – prøv igjen",
     "riskServerLabel": "Server",
@@ -365,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "AI-andremeningen kunne ikke hentes. Risikoen som vises er den regelbaserte.",
     "riskHint": "Vurdering basert på kjente mønstre – ingen garanti.",
     "runningSince": "kjører i {{seconds}} s…",
+    "exitCode": "avslutningskode: {{code}}",
     "waitingForInputHint": "Denne kommandoen venter sannsynligvis på inndata. Stopp den, så foreslår AI-en en ikke-interaktiv variant.",
     "cancelCommand": "Koble fra denne kommandoen",
     "cancellingCommand": "Kobler fra…",
-    "commandCancelledNotice": "⚠ Avbrutt manuelt – utdata kan være ufullstendige, ingen vanlig avslutningskode.",
-    "commandTruncatedNotice": "⚠ Utdata ble kuttet ved størrelsesgrensen – de kan være ufullstendige.",
+    "commandCancelledNotice": "Avbrutt manuelt – utdata kan være ufullstendige, ingen vanlig avslutningskode.",
+    "commandTruncatedNotice": "Utdata ble kuttet ved størrelsesgrensen – de kan være ufullstendige.",
     "liveOutputLabel": "Direkteutdata",
-    "liveOutputTruncatedNotice": "⚠ Størrelsesgrensen er nådd – flere utdata vises ikke lenger.",
+    "liveOutputTruncatedNotice": "Størrelsesgrensen er nådd – flere utdata vises ikke lenger.",
     "autoRanLead": "Kjørt automatisk",
     "autoRanRule": "regel",
     "autoRanScopeGlobal": "global",
@@ -386,17 +426,15 @@
     "editableCommand": "Kommando – kan redigeres",
     "execute": "Kjør",
     "deny": "Nekt",
-    "quickRule": "Godta + regel",
-    "quickRuleDropdownAria": "Vis regelforslag",
-    "newRulePatternHeading": "Mønster for den nye tillat-regelen",
     "scopeThisServer": "Denne serveren",
     "scopeGlobal": "Global",
     "scopeTag": "Merkelapp",
     "tagNamePlaceholder": "Navn på merkelapp",
     "loadingSuggestions": "Laster forslag…",
     "noSuggestions": "Ingen forslag.",
-    "binaryFileHint": "⚠ Binærfil – tekstsammenligning er ikke mulig. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Innholdet er for stort for en linjesammenligning. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
+    "binaryFileHint": "Binærfil – tekstsammenligning er ikke mulig. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
+    "fileTooLargeHint": "Filen er større enn {{limit}}, ingen tekstsammenligning. Ny størrelse: {{newSize}}.",
+    "diffTooLargeHint": "Innholdet er for stort for en linjesammenligning. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "noContentChange": "(ingen innholdsendring)",
     "quickRuleLabel": {
       "exact": "Nøyaktig: {{patterns}}",
@@ -414,10 +452,25 @@
       "blocked": "spør alltid, uansett regler: {{reasons}}",
       "verdictAuto": "kjører automatisk neste gang",
       "verdictAsk": "spør fortsatt: {{reasons}}",
-      "notice": "Regel opprettet. Denne kommandoen spør fortsatt neste gang: {{reasons}}",
       "reasonOther": "en annen sikkerhetskontroll",
-      "loadFailed": "Regeldekningen kunne ikke lastes"
+      "loadFailed": "Regeldekningen kunne ikke lastes",
+      "summaryHeading": "Allerede tillatt",
+      "toDecideHeading": "Gjenstår å avgjøre",
+      "expandAria": "Regelforslag for {{segment}}",
+      "stagedBadge": "ikke lagret ennå",
+      "removeStaged": "Fjern",
+      "saveRules": "Lagre regler ({{count}})",
+      "saveFailed": "Reglene kunne ikke lagres: {{message}}",
+      "unsavedHint": "Ulagrede regler: {{count}}",
+      "segmentCovered": "dekker denne delen; kommandoen spør likevel: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Pålogging på {{hop}}",
+    "password": "Passord",
+    "submit": "Logg inn",
+    "notStored": "Serveren ber om denne informasjonen for å logge inn. Den lagres ikke.",
+    "expired": "Påloggingsforespørselen har utløpt. Tilkoblingen ble ikke opprettet."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhetsadvarsel · Vertsnøkkel endret",
@@ -426,6 +479,7 @@
     "mismatchBodyAfterHost": " presenterer en annen nøkkel enn den som ble lagret sist. Dette kan tyde på et man-in-the-middle-angrep. Fortsett bare hvis du er sikker på at servernøkkelen er endret med rette (f.eks. ved ominstallering av serveren).",
     "known": "Kjent",
     "offeredNow": "Tilbudt nå",
+    "offered": "Tilbudt",
     "keyType": "Nøkkeltype",
     "cancelConnection": "Avbryt tilkobling",
     "trustAnyway": "Stol på likevel",
@@ -438,13 +492,17 @@
   },
   "sessionTabs": {
     "newSession": "Ny økt",
-    "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
     "menu": {
       "open": "Åpne navigasjonsmenyen",
       "title": "Navigasjonsmeny",
-      "sessions": "Åpne økter"
+      "sessions": "Åpne økter",
+      "close": "Lukk navigasjonsmenyen",
+      "needsConfirmation": "Krever bekreftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +511,11 @@
       "pendingBadge": "Krever bekreftelse",
       "readOnlyHint": "Denne økten tilhører et eksternt verktøy (MCP). Den viser bare verktøyets handlinger som skal bekreftes eller avvises, og resultatene av dem; her finnes verken chattefelt eller terminal. Lukkes den, avsluttes MCP-økten og ventende bekreftelser avvises."
     },
-    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist."
+    "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist.",
+    "pendingBadge": "Venter",
+    "newConnection": "Ny tilkobling"
   },
   "aiProvider": {
-    "title": "AI-leverandør",
     "openLogs": "Åpne diagnoselogger i filbehandleren",
     "noProviders": "Ingen leverandør er satt opp ennå.",
     "configuredProvidersTitle": "Oppsatte leverandører",
@@ -476,16 +535,16 @@
     "apiKeyFormatHint": "Ser ikke ut som en {{providerLabel}}-nøkkel – forventet et prefiks som “{{expectedPrefix}}”. Du kan likevel lagre den; leverandører endrer format av og til.",
     "testCredentials": "Test legitimasjon",
     "testingCredentials": "Tester…",
-    "testResultValid": "✓ Legitimasjonen er gyldig",
-    "testResultAuthFailed": "✗ Autentisering mislyktes – sjekk API-nøkkelen",
-    "testResultUnreachable": "✗ Leverandøren kan ikke nås: {{message}}",
+    "testResultValid": "Legitimasjonen er gyldig",
+    "testResultAuthFailed": "Autentisering mislyktes – sjekk API-nøkkelen",
+    "testResultUnreachable": "Leverandøren kan ikke nås: {{message}}",
     "testResultRateLimited": "Legitimasjonen ser gyldig ut, men leverandøren begrenser forespørsler akkurat nå. Test igjen om et minutt.",
     "nativeToolCalling": "Støtter innebygd verktøykall",
     "discoverModels": "Last modeller",
     "discoveringModels": "Laster modeller…",
     "modelDiscoveryFailedHint": "Kunne ikke laste modeller automatisk – skriv inn modellnavnet manuelt.",
     "modelDiscoveryEmptyHint": "Leverandøren returnerte ingen modeller. Skriv inn modellnavnet for hånd.",
-    "modelDiscoveryAuthFailed": "✗ Leverandøren avviste denne legitimasjonen – sjekk API-nøkkelen",
+    "modelDiscoveryAuthFailed": "Leverandøren avviste denne legitimasjonen – sjekk API-nøkkelen",
     "advanced": "Avansert",
     "extraHeadersLabel": "Ekstra overskrifter",
     "extraHeadersHint": "Legges ved hver forespørsel til denne leverandøren (f.eks. OpenRouters HTTP-Referer/X-Title).",
@@ -528,6 +587,7 @@
     "ollamaProbeRetry": "Søk igjen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama funnet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installer Ollama fra ollama.com, start den og last en modell (f.eks. `ollama pull llama3`), og søk deretter igjen.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +652,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mulig forsøk på å injisere instruksjoner via serverinnhold oppdaget – krever bekreftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Forespurt via MCP – krever alltid bekreftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Bruker det lagrede sudo-passordet – krever alltid bekreftelse",
+    "FILTER_RULES_UNAVAILABLE": "Filterreglene kunne ikke lastes – ingenting kjøres automatisk, bekreftelse kreves",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Setter inn en lagret hemmelig verdi før sending – krever alltid bekreftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Leser en fil med legitimasjon (f.eks. SSH-nøkkel, .env, /etc/shadow) – krever alltid bekreftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidligere handling i dette svaret ble avvist – krever bekreftelse",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starter sftp-server (med sudo: filtilgang med root-rettigheter) – krever alltid bekreftelse",
@@ -601,6 +663,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Sjekken for injiserte instruksjoner kunne ikke kjøres (problem hos AI-leverandøren). Den neste foreslåtte handlingen krever bekreftelse.",
     "AI_INJECTION_CHECK_INACTIVE": "Sjekken for injiserte instruksjoner er slått på for denne serveren, men er ikke aktiv i denne økten (AI-andremeningen er av eller kunne ikke settes opp). Slå på andremeningen i innstillingene og koble til på nytt.",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI-andremeningen er slått på, men kunne ikke settes opp for denne økten (leverandøren er fjernet eller legitimasjon ble ikke funnet). Kommandoer sjekkes ikke av den – rett opp innstillingen og koble til på nytt.",
+    "REDACTION_INCOMPLETE": "Noen hemmelige verdier for denne serveren kunne ikke lastes; de blir kanskje ikke maskert i det som sendes til KI-en.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De gjeldende servertaggene kunne ikke leses – krever bekreftelse",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risikoen er vurdert som rød, eller kunne ikke vurderes pålitelig (f.eks. for lang) – krever alltid bekreftelse",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notatoppdateringer krever alltid bekreftelse",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Filskriving krever alltid bekreftelse",
@@ -638,7 +702,13 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
-    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte KI-leverandøren er ikke konfigurert. Velg en konfigurert leverandør.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
+    "CHAT_SESSION_NOT_FOUND": "Denne lagrede chatten finnes ikke lenger. Velg Prøv igjen for å koble til som vanlig uten å gjenoppta den.",
+    "SESSION_NOT_FOUND": "Denne økten er ikke lenger åpen. Åpne den på nytt fra serverlisten.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten",
+    "SSH_NO_COMMON_ALGORITHM": "Ingen SSH-algoritme er felles med serveren. Dens SSH-programvare er for gammel eller for streng. Oppdater den, eller aktiver moderne algoritmer."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",
@@ -721,13 +791,17 @@
     "openedLocally": "“{{name}}” åpnet lokalt – endringer tilbys for opplasting",
     "openLocallyFailed": "“{{name}}” kunne ikke åpnes lokalt: {{reason}}",
     "editUploaded": "Endringen i “{{name}}” lastet opp",
-    "editUploadFailed": "Endringen i “{{name}}” kunne ikke lastes opp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” lastet opp – {{count}} filer",
     "uploadFolderFailed": "Opplasting av mappen “{{name}}” mislyktes: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",
     "nothingToPaste": "Ingenting å lime inn: utklippstavlen inneholder ingen filer",
     "createFileDone": "Filen «{{name}}» er opprettet",
-    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}"
+    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}",
+    "chownDone": "Eier av “{{name}}” endret",
+    "chownRecursive": "Eier endret — {{count}} oppføringer i “{{name}}”",
+    "chownFailed": "Eier av “{{name}}” kunne ikke endres: {{reason}}",
+    "chownUnknownUser": "Eier av “{{name}}” ikke endret: ukjent bruker",
+    "chownUnknownGroup": "Eier av “{{name}}” ikke endret: ukjent gruppe"
   },
   "fileElevation": {
     "toggle": "Utvidede rettigheter",
@@ -741,6 +815,17 @@
     "opDelete": "Sletting",
     "opChmod": "Endring av tillatelser",
     "banner": "Utvidede rettigheter er aktive: alle filhandlinger i denne utforskeren kjøres som {{user}}.",
+    "bannerLogged": "Logges på serveren.",
+    "notice": {
+      "title": "Om utvidede rettigheter",
+      "intro": "Du leser og skriver nå filer som {{user}}. Endringer trer i kraft umiddelbart og kan ikke angres av appen.",
+      "loggedApp": "Hver endring logges i appens logg.",
+      "loggedAppAndServer": "Hver endring logges i appens logg og i serverens autentiseringslogg.",
+      "passwordless": "Sudo-regelen for sftp-server gir {{user}} tilgang uten passord til alt som kjører under denne innloggingen, ikke bare til appen.",
+      "alternative": "Hvis du jevnlig administrerer serveren som root, gjør en egen root-innlogging med nøkkel (PermitRootLogin prohibit-password) den tilgangen eksplisitt.",
+      "gotIt": "Forstått",
+      "dontShowAgain": "Ikke vis igjen for denne serveren"
+    },
     "deleteFileTitle": "Slette filen som {{user}}?",
     "deleteDirTitle": "Slette mappen som {{user}}?",
     "overwriteTitle": "Overskrive filen som {{user}}?",
@@ -762,7 +847,8 @@
     "close": "Lukk",
     "detail": "Detaljer: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo krever passord for sftp-server på denne serveren. Appen ber aldri om et sudo-passord.",
+      "passwordRequired": "sudo krever passord for sftp-server på denne serveren. Legg til sudoers-linjen nedenfor, eller lagre et sudo-passord i serverprofilen for å aktivere utvidede rettigheter.",
+      "wrongSudoPassword": "sudo avviste det lagrede sudo-passordet. Sjekk sudo-passordet i serverprofilen.",
       "notAllowed": "Denne SSH-påloggingen har ikke lov til å starte sftp-server via sudo uten passord.",
       "requireTty": "sudo nekter å kjøre uten terminal (“requiretty” i sudoers). Slå av requiretty for denne påloggingen, f.eks. med “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server ble ikke funnet på serveren. Oppgi stien i serverprofilen under “Avansert”.",
@@ -772,7 +858,8 @@
       "invalidUser": "Ugyldig målbruker.",
       "unsupported": "Den lokale serveren har ingen utvidet modus.",
       "checkFailed": "Sjekken av sudo-rettighetene mislyktes.",
-      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers)."
+      "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers).",
+      "disabledForServer": "Forhøyede rettigheter er slått av for denne serveren i serverprofilen."
     },
     "channelLost": "Utvidede rettigheter er avsluttet – den utvidede kanalen er ikke lenger aktiv.",
     "group": "Utvidede rettigheter",
@@ -780,7 +867,11 @@
     "otherUser": "Som en annen bruker …",
     "targetUser": "Målbruker",
     "targetUserHelp": "Kjører filleseren som denne brukeren via sudo. Standard: root.",
-    "confirm": "Utvid"
+    "confirm": "Utvid",
+    "opChown": "Endring av eier",
+    "chownNote": "Eieren endres som {{user}}.",
+    "idleSwitchedOff": "Forhøyede rettigheter slått av etter {{minutes}} minutter uten aktivitet",
+    "revokedByProfile": "Forhøyede rettigheter ble avsluttet — serverprofilen tillater dem ikke lenger."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -794,6 +885,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Ta med",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruker",
@@ -869,6 +962,8 @@
       "proxyJumpLocalPseudoServer": "peker til den lokale pseudoserveren"
     },
     "confirm": "Importer",
+    "confirmCount_one": "Importer {{count}} server",
+    "confirmCount_other": "Importer {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere opprettet, {{groups}} mapper, {{skipped}} konflikt(er) hoppet over.",
@@ -969,14 +1064,17 @@
       "hostKeyCheck": "Sjekk av vertsnøkkel",
       "authentication": "Autentisering",
       "sessionReady": "Økt opprettet",
-      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig"
+      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig",
+      "outdatedAlgorithms": "Utdaterte algoritmer",
+      "banner": "Serverbanner"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
       "failed": "mislyktes ({{code}})",
       "skipped": "hoppet over",
-      "failedReason": "mislyktes: {{reason}}"
+      "failedReason": "mislyktes: {{reason}}",
+      "warning": "advarsel"
     },
     "hostKeyResult": {
       "known": "kjent",
@@ -989,7 +1087,8 @@
       "privateKey": "Privat nøkkel",
       "agent": "SSH-agent",
       "certificate": "Sertifikat",
-      "identityFile": "Nøkkelfil"
+      "identityFile": "Nøkkelfil",
+      "keyboardInteractive": "Tastaturinteraktiv"
     },
     "detail": {
       "addresses": "Adresser: {{addresses}}",
@@ -998,7 +1097,9 @@
       "cipher": "Chiffer: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtatt, videre autentisering kreves",
-      "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)"
+      "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)",
+      "round": "Runde {{round}}",
+      "prompts": "Serverens spørsmål: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-tilkoblingen fikk tidsavbrudd",
@@ -1016,6 +1117,7 @@
     "parentDirectory": "Overordnet katalog",
     "newFolderButton": "+ Mappe",
     "fileActionsGroup": "Filhandlinger",
+    "directoryActions": "Mappehandlinger",
     "upload": "Last opp",
     "uploadDialogTitle": "Last opp fil(er)",
     "uploadFolder": "Last opp mappe",
@@ -1050,8 +1152,10 @@
       "name": "Navn",
       "size": "Størrelse",
       "permissions": "Tillatelser",
-      "modified": "Endret"
+      "modified": "Endret",
+      "owner": "Eier"
     },
+    "columnsMenu": "Vis eller skjul kolonner",
     "localEdit": {
       "uploading": "Laster opp “{{name}}”…",
       "changed": "“{{name}}” ble endret lokalt. Laste den opp til serveren?",
@@ -1059,8 +1163,7 @@
       "editing": "Redigerer “{{name}}” lokalt…",
       "end": "Avslutt redigering",
       "uploadTitle": "Laste opp lokale endringer?",
-      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Ny størrelse: {{size}}."
+      "remoteChanged": "Filen på serveren er endret siden nedlastingen – opplasting ville overskrive den andre endringen."
     },
     "deleteDialog": {
       "fileTitle": "Slette filen?",
@@ -1082,7 +1185,6 @@
       "conflictTitle": "Overskrive filer i mappen?",
       "conflictBody": "Opplasting av “{{name}}” ville overskrive disse {{count}} filene på serveren. Ingenting overskrives med mindre du bekrefter.",
       "summaryTitle": "Mappeopplasting: “{{name}}”",
-      "summary": "{{uploaded}} filer lastet opp, {{skipped}} hoppet over, {{failed}} mislyktes.",
       "notAttempted": "{{count}} filer ble ikke forsøkt fordi mappen deres ikke kunne opprettes.",
       "skipped": "Hoppet over",
       "failed": "Mislyktes",
@@ -1093,12 +1195,14 @@
         "unsupported": "ikke en vanlig fil eller mappe",
         "notGranted": "dekkes ikke av valget ditt",
         "overwriteNotConfirmed": "finnes på serveren, overskriving ikke bekreftet"
-      }
+      },
+      "uploaded": "Lastet opp"
     },
     "uploadConflict": {
       "title": "Overskrive filen?",
       "body": "finnes allerede på serveren.",
-      "noDiff": "Ingen tekstforskjell mulig (binærfil eller for stor). Nåværende størrelse: {{remoteSize}}, ny størrelse: {{localSize}}."
+      "currentSize": "Nåværende størrelse",
+      "newSize": "Ny størrelse"
     },
     "menu": {
       "download": "Last ned",
@@ -1114,8 +1218,10 @@
       "cut": "Klipp ut",
       "delete": "Slett",
       "newFolder": "Ny mappe",
-      "newFile": "Ny fil"
+      "newFile": "Ny fil",
+      "chown": "Endre eier…"
     },
+    "linkMarker": "symbolsk lenke",
     "properties": {
       "title": "Egenskaper",
       "name": "Navn",
@@ -1123,6 +1229,10 @@
       "type": "Type",
       "typeFolder": "Mappe",
       "typeFile": "Fil",
+      "typeLinkFolder": "Symbolsk lenke til en mappe",
+      "typeLinkFile": "Symbolsk lenke til en fil",
+      "typeLinkBroken": "Ødelagt symbolsk lenke",
+      "linkTarget": "Lenkemål",
       "size": "Størrelse",
       "permissionsSymbolic": "Tillatelser (symbolsk)",
       "permissionsNumeric": "Tillatelser (numerisk)",
@@ -1172,10 +1282,24 @@
       "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
       "permission": "Ingen tekstdiff mulig: med de nåværende rettighetene har du ikke lesetilgang til filen.",
       "other": "Ingen tekstdiff mulig: filen kunne ikke leses ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Endre eier",
+      "owner": "Bruker",
+      "group": "Gruppe",
+      "hint": "Skriv inn et navn eller et tall. En side du lar stå som den er, forblir uendret. Serveren avgjør om endringen er tillatt (vanligvis kan bare root endre eier).",
+      "recursive": "Bruk på innholdet",
+      "recursiveWarning": "— endrer eieren av ALLE filer og undermapper i denne mappen. Symbolske lenker følges ikke. Kan ikke angres."
+    },
+    "transferChown": "Endrer eier av {{name}}",
+    "stopProgress": "Fremdrift",
+    "noTextDiff": "Ingen tekstdiff mulig (binær fil eller for stor)."
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
+    "copyCode": "Kopier kode",
+    "codeCopied": "Kode kopiert",
+    "codeCopyFailed": "Kopiering mislyktes",
     "composerMore": "Flere inndatahandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
@@ -1199,12 +1323,17 @@
     "queued": "Sendes med neste forespørsel",
     "responseCancelled": "Svaret ble avbrutt.",
     "contextCompactedNotice": "Eldre deler av denne chatten ble oppsummert for å passe inn i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
+    "messageLabel": "Melding",
+    "headerProviderTooltip": "Leverandør: {{provider}}",
     "webResearchUnavailable": "Nettsøk er ikke tilgjengelig for denne leverandørkontoen (nettsøk er slått av der). Denne økten svarer uten nettsøk. For å slå det av permanent: Innstillinger → AI-leverandør → “Nettsøk”.",
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
     "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(avkortet)",
+    "outputMoreLines_one": "… {{count}} linje til",
+    "outputMoreLines_other": "… {{count}} linjer til",
+    "outputShowAll": "Vis alle",
+    "outputShowLess": "Vis færre",
     "fileWritten": "Filen «{{path}}» er skrevet.",
     "writtenWithSudoPassword": "Skrevet med det lagrede sudo-passordet.",
     "documentGenerated": "Dokument laget",
@@ -1282,7 +1411,18 @@
     "aiTab": "KI",
     "paneTabs": "Øktdeler",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enheten",
+    "paneSwitch": "Panelbryter",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
+    "extraKeys": {
+      "group": "Ekstra taster",
+      "up": "Pil opp",
+      "down": "Pil ned",
+      "left": "Pil venstre",
+      "right": "Pil høyre",
+      "pageUp": "Side opp",
+      "pageDown": "Side ned"
+    },
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",
     "reconnectGaveUp": "Tilkoblingen kunne ikke gjenopprettes."
@@ -1315,7 +1455,8 @@
       "body": "En språkmodell ({{model}}, ca. {{size}} MiB) lastes ned én gang fra {{source}}. Deretter kjører talegjenkjenningen helt på denne datamaskinen; lyd og tekst forlater den aldri.",
       "download": "Last ned",
       "cancel": "Avbryt",
-      "progress": "Nedlastingsfremdrift"
+      "progress": "Nedlastingsfremdrift",
+      "parakeetLicense": "Lisens: {{license}}"
     },
     "errors": {
       "noDevice": "Fant ingen mikrofon. Koble til en mikrofon og sjekk inndataenheten i systeminnstillingene.",
@@ -1331,7 +1472,8 @@
       "model": "Språkmodell",
       "models": {
         "base": "Base (ca. {{size}} MiB, standard)",
-        "small": "Small (ca. {{size}} MiB, mer presis, tregere)"
+        "small": "Small (ca. {{size}} MiB, mer presis, tregere)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (ca. {{size}} MiB, flerspråklig, rask; oppdager språket automatisk)"
       },
       "statusReady": "Lastet ned",
       "statusNotDownloaded": "Ikke lastet ned",
@@ -1339,7 +1481,8 @@
       "download": "Last ned",
       "delete": "Slett modell",
       "language": "Gjenkjenningsspråk",
-      "languageAuto": "Automatisk"
+      "languageAuto": "Automatisk",
+      "languageParakeetHint": "Parakeet oppdager språket automatisk; denne innstillingen gjelder for Whisper-modeller."
     }
   },
   "connectTab": {
@@ -1399,6 +1542,8 @@
     "import": {
       "title": "Gjenopprett fra sikkerhetskopi",
       "pickTitle": "Velg en sikkerhetskopifil",
+      "pickFailed": "Filen kunne ikke åpnes fra det valgte stedet.",
+      "chooseAgain": "Velg filen på nytt",
       "file": "Fil: {{name}}",
       "kind": "Hva som åpner denne sikkerhetskopien",
       "useCode": "Gjenopprettingskode",
@@ -1415,6 +1560,9 @@
       "file": "Sikkerhetskopi",
       "sessions": "Åpne økter som lukkes: {{count}}",
       "safety": "Dine nåværende data lagres først i {{dir}}. Serverne dine flyttes til en ny mappe kalt “Previous data” med dagens dato.",
+      "pickDirTitle": "Velg mappe for sikkerhetskopien",
+      "changeSafetyDir": "Endre…",
+      "changeSafetyDirFailed": "Mappen kunne ikke velges. Standardmappen beholdes.",
       "replace": "Erstatt data"
     },
     "counts": {
@@ -1439,5 +1587,58 @@
       "newerVersion": "Denne sikkerhetskopien er laget av en nyere versjon av Smart SSH. Oppdater appen og prøv igjen.",
       "failed": "Handlingen mislyktes. Ingenting ble endret."
     }
+  },
+  "errorBoundary": {
+    "title": "Noe gikk galt",
+    "body": "Smart SSH støtte på en uventet feil i grensesnittet. Last inn på nytt for å fortsette. Skjer det igjen, opprett en diagnostikkpakke under Innstillinger → Diagnostikk etter at du har lastet inn på nytt.",
+    "reload": "Last inn på nytt"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Denne serveren bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater serverens SSH-programvare hvis du kan.",
+    "outdatedAlgorithmsHop": "{{hop}} bruker utdaterte SSH-algoritmer ({{algorithms}}). Tilkoblingen er mindre sikker. Oppdater dens SSH-programvare hvis du kan."
+  },
+  "elevatedIdle": {
+    "label": "Slå av forhøyede rettigheter etter inaktivitet",
+    "minutes5": "5 minutter",
+    "minutes15": "15 minutter",
+    "minutes30": "30 minutter",
+    "minutes60": "60 minutter",
+    "never": "Aldri",
+    "hint": "Filleseren forlater den forhøyde modusen av seg selv etter så lang tid uten forhøyet aktivitet. En pågående operasjon teller som aktivitet."
+  },
+  "activities": {
+    "title": "Aktiviteter",
+    "buttonRunning": "Aktiviteter: {{running}} pågår",
+    "buttonFailed": "Aktiviteter: en aktivitet mislyktes",
+    "buttonDone": "Aktiviteter: ferdig",
+    "cancel": "Avbryt",
+    "cancelNamed": "Avbryt {{title}}",
+    "dismiss": "Lukk",
+    "dismissNamed": "Lukk {{title}}",
+    "succeeded": "Ferdig",
+    "cancelled": "Avbrutt",
+    "failed": "Mislyktes",
+    "inProgress": "Pågår",
+    "verifying": "Verifiserer",
+    "speechModelTitle": "Talemodell {{name}}",
+    "buttonInterrupted": "Aktiviteter: noen ble avbrutt",
+    "interrupted": "Avbrutt",
+    "resume": "Gjenoppta",
+    "resumeNamed": "Gjenoppta {{title}}",
+    "discard": "Forkast",
+    "discardNamed": "Forkast {{title}}",
+    "resumeFailed": "Kunne ikke gjenoppta.",
+    "quitTitle": "Avslutte mens aktiviteter pågår?",
+    "quitBody": "Disse aktivitetene pågår fortsatt og blir stoppet:",
+    "quitResumeHint": "Avbrutte nedlastinger kan gjenopptas neste gang du starter appen.",
+    "quitAnyway": "Avslutt likevel",
+    "keepRunning": "La dem fortsette",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbrutt",
+    "summaryInterrupted_other": "{{count}} avbrutt",
+    "summaryFailed_one": "{{count}} mislyktes",
+    "summaryFailed_other": "{{count}} mislyktes",
+    "remaining": "{{time}} igjen"
   }
 }

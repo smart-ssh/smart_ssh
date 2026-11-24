@@ -1,6 +1,4 @@
-//! Testsuite für die Filter-Engine.
-//!
-//! Tests 1-12 setzen Zeile für Zeile den Testfall-Katalog aus
+//! Testsuite für die Filter-Engine. Tests 1-12 setzen Zeile für Zeile den Testfall-Katalog aus
 //! `docs/specs/0002-filter-engine-spec.md`, Abschnitt 6 um (Testname
 //! referenziert die Tabellenzeile in einem Kommentar). Danach folgen
 //! zusätzliche Tests für Groß-/Kleinschreibung, Whitespace-Varianten,
@@ -27,12 +25,13 @@ impl InMemoryPolicyStore {
 
 #[async_trait]
 impl PolicyStore for InMemoryPolicyStore {
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+    async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
         self.rules
             .iter()
             .filter(|rule| scope_applies(&rule.scope, scope))
             .cloned()
-            .collect()
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
@@ -331,7 +330,7 @@ async fn test_multibyte_command_over_byte_limit_forces_confirm_despite_allow() {
 /// normal aus, ein Byte darüber geben beide auf — dieselbe Grenze für beide.
 #[tokio::test]
 async fn test_byte_limit_boundary_is_shared_by_filter_and_classifier() {
-    use crate::risk::{RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+    use crate::risk::{RiskLevel, RuleBasedRiskClassifier};
 
     let eng = engine(allow_iptables());
 
@@ -1526,126 +1525,7 @@ fn test_spec_0077_t7_hard_blacklist_patterns_all_compile() {
 
 // --- Spec 0077, 3.2.2/6.3: Auswertung mit ungültigen Mustern ---------------
 
-/// Aufzeichnung der `tracing`-Ereignisse dieser Testsuite.
-///
-/// Dasselbe Muster wie `ai_providers::test_support` (dort steht die
-/// ausführliche Begründung; Spec 0086, A4.2: hier stand zusätzlich der Name
-/// eines `app-shell`-Moduls, das es nicht gibt): **ein** globaler Subscriber
-/// pro Testprozess
-/// (`Once`), der in einen thread-lokalen Puffer schreibt — mehrere
-/// `set_global_default`-Aufrufe im selben Testbinary gewinnen sonst nur beim
-/// ersten, und die übrigen Tests sähen nie ihre eigenen Zeilen.
-///
-/// **Spec 0094, §7:** Aufgezeichnet wird auf `TRACE`, nicht mehr nur auf
-/// `ERROR`. Vorher begrenzte `with_max_level(Level::ERROR)` die Aufnahme,
-/// damit T-A10 (eine Aussage über ERROR-Ereignisse) nicht versehentlich das
-/// INFO-Ereignis von `evaluate_explained` mitlas. Spec 0094 braucht
-/// genau die andere Richtung: Aussagen darüber, was auf `info` **nicht** und
-/// auf `debug` **doch** steht, sind nur möglich, wenn beide Level im Puffer
-/// landen. Gefiltert wird deshalb beim Lesen —
-/// [`recorded_error_events`] für T-A10, [`lines_at_info_or_above`] und
-/// [`debug_lines`] für T1–T3.
-mod log_capture {
-    thread_local! {
-        static BUFFER: std::cell::RefCell<Vec<u8>> =
-            const { std::cell::RefCell::new(Vec::new()) };
-    }
-
-    #[derive(Clone, Default)]
-    pub(super) struct Writer;
-
-    impl std::io::Write for Writer {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            BUFFER.with(|b| b.borrow_mut().extend_from_slice(buf));
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Writer {
-        type Writer = Writer;
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
-
-    /// Installiert den Subscriber einmal pro Testprozess und leert den
-    /// Puffer dieses Threads. Jeder Test ruft das als Erstes auf.
-    pub(super) fn start_recording() {
-        static INIT: std::sync::Once = std::sync::Once::new();
-        INIT.call_once(|| {
-            let subscriber = tracing_subscriber::fmt()
-                .json()
-                .with_max_level(tracing::Level::TRACE)
-                .with_writer(Writer)
-                .finish();
-            // `let _ =`: schlägt nur fehl, wenn schon ein globaler Default
-            // gesetzt ist — dann ist es dank `Once` bereits dieser hier.
-            let _ = tracing::subscriber::set_global_default(subscriber);
-        });
-        BUFFER.with(|b| b.borrow_mut().clear());
-    }
-
-    /// Alle aufgezeichneten Ereignisse, eine JSON-Zeile je Ereignis, über
-    /// **alle** Level (s. `with_max_level(TRACE)` oben).
-    pub(super) fn recorded_lines() -> Vec<String> {
-        BUFFER.with(|b| {
-            String::from_utf8(b.borrow().clone())
-                .expect("Log ist kein UTF-8")
-                .lines()
-                .map(str::to_string)
-                .collect()
-        })
-    }
-
-    /// Nur die ERROR-Ereignisse (Spec 0077, T-A10). Vor Spec 0094 ergab sich
-    /// das aus `with_max_level(ERROR)`; jetzt wird beim Lesen gefiltert,
-    /// damit dieselbe Aussage gilt, obwohl der Puffer alle Level trägt.
-    pub(super) fn recorded_error_events() -> Vec<String> {
-        lines_at_levels(&["ERROR"])
-    }
-
-    /// Spec 0094, A1: die Zeilen, über die A1 eine Aussage macht — `info`,
-    /// `warn`, `error`. `debug`/`trace` bleiben draußen, denn dort ist
-    /// Inhalt laut A2 ausdrücklich erlaubt.
-    pub(super) fn lines_at_info_or_above() -> Vec<String> {
-        lines_at_levels(&["INFO", "WARN", "ERROR"])
-    }
-
-    /// Spec 0094, A2: die `debug`-Zeilen, die den Inhalt tragen.
-    pub(super) fn debug_lines() -> Vec<String> {
-        lines_at_levels(&["DEBUG"])
-    }
-
-    /// Filtert nach dem `level`-Feld der JSON-Zeile. Das Feld steht im
-    /// JSON-Format von `tracing-subscriber` immer als `"level":"INFO"` o. Ä.
-    /// da — bewusst wörtlich gesucht statt die Zeile zu parsen: ein
-    /// Parse-Fehler dürfte hier nie stillschweigend zu „keine Zeile, also
-    /// kein Treffer" führen, denn das wäre bei einer Abwesenheits-Aussage
-    /// ein falsches Grün.
-    fn lines_at_levels(levels: &[&str]) -> Vec<String> {
-        let lines = recorded_lines();
-        for line in &lines {
-            assert!(
-                ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
-                    .iter()
-                    .any(|l| line.contains(&format!("\"level\":\"{l}\""))),
-                "Log-Zeile ohne erkennbares level-Feld — der Filter würde sie \
-                 stillschweigend übergehen: {line}"
-            );
-        }
-        lines
-            .into_iter()
-            .filter(|line| {
-                levels
-                    .iter()
-                    .any(|l| line.contains(&format!("\"level\":\"{l}\"")))
-            })
-            .collect()
-    }
-}
+use crate::log_capture;
 
 /// Spec 0094, §7: Selbstprüfung der Aufzeichnung. Die Aussagen von T1–T3
 /// („auf `info` kein Treffer, auf `debug` schon") sind nur belastbar, wenn
@@ -2464,8 +2344,8 @@ struct SwappableStore(std::sync::Mutex<Vec<Rule>>);
 
 #[async_trait]
 impl PolicyStore for SwappableStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        self.0.lock().unwrap().clone()
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(self.0.lock().unwrap().clone())
     }
 }
 
@@ -2496,7 +2376,7 @@ async fn test_issue_260_invalid_pattern_is_logged_once_per_rule_and_pattern() {
     struct Shared(Arc<SwappableStore>);
     #[async_trait]
     impl PolicyStore for Shared {
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
             self.0.rules_for(scope).await
         }
     }
@@ -2961,7 +2841,7 @@ async fn test_issue_487_dedup_set_is_cleared_when_full() {
     struct Shared(Arc<SwappableStore>);
     #[async_trait]
     impl PolicyStore for Shared {
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
             self.0.rules_for(scope).await
         }
     }
@@ -3292,3 +3172,4 @@ mod non_writing_redirections {
         assert_deny(&eng.evaluate("rm -rf / 2>/dev/null", &ctx("s", &[])).await);
     }
 }
+mod unavailable;

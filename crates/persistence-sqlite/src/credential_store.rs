@@ -6,19 +6,10 @@
 //! [`CredentialStore`] ist **synchron** (`fn get`/`set`/`delete`, Spec 0003)
 //! und wird aus asynchronen Tauri-Kommandos, aus dem Startablauf und aus der
 //! Auflösung der SSH-Zugangsdaten heraus aufgerufen. `sqlx` ist
-//! ausschließlich asynchron. Die Brücke dazwischen ist gemessen worden,
-//! nicht geraten:
-//!
-//! | Aufrufort | `Handle::try_current()` | Weg |
-//! |---|---|---|
-//! | Startablauf (`build_app_state`, außerhalb jeder Runtime) | `Err` | `handle.block_on(..)` direkt |
-//! | Tauri-Kommando (Task auf der Multi-Thread-Runtime) | `Ok` | `block_in_place(\|\| handle.block_on(..))` |
-//! | `spawn_blocking`-Thread | `Ok` | ebenso |
-//!
-//! `block_in_place` meldet der Runtime, dass dieser Arbeitsthread gleich
-//! blockiert, und lässt sie die übrigen Tasks auf andere Threads schieben.
-//! Ohne diesen Schritt würde `block_on` innerhalb eines Runtime-Kontexts
-//! panicken („Cannot block the current thread from within a runtime").
+//! ausschließlich asynchron. Die Brücke dazwischen ist
+//! [`crate::runtime_bridge::block_on_io`] (Issue #898); dort stehen die drei
+//! Aufrufarten (außerhalb einer Runtime, Multi-Thread, `current_thread`) und
+//! warum keine davon panickt.
 //!
 //! **Kein zweiter Pool, keine zweite Verbindung, keine Trait-Änderung.** Der
 //! Store teilt sich den einen Pool (`max_connections(1)`) mit allen anderen
@@ -38,20 +29,11 @@
 //! wieder frei. Die Transaktionen in `store.rs`/`ai_provider_store.rs` rufen
 //! keinen `CredentialStore` auf.
 //!
-//! # Die eine verbleibende Annahme, und wie sie festgenagelt ist
-//!
-//! `block_in_place` **panickt** auf einer `current_thread`-Runtime
-//! (gemessen: „can call blocking only when running on the multi-threaded
-//! runtime"). Tauris Runtime ist `MultiThread` (ebenfalls gemessen, und von
-//! einem Test in `app-shell` festgehalten). Damit ein künftiger Wechsel
-//! nicht als Panic vor dem ersten Fenster endet, prüft [`Self::block_on`]
-//! die Variante selbst und gibt einen [`CredentialError::Backend`] zurück
-//! statt zu panicken: sichtbar scheitern, nicht abstürzen.
 
 use secrecy::{ExposeSecret, SecretString};
 use sqlx::sqlite::SqlitePool;
 use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
-use tokio::runtime::{Handle, RuntimeFlavor};
+use tokio::runtime::Handle;
 
 use ssh_manager_core::profiles::{
     CredentialError, CredentialRef, CredentialResult, CredentialStore,
@@ -77,34 +59,16 @@ impl SqliteCredentialStore {
         }
     }
 
-    /// Die Brücke aus dem Modul-Kommentar — der **einzige** Ort dieser
-    /// Crate, an dem synchroner Code auf asynchronen trifft.
-    fn block_on<F: std::future::Future>(&self, fut: F) -> CredentialResult<F::Output> {
-        let Ok(entered) = Handle::try_current() else {
-            // Kein Runtime-Kontext (Startablauf): direkt blockieren.
-            return Ok(self.handle.block_on(fut));
-        };
-        // **Die betretene Runtime entscheidet, nicht die eigene**
-        // (spec-reviewer Runde 1): `block_in_place` panickt an der Runtime,
-        // in deren Kontext der Aufruf steht. Hier `self.handle` zu prüfen
-        // hieße, Tauris Variante zu messen und dann an einer anderen zu
-        // panicken — genau die Zusicherung „sichtbar scheitern, nicht
-        // abstürzen" wäre damit nicht erfüllt, und jeder `#[tokio::test]`
-        // in der Standard-Variante stürzte ab statt zu scheitern.
-        if entered.runtime_flavor() != RuntimeFlavor::MultiThread {
-            // Kann im Betrieb nicht eintreten (Test in `app-shell` nagelt
-            // Tauris Variante fest); dass dieser Zweig trotzdem greift und
-            // **nicht** panickt, hält
-            // `tests_credential_store::test_a9_a_current_thread_caller_fails_visibly_instead_of_panicking`
-            // fest. Falls doch:
-            // ein sichtbarer Fehler statt eines Panics vor dem ersten
-            // Fenster. Ohne Nutzlast aus der Bibliothek, ohne Referenz.
-            return Err(CredentialError::Backend(
-                "Secret-Speicher: die Laufzeitumgebung erlaubt keinen blockierenden Zugriff"
-                    .to_string(),
-            ));
-        }
-        Ok(tokio::task::block_in_place(|| self.handle.block_on(fut)))
+    /// Die Brücke aus dem Modul-Kommentar — jetzt
+    /// [`crate::runtime_bridge::block_on_io`] (Issue #898), dort steht auch
+    /// die Fallunterscheidung. Auf einer `current_thread`-Runtime läuft die
+    /// Abfrage auf einem Hilfsthread, statt mit einem Fehler zu enden.
+    fn run_blocking<F>(&self, fut: F) -> CredentialResult<F::Output>
+    where
+        F: std::future::Future + Send,
+        F::Output: Send,
+    {
+        Ok(crate::runtime_bridge::block_on_io(&self.handle, fut))
     }
 
     /// Die Fehlerart als feste Zeichenkette — **ohne** den Fehlertext.
@@ -177,7 +141,7 @@ impl CredentialStore for SqliteCredentialStore {
         let pool = self.pool.clone();
         let key = r.as_str().to_string();
         let row: Option<String> = self
-            .block_on(async move {
+            .run_blocking(async move {
                 sqlx::query_scalar::<_, String>("SELECT value FROM secrets WHERE ref = ?")
                     .bind(key)
                     .fetch_optional(&pool)
@@ -197,7 +161,7 @@ impl CredentialStore for SqliteCredentialStore {
         // gebundener Parameter in die Anweisung, nicht in einen `format!`.
         let value = value.expose_secret().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        self.block_on(async move {
+        self.run_blocking(async move {
             // Überschreiben ist erlaubt und ersetzt den Wert — dasselbe
             // Verhalten wie `set_password` im Schlüsselbund.
             sqlx::query(
@@ -222,7 +186,7 @@ impl CredentialStore for SqliteCredentialStore {
         // Idempotent: Ein `DELETE` auf eine nicht vorhandene Zeile ist in
         // SQL kein Fehler, und das ist hier genau das geforderte Verhalten
         // (A9) — `KeyringCredentialStore` behandelt `NoEntry` ebenso.
-        self.block_on(async move {
+        self.run_blocking(async move {
             sqlx::query("DELETE FROM secrets WHERE ref = ?")
                 .bind(key)
                 .execute(&pool)

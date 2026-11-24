@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 /// Eindeutige Kennung eines Servers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ServerId(pub Uuid);
 
 impl ServerId {

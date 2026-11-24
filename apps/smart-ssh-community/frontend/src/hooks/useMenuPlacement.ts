@@ -1,7 +1,7 @@
 // Issue #627: places a `position: fixed` menu fully inside the window.
 // Use it for every new menu, dropdown or popup (see menuPlacement.ts).
 import { type CSSProperties, type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { type MenuRect, placeMenu } from "../menuPlacement";
+import { type MenuRect, placeMenu } from "../lib/menuPlacement";
 import { useIsNarrow } from "./useIsNarrow";
 
 /** A viewport point, an element, or a function returning either (or null). */

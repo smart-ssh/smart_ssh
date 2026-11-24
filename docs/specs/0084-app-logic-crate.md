@@ -31,15 +31,23 @@ er erreichbar ist.
 
 **A2 — Kein erhöhter Kanal überlebt seine Sitzung.**
 1. Das Entfernen einer Sitzung und ihres Kanals geschieht an **einer**
-   Stelle der Hülle, die beim Trennen aufgerufen wird; außer ihr und Tests
-   entfernt nichts Sitzungen. Sie wartet nicht auf den Transport der
-   Sitzung; das Trennen des Transports bleibt danach beim Trennen. Die
-   Sitzung wird vor dem Löschen des Zuordnungs-Eintrags oder unter
-   derselben Sperre entfernt.
+   Stelle der Hülle; außer ihr und Tests entfernt nichts Sitzungen. Sie
+   wartet nicht auf den Transport der Sitzung. Die Sitzung wird vor dem
+   Löschen des Zuordnungs-Eintrags oder unter derselben Sperre entfernt.
+   Diese Stelle ist Teil des **einen öffentlichen Schließwegs** (Issue
+   #816), der eine Sitzung vollständig schließt: erhöhter Kanal
+   widerrufen, lokale Pfadfreigaben entfernt, wartende Bestätigung
+   abgelehnt, laufender KI-Befehl abgebrochen und abgewartet (höchstens
+   2 s), Transport getrennt (höchstens 2 s), Statusereignis „getrennt"
+   gesendet, Editier-Kopien entfernt. Trennen, Backup-Import und jede
+   einbettende App-Crate bzw. Erweiterung schließen Sitzungen nur darüber;
+   es gibt keinen zweiten Weg, der nur einen Teil davon tut. Das Trennen
+   hängt danach nur noch eigene Arbeit an (Chat-Sitzung beenden,
+   Notiz-Vorschlag).
 2. Aktivieren trägt den Kanal nur ein, wenn die Sitzung zu diesem Zeitpunkt
    noch existiert; Prüfung und Eintrag geschehen unter derselben Sperre, unter
    der auch das Entfernen (A2.1) den Eintrag löscht. Sonst endet der Befehl
-   mit dem Fehler „Session nicht gefunden", und der geöffnete Kanal wird
+   mit dem Fehlercode `SESSION_NOT_FOUND` (übersetzter Hinweistext), und der geöffnete Kanal wird
    verworfen.
 3. Ein Kanal ist nur für die Sitzung erreichbar, für die er aktiviert
    wurde, nicht für eine andere Sitzung zum selben Server.
@@ -117,12 +125,12 @@ Logik. Wo ein Modul beides mischte, gilt:
   in B lässt A aktiv.
 - **T8** Wettlauf: Aktivieren ist nach den Proben, vor dem Eintrag
   angehalten; die Sitzung wird entfernt; danach läuft das Aktivieren weiter.
-  Ergebnis: „Session nicht gefunden", kein Eintrag in der Zuordnung.
+  Ergebnis: Fehlercode `SESSION_NOT_FOUND`, kein Eintrag in der Zuordnung.
   **T8b:** dasselbe, während das Entfernen zwischen Sitzung und Eintrag
   steht.
 - **T9** Deaktivieren bei nicht aktivem Kanal und für eine unbekannte
   Sitzung: kein Absturz; „nicht aktiv" für eine bekannte Sitzung ohne
-  Kanal, „Session nicht gefunden" für eine unbekannte.
+  Kanal, Fehlercode `SESSION_NOT_FOUND` für eine unbekannte.
 - **T10** Kanal von einem Befehl festgehalten, Deaktivieren, danach
   scheitert der Zugriff. **T10b** dasselbe mit Neu-Aktivieren für einen
   anderen Nutzer. **T10c** dasselbe mit Entfernen der Sitzung.
@@ -131,8 +139,9 @@ Logik. Wo ein Modul beides mischte, gilt:
 
 - Dass KI und MCP den Kanal nicht erreichen, tragen Signaturen und
   Crate-Grenze; T5/T5b scheitern nur, wenn ein solcher Weg entsteht.
-- Die Zusage, dass nur eine Stelle Sitzungen entfernt (A2.1), ist per
-  Suche gesichert, nicht vom Compiler.
+- Die Zusage, dass nur eine Stelle Sitzungen entfernt (A2.1), sichert ein
+  Wächtertest, der die Quelltexte nach Aufrufen durchsucht (Selbsttest mit
+  eingepflanztem Aufruf), nicht der Compiler.
 
 ## 9. Klarstellungen
 

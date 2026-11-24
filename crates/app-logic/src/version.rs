@@ -26,6 +26,7 @@ pub fn version_with_hash(version: &str) -> String {
 /// Über-Dialog, Titelzeile, Startup-Log und Diagnosepaket sichtbar.
 /// Serialisiert als `"Dev"`/`"Release"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum BuildType {
     Dev,
     Release,

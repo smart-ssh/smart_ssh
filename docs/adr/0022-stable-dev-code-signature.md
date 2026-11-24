@@ -1,7 +1,7 @@
 # 0022-stable-dev-code-signature
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

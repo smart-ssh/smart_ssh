@@ -1,6 +1,9 @@
 # ADR 0098 — Die Entsperrmaske, der Ausweg nach drei Versuchen und was dabei offen blieb
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0101 (A3, A5, A13, A16–A18, A20, §7 T14, Klarstellungen 9,
 10a/10b/10e, 11), ADR 0095 §7/§8, ADR 0096 §5, ADR 0097 §4
 

@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hostkey-port-a"
+networks = ["hostkey-net"]
+publish = true

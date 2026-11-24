@@ -1,6 +1,9 @@
 # ADR 0109 — Eine eigene MCP-Sitzung je Server und MCP-Client
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0104, Spec 0017 (Abschnitt 3), Spec 0028 (Abschnitt 9a),
 Spec 0040 (Abschnitt 4), Spec 0057 (Abschnitt 2.1), Issue #50
 

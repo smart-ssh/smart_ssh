@@ -6,7 +6,8 @@
 //! `redactor_property` means the live redactor redacts less than before.
 //! It is compiled under `cfg(test)` only and is not reachable from
 //! production code.
-#![allow(dead_code, clippy::all)]
+#![expect(dead_code, reason = "test-only reference; not every helper used")]
+#![expect(clippy::too_many_lines, reason = "frozen test-only reference copy")]
 
 use regex::Regex;
 

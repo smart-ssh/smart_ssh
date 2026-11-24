@@ -1,6 +1,9 @@
 # ADR 0115 — SSH-Zeitgrenzen je Phase und je Hop
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0069 (Teil A3, §5), Issue #97; löst den in ADR 0062 §3
 festgehaltenen, bewusst nicht behobenen Fund „10 s umschließen auch die
 Anmeldung und die ganze Hop-Kette" ab.

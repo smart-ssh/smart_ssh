@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "net-restart"
+networks = ["net-net"]
+publish = true

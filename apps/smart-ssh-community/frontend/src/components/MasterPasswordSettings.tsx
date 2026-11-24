@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { characterCount } from "../passwordLength";
+import { characterCount } from "../lib/passwordLength";
 import {
   changeMasterPassword,
   commandErrorCode,
-  commandErrorMessage,
   getMasterPasswordMode,
   setUpMasterPassword,
   switchToOsKeychain,
-} from "../api";
-import { translateErrorCode } from "../errorCodes";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon, StatusSquare } from "./ui";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
  * lehnt mit `MASTER_PASSWORD_REJECTED` ab; hier bleibt nur der Knopf aus. */
@@ -77,7 +76,7 @@ export function MasterPasswordSettings() {
   useEffect(() => {
     getMasterPasswordMode()
       .then(setMode)
-      .catch((err: unknown) => setError(messageFor(t, err)));
+      .catch((err: unknown) => setError(commandErrorText(t, err)));
   }, [t]);
 
   const clearSecrets = () => {
@@ -97,7 +96,7 @@ export function MasterPasswordSettings() {
       onDone();
       setMode(await getMasterPasswordMode());
     } catch (err) {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
       throw err;
     } finally {
       setBusy(false);
@@ -134,10 +133,10 @@ export function MasterPasswordSettings() {
   return (
     <section className="space-y-6">
       <div>
-        <h4 className="font-heading mb-1 text-sm font-semibold tracking-wide text-slate-200">
+        <h4 className="text-label mb-1">
           {t("masterPassword.modeHeading")}
         </h4>
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-fg-muted">
           {mode === null
             ? t("common.loading")
             : mode === "password"
@@ -148,7 +147,7 @@ export function MasterPasswordSettings() {
 
       {mode === "keychain" && (
         <form
-          className="space-y-3 border-t border-slate-700 pt-4"
+          className="space-y-3 border-t border-border pt-4"
           onSubmit={(e) => {
             e.preventDefault();
             const chosen = password;
@@ -167,10 +166,10 @@ export function MasterPasswordSettings() {
             ).catch(() => clearSecrets());
           }}
         >
-          <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+          <h4 className="text-label">
             {t("masterPassword.setUpHeading")}
           </h4>
-          <p className="text-sm text-slate-300">{t("masterPassword.setUpIntro")}</p>
+          <p className="text-sm text-fg-muted">{t("masterPassword.setUpIntro")}</p>
           <PasswordField
             label={t("masterPassword.newPasswordLabel")}
             value={password}
@@ -182,19 +181,19 @@ export function MasterPasswordSettings() {
             onChange={setRepeated}
           />
           {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
-            <p role="alert" className="text-sm text-amber-300">
+            <p role="alert" className="text-sm text-warning-fg-soft">
               {t("masterPassword.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
             </p>
           )}
           {repeated.length > 0 && password !== repeated && (
-            <p role="alert" className="text-sm text-amber-300">{t("masterPassword.passwordsDiffer")}</p>
+            <p role="alert" className="text-sm text-warning-fg-soft">{t("masterPassword.passwordsDiffer")}</p>
           )}
-          <label className="flex items-start gap-2 text-sm text-slate-200">
+          <label className="flex items-start gap-3 text-sm text-fg-soft narrow:min-h-11">
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1"
+              className="mt-1 h-4 w-4"
             />
             {t("masterPassword.noRecoveryWarning")}
           </label>
@@ -207,7 +206,7 @@ export function MasterPasswordSettings() {
       {mode === "password" && (
         <>
           <form
-            className="space-y-3 border-t border-slate-700 pt-4"
+            className="space-y-3 border-t border-border pt-4"
             onSubmit={(e) => {
               e.preventDefault();
               const currentPassword = current;
@@ -222,7 +221,7 @@ export function MasterPasswordSettings() {
               ).catch(() => clearSecrets());
             }}
           >
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+            <h4 className="text-label">
               {t("masterPassword.changeHeading")}
             </h4>
             <PasswordField
@@ -250,11 +249,11 @@ export function MasterPasswordSettings() {
           </Button>
           </form>
 
-          <div className="space-y-3 border-t border-slate-700 pt-4">
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+          <div className="space-y-3 border-t border-border pt-4">
+            <h4 className="text-label">
               {t("masterPassword.switchHeading")}
             </h4>
-            <p className="text-sm text-slate-300">{t("masterPassword.switchIntro")}</p>
+            <p className="text-sm text-fg-muted">{t("masterPassword.switchIntro")}</p>
             <PasswordField
               label={t("masterPassword.confirmPasswordLabel")}
               value={switchCurrent}
@@ -274,6 +273,8 @@ export function MasterPasswordSettings() {
         <DialogFrame
           layer="app"
           size="sm"
+          tone="danger"
+          icon={<Icon name="warn" />}
           title={t("masterPassword.anotherKeyTitle")}
           onClose={() => {
             setAskAboutAnotherKey(false);
@@ -304,13 +305,15 @@ export function MasterPasswordSettings() {
       {error && (
         <p
           role="alert"
-          className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+          className="flex items-center gap-2 border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
         >
+          <StatusSquare tone="danger" />
           {error}
         </p>
       )}
       {done && (
-        <p className="rounded border border-emerald-800 bg-emerald-950 px-3 py-2 text-sm text-emerald-200">
+        <p className="flex items-center gap-2 border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-fg-softer">
+          <StatusSquare tone="success" />
           {done}
         </p>
       )}
@@ -346,9 +349,3 @@ function PasswordField({
   );
 }
 
-function messageFor(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-}

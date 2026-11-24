@@ -1,19 +1,19 @@
 //! Spec 0008/0057/0058: Notizen (Server/Gruppe, Kürzungs-Vorschlag) — Teil
 //! der Spec-0083-Aufteilung von `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
-use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::profiles::{
     effective_notes, record_revision, GroupId, NoteEditor, NoteTarget,
 };
 use ssh_manager_core::shared::ServerId;
 
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::ai_provider_factory::build_ai_provider_from_config;
+use app_logic::ai_provider_factory::build_ai_provider_from_config_async;
 use app_logic::dto::NoteRevisionDto;
-use app_logic::error::{secret_store_error, CommandResult};
+use app_logic::error::{secret_store_error, CommandResult, StoreResultExt};
 use app_logic::orchestration::execute_note_shrink_request;
 use app_logic::state::{AppState, SessionId};
 
@@ -28,7 +28,11 @@ pub async fn update_group_notes(
     content: String,
 ) -> CommandResult<()> {
     let revision = record_revision(NoteTarget::Group(id), content, NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -39,7 +43,11 @@ pub async fn update_server_notes(
     content: String,
 ) -> CommandResult<()> {
     let revision = record_revision(NoteTarget::Server(id), content, NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -54,6 +62,29 @@ pub async fn update_server_notes(
 #[tauri::command]
 pub async fn large_note_dialog_threshold_chars() -> CommandResult<u32> {
     Ok(app_logic::orchestration::LARGE_NOTE_DIALOG_THRESHOLD_CHARS as u32)
+}
+
+/// Builds the provider for the note-shrink side call (issue #1246: through
+/// the registered decorators).
+pub(crate) async fn build_note_shrink_provider(
+    state: &AppState,
+    config: &persistence_sqlite::AiProviderConfig,
+) -> Result<
+    (
+        Box<dyn ssh_manager_core::ai::AiProvider>,
+        std::sync::Arc<ai_providers::ProviderBudgetGuard>,
+    ),
+    ssh_manager_core::profiles::CredentialError,
+> {
+    // Issue #162: note side call, never web tools.
+    build_ai_provider_from_config_async(
+        &state.rate_limit_registry,
+        state.credential_store.clone(),
+        config,
+        false,
+        &state.ai_provider_decorators,
+    )
+    .await
 }
 
 /// Spec 0057, §4.2 (Etappe 4): "Ja, zusammenfassen" — ausgelöst vom
@@ -86,13 +117,9 @@ pub async fn request_note_shrink(
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
     // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
-        &state.rate_limit_registry,
-        state.credential_store.as_ref(),
-        &active_config,
-        false,
-    )
-    .map_err(secret_store_error)?;
+    let (ai_provider, ai_provider_budget) = build_note_shrink_provider(&state, &active_config)
+        .await
+        .map_err(secret_store_error)?;
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
     // spec-reviewer-Fund (Review dieses Schritts): derselbe zusätzliche
@@ -104,20 +131,27 @@ pub async fn request_note_shrink(
     // erfasst. Kein hinterlegtes Passwort ist kein harter Fehler; ein
     // Lesefehler des Schlüsselbunds wird protokolliert (Issue #36, s.
     // `read_sudo_password_for_redaction`).
-    let scope =
-        super::connect::extension_scope(&app, state.profile_store.as_ref(), server_id).await;
-    let extension_secrets = app_logic::session_extension::known_secrets(
-        state.session_extension.as_deref(),
-        scope.as_ref(),
-    );
-    let redactor: Box<dyn OutputRedactor> = app_logic::server_redaction::server_redactor(
-        state.credential_store.as_ref(),
+    // Issue #1057: same lookup as `connect()`; a failed sudo read or scope
+    // lookup keeps the known secrets and flags the request "incomplete".
+    let local_tags = app_logic::dto::is_local(server_id)
+        .then(|| crate::local_server::synthetic_server(&app).tags);
+    let sudo = app_logic::server_redaction::read_sudo_password_checked_async(
+        state.credential_store.clone(),
         server_id,
-        &extension_secrets,
-    );
+    )
+    .await;
+    let (redactor, redaction_incomplete) =
+        app_logic::session_extension::redactor_for_sessionless_request(
+            state.profile_store.as_ref(),
+            sudo,
+            state.session_extension.as_deref(),
+            server_id,
+            local_tags,
+        )
+        .await;
 
     let language = crate::ui_language::session_prompt_language(&app);
-    tokio::spawn(async move {
+    crate::background_tasks::app_scope(&app).spawn("note-shrink-request", async move {
         let state = app.state::<AppState>();
         let session_id: SessionId = Uuid::new_v4();
         // Spec 0058, Teil 2: derselbe `is_local`-Verzweigungs-Idiom wie
@@ -126,40 +160,34 @@ pub async fn request_note_shrink(
         // eine grundsätzlich andere Persistenz (`local_server::save_notes`
         // statt `ProfileStore::record_note_revision`, s. `orchestration::
         // NoteShrinkTarget`-Doc-Kommentar).
-        if app_logic::dto::is_local(server_id) {
-            let target = crate::local_server::LocalNoteShrinkTarget { app: app.clone() };
-            execute_note_shrink_request(
-                session_id,
-                server_id,
-                ai_provider.as_ref(),
-                &ai_provider_budget,
-                redactor.as_ref(),
-                &TauriEventEmitter(app.clone()),
-                &target,
-                &state.pending_action_confirmations,
-                language,
-            )
-            .await;
-        } else {
-            let target = app_logic::orchestration::ProfileStoreNoteShrinkTarget {
-                profile_store: state.profile_store.as_ref(),
-                server_id,
-                provider_label,
-                model,
+        let target: Box<dyn app_logic::orchestration::NoteShrinkTarget + '_> =
+            if app_logic::dto::is_local(server_id) {
+                Box::new(crate::local_server::LocalNoteShrinkTarget { app: app.clone() })
+            } else {
+                Box::new(app_logic::orchestration::ProfileStoreNoteShrinkTarget {
+                    profile_store: state.profile_store.as_ref(),
+                    server_id,
+                    provider_label,
+                    model,
+                })
             };
-            execute_note_shrink_request(
-                session_id,
-                server_id,
-                ai_provider.as_ref(),
-                &ai_provider_budget,
-                redactor.as_ref(),
-                &TauriEventEmitter(app.clone()),
-                &target,
-                &state.pending_action_confirmations,
-                language,
-            )
-            .await;
-        }
+        app_logic::session_extension::notify_note_request_redaction_incomplete(
+            &TauriEventEmitter(app.clone()),
+            server_id,
+            redaction_incomplete,
+        );
+        execute_note_shrink_request(
+            session_id,
+            server_id,
+            ai_provider.as_ref(),
+            &ai_provider_budget,
+            redactor.as_ref(),
+            &TauriEventEmitter(app.clone()),
+            target.as_ref(),
+            &state.pending_action_confirmations,
+            language,
+        )
+        .await;
     });
 
     Ok(())
@@ -170,7 +198,11 @@ pub async fn list_note_revisions(
     state: State<'_, AppState>,
     target: NoteTarget,
 ) -> CommandResult<Vec<NoteRevisionDto>> {
-    let revisions = state.profile_store.list_note_revisions(target).await?;
+    let revisions = state
+        .profile_store
+        .list_note_revisions(target)
+        .await
+        .store_err()?;
     Ok(revisions.iter().map(NoteRevisionDto::from).collect())
 }
 
@@ -184,13 +216,22 @@ pub async fn rollback_note(
     target: NoteTarget,
     revision_id: Uuid,
 ) -> CommandResult<()> {
-    let revisions = state.profile_store.list_note_revisions(target).await?;
+    let revisions = state
+        .profile_store
+        .list_note_revisions(target)
+        .await
+        .store_err()?;
     let old = revisions
         .iter()
         .find(|r| r.id == revision_id)
-        .ok_or("Revision nicht gefunden")?;
+        .ok_or("Revision nicht gefunden")
+        .or_code("NOTE_REVISION_NOT_FOUND")?;
     let revision = record_revision(target, old.content.clone(), NoteEditor::User);
-    state.profile_store.record_note_revision(&revision).await?;
+    state
+        .profile_store
+        .record_note_revision(&revision)
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -201,12 +242,12 @@ pub async fn rollback_note(
 /// Revisions-Historie.
 #[tauri::command]
 pub async fn update_local_server_notes(app: AppHandle, content: String) -> CommandResult<()> {
-    crate::local_server::save_notes(&app, &content).map_err(Into::into)
+    crate::local_server::save_notes(&app, &content).or_code("LOCAL_SERVER_NOTES_FAILED")
 }
 
 #[tauri::command]
 pub async fn update_local_server_tags(app: AppHandle, tags: Vec<String>) -> CommandResult<()> {
-    crate::local_server::save_tags(&app, &tags).map_err(Into::into)
+    crate::local_server::save_tags(&app, &tags).or_code("LOCAL_SERVER_TAGS_FAILED")
 }
 
 #[tauri::command]
@@ -214,7 +255,11 @@ pub async fn preview_effective_notes(
     state: State<'_, AppState>,
     server_id: ServerId,
 ) -> CommandResult<String> {
-    let server = state.profile_store.get_server(&server_id).await?;
+    let server = state
+        .profile_store
+        .get_server(&server_id)
+        .await
+        .store_err()?;
     effective_notes(&server, state.profile_store.as_ref())
         .await
         .map_err(Into::into)

@@ -1,6 +1,9 @@
 # ADR 0129 — Regelmuster im Regelspeicher prüfen, ungültige Regel einmal melden
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #260, Spec 0077 (3.1.2, 3.2.2), ADR 0068 (Abschnitt 7)
 
 ## Entscheidung

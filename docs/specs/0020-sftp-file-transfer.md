@@ -77,7 +77,9 @@ vertrauenswürdig gekennzeichnet (Spec 0039).
 Dateien über **256 KB** werden mit klarer Meldung an Nutzer und KI abgelehnt,
 statt vollständig in den KI-Kontext geladen zu werden. Die Grenze ist fest,
 nicht einstellbar. Sie wird anhand der vorab abgefragten Größe geprüft;
-liefert diese Abfrage keinen Wert, wird trotzdem gelesen.
+zusätzlich begrenzt das Lesen selbst die Datenmenge, sodass auch eine Datei
+ohne verwertbare Größenangabe oder eine zwischen Abfrage und Lesen gewachsene
+Datei nie vollständig geladen wird, sondern abgelehnt wird.
 
 ### 4.2 Schreiben
 
@@ -98,7 +100,14 @@ Die sicherheitskritischste Aktion dieser Spec. Ablauf:
    Notiz-Vorschlägen (Spec 0019). Existiert die Datei nicht, zeigt der
    Dialog den vollen Inhalt als neue Datei ohne Hervorhebung. Ist die
    bestehende Datei nicht als Text lesbar (Binärdatei), zeigt der Dialog
-   stattdessen einen Hinweis mit alter und neuer Größe.
+   stattdessen einen Hinweis mit alter und neuer Größe. Die App liest dafür
+   höchstens 1 MiB der bestehenden Datei; ist sie größer, zeigt der Dialog
+   keinen Diff, sondern den ehrlichen Hinweis „Datei ist größer als 1 MiB,
+   kein Textvergleich“ mit der neuen Größe (kein Binärdatei-Hinweis, die alte
+   Größe wird nicht angezeigt). Für eine
+   vom Filter abgelehnte Aktion liest die App die Zieldatei gar nicht. Auch
+   `ReadRemoteFile` liest nie mehr als die Lese-Obergrenze, selbst wenn die
+   Größenabfrage fehlschlägt oder 0 meldet (z. B. Spezialdateien).
 4. **Automatisches Backup.** Vor dem Überschreiben einer bestehenden Datei
    legt die App auf dem Server eine Sicherungskopie
    `<pfad>.smartssh-backup-<zeitstempel>` an. Der Backup-Pfad steht im
@@ -167,13 +176,28 @@ Spec 0054.
 ### 5.1 Oberfläche
 
 Der Dateibrowser ist eine umschaltbare Ansicht im rechten Bereich neben dem
-Terminal, mit dem Umschalter „Terminal | Dateien“. Der rechte Bereich ist der
+Terminal. Der Umschalter „KI | Terminal | Dateien“ sitzt in der Kopfzeile der
+Sitzung (ein Segment-Schalter mit Symbolen; der KI-Chat bleibt immer sichtbar,
+Terminal und Dateien schließen sich im rechten Bereich aus, und die Markierung
+der Rechteerhöhung bleibt am Segment „Dateien“). Der rechte Bereich ist der
 „direkte Zugriff auf den Server“, links liegt der KI-Chat. Der Browser zeigt
-eine Pfadleiste mit Navigation und eine Dateiliste (Name, Größe, Rechte,
+eine Werkzeugleiste (Aufwärts, Ausgangsverzeichnis, Aktualisieren,
+Neuer Ordner, Hochladen, Spaltenmenü, Rechteerhöhung), eine Pfadleiste und eine Dateiliste (Name, Größe, Rechte,
 Änderungsdatum). Aktionen stehen im Kontextmenü und im Drei-Punkte-Menü
 (Spec 0054), Upload geht per Button oder Drag-and-Drop aus dem
 Betriebssystem. Spaltenbreiten und Bereichsaufteilung sind verstellbar
 (Spec 0053).
+
+Die **Pfadleiste** zeigt den aktuellen Pfad als Brotkrumen-Leiste in
+Festbreitenschrift: Jedes übergeordnete Segment ist eine Schaltfläche, die
+dieses Verzeichnis lädt; das letzte Segment ist hervorgehoben. Ein Klick auf
+den leeren Teil der Leiste, auf das letzte Segment oder Strg/Cmd+L (bei Fokus
+im Dateibrowser) wechselt zum bearbeitbaren Pfadfeld: Enter lädt den Pfad;
+erst nach erfolgreichem Laden erscheint wieder die Brotkrumen-Leiste mit dem
+neuen Pfad. Scheitert das Laden, bleibt das Feld mit dem getippten Text offen
+und der Fehler wird angezeigt. Escape oder Fokusverlust stellt die
+Brotkrumen-Leiste mit dem zuletzt geladenen Pfad wieder her. Beim Überfahren
+des Namens eines symbolischen Links erscheint „Name -> Ziel“.
 
 ### 5.2 Welche lokalen Dateien gelesen werden dürfen
 
@@ -252,13 +276,32 @@ Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
 
 ## 7. Grenzen
 
-- **Symbolische Links** werden wie normale Einträge aufgelistet. Ob ein
-  Schreibvorgang das Ziel oder den Link ersetzt, ist nicht festgelegt und
-  hängt vom Server ab; das betrifft etwa Pfade unter `sites-enabled`.
+- **Symbolische Links** werden mit einem Link-Symbol vor dem Namen
+  (für Screenreader als „symbolic link" beschriftet) aufgelistet; hinter
+  dem Namen steht das Linkziel als blasses „→ Ziel“ in Festbreitenschrift
+  (gekürzt; der Hover-Text enthält das Ziel bis 200 Zeichen, längere Ziele
+  werden dort mit „…“ abgeschnitten), sofern es lesbar ist; der Text bleibt
+  reiner, maskierter Text. Die
+  Liste löst pro Link das Ziel mit einem `stat` auf:
+  - Ein Link auf einen **Ordner** erscheint mit dem Ordner-Link-Symbol, sortiert
+    unter den Ordnern, ist wie ein Ordner anklickbar und hat das
+    Ordner-Kontextmenü. Geöffnet wird der **logische Pfad** des Links (wie
+    `cd` in der Shell): Das Pfadfeld zeigt den Linkpfad, „Nach oben" geht
+    zum logischen Elternordner.
+  - Ein Link auf eine **Datei** erscheint mit dem Link-Symbol
+    und ist nicht navigierbar.
+  - Ein **defekter** Link (Ziel fehlt oder ist nicht zugänglich) wird
+    abgeblendet dargestellt, ist nicht navigierbar und lässt die Liste nicht
+    scheitern.
+  - Eigenschaften zeigen den Typ als Link (auf Ordner / auf Datei / defekt)
+    und das Linkziel.
+  - **Rekursive Operationen** (Löschen, chmod/chown rekursiv, Ordner-Download-Baum) folgen einem Link nie in den Zielordner;
+    Löschen entfernt nur den Link. Ob ein Schreibvorgang das Ziel oder den
+    Link ersetzt, ist nicht festgelegt und hängt vom Server ab; das betrifft
+    etwa Pfade unter `sites-enabled`.
 - **Backups** (`.smartssh-backup-*`) sammeln sich auf dem Server an; die App
   räumt sie nicht auf und listet sie nicht gesondert.
 - **Große Verzeichnisse** (mehrere tausend Einträge) werden vollständig
   geladen, ohne Seitenaufteilung.
-- Die 256-KB-Grenze für die KI gilt nur anhand der vorab abgefragten Größe
-  (4.1); eine zwischen Abfrage und Lesen gewachsene Datei wird dort nicht
-  erneut geprüft. Für den Dateibrowser gilt die engere Regel aus Spec 0086.
+- Die 256-KB-Grenze für die KI wird beim Lesen selbst durchgesetzt (4.1);
+  eine zwischen Abfrage und Lesen gewachsene Datei wird abgelehnt. Für den Dateibrowser gilt die engere Regel aus Spec 0086.

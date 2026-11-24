@@ -9,7 +9,7 @@ use futures::Stream;
 use ssh_manager_core::ai::{AiError, AiEvent};
 
 /// Spec 0072, A5 (vormals Spec 0069, Teil A2): Auffangnetz
-/// **hinter** [`is_structured_model_not_found`] — Textbausteine
+/// **hinter** [`ProviderErrorInfo::is_model_not_found_structured`] — Textbausteine
 /// (case-insensitive), die auf "das angefragte Modell existiert nicht"
 /// hindeuten, für Provider-Antworten, die kein strukturiertes Feld dafür
 /// liefern. Aus den Fixtures in `tests/fixtures/model_not_found/`
@@ -17,7 +17,7 @@ use ssh_manager_core::ai::{AiError, AiEvent};
 /// OpenAI (`error.code`) und Ollama (`error.type`) werden strukturell
 /// erkannt, OpenRouter nur über den Marker `is not a valid model id`.
 /// Anthropics echte Antwort (gemessen, Spec 0072 §1)
-/// trifft keinen dieser Marker — dafür ist [`is_structured_model_not_found`]
+/// trifft keinen dieser Marker — dafür ist [`ProviderErrorInfo::is_model_not_found_structured`]
 /// zuständig.
 ///
 /// **Warum eine Substring-Liste statt eines strikten JSON-Schemas pro
@@ -49,7 +49,7 @@ pub(crate) const MODEL_NOT_FOUND_MARKERS: &[&str] = &[
 /// aufrufende App handlungsrelevanten Fall.
 ///
 /// Spec 0072, A1/A2: 404 **oder** 400, wenn der Body **entweder** an der
-/// Antwortstruktur ([`is_structured_model_not_found`]) **oder** — als
+/// Antwortstruktur ([`ProviderErrorInfo::is_model_not_found_structured`]) **oder** — als
 /// Auffangnetz, additiv, nie exklusiv — an einem der
 /// [`MODEL_NOT_FOUND_MARKERS`] (case-insensitive) als "Modell nicht
 /// gefunden" erkennbar ist → `ModelNotFound` statt `ProviderUnavailable`.
@@ -67,11 +67,11 @@ pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiErro
         // Issue #631: a spending/usage limit (429, or Anthropic's 400).
         429 | 400 if parsed.is_usage_limit() => parsed.usage_limit_error(body),
         429 => AiError::RateLimited,
-        400 if is_model_no_tool_support(body) => {
+        400 if parsed.is_no_tool_support() => {
             AiError::ModelNoToolSupport(format!("HTTP {status}: {body}"))
         }
         404 | 400
-            if is_structured_model_not_found(body) || contains_model_not_found_marker(body) =>
+            if parsed.is_model_not_found_structured() || contains_model_not_found_marker(body) =>
         {
             AiError::ModelNotFound(format!("HTTP {status}: {body}"))
         }
@@ -138,6 +138,42 @@ impl ProviderErrorInfo {
             code: field("code"),
             message: field("message"),
         }
+    }
+
+    /// Spec 0072, A1/X4: structured "model not found" (not prose):
+    /// `error.type == "not_found_error"` (Anthropic) or `error.code ==
+    /// "model_not_found"`; additive to the marker list, never exclusive.
+    /// Known residual risk (Spec 0072, §4.2): `not_found_error` is not limited
+    /// to models (an unknown path or resource gives the same type), e.g. a
+    /// mistyped attestation URL; cosmetic (error text) only.
+    pub(crate) fn is_model_not_found_structured(&self) -> bool {
+        self.error_type.as_deref() == Some("not_found_error")
+            || self.code.as_deref() == Some("model_not_found")
+    }
+
+    /// Issue #99: Ollama's 400 for a model without tool support
+    /// (`error.type == "invalid_request_error"`, `error.message` ends with
+    /// `does not support tools`, case-insensitive). The caller checks status.
+    pub(crate) fn is_no_tool_support(&self) -> bool {
+        self.error_type.as_deref() == Some("invalid_request_error")
+            && self
+                .message
+                .as_deref()
+                .is_some_and(|m| m.trim().to_lowercase().ends_with("does not support tools"))
+    }
+
+    /// Issue #169 (Spec 0105 §7): `invalid_request_error` whose message names
+    /// a web tool AND says "not enabled" (case-insensitive). The caller
+    /// checks status 400 (ADR 0124).
+    pub(crate) fn is_web_tools_disabled(&self) -> bool {
+        if self.error_type.as_deref() != Some("invalid_request_error") {
+            return false;
+        }
+        let lower = self.message_lower();
+        let names_web_tool = ["web search", "web_search", "web fetch", "web_fetch"]
+            .iter()
+            .any(|marker| lower.contains(marker));
+        names_web_tool && lower.contains("not enabled")
     }
 
     fn matches(&self, needle: &str) -> bool {
@@ -263,76 +299,6 @@ pub(crate) fn map_stream_error_object(error: &serde_json::Value) -> (AiError, Pr
     (mapped, info)
 }
 
-/// Spec 0072, A1: erkennt "Modell nicht gefunden" an einem strukturierten
-/// Feld der Provider-Antwort statt an Prosa — `error.type ==
-/// "not_found_error"` (Anthropic, gemessen §1) oder `error.code ==
-/// "model_not_found"` (OpenAI-kompatible Familie). Geprüft wird genau die
-/// **erste** Ebene unter `error` (Spec 0072, X2) — kein rekursives Suchen
-/// im Baum, das würde z. B. `{"error":{"error":{"type":
-/// "not_found_error"}}}` fälschlich treffen, obwohl der äußere Fehler etwas
-/// anderes bedeuten könnte.
-///
-/// A2: greift keine der beiden Formen — sei es, weil `body` kein gültiges
-/// JSON ist, `error` fehlt oder kein Objekt ist, oder die Felder einen
-/// anderen Typ als `String` haben (Spec 0072, X4) —, liefert diese
-/// Funktion `false`, nie einen Fehler/Panic; der Aufrufer fällt dann auf
-/// die Markerliste zurück. Rein additiv: kein Fall, den die Markerliste
-/// bisher erkannte, wird durch diese Funktion "entzogen".
-///
-/// Restrisiko (Spec 0072, §4.2), bewusst hier dokumentiert statt versteckt —
-/// **breiter als die Spec annahm, s. Spec-Reviewer-Fund (Review dieses
-/// Schritts):** `error.type == "not_found_error"` ist bei Anthropic nicht
-/// auf Modelle beschränkt — ein unbekannter Pfad oder eine unbekannte
-/// Ressourcen-ID erzeugt denselben Typ. Innerhalb dieser Crate betrifft das
-/// nicht nur `POST /v1/messages`/`GET /v1/models` (dort ist die einzige vom
-/// Nutzer gesetzte Ressource der Modellname), sondern auch
-/// `fetch_attestation_info`, das denselben `map_http_status` gegen eine
-/// **frei vom Nutzer eingetragene** Attestierungs-URL aufruft (s.
-/// `crate::discovery::fetch_attestation_info`) — ein Tippfehler dort kann
-/// ebenfalls als "Modell nicht gefunden" erscheinen, obwohl der Endpunkt mit
-/// Modellen nichts zu tun hat. Rein kosmetisch (Fehlertext), kein
-/// Ausführungspfad/keine Filter-/Auto-Exec-Entscheidung hängt daran — aber
-/// nicht mehr "nur zwei eng umrissene Aufrufstellen", wie die Spec annahm.
-/// Käme später ein dritter Aufruf mit weiteren Ressourcen hinzu, ist diese
-/// Einschätzung erneut zu prüfen.
-fn is_structured_model_not_found(body: &str) -> bool {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
-        return false;
-    };
-    let Some(error) = value.get("error") else {
-        return false;
-    };
-    let error_type = error.get("type").and_then(serde_json::Value::as_str);
-    let error_code = error.get("code").and_then(serde_json::Value::as_str);
-    error_type == Some("not_found_error") || error_code == Some("model_not_found")
-}
-
-/// Issue #99: Ollama antwortet auf einen Aufruf mit `tools` für ein Modell
-/// ohne Tool-Unterstützung mit HTTP 400 und
-/// `{"error":{"message":"<modell> does not support tools",
-/// "type":"invalid_request_error",...}}` (gemessen, Fixture
-/// `tests/fixtures/no_tool_support/ollama.json`). Es gibt kein
-/// strukturiertes Code-Feld, deshalb: `error.type ==
-/// "invalid_request_error"` **und** `error.message` endet auf
-/// `does not support tools` (case-insensitive, Modellname davor variiert).
-/// Der Aufrufer prüft den Status (nur 400). Kein JSON, andere Typen oder
-/// anderer Text → `false`.
-fn is_model_no_tool_support(body: &str) -> bool {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
-        return false;
-    };
-    let Some(error) = value.get("error") else {
-        return false;
-    };
-    let is_invalid_request =
-        error.get("type").and_then(serde_json::Value::as_str) == Some("invalid_request_error");
-    let ends_with_marker = error
-        .get("message")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|m| m.trim().to_lowercase().ends_with("does not support tools"));
-    is_invalid_request && ends_with_marker
-}
-
 fn contains_model_not_found_marker(body: &str) -> bool {
     let lower = body.to_lowercase();
     MODEL_NOT_FOUND_MARKERS
@@ -378,7 +344,7 @@ pub(crate) fn map_transport_error(err: &reqwest::Error) -> AiError {
 /// Spec 0069, Teil A2: eine Konstruktor-Funktion statt der fünf bisherigen
 /// Kopien derselben `format!("Keine Antwort vom KI-Provider seit über {}
 /// Sekunden", ...)`-Konstruktion (`anthropic.rs` ×2, `openai_compatible.rs`
-/// ×2, `discovery.rs::discovery_timeout`) — der `Display`-Text von
+/// ×2, `discovery.rs::send_get`) — der `Display`-Text von
 /// `AiError::Timeout` ist bereits wörtlich identisch (s. dessen Doc-
 /// Kommentar/Test in `core::ai::types`), diese Funktion baut nur noch den
 /// Wert selbst.
@@ -419,7 +385,7 @@ mod map_http_status_tests {
     //!
     //! Spec 0072, §6: `test_anthropic_model_not_found_fixture_maps_to_
     //! model_not_found` (T1) ist der Regressionstest für diesen Schritt —
-    //! *Gegenbeweis*: gegen den Stand vor `is_structured_model_not_found`
+    //! *Gegenbeweis*: gegen den Stand vor `ProviderErrorInfo::is_model_not_found_structured`
     //! schlug er fehl (verifiziert: die neue, gemessene Fixture trifft
     //! keinen der `MODEL_NOT_FOUND_MARKERS`, s. `anthropic.json`-Kommentar
     //! im Item BL-0200).
@@ -646,7 +612,7 @@ mod map_http_status_tests {
         ));
     }
 
-    /// X3: ein sehr großer Body darf `is_structured_model_not_found` nicht
+    /// X3: ein sehr großer Body darf `ProviderErrorInfo::is_model_not_found_structured` nicht
     /// zum Absturz bringen. Spec-Reviewer-Fund (Review dieses Schritts,
     /// „gemessen statt angenommen"): anders als eine frühere Fassung dieses
     /// Kommentars behauptete, gibt es auf dem Lesepfad

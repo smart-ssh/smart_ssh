@@ -20,9 +20,9 @@ use tokio::sync::oneshot;
 
 use crate::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use crate::dto::ActionUserDecision;
-use crate::poison::lock_tolerating_poison;
 use crate::session::Session;
 use crate::state::ActionId;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Eine registrierte, noch nicht aufgelöste Bestätigung für `action_id`.
 ///
@@ -71,6 +71,7 @@ impl<'a> PendingConfirmation<'a> {
     ) -> Result<Self, AnotherConfirmationPending> {
         if exclusive
             && session
+                .safety
                 .mcp_confirmation_claim
                 .compare_exchange(
                     false,
@@ -118,7 +119,8 @@ impl<'a> PendingConfirmation<'a> {
     ) -> (ConfirmationWaitOutcome, ConfirmationCleanup<'a>) {
         let Self { cleanup, receiver } = self;
         // A2.1: auch bei vergifteter Sperre setzen statt panicken.
-        *lock_tolerating_poison(&cleanup.session.pending_action) = Some(cleanup.registry.action_id);
+        *lock_tolerating_poison(&cleanup.session.conn.pending_action) =
+            Some(cleanup.registry.action_id);
         let outcome = tokio::time::timeout(timeout, receiver).await;
         (outcome, cleanup)
     }
@@ -147,6 +149,7 @@ impl Drop for ConfirmationCleanup<'_> {
     fn drop(&mut self) {
         if self.claimed {
             self.session
+                .safety
                 .mcp_confirmation_claim
                 .store(false, std::sync::atomic::Ordering::SeqCst);
         }
@@ -159,9 +162,16 @@ impl Drop for ConfirmationCleanup<'_> {
             // A2.2: `lock_tolerating_poison` statt `lock().unwrap()` — ein
             // Panic hier, während bereits ein anderer Panic abgewickelt
             // wird, bräche den Prozess ab.
-            let mut pending = lock_tolerating_poison(&self.session.pending_action);
+            let mut pending = lock_tolerating_poison(&self.session.conn.pending_action);
             if *pending == Some(self.registry.action_id) {
                 *pending = None;
+            }
+        }
+        {
+            // Issue #1020: the stored proposal belongs to this confirmation.
+            let mut turn = lock_tolerating_poison(&self.session.conn.chat_turn);
+            if turn.pending_proposal.as_ref().map(|(id, _)| *id) == Some(self.registry.action_id) {
+                turn.pending_proposal = None;
             }
         }
         // Der Registry-Eintrag wird danach vom Feld `registry`
@@ -237,5 +247,43 @@ impl Drop for RegistryCleanup<'_> {
         // vergiftungstolerant (A2.2) — kein Panic im `Drop`.
         self.registry
             .cancel_if_current(&self.action_id, self.generation);
+    }
+}
+
+#[cfg(test)]
+#[expect(clippy::expect_used, reason = "test code")]
+mod task_cancellation_tests {
+    use super::*;
+    use crate::tasks::TaskSupervisor;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Issue #879: cancelling an app-scope task that waits for a
+    /// confirmation (the on-disconnect note suggestion) drops the guard: no
+    /// entry stays behind, and a late answer is refused, never an approval.
+    #[tokio::test(start_paused = true)]
+    async fn test_cancelled_task_leaves_no_pending_confirmation() {
+        let registry: Arc<ConfirmationRegistry<ActionId, ActionUserDecision>> =
+            Arc::new(ConfirmationRegistry::new());
+        let action_id = uuid::Uuid::new_v4();
+        let supervisor = TaskSupervisor::new();
+        let scope = supervisor.app_scope();
+        let (registered_tx, registered_rx) = tokio::sync::oneshot::channel::<()>();
+        let task_registry = Arc::clone(&registry);
+        scope.spawn("on-disconnect-suggestion", async move {
+            let pending = RegisteredConfirmation::register(&task_registry, action_id);
+            let _ = registered_tx.send(());
+            let _ = pending.wait_for_decision(Duration::from_secs(3600)).await;
+        });
+        registered_rx.await.expect("task registered");
+        assert!(registry.contains(&action_id));
+
+        let report = scope.shutdown(Duration::from_secs(3)).await;
+
+        assert!(!report.timed_out);
+        assert!(!registry.contains(&action_id), "no dangling confirmation");
+        assert!(registry
+            .resolve(&action_id, ActionUserDecision::Approve)
+            .is_err());
     }
 }

@@ -9,6 +9,7 @@
 //! landete das Kommando auf `AutoExec`.
 
 use ssh_manager_core::ai::AiEvent;
+use ssh_manager_core::filter::PolicyRules;
 use ssh_manager_core::filter::{EvalContext, FilterEngine};
 use ssh_manager_core::risk::CommandCheckFinding;
 
@@ -153,6 +154,7 @@ async fn test_injection_code_takes_precedence_over_not_assessable() {
             MockSshTransport::default().with_response(&command, output("")),
         );
         session
+            .safety
             .injection_suspected
             .store(true, std::sync::atomic::Ordering::SeqCst);
         let (decision, payload) = decide(&session, &command).await;
@@ -202,15 +204,15 @@ async fn test_deny_stays_deny_for_not_assessable_command() {
         async fn rules_for(
             &self,
             _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> Vec<ssh_manager_core::filter::Rule> {
-            vec![ssh_manager_core::filter::Rule {
+        ) -> PolicyRules {
+            PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
                 id: RuleId("deny-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 10,
                 origin: RuleOrigin::User,
-            }]
+            }])
         }
     }
     let command = too_nested_harmless();

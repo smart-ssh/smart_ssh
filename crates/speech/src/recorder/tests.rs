@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use super::*;
-use crate::audio::{resample_mono, to_mono_16k};
+use crate::audio::resample_mono;
 use crate::transcribe::{
     parse_language, InvalidLanguage, TranscribeError, TranscribeSession, Transcriber,
 };
@@ -84,8 +84,20 @@ impl AudioSource for FakeSource {
 struct FakeTranscriber {
     calls: Mutex<Vec<(PathBuf, usize, Option<String>)>>,
     fail: bool,
+    /// `open_session` fails: the engine cannot load the model (out of memory, unsupported CPU).
+    load_fail: bool,
 }
 impl Transcriber for FakeTranscriber {
+    fn open_session(
+        &self,
+        _: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        if self.load_fail {
+            Err(TranscribeError)
+        } else {
+            Ok(None)
+        }
+    }
     fn transcribe(
         &self,
         model: &Path,
@@ -141,7 +153,7 @@ fn recorder(
 }
 
 fn model() -> Option<PathBuf> {
-    Some(PathBuf::from("/models/ggml-base.bin"))
+    Some(PathBuf::from("/models/whisper-base-int8"))
 }
 
 #[tokio::test]
@@ -154,7 +166,7 @@ async fn start_stop_returns_transcribed_text_from_wav() {
     assert_eq!(rec.stop().await.unwrap(), format!("heard {n} samples"));
     assert_eq!(
         tr.calls.lock().unwrap()[0].0,
-        PathBuf::from("/models/ggml-base.bin")
+        PathBuf::from("/models/whisper-base-int8")
     );
     assert_eq!(
         *events.lock().unwrap(),
@@ -209,11 +221,15 @@ async fn auto_stop_at_max_length_transcribes_and_stop_collects() {
         800,
         "bound in 16 kHz samples"
     );
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    assert_eq!(
-        events.lock().unwrap().last(),
-        Some(&RecorderState::Finished)
-    );
+    // Wait for the state change itself; the 5 s bound only stops a
+    // regression from hanging (ADR 0122, R6).
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while events.lock().unwrap().last() != Some(&RecorderState::Finished) {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("recorder should reach Finished after the maximum length");
     assert_eq!(tr.calls.lock().unwrap().len(), 1);
     assert!(rec.stop().await.unwrap().starts_with("heard"));
     assert_eq!(rec.stop().await, Err(RecordError::NotRecording));
@@ -264,6 +280,30 @@ async fn transcription_failure_maps_to_key_and_frees_recorder() {
     rec.cancel();
 }
 
+#[tokio::test]
+async fn model_load_failure_maps_to_key_and_frees_recorder() {
+    let tr = Arc::new(FakeTranscriber {
+        load_fail: true,
+        ..Default::default()
+    });
+    let (rec, _) = recorder(FakeSource::new(decode_wav(WAV)), tr, MAX_RECORDING);
+    rec.start(model(), None).unwrap();
+    let err = rec.stop().await.unwrap_err();
+    assert_eq!(err.key(), "speech_transcription_failed");
+    rec.start(model(), None).unwrap();
+    rec.cancel();
+}
+
+/// Mixes interleaved frames down to mono and resamples to 16 kHz.
+fn to_mono_16k(interleaved: &[f32], channels: usize, rate: u32) -> Vec<f32> {
+    let channels = channels.max(1);
+    let mono: Vec<f32> = interleaved
+        .chunks_exact(channels)
+        .map(|f| f.iter().sum::<f32>() / channels as f32)
+        .collect();
+    resample_mono(&mono, rate)
+}
+
 #[test]
 fn resampling_halves_and_downmixes() {
     // 32 kHz stereo -> 16 kHz mono: 4 frames -> 2 samples
@@ -283,7 +323,7 @@ fn language_setting_parses() {
 }
 
 /// Real Whisper inference; needs a downloaded model:
-/// `SMART_SSH_WHISPER_MODEL=/path/ggml-base.bin cargo test -p speech -- --ignored`
+/// `SMART_SSH_WHISPER_MODEL=/path/to/whisper-base-int8 cargo test -p speech -- --ignored`
 #[test]
 #[ignore]
 fn whisper_engine_runs_on_the_bundled_wav() {
@@ -438,7 +478,10 @@ impl TranscribeSession for FakeSession {
         if self.0.running.fetch_add(1, Ordering::SeqCst) > 0 {
             self.0.overlap.fetch_add(1, Ordering::SeqCst);
         }
-        std::thread::sleep(Duration::from_millis(60)); // slower than the interval
+        // Not on the assertion path: it only makes a pass slower than the
+        // live interval so an overlapping pass would be *possible*; the
+        // assertion (`overlap == 0`) holds or fails regardless of timing.
+        std::thread::sleep(Duration::from_millis(60));
         self.0.running.fetch_sub(1, Ordering::SeqCst);
         let n = self.0.passes.fetch_add(1, Ordering::SeqCst);
         Ok(format!("w{n}-{}", samples.len()))
@@ -584,4 +627,64 @@ async fn failed_final_pass_still_errors_after_live_text() {
     );
     rec.start(model(), None).unwrap();
     assert_eq!(rec.stop().await, Err(RecordError::TranscriptionFailed));
+}
+
+/// A source whose `open` blocks until released, like a device that is slow
+/// to become ready.
+struct BlockingSource {
+    entered: mpsc::Sender<()>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+impl AudioSource for BlockingSource {
+    fn open(&self, _max_samples: usize) -> Result<Box<dyn AudioCapture>, CaptureError> {
+        self.entered.send(()).unwrap();
+        self.release
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| CaptureError::Failed)?;
+        Ok(Box::new(FakeCapture(vec![0.1; 16_000], Arc::default())))
+    }
+}
+
+/// Issue #898: the device wait must not hold the recorder's state lock. The
+/// ordering is forced by channels: `status()` returns while `open` is still
+/// blocked, and only afterwards is the source released.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_start_waits_for_the_device_outside_the_state_lock() {
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let source = Arc::new(BlockingSource {
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+    });
+    let rec = Recorder::new(
+        source,
+        Arc::new(FakeTranscriber::default()),
+        Duration::from_secs(60),
+        Arc::new(|_| {}),
+        tokio::runtime::Handle::current(),
+    );
+    let starter = rec.clone();
+    let start = tokio::task::spawn_blocking(move || starter.start(model(), None));
+    let probe = rec.clone();
+    let status = tokio::task::spawn_blocking(move || {
+        entered_rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("open must be entered");
+        // `open` is blocked now; the lock must be free.
+        probe.status()
+    })
+    .await
+    .unwrap();
+    assert_eq!(status, RecorderState::Idle);
+    // A second start during the wait is refused, not queued on the lock.
+    assert!(matches!(
+        rec.start(model(), None),
+        Err(RecordError::AlreadyRecording)
+    ));
+    release_tx.send(()).unwrap();
+    start.await.unwrap().expect("start succeeds after release");
+    assert_eq!(rec.status(), RecorderState::Recording);
+    rec.cancel();
 }

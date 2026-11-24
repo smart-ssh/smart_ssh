@@ -67,7 +67,7 @@ describe("check-tauri-commands on the real repository", () => {
 
   it("fails and names an invoked command that is not registered", () => {
     const root = copyRepo();
-    edit(root, "apps/smart-ssh-community/frontend/src/fileDialog.ts", (t) =>
+    edit(root, "apps/smart-ssh-community/frontend/src/api/fileDialog.ts", (t) =>
       t + '\nexport const probe = () => invoke("does_not_exist");\n',
     );
     expect(checkRepo(root).problems).toEqual([
@@ -127,7 +127,7 @@ describe("check-tauri-commands on the real repository", () => {
     const root = copyRepo();
     const clean = spawnSync(process.execPath, [script, "--root", root], { encoding: "utf8" });
     expect(clean.status).toBe(0);
-    edit(root, "apps/smart-ssh-community/frontend/src/fileDialog.ts", (t) =>
+    edit(root, "apps/smart-ssh-community/frontend/src/api/fileDialog.ts", (t) =>
       t + '\nexport const probe = () => invoke("does_not_exist");\n',
     );
     edit(root, "crates/app-shell/src/commands/app_meta.rs", (t) =>

@@ -164,7 +164,34 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
     all.forEach((el, i) => el.setAttribute("data-e2e-stop", String(i)));
     return all.map((el, i) => {
       const r = el.getBoundingClientRect();
-      return { index: i, top: r.top, left: r.left, bottom: r.bottom, name: `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` };
+      // A control inside a horizontal scroller (the tab strip) is reached by
+      // scrolling: for the visual order only its place inside the scroller counts.
+      let left = r.left;
+      // Scroll-aware: a control inside a vertical scroller is placed by its
+      // content position (scrollTop added) next to others of the same scroller,
+      // and clamped to the scroller's box against controls outside it (a footer).
+      let top = r.top;
+      let bottom = r.bottom;
+      let scroller: HTMLElement | null = null;
+      let contentTop = r.top;
+      let contentBottom = r.bottom;
+      for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+        const cs = getComputedStyle(p);
+        if (cs.overflowX === "auto" || cs.overflowX === "scroll") {
+          const pr = p.getBoundingClientRect();
+          left = Math.min(Math.max(left, pr.left), pr.right);
+        }
+        if (!scroller && (cs.overflowY === "auto" || cs.overflowY === "scroll") && p.scrollHeight > p.clientHeight) {
+          scroller = p;
+          const pr = p.getBoundingClientRect();
+          contentTop = r.top + p.scrollTop;
+          contentBottom = r.bottom + p.scrollTop;
+          top = Math.min(Math.max(r.top, pr.top), pr.bottom);
+          bottom = Math.min(Math.max(r.bottom, pr.top), pr.bottom);
+        }
+      }
+      if (scroller && !scroller.hasAttribute("data-e2e-scroller")) scroller.setAttribute("data-e2e-scroller", String(i));
+      return { index: i, top, left, bottom, scroller: scroller?.getAttribute("data-e2e-scroller") ?? null, contentTop, contentBottom, name: `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` };
     });
   });
   expect(stops.length, "no focusable controls in scope").toBeGreaterThan(0);
@@ -174,8 +201,12 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
   for (let i = 1; i < stops.length; i++) {
     const prev = stops[i - 1]!;
     const cur = stops[i]!;
-    const sameRow = cur.top < prev.bottom - 2 && prev.top < cur.bottom - 2;
-    const ok = sameRow ? cur.left >= prev.left - 1 : cur.top >= prev.top - 1;
+    const sameScroller = cur.scroller !== null && cur.scroller === prev.scroller;
+    const [ct, cb, pt, pb] = sameScroller
+      ? [cur.contentTop, cur.contentBottom, prev.contentTop, prev.contentBottom]
+      : [cur.top, cur.bottom, prev.top, prev.bottom];
+    const sameRow = ct < pb - 2 && pt < cb - 2;
+    const ok = sameRow ? cur.left >= prev.left - 1 : ct >= pt - 1;
     expect(ok, `Tab stop ${cur.name} comes after ${prev.name} but is placed before it`).toBe(true);
   }
 
@@ -215,7 +246,14 @@ export async function expectNoClippedText(scope: Locator): Promise<void> {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || !el.textContent?.trim()) continue;
       const describe = `<${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`;
-      if (r.right > box.right + 1 || r.left < box.left - 1) out.push(`${describe} sticks out sideways`);
+      // Content inside a horizontal scroller (e.g. the tab strip) may extend
+      // past the box: the user reaches it by scrolling.
+      let inScroller = false;
+      for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+        const ox = getComputedStyle(p).overflowX;
+        if ((ox === "auto" || ox === "scroll") && p.scrollWidth > p.clientWidth + 1) inScroller = true;
+      }
+      if (!inScroller && (r.right > box.right + 1 || r.left < box.left - 1)) out.push(`${describe} sticks out sideways`);
       const cs = getComputedStyle(el);
       if (
         cs.textOverflow === "ellipsis" ||
@@ -283,4 +321,37 @@ export async function expectVerticallyCentredWith(
       `vertical centres differ: ${centreA} vs ${centreB}`,
     ).toBeLessThanOrEqual(tolerance);
   }).toPass({ timeout: 5_000 });
+}
+
+/**
+ * The page does not scroll sideways; with `scope`, nothing inside it sticks out
+ * either (except inside boxes that scroll on their own).
+ */
+export async function expectNoHorizontalPageScroll(page: Page, scope?: Locator): Promise<void> {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  if (scope) {
+    // The scrolling content box itself must not scroll sideways (its own overflow would hide a wide child).
+    for (const box of await scope.locator("div.overflow-y-auto").all()) {
+      expect(await box.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
+    // Nothing inside the dialog is wider than the dialog, except boxes that scroll on their own.
+    const overflow = await scope.evaluate((root) => {
+      const limit = root.getBoundingClientRect().right + 1;
+      const bad: string[] = [];
+      for (const el of root.querySelectorAll<HTMLElement>("*")) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.right <= limit) continue;
+        let p: HTMLElement | null = el.parentElement;
+        let scrolls = false;
+        while (p && p !== root) {
+          const ox = getComputedStyle(p).overflowX;
+          if (ox === "auto" || ox === "scroll" || ox === "hidden") scrolls = true;
+          p = p.parentElement;
+        }
+        if (!scrolls) bad.push(`${el.tagName}.${el.className}`.slice(0, 80));
+      }
+      return bad;
+    });
+    expect(overflow).toEqual([]);
+  }
 }

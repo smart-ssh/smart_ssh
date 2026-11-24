@@ -47,7 +47,10 @@ impl FakeSettingsFile {
 impl LegacyMcpTokenFile for FakeSettingsFile {
     fn read_token(&self) -> CommandResult<Option<String>> {
         if self.fail_read {
-            return Err(CommandError::from("settings.json nicht lesbar"));
+            return Err(CommandError::with_code(
+                "settings.json nicht lesbar",
+                "TEST_ERROR",
+            ));
         }
         Ok(self.current())
     }
@@ -55,7 +58,10 @@ impl LegacyMcpTokenFile for FakeSettingsFile {
     fn remove_token(&self) -> CommandResult<()> {
         self.removes.fetch_add(1, Ordering::SeqCst);
         if self.fail_remove {
-            return Err(CommandError::from("settings.json nicht schreibbar"));
+            return Err(CommandError::with_code(
+                "settings.json nicht schreibbar",
+                "TEST_ERROR",
+            ));
         }
         *self.token.lock().unwrap() = None;
         Ok(())

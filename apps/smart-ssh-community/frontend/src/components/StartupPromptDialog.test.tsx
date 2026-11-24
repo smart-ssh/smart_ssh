@@ -10,7 +10,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import type { StartupPromptKind } from "../types";
+import type { StartupPromptKind } from "../api/types";
 import { testI18n } from "../testI18n";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 
@@ -46,6 +46,14 @@ const EXPECTED: Record<StartupPromptKind, string[]> = {
 const ALL_LABELS = [
   ...new Set(Object.values(EXPECTED).flat()),
 ];
+
+describe("accent ticks (#1383)", () => {
+  it("draws the accent corner ticks on the prompt", () => {
+    renderDialog("retryOrQuit");
+    const ticks = screen.getByTestId("dialog-ticks");
+    expect(ticks.querySelectorAll("[data-corner-tick]")).toHaveLength(2);
+  });
+});
 
 describe("StartupPromptDialog", () => {
   it("zeigt je Frageart genau die Knöpfe, die sie anbietet (A3)", () => {

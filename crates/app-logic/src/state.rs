@@ -6,8 +6,7 @@ use uuid::Uuid;
 
 use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::{
-    SqliteAiProviderStore, SqliteChatSessionStore, SqliteLedgerStore, SqlitePolicyStore,
-    SqlitePromptHistoryStore,
+    SqliteAiProviderStore, SqliteChatSessionStore, SqlitePolicyStore, SqlitePromptHistoryStore,
 };
 use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
@@ -41,13 +40,18 @@ pub struct PendingImport {
     pub plan: ssh_manager_core::profiles::ssh_config::ImportPlan,
 }
 
-pub type SessionId = Uuid;
+pub use crate::ids::SessionId;
 /// Kennung eines einzelnen `chat-action-proposed`-Vorschlags innerhalb
 /// einer Session — global eindeutig (nicht nur pro Session), damit
 /// `AppState.pending_action_confirmations` eine flache Map bleiben kann statt
 /// verschachtelt nach `SessionId` sortieren zu müssen.
 pub type ActionId = Uuid;
 
+/// Shared application state.
+///
+/// Extension crates do not use the fields (they stay `pub` for `app-shell`
+/// and may change without notice): use the accessors and re-exports of
+/// [`crate::ext`].
 pub struct AppState {
     pub sessions: SessionManager,
     /// Spec 0038, section 2a: the session extension an edition registered
@@ -128,8 +132,6 @@ pub struct AppState {
     /// Spec 0034: persistente Chat-Sitzungen/-Nachrichten — wie
     /// `policy_store`/`prompt_history_store` `Clone` statt `Arc<dyn ...>`.
     pub chat_session_store: SqliteChatSessionStore,
-    /// Spec 0057, §1: das Session-Ledger.
-    pub ledger_store: SqliteLedgerStore,
     /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
     /// Community Edition kennt aktuell nur den einen festen Zustand
     /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-
@@ -156,6 +158,9 @@ pub struct AppState {
     /// höchstens ein `connect()`-Versuch aktiv sein, ein flacher Schlüssel
     /// reicht daher.
     pub pending_host_key_confirmations: ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    /// Issue #1185: login prompts (password, one-time code, …) waiting for
+    /// `answer_auth_prompt` / `cancel_auth_prompt`, by prompt id.
+    pub pending_auth_prompts: Arc<crate::auth_prompter::AuthPromptRegistry>,
     /// Issue #546: running `connect` attempts by frontend-generated attempt
     /// id, so `cancel_connect` can abort them.
     pub connect_attempts: crate::connect_attempts::ConnectAttempts,
@@ -204,9 +209,19 @@ pub struct AppState {
     /// Issue #505 (ADR 0141): chat content extensions an edition registered;
     /// empty in Community. Handed to every new session.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
+    /// Issue #922: chat sessions whose title attempt already ran; entries
+    /// are removed when the chat session is deleted.
+    pub title_attempts: Arc<crate::session::TitleAttempts>,
     /// Issue #610 (Spec 0038 §2): observers of completed AI requests an
     /// edition registered; empty in Community. Handed to every new session.
     pub ai_usage_observers: Arc<Vec<Arc<dyn crate::ai_usage::AiUsageObserver>>>,
+    /// Issue #1505: observers of session activity an edition registered and
+    /// the queue that delivers to them; inactive in Community.
+    pub activity: Arc<crate::activity::ActivityHub>,
+    /// Issue #1246 (Spec 0038 §2): decorators applied to every AI provider
+    /// the app builds, in registration order; empty in Community.
+    pub ai_provider_decorators:
+        Arc<Vec<Arc<dyn crate::ai_provider_decorator::AiProviderDecorator>>>,
 }
 
 pub struct McpState {

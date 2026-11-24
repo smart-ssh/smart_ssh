@@ -1,6 +1,8 @@
 # ADR 0137 — Chat-Anhänge: eigene Nachrichtenvariante und Auflöser
 
-Status: Superseded by 0141 · Issue: #469 · Spec 0110
+## Status
+
+Superseded by 0141 · Issue: #469 · Spec 0110
 
 ## Kontext
 

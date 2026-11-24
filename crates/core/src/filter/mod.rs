@@ -7,10 +7,13 @@
 //! Präzedenz-Kette (Abschnitt 3) und den Test-Katalog (Abschnitt 6).
 
 mod blacklist;
+mod combined;
 mod engine;
 mod parser;
 mod pattern;
+mod policy_rules;
 mod types;
+mod wrapper_options;
 
 #[cfg(test)]
 mod tests;
@@ -21,18 +24,20 @@ mod adversarial_tests;
 #[cfg(test)]
 mod property_tests;
 
+pub use combined::CombinedPolicySource;
 pub use engine::{
     allow_rule_matches_segment, exceeds_command_length_limit, matches_hard_blacklist,
-    scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
-    PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
+    scope_applies, FilterEngine, PolicySource, PolicySourceError, PolicySourceResult, PolicyStore,
+    DEFAULT_MAX_COMMAND_LENGTH,
 };
+pub use policy_rules::PolicyRules;
 // Spec 0043, Fund B: von `crate::risk::classifier` wiederverwendet, damit
 // beide Konsumenten (Filter-Engine hier, Risiko-Klassifizierer dort)
 // denselben Rekursions-Cap für verschachtelte Command-Substitution nutzen
 // — analog zu `DEFAULT_MAX_COMMAND_LENGTH` oben.
 pub use parser::{split_top_level_segments, MAX_SUBSTITUTION_DEPTH};
 // Spec 0077, 3.1.1: Prüfung eines Musters beim Speichern und Melden.
-pub use pattern::PatternError;
+pub use pattern::{normalize_lexical_path, PatternError};
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
     RuleOrigin, Scope, TraceKind,
@@ -50,6 +55,7 @@ pub(crate) use pattern::CompiledPattern;
 // usw.), s. `risk::classifier`-Doc-Kommentar. Wie `segment_command`
 // bewusst `pub(crate)` — internes Detail zwischen den beiden Modulen.
 pub(crate) use parser::resolve_effective_command;
+pub(crate) use wrapper_options::wrapper_option_takes_value;
 // Issue #88: also reused by `crate::risk`, so the risk classifier rates the
 // code of a `bash -c '…'`/`sh -c '…'` call with the same extraction the
 // filter engine uses for its own checks (no second `-c` parser). Internal

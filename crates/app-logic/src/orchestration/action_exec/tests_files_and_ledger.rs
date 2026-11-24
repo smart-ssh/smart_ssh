@@ -6,11 +6,12 @@
 use async_trait::async_trait;
 
 use ssh_manager_core::ai::{AiEvent, DefaultOutputRedactor, OutputRedactor};
-use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
-use ssh_manager_core::profiles::Server;
+use ssh_manager_core::filter::normalize_lexical_path as normalize;
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
 use ssh_manager_core::ssh::CommandOutput;
+use ssh_manager_core::testing::ServerBuilder;
 
 use crate::dto::ActionUserDecision;
 use crate::events::TestEmitter;
@@ -36,25 +37,19 @@ use crate::test_support::log_capture;
 /// Filter-Auswertung lexikalisch aufgelöst werden.
 #[test]
 fn test_normalize_remote_path_resolves_traversal_and_redundant_segments() {
+    assert_eq!(normalize("/home/deploy/../../etc/shadow"), "/etc/shadow");
     assert_eq!(
-        normalize_remote_path("/home/deploy/../../etc/shadow"),
-        "/etc/shadow"
-    );
-    assert_eq!(
-        normalize_remote_path("/etc/nginx//secret.conf"),
+        normalize("/etc/nginx//secret.conf"),
         "/etc/nginx/secret.conf"
     );
     assert_eq!(
-        normalize_remote_path("/etc/nginx/./secret.conf"),
+        normalize("/etc/nginx/./secret.conf"),
         "/etc/nginx/secret.conf"
     );
-    assert_eq!(
-        normalize_remote_path("/home/deploy/app.log"),
-        "/home/deploy/app.log"
-    );
+    assert_eq!(normalize("/home/deploy/app.log"), "/home/deploy/app.log");
     // Traversal über die Wurzel hinaus kann nicht höher als `/` gehen.
-    assert_eq!(normalize_remote_path("/../../etc/shadow"), "/etc/shadow");
-    assert_eq!(normalize_remote_path("/"), "/");
+    assert_eq!(normalize("/../../etc/shadow"), "/etc/shadow");
+    assert_eq!(normalize("/"), "/");
 }
 
 /// Unabhängiger Review-Pass (Spec 0020): eine Allow-Regel für
@@ -68,8 +63,8 @@ async fn test_read_remote_file_traversal_path_does_not_match_allow_rule_for_othe
     struct AllowDeployDir;
     #[async_trait]
     impl PolicyStore for AllowDeployDir {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("allow-deploy-read".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob(
                     "sftp-read /home/deploy/*".to_string(),
@@ -78,7 +73,7 @@ async fn test_read_remote_file_traversal_path_does_not_match_allow_rule_for_othe
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -142,15 +137,15 @@ async fn test_read_remote_file_deny_rule_blocks_without_reading() {
     struct DenyEtcRead;
     #[async_trait]
     impl PolicyStore for DenyEtcRead {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-etc-read".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("sftp-read /etc/*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -241,7 +236,7 @@ async fn test_read_remote_file_allow_rule_autoexecs_and_redacts_content() {
         mock_sftp.calls(),
         vec![
             "stat /home/deploy/app.conf",
-            "read_file /home/deploy/app.conf"
+            "read_file_capped /home/deploy/app.conf"
         ]
     );
 }
@@ -281,7 +276,7 @@ async fn test_read_remote_file_content_lands_fenced_in_context_and_cannot_break_
     )
     .await;
 
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let text = history
         .iter()
         .find_map(|m| match &m.content {
@@ -499,15 +494,15 @@ async fn test_write_remote_file_deny_rule_blocks() {
     struct DenyEtcWrite;
     #[async_trait]
     impl PolicyStore for DenyEtcWrite {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-etc-write".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("sftp-write /etc/**".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -669,6 +664,10 @@ async fn test_chat_action_proposed_binary_file_reports_size_not_content() {
     assert_eq!(
         events[0].1["previousFileSize"],
         serde_json::json!(binary_len)
+    );
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
     );
 }
 
@@ -915,25 +914,11 @@ async fn test_chat_action_proposed_includes_previous_note_content_for_note_updat
     );
     let server_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let existing_server = Server {
-        id: server_id,
-        name: "srv".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: "Bisheriger Inhalt".to_string(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let existing_server = ServerBuilder::new()
+        .id(server_id)
+        .name("srv")
+        .notes("Bisheriger Inhalt")
+        .build();
     let profile_store =
         crate::test_support::InMemoryProfileStore::new().with_server(existing_server);
     let emitter = TestEmitter::default();
@@ -1004,43 +989,15 @@ async fn test_note_target_name_matches_actual_target_not_a_different_open_server
     // auflösen, unabhängig davon, was sonst noch existiert.
     let server_a_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let server_a = Server {
-        id: server_a_id,
-        name: "Server A".to_string(),
-        host: "a.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
-    let server_b = Server {
-        id: ServerId::new(),
-        name: "Server B".to_string(),
-        host: "b.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let server_a = ServerBuilder::new()
+        .id(server_a_id)
+        .name("Server A")
+        .host("a.example.invalid")
+        .build();
+    let server_b = ServerBuilder::new()
+        .name("Server B")
+        .host("b.example.invalid")
+        .build();
     let profile_store = crate::test_support::InMemoryProfileStore::new()
         .with_server(server_a)
         .with_server(server_b);
@@ -1480,766 +1437,6 @@ async fn test_persisted_command_result_contains_redacted_not_raw_secret() {
     );
 }
 
-// --- Spec 0057, §1: Session-Ledger-Grundgerüst --------------------------
-
-/// Spec 0057, §1.1: der vollständige AutoExec-Durchlauf (Allow-Regel,
-/// kein Bestätigungsdialog) muss drei Ledger-Einträge in Reihenfolge
-/// erzeugen — vorgeschlagen, automatisch freigegeben (mit der
-/// gegriffenen Regel), ausgeführt — plus die abschließende
-/// KI-Antwort als vierten Eintrag. Deckt zugleich ab, dass das Ledger
-/// das bestehende KI-Kontext-Verhalten NICHT verändert: derselbe
-/// Ablauf/dieselben `chat-*`-Events wie im bereits bestehenden
-/// `test_autoexec_path_runs_command_and_records_result` oben, nur mit
-/// zusätzlich angehängtem Ledger.
-#[tokio::test]
-async fn test_ledger_captures_proposed_decision_executed_and_ai_message_for_autoexec() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![
-                AiEvent::ActionProposed(AiAction::SuggestCommand {
-                    command: "ls -la".to_string(),
-                }),
-                AiEvent::TextDelta("Erledigt.".to_string()),
-                AiEvent::Done,
-            ],
-            MockSshTransport::default().with_response("ls -la", output("total 0")),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    run_chat_turn(
-        &session,
-        Uuid::new_v4(),
-        &emitter,
-        &profile_store,
-        &confirmations,
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(
-        entries.len(),
-        4,
-        "erwartet: vorgeschlagen, entschieden, ausgeführt, KI-Nachricht — bekam: {entries:?}"
-    );
-
-    assert_eq!(entries[0].source, LedgerSource::Ai);
-    assert!(matches!(
-        &entries[0].content,
-        LedgerEntryContent::CommandProposed { command } if command == "ls -la"
-    ));
-
-    assert_eq!(entries[1].source, LedgerSource::Ai);
-    match &entries[1].content {
-        LedgerEntryContent::Decision {
-            outcome,
-            reason,
-            code,
-            matched_rule,
-            matched_rule_origin,
-        } => {
-            assert_eq!(*outcome, LedgerDecisionOutcome::AutoApproved);
-            assert!(reason.is_none());
-            assert!(code.is_none());
-            assert_eq!(
-                matched_rule.as_ref().map(|r| r.0.as_str()),
-                Some("allow-all")
-            );
-            assert_eq!(
-                *matched_rule_origin,
-                Some(ssh_manager_core::filter::RuleOrigin::User)
-            );
-        }
-        other => panic!("erwartete Decision, bekam {other:?}"),
-    }
-
-    assert_eq!(entries[2].source, LedgerSource::Ai);
-    assert!(matches!(
-        &entries[2].content,
-        LedgerEntryContent::CommandExecuted { command, cancelled, .. }
-            if command == "ls -la" && !cancelled
-    ));
-
-    assert_eq!(entries[3].source, LedgerSource::Ai);
-    assert!(matches!(
-        &entries[3].content,
-        LedgerEntryContent::AiMessage { text } if text == "Erledigt."
-    ));
-}
-
-/// Spec 0057, §1.2 "PFLICHT": ein Fake-Secret in der Kommando-Ausgabe
-/// darf unter keinen Umständen unredigiert im Ledger landen — exakt
-/// dieselbe Prüfung wie `test_persisted_command_result_contains_
-/// redacted_not_raw_secret` oben, nur für den neuen Ledger-Store statt
-/// `chat_session_store`.
-#[tokio::test]
-async fn test_ledger_redacts_fake_secret_in_command_executed_output() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![
-                AiEvent::ActionProposed(AiAction::SuggestCommand {
-                    command: "cat db.conf".to_string(),
-                }),
-                AiEvent::Done,
-            ],
-            MockSshTransport::default().with_response(
-                "cat db.conf",
-                output("Verbindung ok, password=hunter2geheim"),
-            ),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    run_chat_turn(
-        &session,
-        Uuid::new_v4(),
-        &emitter,
-        &profile_store,
-        &confirmations,
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    let serialized: Vec<String> = entries
-        .iter()
-        .map(|e| serde_json::to_string(&e.content).unwrap())
-        .collect();
-    for raw in &serialized {
-        assert!(
-            !raw.contains("hunter2geheim"),
-            "das Secret darf unter keinen Umständen unredigiert ins Ledger gelangen: {raw}"
-        );
-    }
-    assert!(
-        entries.iter().any(|e| matches!(
-            &e.content,
-            LedgerEntryContent::CommandExecuted { output, .. }
-                if String::from_utf8_lossy(&output.stdout).contains("REDACTED")
-        )),
-        "das Ledger muss den redigierten Platzhalter enthalten: {entries:?}"
-    );
-}
-
-/// Spec 0057, §1.1, zweiter Punkt: eine automatisch (per Deny-Regel)
-/// blockierte Aktion bekommt ebenfalls einen `Decision`-Eintrag —
-/// `Rejected`, mit `reason`/`code` aus der Filter-Engine gefüllt, kein
-/// `CommandExecuted`-Eintrag danach (die Aktion lief nie).
-#[tokio::test]
-async fn test_ledger_records_rejected_decision_for_auto_deny_rule() {
-    struct DenyLsPolicyStore;
-    #[async_trait]
-    impl PolicyStore for DenyLsPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
-                id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
-                pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
-                action: ssh_manager_core::filter::RuleAction::Deny,
-                scope: ssh_manager_core::filter::Scope::Global,
-                priority: 0,
-                origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
-        }
-    }
-
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyLsPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(
-        entries.len(),
-        2,
-        "erwartet: vorgeschlagen + abgelehnt, kein Ausführungs-Eintrag: {entries:?}"
-    );
-    match &entries[1].content {
-        LedgerEntryContent::Decision {
-            outcome,
-            reason,
-            code,
-            matched_rule,
-            ..
-        } => {
-            assert_eq!(*outcome, LedgerDecisionOutcome::Rejected);
-            assert!(reason.is_some());
-            assert!(code.is_some());
-            assert_eq!(matched_rule.as_ref().map(|r| r.0.as_str()), Some("deny-ls"));
-        }
-        other => panic!("erwartete Decision, bekam {other:?}"),
-    }
-}
-
-/// Spec 0057, §1.1, zweiter Punkt: eine per Bestätigungsdialog vom
-/// Nutzer freigegebene Aktion bekommt `LedgerSource::User` auf ihrem
-/// `Decision`-Eintrag — anders als die automatischen Fälle oben, wo die
-/// Quelle von der ursprünglichen Herkunft (KI/MCP) abgeleitet wird.
-#[tokio::test]
-async fn test_ledger_records_user_source_for_confirmed_decision() {
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response("ls -la", output("total 0")),
-        )
-        .await;
-    // `NoRulesPolicyStore` (Session-Default): keine passende Regel ->
-    // `Confirm` (Default-Fallback der Filter-Engine).
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    );
-    let responder = approve_first_proposed_action(&emitter, &confirmations);
-    let ((), ()) = tokio::join!(
-        async {
-            action_future.await;
-        },
-        responder
-    );
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(
-        entries.len(),
-        3,
-        "vorgeschlagen, entschieden, ausgeführt: {entries:?}"
-    );
-    assert_eq!(entries[1].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::Decision {
-            outcome: LedgerDecisionOutcome::Confirmed,
-            ..
-        }
-    ));
-}
-
-/// Wie oben, aber der Nutzer lehnt im Dialog ab — derselbe
-/// `LedgerSource::User`, `outcome: Rejected`, ohne
-/// `CommandExecuted`-Eintrag danach.
-#[tokio::test]
-async fn test_ledger_records_user_source_for_rejected_decision() {
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    );
-    let responder = deny_first_proposed_action(&emitter, &confirmations);
-    let ((), ()) = tokio::join!(
-        async {
-            action_future.await;
-        },
-        responder
-    );
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(entries.len(), 2, "vorgeschlagen + abgelehnt: {entries:?}");
-    assert_eq!(entries[1].source, LedgerSource::User);
-    // spec-reviewer-Fund (Review dieses Schritts): `reason`/`code`
-    // tragen jetzt die ursprüngliche `Decision::Confirm`-Begründung
-    // (hier der Default-Fallback der Filter-Engine "keine Regel
-    // gefunden"/`FILTER_NO_RULE_MATCHED`, da `NoRulesPolicyStore` keine
-    // Regel liefert) — vorher liefen sie hier fest auf `None`.
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::Decision {
-            outcome: LedgerDecisionOutcome::Rejected,
-            reason: Some(reason),
-            code: Some(code),
-            ..
-        } if reason == "keine Regel gefunden" && code == "FILTER_NO_RULE_MATCHED"
-    ));
-}
-
-/// Spec 0057, §1.1: "Quelle (user/ai/mcp-agent)" — ein über MCP
-/// vorgeschlagenes (und vom Menschen im selben, geteilten Tab
-/// bestätigtes) Kommando bekommt `LedgerSource::McpAgent` auf seinem
-/// `CommandProposed`-Eintrag (Herkunft des Vorschlags), aber
-/// `LedgerSource::User` auf dem `Decision`-Eintrag (der Mensch hat
-/// tatsächlich bestätigt) — und wird, anders als `chat_messages`
-/// (Spec 0034/0040, s. `test_mcp_action_on_shared_human_session_writes_
-/// no_persisted_history` oben), TROTZDEM ins Ledger geschrieben (Spec
-/// 0057, §1.1: "für spätere Audit-„wer"-Unterscheidung" — MCP-Aktivität
-/// muss gerade sichtbar bleiben).
-#[tokio::test]
-async fn test_ledger_captures_mcp_origin_independent_of_chat_persist_flag() {
-    let (mut session, chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response("ls -la", output("total 0")),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Mcp {
-            client_name: Some("Claude Code".to_string()),
-        },
-        test_fresh_rejection_flag(),
-    );
-    let responder = approve_first_proposed_action(&emitter, &confirmations);
-    let ((), ()) = tokio::join!(
-        async {
-            action_future.await;
-        },
-        responder
-    );
-
-    // Gegenstück: keine `chat_messages`-Zeile (Spec 0040 unverändert).
-    let chat_history = chat_store.load_session(chat_session_id).await.unwrap();
-    assert!(
-        chat_history.is_empty(),
-        "MCP-Herkunft darf weiterhin nie in die persistierte Chat-Historie schreiben: {chat_history:?}"
-    );
-
-    // Kernaussage: das Ledger erfasst es trotzdem.
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(
-        entries.len(),
-        3,
-        "vorgeschlagen, entschieden, ausgeführt: {entries:?}"
-    );
-    assert_eq!(entries[0].source, LedgerSource::McpAgent);
-    assert!(matches!(
-        &entries[0].content,
-        LedgerEntryContent::CommandProposed { .. }
-    ));
-    assert_eq!(entries[1].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::Decision {
-            outcome: LedgerDecisionOutcome::Confirmed,
-            ..
-        }
-    ));
-    // spec-reviewer-Fund (Review dieses Schritts): die Ausführung
-    // folgt aus der Bestätigung des Menschen (`decision_source` =
-    // `User`, s. `handle_user_decision`) — nicht mehr aus `persist`
-    // abgeleitet (das hätte hier fälschlich `McpAgent` ergeben, ohne
-    // dass ein Mensch dafür Anerkennung bekäme).
-    assert_eq!(entries[2].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[2].content,
-        LedgerEntryContent::CommandExecuted { .. }
-    ));
-}
-
-/// spec-reviewer-Fund (Review dieses Schritts): der bisherige
-/// Redaction-Test deckte nur `CommandExecuted.output` ab —
-/// `CommandProposed.command` und `AiMessage.text` laufen ebenfalls
-/// durch `redact_ledger_entry_content`, waren aber ungetestet. Ein
-/// Fake-Secret sowohl im vorgeschlagenen Kommandotext als auch in der
-/// abschließenden KI-Antwort darf in keinem der beiden Einträge
-/// unredigiert landen.
-#[tokio::test]
-async fn test_ledger_redacts_fake_secret_in_command_proposed_and_ai_message() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![
-                AiEvent::ActionProposed(AiAction::SuggestCommand {
-                    command: "mysql --password=hunter2geheim db".to_string(),
-                }),
-                AiEvent::TextDelta("Verbunden mit password=hunter2geheim erfolgreich.".to_string()),
-                AiEvent::Done,
-            ],
-            MockSshTransport::default()
-                .with_response("mysql --password=hunter2geheim db", output("OK")),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    run_chat_turn(
-        &session,
-        Uuid::new_v4(),
-        &emitter,
-        &profile_store,
-        &confirmations,
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    let serialized: Vec<String> = entries
-        .iter()
-        .map(|e| serde_json::to_string(&e.content).unwrap())
-        .collect();
-    for raw in &serialized {
-        assert!(
-            !raw.contains("hunter2geheim"),
-            "das Secret darf unter keinen Umständen unredigiert ins Ledger gelangen: {raw}"
-        );
-    }
-    assert!(
-        matches!(
-            &entries[0].content,
-            LedgerEntryContent::CommandProposed { command } if command.contains("REDACTED")
-        ),
-        "der vorgeschlagene Kommandotext muss redigiert sein: {entries:?}"
-    );
-    assert!(
-        entries.iter().any(|e| matches!(
-            &e.content,
-            LedgerEntryContent::AiMessage { text } if text.contains("REDACTED")
-        )),
-        "die KI-Nachricht muss redigiert sein: {entries:?}"
-    );
-}
-
-/// spec-reviewer-Fund (Review dieses Schritts): der Timeout-Fallback
-/// (Spec 0046, Fund 4 — `PENDING_ACTION_CONFIRM_TIMEOUT` abgelaufen,
-/// ohne dass je eine Nutzerentscheidung eintraf) bekommt eine eigene,
-/// von einer echten Nutzer-Ablehnung unterscheidbare Attribution: die
-/// Herkunft des ursprünglichen Vorschlags (nicht `User` — kein Mensch
-/// hat entschieden) plus `code: "TIMEOUT"` statt des ursprünglichen
-/// Eskalationsgrunds.
-#[tokio::test]
-async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_out_confirmation() {
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    // Kein Responder — die wartende Bestätigung läuft nie auf, muss
-    // also über `PENDING_ACTION_CONFIRM_TIMEOUT` (regulär 3600s) selbst
-    // ablaufen. `tokio::time::pause()` erst HIER, NACH dem
-    // DB-Setup oben (`start_paused = true` auf Testebene, wie in
-    // `test_regression_pending_confirm_action_times_out_instead_of_
-    // hanging_forever` unten, lässt die dortige echte SQLite-
-    // Verbindungsaufnahme in `session_with_real_chat_and_ledger_
-    // persistence` mit `PoolTimedOut` scheitern — dieselbe virtuelle
-    // Uhr, gegen die auch sqlx' interner Pool-Timeout läuft).
-    tokio::time::pause();
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    );
-    let advancer = async {
-        loop {
-            if session.pending_action.lock().unwrap().is_some() {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
-            .await;
-        // `resume()` HIER, NOCH INNERHALB von `advancer`, unmittelbar
-        // nach `advance()` — NICHT erst nach dem `join!` unten: der
-        // Timeout-Zweig in `handle_action_proposed` schreibt nach dem
-        // Ablaufen selbst noch einen Ledger-Eintrag (echte, reale
-        // SQLite-I/O). Bliebe die Uhr bis nach dem `join!` pausiert,
-        // liefe genau dieser nachfolgende Schreibzugriff noch unter
-        // pausierter Zeit — derselbe `PoolTimedOut`-Mechanismus wie
-        // unten beschrieben, nur diesmal beim Schreiben statt beim
-        // Lesen, und wird von `write_ledger_entry` nicht-fatal nur
-        // geloggt (kein Panic) — das Ergebnis war ein gelegentlich
-        // fehlender zweiter Ledger-Eintrag unter `cargo test
-        // --workspace`, nicht reproduzierbar bei isoliertem Lauf dieses
-        // einen Tests.
-        tokio::time::resume();
-    };
-    tokio::join!(action_future, advancer);
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert_eq!(
-        entries.len(),
-        2,
-        "vorgeschlagen + abgelehnt (Timeout): {entries:?}"
-    );
-    assert_eq!(
-        entries[1].source,
-        LedgerSource::Ai,
-        "Timeout bedeutet KEINE Nutzer-Entscheidung — Quelle bleibt die des Vorschlags"
-    );
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::Decision {
-            outcome: LedgerDecisionOutcome::Rejected,
-            code: Some(code),
-            ..
-        } if code == "TIMEOUT"
-    ));
-}
-
-/// spec-reviewer-Fund (Review dieses Schritts): der `EditThenApprove`-
-/// Pfad, in dem die Filter-Engine den BEARBEITETEN Text erneut
-/// automatisch blockiert (z. B. Hard-Blacklist), war ungetestet.
-/// Erwartet: eigener `CommandProposed`-Eintrag für den bearbeiteten
-/// Text (`User` — der Mensch hat ihn verfasst), gefolgt von einer
-/// automatisch abgelehnten `Decision` (Quelle = Herkunft des
-/// ursprünglichen Vorschlags, nicht `User` — die Engine hat blockiert,
-/// nicht der Mensch), kein `CommandExecuted`-Eintrag danach.
-#[tokio::test]
-async fn test_ledger_records_edit_then_approve_auto_blocked_edit() {
-    struct DenyEditedPolicyStore;
-    #[async_trait]
-    impl PolicyStore for DenyEditedPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
-                id: ssh_manager_core::filter::RuleId("deny-rm".to_string()),
-                pattern: ssh_manager_core::filter::Pattern::Glob("rm *".to_string()),
-                action: ssh_manager_core::filter::RuleAction::Deny,
-                scope: ssh_manager_core::filter::Scope::Global,
-                priority: 0,
-                origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
-        }
-    }
-
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyEditedPolicyStore)));
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    );
-    let responder = respond_to_first_proposed_action(
-        &emitter,
-        &confirmations,
-        ActionUserDecision::EditThenApprove {
-            command: "rm -rf /tmp/x".to_string(),
-        },
-    );
-    let ((), ()) = tokio::join!(
-        async {
-            action_future.await;
-        },
-        responder
-    );
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    // vorgeschlagen ("ls -la") — KEIN Decision-Eintrag dafür: der
-    // Nutzer hat den ursprünglichen Vorschlag weder bestätigt noch
-    // abgelehnt, sondern per `EditThenApprove` durch einen neuen Text
-    // ersetzt (s. `handle_user_decision`s `EditThenApprove`-Zweig) —,
-    // vorgeschlagen (bearbeiteter Text "rm -rf /tmp/x"), abgelehnt
-    // (Deny-Regel).
-    assert_eq!(entries.len(), 3, "{entries:?}");
-    assert_eq!(entries[1].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::CommandProposed { command } if command == "rm -rf /tmp/x"
-    ));
-    assert_eq!(
-        entries[2].source,
-        LedgerSource::Ai,
-        "die Engine hat den bearbeiteten Text automatisch blockiert, kein Nutzer-Entscheid"
-    );
-    match &entries[2].content {
-        LedgerEntryContent::Decision {
-            outcome,
-            matched_rule,
-            ..
-        } => {
-            assert_eq!(*outcome, LedgerDecisionOutcome::Rejected);
-            assert_eq!(matched_rule.as_ref().map(|r| r.0.as_str()), Some("deny-rm"));
-        }
-        other => panic!("erwartete Decision, bekam {other:?}"),
-    }
-}
-
-/// spec-reviewer-Fund (Review dieses Schritts): der `EditThenApprove`-
-/// Pfad, in dem der bearbeitete Text NICHT erneut blockiert wird
-/// (Regelfall — "Ausführen" im Bearbeiten-Dialog ist bereits die
-/// Bestätigung), war ebenfalls ungetestet.
-#[tokio::test]
-async fn test_ledger_records_edit_then_approve_accepted_edit() {
-    let (session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response("ls -lah", output("total 4")),
-        )
-        .await;
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let action_future = handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::SuggestCommand {
-            command: "ls -la".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    );
-    let responder = respond_to_first_proposed_action(
-        &emitter,
-        &confirmations,
-        ActionUserDecision::EditThenApprove {
-            command: "ls -lah".to_string(),
-        },
-    );
-    let ((), ()) = tokio::join!(
-        async {
-            action_future.await;
-        },
-        responder
-    );
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    // vorgeschlagen ("ls -la") — kein Decision-Eintrag dafür (s.
-    // Kommentar im Auto-Blocked-Gegenstück oben) —, vorgeschlagen
-    // (bearbeiteter Text "ls -lah"), bestätigt, ausgeführt.
-    assert_eq!(entries.len(), 4, "{entries:?}");
-    assert_eq!(entries[1].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[1].content,
-        LedgerEntryContent::CommandProposed { command } if command == "ls -lah"
-    ));
-    assert_eq!(entries[2].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[2].content,
-        LedgerEntryContent::Decision {
-            outcome: LedgerDecisionOutcome::Confirmed,
-            ..
-        }
-    ));
-    assert_eq!(entries[3].source, LedgerSource::User);
-    assert!(matches!(
-        &entries[3].content,
-        LedgerEntryContent::CommandExecuted { command, .. } if command == "ls -lah"
-    ));
-}
-
-/// spec-reviewer-Fund (Review dieses Schritts): die dokumentierte
-/// Scope-Reduktion (ADR 0047 Punkt 3 — Etappe 1 erfasst ausschließlich
-/// `AiAction::SuggestCommand`) als expliziter Negativ-Test, statt nur
-/// implizit aus dem `if let AiAction::SuggestCommand` an jeder
-/// Schreibstelle ableitbar zu sein: ein `ReadRemoteFile`-Vorschlag darf
-/// KEINEN Ledger-Eintrag erzeugen, auch nicht bei `AutoExec`.
-#[tokio::test]
-async fn test_ledger_stays_empty_for_read_remote_file_in_this_stage() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default(),
-        )
-        .await;
-    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
-    let mock_sftp = MockSftpSession::new().with_file("/home/deploy/app.conf", b"ok".to_vec());
-    session.set_sftp_for_tests(Box::new(mock_sftp)).await;
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    handle_action_proposed(
-        &session,
-        Uuid::new_v4(),
-        AiAction::ReadRemoteFile {
-            path: "/home/deploy/app.conf".to_string(),
-        },
-        &emitter,
-        &profile_store,
-        &confirmations,
-        ActionOrigin::Internal,
-        test_fresh_rejection_flag(),
-    )
-    .await;
-
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    assert!(
-        entries.is_empty(),
-        "Etappe 1 deckt nur SuggestCommand ab (ADR 0047 Punkt 3): {entries:?}"
-    );
-}
-
 /// Spec 0088, T13 (A3.2, Regression): Scheitert das Oeffnen des SFTP-Kanals,
 /// endet die Dateiaktion als sichtbarer Fehler im Chat — mit Fehlercode, und
 /// ohne Panic.
@@ -2303,6 +1500,171 @@ async fn test_file_actions_report_a_chat_error_when_sftp_cannot_be_opened() {
             errors[0]["code"].is_string(),
             "der Fehler muss einen Fehlercode tragen: {:?}",
             errors[0]
+        );
+    }
+}
+
+// --- Issue #1550: bounded reads before the user decides ---------------------
+
+use super::super::remote_files::MAX_PREVIEW_FILE_BYTES;
+
+async fn run_write_proposal_turn(session: &Session) -> TestEmitter {
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+    let turn = run_chat_turn(
+        session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let responder = deny_first_proposed_action(&emitter, &confirmations);
+    tokio::join!(turn, responder);
+    emitter
+}
+
+fn write_proposal(path: &str) -> Vec<AiEvent> {
+    vec![
+        AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+            path: path.to_string(),
+            content: "new".to_string(),
+        }),
+        AiEvent::Done,
+    ]
+}
+
+/// The preview read never uses the uncapped `read_file` and asks for at most
+/// cap + 1 bytes; a file above the cap yields a size note, no content.
+#[tokio::test]
+async fn preview_read_is_capped() {
+    let path = "/home/deploy/huge.bin";
+    let session =
+        test_session_allowing_everything(write_proposal(path), MockSshTransport::default());
+    // Cap + 1 bytes: the smallest file that is over the cap (issue #1559).
+    let big = vec![b'a'; (MAX_PREVIEW_FILE_BYTES + 1) as usize];
+    let sftp = MockSftpSession::new().with_file(path, big);
+    session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+
+    let emitter = run_write_proposal_turn(&session).await;
+
+    let calls = sftp.calls();
+    assert!(
+        !calls.contains(&format!("read_file {path}")),
+        "uncapped read: {calls:?}"
+    );
+    assert!(calls.contains(&format!("read_file_capped {path}")));
+    assert_eq!(sftp.capped_read_limits(), vec![MAX_PREVIEW_FILE_BYTES + 1]);
+    let events = emitter.events.lock().unwrap().clone();
+    assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
+    // Issue #1559: not the cap as a fake size, but an explicit flag.
+    assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(events[0].1["previousFileTooLarge"], serde_json::json!(true));
+}
+
+/// A file exactly at the cap still gets a content preview.
+#[tokio::test]
+async fn preview_file_at_cap_still_shows_content() {
+    let path = "/home/deploy/edge.conf";
+    let session =
+        test_session_allowing_everything(write_proposal(path), MockSshTransport::default());
+    let sftp = MockSftpSession::new().with_file(path, vec![b'a'; MAX_PREVIEW_FILE_BYTES as usize]);
+    session.set_sftp_for_tests(Box::new(sftp)).await;
+
+    let emitter = run_write_proposal_turn(&session).await;
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events[0].1["previousFileContent"].is_string());
+    assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
+}
+
+/// A `WriteRemoteFile` denied by the filter engine triggers no SFTP access.
+#[tokio::test]
+async fn denied_write_proposal_reads_nothing() {
+    struct DenyAllWrites;
+    #[async_trait]
+    impl PolicyStore for DenyAllWrites {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
+                id: ssh_manager_core::filter::RuleId("deny-writes".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("sftp-write /etc/*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Deny,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }])
+        }
+    }
+    let path = "/etc/passwd";
+    let mut session = test_session(write_proposal(path), MockSshTransport::default());
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyAllWrites)));
+    let sftp = MockSftpSession::new().with_file(path, b"root".to_vec());
+    session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+
+    let emitter = TestEmitter::default();
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events[0].1["decision"]["Deny"].is_object());
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
+    assert!(
+        !sftp.calls().iter().any(|c| c.starts_with("read_file")),
+        "{:?}",
+        sftp.calls()
+    );
+}
+
+/// `ReadRemoteFile` with a failing `stat` (missing path) or size 0 reads only
+/// through the capped variant.
+#[tokio::test]
+async fn read_remote_file_without_usable_stat_uses_capped_read_only() {
+    for existing in [false, true] {
+        let path = "/dev/zero";
+        let session = test_session_allowing_everything(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: path.to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        let mut sftp = MockSftpSession::new();
+        if existing {
+            sftp = sftp.with_file(path, Vec::new());
+        }
+        session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+        let emitter = TestEmitter::default();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &InMemoryProfileStore::default(),
+            &ConfirmationRegistry::new(),
+        )
+        .await;
+        let calls = sftp.calls();
+        assert!(
+            calls.contains(&format!("read_file_capped {path}")),
+            "{calls:?}"
+        );
+        assert!(!calls.contains(&format!("read_file {path}")), "{calls:?}");
+        assert_eq!(
+            sftp.capped_read_limits(),
+            vec![crate::orchestration::remote_files::MAX_READ_FILE_BYTES + 1]
         );
     }
 }

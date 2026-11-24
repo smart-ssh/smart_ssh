@@ -1,0 +1,5 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+# no Subsystem line: the sftp subsystem is disabled

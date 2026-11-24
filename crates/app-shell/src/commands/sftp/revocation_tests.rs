@@ -19,7 +19,7 @@
 //! Produktivpfad benutzt) — nur das Auflösen von Sitzung und Kanal aus dem
 //! `AppState` fehlt, weil ein Tauri-`State` im Unit-Test nicht baubar ist.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -53,6 +53,7 @@ struct Entry {
     is_dir: bool,
     permissions: u32,
     content: Vec<u8>,
+    symlink: bool,
 }
 
 /// Der erhöhte Kanal als Test-Double: deterministischer Verzeichnisbaum,
@@ -108,6 +109,7 @@ impl GatedSftp {
                         is_dir: *is_dir,
                         permissions: if *is_dir { 0o755 } else { 0o644 },
                         content: b"ROOT-INHALT".to_vec(),
+                        symlink: false,
                     },
                 )
             })
@@ -188,6 +190,7 @@ impl GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content,
+                symlink: false,
             },
         );
     }
@@ -255,6 +258,33 @@ impl GatedSftp {
 
     fn exists(&self, path: &str) -> bool {
         self.0.entries.lock().unwrap().contains_key(path)
+    }
+
+    fn mark_symlink(&self, path: &str) {
+        self.0
+            .entries
+            .lock()
+            .unwrap()
+            .get_mut(path)
+            .unwrap()
+            .symlink = true;
+    }
+
+    fn set_content(&self, path: &str, content: &str) {
+        self.0
+            .entries
+            .lock()
+            .unwrap()
+            .get_mut(path)
+            .unwrap()
+            .content = content.as_bytes().to_vec();
+    }
+
+    fn owner_ops(&self) -> Vec<String> {
+        self.ops()
+            .into_iter()
+            .filter(|op| op.starts_with("set_owner "))
+            .collect()
     }
 
     fn permissions(&self, path: &str) -> Option<u32> {
@@ -361,6 +391,7 @@ fn remote_entry(path: &str, entry: &Entry) -> RemoteEntry {
         gid: None,
         owner: None,
         group: None,
+        is_symlink: entry.symlink,
     }
 }
 
@@ -414,6 +445,7 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content: content.to_vec(),
+                symlink: false,
             },
         );
         Ok(())
@@ -483,9 +515,82 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content,
+                symlink: false,
             },
         );
         Ok(end)
+    }
+
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        let synthetic = self.0.synthetic.lock().unwrap().clone();
+        let chunk = if let Some((_, size)) = synthetic.filter(|(p, _)| p == path) {
+            let n = size.saturating_sub(offset).min(len.max(1) as u64) as usize;
+            // Only this one chunk is in memory.
+            vec![(offset / len.max(1) as u64) as u8; n]
+        } else {
+            let content = self
+                .content(path)
+                .ok_or_else(|| SshError::ChannelError(format!("Datei nicht gefunden: {path}")))?;
+            let start = (offset as usize).min(content.len());
+            content[start..(start + len).min(content.len())].to_vec()
+        };
+        // The first range of a transfer is recorded like the former chunked
+        // read (the op lists of the existing tests); further ranges as
+        // `read_range`, so tests see every re-acquire. The empty end-of-file
+        // probe is not an operation of its own.
+        if offset == 0 {
+            self.record(format!("read_file_chunked {path}")).await;
+        } else if !chunk.is_empty() {
+            self.record(format!("read_range {path}")).await;
+        }
+        if !chunk.is_empty() {
+            self.after_chunk(chunk.len()).await;
+        }
+        Ok(chunk)
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        if truncate {
+            self.record(format!("write_file_chunked {path}")).await;
+        } else {
+            self.record(format!("write_range {path}")).await;
+        }
+        {
+            let mut entries = self.0.entries.lock().unwrap();
+            if truncate {
+                entries.insert(
+                    path.to_string(),
+                    Entry {
+                        is_dir: false,
+                        permissions: 0o644,
+                        content: Vec::new(),
+                        symlink: false,
+                    },
+                );
+            }
+            let entry = entries
+                .get_mut(path)
+                .ok_or_else(|| SshError::ChannelError(format!("Datei nicht gefunden: {path}")))?;
+            let start = offset as usize;
+            entry.content.resize(start.max(entry.content.len()), 0);
+            entry.content.truncate(start);
+            entry.content.extend_from_slice(data);
+        }
+        if !data.is_empty() {
+            self.after_chunk(data.len()).await;
+        }
+        Ok(())
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
@@ -542,6 +647,7 @@ impl SftpSession for GatedSftp {
                 is_dir: true,
                 permissions: 0o755,
                 content: Vec::new(),
+                symlink: false,
             },
         );
         Ok(())
@@ -559,6 +665,7 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content: Vec::new(),
+                symlink: false,
             },
         );
         Ok(())
@@ -577,6 +684,17 @@ impl SftpSession for GatedSftp {
         }
         entries.remove(path);
         Ok(())
+    }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        self.record(format!("set_owner {path} {uid} {gid}")).await;
+        if self.0.entries.lock().unwrap().contains_key(path) {
+            Ok(())
+        } else {
+            Err(SshError::ChannelError(format!(
+                "Datei nicht gefunden: {path}"
+            )))
+        }
     }
 
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
@@ -653,6 +771,27 @@ impl SftpSession for CountingSftp {
         Ok(ssh_manager_core::ssh::TransferEnd::Completed)
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        _offset: u64,
+        _len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        self.0.lock().unwrap().push(format!("read_range {path}"));
+        Ok(Vec::new())
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        _offset: u64,
+        _data: &[u8],
+        _truncate: bool,
+    ) -> Result<(), SshError> {
+        self.0.lock().unwrap().push(format!("write_range {path}"));
+        Ok(())
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.0.lock().unwrap().push(format!("stat {path}"));
         Err(SshError::ChannelError("kein Eintrag".to_string()))
@@ -686,6 +825,13 @@ impl SftpSession for CountingSftp {
     }
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.0.lock().unwrap().push(format!("remove_dir {path}"));
+        Ok(())
+    }
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("set_owner {path} {uid} {gid}"));
         Ok(())
     }
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
@@ -737,13 +883,7 @@ async fn setup(elevated: Box<dyn SftpSession>) -> Setup {
     sessions.insert(session_id, session.clone());
 
     let registry = Arc::new(ElevatedSftpRegistry::default());
-    registry.insert_for_tests(
-        session_id,
-        ElevatedSftp {
-            target_user: "root".to_string(),
-            sftp: elevated,
-        },
-    );
+    registry.insert_for_tests(session_id, ElevatedSftp::new("root".to_string(), elevated));
 
     Setup {
         sessions,
@@ -837,111 +977,7 @@ fn assert_inactive<T: std::fmt::Debug>(result: CommandResult<T>) {
 
 // --- Audit-Mitschnitt (T7) ---------------------------------------------------
 
-/// Eingefangene `tracing`-Ereignisse, Feldname → Wert.
-#[derive(Clone, Default)]
-struct CapturedLogs(Arc<StdMutex<Vec<HashMap<String, String>>>>);
-
-impl CapturedLogs {
-    /// Die Audit-Zeilen zu `action` auf `path` (s.
-    /// `elevation::audit_elevated_change`).
-    fn audit_lines(&self, action: &str, path: &str) -> Vec<HashMap<String, String>> {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|fields| {
-                fields.get("action").map(String::as_str) == Some(action)
-                    && fields.get("path").map(String::as_str) == Some(path)
-                    && fields.get("elevated").map(String::as_str) == Some("true")
-            })
-            .cloned()
-            .collect()
-    }
-}
-
-/// Minimaler `tracing::Subscriber`, der nur Ereignisfelder sammelt.
-///
-/// Von Hand statt über `tracing-subscriber`: diese Kiste hat die Abhängigkeit
-/// nicht, und für „welche Felder hatte das Ereignis" braucht es nichts
-/// weiter.
-///
-/// Issue #114: **prozessweit** gesetzt (einmal je Testlauf), nicht als
-/// Thread-Standard. `tracing` merkt sich je Aufrufstelle prozessweit, ob sie
-/// jemand hören will, und fragt dafür den Thread, der sie zuerst erreicht.
-/// Mit einem Thread-Standard konnte das ein paralleler Test ohne Mitschnitt
-/// sein, dann galt die Audit-Zeile für immer als „nie" und T7 sah sie nicht
-/// (s. `test_capture_sees_a_line_whose_callsite_another_thread_reached_first`).
-/// Der prozessweite Subscriber hört jede Aufrufstelle, egal von welchem
-/// Thread, und legt eine Zeile nur ab, wenn auf **ihrem** Thread gerade ein
-/// Mitschnitt läuft. `#[tokio::test]` fährt eine Ein-Thread-Laufzeit, die
-/// auch die per `tokio::spawn` gestarteten Tasks auf genau diesem Thread
-/// abarbeitet, der Mitschnitt erfasst sie also mit.
-struct RoutingSubscriber;
-
-thread_local! {
-    /// Mitschnitt des Tests, der auf diesem Thread läuft, falls einer läuft.
-    static THREAD_CAPTURE: std::cell::RefCell<Option<CapturedLogs>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-impl tracing::Subscriber for RoutingSubscriber {
-    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        THREAD_CAPTURE.with(|capture| {
-            if let Some(logs) = capture.borrow().as_ref() {
-                let mut fields = HashMap::new();
-                event.record(&mut FieldCollector(&mut fields));
-                logs.0.lock().unwrap().push(fields);
-            }
-        });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-struct FieldCollector<'a>(&'a mut HashMap<String, String>);
-
-impl tracing::field::Visit for FieldCollector<'_> {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        self.0.insert(field.name().to_string(), value.to_string());
-    }
-    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        self.0.insert(field.name().to_string(), value.to_string());
-    }
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// Beendet den Mitschnitt dieses Threads beim Verlassen des Tests (auch bei
-/// einer Panik) und stellt den vorherigen Zustand wieder her.
-struct CaptureGuard(Option<CapturedLogs>);
-
-impl Drop for CaptureGuard {
-    fn drop(&mut self) {
-        let previous = self.0.take();
-        THREAD_CAPTURE.with(|capture| *capture.borrow_mut() = previous);
-    }
-}
-
-fn capture_logs() -> (CapturedLogs, CaptureGuard) {
-    static INSTALL: std::sync::Once = std::sync::Once::new();
-    INSTALL.call_once(|| {
-        tracing::subscriber::set_global_default(RoutingSubscriber)
-            .expect("in diesem Testlauf darf niemand sonst einen prozessweiten Subscriber setzen");
-    });
-    let logs = CapturedLogs::default();
-    let previous = THREAD_CAPTURE.with(|capture| capture.borrow_mut().replace(logs.clone()));
-    (logs, CaptureGuard(previous))
-}
+use crate::test_support::log_capture::capture_logs;
 
 /// Eine eigene Aufrufstelle nur für den Test unten: Welcher Thread sie zuerst
 /// erreicht, bestimmt der Test selbst, nicht die Reihenfolge anderer Tests.
@@ -2031,598 +2067,5 @@ async fn test_create_file_and_mkdir_never_overwrite_an_existing_name() {
     );
 }
 
-// --- Issue #622: Stücke, Fortschritt, Abbruch, Bestätigung vor dem Stoppen --
-
-const CHUNK: usize = crate::file_ops::TRANSFER_CHUNK_BYTES;
-
-/// Eine Datei aus drei Stücken (das letzte nur halb), mit stückabhängigem Muster.
-fn three_chunk_content() -> Vec<u8> {
-    (0..(CHUNK * 2 + CHUNK / 2))
-        .map(|i| ((i / 1000) % 251) as u8)
-        .collect()
-}
-
-fn events_named(emitter: &app_logic::events::TestEmitter, name: &str) -> Vec<serde_json::Value> {
-    emitter
-        .events
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|(n, _)| n == name)
-        .map(|(_, p)| p.clone())
-        .collect()
-}
-
-fn spawn_download(
-    s: &Setup,
-    emitter: &Arc<app_logic::events::TestEmitter>,
-    remote: &'static str,
-    local: std::path::PathBuf,
-    total: Option<u64>,
-) -> tokio::task::JoinHandle<CommandResult<()>> {
-    let em = emitter.clone();
-    let session_id = s.session_id;
-    spawn_command(
-        s.session.clone(),
-        s.elevated_channel(),
-        move |session, channel| async move {
-            download_one_file(
-                em.as_ref(),
-                &session,
-                &channel,
-                session_id,
-                remote,
-                local,
-                total,
-            )
-            .await
-        },
-    )
-}
-
-fn spawn_upload(
-    s: &Setup,
-    emitter: &Arc<app_logic::events::TestEmitter>,
-    local: std::path::PathBuf,
-    remote: &'static str,
-) -> tokio::task::JoinHandle<CommandResult<()>> {
-    let em = emitter.clone();
-    let session_id = s.session_id;
-    let granted = app_logic::local_path_grants::GrantedLocalPath::unchecked_for_tests(local);
-    spawn_command(
-        s.session.clone(),
-        s.elevated_channel(),
-        move |session, channel| async move {
-            upload_impl(
-                em.as_ref(),
-                &session,
-                &channel,
-                session_id,
-                &granted,
-                remote,
-            )
-            .await
-        },
-    )
-}
-
-/// Ausschalten mit Bestätigung in eigenem Task; wartet, bis die Stopp-Marke
-/// gesetzt ist (erst dann darf der Test den Mock freigeben).
-async fn confirmed_disable(
-    s: &Setup,
-    elevated: &GatedSftp,
-) -> tokio::task::JoinHandle<CommandResult<app_logic::dto::ElevationDisableDto>> {
-    let (sessions, registry, session_id) = (s.sessions.clone(), s.registry.clone(), s.session_id);
-    let task = tokio::spawn(async move {
-        crate::elevated_sftp::disable(
-            &sessions,
-            &registry,
-            session_id,
-            true,
-            &crate::test_support::elevation::access(),
-        )
-        .await
-    });
-    let registry = s.registry.clone();
-    let session_id = s.session_id;
-    expect_within(
-        "die laufende Operation bekommt die Stopp-Marke",
-        || elevated.describe(),
-        async move {
-            while !registry.ops().has_stopped_elevated(session_id) {
-                tokio::task::yield_now().await;
-            }
-        },
-    )
-    .await;
-    task
-}
-
-fn part_files(dir: &std::path::Path) -> Vec<String> {
-    std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect()
-}
-
-/// Acceptance: > 100 MB laden, ohne die Datei im Speicher zu halten; die
-/// Fortschrittsereignisse steigen und sind gedrosselt.
-#[tokio::test]
-async fn test_622_a_download_over_100_mb_reads_in_bounded_chunks() {
-    let elevated = GatedSftp::small_tree(0);
-    let size: u64 = 101 * 1024 * 1024;
-    elevated.set_synthetic("/t/big.bin", size);
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("big.bin");
-
-    let started = std::time::Instant::now();
-    let result = spawn_download(&s, &emitter, "/t/big.bin", local.clone(), Some(size));
-    join(result, &elevated).await.expect("Download gelingt");
-    let elapsed = started.elapsed();
-
-    assert_eq!(std::fs::metadata(&local).unwrap().len(), size);
-    assert_eq!(elevated.chunks(), size.div_ceil(CHUNK as u64) as usize);
-    assert!(
-        elevated.max_chunk() <= CHUNK,
-        "ein Stück war größer als die Obergrenze: {}",
-        elevated.max_chunk()
-    );
-    assert!(
-        !elevated.ops().iter().any(|o| o.starts_with("read_file ")),
-        "kein Lesen der ganzen Datei, war: {:?}",
-        elevated.ops()
-    );
-    assert_eq!(part_files(dir.path()), vec!["big.bin".to_string()]);
-
-    let progress = events_named(&emitter, "sftp-transfer-progress");
-    let done: Vec<u64> = progress
-        .iter()
-        .map(|p| p["bytesDone"].as_u64().unwrap())
-        .collect();
-    assert!(!done.is_empty(), "mindestens ein Fortschrittsereignis");
-    assert!(
-        done.windows(2).all(|w| w[0] < w[1]),
-        "streng steigend: {done:?}"
-    );
-    assert!(*done.last().unwrap() <= size);
-    assert!(
-        done.len() as f64 <= elapsed.as_secs_f64() * 4.0 + 1.0,
-        "höchstens ca. 4 Ereignisse pro Sekunde: {} in {:?}",
-        done.len(),
-        elapsed
-    );
-    assert_eq!(progress[0]["totalBytes"].as_u64(), Some(size));
-}
-
-/// Acceptance: ohne laufende Operation schaltet das Ausschalten sofort ab.
-#[tokio::test]
-async fn test_622_disabling_without_a_running_operation_switches_off_at_once() {
-    let elevated = GatedSftp::small_tree(0);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-
-    let result = crate::elevated_sftp::disable(
-        &s.sessions,
-        &s.registry,
-        s.session_id,
-        false,
-        &crate::test_support::elevation::access(),
-    )
-    .await
-    .expect("Ausschalten gelingt");
-
-    assert!(result.disabled);
-    assert!(result.running_operations.is_empty());
-    assert!(slot.is_revoked());
-}
-
-/// Acceptance: Ausschalten mit laufenden Operationen listet sie; „Abbrechen“
-/// (= ohne Bestätigung) lässt den Modus an und alles läuft zu Ende.
-#[tokio::test]
-async fn test_622_unconfirmed_disable_lists_the_operations_and_changes_nothing() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.pause_after_chunk(1);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("a.txt");
-    let download = spawn_download(&s, &emitter, "/t/a.txt", local.clone(), Some(1));
-    elevated.wait_until_chunk_paused().await;
-
-    // Löschen und chmod laufen als eingetragene Operationen mit.
-    let channel = s.elevated_channel();
-    let _delete = channel.register_op(
-        uuid::Uuid::new_v4(),
-        crate::file_ops::OpKind::Delete,
-        "/t/old",
-    );
-    let _chmod = channel.register_op(
-        uuid::Uuid::new_v4(),
-        crate::file_ops::OpKind::Chmod,
-        "/t/sub",
-    );
-
-    let access = crate::test_support::elevation::access();
-    let result =
-        crate::elevated_sftp::disable(&s.sessions, &s.registry, s.session_id, false, &access)
-            .await
-            .unwrap();
-    assert!(!result.disabled);
-    let mut kinds: Vec<_> = result
-        .running_operations
-        .iter()
-        .map(|o| (o.kind, o.path.as_str()))
-        .collect();
-    kinds.sort();
-    assert_eq!(
-        kinds,
-        vec![
-            ("chmod", "/t/sub"),
-            ("delete", "/t/old"),
-            ("download", "/t/a.txt")
-        ]
-    );
-    assert!(!slot.is_revoked(), "Abbrechen lässt den Modus an");
-
-    elevated.release_chunk();
-    join(download, &elevated)
-        .await
-        .expect("Download läuft zu Ende");
-    assert_eq!(std::fs::read(&local).unwrap(), three_chunk_content());
-    assert_eq!(elevated.chunks(), 3);
-    assert!(!slot.is_revoked());
-}
-
-/// Acceptance: bestätigtes Stoppen — der Download endet nach einem Stück, die
-/// Temp-Datei ist weg, die Zeile zeigt „stopped“ ohne Kanalfehler, danach ist
-/// der Kanal zu und eine neue Operation scheitert (Adversarial).
-#[tokio::test]
-async fn test_622_confirmed_stop_ends_a_download_within_one_chunk_and_closes_the_channel() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.pause_after_chunk(1);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("a.txt");
-    std::fs::write(&local, b"ALT").unwrap();
-    let download = spawn_download(&s, &emitter, "/t/a.txt", local.clone(), None);
-    elevated.wait_until_chunk_paused().await;
-    assert_eq!(part_files(dir.path()).len(), 2, "Temp-Datei läuft mit");
-    assert_eq!(std::fs::read(&local).unwrap(), b"ALT");
-
-    let disable = confirmed_disable(&s, &elevated).await;
-    elevated.release_chunk();
-
-    let err = join(download, &elevated).await.expect_err("gestoppt");
-    assert_eq!(err.code, Some(super::transfer::FILE_OPERATION_STOPPED));
-    let result = expect_within("das Ausschalten endet", || elevated.describe(), disable)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(result.disabled);
-    assert!(slot.is_revoked());
-
-    assert_eq!(elevated.chunks(), 1, "genau ein Stück, dann Schluss");
-    assert_eq!(part_files(dir.path()), vec!["a.txt".to_string()]);
-    assert_eq!(std::fs::read(&local).unwrap(), b"ALT", "alte Datei bleibt");
-    let finished = events_named(&emitter, "sftp-transfer-finished");
-    assert_eq!(finished.len(), 1);
-    assert_eq!(finished[0]["stopped"], "stopped");
-    assert!(finished[0]["error"].is_null(), "kein Kanalfehler");
-
-    // Adversarial: nach dem Schließen läuft nichts mehr über den Kanal.
-    let ops_before = elevated.op_count();
-    let again = spawn_download(&s, &emitter, "/t/a.txt", dir.path().join("b.txt"), None);
-    assert_inactive(join(again, &elevated).await);
-    assert_eq!(elevated.op_count(), ops_before);
-    assert_eq!(elevated.chunks(), 1);
-}
-
-/// Acceptance: bestätigtes Stoppen beendet ein rekursives Löschen am nächsten
-/// Eintrag, dann ist der Kanal zu.
-#[tokio::test]
-async fn test_622_confirmed_stop_ends_a_recursive_delete_at_the_next_entry() {
-    let elevated = GatedSftp::small_tree(5);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-    let command = spawn_command(
-        s.session.clone(),
-        s.elevated_channel(),
-        |session, channel| async move { delete_impl(&session, &channel, "/t").await },
-    );
-    elevated.wait_until_paused().await;
-    let ops_before = elevated.op_count();
-
-    let disable = confirmed_disable(&s, &elevated).await;
-    elevated.release();
-
-    let err = join(command, &elevated).await.expect_err("gestoppt");
-    assert_eq!(err.code, Some(super::transfer::FILE_OPERATION_STOPPED));
-    expect_within("das Ausschalten endet", || elevated.describe(), disable)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(slot.is_revoked());
-    assert_eq!(elevated.op_count(), ops_before, "kein weiterer Eintrag");
-    assert!(elevated.exists("/t"));
-}
-
-/// Dasselbe für rekursives chmod.
-#[tokio::test]
-async fn test_622_confirmed_stop_ends_a_recursive_chmod_at_the_next_entry() {
-    let elevated = GatedSftp::small_tree(5);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-    let command = spawn_command(
-        s.session.clone(),
-        s.elevated_channel(),
-        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true, false).await },
-    );
-    elevated.wait_until_paused().await;
-    let ops_before = elevated.op_count();
-
-    let disable = confirmed_disable(&s, &elevated).await;
-    elevated.release();
-
-    let err = join(command, &elevated).await.expect_err("gestoppt");
-    assert_eq!(err.code, Some(super::transfer::FILE_OPERATION_STOPPED));
-    expect_within("das Ausschalten endet", || elevated.describe(), disable)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(slot.is_revoked());
-    assert_eq!(elevated.op_count(), ops_before);
-}
-
-/// Acceptance: ein Nutzerwechsel mit laufender Operation zeigt dieselbe Liste
-/// und ändert nichts, solange nicht bestätigt wird.
-#[tokio::test]
-async fn test_622_changing_the_target_user_while_an_operation_runs_asks_first() {
-    let elevated = GatedSftp::small_tree(0);
-    let f = crate::test_support::elevation::fixture_with_channels(vec![Box::new(elevated.clone())]);
-    f.session
-        .set_sftp_for_tests(Box::new(MockSftpSession::new()))
-        .await;
-    crate::elevated_sftp::enable(
-        &f.ctx(),
-        "deploy",
-        None,
-        None,
-        false,
-        &crate::test_support::elevation::access(),
-    )
-    .await
-    .expect("Vorbedingung: Aktivieren gelingt");
-    let slot = f
-        .registry
-        .slot(f.session_id, &crate::test_support::elevation::access())
-        .unwrap();
-    let channel = BrowserChannel::for_tests(&f.registry, f.session_id, Some("root".to_string()));
-    let _op = channel.register_op(uuid::Uuid::new_v4(), crate::file_ops::OpKind::Delete, "/t");
-
-    let result = crate::elevated_sftp::enable(
-        &f.ctx(),
-        "deploy",
-        None,
-        Some("www-data"),
-        false,
-        &crate::test_support::elevation::access(),
-    )
-    .await
-    .unwrap();
-    assert!(result.active);
-    assert_eq!(result.running_operations.len(), 1);
-    assert_eq!(result.running_operations[0].kind, "delete");
-    assert!(
-        !slot.is_revoked(),
-        "ohne Bestätigung bleibt alles wie es war"
-    );
-}
-
-/// Acceptance: Trennen während eines erhöhten Transfers stoppt ihn ohne Dialog.
-#[tokio::test]
-async fn test_622_disconnect_stops_an_elevated_transfer_without_a_dialog() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.pause_after_chunk(1);
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let download = spawn_download(&s, &emitter, "/t/a.txt", dir.path().join("a.txt"), None);
-    elevated.wait_until_chunk_paused().await;
-
-    s.registry.remove_session(&s.sessions, s.session_id);
-    elevated.release_chunk();
-
-    assert_inactive(join(download, &elevated).await);
-    assert_eq!(elevated.chunks(), 1, "nach dem Trennen kein weiteres Stück");
-    assert_eq!(
-        part_files(dir.path()),
-        Vec::<String>::new(),
-        "Temp-Datei weg"
-    );
-}
-
-/// Acceptance: Abbrechen-Knopf — ein Stück, Teildatei weg, Zeile „cancelled“,
-/// kein Fehler, Kanal bleibt offen.
-#[tokio::test]
-async fn test_622_cancel_stops_a_download_and_removes_the_partial_file() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.pause_after_chunk(1);
-    let s = setup(Box::new(elevated.clone())).await;
-    let slot = s.slot();
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let download = spawn_download(&s, &emitter, "/t/a.txt", dir.path().join("a.txt"), None);
-    elevated.wait_until_chunk_paused().await;
-
-    let running = s.registry.ops().running_elevated(s.session_id);
-    let id: uuid::Uuid = running[0].id.parse().unwrap();
-    assert!(s.registry.ops().cancel(s.session_id, id));
-    elevated.release_chunk();
-
-    let err = join(download, &elevated).await.expect_err("abgebrochen");
-    assert_eq!(err.code, Some(super::transfer::FILE_OPERATION_STOPPED));
-    assert_eq!(elevated.chunks(), 1);
-    assert!(part_files(dir.path()).is_empty());
-    let finished = events_named(&emitter, "sftp-transfer-finished");
-    assert_eq!(finished[0]["stopped"], "cancelled");
-    assert!(finished[0]["error"].is_null());
-    assert!(!slot.is_revoked());
-}
-
-/// Upload-Abbruch entfernt die Teildatei auf dem Server.
-#[tokio::test]
-async fn test_622_cancel_removes_the_partial_remote_upload() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.pause_after_chunk(1);
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("up.bin");
-    std::fs::write(&local, three_chunk_content()).unwrap();
-    let upload = spawn_upload(&s, &emitter, local, "/t/up.bin");
-    elevated.wait_until_chunk_paused().await;
-
-    let id: uuid::Uuid = s.registry.ops().running_elevated(s.session_id)[0]
-        .id
-        .parse()
-        .unwrap();
-    assert!(s.registry.ops().cancel(s.session_id, id));
-    elevated.release_chunk();
-
-    let err = join(upload, &elevated).await.expect_err("abgebrochen");
-    assert_eq!(err.code, Some(super::transfer::FILE_OPERATION_STOPPED));
-    assert!(!elevated.exists("/t/up.bin"), "Teildatei entfernt");
-    let finished = events_named(&emitter, "sftp-transfer-finished");
-    assert_eq!(finished[0]["stopped"], "cancelled");
-    assert!(finished[0]["incompleteRemotePath"].is_null());
-}
-
-/// Lässt sich die Teildatei nicht entfernen, nennt die Zeile ihren Pfad.
-#[tokio::test]
-async fn test_622_cancel_names_the_incomplete_remote_file_when_removal_fails() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.pause_after_chunk(1);
-    elevated.fail_remove();
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("up.bin");
-    std::fs::write(&local, three_chunk_content()).unwrap();
-    let upload = spawn_upload(&s, &emitter, local, "/t/up.bin");
-    elevated.wait_until_chunk_paused().await;
-
-    let id: uuid::Uuid = s.registry.ops().running_elevated(s.session_id)[0]
-        .id
-        .parse()
-        .unwrap();
-    s.registry.ops().cancel(s.session_id, id);
-    elevated.release_chunk();
-
-    join(upload, &elevated).await.expect_err("abgebrochen");
-    let finished = events_named(&emitter, "sftp-transfer-finished");
-    assert_eq!(finished[0]["stopped"], "cancelled");
-    assert_eq!(finished[0]["incompleteRemotePath"], "/t/up.bin");
-}
-
-/// Ein erfolgreicher Download ist byte-identisch und ersetzt eine vorhandene
-/// Datei erst nach dem Erfolg.
-#[tokio::test]
-async fn test_622_download_is_identical_and_replaces_the_old_file_only_on_success() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.pause_after_chunk(2);
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local = dir.path().join("a.txt");
-    std::fs::write(&local, b"ALT").unwrap();
-    let download = spawn_download(&s, &emitter, "/t/a.txt", local.clone(), None);
-    elevated.wait_until_chunk_paused().await;
-    assert_eq!(
-        std::fs::read(&local).unwrap(),
-        b"ALT",
-        "noch die alte Datei"
-    );
-
-    elevated.release_chunk();
-    join(download, &elevated).await.unwrap();
-    assert_eq!(std::fs::read(&local).unwrap(), three_chunk_content());
-    assert_eq!(part_files(dir.path()), vec!["a.txt".to_string()]);
-}
-
-/// Ordner-Download: Gesamtfortschritt (Dateien/Bytes) in den Ereignissen.
-#[tokio::test]
-async fn test_622_folder_download_reports_aggregate_progress() {
-    let elevated = GatedSftp::small_tree(0);
-    elevated.put_file("/t/a.txt", three_chunk_content());
-    elevated.put_file("/t/b.txt", vec![7u8; 1000]);
-    let s = setup(Box::new(elevated.clone())).await;
-    let emitter = Arc::new(app_logic::events::TestEmitter::default());
-    let dir = tempfile::tempdir().unwrap();
-    let local_root = dir.path().join("t");
-    let em = emitter.clone();
-    let session_id = s.session_id;
-    let result = spawn_command(
-        s.session.clone(),
-        s.elevated_channel(),
-        move |session, channel| async move {
-            download_recursive(
-                em.as_ref(),
-                &session,
-                &channel,
-                session_id,
-                "/t",
-                &local_root,
-            )
-            .await
-        },
-    );
-    join(result, &elevated)
-        .await
-        .expect("Ordner-Download gelingt");
-
-    let progress = events_named(&emitter, "sftp-transfer-progress");
-    assert!(!progress.is_empty());
-    let total_files = 3u64; // a.txt, b.txt, sub/c.txt
-    for p in &progress {
-        let folder = &p["folder"];
-        assert_eq!(folder["filesTotal"].as_u64(), Some(total_files), "{p}");
-        assert!(folder["bytesTotal"].as_u64().unwrap() >= three_chunk_content().len() as u64);
-        assert!(folder["bytesDone"].as_u64().unwrap() <= folder["bytesTotal"].as_u64().unwrap());
-    }
-}
-
-/// Issue #656: an action that still carries the identity of an edit session
-/// opened as another user is refused with the stable `ELEVATED_USER_CHANGED`
-/// code and never touches the channel (no silent switch); the same action with
-/// the current identity passes the check.
-#[tokio::test]
-async fn test_656_stale_expected_identity_is_refused_and_explicit_current_identity_passes() {
-    let elevated = MockSftpSession::new().with_file("/t/a.txt", b"x".to_vec());
-    let s = setup(Box::new(elevated.clone())).await;
-
-    let stale = BrowserChannel::for_tests(&s.registry, s.session_id, Some("www-data".to_string()));
-    let err = delete_impl(&s.session, &stale, "/t/a.txt")
-        .await
-        .expect_err("an old expected identity must be refused");
-    assert_eq!(err.code, Some("ELEVATED_USER_CHANGED"));
-    assert!(err.message.contains("root") && err.message.contains("www-data"));
-    assert!(
-        elevated.file_content("/t/a.txt").is_some(),
-        "a refused action must not touch the elevated channel"
-    );
-
-    delete_impl(&s.session, &s.elevated_channel(), "/t/a.txt")
-        .await
-        .expect("the current identity, sent explicitly, passes");
-    assert!(!elevated.file_content("/t/a.txt").is_some());
-}
+mod tests_sudo_auth;
+mod tests_transfers;

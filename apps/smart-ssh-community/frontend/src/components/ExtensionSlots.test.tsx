@@ -3,45 +3,45 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getServer, listGroups, listServers } from "../api";
+import { getServer, listGroups, listServers } from "../api/api";
 import { registerGroupFormSection, registerManageView, registerServerFormSection, resetRegistryForTests } from "../extensions";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
+import type { GroupDto, ServerDto } from "../api/types";
 import { GroupForm } from "./GroupForm";
 import { ManagementView } from "./ManagementView";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  deleteGroup: vi.fn(),
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listGroups: vi.fn(),
-  listServers: vi.fn(),
-  listUnusableServers: vi.fn(() => Promise.resolve([])),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
-vi.mock("../events", () => ({ onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})) }));
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    deleteGroup: vi.fn(),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listGroups: vi.fn(),
+    listServers: vi.fn(),
+    listUnusableServers: vi.fn(() => Promise.resolve([])),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
+vi.mock("../api/events", () => ({ onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})) }));
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -64,10 +64,13 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
-const group: GroupDto = { id: "g-1", name: "Prod", parentId: null, notes: "" };
+const group: GroupDto = { isCopy: false, id: "g-1", name: "Prod", parentId: null, notes: "" };
 
 function ServerSection({ serverId, dirty }: { serverId: string; dirty: boolean }) {
   return <p>server-ext {serverId} {dirty ? "dirty" : "clean"}</p>;
@@ -124,6 +127,22 @@ describe("server form section", () => {
     expect(screen.queryByText(/server-ext/)).not.toBeInTheDocument();
     act(() => registerServerFormSection({ id: "late", component: ServerSection }));
     expect(await screen.findByText("server-ext s-1 clean")).toBeInTheDocument();
+  });
+});
+
+describe("failing form section (issue #880)", () => {
+  it("is not rendered while the other section and the form stay usable", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken form section");
+    };
+    registerServerFormSection({ id: "bad", component: Broken });
+    registerServerFormSection({ id: "good", component: ServerSection });
+    serverForm("s-1");
+    expect(await screen.findByText("server-ext s-1 clean")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("server-form-section:bad"))).toBe(true);
+    spy.mockRestore();
   });
 });
 

@@ -15,6 +15,7 @@ test("first-run notice: Continue needs the checkbox, and the confirmation persis
   await serverButton.click();
   const notice = page.getByRole("heading", { name: "Before you start" });
   await expect(notice).toBeVisible();
+  await expect(page.getByTestId("dialog-ticks").locator("[data-corner-tick]")).toHaveCount(2);
 
   const checkbox = page.getByRole("checkbox", { name: "I've read and understood this." });
   const continueButton = page.getByRole("button", { name: "Continue", exact: true });
@@ -32,14 +33,17 @@ test("first-run notice: Continue needs the checkbox, and the confirmation persis
   await continueButton.click();
 
   await expect(notice).toBeHidden();
-  await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
   await expect(page.getByText("Connection refused")).toBeVisible();
+  expect((await app.calls("connect")).length).toBe(1);
 
   // After a reload the confirmation is still stored: connecting goes
   // straight to the backend, the notice does not come back.
   await app.reload();
-  await page.getByRole("button", { name: /^alpha\b/ }).click();
-  await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
+  const reloadedButton = page.getByRole("button", { name: /^alpha\b/ });
+  await expect(reloadedButton).toBeVisible();
+  await expect(reloadedButton).toBeEnabled();
+  await reloadedButton.click();
   await expect(page.getByText("Connection refused")).toBeVisible();
+  expect((await app.calls("connect")).length).toBe(1);
   await expect(notice).toBeHidden();
 });

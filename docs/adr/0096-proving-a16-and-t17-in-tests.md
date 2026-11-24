@@ -1,6 +1,9 @@
 # ADR 0096 — T17 und T18 belegen: was gemessen wird und was gelesen
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0101 (§7, T17/T18), ADR 0095 §10
 
 ADR 0095 §10 ließ zwei Tests offen: T17 (Schlüssel, Passwort und Secret

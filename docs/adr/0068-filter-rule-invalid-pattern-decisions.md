@@ -1,6 +1,9 @@
 # ADR 0068: Filterregeln mit einem Muster, das sich nicht übersetzen lässt
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0077-filter-rule-invalid-pattern.md (§1, §4, §9 mit den
 Klarstellungen Q-BL-0249-01, Q-BL-0249-02, Q-BL-0249-03), Spec 0060
 (strenger Glob-Zweig), Spec 0009 (Regelverwaltung), Spec 0024 §5

@@ -68,6 +68,16 @@ impl ExtensionDb {
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
+
+    /// The encrypted key-value and secret store, bound to exactly this
+    /// extension's prefix as namespace (issue #785). Creates no table; the
+    /// handle cannot reach another namespace.
+    pub fn kv_store(&self) -> crate::extension_store::NamespacedStore {
+        crate::extension_store::NamespacedStore::for_validated_prefix(
+            self.pool.clone(),
+            &self.prefix,
+        )
+    }
 }
 
 impl std::fmt::Debug for ExtensionDb {
@@ -131,23 +141,6 @@ pub fn validate_prefix(prefix: &str) -> Result<(), ExtensionMigrationError> {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
     {
         return Err(bad);
-    }
-    Ok(())
-}
-
-/// No prefix may be the start of another one (`ext_a_` would own the tables
-/// of `ext_a_b_`... only if the latter were allowed; the validation above
-/// forbids inner underscores, so equality is the only collision).
-pub fn validate_unique_prefixes<'a>(
-    prefixes: impl IntoIterator<Item = &'a str>,
-) -> Result<(), ExtensionMigrationError> {
-    let mut seen = std::collections::BTreeSet::new();
-    for p in prefixes {
-        if !seen.insert(p.to_owned()) {
-            return Err(ExtensionMigrationError::InvalidRegistration(
-                "two extensions registered the same prefix",
-            ));
-        }
     }
     Ok(())
 }
@@ -222,6 +215,10 @@ struct AuthContext {
     refused: std::sync::atomic::AtomicBool,
 }
 
+#[expect(
+    unsafe_code,
+    reason = "SQLite authorizer callback: raw C ABI, see SAFETY comments"
+)]
 unsafe extern "C" fn authorizer(
     user: *mut c_void,
     action: c_int,
@@ -346,30 +343,7 @@ impl SqliteProfileStore {
             .await
             .map_err(|e| db_error(version, &e))?;
 
-        let ctx = Box::new(AuthContext {
-            prefix: prefix.to_owned(),
-            refused: std::sync::atomic::AtomicBool::new(false),
-        });
-        let ctx_ptr = &*ctx as *const AuthContext as usize;
-        install(&mut conn, Some(ctx_ptr), version).await?;
-        let run = sqlx::raw_sql(sqlx::AssertSqlSafe(m.sql.clone()))
-            .execute(&mut *conn)
-            .await;
-        install(&mut conn, None, version).await?;
-
-        let refused = ctx.refused.load(std::sync::atomic::Ordering::SeqCst);
-        let outcome = match run {
-            Err(_) if refused => Err(ExtensionMigrationError::Rejected {
-                version,
-                reason: "touches objects outside the extension prefix or uses a forbidden feature",
-            }),
-            Err(e) => Err(db_error(version, &e)),
-            Ok(_) => foreign_keys_stay_inside(&mut conn, prefix, version).await,
-        };
-        let outcome = match outcome {
-            Ok(()) => record_and_commit(&mut conn, history, m).await,
-            Err(e) => Err(e),
-        };
+        let outcome = run_in_transaction(&mut conn, prefix, history, m).await;
         if outcome.is_err() {
             // Best effort: the connection is closed on drop anyway.
             let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
@@ -378,33 +352,170 @@ impl SqliteProfileStore {
     }
 }
 
-async fn install(
+/// Everything between `BEGIN` and the rollback decision. Any error returned
+/// from here (including early `?` returns) is followed by a `ROLLBACK` in the
+/// caller, and the authorizer guard has been dropped by then.
+async fn run_in_transaction(
     conn: &mut sqlx::SqliteConnection,
-    ctx: Option<usize>,
-    version: i64,
+    prefix: &str,
+    history: &str,
+    m: &ExtensionMigration,
 ) -> Result<(), ExtensionMigrationError> {
-    let mut handle = conn
-        .lock_handle()
-        .await
-        .map_err(|e| db_error(version, &e))?;
-    let raw = handle.as_raw_handle().as_ptr();
-    // SAFETY: `raw` is the live connection handle, held under sqlx's lock.
-    // The context outlives the installation (see `apply_extension_migration`).
-    let rc = unsafe {
-        match ctx {
-            Some(p) => {
-                libsqlite3_sys::sqlite3_set_authorizer(raw, Some(authorizer), p as *mut c_void)
-            }
-            None => libsqlite3_sys::sqlite3_set_authorizer(raw, None, std::ptr::null_mut()),
-        }
-    };
-    if rc != libsqlite3_sys::SQLITE_OK {
-        return Err(ExtensionMigrationError::Database {
+    let version = m.version;
+    let mut guard = AuthorizerGuard::install(conn, prefix, version).await?;
+    let run = sqlx::raw_sql(sqlx::AssertSqlSafe(m.sql.clone()))
+        .execute(&mut *conn)
+        .await;
+    guard.uninstall(version)?;
+
+    let outcome = match run {
+        Err(_) if guard.refused() => Err(ExtensionMigrationError::Rejected {
             version,
-            code: rc.to_string(),
-        });
+            reason: "touches objects outside the extension prefix or uses a forbidden feature",
+        }),
+        Err(e) => Err(db_error(version, &e)),
+        Ok(_) => foreign_keys_stay_inside(conn, prefix, version).await,
+    };
+    match outcome {
+        Ok(()) => record_and_commit(conn, history, m).await,
+        Err(e) => Err(e),
     }
-    Ok(())
+}
+
+/// Raw SQLite connection pointer that may be held across `.await`s.
+struct DbPtr(*mut libsqlite3_sys::sqlite3);
+
+#[expect(unsafe_code, reason = "see SAFETY comment")]
+// SAFETY: the pointer is only dereferenced by SQLite calls made while the
+// owning connection is alive and not executing a statement (the guard is
+// dropped before the connection, and only used between awaited statements).
+unsafe impl Send for DbPtr {}
+
+/// Owns the authorizer's context and removes the authorizer again on drop.
+///
+/// Must be declared (and thus dropped) before the connection it was
+/// installed on.
+struct AuthorizerGuard {
+    db: DbPtr,
+    /// Heap context handed to SQLite as the callback's user data; freed only
+    /// after `Drop::drop` has removed the authorizer (fields drop afterwards).
+    ctx: Box<AuthContext>,
+    installed: bool,
+}
+
+#[expect(
+    unsafe_code,
+    reason = "sqlite3_set_authorizer FFI calls, see SAFETY comments"
+)]
+impl AuthorizerGuard {
+    async fn install(
+        conn: &mut sqlx::SqliteConnection,
+        prefix: &str,
+        version: i64,
+    ) -> Result<Self, ExtensionMigrationError> {
+        let ctx = Box::new(AuthContext {
+            prefix: prefix.to_owned(),
+            refused: std::sync::atomic::AtomicBool::new(false),
+        });
+        let mut handle = conn
+            .lock_handle()
+            .await
+            .map_err(|e| db_error(version, &e))?;
+        let db = handle.as_raw_handle().as_ptr();
+        // SAFETY: `db` is the live connection handle, held under sqlx's
+        // lock. The context is heap-allocated and stays alive until the
+        // guard's `Drop` has removed the authorizer.
+        let rc = unsafe {
+            libsqlite3_sys::sqlite3_set_authorizer(
+                db,
+                Some(authorizer),
+                &*ctx as *const AuthContext as *mut c_void,
+            )
+        };
+        // Even on failure SQLite may have kept the pointer; the guard's Drop
+        // clears it either way.
+        let guard = Self {
+            db: DbPtr(db),
+            ctx,
+            installed: true,
+        };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(ExtensionMigrationError::Database {
+                version,
+                code: rc.to_string(),
+            });
+        }
+        Ok(guard)
+    }
+
+    fn refused(&self) -> bool {
+        self.ctx.refused.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn clear(&mut self) -> c_int {
+        // SAFETY: `self.db` belongs to a connection that outlives the guard;
+        // a null callback removes the authorizer.
+        let rc = unsafe {
+            libsqlite3_sys::sqlite3_set_authorizer(self.db.0, None, std::ptr::null_mut())
+        };
+        if rc == libsqlite3_sys::SQLITE_OK {
+            self.installed = false;
+        }
+        rc
+    }
+
+    /// Removes the authorizer now and reports a failure; `Drop` retries.
+    fn uninstall(&mut self, version: i64) -> Result<(), ExtensionMigrationError> {
+        #[cfg(test)]
+        if test_hook::should_fail(&self.ctx.prefix) {
+            return Err(ExtensionMigrationError::Database {
+                version,
+                code: "test-uninstall".to_owned(),
+            });
+        }
+        let rc = self.clear();
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(ExtensionMigrationError::Database {
+                version,
+                code: rc.to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Drop for AuthorizerGuard {
+    fn drop(&mut self) {
+        // Order matters: remove the authorizer here, while `self.ctx` is
+        // still alive; the Box is freed only after this body returns.
+        if self.installed {
+            self.clear();
+        }
+        #[cfg(test)]
+        test_hook::record_dropped(&self.ctx.prefix, !self.installed);
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_hook {
+    use std::sync::Mutex;
+    static FAIL: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    static REMOVED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    pub(crate) fn fail_uninstall_for(prefix: &str) {
+        FAIL.lock().unwrap().push(prefix.to_owned());
+    }
+    pub(super) fn should_fail(prefix: &str) -> bool {
+        FAIL.lock().unwrap().iter().any(|p| p == prefix)
+    }
+    pub(super) fn record_dropped(prefix: &str, removed: bool) {
+        if removed {
+            REMOVED.lock().unwrap().push(prefix.to_owned());
+        }
+    }
+    pub(crate) fn authorizer_removed(prefix: &str) -> bool {
+        REMOVED.lock().unwrap().iter().any(|p| p == prefix)
+    }
 }
 
 async fn foreign_keys_stay_inside(
@@ -488,5 +599,42 @@ mod permitted_tests {
             Some("ext_demo_a")
         ));
         assert!(!permitted(P, FUNCTION, None, Some("load_extension")));
+    }
+}
+
+#[cfg(test)]
+mod kv_store_tests {
+    use super::*;
+
+    // Issue #785: the default path (no extension) leaves `ext_kv` empty, and
+    // an extension that never uses its store creates no rows either.
+    #[tokio::test]
+    async fn kv_store_creates_no_rows_until_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+            .await
+            .unwrap();
+        let count = |pool: SqlitePool| async move {
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ext_kv")
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        };
+        let db = store
+            .run_extension_migrations(&ExtensionRegistration {
+                prefix: "ext_demo_".into(),
+                migrations: vec![ExtensionMigration {
+                    version: 1,
+                    description: "init".into(),
+                    sql: "CREATE TABLE ext_demo_t (id INTEGER);".into(),
+                }],
+            })
+            .await
+            .unwrap();
+        assert_eq!(count(db.pool().clone()).await, 0);
+        let kv = db.kv_store();
+        kv.set("k", b"v").await.unwrap();
+        assert_eq!(count(db.pool().clone()).await, 1);
+        assert!(format!("{kv:?}").contains("ext_demo_"));
     }
 }

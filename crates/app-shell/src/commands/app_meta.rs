@@ -7,7 +7,7 @@ use app_logic::dto::AppInfoDto;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-/// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "unknown")
+/// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "android", "unknown")
 /// zur plattformspezifischen Anpassung des UI-Paddings im Frontend (Spec 0014, Abschnitt 4).
 #[tauri::command]
 pub fn get_platform() -> &'static str {
@@ -23,7 +23,16 @@ pub fn get_platform() -> &'static str {
     {
         "linux"
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        "android"
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "android"
+    )))]
     {
         "unknown"
     }
@@ -51,6 +60,10 @@ pub fn get_app_info<R: tauri::Runtime>(
         &app.package_info().version.to_string(),
         *edition,
         app_logic::version::BuildType::current(),
+        persistence_sqlite::data_dir_override().as_deref(),
+        directories::BaseDirs::new()
+            .map(|b| b.home_dir().to_path_buf())
+            .as_deref(),
     )
 }
 
@@ -62,6 +75,8 @@ fn build_app_info(
     version: &str,
     edition: crate::wiring::Edition,
     build_type: app_logic::version::BuildType,
+    data_dir: Option<&std::path::Path>,
+    home: Option<&std::path::Path>,
 ) -> AppInfoDto {
     AppInfoDto {
         version: version.to_string(),
@@ -72,6 +87,13 @@ fn build_app_info(
             crate::wiring::Edition::Official => "Official".to_string(),
         },
         build_type,
+        data_dir: data_dir.map(|d| d.display().to_string()),
+        data_dir_display: data_dir.map(|d| app_logic::data_paths::shorten_home(d, home)),
+        settings_store_path: data_dir.map(|d| {
+            d.join(crate::settings_store::SETTINGS_STORE_FILE)
+                .display()
+                .to_string()
+        }),
     }
 }
 
@@ -87,6 +109,8 @@ mod app_info_tests {
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         assert_eq!(info.version, "0.4.1");
@@ -99,16 +123,52 @@ mod app_info_tests {
     }
 
     #[test]
+    fn test_build_app_info_reports_data_dir_only_with_override() {
+        let none = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            app_logic::version::BuildType::Release,
+            None,
+            None,
+        );
+        assert_eq!(none.data_dir, None);
+        assert_eq!(none.data_dir_display, None);
+        assert_eq!(none.settings_store_path, None);
+
+        let dir = std::path::Path::new("/home/u/SmartSSH-Test");
+        let some = build_app_info(
+            "0.4.1",
+            crate::wiring::Edition::Community,
+            app_logic::version::BuildType::Release,
+            Some(dir),
+            Some(std::path::Path::new("/home/u")),
+        );
+        assert_eq!(some.data_dir.as_deref(), Some("/home/u/SmartSSH-Test"));
+        assert_eq!(
+            some.data_dir_display,
+            Some(format!("~{}SmartSSH-Test", std::path::MAIN_SEPARATOR))
+        );
+        assert_eq!(
+            some.settings_store_path,
+            Some(dir.join("settings.json").display().to_string())
+        );
+    }
+
+    #[test]
     fn test_build_app_info_reports_build_type() {
         let dev = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Dev,
+            None,
+            None,
         );
         let release = build_app_info(
             "0.4.1",
             crate::wiring::Edition::Community,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         // Das Frontend liest `buildType` mit exakt diesen Werten
@@ -127,6 +187,8 @@ mod app_info_tests {
             "0.4.1",
             crate::wiring::Edition::Official,
             app_logic::version::BuildType::Release,
+            None,
+            None,
         );
 
         assert_eq!(info.edition, "Official");
@@ -171,8 +233,18 @@ mod app_info_tests {
 #[tauri::command]
 pub fn get_entitlements(
     state: State<'_, AppState>,
+    catalogue: State<'_, crate::wiring::EntitlementCatalogue>,
 ) -> ssh_manager_core::entitlements::Entitlements {
-    state.entitlements.current()
+    catalogue.filter(state.entitlements.current())
+}
+
+/// Tells the frontend that the entitlement set changed (see
+/// `get_entitlements`).
+pub(crate) fn emit_entitlements_changed(
+    app: &tauri::AppHandle,
+    current: ssh_manager_core::entitlements::Entitlements,
+) {
+    tauri::Emitter::emit(app, app_logic::event_names::ENTITLEMENTS_CHANGED, current).ok();
 }
 
 /// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets
@@ -197,6 +269,23 @@ pub fn get_entitlements(
 /// zu ignorieren.
 #[tauri::command]
 pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandResult<&'static str> {
+    // Android (Spec 0114): no overlay title bar; the command stays registered
+    // so the frontend call does not fail, and reports the native frame.
+    #[cfg(target_os = "android")]
+    {
+        let _ = window;
+        Ok("native")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        create_overlay_titlebar_desktop(window).await
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+async fn create_overlay_titlebar_desktop(
+    window: tauri::WebviewWindow,
+) -> CommandResult<&'static str> {
     use tauri_plugin_decoration::WebviewWindowExt;
 
     if let Err(error) = window.activate_decoration().await {
@@ -236,6 +325,7 @@ pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandRes
 /// (nicht verschluckt) — der Startpunkt, um ein künftiges Windows-/
 /// Linux-Problem tatsächlich diagnostizieren zu können, statt wie bisher
 /// zu raten.
+#[cfg(not(target_os = "android"))]
 async fn restore_native_decoration(
     window: &tauri::WebviewWindow,
     activation_error: impl std::fmt::Display,

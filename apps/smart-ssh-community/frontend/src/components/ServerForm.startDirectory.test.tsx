@@ -4,41 +4,41 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createServer, getServer, updateServer } from "../api";
+import { createServer, getServer, updateServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { ServerDto } from "../types";
+import type { ServerDto } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  inspectKeyFile: vi.fn(),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    inspectKeyFile: vi.fn(),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -66,6 +66,8 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
     startDirectory: null,
     ...overrides,
   };
@@ -117,6 +119,7 @@ describe("ServerForm start directory (Spec 0102)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
 
     await waitFor(() => expect(updateServer).toHaveBeenCalledTimes(1));
+    // wait-ok: asserts only the mock's arguments, no DOM state depends on the call
     expect(vi.mocked(updateServer).mock.calls[0][1].startDirectory).toBeNull();
   });
 
@@ -142,7 +145,6 @@ describe("ServerForm start directory (Spec 0102)", () => {
     );
     renderForm("00000000-0000-0000-0000-000000000000");
 
-    await waitFor(() => expect(getServer).toHaveBeenCalled());
     // Vor dem Laden ist `isLocal` noch unbekannt; danach verschwindet das Feld.
     await waitFor(() => expect(screen.queryByLabelText(LABEL)).toBeNull());
     expect(screen.queryByText(/Startverzeichnis/)).toBeNull();

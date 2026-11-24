@@ -16,11 +16,12 @@
 //! in `app-shell::orchestration`) mappt sie zuerst auf dieselben
 //! `sftp-read <pfad>`/`sftp-write <pfad>`-Pseudokommandos, die bereits für
 //! die Filter-Engine-Anbindung existieren (Spec 0020, Abschnitt 4.1), und
-//! ruft dann [`RiskClassifier::classify`] wie für ein normales Kommando auf
+//! ruft dann [`RuleBasedRiskClassifier::classify`] wie für ein normales Kommando auf
 //! — dieselbe Konvention, keine zweite Mapping-Logik in diesem Modul.
 
 mod classifier;
 mod patterns;
+mod sftp_word_check;
 mod types;
 
 #[cfg(test)]
@@ -29,8 +30,14 @@ mod tests;
 #[cfg(test)]
 mod property_tests;
 
+mod sudo_options;
+#[cfg(test)]
+mod tests_sftp_server_args;
+#[cfg(test)]
+mod tests_ssh_key_names;
+
 pub use classifier::{
     secret_path_read_reason, sftp_server_invocation_reason, CommandCheckFinding,
     RuleBasedRiskClassifier,
 };
-pub use types::{RiskAssessment, RiskClassifier, RiskLevel};
+pub use types::{RiskAssessment, RiskLevel};

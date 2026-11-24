@@ -1,14 +1,15 @@
 // Parts of a session tab shared by the wide tab bar and the narrow burger
 // menu (issue #579), so label, state indicator and badges stay identical.
 import type { TFunction } from "i18next";
-import { Spinner } from "./ui";
-import { numberedServerName, sessionTabLabel, type SessionTab } from "../useSessionTabs";
+import { Spinner, Icon, Badge } from "./ui";
+import { numberedServerName, sessionTabLabel, type SessionTab } from "../hooks/useSessionTabs";
+import { StatusSquare, type StatusTone } from "./ui/StatusSquare";
 
-const STATUS_DOT: Record<SessionTab["status"], string> = {
-  connected: "bg-emerald-500",
-  disconnected: "bg-slate-500",
-  reconnecting: "bg-amber-500",
-  awaiting_host_key: "bg-amber-500",
+export const STATUS_TONE: Record<SessionTab["status"], StatusTone> = {
+  connected: "success",
+  disconnected: "neutral",
+  reconnecting: "warning",
+  awaiting_host_key: "warning",
 };
 
 /** The visible label of a tab, including connecting/failed wording. */
@@ -25,11 +26,11 @@ export function TabStateIndicator({ tab }: { tab: SessionTab }) {
   return tab.phase === "connecting" ? (
     <Spinner className="h-2.5 w-2.5 shrink-0" />
   ) : tab.phase === "failed" ? (
-    <span aria-hidden="true" className="shrink-0 text-red-400">
-      ✗
+    <span aria-hidden="true" className="shrink-0 text-danger-fg">
+      <Icon name="x" />
     </span>
   ) : (
-    <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
+    <StatusSquare tone={tab.isLocal && tab.status === "connected" ? "local" : STATUS_TONE[tab.status]} />
   );
 }
 
@@ -49,7 +50,7 @@ export function SessionTabContent({
     <>
       <TabStateIndicator tab={tab} />
       {tab.mcp && (
-        <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
+        <span className="shrink-0 border border-local/60 px-1 text-[10px] leading-tight text-local-fg">
           {t("sessionTabs.mcp.badge")}
         </span>
       )}
@@ -58,14 +59,13 @@ export function SessionTabContent({
       </span>
       {tab.hasPendingAction &&
         (tab.mcp ? (
-          <span className="shrink-0 animate-pulse bg-amber-400 px-1 text-[10px] leading-tight text-slate-950">
+          <span className="shrink-0 animate-pulse bg-warning-fg px-1 text-[10px] leading-tight text-surface-sunken">
             {t("sessionTabs.mcp.pendingBadge")}
           </span>
         ) : (
-          <span
-            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-            title={t("sessionTabs.pendingAction")}
-          />
+          <span title={t("sessionTabs.pendingAction")} className="shrink-0">
+            <Badge tone="warning">{t("sessionTabs.pendingBadge")}</Badge>
+          </span>
         ))}
     </>
   );

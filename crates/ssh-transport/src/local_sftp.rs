@@ -127,6 +127,31 @@ impl Default for LocalFileSession {
     }
 }
 
+fn local_entry(name: String, path: String, metadata: &std::fs::Metadata) -> RemoteEntry {
+    let (uid, gid) = owner_ids(metadata);
+    RemoteEntry {
+        name,
+        path,
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        permissions: permission_bits(metadata),
+        modified: modified_time(metadata),
+        uid,
+        gid,
+        owner: None,
+        group: None,
+        is_symlink: metadata.file_type().is_symlink(),
+    }
+}
+
+/// Entry for `path` itself: named by its last component, or the whole path.
+fn path_entry(path: &str, metadata: &std::fs::Metadata) -> RemoteEntry {
+    let name = Path::new(path)
+        .file_name()
+        .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+    local_entry(name, path.to_string(), metadata)
+}
+
 #[async_trait]
 impl SftpSession for LocalFileSession {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
@@ -136,26 +161,16 @@ impl SftpSession for LocalFileSession {
         let mut entries = Vec::new();
         while let Some(entry) = read_dir.next_entry().await.map_err(|e| io_err(path, e))? {
             let metadata = entry.metadata().await.map_err(|e| io_err(path, e))?;
-            let (uid, gid) = owner_ids(&metadata);
-            entries.push(RemoteEntry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                // Built from the caller's `path`, not `entry.path()` (which
-                // would carry the resolved home prefix): relative input
-                // stays relative output (`"."` → `./name`), as before
-                // issue #10, so `remotePath.ts` keeps working unchanged.
-                path: Path::new(path)
+            entries.push(local_entry(
+                entry.file_name().to_string_lossy().into_owned(),
+                // From the caller's `path`, not `entry.path()` (resolved home
+                // prefix): relative input stays relative (`"."` → `./name`).
+                Path::new(path)
                     .join(entry.file_name())
                     .to_string_lossy()
                     .into_owned(),
-                is_dir: metadata.is_dir(),
-                size: metadata.len(),
-                permissions: permission_bits(&metadata),
-                modified: modified_time(&metadata),
-                uid,
-                gid,
-                owner: None,
-                group: None,
-            });
+                &metadata,
+            ));
         }
         Ok(entries)
     }
@@ -247,50 +262,74 @@ impl SftpSession for LocalFileSession {
         }
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let mut file = tokio::fs::File::open(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        file.seek(std::io::SeekFrom::Start(offset))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let mut buf = Vec::new();
+        file.take(len as u64)
+            .read_to_end(&mut buf)
+            .await
+            .map_err(|e| io_err(path, e))?;
+        Ok(buf)
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+        let resolved = self.resolve(path);
+        let mut file = if truncate {
+            tokio::fs::File::create(resolved).await
+        } else {
+            tokio::fs::OpenOptions::new()
+                .write(true)
+                .open(resolved)
+                .await
+        }
+        .map_err(|e| io_err(path, e))?;
+        if !truncate {
+            file.seek(std::io::SeekFrom::Start(offset))
+                .await
+                .map_err(|e| io_err(path, e))?;
+        }
+        file.write_all(data).await.map_err(|e| io_err(path, e))?;
+        file.flush().await.map_err(|e| io_err(path, e))?;
+        Ok(())
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::metadata(self.resolve(path))
             .await
             .map_err(|e| io_err(path, e))?;
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string());
-        let (uid, gid) = owner_ids(&metadata);
-        Ok(RemoteEntry {
-            name,
-            path: path.to_string(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            permissions: permission_bits(&metadata),
-            modified: modified_time(&metadata),
-            uid,
-            gid,
-            owner: None,
-            group: None,
-        })
+        Ok(path_entry(path, &metadata))
+    }
+
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        let target = tokio::fs::read_link(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        Ok(target.to_string_lossy().into_owned())
     }
 
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::symlink_metadata(self.resolve(path))
             .await
             .map_err(|e| io_err(path, e))?;
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string());
-        let (uid, gid) = owner_ids(&metadata);
-        Ok(RemoteEntry {
-            name,
-            path: path.to_string(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            permissions: permission_bits(&metadata),
-            modified: modified_time(&metadata),
-            uid,
-            gid,
-            owner: None,
-            group: None,
-        })
+        Ok(path_entry(path, &metadata))
     }
 
     /// `symlink_metadata` (lstat) statt `metadata` (stat) — SFTP `REMOVE`
@@ -362,6 +401,25 @@ impl SftpSession for LocalFileSession {
             .map_err(|e| io_err(path, e))
     }
 
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::lchown(self.resolve(path), Some(uid), Some(gid))
+                .map_err(|e| io_err(path, e))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (uid, gid);
+            Err(io_err(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "Owner change is not supported on this operating system",
+                ),
+            ))
+        }
+    }
+
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
         #[cfg(unix)]
         {
@@ -392,6 +450,37 @@ impl SftpSession for LocalFileSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #1291: the local session lists a link as itself (lstat view),
+    /// `read_link` returns its target, and `stat` follows it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_links_are_listed_as_links_and_read_link_returns_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir(root.join("folder")).unwrap();
+        std::fs::write(root.join("file"), b"x").unwrap();
+        std::os::unix::fs::symlink(root.join("folder"), root.join("link-dir")).unwrap();
+        std::os::unix::fs::symlink("nowhere", root.join("dangling")).unwrap();
+        let mut session = LocalFileSession::new();
+        let base = root.to_str().unwrap();
+
+        let entries = session.list_dir(base).await.unwrap();
+        let link = entries.iter().find(|e| e.name == "link-dir").unwrap();
+        assert!(link.is_symlink && !link.is_dir);
+        let plain = entries.iter().find(|e| e.name == "file").unwrap();
+        assert!(!plain.is_symlink);
+
+        let link_path = format!("{base}/link-dir");
+        assert_eq!(
+            session.read_link(&link_path).await.unwrap(),
+            root.join("folder").to_str().unwrap()
+        );
+        assert!(session.stat(&link_path).await.unwrap().is_dir);
+        let dangling = format!("{base}/dangling");
+        assert_eq!(session.read_link(&dangling).await.unwrap(), "nowhere");
+        assert!(session.stat(&dangling).await.is_err());
+    }
 
     #[tokio::test]
     async fn test_write_then_read_file_roundtrip() {
@@ -603,6 +692,33 @@ mod tests {
         session.create_dir("made-dir-2").await.unwrap();
         session.remove("./made-dir-2").await.unwrap();
         assert!(!home.path().join("made-dir-2").exists());
+    }
+
+    /// Issue #654: `set_owner` acts under the home directory and changes a
+    /// symlink itself, not its target. An unprivileged test can only set its
+    /// own ids, which still proves the call reaches the file.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_set_owner_acts_on_the_link_not_the_target() {
+        use std::os::unix::fs::MetadataExt;
+        let home = tempfile::tempdir().unwrap();
+        tokio::fs::write(home.path().join("o.txt"), b"x")
+            .await
+            .unwrap();
+        std::os::unix::fs::symlink("o.txt", home.path().join("link")).unwrap();
+        let meta = std::fs::metadata(home.path().join("o.txt")).unwrap();
+        let mut session = LocalFileSession::with_home(Some(home.path().to_path_buf()));
+        session
+            .set_owner("o.txt", meta.uid(), meta.gid())
+            .await
+            .unwrap();
+        session
+            .set_owner("link", meta.uid(), meta.gid())
+            .await
+            .unwrap();
+        assert!(session.lstat("link").await.unwrap().is_symlink);
+        assert!(!session.lstat("o.txt").await.unwrap().is_symlink);
+        assert!(session.set_owner("missing", 0, 0).await.is_err());
     }
 
     #[cfg(unix)]

@@ -16,6 +16,7 @@ mod credential_store;
 /// Klartext-Datei umwandeln.
 mod encryption;
 mod error;
+mod error_kind;
 /// Issue #462: extension-owned tables and migrations (Spec 0038, 2a).
 mod extension_db;
 /// Issue #673: namespaced key-value and secret store.
@@ -25,24 +26,31 @@ mod extension_store;
 mod field_content_decryption;
 /// Issue #19: exklusive Sperre auf das Datenverzeichnis.
 mod instance_lock;
-mod ledger_store;
 mod mapping;
 mod paths;
 mod policy_store;
 mod prompt_history_store;
+pub mod runtime_bridge;
+mod server_columns;
 mod store;
+#[cfg(any(test, feature = "test-support"))]
+mod test_exit_guard;
 /// Issue #15: Helfer für die End-zu-End-Migrationstests (Release-Fixtures,
 /// Abbild von Schema und Inhalt, eine Migration aus der Zukunft). Hinter
 /// `test-support`, wie `SqliteProfileStore::connect_plaintext`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+mod time_zone;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+#[cfg(test)]
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
+#[cfg(test)]
+mod tests_concurrent_writes;
 #[cfg(test)]
 mod tests_credential_store;
 #[cfg(test)]
@@ -68,9 +76,16 @@ mod tests_fixture_t0;
 /// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
 #[cfg(test)]
 mod tests_raw_file;
+#[cfg(test)]
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
+#[cfg(test)]
+mod tests_remove_activity_record;
+#[cfg(test)]
+mod tests_runtime_bridge_guard;
+#[cfg(test)]
+mod tests_server_columns;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
@@ -89,9 +104,12 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
+pub use error_kind::{
+    classify, DbFailure, StoreErrorKind, FILTER_RULE_PATTERN_INVALID, STORE_ERROR_CODES,
+};
 pub use extension_db::{
-    validate_prefix, validate_unique_prefixes, ExtensionDb, ExtensionMigration,
-    ExtensionMigrationError, ExtensionRegistration,
+    validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
+    ExtensionRegistration,
 };
 pub use extension_store::{
     ExtensionStore, ExtensionStoreError, NamespacedStore, MAX_KEYS_PER_NAMESPACE, MAX_KEY_BYTES,
@@ -101,10 +119,15 @@ pub use field_content_decryption::{
     ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,
 };
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
-pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::{
-    data_dir_override, data_dir_override_from, default_db_path, DATA_DIR_OVERRIDE_ENV,
+    android_cache_dir, android_cache_dir_for, android_files_dir, android_files_dir_for,
+    android_user_id_from_uid, data_dir_flag_from, data_dir_override, data_dir_override_from,
+    default_db_path, init_data_dir, pointer_file_path, pointer_file_target, resolve_with,
+    resolved_data_dir, select_override, set_android_app_id, AndroidAppIdError, DataDirError,
+    DataDirSource, HomeUnknown, PointerOs, ResolvedDataDir, ANDROID_APP_ID, DATA_DIR_FLAG,
+    DATA_DIR_OVERRIDE_ENV, POINTER_FILE_EXTENSION,
 };
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
 pub use store::SqliteProfileStore;
+pub use time_zone::{device_time_zone_source, TimeZoneSource};

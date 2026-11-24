@@ -1,6 +1,8 @@
 # ADR 0091 — Host-Key-Dialog: Fokus-Fang als Hook, zwei Mechanismen für die Fokus-Rückholung, bewusst nicht behobene Review-Funde
 
-Status: akzeptiert · Spec: `docs/specs/0100-host-key-dialog-keyboard.md`
+## Status
+
+Accepted · Spec: `docs/specs/0100-host-key-dialog-keyboard.md`
 
 ## 1. Ein Hook ohne eigenes Markup statt eines portalten Dialog-Bausteins
 

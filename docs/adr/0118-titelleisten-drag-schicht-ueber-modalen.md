@@ -1,6 +1,9 @@
 # ADR 0118 — Titelleisten-Drag-Schicht über modalen Dialogen
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0014 (Abschnitt 5), Issue #160
 
 ## Kontext

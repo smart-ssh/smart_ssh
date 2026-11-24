@@ -8,6 +8,7 @@
 
 use async_trait::async_trait;
 use ssh_manager_core::ai::AiEvent;
+use ssh_manager_core::filter::PolicyRules;
 use ssh_manager_core::filter::{
     EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule, RuleAction, Scope,
 };
@@ -23,15 +24,15 @@ use super::*;
 struct AllowExactIptablesFlushStore;
 #[async_trait]
 impl PolicyStore for AllowExactIptablesFlushStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: RuleId("allow-iptables-flush".to_string()),
             pattern: Pattern::Exact("iptables -F".to_string()),
             action: RuleAction::Allow,
             scope: Scope::Global,
             priority: 0,
             origin: RuleOrigin::User,
-        }]
+        }])
     }
 }
 
@@ -39,15 +40,15 @@ impl PolicyStore for AllowExactIptablesFlushStore {
 struct DenyIptablesStore;
 #[async_trait]
 impl PolicyStore for DenyIptablesStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: RuleId("deny-iptables".to_string()),
             pattern: Pattern::Glob("iptables*".to_string()),
             action: RuleAction::Deny,
             scope: Scope::Global,
             priority: 10,
             origin: RuleOrigin::User,
-        }]
+        }])
     }
 }
 
@@ -71,7 +72,7 @@ fn confirm_reason(payload: &serde_json::Value) -> &str {
 fn red_risk_session(transport: MockSshTransport) -> Session {
     let session = test_session_allowing_everything(vec![AiEvent::Done], transport);
     assert!(
-        session.red_risk_always_confirm,
+        session.safety.red_risk_always_confirm,
         "Spec 0092, A1.2: Test-Fixtures starten mit eingeschalteter Einstellung"
     );
     session
@@ -359,6 +360,7 @@ async fn test_t6_red_with_injection_flag_shows_injection_reason_and_keeps_the_fl
             .with_response("ls -la", output("total 0")),
     );
     session
+        .safety
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -386,6 +388,7 @@ async fn test_t6_red_with_injection_flag_shows_injection_reason_and_keeps_the_fl
     );
     assert!(
         session
+            .safety
             .injection_suspected
             .load(std::sync::atomic::Ordering::SeqCst),
         "das neue Glied darf das Verdachts-Flag nicht verbrauchen"
@@ -507,7 +510,7 @@ async fn test_t8b_sudo_form_under_a_non_sudo_allow_rule_is_escalated() {
         red_risk_session(MockSshTransport::default().with_response(&sudo_command, output("")));
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowExactIptablesFlushStore)));
     assert!(
-        session.sudo_password.is_none(),
+        session.safety.sudo_password.is_none(),
         "Vorbedingung: kein gespeichertes Sudo-Passwort"
     );
 

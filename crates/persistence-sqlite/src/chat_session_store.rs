@@ -33,6 +33,8 @@ use ssh_manager_core::shared::ServerId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatSessionStoreError {
     Backend(String),
+    /// SQLite failure with its kind (issue #885).
+    Database(crate::error_kind::DbFailure),
     /// Die geladene `content`-Spalte einer Nachricht ließ sich nicht als
     /// `MessageContent` deserialisieren — z. B. korrupte/fremde Daten.
     /// Eigene Variante statt in `Backend` verpackt, damit Aufrufer diesen
@@ -48,6 +50,7 @@ pub enum ChatSessionStoreError {
 impl std::fmt::Display for ChatSessionStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ChatSessionStoreError::Database(d) => write!(f, "Datenbankfehler: {}", d.message),
             ChatSessionStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
             ChatSessionStoreError::CorruptContent { message_id, reason } => write!(
                 f,
@@ -58,10 +61,6 @@ impl std::fmt::Display for ChatSessionStoreError {
 }
 
 impl std::error::Error for ChatSessionStoreError {}
-
-fn backend_err(e: sqlx::Error) -> ChatSessionStoreError {
-    ChatSessionStoreError::Backend(e.to_string())
-}
 
 fn role_to_text(role: Role) -> &'static str {
     match role {
@@ -105,8 +104,9 @@ fn content_type_for(content: &MessageContent) -> &'static str {
 /// delete, retention delete and (via the profile store) server delete. Called
 /// only after the delete succeeded; a crash in between is covered by the
 /// extension's `reconcile` at the next start.
+#[async_trait::async_trait]
 pub trait ChatSessionRemovalObserver: Send + Sync {
-    fn sessions_removed(&self, session_ids: &[Uuid]);
+    async fn sessions_removed(&self, session_ids: &[Uuid]);
 }
 
 /// Slot shared between the profile store and every chat store made from it,
@@ -114,12 +114,12 @@ pub trait ChatSessionRemovalObserver: Send + Sync {
 pub(crate) type RemovalHook =
     std::sync::Arc<std::sync::OnceLock<std::sync::Arc<dyn ChatSessionRemovalObserver>>>;
 
-pub(crate) fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
+pub(crate) async fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
     if ids.is_empty() {
         return;
     }
     if let Some(observer) = hook.get() {
-        observer.sessions_removed(ids);
+        observer.sessions_removed(ids).await;
     }
 }
 
@@ -152,7 +152,8 @@ impl SqliteChatSessionStore {
     ) -> Result<Uuid, ChatSessionStoreError> {
         let id = Uuid::new_v4();
         sqlx::query(
-            "INSERT INTO chat_sessions (id, server_id, title, started_at, ended_at, ai_provider_id) \
+            "INSERT INTO chat_sessions \
+             (id, server_id, title, started_at, ended_at, ai_provider_id) \
              VALUES (?, ?, NULL, ?, NULL, ?)",
         )
         .bind(id.to_string())
@@ -160,9 +161,7 @@ impl SqliteChatSessionStore {
         .bind(Utc::now().to_rfc3339())
         .bind(ai_provider_id.map(|id| id.to_string()))
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
-
+        .await?;
         Ok(id)
     }
 
@@ -192,13 +191,18 @@ impl SqliteChatSessionStore {
         }
         let session_id_str = session_id.to_string();
 
+        // Issue #903: read-max and insert in one transaction. `BEGIN
+        // IMMEDIATE` takes the write lock up front, so no other writer can
+        // slip between the SELECT and the INSERT (and the UNIQUE index from
+        // migration 0027 backs it up).
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let next_sequence: i64 = sqlx::query(
             "SELECT COALESCE(MAX(sequence), -1) + 1 AS next FROM chat_messages WHERE session_id = ?",
         )
         .bind(&session_id_str)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
-        .map_err(backend_err)?
+        ?
         .get("next");
 
         let content_json = serde_json::to_string(&message.content).map_err(|e| {
@@ -219,9 +223,9 @@ impl SqliteChatSessionStore {
         .bind(&content_json)
         .bind(next_sequence)
         .bind(Utc::now().to_rfc3339())
-        .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
 
         Ok(message_id)
     }
@@ -241,14 +245,13 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
 
         rows.into_iter()
             .map(|row| {
                 let id: String = row.get("id");
                 let role_raw: String = row.get("role");
-                let content_raw: String = row.try_get("content").map_err(backend_err)?;
+                let content_raw: String = row.try_get("content")?;
                 let content: MessageContent = serde_json::from_str(&content_raw).map_err(|e| {
                     ChatSessionStoreError::CorruptContent {
                         message_id: id.clone(),
@@ -263,31 +266,37 @@ impl SqliteChatSessionStore {
             .collect()
     }
 
+    /// Whether a `chat_sessions` row with this id exists.
+    pub async fn session_exists(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count > 0)
+    }
+
     /// Spec 0034, Abschnitt 4: "endet bei `disconnect()`".
     pub async fn mark_ended(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
         sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")
             .bind(Utc::now().to_rfc3339())
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
     /// Issue #543 / Spec 0034, Abschnitt 4: deletes the session iff it has
-    /// no `chat_messages` and no `ledger_entries`. Check and delete are one
+    /// no `chat_messages`. Check and delete are one
     /// statement, so a message arriving concurrently either lands first (row
     /// kept) or hits a missing session. Returns whether a row was deleted.
     pub async fn delete_if_empty(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
         let res = sqlx::query(
             "DELETE FROM chat_sessions WHERE id = ? \
-             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
-             AND NOT EXISTS (SELECT 1 FROM ledger_entries WHERE session_id = chat_sessions.id)",
+             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)",
         )
         .bind(session_id.to_string())
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         Ok(res.rows_affected() > 0)
     }
 
@@ -309,8 +318,7 @@ impl SqliteChatSessionStore {
         sqlx::query("UPDATE chat_sessions SET ended_at = NULL WHERE id = ?")
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
@@ -336,8 +344,7 @@ impl SqliteChatSessionStore {
         .bind(rounds_covered)
         .bind(session_id.to_string())
         .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         Ok(())
     }
 
@@ -354,12 +361,11 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_optional(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let Some(row) = row else {
             return Ok(None);
         };
-        let text: Option<String> = row.try_get("summary_text").map_err(backend_err)?;
+        let text: Option<String> = row.try_get("summary_text")?;
         let rounds_covered: Option<i64> = row.get("summary_rounds_covered");
         let (Some(text), Some(rounds_covered)) = (text, rounds_covered) else {
             return Ok(None);
@@ -383,7 +389,7 @@ impl SqliteChatSessionStore {
         .bind(server_id.0.to_string())
         .fetch_all(&self.pool)
         .await
-        .map_err(backend_err)?;
+        ?;
 
         rows.into_iter()
             .map(|row| {
@@ -420,8 +426,7 @@ impl SqliteChatSessionStore {
             .bind(new_title)
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(())
     }
 
@@ -444,8 +449,7 @@ impl SqliteChatSessionStore {
                 .bind(title)
                 .bind(session_id.to_string())
                 .execute(&self.pool)
-                .await
-                .map_err(backend_err)?;
+                .await?;
         Ok(result.rows_affected() > 0)
     }
 
@@ -455,8 +459,7 @@ impl SqliteChatSessionStore {
         let row = sqlx::query("SELECT title FROM chat_sessions WHERE id = ?")
             .bind(session_id.to_string())
             .fetch_optional(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         Ok(row.is_some_and(|r| r.get::<Option<String>, _>("title").is_some()))
     }
 
@@ -473,12 +476,11 @@ impl SqliteChatSessionStore {
         )
         .bind(session_id.to_string())
         .fetch_optional(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let Some(row) = row else {
             return Ok(None);
         };
-        let raw: String = row.try_get("content").map_err(backend_err)?;
+        let raw: String = row.try_get("content")?;
         match serde_json::from_str::<MessageContent>(&raw) {
             Ok(MessageContent::Text(text)) => Ok(Some(text)),
             Ok(_) => Ok(None),
@@ -500,8 +502,7 @@ impl SqliteChatSessionStore {
               AND m.role = 'user' AND m.content_type = 'text')",
         )
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let mut out = Vec::new();
         for row in rows {
             let id_raw: String = row.get("id");
@@ -522,11 +523,10 @@ impl SqliteChatSessionStore {
         let result = sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
             .bind(session_id.to_string())
             .execute(&self.pool)
-            .await
-            .map_err(backend_err)?;
+            .await?;
         // Issue #504: only after a successful delete, once per removed session.
         if result.rows_affected() > 0 {
-            notify_removed(&self.removal, &[session_id]);
+            notify_removed(&self.removal, &[session_id]).await;
         }
         Ok(())
     }
@@ -548,14 +548,13 @@ impl SqliteChatSessionStore {
         )
         .bind(cutoff.to_rfc3339())
         .fetch_all(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        .await?;
         let ids: Vec<Uuid> = rows
             .iter()
             .filter_map(|r| r.try_get::<String, _>("id").ok())
             .filter_map(|raw| Uuid::parse_str(&raw).ok())
             .collect();
-        notify_removed(&self.removal, &ids);
+        notify_removed(&self.removal, &ids).await;
         Ok(rows.len() as u64)
     }
 }
@@ -582,8 +581,9 @@ mod tests {
     use sqlx::sqlite::SqliteConnectOptions;
 
     use super::*;
-    use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
+    use ssh_manager_core::profiles::ProfileStore;
     use ssh_manager_core::ssh::CommandOutput;
+    use ssh_manager_core::testing::ServerBuilder;
 
     use crate::SqliteProfileStore;
 
@@ -601,25 +601,7 @@ mod tests {
     /// die Fremdschlüssel-Einschränkung jeden `create_session()`-Aufruf
     /// ablehnen), analog zu `prompt_history_store::tests::create_test_server`.
     async fn create_test_server(profile_store: &SqliteProfileStore) -> ServerId {
-        let now = Utc::now();
-        let server = Server {
-            id: ServerId::new(),
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: vec![],
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        };
+        let server = ServerBuilder::new().name("Test-Server").build();
         let id = server.id;
         profile_store.create_server(&server).await.unwrap();
         id
@@ -843,25 +825,6 @@ mod tests {
             .unwrap()
             .get("ended_at");
         assert!(ended.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_delete_if_empty_keeps_session_with_ledger_entry() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
-             VALUES (?, ?, 1, 'mcp-agent', 'command_executed', x'00', ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(id.to_string())
-        .bind(Utc::now().to_rfc3339())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-        assert!(!chat_store.delete_if_empty(id).await.unwrap());
-        assert_eq!(session_count(&profile_store, id).await, 1);
     }
 
     #[tokio::test]
@@ -1437,14 +1400,15 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=26).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=30).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.
     #[derive(Default)]
     struct Recording(std::sync::Mutex<Vec<Vec<Uuid>>>);
+    #[async_trait::async_trait]
     impl ChatSessionRemovalObserver for Recording {
-        fn sessions_removed(&self, ids: &[Uuid]) {
+        async fn sessions_removed(&self, ids: &[Uuid]) {
             self.0.lock().unwrap().push(ids.to_vec());
         }
     }
@@ -1604,53 +1568,6 @@ mod tests {
         );
     }
 
-    /// Ein Inhalt, der kein Text ist (eine nicht umgestellte Altzeile), ist
-    /// ein klarer Fehler — kein Panic, keine stille Lücke im Verlauf.
-    #[tokio::test]
-    async fn test_a_blob_message_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "INSERT INTO chat_messages \
-             (id, session_id, role, content_type, content, sequence, created_at) \
-             VALUES (?, ?, 'user', 'text', ?, 0, ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(session_id.to_string())
-        .bind(vec![0u8; 40])
-        .bind(Utc::now().to_rfc3339())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_session(session_id).await,
-            Err(ChatSessionStoreError::Backend(_))
-        ));
-    }
-
-    /// Wie oben, für `load_summary`.
-    #[tokio::test]
-    async fn test_a_blob_summary_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = 2 WHERE id = ?",
-        )
-        .bind(vec![0u8; 40])
-        .bind(session_id.to_string())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_summary(session_id).await,
-            Err(ChatSessionStoreError::Backend(_))
-        ));
-    }
-
     /// `load_summary` muss für eine Sitzung ohne je gespeicherte
     /// Zusammenfassung `Ok(None)` liefern (additive Migration: beide
     /// Spalten `NULL`), nicht fälschlich einen Fehler.
@@ -1664,3 +1581,6 @@ mod tests {
         assert_eq!(loaded, None);
     }
 }
+
+#[cfg(test)]
+mod tests_blob;

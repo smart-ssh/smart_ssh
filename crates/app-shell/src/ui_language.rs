@@ -15,7 +15,6 @@ use app_logic::system_prompt::{prompt_language, PromptLanguage};
 use tauri_plugin_store::StoreExt;
 
 /// Derselbe Ablageort wie die UI-Sprache (Spec 0024, Abschnitt 4).
-use crate::settings_store::SETTINGS_STORE_FILE;
 const LANGUAGE_KEY: &str = "language";
 
 /// Ein nicht öffenbarer Store zählt wie „keine gespeicherte Wahl" — genau
@@ -25,7 +24,7 @@ const LANGUAGE_KEY: &str = "language";
 pub(crate) fn session_prompt_language<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> PromptLanguage {
-    let stored = match app.store(SETTINGS_STORE_FILE) {
+    let stored = match app.store(crate::settings_store::settings_store_file()) {
         Ok(store) => store.get(LANGUAGE_KEY),
         Err(err) => {
             tracing::warn!(
@@ -49,7 +48,7 @@ pub(crate) mod test_support {
     /// Tests.
     pub(crate) fn set_ui_language(handle: &AppHandle<MockRuntime>, language: &str) {
         handle
-            .store(super::SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("settings store must open in the mock app")
             .set(super::LANGUAGE_KEY, language);
     }
@@ -57,7 +56,7 @@ pub(crate) mod test_support {
     /// Entfernt die UI-Sprache wieder aus dem Store dieser App-Instanz.
     pub(crate) fn clear_ui_language(handle: &AppHandle<MockRuntime>) {
         handle
-            .store(super::SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("settings store must open in the mock app")
             .delete(super::LANGUAGE_KEY);
     }

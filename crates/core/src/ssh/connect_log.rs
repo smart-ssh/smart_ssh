@@ -22,6 +22,7 @@
 //! **Beobachten, nie entscheiden.** Das Protokoll ist reine Aufzeichnung;
 //! keine Vertrauens- oder Anmeldeentscheidung hängt an ihm.
 
+use crate::sync::lock_tolerating_poison;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -40,6 +41,10 @@ pub const HOST_KEY_CHANGED: &str = "HOST_KEY_CHANGED";
 /// erlaubt 255 Zeichen einschließlich CR LF.
 const MAX_SERVER_VERSION_CHARS: usize = 255;
 
+/// Issue #1227: upper bound (in characters) of the login banner text shown
+/// in the log.
+pub const MAX_BANNER_CHARS: usize = 2000;
+
 /// Schrittcode für eine Zeitüberschreitung während der TCP-Verbindung.
 pub const TCP_TIMEOUT_CODE: &str = "SSH_TCP_TIMEOUT";
 
@@ -50,6 +55,7 @@ pub const TCP_TIMEOUT_CODE: &str = "SSH_TCP_TIMEOUT";
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ConnectStep {
     /// Namensauflösung des ersten Hops. `addresses` ist leer, solange sie
     /// läuft oder wenn sie gescheitert ist.
@@ -80,21 +86,57 @@ pub enum ConnectStep {
         fingerprint: Option<String>,
         result: Option<HostKeyCheckResult>,
     },
-    /// Eine Anmeldung mit der konfigurierten Methode. `remaining_methods`
-    /// nennt, was der Server nach einem Fehlschlag noch anbietet — **nur zur
-    /// Anzeige**, es wird keine weitere Methode versucht.
+    /// Ein Anmeldeversuch (bzw. bei `keyboard-interactive` eine Runde).
+    /// `remaining_methods` nennt, was der Server nach einem Fehlschlag noch
+    /// anbietet; weitere Schritte folgen nur nach Teilerfolg (Issue #1184).
     Authentication {
         method: AuthMethodKind,
         remaining_methods: Vec<String>,
         partial_success: bool,
+        /// Issue #1184: `keyboard-interactive` only — number of the info
+        /// request round (1-based).
+        round: Option<u32>,
+        /// Issue #1184: the prompt texts of that round (server-supplied,
+        /// capped). The answers are never recorded.
+        prompts: Vec<String>,
     },
     /// Die SSH-Sitzung zum Ziel steht (letzter Hop angemeldet).
     SessionReady,
+    /// Issue #1173: this hop negotiated outdated algorithms (or no strict
+    /// key exchange). Recorded with status [`StepStatus::Warning`]; the
+    /// connection is not affected.
+    OutdatedAlgorithms { algorithms: Vec<String> },
+    /// Issue #1227: the login banner (`SSH_MSG_USERAUTH_BANNER`) the server
+    /// sent before authentication. `text` is server input, already passed
+    /// through [`sanitize_banner`]; the UI shows it as plain text only.
+    Banner { text: String },
 }
+
+/// Issue #1173: one hop of an established connection that uses outdated
+/// SSH algorithms. Algorithm names are not secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub struct ConnectWarning {
+    /// `user@host:port` of the affected hop.
+    pub hop: String,
+    /// Names of the outdated algorithms (the Terrapin warning is
+    /// [`STRICT_KEX_MISSING`]).
+    pub algorithms: Vec<String>,
+}
+
+/// Pseudo algorithm name for a server that does not support strict key
+/// exchange (`kex-strict-s-v00@openssh.com`, Terrapin, CVE-2023-48795).
+pub const STRICT_KEX_MISSING: &str = "kex-strict-s-v00@openssh.com (missing)";
+
+/// Stable code of the warning status of an [`ConnectStep::OutdatedAlgorithms`]
+/// step.
+pub const OUTDATED_ALGORITHMS_CODE: &str = "SSH_OUTDATED_ALGORITHMS";
 
 /// Ergebnis der Host-Key-Prüfung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum HostKeyCheckResult {
     Known,
     Unknown,
@@ -104,6 +146,11 @@ pub enum HostKeyCheckResult {
 /// Art der Anmeldung — ohne jedes Material.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(ts_rs::TS),
+    ts(rename = "ConnectAuthMethodKind")
+)]
 pub enum AuthMethodKind {
     /// SSH-Methode `none` (Issue #632) — nur als erster Versuch einer
     /// Anmeldung ohne Passwort.
@@ -113,6 +160,8 @@ pub enum AuthMethodKind {
     Agent,
     Certificate,
     IdentityFile,
+    /// Issue #1184: SSH method `keyboard-interactive`.
+    KeyboardInteractive,
 }
 
 impl From<&AuthMethod> for AuthMethodKind {
@@ -134,6 +183,7 @@ impl From<&AuthMethod> for AuthMethodKind {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum StepStatus {
     /// Läuft noch — nur in einer Momentaufnahme mitten im Versuch zu sehen.
     Running,
@@ -141,6 +191,11 @@ pub enum StepStatus {
     /// Der Schritt war nicht nötig (z. B. keine Namensauflösung für eine
     /// IP-Adresse).
     Skipped,
+    /// Issue #1173: the step succeeded but deserves the user's attention. It
+    /// does not count as failed. `code` is a stable code, never free text.
+    Warning {
+        code: String,
+    },
     /// Hier ist der Versuch gescheitert. `code` ist ein stabiler Code, nie
     /// freier Text.
     Failed {
@@ -151,6 +206,7 @@ pub enum StepStatus {
 /// Ein aufgezeichneter Schritt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ConnectStepRecord {
     /// 0 = erster Hop der Kette.
     pub hop_index: usize,
@@ -183,6 +239,49 @@ pub struct ConnectLog {
     /// Issue #546: optional live sink, called synchronously with the full
     /// snapshot after every change. Shared by clones like `entries`.
     sink: Option<ProgressSink>,
+    /// Issue #1187: shared by clones; the transport holds it while a login
+    /// prompt is open, so every time limit around the attempt stands still.
+    prompt_pause: Arc<PromptPause>,
+}
+
+/// Issue #1184/#1187: a flag that is held while the user is asked for a
+/// login answer. Time limits watch it and stop counting while it is held.
+pub struct PromptPause {
+    tx: tokio::sync::watch::Sender<bool>,
+}
+
+impl Default for PromptPause {
+    fn default() -> Self {
+        Self {
+            tx: tokio::sync::watch::channel(false).0,
+        }
+    }
+}
+
+impl PromptPause {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pauses until the returned guard is dropped (also when the waiting
+    /// future is cancelled).
+    pub fn pause(&self) -> PauseGuard<'_> {
+        self.tx.send_replace(true);
+        PauseGuard(self)
+    }
+
+    /// Watches the paused state.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.tx.subscribe()
+    }
+}
+
+pub struct PauseGuard<'a>(&'a PromptPause);
+
+impl Drop for PauseGuard<'_> {
+    fn drop(&mut self) {
+        self.0.tx.send_replace(false);
+    }
 }
 
 /// Receives the full progress snapshot of an attempt whenever a step starts,
@@ -209,7 +308,13 @@ impl ConnectLog {
         Self {
             entries: Arc::default(),
             sink: Some(sink),
+            prompt_pause: Arc::default(),
         }
+    }
+
+    /// The pause shared with the transport (Issue #1187).
+    pub fn prompt_pause(&self) -> Arc<PromptPause> {
+        self.prompt_pause.clone()
     }
 
     /// Reports the current state to the sink, if any. Called after the lock
@@ -229,7 +334,7 @@ impl ConnectLog {
     /// ist reine Anzeige. Weiterarbeiten mit dem Inhalt statt eines Panics
     /// mitten im Verbindungsaufbau.
     fn lock(&self) -> MutexGuard<'_, Vec<Entry>> {
-        self.entries.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.entries)
     }
 
     /// Beginnt einen Schritt.
@@ -272,6 +377,99 @@ impl ConnectLog {
         self.finish(id, StepStatus::Skipped);
     }
 
+    /// Issue #1173: records that `hop` negotiated outdated `algorithms`. The
+    /// step is born finished with status warning; it never fails the attempt.
+    pub fn warn_outdated(&self, hop_index: usize, hop: &str, algorithms: Vec<String>) {
+        // One warning per hop: a later finding for the same hop (for
+        // example the user key signature) extends the existing entry.
+        let existing = {
+            let mut entries = self.lock();
+            entries
+                .iter_mut()
+                .find(|e| {
+                    e.record.hop_index == hop_index
+                        && matches!(e.record.step, ConnectStep::OutdatedAlgorithms { .. })
+                })
+                .map(|e| {
+                    if let ConnectStep::OutdatedAlgorithms { algorithms: have } = &mut e.record.step
+                    {
+                        for a in &algorithms {
+                            if !have.contains(a) {
+                                have.push(a.clone());
+                            }
+                        }
+                    }
+                })
+                .is_some()
+        };
+        if existing {
+            self.notify();
+            return;
+        }
+        let id = self.start_silent(
+            hop_index,
+            hop,
+            ConnectStep::OutdatedAlgorithms { algorithms },
+        );
+        self.finish(
+            id,
+            StepStatus::Warning {
+                code: OUTDATED_ALGORITHMS_CODE.to_string(),
+            },
+        );
+    }
+
+    /// Issue #1227: records the login banner of `hop`. The text is
+    /// sanitized here; a banner that is empty afterwards records nothing.
+    /// A second banner message of the same hop is appended to the first
+    /// (SSH allows several), the total staying within [`MAX_BANNER_CHARS`].
+    pub fn record_banner(&self, hop_index: usize, hop: &str, raw: &str) {
+        let clean = sanitize_banner(raw);
+        if clean.is_empty() {
+            return;
+        }
+        let appended = {
+            let mut entries = self.lock();
+            entries
+                .iter_mut()
+                .find(|e| {
+                    e.record.hop_index == hop_index
+                        && matches!(e.record.step, ConnectStep::Banner { .. })
+                })
+                .map(|e| {
+                    if let ConnectStep::Banner { text } = &mut e.record.step {
+                        let room = MAX_BANNER_CHARS.saturating_sub(text.chars().count() + 1);
+                        if room > 0 {
+                            text.push('\n');
+                            text.extend(clean.chars().take(room));
+                        }
+                    }
+                })
+                .is_some()
+        };
+        if appended {
+            self.notify();
+            return;
+        }
+        let id = self.start_silent(hop_index, hop, ConnectStep::Banner { text: clean });
+        self.finish(id, StepStatus::Ok);
+    }
+
+    /// Issue #1173: the outdated-algorithm warnings recorded so far, one per
+    /// affected hop, in hop order of recording.
+    pub fn warnings(&self) -> Vec<ConnectWarning> {
+        self.lock()
+            .iter()
+            .filter_map(|e| match &e.record.step {
+                ConnectStep::OutdatedAlgorithms { algorithms } => Some(ConnectWarning {
+                    hop: e.record.hop.clone(),
+                    algorithms: algorithms.clone(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Beendet einen Schritt als gescheitert.
     pub fn fail(&self, id: StepId, code: &str) {
         self.finish(
@@ -280,6 +478,19 @@ impl ConnectLog {
                 code: code.to_string(),
             },
         );
+    }
+
+    /// Issue #1220: like [`Self::fail`], but attributes the step to another
+    /// hop. Used when a bastion refuses to open the tunnel: the step stays
+    /// the tunnel to the target, yet the hop that failed is the bastion.
+    pub fn fail_at_hop(&self, id: StepId, hop_index: usize, hop: &str, code: &str) {
+        if let Some(entry) = self.lock().get_mut(id.0) {
+            if entry.record.status == StepStatus::Running {
+                entry.record.hop_index = hop_index;
+                entry.record.hop = hop.to_string();
+            }
+        }
+        self.fail(id, code);
     }
 
     fn finish(&self, id: StepId, status: StepStatus) {
@@ -336,6 +547,7 @@ impl ConnectLog {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum StepDetail {
     /// DNS / TCP: `host:port` being contacted.
     Contacting { target: String },
@@ -353,18 +565,31 @@ pub enum StepDetail {
 /// One step as sent in the `connect-progress` event (Issue #546).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ConnectStepSnapshot {
     /// Step kind, camelCase (`dnsResolution`, `tcpConnect`, `tunnelOpen`,
     /// `handshake`, `hostKeyCheck`, `authentication`, `sessionReady`).
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(
+            type = "\"dnsResolution\" | \"tcpConnect\" | \"tunnelOpen\" | \"handshake\" | \"hostKeyCheck\" | \"authentication\" | \"sessionReady\" | \"outdatedAlgorithms\" | \"banner\""
+        )
+    )]
     pub kind: String,
     pub hop_index: usize,
     /// Hop label (`user@host:port`, Spec 0076 naming).
     pub hop: String,
-    /// `running` | `ok` | `failed`.
+    /// `running` | `ok` | `skipped` | `warning` | `failed`.
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"running\" | \"ok\" | \"skipped\" | \"warning\" | \"failed\"")
+    )]
     pub status: String,
     /// Error code when `failed`.
     pub error_code: Option<String>,
     pub detail: Option<StepDetail>,
+    /// Elapsed milliseconds of a finished step; `None` while it runs.
+    pub duration_ms: Option<u64>,
 }
 
 impl ConnectStepSnapshot {
@@ -392,6 +617,7 @@ impl ConnectStepSnapshot {
                     (_, true) | (StepStatus::Running, _) => ("running", None),
                     (StepStatus::Ok, _) => ("ok", None),
                     (StepStatus::Skipped, _) => ("skipped", None),
+                    (StepStatus::Warning { .. }, _) => ("warning", None),
                     (StepStatus::Failed { code }, _) => ("failed", Some(code.clone())),
                 };
                 let running = status == "running";
@@ -426,6 +652,7 @@ impl ConnectStepSnapshot {
                     status: status.to_string(),
                     error_code,
                     detail,
+                    duration_ms: if running { None } else { r.duration_ms },
                 }
             })
             .collect()
@@ -447,6 +674,8 @@ fn step_kind(step: &ConnectStep) -> &'static str {
         ConnectStep::HostKeyCheck { .. } => "hostKeyCheck",
         ConnectStep::Authentication { .. } => "authentication",
         ConnectStep::SessionReady => "sessionReady",
+        ConnectStep::OutdatedAlgorithms { .. } => "outdatedAlgorithms",
+        ConnectStep::Banner { .. } => "banner",
     }
 }
 
@@ -454,6 +683,7 @@ fn auth_method_label(kind: AuthMethodKind) -> &'static str {
     match kind {
         AuthMethodKind::None => "none",
         AuthMethodKind::Password => "password",
+        AuthMethodKind::KeyboardInteractive => "keyboard-interactive",
         AuthMethodKind::Agent => "publickey (agent)",
         AuthMethodKind::PrivateKey | AuthMethodKind::Certificate | AuthMethodKind::IdentityFile => {
             "publickey (key file)"
@@ -477,10 +707,168 @@ pub fn sanitize_server_version(raw: &[u8]) -> String {
         .collect()
 }
 
+/// Issue #1227: prepares a server-controlled login banner for display.
+/// Removes whole ANSI escape sequences (CSI, OSC, other `ESC x`), all other
+/// control characters except line breaks (CR LF and CR become `\n`, tabs
+/// become a space), C1 controls and bidirectional overrides; trims blank
+/// edges and caps the result at [`MAX_BANNER_CHARS`] characters.
+pub fn sanitize_banner(raw: &str) -> String {
+    let mut out = String::new();
+    let mut count = 0usize;
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        if count >= MAX_BANNER_CHARS {
+            break;
+        }
+        let keep = match c {
+            '\u{1b}' => {
+                match chars.peek().copied() {
+                    // CSI: parameters up to a final byte 0x40..=0x7e.
+                    Some('[') => {
+                        chars.next();
+                        for n in chars.by_ref() {
+                            if ('\u{40}'..='\u{7e}').contains(&n) {
+                                break;
+                            }
+                        }
+                    }
+                    // OSC: up to BEL or ST (`ESC \`).
+                    Some(']') => {
+                        chars.next();
+                        while let Some(n) = chars.next() {
+                            if n == '\u{7}' {
+                                break;
+                            }
+                            if n == '\u{1b}' {
+                                chars.next_if_eq(&'\\');
+                                break;
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        chars.next();
+                    }
+                    None => {}
+                }
+                None
+            }
+            '\r' => {
+                chars.next_if_eq(&'\n');
+                Some('\n')
+            }
+            '\n' => Some('\n'),
+            '\t' => Some(' '),
+            c if c.is_control()
+                || ('\u{202a}'..='\u{202e}').contains(&c)
+                || ('\u{2066}'..='\u{2069}').contains(&c)
+                || c == '\u{200e}'
+                || c == '\u{200f}' =>
+            {
+                None
+            }
+            c => Some(c),
+        };
+        if let Some(k) = keep {
+            out.push(k);
+            count += 1;
+        }
+    }
+    out.trim().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::profiles::CredentialRef;
+
+    #[test]
+    fn banner_strips_escapes_and_controls() {
+        assert_eq!(sanitize_banner("Hello\r\nWorld\t!"), "Hello\nWorld !");
+        assert_eq!(sanitize_banner("\x1b[31mred\x1b[0m"), "red");
+        assert_eq!(sanitize_banner("a\x1b]0;title\x07b"), "ab");
+        assert_eq!(sanitize_banner("a\x1b]0;t\x1b\\b\x07\u{85}"), "ab");
+        assert_eq!(sanitize_banner("x\u{202e}y\0z"), "xyz");
+        assert_eq!(sanitize_banner("  \n\x1b[2J \n"), "");
+    }
+
+    #[test]
+    fn banner_is_capped() {
+        let long = "a".repeat(MAX_BANNER_CHARS * 3);
+        assert_eq!(sanitize_banner(&long).chars().count(), MAX_BANNER_CHARS);
+        // Escape bytes do not count towards the cap.
+        let mixed = format!("{}b", "\x1b[1m".repeat(MAX_BANNER_CHARS));
+        assert_eq!(sanitize_banner(&mixed), "b");
+    }
+
+    #[test]
+    fn record_banner_adds_one_step_per_hop_and_skips_empty() {
+        let log = ConnectLog::new();
+        log.record_banner(0, "u@a:22", "\x1b[2J \n");
+        assert!(log.snapshot().is_empty());
+        log.record_banner(0, "u@a:22", "first");
+        log.record_banner(0, "u@a:22", "second");
+        let snap = log.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(
+            snap[0].step,
+            ConnectStep::Banner {
+                text: "first\nsecond".into()
+            }
+        );
+        assert_eq!(snap[0].status, StepStatus::Ok);
+        let snaps = ConnectStepSnapshot::from_records(&snap, false);
+        assert_eq!(snaps[0].kind, "banner");
+    }
+
+    #[test]
+    fn warn_outdated_merges_per_hop_without_duplicates() {
+        let log = ConnectLog::new();
+        log.warn_outdated(0, "u@a:22", vec!["ssh-rsa".into()]);
+        log.warn_outdated(0, "u@a:22", vec!["ssh-rsa".into(), "3des-cbc".into()]);
+        log.warn_outdated(1, "u@b:22", vec!["diffie-hellman-group1-sha1".into()]);
+        let w = log.warnings();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].hop, "u@a:22");
+        assert_eq!(w[0].algorithms, vec!["ssh-rsa", "3des-cbc"]);
+        assert_eq!(w[1].algorithms, vec!["diffie-hellman-group1-sha1"]);
+    }
+
+    #[test]
+    fn no_common_algorithm_error_names_hop_kind_and_offers() {
+        use crate::ssh::{AlgorithmKind, SshError};
+        let e = SshError::NoCommonAlgorithm {
+            hop: crate::ssh::HopLabel {
+                username: "u".into(),
+                host: "a".into(),
+                port: 22,
+            },
+            kind: AlgorithmKind::HostKey,
+            server_offers: vec!["ssh-dss".into()],
+        };
+        assert_eq!(e.code(), "SSH_NO_COMMON_ALGORITHM");
+        let m = e.to_string();
+        assert!(
+            m.contains("u@a:22") && m.contains("host key") && m.contains("ssh-dss"),
+            "{m}"
+        );
+    }
+
+    #[test]
+    fn fail_at_hop_reattributes_a_running_step() {
+        let log = ConnectLog::new();
+        let id = log.start(
+            1,
+            "u@target:22",
+            ConnectStep::TunnelOpen {
+                host: "target".to_string(),
+                port: 22,
+            },
+        );
+        log.fail_at_hop(id, 0, "u@bastion:22", "SSH_CHANNEL_ERROR");
+        let rec = &log.snapshot()[0];
+        assert_eq!((rec.hop_index, rec.hop.as_str()), (0, "u@bastion:22"));
+        assert!(matches!(rec.status, StepStatus::Failed { .. }));
+    }
 
     #[test]
     fn steps_finish_once_and_keep_their_order() {
@@ -609,6 +997,18 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_carries_duration_only_for_finished_steps() {
+        let log = ConnectLog::new();
+        let done = log.start(0, "u@a:22", ConnectStep::SessionReady);
+        log.succeed(done);
+        log.start(0, "u@a:22", ConnectStep::SessionReady);
+        let snaps = log.progress_snapshot();
+        assert!(snaps[0].duration_ms.is_some());
+        assert_eq!(snaps[1].status, "running");
+        assert_eq!(snaps[1].duration_ms, None);
+    }
+
+    #[test]
     fn clones_share_the_same_record() {
         let log = ConnectLog::new();
         let writer = log.clone();
@@ -705,6 +1105,8 @@ mod tests {
                 method: AuthMethodKind::IdentityFile,
                 remaining_methods: vec![],
                 partial_success: false,
+                round: None,
+                prompts: vec![],
             },
         );
         log.succeed(a);

@@ -1,16 +1,18 @@
 // Spec 0052, Abschnitt 3.2: die Kategorie „Über" zeigt Version + Hash,
 // der Text ist markierbar und kopierbar.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import { getAppInfo } from "../api";
+import { getAppInfo } from "../api/api";
 import { testI18n } from "../testI18n";
-import { THIRD_PARTY_NOTICES_MARKER } from "../thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER } from "../lib/thirdPartyNoticesMarker";
 import { AboutSettings } from "./AboutSettings";
 
-vi.mock("../api", () => ({
-  getAppInfo: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getAppInfo: vi.fn(),
+  }),
+);
 
 function renderAbout() {
   return render(
@@ -28,6 +30,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -42,6 +47,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.5.0 (abf7a22)",
       edition: "Community",
       buildType: "Dev",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -74,6 +82,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
 
     renderAbout();
@@ -91,6 +102,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const writeText = vi.fn(() => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
@@ -99,8 +113,19 @@ describe("AboutSettings (Spec 0052)", () => {
     const button = await screen.findByRole("button", { name: "Kopieren" });
     fireEvent.click(button);
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build"));
     expect(await screen.findByText("Kopiert!")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build");
+  });
+
+  it("renders the copy button icon-only with its accessible name", async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({
+      version: "0.4.1", commitHash: "a5b3e01", versionDisplay: "0.4.1 (a5b3e01)", edition: "Community",
+      buildType: "Release", dataDir: null, dataDirDisplay: null, settingsStorePath: null,
+    });
+    renderAbout();
+    const button = await screen.findByRole("button", { name: "Kopieren" });
+    expect(button.textContent?.trim()).toBe("");
+    expect(button.querySelector("svg")).not.toBeNull();
   });
 
   it("shows a visible error (not just a console warning) when the clipboard write fails", async () => {
@@ -110,6 +135,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.4.1 (a5b3e01)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const writeText = vi.fn(() => Promise.reject(new Error("denied")));
     Object.assign(navigator, { clipboard: { writeText } });
@@ -139,6 +167,9 @@ describe("AboutSettings (Spec 0052)", () => {
       versionDisplay: "0.5.0 (abf7a22)",
       edition: "Community",
       buildType: "Release",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     });
     const content = `${THIRD_PARTY_NOTICES_MARKER}\n\nMIT License`;
     vi.stubGlobal(

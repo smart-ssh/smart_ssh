@@ -6,6 +6,7 @@
 //! master-password mode. A service that fails to start is logged and
 //! skipped; it never stops the others or the app.
 
+pub use crate::background_tasks::app_scope;
 use std::sync::Arc;
 use std::time::Duration;
 

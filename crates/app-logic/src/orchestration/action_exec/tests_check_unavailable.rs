@@ -4,7 +4,9 @@
 
 use std::sync::Arc;
 
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use async_trait::async_trait;
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, RedactedContext};
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 
 use crate::events::TestEmitter;
 use crate::test_support::log_capture;
@@ -20,7 +22,7 @@ struct FailingProvider;
 impl AiProvider for FailingProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![AiEvent::Error(
             AiError::ProviderUnavailable(format!("HTTP 500 body: {SECRET_FRAGMENT}")),
@@ -32,7 +34,7 @@ struct TextProvider(&'static str);
 impl AiProvider for TextProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![
             AiEvent::TextDelta(self.0.to_string()),
@@ -243,6 +245,7 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
     );
     assert!(
         !session
+            .safety
             .injection_suspected
             .load(std::sync::atomic::Ordering::SeqCst),
         "a failed check must not invent a suspicion"
@@ -288,6 +291,7 @@ async fn test_injection_check_without_verdict_counts_as_unavailable() {
     .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_some());
     assert!(session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -297,6 +301,7 @@ async fn test_injection_check_without_verdict_counts_as_unavailable() {
 async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     let session = session_with_injection_check(FailingProvider);
     session
+        .safety
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
     check_for_injected_instructions(
@@ -309,6 +314,7 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     )
     .await;
     assert!(session
+        .safety
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -329,6 +335,7 @@ async fn test_successful_injection_check_has_no_notice() {
     .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_none());
     assert!(!session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -355,6 +362,7 @@ async fn test_unavailable_flag_survives_a_denied_action() {
     .await;
     assert!(!matches!(decision, Decision::AutoExec));
     assert!(session
+        .safety
         .injection_check_unavailable
         .load(std::sync::atomic::Ordering::SeqCst));
 }
@@ -365,6 +373,7 @@ async fn test_unavailable_flag_survives_a_denied_action() {
 async fn test_setup_failure_notice_is_sent_once_per_session() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session
+        .safety
         .second_opinion_setup_notice_pending
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let emitter = TestEmitter::default();
@@ -382,6 +391,7 @@ async fn test_setup_failure_notice_is_sent_once_per_session() {
 async fn test_inactive_injection_check_notice_is_sent_once() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     session
+        .safety
         .injection_check_inactive_notice_pending
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let emitter = TestEmitter::default();
@@ -494,4 +504,106 @@ async fn test_issue_688_no_provider_logs_no_injection_check_lines() {
     )
     .await;
     assert!(!log_capture::recorded_text().contains("injection check"));
+}
+
+/// Issue #836: a decision made while the filter rules are unavailable
+/// carries `FILTER_RULES_UNAVAILABLE` in its activity event, even though an allow
+/// rule for the command exists.
+#[tokio::test]
+async fn test_activity_event_carries_rules_unavailable_code() {
+    struct UnavailableWithAllow;
+    #[async_trait]
+    impl PolicyStore for UnavailableWithAllow {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::unavailable(vec![Rule {
+                id: ssh_manager_core::filter::RuleId("allow-ls".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("ls*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Allow,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }])
+        }
+    }
+
+    let (session, _chat_store, _chat_session_id, _tmp_dir) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let (mut session, probe) = with_activity_probe(session);
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(UnavailableWithAllow)));
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let action_future = handle_action_proposed(
+        &session,
+        Uuid::new_v4(),
+        AiAction::SuggestCommand {
+            command: "ls -la".to_string(),
+        },
+        &emitter,
+        &profile_store,
+        &confirmations,
+        ActionOrigin::Internal,
+        test_fresh_rejection_flag(),
+    );
+    let responder = deny_first_proposed_action(&emitter, &confirmations);
+    let ((), ()) = tokio::join!(
+        async {
+            action_future.await;
+        },
+        responder
+    );
+
+    let kinds = probe.kinds();
+    assert!(
+        matches!(
+            &kinds[1],
+            crate::activity::ActivityEventKind::Decision {
+                code: Some(code),
+                ..
+            } if code == "FILTER_RULES_UNAVAILABLE"
+        ),
+        "{kinds:?}"
+    );
+}
+
+/// File paths are redacted before they reach an observer.
+#[tokio::test]
+async fn test_activity_events_redact_fake_secret_in_file_paths() {
+    let (session, _chat_store, _chat_session_id, _tmp_dir) =
+        session_with_real_chat_persistence(vec![], MockSshTransport::default()).await;
+    let (session, probe) = with_activity_probe(session);
+    for content in [
+        LedgerEntryContent::FileRead {
+            path: "/srv/app?password=hunter2geheim".to_string(),
+            bytes: Some(1),
+            sha256: None,
+        },
+        LedgerEntryContent::FileWritten {
+            path: "/srv/app?password=hunter2geheim".to_string(),
+            backup_path: None,
+            bytes_before: None,
+            bytes_after: Some(1),
+            sha256_before: None,
+            sha256_after: None,
+            sudo: false,
+        },
+    ] {
+        super::super::chat_turn::emit_activity_for_action(
+            &session,
+            LedgerSource::Ai,
+            content,
+            Some(Uuid::new_v4()),
+        )
+        .await;
+    }
+    let kinds = probe.kinds();
+    assert_eq!(kinds.len(), 2, "{kinds:?}");
+    for k in &kinds {
+        let s = format!("{k:?}");
+        assert!(
+            !s.contains("hunter2geheim"),
+            "secret reported in plaintext: {s}"
+        );
+    }
 }

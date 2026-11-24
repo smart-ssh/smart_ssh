@@ -26,6 +26,7 @@
 //! Einschleusungs-Check, Zusammenfassung, Auto-Titel, Notiz-Vorschlag,
 //! Notiz-Kürzung) geteilt, sobald sie denselben Key/Endpunkt/Modell nutzen.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -67,22 +68,16 @@ struct Counter {
 }
 
 impl Counter {
-    fn update(
-        &mut self,
-        now: Instant,
-        limit: Option<u64>,
-        remaining: Option<u64>,
-        reset_at: Option<Instant>,
-    ) {
+    fn update(&mut self, now: Instant, raw: RawCounter) {
         self.last_updated = Some(now);
-        if limit.is_some() {
-            self.limit = limit;
+        if raw.limit.is_some() {
+            self.limit = raw.limit;
         }
-        if remaining.is_some() {
-            self.remaining = remaining;
+        if raw.remaining.is_some() {
+            self.remaining = raw.remaining;
         }
-        if reset_at.is_some() {
-            self.reset_at = reset_at;
+        if raw.reset_at.is_some() {
+            self.reset_at = raw.reset_at;
         }
     }
 
@@ -219,32 +214,12 @@ impl ProviderBudgetGuard {
     /// mitschickt, verliert den zuletzt bekannten Reset-Zeitpunkt nicht).
     pub fn record_headers(&self, snapshot: RateLimitHeaderSnapshot) {
         let now = Instant::now();
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = lock_tolerating_poison(&self.state);
         state.has_any_header_data = true;
-        state.requests.update(
-            now,
-            snapshot.requests.limit,
-            snapshot.requests.remaining,
-            snapshot.requests.reset_at,
-        );
-        state.input_tokens.update(
-            now,
-            snapshot.input_tokens.limit,
-            snapshot.input_tokens.remaining,
-            snapshot.input_tokens.reset_at,
-        );
-        state.output_tokens.update(
-            now,
-            snapshot.output_tokens.limit,
-            snapshot.output_tokens.remaining,
-            snapshot.output_tokens.reset_at,
-        );
-        state.tokens.update(
-            now,
-            snapshot.tokens.limit,
-            snapshot.tokens.remaining,
-            snapshot.tokens.reset_at,
-        );
+        state.requests.update(now, snapshot.requests);
+        state.input_tokens.update(now, snapshot.input_tokens);
+        state.output_tokens.update(now, snapshot.output_tokens);
+        state.tokens.update(now, snapshot.tokens);
     }
 
     /// Spec 0061 Abschnitt 3: Wartedauer vor dem nächsten `send()`, oder
@@ -261,7 +236,7 @@ impl ProviderBudgetGuard {
     /// Solange nie irgendein Header gelesen wurde, immer `None` (Invariante
     /// „header-loser Provider wird nie blockiert").
     pub fn wait_duration(&self, estimated_input_tokens: u64) -> Option<Duration> {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let state = lock_tolerating_poison(&self.state);
         if !state.has_any_header_data {
             return None;
         }
@@ -319,6 +294,9 @@ pub fn provider_identity_key(base_url: &str, model: &str, api_key: &str) -> Stri
 #[derive(Debug, Default)]
 pub struct RateLimitRegistry {
     guards: Mutex<HashMap<String, Arc<ProviderBudgetGuard>>>,
+    /// Issue #609 / #860: endpoints that rejected `stream_options`, shared
+    /// by every OpenAI-compatible provider built from this registry.
+    stream_options_rejections: crate::openai_common::StreamOptionsRejections,
 }
 
 impl RateLimitRegistry {
@@ -326,8 +304,14 @@ impl RateLimitRegistry {
         Self::default()
     }
 
+    /// The `stream_options` rejection memory of this registry (a clone shares
+    /// state); a fresh registry starts empty.
+    pub fn stream_options_rejections(&self) -> crate::openai_common::StreamOptionsRejections {
+        self.stream_options_rejections.clone()
+    }
+
     pub fn guard_for(&self, identity_key: &str) -> Arc<ProviderBudgetGuard> {
-        let mut guards = self.guards.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guards = lock_tolerating_poison(&self.guards);
         guards
             .entry(identity_key.to_string())
             .or_insert_with(|| Arc::new(ProviderBudgetGuard::new()))

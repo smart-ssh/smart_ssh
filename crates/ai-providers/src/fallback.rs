@@ -81,7 +81,7 @@ fn try_parse_action_block(full_text: &str) -> Option<FallbackParseResult> {
     let value: Value = serde_json::from_str(json_part.trim()).ok()?;
     let name = value.get("action")?.as_str()?;
     let parameters = value.get("parameters")?;
-    let action = super::action::action_from_tool_arguments(name, parameters).ok()?;
+    let action = super::action::parse_tool_action(name, parameters).ok()?;
 
     let mut remaining = String::with_capacity(full_text.len());
     remaining.push_str(&full_text[..start]);
@@ -117,7 +117,7 @@ mod tests {
     }
 
     /// `generate_document` läuft im Fallback-Modus über denselben
-    /// `action::action_from_tool_arguments`-Pfad wie jede andere Aktion
+    /// `action::parse_tool_action`-Pfad wie jede andere Aktion
     /// (`fallback_system_prompt_addition` iteriert bereits generisch über
     /// alle übergebenen `ActionSchema`s) — dieser Test deckt konkret ab,
     /// dass mehrzeiliger Markdown-Inhalt im `content_markdown`-Feld den

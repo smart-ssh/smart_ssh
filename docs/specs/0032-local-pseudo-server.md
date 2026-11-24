@@ -50,7 +50,8 @@ gemeinsame Transport-Schnittstelle arbeitet (Spec 0005, Abschnitt 2).
 - **Immer da und zuerst.** Die Serverliste enthält ihn immer als erstes Element,
   unabhängig von jedem Gruppenfilter. Er gehört nie zu einer Gruppe.
 - **Name und Anzeige.** Der Name ist fest „Localhost". Die Zeile zeigt
-  `Benutzer@Host` ohne Port, weil es keinen gibt.
+  statt `Benutzer@Host` die Angabe „this device" (übersetzt) und ein
+  „Local"-Kennzeichen am Zeilenende; einen Port gibt es nicht.
 - **Nur Notizen und Tags sind editierbar.** Name, Host, Port, Benutzer,
   Anmeldeart, Jump-Host und Startverzeichnis gibt es für Localhost nicht; das
   Formular zeigt sie nicht an, sondern nur einen Hinweis, Notizen und Tags.

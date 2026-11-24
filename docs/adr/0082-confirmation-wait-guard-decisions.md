@@ -1,6 +1,8 @@
 # ADR 0082 — Entscheidungen beim Umbau des Bestätigungswartens (Spec 0088)
 
-Status: akzeptiert · Spec: `docs/specs/0088-confirm-wait-without-panics.md` · Backlog: BL-0231
+## Status
+
+Accepted · Spec: `docs/specs/0088-confirm-wait-without-panics.md` · Backlog: BL-0231
 
 Spec 0088 ließ mehrere Punkte bewusst offen („Den Weg über den vergifteten
 Wert wählt der Coder"). Dieses ADR hält fest, welcher Weg gewählt wurde und

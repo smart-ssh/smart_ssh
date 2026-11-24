@@ -128,6 +128,7 @@ fn own_refs(auth: &AuthMethod, server: Uuid) -> bool {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub(crate) fn validate(s: &Snapshot) -> Result<(), BackupOpError> {
     ensure(s.servers.len() <= MAX_SERVERS, "too many servers")?;
     ensure(s.groups.len() <= MAX_GROUPS, "too many folders")?;

@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "メインナビゲーション",
     "connect": "接続",
     "manage": "管理",
     "rules": "フィルタールール"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "サーバーがまだ追加されていません",
     "emptyStateHint": "最初のサーバーを追加して、SSHで接続しましょう。",
     "emptyStateCreateFirstServer": "最初のサーバーを追加",
-    "newServerInGroup": "グループ「{{name}}」に新しいサーバー",
-    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。"
+    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。",
+    "localBadge": "ローカル",
+    "thisDevice": "このデバイス",
+    "sessionOpen": "セッション接続中",
+    "sessionPending": "確認待ち",
+    "sessionDisconnected": "セッション切断",
+    "sessionReconnecting": "再接続中"
   },
   "settings": {
     "title": "設定",
@@ -49,6 +55,13 @@
       "dataAndBackup": "データとバックアップ"
     }
   },
+  "appearance": {
+    "heading": "外観",
+    "language": "言語",
+    "system": "システムに従う",
+    "light": "ライト",
+    "dark": "ダーク"
+  },
   "about": {
     "version": "バージョン",
     "copyHint": "クリップボードにコピー",
@@ -57,6 +70,7 @@
     "copyFailed": "コピーに失敗しました。代わりにテキストを選択できます。",
     "loadFailed": "バージョン／ビルド情報を読み込めませんでした。",
     "buildDev": "開発ビルド",
+    "dataDirMarker": "データ: {{path}}",
     "buildRelease": "リリースビルド",
     "thirdPartyLicenses": {
       "openButton": "サードパーティのライセンス",
@@ -79,6 +93,7 @@
       "no_session_bus": "利用できません — D-Busセッションバスに到達できません。次の手順: `sudo apt install dbus-user-session` を実行し、再度サインインしてください。",
       "no_secret_service_provider": "利用できません — Secret Serviceプロバイダーが動作していません。次の手順: `sudo apt install gnome-keyring` を実行し、再度サインインしてください。KDEでも同様に動作します。すでにKWallet（`kwallet6`）やKeePassXCを使用している場合は、それらのSecret Service連携を起動または有効にする必要があります。インストールするだけでは不十分です。",
       "locked": "利用できません — 存在しますがロックされています。次の手順: ロックを解除してSmart SSHを再起動してください。不足しているパッケージはありません。",
+      "no_keystore": "利用できません — Android Keystoreを利用できません。次の手順: 代わりにマスターパスワードを使用してください。シークレットは暗号化されたデータベースに保存されたままです。",
       "unknown": "利用できません — 原因不明です。次の手順: Secret Serviceプロバイダー（gnome-keyring、またはSecret Service連携を有効にしたKWalletやKeePassXC）が動作しロック解除されているかを確認し、Smart SSHを再起動してください。"
     },
     "keychainBlocked": "これはお客様のシークレットには影響しません。APIキー、サーバーのパスワード、パスフレーズ、sudoパスワードはキーチェーンではなく、暗号化されたデータベースに保存されています。",
@@ -91,8 +106,10 @@
       "hostKeys": "ホストキー",
       "wrappingFile": "マスターパスワードの鍵ファイル",
       "mcpSettings": "MCP設定",
+      "speechModels": "音声モデル",
       "sessions": "セッション",
       "sessionsInDatabase": "データベースに保存",
+      "keychainService": "キーチェーンのサービス",
       "copy": "コピー",
       "copied": "パスをコピーしました",
       "copyFailed": "コピーに失敗しました:",
@@ -126,11 +143,15 @@
     "importSshConfig": "インポート…",
     "importSshConfigHint": "OpenSSHのssh_configファイルからサーバーをインポートします",
     "exportSshConfig": "エクスポート…",
-    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします"
+    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします",
+    "title": "サーバー",
+    "collapseGroup": "グループ「{{name}}」を折りたたむ",
+    "expandGroup": "グループ「{{name}}」を展開"
   },
   "treeDrag": {
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
+    "current": "現在",
     "hintGroup": "→ このグループに移動",
     "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
     "moveTo": "「{{name}}」の移動先…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "このサーバーのチャット履歴、メモ、タグも完全に削除されます。",
     "confirmDeleteServer": "完全に削除",
     "testResult": {
-      "success": "✓ 接続に成功しました",
-      "authFailed": "✗ ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
+      "success": "接続に成功しました",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
       "hostKeyUnknown": "ホストキーが不明です — 確認が必要です",
-      "hostKeyMismatch": "⚠ ホストキーが変更されました",
-      "networkError": "✗ ネットワークエラー: {{message}}",
-      "timeout": "✗ サーバーが応答しません。アドレス、ポート、ファイアウォールを確認してください。"
+      "hostKeyMismatch": "ホストキーが変更されました",
+      "networkError": "ネットワークエラー: {{message}}",
+      "timeout": "サーバーが応答しません。アドレス、ポート、ファイアウォールを確認してください。"
     },
     "largeNoteHint": "このメモは非常に大きいため、長いセッションではAIのコンテキスト用に短縮されることがあります。保存されたメモは完全なまま残ります。",
     "summarizeNow": "今すぐ要約",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "sftp-serverのパス（昇格したファイルアクセス）",
     "sftpServerPathPlaceholder": "自動",
     "sftpServerPathHint": "昇格した権限でのファイルブラウザーで自動検出が失敗する場合にのみ必要です（例: /usr/lib/openssh/sftp-server）。空欄 = 自動。",
+    "elevationAllowedLabel": "ファイルブラウザーで昇格した権限を許可する",
+    "elevationAllowedHint": "オフの場合、このサーバーではファイルブラウザーが昇格した権限を提供しません。",
     "startDirectoryLabel": "開始ディレクトリ（ターミナルとファイルブラウザー）",
     "startDirectoryPlaceholder": "ホームディレクトリ",
     "startDirectoryHint": "絶対パス（/…）または ~/ で始まるパス。ターミナルでは表示される cd で移動し、ファイルブラウザーではそこを開きます。AIのコマンドは常にホームディレクトリで実行されます。空欄 = ホームディレクトリ。",
@@ -294,6 +318,13 @@
       "connection": "接続",
       "security": "セキュリティ",
       "invalid": "エラーがあります"
+    },
+    "importKey": {
+      "title": "キーを Smart SSH にインポートしますか？",
+      "import": "キーをインポート",
+      "keep": "ファイルパスを保持",
+      "importHint": "キーは暗号化されて Smart SSH に保存され、バックアップとともに他のデバイスへ引き継がれます。",
+      "keepHint": "保存され他のデバイスへ引き継がれるのはファイルパスのみです。ファイルはすべてのデバイスで同じパスに存在する必要があります。"
     }
   },
   "filterRules": {
@@ -337,10 +368,13 @@
     "matchedRuleLabel": "ルール:",
     "segmentLabel": "セグメント {{index}}",
     "checksLabel": "チェック:",
-    "hardBlacklistLabel": "ハードブラックリスト:"
+    "hardBlacklistLabel": "ハードブラックリスト:",
+    "invalidPattern": "無効なパターン",
+    "rowActions": "行の操作",
+    "ruleCount_other": "{{count}} 件のルール"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}}ステップで自動継続を一時停止しました。メッセージを送信すると続行します。",
+    "autoContinuationLimitReached": "確認なしで{{limit}}ステップが続いたため、自動継続を一時停止しました。メッセージを送信すると続行します。",
     "aiBudgetWaiting": "AIの利用枠を待機中 — {{seconds}}秒後に再試行します…",
     "suggestCommand": "コマンドを提案",
     "generateDocument": "ドキュメントを生成: {{title}}",
@@ -354,8 +388,12 @@
     "blocked": "ブロック済み",
     "rejected": "拒否済み",
     "rejectedByUser": "ユーザーが拒否しました。",
-    "usesStoredSudoPassword": "🔑 保存済みのsudoパスワードを使用して実行されます。",
-    "writeMayUseStoredSudoPassword": "🔑 書き込み権限がない場合、アプリは保存済みのsudoパスワード（sudo）を使用して書き込みます。",
+    "expired": "期限切れ",
+    "discardedAfterReconnect": "再接続されたため破棄されました。何も実行されていません。",
+    "expiredTimeout": "時間内に応答がなく破棄されました。何も実行されていません。",
+    "expiredUnknown": "このリクエストは保留中ではありません。何も実行されていません。",
+    "usesStoredSudoPassword": "保存済みのsudoパスワードを使用して実行されます。",
+    "writeMayUseStoredSudoPassword": "書き込み権限がない場合、アプリは保存済みのsudoパスワード（sudo）を使用して書き込みます。",
     "takeIntoNote": "メモに取り込む",
     "takeIntoNoteFailed": "失敗しました — もう一度お試しください",
     "riskServerLabel": "サーバー",
@@ -365,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "AIのセカンドオピニオンを取得できませんでした。表示されているリスクはルールベースのものです。",
     "riskHint": "既知のパターンに基づく評価です。保証するものではありません。",
     "runningSince": "{{seconds}}秒間実行中…",
+    "exitCode": "終了コード: {{code}}",
     "waitingForInputHint": "このコマンドは入力待ちの可能性があります。停止すると、AI が非対話型の代替案を提案します。",
     "cancelCommand": "このコマンドを切断",
     "cancellingCommand": "切断中…",
-    "commandCancelledNotice": "⚠ 手動でキャンセルされました — 出力が不完全な可能性があり、通常の終了コードはありません。",
-    "commandTruncatedNotice": "⚠ 出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
+    "commandCancelledNotice": "手動でキャンセルされました — 出力が不完全な可能性があり、通常の終了コードはありません。",
+    "commandTruncatedNotice": "出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
     "liveOutputLabel": "ライブ出力",
-    "liveOutputTruncatedNotice": "⚠ サイズ上限に達しました — これ以降の出力は表示されません。",
+    "liveOutputTruncatedNotice": "サイズ上限に達しました — これ以降の出力は表示されません。",
     "autoRanLead": "自動実行",
     "autoRanRule": "ルール",
     "autoRanScopeGlobal": "グローバル",
@@ -386,17 +425,15 @@
     "editableCommand": "コマンド — 編集可能",
     "execute": "実行",
     "deny": "拒否",
-    "quickRule": "承認 + ルール",
-    "quickRuleDropdownAria": "ルールの候補を表示",
-    "newRulePatternHeading": "新しい許可ルールのパターン",
     "scopeThisServer": "このサーバー",
     "scopeGlobal": "グローバル",
     "scopeTag": "タグ",
     "tagNamePlaceholder": "タグ名",
     "loadingSuggestions": "候補を読み込み中…",
     "noSuggestions": "候補はありません。",
-    "binaryFileHint": "⚠ バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
-    "diffTooLargeHint": "⚠ 内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
+    "binaryFileHint": "バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
+    "fileTooLargeHint": "ファイルが {{limit}} を超えているため、テキストの比較はできません。新しいサイズ: {{newSize}}。",
+    "diffTooLargeHint": "内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
     "noContentChange": "（内容の変更なし）",
     "quickRuleLabel": {
       "exact": "完全一致: {{patterns}}",
@@ -414,10 +451,25 @@
       "blocked": "ルールに関係なく常に確認します: {{reasons}}",
       "verdictAuto": "次回から自動的に実行されます",
       "verdictAsk": "引き続き確認します: {{reasons}}",
-      "notice": "ルールを作成しました。このコマンドは次回も確認が必要です: {{reasons}}",
       "reasonOther": "別の安全チェック",
-      "loadFailed": "ルールの適用範囲を読み込めませんでした"
+      "loadFailed": "ルールの適用範囲を読み込めませんでした",
+      "summaryHeading": "許可済み",
+      "toDecideHeading": "未決定",
+      "expandAria": "{{segment}} のルール候補",
+      "stagedBadge": "未保存",
+      "removeStaged": "削除",
+      "saveRules": "ルールを保存 ({{count}})",
+      "saveFailed": "ルールを保存できませんでした: {{message}}",
+      "unsavedHint": "未保存のルール: {{count}}",
+      "segmentCovered": "この部分は対象ですが、コマンドは引き続き確認を求めます: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "{{hop}} へのログイン",
+    "password": "パスワード",
+    "submit": "ログイン",
+    "notStored": "サーバーがログインのためにこの情報を求めています。保存されません。",
+    "expired": "ログイン要求の有効期限が切れました。接続は確立されませんでした。"
   },
   "hostKeyDialog": {
     "mismatchLabel": "セキュリティ警告 · ホストキーが変更されました",
@@ -426,6 +478,7 @@
     "mismatchBodyAfterHost": " が、前回保存された鍵とは異なる鍵を提示しています。中間者攻撃の可能性があります。サーバーの鍵が正当な理由（例: サーバーの再インストール）で変更されたと確信できる場合にのみ、続行してください。",
     "known": "既知",
     "offeredNow": "今回提示",
+    "offered": "提示",
     "keyType": "鍵の種類",
     "cancelConnection": "接続をキャンセル",
     "trustAnyway": "それでも信頼する",
@@ -438,13 +491,16 @@
   },
   "sessionTabs": {
     "newSession": "新しいセッション",
-    "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
     "menu": {
       "open": "ナビゲーションメニューを開く",
       "title": "ナビゲーションメニュー",
-      "sessions": "開いているセッション"
+      "sessions": "開いているセッション",
+      "close": "ナビゲーションメニューを閉じる",
+      "needsConfirmation": "確認が必要",
+      "activities": "アクティビティ",
+      "activitiesRunning_other": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +509,11 @@
       "pendingBadge": "確認が必要",
       "readOnlyHint": "このセッションは外部ツール（MCP）のものです。確認または拒否するツールの操作とその結果のみが表示され、チャット入力やターミナルはありません。閉じるとMCPセッションが終了し、保留中の確認は拒否されます。"
     },
-    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。"
+    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。",
+    "pendingBadge": "保留中",
+    "newConnection": "新しい接続"
   },
   "aiProvider": {
-    "title": "AIプロバイダー",
     "openLogs": "診断ログをファイルマネージャーで開く",
     "noProviders": "プロバイダーがまだ設定されていません。",
     "configuredProvidersTitle": "設定済みのプロバイダー",
@@ -476,16 +533,16 @@
     "apiKeyFormatHint": "{{providerLabel}}のキーではないようです。「{{expectedPrefix}}」のようなプレフィックスが想定されます。そのまま保存することもできます。プロバイダーは形式を変更することがあります。",
     "testCredentials": "認証情報をテスト",
     "testingCredentials": "テスト中…",
-    "testResultValid": "✓ 認証情報は有効です",
-    "testResultAuthFailed": "✗ 認証に失敗しました – APIキーを確認してください",
-    "testResultUnreachable": "✗ プロバイダーに到達できません: {{message}}",
+    "testResultValid": "認証情報は有効です",
+    "testResultAuthFailed": "認証に失敗しました – APIキーを確認してください",
+    "testResultUnreachable": "プロバイダーに到達できません: {{message}}",
     "testResultRateLimited": "認証情報は有効のようですが、プロバイダーが現在レート制限中です。1分ほど待ってからもう一度テストしてください。",
     "nativeToolCalling": "ネイティブのツール呼び出しに対応",
     "discoverModels": "モデルを読み込む",
     "discoveringModels": "モデルを読み込み中…",
     "modelDiscoveryFailedHint": "モデルを自動で読み込めませんでした — モデル名を手動で入力してください。",
     "modelDiscoveryEmptyHint": "プロバイダーからモデルが返されませんでした。モデル名を手動で入力してください。",
-    "modelDiscoveryAuthFailed": "✗ プロバイダーがこの認証情報を拒否しました – APIキーを確認してください",
+    "modelDiscoveryAuthFailed": "プロバイダーがこの認証情報を拒否しました – APIキーを確認してください",
     "advanced": "詳細設定",
     "extraHeadersLabel": "追加ヘッダー",
     "extraHeadersHint": "このプロバイダーへのすべてのリクエストに付加されます（例: OpenRouterのHTTP-Referer／X-Title）。",
@@ -528,6 +585,7 @@
     "ollamaProbeRetry": "再検索",
     "ollamaProbeNotFoundHeading": "ローカルのOllamaが見つかりません（既定のポート 11434）。",
     "ollamaProbeNotFoundInstructions": "ollama.comからOllamaをインストールして起動し、モデルを読み込んで（例: `ollama pull llama3`）から、もう一度検索してください。",
+    "typeLabel": "種類",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +650,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "サーバーの内容を通じて指示をインジェクションしようとする試みの可能性を検出しました – 確認が必要です",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP経由でリクエストされました – 常に確認が必要です",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "保存済みのsudoパスワードを使用します – 常に確認が必要です",
+    "FILTER_RULES_UNAVAILABLE": "フィルタルールを読み込めませんでした – 自動実行は行われず、確認が必要です",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "送信前に保存済みの秘密の値を挿入します – 常に確認が必要です",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "認証情報を含むファイル（例: SSH鍵、.env、/etc/shadow）を読み取ります – 常に確認が必要です",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "この応答内の以前の操作が拒否されました – 確認が必要です",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-serverを起動します（sudoの場合: root権限でのファイルアクセス）– 常に確認が必要です",
@@ -601,6 +661,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "インジェクションされた指示のチェックを実行できませんでした（AIプロバイダーの問題）。次に提案される操作には確認が必要です。",
     "AI_INJECTION_CHECK_INACTIVE": "インジェクションされた指示のチェックはこのサーバーで有効ですが、このセッションでは動作していません（AIセカンドオピニオンがオフか、セットアップできませんでした）。設定でセカンドオピニオンを有効にして、再接続してください。",
     "AI_SECOND_OPINION_SETUP_FAILED": "AIセカンドオピニオンはオンですが、このセッションではセットアップできませんでした（プロバイダーが削除されたか、認証情報が見つかりません）。コマンドはセカンドオピニオンによるチェックを受けません – 設定を修正して再接続してください。",
+    "REDACTION_INCOMPLETE": "このサーバーの一部のシークレット値を読み込めませんでした。AIに送信される内容でマスクされない可能性があります。",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "サーバーの現在のタグを読み取れませんでした – 確認が必要です",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "リスクが赤と評価された、または確実に評価できませんでした（例: 長すぎる）– 常に確認が必要です",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "メモの更新には常に確認が必要です",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "ファイルの書き込みには常に確認が必要です",
@@ -638,7 +700,13 @@
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
-    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "選択した AI プロバイダーは設定されていません。設定済みのプロバイダーを選択してください。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
+    "CHAT_SESSION_NOT_FOUND": "保存されたこのチャットは存在しません。「再試行」を選ぶと、再開せずに通常どおり接続します。",
+    "SESSION_NOT_FOUND": "このセッションは既に閉じられています。サーバー一覧からもう一度開いてください。",
+    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません",
+    "SSH_NO_COMMON_ALGORITHM": "サーバーと共通の SSH アルゴリズムがありません。サーバーの SSH ソフトウェアが古すぎるか制限が厳しすぎます。更新するか、新しいアルゴリズムを有効にしてください。"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -716,13 +784,17 @@
     "openedLocally": "「{{name}}」をローカルで開きました — 変更内容はアップロードの確認が表示されます",
     "openLocallyFailed": "「{{name}}」をローカルで開けませんでした: {{reason}}",
     "editUploaded": "「{{name}}」の変更をアップロードしました",
-    "editUploadFailed": "「{{name}}」の変更をアップロードできませんでした: {{reason}}",
     "uploadedFolder": "フォルダー「{{name}}」をアップロードしました — {{count}}個のファイル",
     "uploadFolderFailed": "フォルダー「{{name}}」のアップロードに失敗しました: {{reason}}",
     "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",
     "nothingToPaste": "貼り付けるものがありません：クリップボードにファイルがありません",
     "createFileDone": "ファイル「{{name}}」を作成しました",
-    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}"
+    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}",
+    "chownDone": "「{{name}}」の所有者を変更しました",
+    "chownRecursive": "所有者を変更しました — 「{{name}}」内の {{count}} 件",
+    "chownFailed": "「{{name}}」の所有者を変更できませんでした: {{reason}}",
+    "chownUnknownUser": "「{{name}}」の所有者は変更されませんでした: 不明なユーザー",
+    "chownUnknownGroup": "「{{name}}」の所有者は変更されませんでした: 不明なグループ"
   },
   "fileElevation": {
     "toggle": "昇格した権限",
@@ -736,6 +808,17 @@
     "opDelete": "削除",
     "opChmod": "権限の変更",
     "banner": "昇格した権限が有効です: このブラウザーでのすべてのファイル操作は {{user}} として実行されます。",
+    "bannerLogged": "サーバー上で記録されます。",
+    "notice": {
+      "title": "昇格権限について",
+      "intro": "これからは {{user}} としてファイルを読み書きします。変更はすぐに反映され、アプリから元に戻すことはできません。",
+      "loggedApp": "すべての変更はアプリのログに記録されます。",
+      "loggedAppAndServer": "すべての変更はアプリのログとサーバーの認証ログに記録されます。",
+      "passwordless": "sftp-server 用の sudo ルールにより、{{user}} はこのアプリだけでなく、このログインで動くすべてのものにパスワードなしでアクセスできます。",
+      "alternative": "このサーバーを普段 root で管理する場合は、鍵を使う専用の root ログイン (PermitRootLogin prohibit-password) にすると、そのアクセスが明確になります。",
+      "gotIt": "了解",
+      "dontShowAgain": "このサーバーでは今後表示しない"
+    },
     "deleteFileTitle": "{{user}} としてファイルを削除しますか？",
     "deleteDirTitle": "{{user}} としてフォルダーを削除しますか？",
     "overwriteTitle": "{{user}} としてファイルを上書きしますか？",
@@ -757,7 +840,8 @@
     "close": "閉じる",
     "detail": "詳細: {{detail}}",
     "failure": {
-      "passwordRequired": "このサーバーでは、sftp-serverに対してsudoがパスワードを要求します。このアプリがsudoパスワードを尋ねることはありません。",
+      "passwordRequired": "このサーバーでは sftp-server の実行に sudo のパスワードが必要です。下の sudoers の行を追加するか、サーバープロファイルに sudo パスワードを保存すると、昇格権限を使えます。",
+      "wrongSudoPassword": "保存されている sudo パスワードが sudo に拒否されました。サーバープロファイルの sudo パスワードを確認してください。",
       "notAllowed": "このSSHログインは、パスワードなしでsudo経由でsftp-serverを起動することが許可されていません。",
       "requireTty": "sudoはターミナルなしでの実行を拒否します（sudoersの「requiretty」）。このログインに対してrequirettyを無効にしてください。例: 「Defaults:<login> !requiretty」",
       "sftpServerNotFound": "サーバー上でsftp-serverが見つかりませんでした。サーバープロファイルの「詳細設定」でそのパスを入力してください。",
@@ -767,7 +851,8 @@
       "invalidUser": "対象ユーザーが無効です。",
       "unsupported": "ローカルサーバーには昇格モードがありません。",
       "checkFailed": "sudoの権限の確認に失敗しました。",
-      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
+      "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。",
+      "disabledForServer": "このサーバーでは、サーバープロファイルで昇格した権限がオフになっています。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
     "group": "昇格された権限",
@@ -775,7 +860,11 @@
     "otherUser": "別のユーザーとして…",
     "targetUser": "対象ユーザー",
     "targetUserHelp": "sudo を使って、このユーザーとしてファイルブラウザを実行します。既定値: root。",
-    "confirm": "昇格"
+    "confirm": "昇格",
+    "opChown": "所有者の変更",
+    "chownNote": "所有者は {{user}} として変更されます。",
+    "idleSwitchedOff": "操作がないまま{{minutes}}分が経過したため、昇格した権限をオフにしました",
+    "revokedByProfile": "昇格した権限を終了しました — サーバープロファイルで許可されなくなりました。"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -789,6 +878,8 @@
     "groupsHeading": "作成されるフォルダー構造",
     "entriesHeading": "{{count}}台のサーバー",
     "field": {
+      "name": "名前",
+      "include": "含める",
       "host": "アドレス",
       "port": "ポート",
       "username": "ユーザー",
@@ -864,6 +955,7 @@
       "proxyJumpLocalPseudoServer": "ローカル擬似サーバーを指しています"
     },
     "confirm": "インポート",
+    "confirmCount_other": "{{count}}台のサーバーをインポート",
     "applying": "インポート中…",
     "result": {
       "success": "サーバー{{created}}台、フォルダー{{groups}}個を作成し、競合{{skipped}}件をスキップしました。",
@@ -964,14 +1056,17 @@
       "hostKeyCheck": "ホストキーの確認",
       "authentication": "認証",
       "sessionReady": "セッション確立",
-      "dnsSkipped": "IPアドレス – 名前解決は不要"
+      "dnsSkipped": "IPアドレス – 名前解決は不要",
+      "outdatedAlgorithms": "古いアルゴリズム",
+      "banner": "サーバーバナー"
     },
     "status": {
       "ok": "OK",
       "running": "進行中",
       "failed": "失敗（{{code}}）",
       "skipped": "スキップ",
-      "failedReason": "失敗: {{reason}}"
+      "failedReason": "失敗: {{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "既知",
@@ -984,7 +1079,8 @@
       "privateKey": "秘密鍵",
       "agent": "SSHエージェント",
       "certificate": "証明書",
-      "identityFile": "鍵ファイル"
+      "identityFile": "鍵ファイル",
+      "keyboardInteractive": "キーボードインタラクティブ"
     },
     "detail": {
       "addresses": "アドレス: {{addresses}}",
@@ -993,7 +1089,9 @@
       "cipher": "暗号: {{value}}",
       "mac": "MAC：{{value}}",
       "partialSuccess": "部分的に受理されました。さらに認証が必要です",
-      "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）"
+      "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）",
+      "round": "ラウンド {{round}}",
+      "prompts": "サーバーのプロンプト: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP接続がタイムアウトしました",
@@ -1011,6 +1109,7 @@
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
     "fileActionsGroup": "ファイル操作",
+    "directoryActions": "ディレクトリ操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",
@@ -1045,8 +1144,10 @@
       "name": "名前",
       "size": "サイズ",
       "permissions": "権限",
-      "modified": "更新日時"
+      "modified": "更新日時",
+      "owner": "所有者"
     },
+    "columnsMenu": "列の表示/非表示",
     "localEdit": {
       "uploading": "「{{name}}」をアップロード中…",
       "changed": "「{{name}}」がローカルで変更されました。サーバーにアップロードしますか？",
@@ -1054,8 +1155,7 @@
       "editing": "「{{name}}」をローカルで編集中…",
       "end": "編集を終了",
       "uploadTitle": "ローカルの変更をアップロードしますか？",
-      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。新しいサイズ: {{size}}。"
+      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。"
     },
     "deleteDialog": {
       "fileTitle": "ファイルを削除しますか？",
@@ -1075,7 +1175,6 @@
       "conflictTitle": "フォルダー内のファイルを上書きしますか？",
       "conflictBody": "「{{name}}」をアップロードすると、サーバー上のこれら{{count}}個のファイルが上書きされます。確認しない限り、何も上書きされません。",
       "summaryTitle": "フォルダーのアップロード: 「{{name}}」",
-      "summary": "{{uploaded}}個のファイルをアップロード、{{skipped}}個をスキップ、{{failed}}個が失敗しました。",
       "notAttempted": "フォルダーを作成できなかったため、{{count}}個のファイルは処理されませんでした。",
       "skipped": "スキップ",
       "failed": "失敗",
@@ -1086,12 +1185,14 @@
         "unsupported": "通常のファイルまたはフォルダーではありません",
         "notGranted": "選択範囲に含まれていません",
         "overwriteNotConfirmed": "サーバー上に存在し、上書きが確認されていません"
-      }
+      },
+      "uploaded": "アップロード済み"
     },
     "uploadConflict": {
       "title": "ファイルを上書きしますか？",
       "body": "はサーバー上にすでに存在します。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。現在のサイズ: {{remoteSize}}、新しいサイズ: {{localSize}}。"
+      "currentSize": "現在のサイズ",
+      "newSize": "新しいサイズ"
     },
     "menu": {
       "download": "ダウンロード",
@@ -1107,8 +1208,10 @@
       "cut": "切り取り",
       "delete": "削除",
       "newFolder": "新しいフォルダー",
-      "newFile": "新しいファイル"
+      "newFile": "新しいファイル",
+      "chown": "所有者を変更…"
     },
+    "linkMarker": "シンボリックリンク",
     "properties": {
       "title": "プロパティ",
       "name": "名前",
@@ -1116,6 +1219,10 @@
       "type": "種類",
       "typeFolder": "フォルダー",
       "typeFile": "ファイル",
+      "typeLinkFolder": "フォルダーへのシンボリックリンク",
+      "typeLinkFile": "ファイルへのシンボリックリンク",
+      "typeLinkBroken": "リンク切れのシンボリックリンク",
+      "linkTarget": "リンク先",
       "size": "サイズ",
       "permissionsSymbolic": "権限（シンボリック）",
       "permissionsNumeric": "権限（数値）",
@@ -1165,10 +1272,24 @@
       "notText": "テキスト差分を表示できません：ファイルはバイナリです（有効な UTF-8 テキストではありません）。",
       "permission": "テキスト差分を表示できません：現在の権限ではこのファイルの読み取り権限がありません。",
       "other": "テキスト差分を表示できません：ファイルを読み取れませんでした（{{message}}）。"
-    }
+    },
+    "chown": {
+      "title": "所有者の変更",
+      "owner": "ユーザー",
+      "group": "グループ",
+      "hint": "名前または番号を入力してください。そのままにした側は変更されません。変更が許可されるかはサーバーが判断します(通常は root のみ所有者を変更できます)。",
+      "recursive": "内容にも適用",
+      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの所有者を変更します。シンボリックリンクはたどりません。元に戻せません。"
+    },
+    "transferChown": "{{name}} の所有者を変更中",
+    "stopProgress": "進捗",
+    "noTextDiff": "テキスト差分を表示できません(バイナリファイル、またはサイズが大きすぎます)。"
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
+    "copyCode": "コードをコピー",
+    "codeCopied": "コードをコピーしました",
+    "codeCopyFailed": "コピーに失敗しました",
     "composerMore": "その他の入力操作",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",
@@ -1192,12 +1313,16 @@
     "queued": "次のリクエストと一緒に送信されます",
     "responseCancelled": "応答をキャンセルしました。",
     "contextCompactedNotice": "このチャットの古い部分は、モデルのコンテキストに収めるために要約されました。",
-    "contextUsage": "コンテキスト {{used}} / {{window}}",
     "contextUsageTooltip": "コンテキストがいっぱいになると、チャットの古い部分は自動的に要約されます。",
+    "messageLabel": "メッセージ",
+    "headerProviderTooltip": "プロバイダー: {{provider}}",
     "webResearchUnavailable": "このプロバイダーのアカウントではWebリサーチを利用できません（Web検索が無効になっています）。このセッションはWebリサーチなしで回答します。恒久的にオフにするには、設定 → AIプロバイダー → 「Webリサーチ」を開いてください。",
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",
     "outputTruncated": "（省略されました）",
+    "outputMoreLines_other": "… 他 {{count}} 行",
+    "outputShowAll": "すべて表示",
+    "outputShowLess": "表示を減らす",
     "fileWritten": "ファイル「{{path}}」を書き込みました。",
     "writtenWithSudoPassword": "保存済みのsudoパスワードを使用して書き込みました。",
     "documentGenerated": "ドキュメントを生成しました",
@@ -1274,7 +1399,18 @@
     "aiTab": "AI",
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
+    "thisDevice": "このデバイス",
+    "paneSwitch": "ペイン切り替え",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
+    "extraKeys": {
+      "group": "追加キー",
+      "up": "上矢印",
+      "down": "下矢印",
+      "left": "左矢印",
+      "right": "右矢印",
+      "pageUp": "ページアップ",
+      "pageDown": "ページダウン"
+    },
     "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
     "stopReconnect": "停止",
     "reconnectGaveUp": "接続を復旧できませんでした。"
@@ -1307,7 +1443,8 @@
       "body": "音声モデル（{{model}}、約 {{size}} MiB）を {{source}} から一度だけダウンロードします。以後、音声認識はこのコンピューター上だけで動作し、音声とテキストが外部に送られることはありません。",
       "download": "ダウンロード",
       "cancel": "キャンセル",
-      "progress": "ダウンロードの進行状況"
+      "progress": "ダウンロードの進行状況",
+      "parakeetLicense": "ライセンス: {{license}}"
     },
     "errors": {
       "noDevice": "マイクが見つかりません。マイクを接続し、システム設定で入力デバイスを確認してください。",
@@ -1323,7 +1460,8 @@
       "model": "音声モデル",
       "models": {
         "base": "Base（約 {{size}} MiB、既定）",
-        "small": "Small（約 {{size}} MiB、高精度・低速）"
+        "small": "Small（約 {{size}} MiB、高精度・低速）",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (約 {{size}} MiB、多言語、高速。言語を自動で検出します)"
       },
       "statusReady": "ダウンロード済み",
       "statusNotDownloaded": "未ダウンロード",
@@ -1331,7 +1469,8 @@
       "download": "ダウンロード",
       "delete": "モデルを削除",
       "language": "認識言語",
-      "languageAuto": "自動"
+      "languageAuto": "自動",
+      "languageParakeetHint": "Parakeet は言語を自動で検出します。この設定は Whisper モデルに適用されます。"
     }
   },
   "connectTab": {
@@ -1391,6 +1530,8 @@
     "import": {
       "title": "バックアップから復元",
       "pickTitle": "バックアップファイルを選択",
+      "pickFailed": "選択した場所からファイルを開けませんでした。",
+      "chooseAgain": "ファイルを選び直す",
       "file": "ファイル：{{name}}",
       "kind": "このバックアップを開く方法",
       "useCode": "リカバリーコード",
@@ -1407,6 +1548,9 @@
       "file": "バックアップ",
       "sessions": "閉じられる開いているセッション：{{count}}",
       "safety": "現在のデータは先に {{dir}} に保存されます。現在のサーバーは、今日の日付が付いた新しいフォルダー “Previous data” に移動します。",
+      "pickDirTitle": "安全バックアップの保存先フォルダーを選択",
+      "changeSafetyDir": "変更…",
+      "changeSafetyDirFailed": "フォルダーを選択できませんでした。既定のフォルダーのままです。",
       "replace": "データを置き換える"
     },
     "counts": {
@@ -1431,5 +1575,55 @@
       "newerVersion": "このバックアップは、より新しいバージョンの Smart SSH で作成されました。アプリを更新して再試行してください。",
       "failed": "操作に失敗しました。何も変更されていません。"
     }
+  },
+  "errorBoundary": {
+    "title": "問題が発生しました",
+    "body": "Smart SSH のインターフェースで予期しないエラーが発生しました。再読み込みして続行してください。再発する場合は、再読み込み後に「設定 → 診断」で診断バンドルを作成してください。",
+    "reload": "再読み込み"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "このサーバーは古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、サーバーの SSH ソフトウェアを更新してください。",
+    "outdatedAlgorithmsHop": "{{hop}} は古い SSH アルゴリズム（{{algorithms}}）を使用しています。接続の安全性が低下します。可能であれば、その SSH ソフトウェアを更新してください。"
+  },
+  "elevatedIdle": {
+    "label": "操作がない場合に昇格した権限をオフにする",
+    "minutes5": "5分",
+    "minutes15": "15分",
+    "minutes30": "30分",
+    "minutes60": "60分",
+    "never": "しない",
+    "hint": "昇格した操作がこの時間なかった場合、ファイルブラウザーは自動的に昇格モードを終了します。実行中の操作はアクティビティとして扱われます。"
+  },
+  "activities": {
+    "title": "アクティビティ",
+    "buttonRunning": "アクティビティ: {{running}} 件実行中",
+    "buttonFailed": "アクティビティ: 1 件が失敗しました",
+    "buttonDone": "アクティビティ: 完了",
+    "cancel": "キャンセル",
+    "cancelNamed": "{{title}} をキャンセル",
+    "dismiss": "閉じる",
+    "dismissNamed": "{{title}} を閉じる",
+    "succeeded": "完了",
+    "cancelled": "キャンセル済み",
+    "failed": "失敗",
+    "inProgress": "処理中",
+    "verifying": "検証中",
+    "speechModelTitle": "音声モデル {{name}}",
+    "buttonInterrupted": "アクティビティ: 一部が中断されました",
+    "interrupted": "中断",
+    "resume": "再開",
+    "resumeNamed": "{{title}}を再開",
+    "discard": "破棄",
+    "discardNamed": "{{title}}を破棄",
+    "resumeFailed": "再開できませんでした。",
+    "quitTitle": "実行中のアクティビティがありますが終了しますか?",
+    "quitBody": "次のアクティビティは実行中で、停止されます:",
+    "quitResumeHint": "中断されたダウンロードは、次回の起動時に再開できます。",
+    "quitAnyway": "終了する",
+    "keepRunning": "実行を続ける",
+    "summaryRunning_other": "実行中 {{count}} 件",
+    "summaryInterrupted_other": "中断 {{count}} 件",
+    "summaryFailed_other": "失敗 {{count}} 件",
+    "remaining": "残り {{time}}"
   }
 }

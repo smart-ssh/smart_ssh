@@ -5,8 +5,12 @@
 
 use uuid::Uuid;
 
+use super::approval::ApprovedFileWrite;
+
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
+use ssh_manager_core::ssh::elevated::shell_single_quote;
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::events::{emit_chat_action_result, ActionResultPayload, EventEmitter};
@@ -14,7 +18,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::action_exec::{check_for_injected_instructions, emit_action_error};
-use super::chat_turn::push_history_scoped;
+use super::chat_turn::{emit_activity_for_action, push_history_scoped};
 
 // --- Spec 0020: SFTP-Dateizugriff (ReadRemoteFile/WriteRemoteFile) --------
 
@@ -24,6 +28,29 @@ use super::chat_turn::push_history_scoped;
 /// entsprechende Einstellungs-UI vorgesehen).
 pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 
+/// Issue #1550, Spec 0020 section 4.2 point 3: upper bound for reading the
+/// current target file for the diff preview. A larger file gets no content
+/// preview (flagged `previous_file_too_large`, issue #1559).
+pub(crate) const MAX_PREVIEW_FILE_BYTES: u64 = 1024 * 1024;
+
+/// Lowercase hex SHA-256 of `bytes` — the content fingerprint the activity
+/// record keeps instead of the content itself (Spec 0057).
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// What a successful write leaves for the activity record. `sha256_before`
+/// is `None` when the old content was not read (new file, or only readable
+/// with elevated rights).
+struct WriteDone {
+    backup_path: Option<String>,
+    sha256_before: Option<String>,
+}
+
 /// Spec 0020, Abschnitt 3: öffnet die SFTP-Session der Session lazy (erst
 /// beim ersten Aufruf) und hält sie danach für die Dauer der Session offen
 /// (`session.sftp` bleibt `Some`, bis die Session selbst endet). Ein
@@ -32,9 +59,11 @@ pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 /// Abschnitt 5, `app_shell::commands::sftp_*`) braucht dieselbe Lazy-Open-Logik,
 /// läuft aber komplett außerhalb der KI-Kernschleife dieser Datei.
 pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
-    let mut guard = session.lock_sftp().await;
-    if !guard.is_open() {
-        let mut transport = session.transport.lock().await;
+    // Lock hierarchy (docs/architecture.md, "Lock hierarchy of a session"):
+    // SFTP channel first, transport second — only `SessionLocks` offers it.
+    let mut locks = session.locks();
+    let (mut guard, transport) = locks.sftp_then_transport_if_closed().await;
+    if let Some(mut transport) = transport {
         let sftp = transport.open_sftp().await?;
         // Spec 0085, A3.2: die eine Stelle, die den normalen Kanal befüllt —
         // und sie nimmt ihn aus dem Transport dieser Sitzung selbst.
@@ -51,27 +80,36 @@ pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
 /// ist eine Zusatzinformation, kein Blocker für den Vorschlag selbst).
 /// `(Some(text), None)` bei einer als UTF-8 dekodierbaren bestehenden
 /// Datei; `(None, Some(size))` bei einer bestehenden Binärdatei (Abschnitt
-/// 4.2, Punkt 3, letzter Satz).
+/// 4.2, Punkt 3, letzter Satz). The third element (issue #1559) is `true`
+/// only when the existing file is larger than `MAX_PREVIEW_FILE_BYTES`: then
+/// content and size are both `None` (the size is not known, only that it is
+/// over the cap).
 pub(crate) async fn previous_file_content_for_action(
     action: &AiAction,
     session: &Session,
-) -> (Option<String>, Option<u64>) {
+) -> (Option<String>, Option<u64>, bool) {
     let AiAction::WriteRemoteFile { path, .. } = action else {
-        return (None, None);
+        return (None, None, false);
     };
     if ensure_sftp_open(session).await.is_err() {
-        return (None, None);
+        return (None, None, false);
     }
     let mut guard = session.lock_sftp().await;
     let Some(sftp) = guard.sftp() else {
-        return (None, None);
+        return (None, None, false);
     };
-    match sftp.read_file(path).await {
+    // Issue #1550: bounded read (cap + 1 detects "larger than the cap"); the
+    // target may be a huge file or a special file such as /dev/zero.
+    match sftp
+        .read_file_capped(path, MAX_PREVIEW_FILE_BYTES + 1, &mut |_| {})
+        .await
+    {
+        Ok(bytes) if bytes.len() as u64 > MAX_PREVIEW_FILE_BYTES => (None, None, true),
         Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => (Some(text), None),
-            Err(err) => (None, Some(err.into_bytes().len() as u64)),
+            Ok(text) => (Some(text), None, false),
+            Err(err) => (None, Some(err.into_bytes().len() as u64), false),
         },
-        Err(_) => (None, None),
+        Err(_) => (None, None, false),
     }
 }
 
@@ -122,6 +160,7 @@ pub(crate) async fn execute_read_remote_file(
     path: String,
     emitter: &dyn EventEmitter,
     persist: bool,
+    ledger_source: LedgerSource,
 ) -> bool {
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
@@ -149,6 +188,7 @@ pub(crate) async fn execute_read_remote_file(
         // spec-reviewer-Fund (Runde 1): Der Fehler wird hier nur
         // herausgereicht und erst NACH diesem Block gemeldet. Sonst liefe
         // `emit_action_error` (nimmt `session.context`) unter der noch
+        // (docs/architecture.md, "Lock hierarchy of a session")
         // gehaltenen SFTP-Sperre — eine Sperrreihenfolge sftp→context, die
         // es an dieser Stelle vorher nicht gab.
         match guard.sftp_or_err() {
@@ -182,7 +222,12 @@ pub(crate) async fn execute_read_remote_file(
     let raw = {
         let mut guard = session.lock_sftp().await;
         match guard.sftp_or_err() {
-            Ok(sftp) => sftp.read_file(&path).await,
+            // Issue #1550: capped even when `stat` failed or reported 0
+            // (special files such as /dev/zero); +1 detects "over the limit".
+            Ok(sftp) => {
+                sftp.read_file_capped(&path, MAX_READ_FILE_BYTES + 1, &mut |_| {})
+                    .await
+            }
             // Derselbe Fehlertyp wie `read_file` — der leere Kanal läuft
             // damit durch den bestehenden `Err`-Zweig unten, ohne dass hier
             // unter gehaltener SFTP-Sperre etwas emittiert wird.
@@ -191,7 +236,34 @@ pub(crate) async fn execute_read_remote_file(
     };
 
     match raw {
+        Ok(bytes) if bytes.len() as u64 > MAX_READ_FILE_BYTES => {
+            emit_action_error(
+                session,
+                emitter,
+                session_id,
+                format!(
+                    "Datei '{path}' ist zu groß (Obergrenze {MAX_READ_FILE_BYTES} Bytes) \
+                     — wird nicht gelesen."
+                ),
+                None,
+                persist,
+            )
+            .await
+        }
         Ok(bytes) => {
+            // Activity record (Spec 0057): path, size and hash only — never
+            // the content. Hash of the raw bytes, before redaction.
+            emit_activity_for_action(
+                session,
+                ledger_source,
+                LedgerEntryContent::FileRead {
+                    path: path.clone(),
+                    bytes: Some(bytes.len() as u64),
+                    sha256: Some(sha256_hex(&bytes)),
+                },
+                Some(action_id),
+            )
+            .await;
             let redacted = ssh_manager_core::ai::OutputRedactor::redact(
                 &session.redactor,
                 &CommandOutput {
@@ -233,6 +305,7 @@ pub(crate) async fn execute_read_remote_file(
             .await;
             // Spec 0039, Abschnitt 5.
             session
+                .safety
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             check_for_injected_instructions(
@@ -268,13 +341,6 @@ fn backup_path_for(path: &str) -> String {
     )
 }
 
-/// Einfaches POSIX-Single-Quote-Escaping für Pfade, die als Argument in ein
-/// per `execute_with_stdin` ausgeführtes Shell-Kommando eingebettet werden
-/// (Spec 0020, Abschnitt 4.3).
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
-}
-
 /// Regulärer (nicht-privilegierter) Schreibversuch per SFTP: Backup (falls
 /// die Datei existiert) + eigentliches Schreiben, in dieser Reihenfolge
 /// (Spec 0020, Abschnitt 4.2, Punkt 4: "vor jedem Überschreiben"). Gibt den
@@ -286,17 +352,19 @@ async fn write_via_sftp_with_backup(
     path: &str,
     content: &str,
     existed: bool,
-) -> Result<Option<String>, SshError> {
+) -> Result<WriteDone, SshError> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
         None
     };
 
+    let mut sha256_before = None;
     if let Some(backup) = &backup_path {
         let mut guard = session.lock_sftp().await;
         let sftp = guard.sftp_or_err()?;
         let old_content = sftp.read_file(path).await?;
+        sha256_before = Some(sha256_hex(&old_content));
         sftp.write_file(backup, &old_content).await?;
     }
 
@@ -304,7 +372,10 @@ async fn write_via_sftp_with_backup(
     let sftp = guard.sftp_or_err()?;
     sftp.write_file(path, content.as_bytes()).await?;
 
-    Ok(backup_path)
+    Ok(WriteDone {
+        backup_path,
+        sha256_before,
+    })
 }
 
 /// Führt `command` mit dem hinterlegten Sudo-Passwort über Stdin aus (Spec
@@ -313,6 +384,8 @@ async fn write_via_sftp_with_backup(
 /// Exit-Code als Kommando-Ergebnis zurückgibt) braucht dieser interne
 /// Aufbauschritt ein hartes Erfolg/Fehlschlag-Signal.
 async fn execute_privileged(
+    // Proof that a confirmed `WriteRemoteFile` action leads here.
+    _approval: &ApprovedFileWrite,
     session: &Session,
     command: &str,
     password: &secrecy::SecretString,
@@ -343,26 +416,39 @@ async fn execute_privileged(
 /// der ursprüngliche Schreibversuch, SFTP kennt zudem kein eigenes
 /// "Kopieren".
 async fn write_via_sudo_fallback(
+    approval: &ApprovedFileWrite,
     session: &Session,
     path: &str,
     content: &str,
     existed: bool,
     old_mode: Option<u32>,
     password: &secrecy::SecretString,
-) -> Result<Option<String>, SshError> {
+) -> Result<WriteDone, SshError> {
     let backup_path = if existed {
         Some(backup_path_for(path))
     } else {
         None
     };
 
+    // "Before" hash: only when the old content is readable over SFTP (e.g. a
+    // 0644 root file); `None` when the read itself is denied or fails.
+    let mut sha256_before = None;
+    if existed {
+        let mut guard = session.lock_sftp().await;
+        if let Some(sftp) = guard.sftp() {
+            if let Ok(old) = sftp.read_file(path).await {
+                sha256_before = Some(sha256_hex(&old));
+            }
+        }
+    }
+
     if let Some(backup) = &backup_path {
         let cmd = format!(
             "sudo -S cp -p {} {}",
-            shell_quote(path),
-            shell_quote(backup)
+            shell_single_quote(path),
+            shell_single_quote(backup)
         );
-        execute_privileged(session, &cmd, password).await?;
+        execute_privileged(approval, session, &cmd, password).await?;
     }
 
     // `install -m` statt `mv`, um Rechte/Eigentümer des Ziels in einem
@@ -387,10 +473,10 @@ async fn write_via_sudo_fallback(
 
     let install_cmd = format!(
         "sudo -S install -m {mode:o} {} {}",
-        shell_quote(&temp_name),
-        shell_quote(path)
+        shell_single_quote(&temp_name),
+        shell_single_quote(path)
     );
-    let install_result = execute_privileged(session, &install_cmd, password).await;
+    let install_result = execute_privileged(approval, session, &install_cmd, password).await;
 
     // Temp-Datei aufräumen, unabhängig vom Ergebnis des `install`-Aufrufs.
     {
@@ -401,7 +487,10 @@ async fn write_via_sudo_fallback(
     }
 
     install_result?;
-    Ok(backup_path)
+    Ok(WriteDone {
+        backup_path,
+        sha256_before,
+    })
 }
 
 /// Spec 0020, Abschnitt 4.2/4.3: kompletter Schreib-Ablauf — regulärer
@@ -409,18 +498,24 @@ async fn write_via_sudo_fallback(
 /// Fallback, sofern für den Server ein Passwort hinterlegt ist. Ohne
 /// Passwort wird der ursprüngliche Fehler unverändert gemeldet (Abschnitt
 /// 4.3, Punkt 5: "kein stiller Fallback").
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one argument per input; one linear write flow"
+)]
 pub(crate) async fn execute_write_remote_file(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
-    path: String,
-    content: String,
+    approved: ApprovedFileWrite,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     persist: bool,
     sudo_fallback_announced: bool,
+    ledger_source: LedgerSource,
 ) -> bool {
+    let path = approved.path().to_owned();
+    let content = approved.content().to_owned();
     // Issue #464 (Spec 0038): the edition's transform runs on the final
     // approved content, right before it is written. Result, history and
     // errors below never see `wire_content`.
@@ -462,14 +557,14 @@ pub(crate) async fn execute_write_remote_file(
         let mut guard = session.lock_sftp().await;
         match guard.sftp_or_err() {
             Ok(sftp) => Ok(match sftp.stat(&path).await {
-                Ok(entry) => (true, Some(entry.permissions)),
-                Err(_) => (false, None),
+                Ok(entry) => (true, Some(entry.permissions), Some(entry.size)),
+                Err(_) => (false, None, None),
             }),
             // s. `execute_read_remote_file`: melden erst nach dem Block.
             Err(err) => Err(err),
         }
     };
-    let (existed, old_mode) = match stat_result {
+    let (existed, old_mode, bytes_before) = match stat_result {
         Ok(found) => found,
         Err(err) => {
             return emit_sftp_channel_error(session, emitter, session_id, &path, err, persist).await
@@ -478,17 +573,26 @@ pub(crate) async fn execute_write_remote_file(
 
     let regular = write_via_sftp_with_backup(session, &path, wire_content, existed).await;
 
-    let (backup_path, used_sudo_password) = match regular {
-        Ok(backup_path) => (backup_path, false),
+    let (done, used_sudo_password) = match regular {
+        Ok(done) => (done, false),
         Err(SshError::SftpPermissionDenied(_)) => {
             // Spec 0068, Teil 3: Sudo-Fallback nur, wenn der Dialog ihn vorab
             // angekündigt hat — genau der im Event gesendete Wert
             // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
             let Some(password) = session
+                .safety
                 .sudo_password
                 .get()
                 .filter(|_| sudo_fallback_announced)
             else {
+                session
+                    .emit_file_write_failed(
+                        ledger_source,
+                        action_id,
+                        &path,
+                        SshError::SftpPermissionDenied(String::new()).code(),
+                    )
+                    .await;
                 return emit_action_error(
                     session,
                     emitter,
@@ -507,6 +611,7 @@ pub(crate) async fn execute_write_remote_file(
                 .await;
             };
             match write_via_sudo_fallback(
+                &approved,
                 session,
                 &path,
                 wire_content,
@@ -516,9 +621,12 @@ pub(crate) async fn execute_write_remote_file(
             )
             .await
             {
-                Ok(backup_path) => (backup_path, true),
+                Ok(done) => (done, true),
                 Err(err) => {
                     let code = err.code();
+                    session
+                        .emit_file_write_failed(ledger_source, action_id, &path, code)
+                        .await;
                     return emit_action_error(
                         session,
                         emitter,
@@ -535,6 +643,9 @@ pub(crate) async fn execute_write_remote_file(
         }
         Err(err) => {
             let code = err.code();
+            session
+                .emit_file_write_failed(ledger_source, action_id, &path, code)
+                .await;
             return emit_action_error(
                 session,
                 emitter,
@@ -547,6 +658,27 @@ pub(crate) async fn execute_write_remote_file(
         }
     };
 
+    let WriteDone {
+        backup_path,
+        sha256_before,
+    } = done;
+    // Activity record (Spec 0057): written only now, when bytes were written.
+    // The hash is of the bytes that went over the wire; no content, no diff.
+    emit_activity_for_action(
+        session,
+        ledger_source,
+        LedgerEntryContent::FileWritten {
+            path: path.clone(),
+            backup_path: backup_path.clone(),
+            bytes_before,
+            bytes_after: Some(wire_content.len() as u64),
+            sha256_before,
+            sha256_after: Some(sha256_hex(wire_content.as_bytes())),
+            sudo: used_sudo_password,
+        },
+        Some(action_id),
+    )
+    .await;
     let summary = match &backup_path {
         Some(backup) => format!("Datei '{path}' geschrieben (Backup: '{backup}')."),
         None => format!("Datei '{path}' neu angelegt."),

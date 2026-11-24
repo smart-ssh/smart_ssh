@@ -102,7 +102,12 @@ Anzeige unterscheidbar (stabile Codes `KEY_FILE_NOT_FOUND`,
 Oberfläche zeigt je Code einen übersetzten Text (`de` und `en`).
 
 **A-7** Ein Lesefehler ist ein Auflösungsfehler der Anmeldung (Code
-`SSH_CREDENTIAL_RESOLUTION_FAILED`), kein eigener Fehlertyp und kein Panic.
+`SSH_CREDENTIAL_RESOLUTION_FAILED`), kein Panic. Ausnahme „Datei fehlt":
+Das ist der eigene Zustand **„Schlüsseldatei auf diesem Gerät nicht
+gefunden"** (Code `KEY_FILE_NOT_FOUND_ON_DEVICE`, die Meldung nennt den
+Pfad). Er erscheint in der Serverliste (unter dem Pfad), im Formular (neben
+dem Pfadfeld) und als Fehler von Verbinden und Verbindungstest; es gibt
+keinen Rückfall auf eine andere Anmeldeart.
 
 **A-8** Die Anmeldeart gilt auch für Jump-Hosts. Die Meldung nennt den
 Hop, der gescheitert ist, vorn als `Benutzer@Host:Port: …` — im
@@ -184,6 +189,27 @@ dessen Passphrase, nie die Datei; die Lösch-Vorschau sagt das.
 ein gültiger Schlüssel ist (auch bei zu weiten Rechten, A-4); sonst steht
 der Grund daneben (A-6). Konnte der Befund nicht abgefragt werden, bleibt der
 Knopf gesperrt und sagt es.
+
+**C-8 Rückfrage beim Speichern.** Speichert der Nutzer einen Server mit der
+Anmeldeart „Schlüsseldatei", **und der Pfad ist neu oder hat sich
+geändert**, fragt ein Dialog einmal nach:
+
+- **„Schlüssel importieren"** (Vorgabe): Der Schlüssel wird wie in C-3 bis
+  C-6 gelesen und verschlüsselt gespeichert (eine Passphrase-Referenz
+  wandert mit); der Server nutzt danach die Anmeldeart „Privater
+  Schlüssel". Der Dialog nennt, dass der Schlüssel als gespeicherter
+  Schlüssel mit Backups auf andere Geräte wandert. Scheitert der Import,
+  ist der Server mit dem Pfad gespeichert; der Dialog zeigt den Grund und
+  erlaubt einen neuen Versuch oder „Dateipfad behalten".
+- **„Dateipfad behalten"**: Es wird wie bisher nur der Pfad gespeichert. Der
+  Dialog nennt, dass nur der Pfad wandert und die Datei auf jedem Gerät am
+  selben Pfad vorhanden sein muss.
+- **Abbrechen** kehrt ohne Speichern zum Formular zurück.
+
+Beim Bearbeiten anderer Felder eines bestehenden Schlüsseldatei-Servers
+(Pfad unverändert) erscheint der Dialog nicht; bestehende Server werden nie
+beim Laden gefragt. Die Aktion aus C-1 bleibt für Server, die den Pfad
+behalten.
 
 ## 4. Zusammenspiel
 

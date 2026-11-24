@@ -13,23 +13,24 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseAllowedWhileLocked } from "../../../../../scripts/check-tauri-commands.mjs";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
 import { testI18n } from "../testI18n";
-import type { StartupPromptRequest, StartupStateDto } from "../types";
+import type { StartupPromptRequest, StartupStateDto } from "../api/types";
 import { AppHeader } from "./AppHeader";
 import { StartupGate } from "./StartupGate";
 
 const invokeMock = vi.fn();
 
-// Bewusst **nicht** `../api` attrappiert: Die echten API-Funktionen gehen
+// Bewusst **nicht** `../api/api` attrappiert: Die echten API-Funktionen gehen
 // über `invoke`, so sieht der Test jedes Kommando, das die Maske auslöst.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onStartupPrompt: vi.fn(() => Promise.resolve(() => {})),
   onStartupUnlocked: vi.fn(() => Promise.resolve(() => {})),
+  onActivityChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 // `../i18n` spricht beim Import die Tauri-Plugins `store`/`os` an.
@@ -139,13 +140,13 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     expect(layer).toHaveAttribute("data-tauri-drag-region");
     expect(layer).toHaveAttribute("aria-hidden", "true");
     expect(layer).toBeEmptyDOMElement();
-    // Fest an der Fensteroberkante, so hoch wie die Titelleiste (`h-9`).
-    expect(layer).toHaveClass("fixed", "top-0", "h-9");
+    // Fest an der Fensteroberkante, so hoch wie die Titelleiste (`h-11`).
+    expect(layer).toHaveClass("fixed", "top-0", "h-11");
 
     // Die Karte liegt nicht in der Leiste, hat keinen Stapelrang darüber,
     // und die Maske hält oben Titelleistenhöhe + Rand frei (`pt-15` =
-    // `h-9` + `p-6`), sodass die zentrierte Karte nie darunter rückt.
-    const card = screen.getByRole("heading", { name: "Smart SSH" }).parentElement!;
+    // `h-11` + `p-6`), sodass die zentrierte Karte nie darunter rückt.
+    const card = screen.getByTestId("startup-card");
     expect(layer!.contains(card)).toBe(false);
     expect(stackRankOf(card)).toBeLessThan(zIndexOf(layer!));
     const gateRoot = container.firstElementChild!;
@@ -193,7 +194,7 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     // Kein Kind des Backdrops und nicht durchlässig.
     expect(backdrop!.contains(layer)).toBe(false);
     expect(layer).not.toHaveClass("pointer-events-none");
-    // Der Dialog hält oben die Titelleistenhöhe frei (`pt-13` = `h-9` +
+    // Der Dialog hält oben die Titelleistenhöhe frei (`pt-13` = `h-11` +
     // `p-4`), seine Knöpfe und Eingaben rücken nie unter die Leiste.
     expect(backdrop).toHaveClass("pt-13");
     expect(backdrop).not.toHaveClass("p-4");
@@ -287,7 +288,7 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     // (die des Headers), keine zusätzliche Startleiste.
     await waitFor(() => expect(vi.mocked(onStartupPrompt)).toHaveBeenCalled());
     deliverPrompt({ ...question, kind: "notice" });
-    await waitFor(() => expect(screen.queryByTestId("titlebar-drag-layer")).not.toBeNull());
+    expect(await screen.findByTestId("titlebar-drag-layer")).toBeTruthy();
     expect(strip()).toBeNull();
     expect(document.querySelectorAll("[data-testid$='drag-layer'], [data-testid$='drag-strip']")).toHaveLength(1);
   });

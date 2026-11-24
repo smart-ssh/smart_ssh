@@ -1,6 +1,8 @@
 # ADR 0087 — Grenzen der Redaction von Kommandozeilen-Passwörtern
 
-Status: angenommen · Spec: 0095 · Backlog: BL-0118
+## Status
+
+Accepted · Spec: 0095 · Backlog: BL-0118
 
 ## Kontext
 

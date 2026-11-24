@@ -4,18 +4,18 @@
 //! Fehler-Mapping bei der Auth-Auflösung. Echter Verbindungsaufbau
 //! (Integrationstests) ist Sache von `crates/ssh-transport`.
 
+use crate::testing::ServerBuilder;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use chrono::Utc;
 use secrecy::{ExposeSecret, SecretString};
 
 use super::mock::MockKeyFileReader;
 use super::*;
 use crate::profiles::{
     AuthMethod, CredentialError, CredentialRef, CredentialResult, CredentialStore, Group, GroupId,
-    NoteRevision, PostIngestPolicy, ProfileError, ProfileResult, ProfileStore, Server,
+    NoteRevision, ProfileError, ProfileResult, ProfileStore, Server,
 };
 use crate::shared::ServerId;
 
@@ -217,35 +217,25 @@ impl SshTransport for MockSshTransport {
 
 // --- Fixtures --------------------------------------------------------
 
-fn make_server(name: &str, jump_host: Option<ServerId>) -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: format!("{name}.example.invalid"),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
 // --- Jump-Host-Ketten-Auflösung ---------------------------------------
 
 #[tokio::test]
 async fn test_jump_host_chain_resolves_multiple_hops_correctly() {
-    let bastion = make_server("bastion", None);
-    let middle = make_server("middle", Some(bastion.id));
-    let target = make_server("target", Some(middle.id));
+    let bastion = ServerBuilder::new()
+        .name("bastion")
+        .host(&format!("{}.example.invalid", "bastion"))
+        .jump_host(None)
+        .build();
+    let middle = ServerBuilder::new()
+        .name("middle")
+        .host(&format!("{}.example.invalid", "middle"))
+        .jump_host(Some(bastion.id))
+        .build();
+    let target = ServerBuilder::new()
+        .name("target")
+        .host(&format!("{}.example.invalid", "target"))
+        .jump_host(Some(middle.id))
+        .build();
 
     let store = MockProfileStore::new()
         .with_server(bastion.clone())
@@ -272,7 +262,11 @@ async fn test_jump_host_chain_resolves_multiple_hops_correctly() {
 
 #[tokio::test]
 async fn test_jump_host_chain_without_jump_host_is_single_hop() {
-    let target = make_server("standalone", None);
+    let target = ServerBuilder::new()
+        .name("standalone")
+        .host(&format!("{}.example.invalid", "standalone"))
+        .jump_host(None)
+        .build();
     let store = MockProfileStore::new().with_server(target.clone());
 
     let resolved = resolve_connection_target(&target, &store).await.unwrap();
@@ -283,8 +277,16 @@ async fn test_jump_host_chain_without_jump_host_is_single_hop() {
 
 #[tokio::test]
 async fn test_jump_host_cycle_detection_returns_error_not_infinite_loop() {
-    let mut a = make_server("a", None);
-    let mut b = make_server("b", None);
+    let mut a = ServerBuilder::new()
+        .name("a")
+        .host(&format!("{}.example.invalid", "a"))
+        .jump_host(None)
+        .build();
+    let mut b = ServerBuilder::new()
+        .name("b")
+        .host(&format!("{}.example.invalid", "b"))
+        .jump_host(None)
+        .build();
     // Simuliert einen Store-Fehler: a -> b -> a.
     a.jump_host = Some(b.id);
     b.jump_host = Some(a.id);
@@ -447,6 +449,23 @@ fn test_resolve_auth_encrypted_identity_file_with_stored_passphrase_resolves() {
     );
 }
 
+/// Issue #667 / Spec 0109 C3: fehlt die Datei auf diesem Gerät, ist das ein
+/// eigener Zustand mit Pfad (`KEY_FILE_NOT_FOUND_ON_DEVICE`) — kein Rückfall.
+#[test]
+fn test_resolve_auth_missing_identity_file_is_not_found_on_device() {
+    let store = MockCredentialStore::new();
+    let key_files = MockKeyFileReader::new();
+    let auth = AuthMethod::IdentityFile {
+        path: IDENTITY_PATH.to_string(),
+        passphrase_ref: None,
+    };
+
+    let err = resolve_auth(&auth, &store, &key_files).unwrap_err();
+
+    assert_eq!(err.code(), "KEY_FILE_NOT_FOUND_ON_DEVICE");
+    assert!(err.to_string().contains(IDENTITY_PATH), "{err}");
+}
+
 /// A-5/A-6: **ohne** hinterlegte Passphrase ergibt derselbe Schlüssel eine
 /// Meldung, die genau das sagt — und den Pfad nennt (nur `resolve_auth`
 /// kennt ihn, §4.2). Nicht „Anmeldung fehlgeschlagen".
@@ -480,12 +499,16 @@ fn test_resolve_auth_encrypted_identity_file_without_passphrase_names_path_and_r
 }
 
 /// §6.1.3: Ein Lesefehler wird zu [`SshError::CredentialResolutionFailed`]
-/// — kein neuer Fehlertyp, kein Panic (A-7).
+/// — kein Panic (A-7). Ausnahme „Datei fehlt“ (Issue #667): eigener Zustand.
 #[test]
-fn test_resolve_auth_identity_file_missing_file_yields_credential_resolution_failed() {
+fn test_resolve_auth_identity_file_unreadable_file_yields_credential_resolution_failed() {
     let store = MockCredentialStore::new();
-    // Die Attrappe kennt den Pfad gar nicht → „nicht gefunden".
-    let key_files = MockKeyFileReader::new();
+    let key_files = MockKeyFileReader::new().with_error(
+        IDENTITY_PATH,
+        KeyFileError::NotARegularFile {
+            path: IDENTITY_PATH.to_string(),
+        },
+    );
     let auth = AuthMethod::IdentityFile {
         path: IDENTITY_PATH.to_string(),
         passphrase_ref: None,
@@ -510,11 +533,11 @@ fn test_resolve_auth_missing_key_file_reports_not_found_on_this_device() {
         passphrase_ref: None,
     };
     match resolve_auth(&auth, &store, &key_files) {
-        Err(SshError::CredentialResolutionFailed(msg)) => assert_eq!(
-            msg,
+        Err(err @ SshError::KeyFileNotFound { .. }) => assert_eq!(
+            err.to_string(),
             format!("Schlüsseldatei auf diesem Gerät nicht gefunden: {IDENTITY_PATH}")
         ),
-        other => panic!("expected CredentialResolutionFailed, got {other:?}"),
+        other => panic!("expected KeyFileNotFound, got {other:?}"),
     }
 }
 
@@ -604,6 +627,14 @@ fn test_each_key_file_error_reaches_resolve_auth_as_a_failure() {
         };
 
         let result = resolve_auth(&auth, &store, &key_files);
+        // Issue #667: „nicht gefunden“ ist ein eigener Zustand mit Pfad.
+        if matches!(case, KeyFileError::NotFound { .. }) {
+            let Err(err @ SshError::KeyFileNotFound { .. }) = result else {
+                panic!("{case:?} muss zu KeyFileNotFound führen, bekam {result:?}");
+            };
+            assert!(err.to_string().contains(IDENTITY_PATH), "{err}");
+            continue;
+        }
         let Err(SshError::CredentialResolutionFailed(message)) = result else {
             panic!("{case:?} muss zu CredentialResolutionFailed führen, bekam {result:?}");
         };
@@ -754,13 +785,13 @@ async fn test_t6_4_8_security_logic_does_not_branch_on_the_auth_method() {
         Decision, EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule,
         RuleAction, RuleId, RuleOrigin, Scope,
     };
-    use crate::risk::{RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
+    use crate::risk::{RiskLevel, RuleBasedRiskClassifier};
 
     struct OneRule(Rule);
     #[async_trait]
     impl PolicyStore for OneRule {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![self.0.clone()]
+        async fn rules_for(&self, _scope: &EffectiveScope) -> crate::filter::PolicyRules {
+            crate::filter::PolicyRules::complete(vec![self.0.clone()])
         }
     }
 

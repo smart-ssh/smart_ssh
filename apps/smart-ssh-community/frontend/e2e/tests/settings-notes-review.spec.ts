@@ -2,8 +2,8 @@
 // focus indicators, Escape and focus return of the dialogs, and long content
 // at both window sizes (docs/ui-guidelines.md).
 import type { Page } from "@playwright/test";
-import { THIRD_PARTY_NOTICES_MARKER } from "../../src/thirdPartyNoticesMarker";
-import { expect, test } from "../support/app";
+import { THIRD_PARTY_NOTICES_MARKER } from "../../src/lib/thirdPartyNoticesMarker";
+import { expect, openSettings, test } from "../support/app";
 import { populated, server } from "../support/data";
 import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
@@ -31,14 +31,6 @@ const longContent = () => ({
   },
 });
 
-async function openSettings(page: Page, category?: string) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
-  if (category) await dialog.getByRole("button", { name: category, exact: true }).click();
-  return dialog;
-}
-
 test("settings: focus starts on the active category, Escape closes and focus returns to the trigger", async ({ app }) => {
   await app.launch(populated());
   const page = app.page;
@@ -49,6 +41,23 @@ test("settings: focus starts on the active category, Escape closes and focus ret
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+test("settings: arrow keys move through the category list, Enter opens, Escape closes", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  const dialog = await openSettings(page);
+  const rows = dialog.locator("nav li button");
+  await expect(rows.nth(0)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(rows.nth(0)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(rows.nth(1)).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 });
 
 test("settings: Tab stays inside the dialog", async ({ app }) => {

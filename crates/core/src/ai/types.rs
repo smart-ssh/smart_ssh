@@ -3,6 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::rejection::RejectionReason;
 use crate::profiles::{AiAction, AskUserOption};
 use crate::ssh::CommandOutput;
 
@@ -10,9 +11,9 @@ use crate::ssh::CommandOutput;
 /// 0007, Abschnitt 8). Bleibt (wie [`crate::profiles::GroupId`]) lokal in
 /// `ai`, statt nach `crate::shared` zu wandern: kein anderes `core`-Modul
 /// kennt das Konzept "AI-Provider-Konfiguration", es gibt also keinen
-/// zweiten Ort, der denselben Typ bräuchte (s. `crate::shared`-Modul-
-/// Kommentar für die generelle Regel).
+/// zweiten Ort, der denselben Typ bräuchte (Regel: `crate::shared`-Doku).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct ProviderId(pub Uuid);
 
 impl ProviderId {
@@ -35,6 +36,7 @@ impl Default for ProviderId {
 /// Konstrukt, zwei Randbedingungen, die sich sonst leise auseinander
 /// entwickeln könnten.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ProviderType {
     #[serde(rename = "openai")]
     OpenAi,
@@ -424,25 +426,6 @@ pub enum MessageContent {
     Sealed(super::SealedContent),
 }
 
-/// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum RejectionReason {
-    /// Der Nutzer hat im Bestätigungsdialog auf "Ablehnen" geklickt.
-    User,
-    /// Die Filter-Engine hat die Aktion automatisch blockiert, ohne dass
-    /// überhaupt ein Bestätigungsdialog gezeigt wurde — der `String` ist
-    /// der `Decision::Deny { reason }`-Grund (Spec 0002).
-    Blocked(String),
-    /// Spec 0046, Fund 4: eine wartende Bestätigung wurde durch das
-    /// Backend-seitige Sicherheitsnetz aufgelöst, OHNE dass je eine
-    /// Nutzerentscheidung eintraf (z. B. ein Frontend-Reload, der den
-    /// wartenden Dialog aus seinem State verlor). Bewusst nicht `User` —
-    /// die KI (und ein Mensch, der die Historie später liest) soll nicht
-    /// fälschlich annehmen, ein Mensch habe sich aktiv gegen den
-    /// Vorschlag entschieden.
-    Timeout,
-}
-
 /// Beschreibung einer Aktion, die ein Provider per Tool-/Function-Calling
 /// vorschlagen kann (Spec 0006, Abschnitt 3/4) — providerunabhängige,
 /// minimale Zwischenform. Jede konkrete `AiProvider`-Implementierung
@@ -535,7 +518,7 @@ impl ActionSchema {
     /// KI muss nie eine `ServerId`/`GroupId` kennen oder korrekt formatieren
     /// (Ursache des `target_id ist keine gültige UUID`-Bugfalls). `target`
     /// ist optional (Default bei Fehlen: `current_server`, s.
-    /// `ai_providers::action::action_from_tool_arguments`); das Backend
+    /// `ai_providers::action::parse_tool_action`); das Backend
     /// löst daraus die tatsächliche ID selbst aus dem Session-Kontext auf.
     pub fn propose_note_update() -> Self {
         Self {

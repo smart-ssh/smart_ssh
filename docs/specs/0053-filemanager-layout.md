@@ -6,8 +6,14 @@ Bezüge: Spec 0020 (Dateibrowser, Abschnitt 5.1), Spec 0054 (Aktionsspalte).
 
 ## Teil 1: Verstellbare Spaltenbreiten
 
-Die Dateiliste hat die Spalten Name, Größe, Rechte und Änderungsdatum sowie
-eine schmale Aktionsspalte (Drei-Punkte-Menü).
+Die Dateiliste hat die Spalten Name, Größe, Rechte, Änderungsdatum und
+Besitzer (in dieser Reihenfolge) sowie eine schmale Aktionsspalte
+(Drei-Punkte-Menü, 44 px). Ohne gespeichertes Layout sind die Breiten Größe
+110, Rechte 130, Änderungsdatum 170 und Besitzer 150 px; gespeicherte Breiten
+und ausgeblendete Spalten gelten weiterhin vor diesen Vorgaben. Die Kopfzeile
+liegt auf einem abgesenkten Streifen mit Großbuchstaben-Beschriftung, die
+Zeilen sind 32 px hoch mit einer 1-px-Linie darunter; Größe steht rechtsbündig,
+Rechte, Besitzer und Änderungsdatum in einer 12-px-Festbreitenschrift.
 
 - Zwischen den Spaltenköpfen sitzt ein Ziehgriff. Ziehen ändert die Breite
   der Spalte links davon. Der Mauszeiger zeigt den Griff als
@@ -16,12 +22,33 @@ eine schmale Aktionsspalte (Drei-Punkte-Menü).
   0 zusammenziehen. Auch eine sehr breit gezogene Nachbarspalte drückt die
   Name-Spalte nie unter ihre eigene Mindestbreite.
 - Die **Name-Spalte** hat keine feste Breite und nimmt den Rest ein. Größe,
-  Rechte und Änderungsdatum sind verstellbar; die Aktionsspalte ist fest und
+  Rechte, Besitzer und Änderungsdatum sind verstellbar; die Aktionsspalte ist fest und
   hat keinen Griff.
 - **Persistenz:** Die gewählten Breiten bleiben über einen Neustart
   erhalten. Sie gelten global, nicht je Server oder Sitzung. Ein fehlender,
   kaputter oder unplausibler gespeicherter Wert (nicht endlich, nicht
   positiv, absurd groß) wird verworfen und durch den Standardwert ersetzt.
+  Die Layout-Einstellungen (Breiten, Aufteilung, Spalten, Sortierung) schreibt
+  das Backend; die Oberfläche liest sie nur.
+
+### Besitzer-Spalte und Spalten ein-/ausblenden
+
+- Die Spalte **Besitzer** zeigt `Benutzer:Gruppe`. Ist ein Name unbekannt,
+  steht an seiner Stelle die Zahl (uid bzw. gid); ist beides unbekannt, ein
+  Strich. Sie ist standardmäßig sichtbar.
+- Liefert der Server nur Zahlen (SFTP v3), werden die Namen einmal je
+  Sitzung aus `/etc/passwd` und `/etc/group` gelesen — ausschließlich per
+  SFTP, nie über einen Shell-Befehl. Sind die Dateien nicht lesbar, bleiben
+  die Zahlen stehen; das ist kein Fehler.
+- Ein Rechtsklick auf die Kopfzeile oder die Werkzeugleisten-Schaltfläche
+  „Spalten ein- oder ausblenden“ öffnet ein Menü mit je einem Häkchen für
+  Größe, Rechte, Änderungsdatum und Besitzer (die Schaltfläche verankert es an
+  sich selbst). Die Name-Spalte steht dort
+  nicht und lässt sich nicht ausblenden. Das Menü bleibt beim Umschalten
+  offen und schließt per Klick daneben oder Escape.
+- Die Auswahl gilt global und bleibt über einen Neustart erhalten; Unbekanntes
+  im gespeicherten Wert wird verworfen. Das Verstellen der Breiten funktioniert
+  mit ausgeblendeten Spalten unverändert.
 
 ## Teil 2: Verstellbare Bereichsgröße
 
@@ -49,8 +76,8 @@ senkrechter Ziehgriff.
   und per Tastatur bedienbar. Ein Klick sortiert die Liste nach dieser
   Spalte aufsteigend; ein zweiter Klick auf dieselbe Spalte kehrt die
   Reihenfolge um, eine andere Spalte beginnt wieder aufsteigend.
-- Die aktive Spalte zeigt einen Pfeil (▲ aufsteigend, ▼ absteigend) und
-  trägt `aria-sort`; alle anderen Köpfe `aria-sort="none"`.
+- Die aktive Spalte zeigt einen Winkel (nach oben aufsteigend, nach unten absteigend),
+  jede andere sortierbare Spalte einen schwachen Winkel nach rechts; die aktive trägt `aria-sort`; alle anderen Köpfe `aria-sort="none"`.
 - **Ordner stehen immer oben**; beide Gruppen werden nach der gewählten
   Spalte sortiert. Name: natürliche Reihenfolge ohne Beachtung der
   Groß-/Kleinschreibung („a2“ vor „a10“). Größe: numerisch (Ordner nach
@@ -61,6 +88,10 @@ senkrechter Ziehgriff.
   und Sitzungen, bleibt beim Navigieren und über einen Neustart erhalten;
   ein fehlender oder ungültiger gespeicherter Wert wird durch den Standard
   ersetzt.
+- Ändert man die Sortierung in einem Dateimanager-Panel, übernehmen alle
+  anderen geöffneten Panels im selben Fenster sie sofort (Reihenfolge,
+  Pfeil und `aria-sort`); ein erneuter Klick kehrt von diesem gemeinsamen
+  Stand aus um.
 - Ein Klick auf einen Ziehgriff ändert die Sortierung nie.
 - Im schmalen Layout gibt es keine Spaltenköpfe; die Liste folgt dort der
   gespeicherten Sortierung.

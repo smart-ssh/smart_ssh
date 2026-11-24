@@ -1,31 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addAiProvider,
   commandErrorCode,
-  commandErrorMessage,
   deleteAiProvider,
   discoverModels,
   fetchAttestationInfo,
   listAiProviders,
   setActiveAiProvider,
   updateAiProvider,
-} from "../api";
-import { Button } from "./ui";
+} from "../api/api";
+import { Badge, Button, Field, Icon } from "./ui";
+import { SettingsActionSlotContext, SettingsSectionAction } from "./SettingsSectionAction";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
-import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
-import { translateErrorCode } from "../errorCodes";
-import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
+import { CARD_CLASS, FIELD_CLASS } from "./aiProviderFormStyles";
+import { commandErrorText } from "../api/errorCodes";
+import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../lib/ollama";
 import {
   loadRedRiskAlwaysConfirm,
   loadRiskClassifierSettings,
   saveRedRiskAlwaysConfirm,
   saveRiskClassifierSettings,
-} from "../riskSettings";
+} from "../settings/riskSettings";
 import {
   type AiProviderConfigDto,
   supportsWebResearch,
-} from "../types";
+} from "../api/types";
 
 /** Spec 0069, Teil B3: die fünf unterscheidbaren Anzeigezustände der
  * Ollama-Erkennungskarte. Kein eigener `idle`-artiger Zustand nötig —
@@ -38,6 +38,43 @@ type OllamaProbeState =
   | { status: "unreachable" }
   | { status: "otherError" };
 
+
+/** Switch visual on a native checkbox: the input keeps its checkbox
+ * semantics (name, checked state, keyboard), the track is decoration. */
+function SwitchRow({
+  checked,
+  busy,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  /** Save in progress: changes are ignored, but the input is not `disabled`
+   * (a disabled input drops keyboard focus), so it is `aria-disabled`. */
+  busy?: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 text-sm text-fg-muted">
+      <span className="relative inline-block h-4 w-8 shrink-0">
+        <input
+          type="checkbox"
+          className="focus-ring peer absolute inset-0 m-0 cursor-pointer appearance-none border border-border-strong bg-surface-sunken checked:border-accent-border checked:bg-accent-subtle aria-disabled:opacity-50"
+          checked={checked}
+          aria-disabled={busy || undefined}
+          onChange={(e) => {
+            if (!busy) onChange(e.target.checked);
+          }}
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-[3px] left-[3px] h-2.5 w-2.5 bg-fg-muted transition-transform peer-checked:translate-x-4 peer-checked:bg-accent"
+        />
+      </span>
+      {children}
+    </label>
+  );
+}
 
 interface AiProviderSettingsProps {
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
@@ -100,20 +137,26 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setRiskClassifierEnabled(settings.enabled);
         setRiskClassifierProviderId(settings.providerId);
       })
-      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   }, []);
 
   /** Spec 0026, Abschnitt 3, Punkt 1: erst bei der nächsten `connect()`
    * wirksam (s. `riskSettings.ts`-Doc-Kommentar) — trotzdem sofort
    * gespeichert, damit die Einstellung nicht verloren geht. */
   const handleRiskClassifierChange = async (enabled: boolean, providerId: string | null) => {
+    if (riskSettingsSaving) return;
+    const previousEnabled = riskClassifierEnabled;
+    const previousProviderId = riskClassifierProviderId;
     setRiskClassifierEnabled(enabled);
     setRiskClassifierProviderId(providerId);
     setRiskSettingsSaving(true);
     try {
       await saveRiskClassifierSettings({ enabled, providerId });
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      // Spec 0092, A1.6: never show a value that was not saved.
+      setRiskClassifierEnabled(previousEnabled);
+      setRiskClassifierProviderId(previousProviderId);
+      setError(commandErrorText(t, err));
     } finally {
       setRiskSettingsSaving(false);
     }
@@ -125,19 +168,21 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   useEffect(() => {
     loadRedRiskAlwaysConfirm()
       .then(setRedRiskAlwaysConfirm)
-      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   }, []);
 
   /** Spec 0092, A1.3: erst bei der nächsten `connect()` wirksam — trotzdem
    * sofort gespeichert (dasselbe Muster wie `handleRiskClassifierChange`
    * oben). */
   const handleRedRiskAlwaysConfirmChange = async (value: boolean) => {
+    if (redRiskSettingSaving) return;
     setRedRiskAlwaysConfirm(value);
     setRedRiskSettingSaving(true);
     try {
       await saveRedRiskAlwaysConfirm(value);
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setRedRiskAlwaysConfirm(!value);
+      setError(commandErrorText(t, err));
     } finally {
       setRedRiskSettingSaving(false);
     }
@@ -149,9 +194,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setProviders(list);
         setProvidersLoaded(true);
       })
-      .catch((err) =>
-        setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))),
-      );
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   };
 
   useEffect(reload, []);
@@ -208,7 +251,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     if (!providersLoaded) return;
     if (providers.some((p) => p.providerType === "ollama")) return;
     void runOllamaProbe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- probe runs once when the providers have loaded
   }, [providersLoaded]);
 
   /** Spec 0069, Teil B4 (E2): Bestätigung des Nutzers ist der Klick selbst
@@ -244,7 +287,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       // `KEYCHAIN_UNAVAILABLE`), nichts aktiv gesetzt (der
       // `setActiveAiProvider`-Aufruf oben ist nie erreicht, wenn schon
       // `addAiProvider` wirft).
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setOllamaAdding(false);
     }
@@ -262,7 +305,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     } catch (err) {
       setAttestationErrors((prev) => ({
         ...prev,
-        [providerId]: translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+        [providerId]: commandErrorText(t, err),
       }));
     } finally {
       setAttestationLoading((prev) => ({ ...prev, [providerId]: false }));
@@ -281,9 +324,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     reload();
     onProvidersChanged();
     if (activationError !== null) {
-      setError(
-        translateErrorCode(t, commandErrorCode(activationError), commandErrorMessage(activationError)),
-      );
+      setError(commandErrorText(t, activationError));
     }
   };
 
@@ -294,7 +335,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -305,7 +346,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -329,7 +370,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -339,6 +380,20 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   // statt der Bedingung direkt im JSX, damit der leere-Rahmen-Fall
   // strukturell ausgeschlossen ist (derselbe `<section>` wird nur
   // gerendert, wenn er auch Inhalt hat).
+  const settingsSlot = useContext(SettingsActionSlotContext);
+  const inSettingsSlot = settingsSlot !== null;
+  const addButton = (
+    <Button
+      ref={addButtonRef}
+      variant="primary"
+      size="sm"
+      onClick={() => setAddDialogOpen(true)}
+    >
+      <Icon name="plus" className="mr-1 inline align-text-bottom" />
+      {t("aiProvider.addProvider")}
+    </Button>
+  );
+
   const showOllamaCard =
     ollamaProbe !== null &&
     !ollamaDismissed &&
@@ -350,8 +405,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
   return (
     <div>
+      <SettingsSectionAction>{addButton}</SettingsSectionAction>
       {error && (
-        <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
+        <p className="mb-4 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>
       )}
 
       {/* Spec 0056, Teil 3: eigene Karte statt freistehender Liste — macht
@@ -361,66 +417,74 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * Struktur, bekommt aber einen dunkleren Innenhintergrund
        * (`slate-950/40`) als die Karte (`slate-900/40`), damit sich Karte
        * und Listeninhalt trotz gleicher Rahmenfarbe voneinander abheben. */}
-      <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-slate-200">
+      <section className="mb-6">
+        <h3 className="mb-3 font-mono text-xs uppercase tracking-wider text-fg-subtle">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
-        <ul className="divide-y divide-slate-700 rounded-md border border-slate-700 bg-slate-950/40">
+        <ul className="divide-y divide-border border border-border bg-surface-sunken/40 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(11rem,1fr)_auto_minmax(min-content,11rem)] lg:gap-x-4">
           {providers.length === 0 && (
-            <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
+            <li className="px-4 py-3 text-sm text-fg-subtle lg:col-span-full">{t("aiProvider.noProviders")}</li>
           )}
-          {providers.map((provider) => (
-            <li key={provider.id} className="px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+          {providers.map((provider) => {
+            const typeLabel = t(`aiProvider.providerTypes.${provider.providerType}`);
+            const connection = provider.baseUrl
+              ? `${t("aiProvider.typeLabel")}: ${typeLabel} · ${provider.baseUrl}`
+              : `${t("aiProvider.typeLabel")}: ${typeLabel}`;
+            return (
+            <li
+              key={provider.id}
+              data-active={provider.isActive ? "true" : undefined}
+              className={`px-4 py-3 lg:col-span-full lg:grid lg:grid-cols-subgrid ${provider.isActive ? "bg-accent-subtle shadow-[inset_2px_0_0_var(--color-accent)]" : ""}`}
+            >
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 lg:col-span-full lg:grid-cols-subgrid">
                 <div className="min-w-0">
-                  <p className="flex items-center font-medium text-slate-100">
-                    <span className="truncate" title={provider.displayName}>
-                      {provider.displayName}
-                    </span>
-                    {provider.isActive && (
-                      <span className="ml-2 shrink-0 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
-                        {t("aiProvider.active")}
-                      </span>
-                    )}
+                  <p className="truncate font-medium text-fg" title={provider.displayName}>
+                    {provider.displayName}
                   </p>
-                  <p
-                    className="truncate text-sm text-slate-400"
-                    title={`${t(`aiProvider.providerTypes.${provider.providerType}`)} · ${provider.model}`}
-                  >
-                    {t(`aiProvider.providerTypes.${provider.providerType}`)} · {provider.model}
+                  <p className="truncate text-sm text-fg-subtle" title={connection}>
+                    {connection}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <p className="truncate font-mono text-sm text-fg-muted" title={provider.model}>
+                  {provider.model}
+                </p>
+                <div>
+                  {provider.isActive && (
+                    <Badge tone="success" square>
+                      {t("aiProvider.active")}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
                   {!provider.isActive && (
-                    <Button size="sm"
-                      onClick={() => handleSetActive(provider.id)}
-                      
-                    >
+                    <Button size="sm" onClick={() => handleSetActive(provider.id)}>
                       {t("aiProvider.setActive")}
                     </Button>
                   )}
                   <Button size="sm" onClick={() => setEditingProvider(provider)}>
+                    <Icon name="edit" className="mr-1 inline align-text-bottom" />
                     {t("common.edit")}
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)} >
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)}>
+                    <Icon name="trash" className="mr-1 inline align-text-bottom" />
                     {t("common.delete")}
                   </Button>
                 </div>
               </div>
 
               {supportsWebResearch(provider.providerType, provider.baseUrl) && (
-                <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
-                  <input
-                    type="checkbox"
+                <div className="mt-2 lg:col-span-full">
+                  <SwitchRow
                     checked={provider.webResearchEnabled}
-                    onChange={(e) => handleWebResearchChange(provider, e.target.checked)}
-                  />
-                  {t("aiProvider.webResearch")}
-                </label>
+                    onChange={(checked) => handleWebResearchChange(provider, checked)}
+                  >
+                    {t("aiProvider.webResearch")}
+                  </SwitchRow>
+                </div>
               )}
 
               {provider.attestationUrl && (
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-2 space-y-1.5 lg:col-span-full">
                   <Button size="sm"
                     onClick={() => handleFetchAttestation(provider.id)}
                     disabled={attestationLoading[provider.id]}
@@ -431,19 +495,19 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       : t("aiProvider.attestationFetch")}
                   </Button>
                   {attestationErrors[provider.id] && (
-                    <p className="text-xs text-red-400">{attestationErrors[provider.id]}</p>
+                    <p className="text-xs text-danger-fg">{attestationErrors[provider.id]}</p>
                   )}
                   {attestationResults[provider.id] && (
                     <div className="space-y-1">
-                      <p className="text-xs text-amber-300">
+                      <p className="text-xs text-warning-fg-soft">
                         {t("aiProvider.attestationDisclaimerBeforeNot")}
                         <strong>{t("aiProvider.attestationDisclaimerNot")}</strong>
                         {t("aiProvider.attestationDisclaimerAfterNot")}
                       </p>
-                      <p className="text-xs font-semibold text-slate-400">
+                      <p className="text-xs font-semibold text-fg-subtle">
                         {t("aiProvider.attestationResultLabel")}
                       </p>
-                      <pre className="max-h-40 overflow-auto rounded border border-slate-700 bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">
+                      <pre className="max-h-40 overflow-auto border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
                         {attestationResults[provider.id]}
                       </pre>
                     </div>
@@ -451,17 +515,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
-        <Button
-          ref={addButtonRef}
-          variant={providers.length === 0 ? "primary" : "secondary"}
-          size="sm"
-          className="mt-3"
-          onClick={() => setAddDialogOpen(true)}
-        >
-          {t("aiProvider.addProvider")}
-        </Button>
+        {!inSettingsSlot && addButton}
       </section>
 
       {/* Spec 0026, Abschnitt 3, Punkt 1: eigener Abschnitt für die
@@ -471,28 +528,26 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * einer bloßen oberen Trennlinie — bislang lief dieser Bereich
        * optisch nahtlos in die Provider-Liste über. */}
       <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.riskClassifierTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.riskClassifierHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={riskClassifierEnabled}
-            onChange={(e) =>
-              handleRiskClassifierChange(e.target.checked, riskClassifierProviderId)
-            }
-          />
+        <SwitchRow
+          checked={riskClassifierEnabled}
+          onChange={(checked) => handleRiskClassifierChange(checked, riskClassifierProviderId)}
+          busy={riskSettingsSaving}
+        >
           {t("aiProvider.riskClassifierEnable")}
-        </label>
+        </SwitchRow>
+        <p className="mt-1 pl-11 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
         {riskClassifierEnabled && (
-          <label className={LABEL_CLASS}>
-            <span className={LABEL_TEXT_CLASS}>{t("aiProvider.riskClassifierProvider")}</span>
+          <Field label={t("aiProvider.riskClassifierProvider")} className="mt-3 pl-11 md:flex-row! md:items-center md:gap-3">
+            {(control) => (
             <select
+              {...control}
               value={riskClassifierProviderId ?? ""}
               onChange={(e) => handleRiskClassifierChange(true, e.target.value || null)}
-              disabled={riskSettingsSaving}
-              className={`mt-1 w-full ${FIELD_CLASS}`}
+              aria-disabled={riskSettingsSaving || undefined}
+              className={`w-full aria-disabled:opacity-50 md:w-auto ${FIELD_CLASS}`}
             >
               <option value="">{t("aiProvider.riskClassifierNoProvider")}</option>
               {providers.map((provider) => (
@@ -501,29 +556,24 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </option>
               ))}
             </select>
-          </label>
+            )}
+          </Field>
         )}
-      </section>
 
-      {/* Spec 0092, A1.4: eigener Abschnitt, unabhängig von der
-       * KI-Zweitmeinung oben bedienbar — bewusst eine eigene Karte statt
-       * eines weiteren Feldes in der Zweitmeinungs-Karte, weil die
-       * Einstellung ohne aktivierte Zweitmeinung genauso wirkt
-       * (regelbasiertes Rot). */}
-      <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+        {/* Spec 0092, A1.4: independent of the second opinion above (rule-based
+         * red works without it), separated by a 1 px rule inside the card. */}
+        <div className="my-4 border-t border-border" />
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.redRiskAlwaysConfirmTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={redRiskAlwaysConfirm}
-            disabled={redRiskSettingSaving}
-            onChange={(e) => handleRedRiskAlwaysConfirmChange(e.target.checked)}
-          />
+        <SwitchRow
+          checked={redRiskAlwaysConfirm}
+          busy={redRiskSettingSaving}
+          onChange={handleRedRiskAlwaysConfirmChange}
+        >
           {t("aiProvider.redRiskAlwaysConfirmEnable")}
-        </label>
+        </SwitchRow>
+        <p className="mt-1 pl-11 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
       </section>
 
       {/* Spec 0069, Teil B3: eine Karte oberhalb von "Provider
@@ -535,20 +585,21 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       {showOllamaCard && ollamaProbe && (
         <section className={`mb-6 ${CARD_CLASS}`}>
           {ollamaProbe.status === "loading" && (
-            <p className="text-sm text-slate-400">{t("aiProvider.ollamaProbeSearching")}</p>
+            <p className="text-sm text-fg-subtle">{t("aiProvider.ollamaProbeSearching")}</p>
           )}
 
           {ollamaProbe.status === "found" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-100">
+              <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeFoundHeading")}
               </p>
-              <label className={LABEL_CLASS}>
-                <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
+              <Field label={t("aiProvider.model")}>
+                {(control) => (
                 <select
+                  {...control}
                   value={ollamaSelectedModel}
                   onChange={(e) => setOllamaSelectedModel(e.target.value)}
-                  className={`mt-1 w-full ${FIELD_CLASS}`}
+                  className={`w-full ${FIELD_CLASS}`}
                 >
                   {ollamaProbe.models.map((model) => (
                     <option key={model} value={model}>
@@ -556,8 +607,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     </option>
                   ))}
                 </select>
-              </label>
-              <p className="text-xs text-slate-400">
+                )}
+              </Field>
+              <p className="text-xs text-fg-subtle">
                 {providers.some((p) => p.isActive)
                   ? t("aiProvider.ollamaProbeFoundHintInactive")
                   : t("aiProvider.ollamaProbeFoundHintWillActivate")}
@@ -579,10 +631,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
           {ollamaProbe.status === "empty" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-100">
+              <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeEmptyHeading")}
               </p>
-              <p className="text-xs text-slate-400">{t("aiProvider.ollamaProbePullHint")}</p>
+              <p className="text-xs text-fg-subtle">{t("aiProvider.ollamaProbePullHint")}</p>
               <Button size="sm" onClick={runOllamaProbe} >
                 {t("aiProvider.ollamaProbeRetry")}
               </Button>
@@ -596,10 +648,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           {ollamaProbe.status === "unreachable" &&
             providers.length === 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-100">
+                <p className="text-sm font-medium text-fg">
                   {t("aiProvider.ollamaProbeNotFoundHeading")}
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-fg-subtle">
                   {t("aiProvider.ollamaProbeNotFoundInstructions")}
                 </p>
                 <Button size="sm" onClick={runOllamaProbe} >

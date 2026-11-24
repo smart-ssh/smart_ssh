@@ -22,7 +22,7 @@ async function proposeLongRedCommand(app: AppDriver) {
   await app.emit("chat-action-proposed", redCommandProposal(sessionId, LONG_COMMAND));
   // The action card: the bordered block in the chat that holds the buttons.
   const card = app.page
-    .locator("div.border.p-3.text-sm")
+    .locator("div.border.bg-surface-sunken.text-sm")
     .filter({ has: app.page.getByRole("button", { name: "Execute", exact: true }) })
     .filter({ visible: true });
   await expect(card).toBeVisible();
@@ -54,7 +54,7 @@ test.describe("command confirmation", () => {
     for (const axis of ["Server", "Data"]) {
       const badge = card.getByText(new RegExp(`^${axis}ⓘ?$`));
       await expect(badge).toBeVisible();
-      await expect(badge).toHaveClass(/bg-red-900/);
+      await expect(badge).toHaveClass(/bg-danger-subtle-hover/);
     }
 
     const { confirm, reject } = decisionButtons(card);
@@ -63,15 +63,15 @@ test.describe("command confirmation", () => {
 
     // Keyboard: from the command field, Tab reaches both buttons.
     await editor.focus();
-    await expectReachableByTab(app.page, confirm);
     await expectReachableByTab(app.page, reject);
+    await expectReachableByTab(app.page, confirm);
   });
 
   test("Deny sends exactly one deny decision", async ({ app }) => {
     const { sessionId, card } = await proposeLongRedCommand(app);
     await decisionButtons(card).reject.click();
     await expect(decisionButtons(card).reject).toHaveCount(0);
-    expect(await app.calls("respond_to_action")).toEqual([
+    await expect.poll(() => app.calls("respond_to_action")).toEqual([
       {
         cmd: "respond_to_action",
         args: { sessionId, actionId: "action-1", decision: { decision: "deny" } },
@@ -83,11 +83,65 @@ test.describe("command confirmation", () => {
     const { sessionId, card } = await proposeLongRedCommand(app);
     await decisionButtons(card).confirm.click();
     await expect(decisionButtons(card).confirm).toHaveCount(0);
-    expect(await app.calls("respond_to_action")).toEqual([
+    await expect.poll(() => app.calls("respond_to_action")).toEqual([
       {
         cmd: "respond_to_action",
         args: { sessionId, actionId: "action-1", decision: { decision: "approve" } },
       },
     ]);
+  });
+
+  // Issue #1357: rules per sub-command, staged and saved in one batch.
+  test("stages a rule per sub-command, saves them without executing, then Execute runs", async ({ app }) => {
+    // One canned answer for every row: it offers both rules.
+    const offer = (tool: string, pattern: string) => ({
+      kind: "tool", names: [tool], patterns: [{ patternType: "glob", patternValue: pattern }],
+      segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: false, reasons: [] },
+    });
+    await app.launch({
+      ...populated(),
+      commands: {
+        explain_confirmation: { result: { segments: [
+          { index: 0, text: "echo a", state: "covered", rule: { patternType: "glob", patternValue: "echo *" }, reasons: [] },
+          { index: 1, text: "ls -la /tmp", state: "needsRule", rule: null, reasons: [] },
+          { index: 2, text: "git status", state: "needsRule", rule: null, reasons: [] },
+        ], suggestions: [] } },
+        explain_segment_rules: { result: {
+          segmentIndex: 1, segmentText: "ls -la /tmp", blockedReasons: [],
+          suggestions: [offer("ls", "ls *"), offer("git", "git status *")],
+        } },
+        create_quick_rules_batch: { result: ["r1", "r2"] },
+      },
+    });
+    const sessionId = await openSession(app, "db-primary");
+    await app.emit("chat-action-proposed", redCommandProposal(sessionId, "echo a && ls -la /tmp && git status"));
+    const page = app.page;
+    await expect(page.getByText("Already allowed")).toBeVisible();
+    const lsToggle = page.getByRole("button", { name: "Rule suggestions for ls -la /tmp" });
+    const gitToggle = page.getByRole("button", { name: "Rule suggestions for git status" });
+    await expect(lsToggle).toHaveAttribute("aria-expanded", "false");
+    await lsToggle.click();
+    await expect(lsToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("radio", { name: "This Server" })).toBeChecked();
+    await page.getByRole("button", { name: /All `ls` calls/ }).click();
+    await gitToggle.click();
+    await page.getByRole("radio", { name: "Global" }).check();
+    await page.getByRole("button", { name: /All `git` calls/ }).click();
+    await expect(page.getByTestId("staged-rule")).toHaveCount(2);
+    await expect(page.getByText("Rules not saved: 2")).toBeVisible();
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
+
+    await page.getByRole("button", { name: "Save rules (2)" }).click();
+    await expect(page.getByTestId("saved-rule")).toHaveCount(2);
+    await expect.poll(() => app.calls("create_quick_rules_batch")).toHaveLength(1);
+    const [batch] = await app.calls("create_quick_rules_batch");
+    expect((batch.args as { rules: { scope: unknown }[] }).rules.map((r) => r.scope)).toEqual([
+      { Server: expect.any(String) },
+      "Global",
+    ]);
+    await expect(lsToggle).toBeVisible();
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
+    await page.getByRole("button", { name: "Execute", exact: true }).click();
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(1);
   });
 });

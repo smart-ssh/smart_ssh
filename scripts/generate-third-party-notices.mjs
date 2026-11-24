@@ -40,8 +40,8 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 // Skripts von einem Ladefehler oder einer zufällig getroffenen anderen
 // Antwort (z. B. der SPA-Startseite im Dev-Build) unterscheidet.
 // Maßgebliche Quelle der Kennzeile (Issue #7, ADR 0100): die Frontend-Kopie
-// (`src/thirdPartyNoticesMarker.ts`) und jede Kopie in den Workflows unter
-// `.github/` werden von `src/thirdPartyNoticesMarker.test.ts` gegen genau
+// (`src/lib/thirdPartyNoticesMarker.ts`) und jede Kopie in den Workflows unter
+// `.github/` werden von `src/lib/thirdPartyNoticesMarker.test.ts` gegen genau
 // diese Zeile geprüft.
 export const MARKER = "SMART-SSH-THIRD-PARTY-NOTICES-V1";
 
@@ -287,9 +287,15 @@ function collectRustNotices(aboutJson) {
 // Crate.
 const VENDORED_LICENSE_FILES = [
   {
-    crateName: "libsqlite3-sys",
-    relativePath: "sqlcipher/LICENSE",
-    label: "SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)",
+    // Since libsqlite3-sys 0.40 the SQLCipher source lives in `sqlcipher-src`.
+    crateName: "sqlcipher-src",
+    relativePath: "sqlcipher/LICENSE-sqlcipher",
+    label: "SQLCipher (gebündelt in sqlcipher-src, Spec 0101 A1)",
+  },
+  {
+    crateName: "sqlcipher-src",
+    relativePath: "sqlcipher/LICENSE-libtomcrypt",
+    label: "LibTomCrypt (gebündelt in sqlcipher-src, Spec 0101 A1)",
   },
   {
     crateName: "openssl-src",
@@ -635,6 +641,27 @@ function renderFontSection(fontLicensePath) {
   return ["## Schriften", "", content.trimEnd(), ""].join("\n");
 }
 
+// Spec 0108: Sprachmodelle werden nicht mitgeliefert, sondern auf
+// Nutzerwunsch geladen; die Namensnennung (CC-BY-4.0 bzw. Apache-2.0) steht
+// trotzdem hier, weil die App das Modell verwendet.
+const SPEECH_MODEL_ATTRIBUTION = [
+  "Whisper base and small by OpenAI, Apache-2.0",
+  "https://huggingface.co/openai/whisper-base and https://huggingface.co/openai/whisper-small",
+  "License: https://www.apache.org/licenses/LICENSE-2.0",
+  "ONNX conversions used by the app: https://huggingface.co/onnx-community/whisper-base and",
+  "https://huggingface.co/onnx-community/whisper-small (Apache-2.0; int8 quantised, no other changes by Smart SSH).",
+  "",
+  "Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0",
+  "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+  "License: https://creativecommons.org/licenses/by/4.0/",
+  "ONNX conversion used by the app: https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+  "(CC-BY-4.0; int8 quantised, no other changes by Smart SSH).",
+];
+
+function renderSpeechModelSection() {
+  return ["## Sprachmodelle", "", ...SPEECH_MODEL_ATTRIBUTION, ""].join("\n");
+}
+
 // --- main ------------------------------------------------------------------
 
 function generate(args) {
@@ -690,6 +717,7 @@ function generate(args) {
     renderLicenseSection("npm-Produktionsabhaengigkeiten", npmGroups),
     renderLicenseSection("Build-Werkzeuge mit ausgeliefertem Code (devDependencies)", devGroups),
     renderFontSection(args.fontLicense),
+    renderSpeechModelSection(),
     renderNoticesSection([...rustNotices, ...vendoredLicenseNotices, ...npmNotices, ...devNotices]),
   ].join("\n");
 
@@ -735,4 +763,5 @@ export {
   collectNpmProdPackages,
   groupByText,
   generate,
+  renderSpeechModelSection,
 };

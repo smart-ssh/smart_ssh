@@ -17,10 +17,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { tierLabel } from "./tiers";
 
 import type { FeatureLockedPayload } from "./entitlements";
 import { subscribeFeatureLocked } from "./featureLockedBus";
-import { Button, DialogFrame } from "../components/ui";
+import { Button, DialogFrame, Icon } from "../components/ui";
 
 export function FeatureLockedDialog() {
   const { t } = useTranslation();
@@ -35,6 +36,7 @@ export function FeatureLockedDialog() {
     <DialogFrame
       layer="app"
       size="sm"
+      icon={<Icon name="lock" />}
       title={t("featureLocked.title")}
       onClose={() => setLocked(null)}
       initialFocusRef={closeRef}
@@ -44,7 +46,7 @@ export function FeatureLockedDialog() {
         </Button>
       }
     >
-      <p>{t("featureLocked.body", { feature: locked.feature, tier: locked.tier })}</p>
+      <p>{t("featureLocked.body", { feature: locked.feature, tier: tierLabel(locked.tier, t) })}</p>
     </DialogFrame>
   );
 }

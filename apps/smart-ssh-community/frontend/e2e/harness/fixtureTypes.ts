@@ -9,7 +9,7 @@ import type {
   HostKeyKind,
   ServerDto,
   SessionSummaryDto,
-} from "../../src/types";
+} from "../../src/api/types";
 
 /** A canned answer for one command, replacing the model's default handler. */
 export type CannedResponse =

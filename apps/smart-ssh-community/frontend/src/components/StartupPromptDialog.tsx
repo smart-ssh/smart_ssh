@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { characterCount } from "../passwordLength";
-import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
+import { characterCount } from "../lib/passwordLength";
+import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../api/types";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import type { ButtonVariant } from "./ui";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
  *
@@ -149,6 +149,7 @@ export function StartupPromptDialog({
       layer="app"
       size="sm"
       reserveTitlebar
+      ticks="accent"
       title={request.title}
       onClose={onEscape}
       initialFocusRef={wantsPassword ? passwordRef : safeButtonRef}
@@ -183,7 +184,7 @@ export function StartupPromptDialog({
     >
       {/* `whitespace-pre-line`: Die Backend-Texte gliedern Ursache,
        * Datenpfad und nächsten Schritt in Zeilen (Spec 0059). */}
-      <p className="whitespace-pre-line break-words text-slate-300">{request.message}</p>
+      <p className="whitespace-pre-line break-words text-fg-muted">{request.message}</p>
 
       {wantsPassword && (
         <div className="mt-4 space-y-3">
@@ -224,12 +225,12 @@ export function StartupPromptDialog({
           {/* A13/E10: die Warnung mit ausdrücklicher Bestätigung — ohne
            * Passwort sind die Daten verloren, es gibt keine
            * Wiederherstellung. */}
-          <label className="flex items-start gap-2 text-sm text-slate-200">
+          <label className="flex items-start gap-2 text-sm text-fg-soft">
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+              className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-fg"
             />
             {t("startup.noRecoveryWarning")}
           </label>

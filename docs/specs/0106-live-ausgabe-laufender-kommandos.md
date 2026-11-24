@@ -88,6 +88,12 @@ nicht mehr angezeigt." und keine weitere Ausgabe. Das Kommando wird dabei
 genauso behandelt wie bisher, das Ergebnis ist das bisherige begrenzte
 Ergebnis.
 
+Kommt die Anzeige der Ausgabe eines Kommandos nicht hinterher (z. B. bei
+sehr viel Ausgabe in kurzer Zeit), verwirft die Live-Ansicht weitere
+Ausgabe und zeigt denselben Hinweis wie bei erreichter Grenze. Das Kommando
+läuft unbeeinflusst weiter; das Ergebnis, das in den Verlauf und zur KI
+gelangt, ist vollständig (bzw. wie bisher begrenzt).
+
 ## 5. Localhost
 
 Auf dem lokalen Pseudo-Server erscheint die Ausgabe genauso live. Abbrechen

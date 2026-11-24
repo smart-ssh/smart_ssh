@@ -1,7 +1,7 @@
 # 0034-redact-before-fence-marker-splitting
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

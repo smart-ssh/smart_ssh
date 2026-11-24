@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -7,7 +8,7 @@ use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
     CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, RunningExec,
-    SftpSession, SshError, SshTransport,
+    SftpSession, SshError, SshTransport, SudoPromptError,
 };
 
 use crate::error::map_session_russh_error;
@@ -21,6 +22,8 @@ use crate::shell::RusshShell;
 /// Spec 0067: Antwortfrist für den SFTP-Handshake über einen Exec-Kanal —
 /// ein von sudo abgelehnter Start meldet sich so nach wenigen Sekunden.
 const EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS: u64 = 5;
+/// Issue #1191: how long to wait for the sudo prompt marker.
+const SUDO_PROMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 /// Äußere Obergrenze als Sicherheitsnetz, falls der Handshake selbst hängt.
 const EXEC_SFTP_INIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
@@ -46,6 +49,9 @@ pub struct RusshTransport {
     pub(crate) max_output_bytes: usize,
     /// Issue #353: set when any hop's session ends.
     pub(crate) loss: ssh_manager_core::ssh::ConnectionLossWatch,
+    /// Issue #881: where the SFTP tap pumps run (the session scope). `None`
+    /// until the application sets it; see `sftp_tap::tap`.
+    pub(crate) spawner: Option<ssh_manager_core::ssh::TaskSpawner>,
 }
 
 /// Treibt `channel.wait()`, bis der Channel schließt — akkumuliert dabei
@@ -57,31 +63,21 @@ pub struct RusshTransport {
 /// Limit hinaus belegen, bevor der Cap greift — anders als zuvor, wo alle
 /// `ChannelMsg`s erst vollständig in einem `Vec` gesammelt wurden.
 async fn drain_channel(
-    mut channel: Channel<Msg>,
+    channel: Channel<Msg>,
     max_output_bytes: usize,
 ) -> Result<CommandOutput, SshError> {
-    let mut acc = ExecAccumulator::with_limit(max_output_bytes);
-    loop {
-        if acc.cap_reached() {
-            let _ = channel.eof().await;
-            let _ = channel.close().await;
-            break;
-        }
-        match channel.wait().await {
-            None => break,
-            Some(msg) => {
-                let is_close = matches!(msg, ChannelMsg::Close);
-                acc.push(msg);
-                if is_close {
-                    break;
-                }
-            }
-        }
-    }
-    Ok(acc.into_output())
+    drain_channel_cancellable(
+        channel,
+        std::future::pending::<()>(),
+        max_output_bytes,
+        None,
+    )
+    .await
+    .map(|outcome| outcome.output)
 }
 
-/// Wie [`drain_channel`], aber bricht früh ab, sobald `cancel` auflöst
+/// The one drain loop; [`drain_channel`] calls it with a never-resolving
+/// `cancel`. Bricht früh ab, sobald `cancel` auflöst
 /// (Spec 0027) — für ein Kommando, das nie von selbst endet (`journalctl
 /// -f`, `tail -f`, …). Liefert die bis dahin gesammelte Ausgabe mit
 /// `cancelled: true` zurück statt weiter auf das reguläre Kanal-Ende zu
@@ -99,7 +95,7 @@ async fn drain_channel(
 /// Töten des Remote-Prozesses (s. Spec 0027, Abschnitt 3).
 async fn drain_channel_cancellable(
     mut channel: Channel<Msg>,
-    mut cancel: oneshot::Receiver<()>,
+    mut cancel: impl Future<Output = impl Sized> + Unpin,
     max_output_bytes: usize,
     sink: Option<ExecOutputSink>,
 ) -> Result<ExecOutcome, SshError> {
@@ -164,15 +160,7 @@ impl SshTransport for RusshTransport {
     }
 
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, None).await?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -186,22 +174,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         stdin: &[u8],
     ) -> Result<CommandOutput, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if !stdin.is_empty() {
-            channel
-                .data_bytes(stdin.to_vec())
-                .await
-                .map_err(map_session_russh_error)?;
-        }
-        channel.eof().await.map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, Some(stdin)).await?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -210,15 +183,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, None).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
     }
 
@@ -228,22 +193,7 @@ impl SshTransport for RusshTransport {
         stdin: &[u8],
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if !stdin.is_empty() {
-            channel
-                .data_bytes(stdin.to_vec())
-                .await
-                .map_err(map_session_russh_error)?;
-        }
-        channel.eof().await.map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, Some(stdin)).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
     }
 
@@ -257,24 +207,7 @@ impl SshTransport for RusshTransport {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if let Some(stdin) = stdin {
-            if !stdin.is_empty() {
-                channel
-                    .data_bytes(stdin.to_vec())
-                    .await
-                    .map_err(map_session_russh_error)?;
-            }
-            channel.eof().await.map_err(map_session_russh_error)?;
-        }
+        let channel = self.open_exec(command, stdin).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, Some(sink)).await
     }
 
@@ -285,24 +218,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         stdin: Option<&[u8]>,
     ) -> Result<Option<Box<dyn RunningExec>>, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if let Some(stdin) = stdin {
-            if !stdin.is_empty() {
-                channel
-                    .data_bytes(stdin.to_vec())
-                    .await
-                    .map_err(map_session_russh_error)?;
-            }
-            channel.eof().await.map_err(map_session_russh_error)?;
-        }
+        let channel = self.open_exec(command, stdin).await?;
         Ok(Some(Box::new(RunningRusshExec {
             channel,
             max_output_bytes: self.max_output_bytes,
@@ -310,7 +226,7 @@ impl SshTransport for RusshTransport {
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
-        let channel = self
+        let mut channel = self
             .handle
             .channel_open_session()
             .await
@@ -327,6 +243,26 @@ impl SshTransport for RusshTransport {
             )
             .await
             .map_err(map_session_russh_error)?;
+        // Issue #1180: the server answers the PTY request; a refusal (e.g.
+        // `PermitTTY no`) must fail here with a clear error instead of
+        // leaving a shell channel that the server closes right away.
+        loop {
+            match channel.wait().await {
+                Some(russh::ChannelMsg::Success) => break,
+                Some(russh::ChannelMsg::Failure) => {
+                    return Err(SshError::ChannelError(
+                        "Der Server hat die Terminal-Anfrage (PTY) abgelehnt (z. B. PermitTTY no)"
+                            .to_string(),
+                    ));
+                }
+                Some(russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => {
+                    return Err(SshError::SessionClosed(
+                        "Verbindung während der Terminal-Anfrage (PTY) geschlossen".to_string(),
+                    ));
+                }
+                Some(_) => continue,
+            }
+        }
         channel
             .request_shell(true)
             .await
@@ -343,11 +279,33 @@ impl SshTransport for RusshTransport {
             .channel_open_session()
             .await
             .map_err(map_session_russh_error)?;
+        let mut channel = channel;
         channel
             .request_subsystem(true, "sftp")
             .await
             .map_err(map_session_russh_error)?;
-        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        // Issue #1225: wait for the server's reply, so a server without the
+        // sftp subsystem fails right away instead of after the init timeout.
+        loop {
+            match channel.wait().await {
+                Some(russh::ChannelMsg::Success) => break,
+                Some(russh::ChannelMsg::Failure) => {
+                    // Best effort: the channel is useless either way.
+                    let _ = channel.close().await;
+                    return Err(SshError::ChannelError(
+                        "Der Server bietet das SFTP-Subsystem nicht an (SFTP subsystem not offered by the server)"
+                            .to_string(),
+                    ));
+                }
+                Some(russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => {
+                    return Err(SshError::SessionClosed(
+                        "Verbindung während der SFTP-Anfrage geschlossen".to_string(),
+                    ));
+                }
+                Some(_) => continue,
+            }
+        }
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream(), self.spawner.as_ref());
         let client = russh_sftp::client::SftpSession::new(stream)
             .await
             .map_err(|e| {
@@ -382,11 +340,35 @@ impl SshTransport for RusshTransport {
         })?
     }
 
+    async fn open_sftp_via_exec_with_sudo_password(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        // The timeout covers the whole sequence (channel open, prompt wait,
+        // handshake), like `open_sftp_via_exec`.
+        tokio::time::timeout(
+            EXEC_SFTP_INIT_TIMEOUT,
+            self.open_sftp_sudo_password_inner(command, marker, password),
+        )
+        .await
+        .map_err(|_| {
+            SudoPromptError::Failed(SshError::ChannelError(
+                "SFTP-Start über Exec-Kanal: Zeitüberschreitung".to_string(),
+            ))
+        })?
+    }
+
     async fn disconnect(&mut self) -> Result<(), SshError> {
         self.handle
             .disconnect(russh::Disconnect::ByApplication, "", "")
             .await
             .map_err(map_session_russh_error)
+    }
+
+    fn set_task_spawner(&mut self, spawner: ssh_manager_core::ssh::TaskSpawner) {
+        self.spawner = Some(spawner);
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
@@ -402,11 +384,16 @@ impl SshTransport for RusshTransport {
 }
 
 impl RusshTransport {
-    /// s. `open_sftp_via_exec` (Spec 0067).
-    async fn open_sftp_via_exec_inner(
-        &mut self,
+    /// Opens a session channel and starts `command` on it. `stdin`: `None`
+    /// sends no data and no EOF; `Some(bytes)` writes `bytes` (if non-empty)
+    /// and then EOF — needed so that e.g. `sudo -S` (Spec 0018, section 5)
+    /// actually reads the password delivered via stdin instead of waiting
+    /// for a prompt that never arrives (no TTY).
+    async fn open_exec(
+        &self,
         command: &str,
-    ) -> Result<Box<dyn SftpSession>, SshError> {
+        stdin: Option<&[u8]>,
+    ) -> Result<Channel<Msg>, SshError> {
         let channel = self
             .handle
             .channel_open_session()
@@ -416,6 +403,83 @@ impl RusshTransport {
             .exec(true, command)
             .await
             .map_err(map_session_russh_error)?;
+        if let Some(stdin) = stdin {
+            if !stdin.is_empty() {
+                channel
+                    .data_bytes(stdin.to_vec())
+                    .await
+                    .map_err(map_session_russh_error)?;
+            }
+            channel.eof().await.map_err(map_session_russh_error)?;
+        }
+        Ok(channel)
+    }
+
+    /// Issue #1191, s. `open_sftp_via_exec_with_sudo_password`.
+    async fn open_sftp_sudo_password_inner(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        use crate::sudo_prompt::{wait_for_marker, StderrWatch};
+        let mut channel = self
+            .open_exec(command, None)
+            .await
+            .map_err(SudoPromptError::Failed)?;
+        let mut watch = StderrWatch::new(marker);
+        // Nothing is written before the marker was seen on stderr. If it
+        // never comes (or sudo exits) the channel is closed with no password
+        // byte sent.
+        if let Err(e) = wait_for_marker(&mut channel, &mut watch, SUDO_PROMPT_TIMEOUT).await {
+            let _ = channel.close().await;
+            return Err(e);
+        }
+        let mut line = zeroize::Zeroizing::new(Vec::with_capacity(
+            secrecy::ExposeSecret::expose_secret(password).len() + 1,
+        ));
+        line.extend_from_slice(secrecy::ExposeSecret::expose_secret(password).as_bytes());
+        line.push(b'\n');
+        let sent = channel.data_bytes(std::mem::take(&mut *line)).await;
+        drop(line);
+        if let Err(e) = sent {
+            let _ = channel.close().await;
+            return Err(SudoPromptError::Failed(map_session_russh_error(e)));
+        }
+        watch.reset();
+        let (stream, state) = crate::sudo_prompt::bridge(channel, watch, self.spawner.as_ref());
+        let config = russh_sftp::client::Config {
+            request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
+            ..Default::default()
+        };
+        let (stream, tap) = crate::sftp_tap::tap(stream, self.spawner.as_ref());
+        let client = match russh_sftp::client::SftpSession::new_with_config(stream, config).await {
+            Ok(client) => client,
+            Err(e) => {
+                if let Some(err) = state.failure() {
+                    return Err(err);
+                }
+                return Err(SudoPromptError::Failed(map_sftp_init_error(
+                    "SFTP-Init über Exec-Kanal fehlgeschlagen",
+                    e,
+                    self.handle.is_closed(),
+                )));
+            }
+        };
+        client.set_timeout(russh_sftp::client::Config::default().request_timeout_secs);
+        Ok(Box::new(RusshSftpSession::new(
+            client,
+            SessionProbe::new(&self.handle),
+            tap,
+        )))
+    }
+
+    /// s. `open_sftp_via_exec` (Spec 0067).
+    async fn open_sftp_via_exec_inner(
+        &mut self,
+        command: &str,
+    ) -> Result<Box<dyn SftpSession>, SshError> {
+        let channel = self.open_exec(command, None).await?;
         // `russh-sftp` wartet auf jede Antwort bis zum Request-Timeout
         // (Default 10 s) — auch dann, wenn der Kanal schon zu ist (sudo hat
         // abgelehnt). Für den Handshake daher kurz, danach der Normalwert.
@@ -423,7 +487,7 @@ impl RusshTransport {
             request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
             ..Default::default()
         };
-        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream(), self.spawner.as_ref());
         let client = russh_sftp::client::SftpSession::new_with_config(stream, config)
             .await
             .map_err(|e| {

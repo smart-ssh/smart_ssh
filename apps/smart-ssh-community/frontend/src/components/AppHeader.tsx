@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { Button, Icon, Logo } from "./ui";
+import { MAIN_TAB_ENTRIES, type MainTab } from "../lib/navEntries";
+import { ActivityCenter } from "./activities/ActivityCenter";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { getAppInfo } from "../api";
-import type { AppInfoDto } from "../types";
-import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../modalLayer";
+import { getAppInfo } from "../api/api";
+import type { AppInfoDto } from "../api/types";
+import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../lib/modalLayer";
 import {
   TITLEBAR_HEIGHT_CLASS,
   titlebarDragInsetStyle,
   titlebarPaddingStyle,
   usePlatform,
   type DecorationMode,
-} from "../titlebarLayout";
+} from "../lib/titlebarLayout";
 
 /** Spec 0052, Abschnitt 3.3: die Titelzeile zeigt Version+Hash (+ Edition,
  * z. B. "· Official" — spec-optional "falls billig", hier billig genug für
@@ -26,6 +30,14 @@ const SHOW_EARLY_ACCESS_TITLEBAR_INFO = true;
 
 interface AppHeaderProps {
   children?: React.ReactNode;
+  /** Wide layout: the main navigation (Connect / Manage / Filter Rules) lives in the bar. */
+  mainNav?: {
+    /** `null` while a session is shown: no entry is active then. */
+    active: MainTab | null;
+    onSelect: (tab: MainTab) => void;
+  };
+  /** Wide layout: opens the settings (icon button on the right). */
+  onOpenSettings?: (opener: HTMLElement) => void;
 }
 
 /**
@@ -35,7 +47,8 @@ interface AppHeaderProps {
  * - Windows / Linux: Native Controls sitzen oben rechts -> rechter Abstand
  * - Drag-Region via `data-tauri-drag-region`
  */
-export function AppHeader({ children }: AppHeaderProps) {
+export function AppHeader({ children, mainNav, onOpenSettings }: AppHeaderProps) {
+  const { t } = useTranslation();
   const platform = usePlatform();
   const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
   const [appInfo, setAppInfo] = useState<AppInfoDto | null>(null);
@@ -88,70 +101,72 @@ export function AppHeader({ children }: AppHeaderProps) {
       <header
         data-tauri-drag-region
         style={paddingStyle}
-        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-slate-800/80 bg-slate-950/90 text-slate-300 text-xs backdrop-blur-sm transition-all`}
+        className={`relative z-30 flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
       >
-        {/* Linker Bereich: App-Icon + Schriftzug — Marke aus dem Claude-
-            Design-Entwurf (Abschnitt 1a, "Terminal-Cursor mit Spark"):
-            eckiger Cursor-Chevron + Balken in Akzentfarbe, optionaler
-            Spark oben rechts (ab ~32px Icon-Größe entfernt, s. Entwurf —
-            hier bei 16px Titelleisten-Höhe bereits ohne Spark). */}
+        {/* Left: Trace logo lockup, then version / edition / early-access / data-dir / dev
+            markers in small mono style (spec 0052). */}
         {!narrow && (
-        <div data-tauri-drag-region className="flex items-center gap-2">
-          <svg
-            data-tauri-drag-region
-            className="h-4 w-4"
-            viewBox="0 0 64 64"
-            fill="none"
-          >
-            <path
-              d="M20 20 L31 32 L20 44"
-              stroke="var(--color-indigo-600)"
-              strokeWidth="7"
-              strokeLinecap="square"
-            />
-            <rect x="34" y="38" width="16" height="7" fill="var(--color-indigo-600)" />
-          </svg>
-          <span
-            data-tauri-drag-region
-            className="font-heading font-semibold tracking-wide text-slate-100"
-          >
-            Smart SSH
-            {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
-              <>
-                {/* Issue #421: Voller Text nur ab 1024 px Fensterbreite, sonst
-                    bedrängt er die Tab-Leiste in der Mitte. Darunter bleibt
-                    nur die Dev-Markierung; Version und Edition stehen
-                    weiterhin unter Einstellungen > Über. */}
+        <div data-tauri-drag-region className="flex shrink-0 items-center gap-3">
+          <Logo variant="lockup" size={20} />
+          {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
+            <span data-tauri-drag-region className="flex items-center gap-2 font-mono text-[11px] text-fg-subtle">
+              {/* Issue #421: the full text only from 1024 px window width; below it
+                  only the dev marker stays (version and edition are in Settings > About). */}
+              <span data-tauri-drag-region data-testid="titlebar-version-full" className="hidden lg:inline">
+                {appInfo.versionDisplay}
+                {appInfo.edition && ` · ${appInfo.edition}`}
+                {/* Dev and release builds use separate data directories — only Dev is marked. */}
+                {appInfo.buildType === "Dev" && " · Dev"} — Early Access
+              </span>
+              {appInfo.dataDirDisplay && (
                 <span
                   data-tauri-drag-region
-                  data-testid="titlebar-version-full"
-                  className="ml-1.5 hidden font-normal tracking-normal text-slate-400 lg:inline"
+                  data-testid="titlebar-data-dir-marker"
+                  title={appInfo.dataDir ?? undefined}
+                  className="inline-block max-w-[24ch] truncate text-accent"
                 >
-                  {appInfo.versionDisplay}
-                  {appInfo.edition && ` · ${appInfo.edition}`}
-                  {/* Dev- und Release-Build nutzen getrennte Datenverzeichnisse —
-                      nur Dev wird markiert, Release bleibt der Normalfall. */}
-                  {appInfo.buildType === "Dev" && " · Dev"} — Early Access
+                  {t("about.dataDirMarker", { path: appInfo.dataDirDisplay })}
                 </span>
-                {appInfo.buildType === "Dev" && (
-                  <span
-                    data-tauri-drag-region
-                    data-testid="titlebar-dev-marker"
-                    className="ml-1.5 font-normal tracking-normal text-slate-400 lg:hidden"
-                  >
-                    · Dev
-                  </span>
-                )}
-              </>
-            )}
-          </span>
+              )}
+              {appInfo.buildType === "Dev" && (
+                <span data-tauri-drag-region data-testid="titlebar-dev-marker" className="lg:hidden">
+                  · Dev
+                </span>
+              )}
+            </span>
+          )}
         </div>
+        )}
+
+        {!narrow && mainNav && (
+          <nav aria-label={t("nav.label")} className="ml-4 flex h-full shrink-0 items-stretch">
+            {MAIN_TAB_ENTRIES.map((entry) => {
+              const active = mainNav.active === entry.id;
+              return (
+                <Button
+                  variant="bare"
+                  key={entry.id}
+                  type="button"
+                  onClick={() => mainNav.onSelect(entry.id)}
+                  aria-current={active ? "page" : undefined}
+                  className={`focus-ring label-condensed flex h-full items-center gap-1.5 border-l border-t-2 border-l-border px-3 lg:px-4 text-[13px] tracking-[0.08em] last:border-r last:border-r-border ${
+                    active
+                      ? "border-t-accent bg-surface text-fg-strong"
+                      : "border-t-transparent text-fg-subtle hover:bg-surface-raised hover:text-fg"
+                  }`}
+                >
+                  {entry.id === "rules" && <Icon name="shield" size={14} />}
+                  {t(entry.labelKey)}
+                </Button>
+              );
+            })}
+          </nav>
         )}
 
         {/* Mittlerer Bereich: Platz für künftige Session-Tabs (Spec 0014, Abschnitt 4) */}
         <div
           data-tauri-drag-region
-          className={`flex flex-1 items-center justify-center ${narrow ? "min-w-0 px-1" : "px-4"}`}
+          className={`flex h-full flex-1 items-stretch ${narrow ? "min-w-0 justify-center px-1" : "min-w-0 justify-start"}`}
         >
           {children}
         </div>
@@ -159,10 +174,24 @@ export function AppHeader({ children }: AppHeaderProps) {
         {/* Rechter Bereich: Platzhalter für optionale interaktive Header-Aktionen */}
         <div data-tauri-drag-region className="flex items-center gap-2">
           {/* Interaktive Elemente hier müssen ohne `data-tauri-drag-region` eingebunden werden */}
+          {/* Issue #1325: activity center, hidden without activities. */}
+          <ActivityCenter />
+          {!narrow && onOpenSettings && (
+            <Button
+              type="button"
+              variant="bare"
+              aria-label={t("settings.title")}
+              title={t("settings.title")}
+              onClick={(e) => onOpenSettings(e.currentTarget)}
+              className="focus-ring inline-flex h-7 w-7 items-center justify-center border border-transparent text-fg-subtle hover:border-border-strong hover:text-fg"
+            >
+              <Icon name="sliders" size={16} />
+            </Button>
+          )}
         </div>
       </header>
       {/* Issue #160 / Spec 0014, Abschnitt 5: Titelleisten-Drag-Schicht.
-          Jeder modale Backdrop (`ModalBackdrop`, `fixed inset-0 z-50`) liegt
+          Jeder modale Backdrop (`ModalBackdrop`, fixed over the whole window at `z-50`) liegt
           über dem ganzen Fenster inklusive dieses Headers — ohne diese
           Schicht träfe ein Klick auf die Titelleiste den Backdrop statt der
           Drag-Region, und das Fenster ließe sich nicht mehr bewegen.
@@ -180,7 +209,8 @@ export function AppHeader({ children }: AppHeaderProps) {
           Kind des `<header>`: dessen `backdrop-blur` macht ihn zum
           Bezugsrahmen für `fixed`-Nachfahren und zu einem eigenen
           Stapelkontext, die Schicht käme dann nicht über die Backdrops. */}
-      {anyModalOpen && (
+      {/* Android has no window to drag; there the narrow navigation sheet reaches the top edge. */}
+      {anyModalOpen && platform !== "android" && (
         <div
           data-tauri-drag-region
           data-testid="titlebar-drag-layer"

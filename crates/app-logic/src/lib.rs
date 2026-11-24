@@ -19,15 +19,29 @@
 //! (`app-logic`) enthält keinen Typ, keine Funktion und kein Feld, über das
 //! er erreichbar ist (A1).
 
+#[cfg(all(test, feature = "ts-export"))]
+mod ts_export;
+
+pub mod activities;
+pub mod activity;
+pub mod ai_provider_decorator;
 pub mod ai_provider_factory;
 pub mod ai_usage;
+pub mod auth_prompt_events;
+pub mod auth_prompter;
 pub mod auto_reconnect;
+pub mod background_keepalive;
 pub mod backup;
 pub mod chat_content_extension;
+pub mod chat_resync;
 pub mod compaction;
 pub mod confirmation;
 pub mod confirmation_explain;
+pub mod confirmation_settled;
+pub mod connect;
 pub mod connect_attempts;
+pub mod credential_slots;
+pub mod data_dir_error_messages;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
 pub mod data_paths;
 /// Spec 0101, A3/A5: Die Entscheidungstabelle für den Datenbankstart und
@@ -37,15 +51,21 @@ pub mod database_startup;
 pub mod diagnostics;
 pub mod document_export;
 pub mod dto;
+pub mod elevation_events;
 pub mod ephemeral_credentials;
 pub mod error;
+pub mod event_names;
 pub mod events;
+/// Extension API: the documented, supported surface for extension crates.
+pub mod ext;
 pub mod field_content_decryption;
+pub mod file_browser;
 pub mod filter_rules;
 pub mod folder_upload;
 pub mod groups;
 pub mod host_key_store;
 pub mod identity_file;
+pub mod ids;
 pub mod key_files;
 /// Issue #89: which local paths the file browser may read (upload,
 /// overwrite preview, edit-session polling).
@@ -62,9 +82,8 @@ pub mod mcp_sessions;
 /// Spec 0101, A12: das MCP-Server-Token im Secret-Speicher.
 pub mod mcp_token;
 pub mod orchestration;
-/// Spec 0088, A2.1/A2.2: crate-intern, weil es eine Implementierungs-
-/// Entscheidung über die Sperren dieser Crate ist und keine Schnittstelle.
-mod poison;
+/// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
+pub mod owner_names;
 /// Spec 0084, A5: `NoRulesPolicyStore` ist ein Testdouble, das sowohl
 /// innerhalb dieser Crate (`session.rs`, `orchestration::test_support`) als
 /// auch von `app-shell`s Tests (`commands::chat`) gebraucht wird — deshalb
@@ -72,30 +91,37 @@ mod poison;
 /// `#[cfg(test)]`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod policy;
+pub mod quick_rules_batch;
+mod redact_for_server;
 pub mod rule_suggestions;
 pub mod second_opinion;
 /// Spec 0101, A10/A11: der einmalige Umzug der Secrets aus dem
 /// Schlüsselbund in die verschlüsselte Datenbank.
 pub mod secret_migration;
 pub mod server_credentials;
+pub mod server_guards;
+pub mod server_paths;
 /// Issue #18: Session-Redactor eines Servers und redigierte, gefencte
 /// Notizen für das MCP-Tool `get_server_notes`.
 pub mod server_redaction;
 pub mod servers;
 pub mod session;
 pub mod session_extension;
+pub mod sftp_ops;
 pub mod single_instance;
 pub mod ssh_config_import;
-/// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
 pub mod start_directory;
 /// Spec 0101, A3/A5: Texte der Startdialoge mit Wahl (D1–D4 und die
 /// zweiten Bestätigungen).
 pub mod startup_choice_dialogs;
 pub mod startup_error_messages;
 pub mod state;
+pub mod status;
 /// Issue #90: Sitzungs-System-Prompt auf Deutsch und Englisch, gewählt
 /// nach der UI-Sprache.
 pub mod system_prompt;
+/// Issue #879: owner for background tasks (scopes, cancel, shutdown).
+pub mod tasks;
 pub mod test_connection;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

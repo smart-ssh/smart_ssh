@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "./thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "./lib/thirdPartyNoticesMarker";
 
 const FRONTEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NOTICES_PATH = path.join(FRONTEND_DIR, "public/third-party-notices.txt");
@@ -53,8 +53,8 @@ describe("Drittlizenzen: Inhalt auf dem aktuellen Stand (Spec 0099, A1.1, A1.8)"
   it.skipIf(!hasOutput)(
     "enthält die Lizenztexte von SQLCipher und der vendorten OpenSSL-Quelle (Spec 0101, T9)",
     () => {
-      expect(content).toContain("SQLCipher (gebündelt in libsqlite3-sys, Spec 0101 A1)");
-      expect(content).toContain("Zetetic LLC");
+      expect(content).toContain("SQLCipher (gebündelt in sqlcipher-src, Spec 0101 A1)");
+      expect(content).toContain("ZETETIC LLC");
       expect(content).toContain("OpenSSL (vendorte Quelle in openssl-src, Spec 0101 A1)");
     },
   );
@@ -67,5 +67,30 @@ describe("Drittlizenzen: Hinweisdateien (Spec 0099, A1.2)", () => {
   it.skipIf(!hasOutput)("enthält den Inhalt von cfg_aliases' NOTICES.md mit Paketnamen", () => {
     expect(content).toContain("cfg_aliases");
     expect(content).toContain("tectonic_cfg_support is licensed under the MIT License");
+  });
+});
+
+// Spec 0108: the CC-BY-4.0 attribution of the downloadable Parakeet model is
+// part of the shipped notices (checked on the generator output, independent
+// of a generated file).
+describe("Drittlizenzen: Sprachmodell-Namensnennung (Spec 0108)", () => {
+  it("nennt Whisper, OpenAI, Apache-2.0 und die ONNX-Quellen", async () => {
+    const { renderSpeechModelSection } = await import(
+      "../../../../scripts/generate-third-party-notices.mjs"
+    );
+    const section = renderSpeechModelSection();
+    expect(section).toContain("Whisper base and small by OpenAI, Apache-2.0");
+    expect(section).toContain("https://huggingface.co/onnx-community/whisper-base");
+    expect(section).toContain("https://huggingface.co/onnx-community/whisper-small");
+    expect(section).not.toContain("whisper.cpp");
+  });
+
+  it("nennt Parakeet TDT 0.6B v3, NVIDIA, CC-BY-4.0 und die Quelle", async () => {
+    const { renderSpeechModelSection } = await import(
+      "../../../../scripts/generate-third-party-notices.mjs"
+    );
+    const section = renderSpeechModelSection();
+    expect(section).toContain("Parakeet TDT 0.6B v3 by NVIDIA, CC-BY-4.0");
+    expect(section).toContain("https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3");
   });
 });

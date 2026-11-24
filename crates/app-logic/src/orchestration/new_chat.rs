@@ -3,6 +3,7 @@
 //! Sudo-Passwort und `untrusted_content_ingested` bleiben unangetastet; nur
 //! der Chat (Zeile in `chat_sessions` und `SessionContext`) wird getauscht.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use uuid::Uuid;
 
 use crate::error::CommandError;
@@ -49,8 +50,9 @@ fn busy_error() -> CommandError {
 }
 
 fn is_confirmation_open(session: &Session) -> bool {
-    crate::poison::lock_tolerating_poison(&session.pending_action).is_some()
+    ssh_manager_core::sync::lock_tolerating_poison(&session.conn.pending_action).is_some()
         || session
+            .safety
             .mcp_confirmation_claim
             .load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -60,11 +62,7 @@ struct TurnClaim<'a>(&'a Session);
 
 impl Drop for TurnClaim<'_> {
     fn drop(&mut self) {
-        let mut turn = self
-            .0
-            .chat_turn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut turn = lock_tolerating_poison(&self.0.conn.chat_turn);
         turn.running = false;
         turn.swapping = false;
     }
@@ -89,15 +87,15 @@ pub async fn start_new_chat(
     emitter: &dyn EventEmitter,
     provider_id: Option<Uuid>,
 ) -> Result<Option<Uuid>, CommandError> {
-    if crate::poison::lock_tolerating_poison(&session.chat_turn).running
+    if ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn).running
         || is_confirmation_open(session)
     {
         return Err(busy_error());
     }
 
     let persisted = match (
-        &session.chat_session_store,
-        *session.chat_session_id.lock().await,
+        &session.persistence.chat_session_store,
+        *session.persistence.chat_session_id.lock().await,
     ) {
         (Some(store), Some(id)) => Some((store.clone(), id)),
         _ => None,
@@ -111,7 +109,7 @@ pub async fn start_new_chat(
     // Belegt den Turn-Slot atomar mit der Prüfung: eine währenddessen
     // eintreffende Nutzer-Nachricht wird nur eingereiht, nicht ausgeführt.
     {
-        let mut turn = crate::poison::lock_tolerating_poison(&session.chat_turn);
+        let mut turn = ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn);
         if turn.running {
             return Err(busy_error());
         }
@@ -129,7 +127,10 @@ pub async fn start_new_chat(
             .await
             .map_err(|err| {
                 tracing::warn!(error = %err, "new chat session creation failed");
-                CommandError::from(format!("Neuer Chat konnte nicht angelegt werden: {err}"))
+                CommandError::with_code(
+                    format!("Neuer Chat konnte nicht angelegt werden: {err}"),
+                    "CHAT_NEW_SESSION_FAILED",
+                )
             })?;
         if let Err(err) = store.end_or_discard(*old_id).await {
             tracing::warn!(error = %err, "chat session mark_ended failed");
@@ -140,10 +141,11 @@ pub async fn start_new_chat(
     };
 
     {
-        let mut chat_session_id = session.chat_session_id.lock().await;
-        let mut context = session.context.lock().await;
-        let mut summary = session.summary.lock().await;
-        let mut flags = crate::poison::lock_tolerating_poison(&session.mcp_origin_flags);
+        let mut chat_session_id = session.persistence.chat_session_id.lock().await;
+        let mut context = session.ai.context.lock().await;
+        let mut summary = session.ai.summary.lock().await;
+        let mut flags =
+            ssh_manager_core::sync::lock_tolerating_poison(&session.safety.mcp_origin_flags);
         // Kontext-Lock nur für diese reinen Speicheroperationen.
         context.history.retain(is_os_banner);
         flags.clear();
@@ -151,24 +153,25 @@ pub async fn start_new_chat(
         *summary = None;
         if new_id.is_some() {
             *chat_session_id = new_id;
+            // The new chat is unknown to the observers until its first
+            // message emits `ChatStarted` again.
+            session.reset_chat_announced();
         }
     }
     // Issue #648: the provider-reported size belongs to the old chat. Reset
     // the tracker (so compaction ignores the old ratio) and tell the UI 0.
-    *session
-        .context_usage
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Default::default();
+    *lock_tolerating_poison(&session.ai.context_usage) = Default::default();
     crate::events::emit_chat_context_usage(
         emitter,
         session_id,
         0,
-        session.model_context_window_tokens as u64,
+        session.ai.model_context_window_tokens as u64,
     );
     // Per-Chat-Zustand der laufenden Verbindung; `untrusted_content_ingested`
     // bleibt bewusst unberührt (Issue #271, Entscheidung 2), ebenso
     // `injection_suspected`/`injection_check_unavailable`.
     session
+        .conn
         .auto_continue_stop
         .store(false, std::sync::atomic::Ordering::SeqCst);
 
@@ -177,7 +180,7 @@ pub async fn start_new_chat(
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests {
     use super::*;
     use crate::events::TestEmitter;
@@ -213,12 +216,224 @@ mod tests {
         )
         .await;
         {
-            let mut ctx = session.context.lock().await;
+            let mut ctx = session.ai.context.lock().await;
             ctx.history.push(banner());
             ctx.history.push(user("erste Frage"));
         }
-        *session.mcp_origin_flags.lock().unwrap() = vec![false, false];
+        *session.safety.mcp_origin_flags.lock().unwrap() = vec![false, false];
         (session, store, id, tmp)
+    }
+
+    /// Issue #1507: after "new chat" the events carry no chat id until the
+    /// first message of the new chat announces it (never an unannounced id).
+    #[tokio::test]
+    async fn test_new_chat_resets_the_announcement_of_the_chat_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ActivitySource, ConnectionChange, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, old_id, _tmp) = persisted_session().await;
+        let session = session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        ));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        session.emit_chat_started_once().await;
+        let new_id = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        session.emit_chat_started_once().await;
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        let events = rec.0.lock().unwrap().clone();
+        let ids: Vec<_> = events
+            .iter()
+            .map(|e| e.session.chat_session_id.clone())
+            .collect();
+        let (a, b) = (Some(old_id.to_string()), Some(new_id.to_string()));
+        assert_eq!(ids, [None, a, None, b.clone(), b], "{events:?}");
+        assert!(matches!(
+            events[3].kind,
+            ActivityEventKind::ChatStarted { .. }
+        ));
+    }
+
+    /// Issue #1562: `emit_chat_started_once` running concurrently with "new
+    /// chat" never leaves the announcement and the current chat apart: the
+    /// payload id equals the envelope id, and after the next message the
+    /// last announced id is the current one.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_chat_started_racing_with_new_chat_announces_the_current_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        let session = std::sync::Arc::new(session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        )));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        for round in 0..300 {
+            let emitter = {
+                let session = session.clone();
+                tokio::spawn(async move {
+                    session.emit_chat_started_once().await;
+                })
+            };
+            let new_chat = {
+                let session = session.clone();
+                tokio::spawn(async move {
+                    start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+                        .await
+                        .unwrap()
+                })
+            };
+            emitter.await.unwrap();
+            let new_id = new_chat.await.unwrap().expect("new row");
+            // The first message of the (new) chat.
+            session.emit_chat_started_once().await;
+            let events = rec.0.lock().unwrap().clone();
+            let announced: Vec<_> = events
+                .iter()
+                .filter_map(|e| match &e.kind {
+                    ActivityEventKind::ChatStarted { chat_session_id } => {
+                        Some((chat_session_id.clone(), e.session.chat_session_id.clone()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            for (payload, envelope) in &announced {
+                assert_eq!(Some(payload), envelope.as_ref(), "round {round}");
+            }
+            assert_eq!(
+                announced.last().map(|(id, _)| id.clone()),
+                Some(new_id.to_string()),
+                "round {round}: {announced:?}"
+            );
+        }
+    }
+
+    /// Issue #1562: deterministic interleaving (tokio's mutex is FIFO on a
+    /// current-thread runtime). The emitter waits for the chat id lock, "new
+    /// chat" queues behind it and swaps the id while the emitter has not run:
+    /// the announcement must carry one id in payload and envelope, and the
+    /// next message must announce the new id.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_chat_started_waiting_on_the_lock_while_new_chat_swaps_the_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        let session = std::sync::Arc::new(session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        )));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        let new_id = Uuid::new_v4();
+        let guard = session.persistence.chat_session_id.lock().await;
+        let emitter = {
+            let session = session.clone();
+            tokio::spawn(async move { session.emit_chat_started_once().await })
+        };
+        tokio::task::yield_now().await;
+        let swapper = {
+            let session = session.clone();
+            tokio::spawn(async move {
+                let mut id = session.persistence.chat_session_id.lock().await;
+                *id = Some(new_id);
+                session.reset_chat_announced();
+            })
+        };
+        tokio::task::yield_now().await;
+        drop(guard);
+        emitter.await.unwrap();
+        swapper.await.unwrap();
+        session.emit_chat_started_once().await;
+        let events = rec.0.lock().unwrap().clone();
+        let announced: Vec<_> = events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                ActivityEventKind::ChatStarted { chat_session_id } => {
+                    Some((chat_session_id.clone(), e.session.chat_session_id.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        for (payload, envelope) in &announced {
+            assert_eq!(Some(payload), envelope.as_ref(), "{announced:?}");
+        }
+        assert_eq!(
+            announced.last().map(|(id, _)| id.clone()),
+            Some(new_id.to_string()),
+            "{announced:?}"
+        );
     }
 
     #[tokio::test]
@@ -235,7 +450,10 @@ mod tests {
             .expect("persisted tab gets a new row");
 
         assert_ne!(new_id, old_id);
-        assert_eq!(*session.chat_session_id.lock().await, Some(new_id));
+        assert_eq!(
+            *session.persistence.chat_session_id.lock().await,
+            Some(new_id)
+        );
         let rows = store
             .list_sessions_for_server(&session.server_id)
             .await
@@ -247,25 +465,30 @@ mod tests {
         let new = rows.iter().find(|r| r.id == new_id).unwrap();
         assert!(new.ended_at.is_none());
         // History is empty apart from the connection's OS banner.
-        let ctx = session.context.lock().await;
+        let ctx = session.ai.context.lock().await;
         assert_eq!(ctx.history.len(), 1);
         assert!(is_os_banner(&ctx.history[0]));
-        assert_eq!(session.mcp_origin_flags.lock().unwrap().len(), 1);
-        assert!(session.summary.lock().await.is_none());
-        assert!(!session.chat_turn.lock().unwrap().running);
+        assert_eq!(session.safety.mcp_origin_flags.lock().unwrap().len(), 1);
+        assert!(session.ai.summary.lock().await.is_none());
+        assert!(!session.conn.chat_turn.lock().unwrap().running);
     }
 
     #[tokio::test]
     async fn test_new_chat_resets_context_usage_and_emits_zero() {
         let (session, _store, _old_id, _tmp) = persisted_session().await;
-        session.context_usage.lock().unwrap().record(90_000, 40_000);
-        assert!(session.context_usage.lock().unwrap().ratio() > 2.0);
+        session
+            .ai
+            .context_usage
+            .lock()
+            .unwrap()
+            .record(90_000, 40_000);
+        assert!(session.ai.context_usage.lock().unwrap().ratio() > 2.0);
         let emitter = TestEmitter::default();
         let sid = Uuid::new_v4();
 
         start_new_chat(&session, sid, &emitter, None).await.unwrap();
 
-        let tracker = session.context_usage.lock().unwrap().clone();
+        let tracker = session.ai.context_usage.lock().unwrap().clone();
         assert_eq!(tracker, crate::compaction::ContextUsageTracker::default());
         assert_eq!(tracker.last_input_tokens, None);
         assert_eq!(tracker.ratio(), 1.0);
@@ -278,7 +501,7 @@ mod tests {
         assert_eq!(usage[0].1["inputTokens"], 0);
         assert_eq!(
             usage[0].1["windowTokens"],
-            session.model_context_window_tokens as u64
+            session.ai.model_context_window_tokens as u64
         );
     }
 
@@ -304,10 +527,15 @@ mod tests {
     async fn test_new_chat_keeps_untrusted_flag_and_connection() {
         let (session, _store, _old_id, _tmp) = persisted_session().await;
         session
+            .safety
             .untrusted_content_ingested
             .store(true, Ordering::SeqCst);
-        session.injection_suspected.store(true, Ordering::SeqCst);
         session
+            .safety
+            .injection_suspected
+            .store(true, Ordering::SeqCst);
+        session
+            .safety
             .injection_check_unavailable
             .store(true, Ordering::SeqCst);
 
@@ -315,9 +543,15 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(session.untrusted_content_ingested.load(Ordering::SeqCst));
-        assert!(session.injection_suspected.load(Ordering::SeqCst));
-        assert!(session.injection_check_unavailable.load(Ordering::SeqCst));
+        assert!(session
+            .safety
+            .untrusted_content_ingested
+            .load(Ordering::SeqCst));
+        assert!(session.safety.injection_suspected.load(Ordering::SeqCst));
+        assert!(session
+            .safety
+            .injection_check_unavailable
+            .load(Ordering::SeqCst));
         // Same transport, still usable.
         let out = session
             .transport
@@ -334,9 +568,9 @@ mod tests {
         for pending in [false, true] {
             let (session, store, old_id, _tmp) = persisted_session().await;
             if pending {
-                *session.pending_action.lock().unwrap() = Some(Uuid::new_v4());
+                *session.conn.pending_action.lock().unwrap() = Some(Uuid::new_v4());
             } else {
-                session.chat_turn.lock().unwrap().running = true;
+                session.conn.chat_turn.lock().unwrap().running = true;
             }
 
             let err = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
@@ -344,8 +578,11 @@ mod tests {
                 .unwrap_err();
 
             assert_eq!(err.code, Some(NEW_CHAT_BUSY));
-            assert_eq!(*session.chat_session_id.lock().await, Some(old_id));
-            assert_eq!(session.context.lock().await.history.len(), 2);
+            assert_eq!(
+                *session.persistence.chat_session_id.lock().await,
+                Some(old_id)
+            );
+            assert_eq!(session.ai.context.lock().await.history.len(), 2);
             let rows = store
                 .list_sessions_for_server(&session.server_id)
                 .await
@@ -362,23 +599,23 @@ mod tests {
         start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
             .await
             .unwrap();
-        let turn = session.chat_turn.lock().unwrap();
+        let turn = session.conn.chat_turn.lock().unwrap();
         assert!(!turn.running && !turn.swapping && turn.queued.is_empty());
     }
 
     #[tokio::test]
     async fn test_new_chat_in_local_tab_only_clears_context() {
         let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-        session.context.lock().await.history.push(user("hallo"));
-        *session.mcp_origin_flags.lock().unwrap() = vec![false];
+        session.ai.context.lock().await.history.push(user("hallo"));
+        *session.safety.mcp_origin_flags.lock().unwrap() = vec![false];
 
         let result = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
             .await
             .unwrap();
 
         assert_eq!(result, None);
-        assert!(session.context.lock().await.history.is_empty());
-        assert_eq!(*session.chat_session_id.lock().await, None);
-        assert!(session.chat_session_store.is_none());
+        assert!(session.ai.context.lock().await.history.is_empty());
+        assert_eq!(*session.persistence.chat_session_id.lock().await, None);
+        assert!(session.persistence.chat_session_store.is_none());
     }
 }

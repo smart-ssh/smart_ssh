@@ -1,7 +1,7 @@
 # 0036-substitution-depth-cap-denies-instead-of-confirms
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

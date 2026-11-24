@@ -9,6 +9,8 @@
 //! persistierten Wert bleibt — ein reiner JS-seitiger Store-Schreibzugriff
 //! hätte keine Wirkung auf einen bereits laufenden Server.
 
+use app_logic::error::ResultCodeExt;
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -19,7 +21,7 @@ use tauri_plugin_store::StoreExt;
 use ssh_manager_core::shared::ServerId;
 
 use crate::mcp_backend::AppMcpBackend;
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+use crate::settings_store;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
@@ -33,7 +35,7 @@ const ALLOWED_SERVERS_KEY: &str = "mcpServerAllowedServerIds";
 /// änderbar war (unabhängiger Review-Pass, Spec-Audit-Fund).
 const CONFIRM_TIMEOUT_SECS_KEY: &str = "mcpServerConfirmTimeoutSecs";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerSettingsDto {
     pub enabled: bool,
@@ -48,6 +50,20 @@ pub struct McpServerSettingsDto {
     /// `set_mcp_server_confirm_timeout_secs`), analog zu einem geänderten
     /// Port.
     pub confirm_timeout_secs: u64,
+}
+
+/// The token is shown to the user on purpose (IPC), but `Debug` must not
+/// print it (issue #848).
+impl std::fmt::Debug for McpServerSettingsDto {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServerSettingsDto")
+            .field("enabled", &self.enabled)
+            .field("endpoint", &self.endpoint)
+            .field("token", &"[REDACTED]")
+            .field("allowed_server_ids", &self.allowed_server_ids)
+            .field("confirm_timeout_secs", &self.confirm_timeout_secs)
+            .finish()
+    }
 }
 
 fn generate_token() -> String {
@@ -71,7 +87,10 @@ struct SettingsJsonToken<'a> {
 
 impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
     fn read_token(&self) -> CommandResult<Option<String>> {
-        let store = self.app.store(SETTINGS_STORE_FILE)?;
+        let store = self
+            .app
+            .store(crate::settings_store::settings_store_file())
+            .or_code("SETTINGS_STORE_FAILED")?;
         Ok(store
             .get(TOKEN_KEY)
             .and_then(|v| v.as_str().map(str::to_string)))
@@ -110,7 +129,9 @@ fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String
 }
 
 fn load_allowed_servers(app: &AppHandle) -> CommandResult<HashSet<ServerId>> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(crate::settings_store::settings_store_file())
+        .or_code("SETTINGS_STORE_FAILED")?;
     let Some(value) = store.get(ALLOWED_SERVERS_KEY) else {
         return Ok(HashSet::new());
     };
@@ -133,7 +154,9 @@ fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandRes
 }
 
 fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u64> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(crate::settings_store::settings_store_file())
+        .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(CONFIRM_TIMEOUT_SECS_KEY)
         .and_then(|v| v.as_u64())
@@ -141,7 +164,9 @@ fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u6
 }
 
 fn is_enabled_setting(app: &AppHandle) -> CommandResult<bool> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(crate::settings_store::settings_store_file())
+        .or_code("SETTINGS_STORE_FAILED")?;
     Ok(store
         .get(ENABLED_KEY)
         .and_then(|v| v.as_bool())
@@ -157,18 +182,14 @@ fn sync_live_state_from_store(app: &AppHandle, state: &AppState) -> CommandResul
     let token = load_or_init_token(app, state)?;
     state.mcp.token.set(token);
     let allowed = load_allowed_servers(app)?;
-    *state.mcp.allowed_servers.lock().expect("Mutex vergiftet") = allowed;
+    *lock_tolerating_poison(&state.mcp.allowed_servers) = allowed;
     Ok(())
 }
 
 async fn build_dto(app: &AppHandle, state: &AppState) -> CommandResult<McpServerSettingsDto> {
     let enabled = state.mcp.runtime.lock().await.is_some();
     let token = load_or_init_token(app, state)?;
-    let allowed_server_ids = state
-        .mcp
-        .allowed_servers
-        .lock()
-        .expect("Mutex vergiftet")
+    let allowed_server_ids = lock_tolerating_poison(&state.mcp.allowed_servers)
         .iter()
         .map(|id| id.0.to_string())
         .collect();
@@ -300,7 +321,7 @@ pub async fn set_mcp_server_allowed_servers(
 ) -> CommandResult<McpServerSettingsDto> {
     let ids: HashSet<ServerId> = server_ids.into_iter().collect();
     store_allowed_servers(&app, &ids)?;
-    *state.mcp.allowed_servers.lock().expect("Mutex vergiftet") = ids;
+    *lock_tolerating_poison(&state.mcp.allowed_servers) = ids;
     build_dto(&app, &state).await
 }
 
@@ -339,12 +360,27 @@ mod tests {
     /// `McpServerConfig::default()` (fest 5 Minuten) konstruierte, egal was
     /// in den Einstellungen stand. Ohne persistierten Wert muss weiterhin
     /// exakt der Backend-Default gelten.
+    /// Issue #848: `Debug` hides the token but still prints the other fields.
+    #[test]
+    fn test_settings_dto_debug_hides_token() {
+        let dto = McpServerSettingsDto {
+            enabled: true,
+            endpoint: "http://127.0.0.1:1234".into(),
+            token: "tok-s3cr3t-value".into(),
+            allowed_server_ids: vec![],
+            confirm_timeout_secs: 7,
+        };
+        let shown = format!("{dto:?}");
+        assert!(!shown.contains("tok-s3cr3t-value"), "{shown}");
+        assert!(shown.contains("127.0.0.1:1234") && shown.contains("[REDACTED]"));
+    }
+
     #[test]
     fn test_load_confirm_timeout_secs_defaults_to_backend_default_without_stored_value() {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = handle.store(crate::settings_store::settings_store_file()) {
             store.delete(CONFIRM_TIMEOUT_SECS_KEY);
             let _ = store.save();
         }
@@ -353,7 +389,7 @@ mod tests {
 
         assert_eq!(secs, mcp_server::DEFAULT_CONFIRM_TIMEOUT.as_secs());
 
-        if let Ok(store) = handle.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = handle.store(crate::settings_store::settings_store_file()) {
             store.delete(CONFIRM_TIMEOUT_SECS_KEY);
             let _ = store.save();
         }
@@ -367,7 +403,9 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .expect("Store");
         store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
         store.save().expect("Store konnte nicht gespeichert werden");
 
@@ -394,12 +432,17 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
-        let store = handle.store(SETTINGS_STORE_FILE).expect("Store");
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .expect("Store");
         store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(120u64));
         store.save().expect("Store konnte nicht gespeichert werden");
 
-        let store_path = tauri_plugin_store::resolve_store_path(handle, SETTINGS_STORE_FILE)
-            .expect("store path must resolve");
+        let store_path = tauri_plugin_store::resolve_store_path(
+            handle,
+            crate::settings_store::SETTINGS_STORE_FILE,
+        )
+        .expect("store path must resolve");
         std::fs::set_permissions(&store_path, std::fs::Permissions::from_mode(0o644))
             .expect("store file must exist after save");
 

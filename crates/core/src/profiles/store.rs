@@ -26,6 +26,76 @@ pub enum ProfileError {
     /// konkrete Store-Implementierung wandelt ihre eigenen Fehler über
     /// `.to_string()` in diese Variante um.
     Backend(String),
+    /// A database failure whose machine-readable kind survived (issue #885):
+    /// the command layer maps `kind` to a stable error code. `message` is the
+    /// library text as before — never bound values.
+    Store {
+        kind: StoreErrorKind,
+        message: String,
+    },
+}
+
+/// Coarse, machine-readable class of a persistence failure (issue #885).
+/// Defined here because [`ProfileError`] carries it; `persistence-sqlite`
+/// re-exports it and owns the classifier for `sqlx` errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StoreErrorKind {
+    NotFound,
+    Constraint,
+    Busy,
+    Corrupt,
+    Io,
+    Other,
+}
+
+/// Issue #885: a SQLite store failed because the database was busy/locked.
+pub const STORE_BUSY: &str = "STORE_BUSY";
+/// Issue #885: a store write violated a database constraint.
+pub const STORE_CONSTRAINT: &str = "STORE_CONSTRAINT";
+/// Issue #885: the database is corrupt or not a database.
+pub const STORE_CORRUPT: &str = "STORE_CORRUPT";
+/// Issue #885: the database file could not be read or written.
+pub const STORE_IO: &str = "STORE_IO";
+/// Issue #885: any other store failure (including "not found" of a row).
+pub const STORE_FAILED: &str = "STORE_FAILED";
+
+impl StoreErrorKind {
+    /// All codes [`Self::code`] can return.
+    pub const CODES: &'static [&'static str] = &[
+        STORE_BUSY,
+        STORE_CONSTRAINT,
+        STORE_CORRUPT,
+        STORE_IO,
+        STORE_FAILED,
+    ];
+
+    /// The stable error code for a store failure kind (issue #885).
+    pub fn code(self) -> &'static str {
+        match self {
+            StoreErrorKind::Busy => STORE_BUSY,
+            StoreErrorKind::Constraint => STORE_CONSTRAINT,
+            StoreErrorKind::Corrupt => STORE_CORRUPT,
+            StoreErrorKind::Io => STORE_IO,
+            StoreErrorKind::NotFound | StoreErrorKind::Other => STORE_FAILED,
+        }
+    }
+}
+
+impl ProfileError {
+    /// All codes the [`ErrorCode`](crate::ipc_error::ErrorCode) impl can
+    /// return (the `STORE_*` ones are in [`StoreErrorKind::CODES`]).
+    pub const CODES: &'static [&'static str] =
+        &["SERVER_NOT_FOUND", "GROUP_NOT_FOUND", "GROUP_CHAIN_CYCLE"];
+
+    /// The kind of a database failure; `None` for the domain variants and the
+    /// domain variants (`ServerNotFound`, ...); a plain-string `Backend` is `Other`.
+    pub fn kind(&self) -> Option<StoreErrorKind> {
+        match self {
+            ProfileError::Store { kind, .. } => Some(*kind),
+            ProfileError::Backend(_) => Some(StoreErrorKind::Other),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ProfileError {
@@ -37,11 +107,26 @@ impl fmt::Display for ProfileError {
                 write!(f, "zyklische Gruppen-Elternkette erkannt")
             }
             ProfileError::Backend(msg) => write!(f, "Profile-Store-Backend-Fehler: {msg}"),
+            ProfileError::Store { message, .. } => {
+                write!(f, "Profile-Store-Backend-Fehler: {message}")
+            }
         }
     }
 }
 
 impl std::error::Error for ProfileError {}
+
+impl crate::ipc_error::ErrorCode for ProfileError {
+    fn code(&self) -> &'static str {
+        match self {
+            ProfileError::ServerNotFound(_) => "SERVER_NOT_FOUND",
+            ProfileError::GroupNotFound(_) => "GROUP_NOT_FOUND",
+            ProfileError::CycleDetected => "GROUP_CHAIN_CYCLE",
+            ProfileError::Backend(_) => STORE_FAILED,
+            ProfileError::Store { kind, .. } => kind.code(),
+        }
+    }
+}
 
 pub type ProfileResult<T> = Result<T, ProfileError>;
 

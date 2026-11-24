@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listRules, listServers } from "../api";
-import { requestOpenFilterRule } from "../navigationBus";
-import type { AutoExecRule, Scope } from "../types";
+import { listRules, listServers } from "../api/api";
+import { requestOpenFilterRule } from "../buses/navigationBus";
+import type { AutoExecRule, Scope } from "../api/types";
+import { Button, Icon } from "./ui";
 
-/** Issue #696, Spec 0011: muted line under the command of an automatically
- * run action — "Ran automatically · rule `<pattern>` · <scope>", one entry per
- * rule. The pattern is a link into the filter rules tab while the rule still
+/** Issue #696/#1371, Spec 0011: left part of the executed-action card header —
+ * bolt icon, "Ran automatically" and per rule "rule `<pattern>` · <scope>". The pattern is a link into the filter rules tab while the rule still
  * exists, plain text otherwise. Display only. */
 export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
   const { t } = useTranslation();
@@ -15,6 +15,7 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
   const needsServers = rules.some((r) => typeof r.scope === "object" && "Server" in r.scope);
 
   useEffect(() => {
+    if (rules.length === 0) return;
     let cancelled = false;
     listRules()
       .then((all) => {
@@ -35,7 +36,7 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
     return () => {
       cancelled = true;
     };
-  }, [needsServers]);
+  }, [needsServers, rules.length]);
 
   const scopeText = (scope: Scope): string => {
     if (scope === "Global") return t("actionCard.autoRanScopeGlobal");
@@ -46,28 +47,30 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
   };
 
   return (
-    <p className="mt-1 text-xs text-slate-400">
-      {t("actionCard.autoRanLead")}
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-fg-subtle">
+      <Icon name="bolt" className="text-success-fg" />
+      <span className="text-label text-success-fg">{t("actionCard.autoRanLead")}</span>
       {rules.map((rule) => (
-        <span key={rule.ruleId}>
-          {" · "}
-          {t("actionCard.autoRanRule")}{" "}
+        <span key={rule.ruleId} className="inline-flex flex-wrap items-center gap-1.5">
+          <span aria-hidden="true">·</span>
+          <span>{t("actionCard.autoRanRule")}</span>
           {existing.has(rule.ruleId) ? (
-            <button
+            <Button
+              variant="bare"
               type="button"
-              className="font-mono underline hover:text-slate-200"
+              className="border border-border-strong px-1.5 font-mono text-fg-soft underline hover:text-fg"
               title={t("actionCard.autoRanOpenRule")}
               onClick={() => requestOpenFilterRule(rule.ruleId)}
             >
               {rule.patternValue}
-            </button>
+            </Button>
           ) : (
-            <span className="font-mono">{rule.patternValue}</span>
+            <span className="border border-border-strong px-1.5 font-mono text-fg-soft">{rule.patternValue}</span>
           )}
-          {" · "}
-          {scopeText(rule.scope)}
+          <span aria-hidden="true">·</span>
+          <span>{scopeText(rule.scope)}</span>
         </span>
       ))}
-    </p>
+    </div>
   );
 }

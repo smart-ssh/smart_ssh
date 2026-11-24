@@ -1,20 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
   commandErrorMessage,
   listGroups,
   listServers,
   listUnusableServers,
-} from "../api";
-import { translateErrorCode } from "../errorCodes";
-import { performMove, type DragItem, type DropTarget } from "../treeDrag";
-import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
+} from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { performMove, type DragItem, type DropTarget } from "../lib/treeDrag";
+import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
 import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button } from "./ui";
+import { Button, ErrorBoundary, Icon } from "./ui";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
@@ -37,6 +36,10 @@ interface ManagementViewProps {
   onInitialSelectionConsumed?: () => void;
   /** Issue #692: "Connect" in a saved server's settings. */
   onConnect?: (serverId: string) => void;
+  /** Issue #1368: collapsed groups of the sidebar tree, kept by `App` for the
+   * session (shared with the Connect tree). */
+  collapsedGroupIds?: ReadonlySet<string>;
+  onToggleGroup?: (groupId: string) => void;
 }
 
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
@@ -44,6 +47,8 @@ export function ManagementView({
   initialSelection = null,
   onInitialSelectionConsumed,
   onConnect,
+  collapsedGroupIds,
+  onToggleGroup,
 }: ManagementViewProps) {
   const { t } = useTranslation();
   const manageViews = useManageViews();
@@ -82,7 +87,7 @@ export function ManagementView({
       setNewFormRevision((n) => n + 1);
       onInitialSelectionConsumed?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to a new initialSelection only; callbacks and setters are not triggers
   }, [initialSelection]);
 
   // Issue #49: erhöht bei jeder Auswahl (auch einem erneuten Klick auf
@@ -133,7 +138,7 @@ export function ManagementView({
         setMovedTo({ groupId: target.kind === "group" ? target.id : null });
       }
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
     reload();
   };
@@ -153,6 +158,23 @@ export function ManagementView({
   // list's scroll position is restored.
   const showList = !narrow || !selection;
   const showDetail = !narrow || Boolean(selection);
+
+  // Narrow header: icon and name of the open item (as in the design).
+  const selectedHeader = ((): { icon: "server" | "local" | "folder" | "warn"; name: string } | null => {
+    if (selection?.kind === "server") {
+      const s = servers.find((x) => x.id === selection.id);
+      return s ? { icon: s.isLocal ? "local" : "server", name: s.name } : null;
+    }
+    if (selection?.kind === "unusableServer") {
+      const s = unusableServers.find((x) => x.id === selection.id);
+      return s ? { icon: "warn", name: s.name } : null;
+    }
+    if (selection?.kind === "group") {
+      const g = groups.find((x) => x.id === selection.id);
+      return g ? { icon: "folder", name: g.name } : null;
+    }
+    return null;
+  })();
 
   const findListScroller = () =>
     listRef.current?.querySelector<HTMLElement>('[data-drop-target="root"]') ?? null;
@@ -190,6 +212,9 @@ export function ManagementView({
         onImportSshConfig={() => setImportOpen(true)}
         onExportSshConfig={() => setExportOpen(true)}
         onMove={(item, target) => void handleMove(item, target)}
+        onKeptAsRegular={reload}
+        collapsedGroupIds={collapsedGroupIds}
+        onToggleGroup={onToggleGroup}
       />
       </div>
       )}
@@ -206,13 +231,19 @@ export function ManagementView({
       {showDetail && (
       <div className="min-w-0 flex-1 overflow-y-auto">
         {narrow && selection && (
-          <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900 px-2 py-1">
-            <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11">
-              <span aria-hidden="true">←</span> {t("management.back")}
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface px-2 py-1">
+            <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11 shrink-0">
+              <Icon name="chev-l" className="mr-1 inline align-text-bottom" /> {t("management.back")}
             </Button>
+            {selectedHeader && (
+              <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+                <Icon name={selectedHeader.icon} className="shrink-0 text-fg-muted" />
+                <span className="truncate font-mono">{selectedHeader.name}</span>
+              </span>
+            )}
           </div>
         )}
-        {error && <p className="p-4 text-sm text-red-400">{error}</p>}
+        {error && <p className="p-4 text-sm text-danger-fg">{error}</p>}
 
         {/* `key` erzwingt einen vollständigen Remount (statt Wiederverwendung
          * derselben Komponenten-Instanz mit nur geänderten Props), sobald
@@ -283,7 +314,11 @@ export function ManagementView({
         {selection?.kind === "extensionView" &&
           (() => {
             const View = manageViews.find((v) => v.id === selection.id)?.component;
-            return View ? <View key={selection.id} /> : null;
+            return View ? (
+              <ErrorBoundary key={selection.id} id={`manage-view:${selection.id}`}>
+                <View />
+              </ErrorBoundary>
+            ) : null;
           })()}
         {!selection && !narrow && (
           // Spec 0072, Teil 3 (BL-0202): dieser Platzhaltertext stand fest
@@ -291,7 +326,7 @@ export function ManagementView({
           // lag außerhalb des Dateisatzes von Spec 0069. Interpoliert die
           // Button-Beschriftungen aus `sidebar.addGroup`/`sidebar.addServer`
           // statt sie hier ein zweites Mal wörtlich zu führen.
-          <p className="p-4 text-sm text-slate-400">
+          <p className="p-4 text-sm text-fg-subtle">
             {t("management.emptyState", {
               addGroup: t("sidebar.addGroup"),
               addServer: t("sidebar.addServer"),

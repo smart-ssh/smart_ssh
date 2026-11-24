@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "./ui";
-import { subscribeToasts, type Toast } from "../toastBus";
+import { Button, Icon } from "./ui";
+import { subscribeToasts, type Toast } from "../buses/toastBus";
 
 /** Erfolgsmeldungen verschwinden von selbst, Fehler (und Hinweise, Issue
  * #37) bleiben stehen, bis der Nutzer sie schließt (Spec 0067, Teil B2). */
@@ -41,14 +41,17 @@ export function ToastHost() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-start justify-between gap-2 rounded-lg border p-3 text-sm shadow-lg ${
+          data-kind={toast.kind}
+          className={`flex items-start justify-between gap-2 border p-3 text-sm shadow-offset-sm ${
             toast.kind === "error"
-              ? "border-red-900 bg-red-950 text-red-200"
-              : "border-slate-700 bg-slate-800 text-slate-100"
+              ? "border-danger-border bg-danger-subtle text-danger-fg-softer"
+              : toast.kind === "success"
+                ? "border-success-border bg-surface-raised text-fg"
+                : "border-border-strong bg-surface-raised text-fg"
           }`}
         >
           <p className="min-w-0 break-words">
-            {toast.kind === "success" ? "✓ " : toast.kind === "info" ? "ℹ " : "⚠ "}
+            <Icon name={toast.kind === "success" ? "check" : toast.kind === "info" ? "info" : "warn"} className={`mr-1 inline align-text-bottom ${toast.kind === "success" ? "text-success-fg" : toast.kind === "error" ? "text-danger-fg" : "text-fg-muted"}`} />
             {toast.message}
           </p>
           <div className="flex shrink-0 gap-1">
@@ -65,11 +68,12 @@ export function ToastHost() {
             )}
             <Button
               size="sm"
-              variant={toast.kind === "error" ? "danger" : "secondary"}
+              iconOnly
+              variant={toast.kind === "error" ? "danger" : "ghost"}
               onClick={() => dismiss(toast.id)}
               aria-label={t("toast.dismiss")}
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
         </div>

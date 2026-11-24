@@ -4,7 +4,7 @@
 import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
-import { MAX_DIFF_INPUT_BYTES } from "../textDiff";
+import { MAX_DIFF_INPUT_BYTES } from "../lib/textDiff";
 import { testI18n } from "../testI18n";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 

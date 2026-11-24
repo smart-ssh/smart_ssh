@@ -1,6 +1,7 @@
 # Spec 0083 — Anwendungs-Hülle in Module aufteilen (aufgelöst)
 
 Status: aufgelöst
+Zweck: Reiner Umbauauftrag, die Anwendungs-Hülle in thematische Module aufzuteilen; beschreibt kein Produktverhalten.
 Nachfolger: ADR 0076, `docs/architecture.md`, Spec 0084
 
 Diese Spec war ein reiner Umbauauftrag (zwei sehr große Dateien in

@@ -2,6 +2,7 @@
 // Warnung, Speichern trotzdem möglich; generischer Provider → keine
 // Warnung."
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -18,46 +19,35 @@ import {
   setActiveAiProvider,
   testAiProviderCredentials,
   updateAiProvider,
-} from "../api";
-import type { AiProviderConfigDto } from "../types";
+} from "../api/api";
+import type { AiProviderConfigDto } from "../api/types";
 import { testI18n } from "../testI18n";
 import { AiProviderSettings } from "./AiProviderSettings";
 
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  addAiProvider: vi.fn(() => Promise.resolve("new-id")),
-  deleteAiProvider: vi.fn(),
-  // Spec 0069, Teil B1: jeder dieser Tests mountet die Komponente ohne
-  // vorhandenen Ollama-Provider — das löst die automatische Probe aus
-  // (`runOllamaProbe`, ruft `discoverModels` auf). Ein bewusst
-  // fehlschlagender Default (statt eines unkonfigurierten `vi.fn()`, der
-  // `undefined` zurückgäbe und `models.length` crashen ließe) hält diese
-  // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
-  // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
-  // "jeder andere Fehler → keine Karte").
-  discoverModels: vi.fn(() =>
-    Promise.reject(new Error("not configured in this test")),
-  ),
-  fetchAttestationInfo: vi.fn(),
-  setActiveAiProvider: vi.fn(),
-  testAiProviderCredentials: vi.fn(),
-  updateAiProvider: vi.fn(() => Promise.resolve()),
-  // Spec 0069, Teil B: `runOllamaProbe` braucht das tatsächliche
-  // `code`-Extraktionsverhalten (wie in `ServerList.test.tsx` bereits
-  // etabliert), Spec 0071 braucht `.message`-Extraktion für
-  // `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte — echte Implementierungen
-  // statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    addAiProvider: vi.fn(() => Promise.resolve("new-id")),
+    deleteAiProvider: vi.fn(),
+    // Spec 0069, Teil B1: jeder dieser Tests mountet die Komponente ohne
+    // vorhandenen Ollama-Provider — das löst die automatische Probe aus
+    // (`runOllamaProbe`, ruft `discoverModels` auf). Ein bewusst
+    // fehlschlagender Default (statt eines unkonfigurierten `vi.fn()`, der
+    // `undefined` zurückgäbe und `models.length` crashen ließe) hält diese
+    // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
+    // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
+    // "jeder andere Fehler → keine Karte").
+    discoverModels: vi.fn(() =>
+      Promise.reject(new Error("not configured in this test")),
+    ),
+    fetchAttestationInfo: vi.fn(),
+    setActiveAiProvider: vi.fn(),
+    testAiProviderCredentials: vi.fn(),
+    updateAiProvider: vi.fn(() => Promise.resolve()),
+  }),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() =>
     Promise.resolve({ enabled: false, providerId: null }),
   ),
@@ -90,6 +80,16 @@ function renderFormWithDialog() {
   const result = renderForm();
   fireEvent.click(screen.getByRole("button", { name: "Provider hinzufügen" }));
   return result;
+}
+
+/** The probe's outcome renders nothing for the cases asserted by absence, so the DOM gives no
+ * "done" signal: wait for the call, then for its (rejected) promise after the component's own
+ * `catch` handler has run. */
+async function settleOllamaProbe() {
+  await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await vi.mocked(discoverModels).mock.results[0].value.catch(() => undefined);
+  });
 }
 
 describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
@@ -231,9 +231,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
-    );
+    const valid = await screen.findByText("Zugangsdaten gültig");
+    expect(valid).toBeInTheDocument();
+    expect(valid.querySelector("svg")?.getAttribute("data-icon")).toBe("check");
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
@@ -252,11 +252,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen"),
-      ).toBeInTheDocument(),
-    );
+    const failed = await screen.findByText("Authentifizierung fehlgeschlagen – API-Key prüfen");
+    expect(failed).toBeInTheDocument();
+    expect(failed.querySelector("svg")?.getAttribute("data-icon")).toBe("x");
   });
 
   it("shows an unreachable result including the message", async () => {
@@ -273,11 +271,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText("✗ Provider nicht erreichbar: connection refused"),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Provider nicht erreichbar: connection refused")).toBeInTheDocument();
   });
 
   // Spec 0069, Teil A5, Test 19: `unreachable` mit `AI_RATE_LIMITED` zeigt
@@ -299,13 +293,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(
-          "Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.",
-        ),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.")).toBeInTheDocument();
     expect(
       screen.queryByText(/Provider nicht erreichbar/),
     ).not.toBeInTheDocument();
@@ -328,9 +316,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText(/kennt dieses Modell nicht/)).toBeInTheDocument(),
-    );
+    expect(await screen.findByText(/kennt dieses Modell nicht/)).toBeInTheDocument();
     expect(
       screen.queryByText(/HTTP 404: model_not_found/),
     ).not.toBeInTheDocument();
@@ -351,11 +337,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(/unterstützt keine Tool-Aufrufe/),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText(/unterstützt keine Tool-Aufrufe/)).toBeInTheDocument();
     expect(
       screen.queryByText(/does not support tools/),
     ).not.toBeInTheDocument();
@@ -370,15 +352,13 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.click(
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
-    await waitFor(() =>
-      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Zugangsdaten gültig")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc-changed" },
     });
 
-    expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zugangsdaten gültig")).not.toBeInTheDocument();
   });
 });
 
@@ -608,7 +588,7 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
     renderForm();
 
-    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    await settleOllamaProbe();
     expect(
       screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
     ).not.toBeInTheDocument();
@@ -622,7 +602,7 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
     renderForm();
 
-    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    await settleOllamaProbe();
     expect(
       screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
     ).not.toBeInTheDocument();
@@ -692,7 +672,7 @@ describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/2
     // Spec 0071 merge: `commandErrorMessage` extrahiert jetzt `.message`
     // statt eines rohen `String(err)` — ein natives `Error`-Objekt liefert
     // hier "boom", nicht mehr "Error: boom" (s. Mock oben).
-    await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
+    expect(await screen.findByText("boom")).toBeInTheDocument();
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
 
@@ -777,7 +757,7 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
     fireEvent.click(toggle);
 
     await waitFor(() => expect(toggle).not.toBeChecked());
-    const { saveRedRiskAlwaysConfirm } = await import("../riskSettings");
+    const { saveRedRiskAlwaysConfirm } = await import("../settings/riskSettings");
     expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(false);
   });
 });
@@ -938,9 +918,9 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
 
-    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
     // Rest des Erfolgspfads unverändert: Liste neu geladen.
     expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(addAiProvider).toHaveBeenCalledTimes(1);
     expect(listAiProviders).toHaveBeenCalledTimes(2);
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
@@ -956,8 +936,8 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
 
-    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(addAiProvider).toHaveBeenCalledTimes(1);
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
 });
@@ -1181,7 +1161,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/Zugangsdaten abgelehnt/);
-    expect(alert.className).toMatch(/text-red-400/);
+    expect(alert.className).toMatch(/text-danger-fg/);
     expect(
       screen.queryByText(/Modelle konnten nicht automatisch geladen werden/),
     ).not.toBeInTheDocument();
@@ -1517,5 +1497,52 @@ describe("AiProviderSettings edit saved provider (issue #690)", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(updateAiProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe("AiProviderSettings provider grid and risk switches (issue #1377)", () => {
+  it("shows type and base URL, the model and an active badge; the active row is highlighted", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      ollamaProvider({ isActive: true }),
+      ollamaProvider({ id: "b", displayName: "Other", baseUrl: null, model: "m2" }),
+    ]);
+    renderForm();
+    const row = (await screen.findByText("Ollama (lokal)")).closest("li")!;
+    expect(row.dataset.active).toBe("true");
+    expect(row.className).toMatch(/bg-accent-subtle/);
+    expect(within(row).getByText(/http:\/\/127\.0\.0\.1:11434\/v1/)).toBeTruthy();
+    expect(within(row).getByText("llama3").className).toMatch(/font-mono/);
+    expect(within(row).getByText("aktiv")).toBeTruthy();
+    const other = screen.getByText("Other").closest("li")!;
+    expect(other.dataset.active).toBeUndefined();
+  });
+
+  it("renders both risk options as labelled checkboxes in a single card that toggle", async () => {
+    // Non-default stored values, so the assertions below only hold after the load.
+    const risk = await import("../settings/riskSettings");
+    vi.mocked(risk.loadRiskClassifierSettings).mockResolvedValueOnce({ enabled: true, providerId: null });
+    vi.mocked(risk.loadRedRiskAlwaysConfirm).mockResolvedValueOnce(false);
+    renderForm();
+    const redRisk = await screen.findByRole("checkbox", {
+      name: testI18n.t("aiProvider.redRiskAlwaysConfirmEnable"),
+    });
+    const second = screen.getByRole("checkbox", {
+      name: testI18n.t("aiProvider.riskClassifierEnable"),
+    });
+    // Wait for the settings load before asserting or toggling.
+    await waitFor(() => expect((redRisk as HTMLInputElement).checked).toBe(false));
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
+    expect(redRisk.closest("section")).toBe(second.closest("section"));
+    const { saveRiskClassifierSettings, saveRedRiskAlwaysConfirm } = await import(
+      "../settings/riskSettings"
+    );
+    fireEvent.click(second);
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(false));
+    expect(saveRiskClassifierSettings).toHaveBeenCalledWith({
+      enabled: false,
+      providerId: null,
+    });
+    fireEvent.click(redRisk);
+    await waitFor(() => expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(true));
   });
 });

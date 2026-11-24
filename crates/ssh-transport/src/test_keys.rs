@@ -17,7 +17,10 @@ use russh::keys::{Algorithm, PrivateKey};
 /// Ein gültiger, **unverschlüsselter** OpenSSH-Privatschlüssel als Text —
 /// genau die Form, die in einer Schlüsseldatei steht.
 pub fn unencrypted_private_key() -> String {
-    generate().to_openssh(LineEnding::LF).unwrap().to_string()
+    generate()
+        .to_openssh(LineEnding::LF)
+        .expect("test key serialises")
+        .to_string()
 }
 
 /// Derselbe Schlüssel, aber **passphrase-geschützt**. Für A-5: Ein
@@ -27,7 +30,7 @@ pub fn encrypted_private_key(passphrase: &str) -> String {
         .encrypt(&mut rand::rng(), passphrase.as_bytes())
         .expect("Testschlüssel lässt sich verschlüsseln")
         .to_openssh(LineEnding::LF)
-        .unwrap()
+        .expect("test key serialises")
         .to_string()
 }
 

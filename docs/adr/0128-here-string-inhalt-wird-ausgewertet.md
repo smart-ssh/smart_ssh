@@ -1,6 +1,9 @@
 # ADR 0128 — Filter-Engine: Here-String-Inhalt einer Shell wird ausgewertet
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #53, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036, ADR 0107 (Entscheidung 7)
 
 ## Problem

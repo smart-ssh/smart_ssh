@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Smart SSH">
+  <path d="M48 14H16v18h32v18H16" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M42 8h12v12H42z M10 44h12v12H10z" fill="#2cc6e8"/>
+</svg>

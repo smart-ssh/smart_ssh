@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNarrowSlot } from "../lib/narrowSlot";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, reconnectSession, stopAutoReconnect } from "../api";
-import { translateErrorCode } from "../errorCodes";
-import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
-import type { McpSessionInfo } from "../types";
-import { sessionTabLabel } from "../useSessionTabs";
-import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
-import { useDragResize } from "../useDragResize";
+import { getServer, listGroups, reconnectSession, stopAutoReconnect } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { onAutoReconnectChanged, onConnectionStatusChanged } from "../api/events";
+import type { McpSessionInfo } from "../api/types";
+import { sessionTabLabel } from "../hooks/useSessionTabs";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../settings/layoutSettings";
+import { useDragResize } from "../hooks/useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button, Tabs, useTabsIdBase, type TabItem } from "./ui";
+import { Badge, Button, Menu, MenuItem, StatusSquare, Tabs, useTabsIdBase, type StatusTone, type TabItem, Icon, type IconName } from "./ui";
 import { panelId, tabId } from "./ui/Tabs";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView, type TerminalLink } from "./TerminalView";
@@ -22,7 +24,7 @@ import { TerminalView, type TerminalLink } from "./TerminalView";
 const LEFT_PANEL_MIN_WIDTH = 360;
 const RIGHT_PANEL_MIN_WIDTH = 300;
 const RIGHT_PANEL_DEFAULT_WIDTH = 420;
-const SPLIT_HANDLE_WIDTH = 6;
+const SPLIT_HANDLE_WIDTH = 5;
 
 /** Fenster zu schmal, um beide Mindestbreiten gleichzeitig unterzubringen. */
 function windowTooSmallForBothPanels(containerWidth: number): boolean {
@@ -139,14 +141,46 @@ export function SessionView({
   const [narrowTab, setNarrowTab] = useState<NarrowTab>("ai");
   const paneTabsBase = useTabsIdBase();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Issue #1387, Spec 0113 §4: in the narrow layout the ⋯ button and its menu
+  // live in the title bar (slot of `NarrowHeaderNav`) of the active session.
+  const { slot: titleBarSlot } = useNarrowSlot();
+  const narrowSlot = narrow && isActiveTab ? titleBarSlot : null;
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  // Issue #1366: server details for the header line. Loaded once per mount
+  // without blocking the panes; a failure just leaves the line out.
+  const [serverInfo, setServerInfo] = useState<{
+    line: string;
+    isLocal: boolean;
+    group: string | null;
+  } | null>(null);
   useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+    if (mcp) return;
+    let cancelled = false;
+    getServer(serverId)
+      .then(async (server) => {
+        let group: string | null = null;
+        if (server.groupId !== null) {
+          try {
+            group = (await listGroups()).find((g) => g.id === server.groupId)?.name ?? null;
+          } catch (err) {
+            console.warn("list_groups failed:", err);
+          }
+        }
+        if (!cancelled) {
+          setServerInfo({
+            line: server.isLocal
+              ? `${server.username} · ${t("session.thisDevice")}`
+              : `${server.username}@${server.host}:${server.port}`,
+            isLocal: server.isLocal,
+            group,
+          });
+        }
+      })
+      .catch((err) => console.warn("get_server failed:", err));
+    return () => {
+      cancelled = true;
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  }, [serverId, mcp, t]);
   const [filesElevatedUser, setFilesElevatedUser] = useState<string | null>(null);
 
   // Spec 0053, Teil 2: `preferredRightWidth` ist die vom Nutzer gewählte
@@ -266,9 +300,7 @@ export function SessionView({
   }, [sessionId]);
 
   const handleStopAutoReconnect = useCallback(() => {
-    stopAutoReconnect(sessionId).catch((err) =>
-      setReconnectError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))),
-    );
+    stopAutoReconnect(sessionId).catch((err) => setReconnectError(commandErrorText(t, err)));
   }, [sessionId, t]);
 
   // Issue #355: Knopf und Taste R lösen denselben Pfad aus; `reconnectBusy`
@@ -285,9 +317,7 @@ export function SessionView({
         setLink("live");
       })
       .catch((err) => {
-        setReconnectError(
-          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
-        );
+        setReconnectError(commandErrorText(t, err));
         setLink("lost");
       })
       .finally(() => {
@@ -301,10 +331,10 @@ export function SessionView({
   // Chat-Eingabe (dito `send_chat_message`).
   if (mcp) {
     return (
-      <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-        <header className="flex items-center justify-between gap-3 border-b border-fuchsia-900/60 px-4 py-2">
+      <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
+        <header className="flex items-center justify-between gap-3 border-b border-local-border/60 px-4 py-2">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="shrink-0 border border-fuchsia-500/60 px-1.5 text-xs text-fuchsia-300">
+            <span className="shrink-0 border border-local/60 px-1.5 text-xs text-local-fg">
               {t("sessionTabs.mcp.badge")}
             </span>
             <span
@@ -313,7 +343,7 @@ export function SessionView({
             >
               {sessionTabLabel({ serverName, mcp }, t("sessionTabs.mcp.unnamedClient"))}
             </span>
-            {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+            {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
           </div>
           <Button onClick={onRequestClose} className="shrink-0">
             {t("session.disconnect")}
@@ -337,19 +367,29 @@ export function SessionView({
     // Keep the wide right-panel choice in step with the last Terminal/Files tab.
     if (tab !== "ai") setRightPanelView(tab);
   };
+  const elevatedMarker = filesElevatedUser && (
+    <Icon name="warn" className="ml-1 inline align-text-bottom text-warning-fg" />
+  );
+  const paneLabel = (icon: IconName, text: string, extra?: ReactNode) => (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon name={icon} />
+      {text}
+      {extra}
+    </span>
+  );
   const narrowTabs: TabItem[] = [
-    { id: "ai", label: t("session.aiTab") },
-    { id: "terminal", label: t("session.terminalTab") },
-    {
-      id: "files",
-      label: (
-        <>
-          {t("session.filesTab")}
-          {filesElevatedUser && <span className="ml-1 text-amber-400">⚠</span>}
-        </>
-      ),
-    },
+    { id: "ai", label: paneLabel("spark", t("session.aiTab")) },
+    { id: "terminal", label: paneLabel("terminal", t("session.terminalTab")) },
+    { id: "files", label: paneLabel("folder", t("session.filesTab"), elevatedMarker) },
   ];
+  const statusTone: StatusTone =
+    link === "reconnecting" || autoAttempt !== null
+      ? "warning"
+      : link === "lost"
+        ? "danger"
+        : serverInfo?.isLocal
+          ? "local"
+          : "success";
   const showTerminal = narrow ? narrowTab === "terminal" : rightPanelView === "terminal";
   const showFiles = narrow ? narrowTab === "files" : rightPanelView === "files";
   const panelAria = (id: NarrowTab) =>
@@ -358,90 +398,164 @@ export function SessionView({
       : {};
 
   const showReconnect = link !== "live" && autoAttempt === null;
-  const reconnectButton = (
-    <Button
-      variant="secondary"
-      size="sm"
-      onClick={() => {
-        setMenuOpen(false);
-        handleReconnect();
-      }}
-      disabled={link === "reconnecting"}
-      className={narrow ? "min-h-11 w-full" : "shrink-0"}
-    >
-      {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
-    </Button>
+  const segmentClass = (active: boolean) =>
+    `label-condensed inline-flex h-7 items-center gap-1.5 px-2.5 text-xs focus-ring-flush ${
+      active ? "bg-surface-raised text-fg-strong" : "text-fg-subtle hover:text-fg-bright"
+    }`;
+
+  const moreButton = (
+          <Button
+            ref={moreButtonRef}
+            variant="secondary"
+            iconOnly
+            onClick={(e) => {
+              // The menu closes on a click outside it; this click is not one.
+              e.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={t("session.moreActions")}
+            className="shrink-0"
+          >
+            <Icon name="more" />
+          </Button>
+  );
+  const moreMenu = (
+    <>
+        {menuOpen && (
+          <Menu
+            label={t("session.moreActions")}
+            anchor={() => moreButtonRef.current}
+            align="end"
+            narrow={narrow}
+            onClose={() => setMenuOpen(false)}
+            returnFocusTo={() => moreButtonRef.current}
+            className="z-30 w-48"
+          >
+            {showReconnect && (
+              <MenuItem narrow={narrow} onClick={handleReconnect} disabled={link === "reconnecting"}>
+                {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+              </MenuItem>
+            )}
+            <MenuItem narrow={narrow} danger onClick={onRequestClose}>
+              {t("session.disconnect")}
+            </MenuItem>
+          </Menu>
+        )}
+    </>
   );
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-      <header className="relative flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <span title={serverName} className="font-heading min-w-0 truncate font-semibold tracking-wide">
+    <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
+      {narrowSlot ? (
+        createPortal(
+          <>
+            <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
+            {moreButton}
+            {moreMenu}
+          </>,
+          narrowSlot,
+        )
+      ) : narrow ? null : (
+      <header className="relative flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+        <div className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
+          <span className="flex shrink-0"><StatusSquare tone={statusTone} /></span>
+          <span title={serverName} className="font-heading text-title min-w-[6ch] shrink truncate font-semibold tracking-wide">
             {serverName}
           </span>
-          {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+          {serverInfo && !narrow && (
+            <span title={serverInfo.line} className="min-w-0 truncate font-mono text-xs text-fg-faint">{serverInfo.line}</span>
+          )}
+          {serverInfo?.group && !narrow && <Badge>{serverInfo.group}</Badge>}
+          <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {!narrow && (
+            <fieldset aria-label={t("session.paneSwitch")} className="m-0 flex min-w-0 border border-border-strong p-0">
+              <span aria-current="true" className={segmentClass(true)}>
+                <Icon name="spark" />
+                {t("session.aiTab")}
+              </span>
+              <Button variant="bare"
+                type="button"
+                onClick={() => setRightPanelView("terminal")}
+                aria-pressed={rightPanelView === "terminal"}
+                className={segmentClass(rightPanelView === "terminal")}
+              >
+                <Icon name="terminal" />
+                {t("session.terminalTab")}
+              </Button>
+              <Button variant="bare"
+                type="button"
+                onClick={() => setRightPanelView("files")}
+                aria-pressed={rightPanelView === "files"}
+                className={segmentClass(rightPanelView === "files")}
+              >
+                <Icon name="folder" />
+                {t("session.filesTab")}
+                {filesElevatedUser && (
+                  // Spec 0067, A5: elevated mode stays visible while the
+                  // Files view is hidden.
+                  <span className="normal-case tracking-normal text-warning-fg">
+                    <Icon name="warn" className="mr-1 inline align-text-bottom" /> {filesElevatedUser}
+                  </span>
+                )}
+              </Button>
+            </fieldset>
+          )}
+          {!narrow && (
+            <Button variant="danger" onClick={onRequestClose} className="shrink-0">
+              {t("session.disconnect")}
+            </Button>
+          )}
+          {moreButton}
+        </div>
+        {moreMenu}
+      </header>
+      )}
+      {(statusNote || link === "reconnecting" || autoAttempt !== null || gaveUp) && (
+        <div data-testid="session-status-strip" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-1">
+          {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
+          {link === "reconnecting" && autoAttempt === null && (
+            <output className="font-mono text-xs text-warning-fg-soft">{t("session.reconnecting")}</output>
+          )}
           {autoAttempt !== null && (
             <>
-              <output className="font-mono text-xs text-amber-300">
+              <output className="font-mono text-xs text-warning-fg-soft">
                 {t("session.reconnectingAuto", { attempt: autoAttempt })}
               </output>
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={handleStopAutoReconnect}
-                className={`shrink-0 text-xs text-indigo-300 underline hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${narrow ? "min-h-11 px-2" : ""}`}
+                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush ${narrow ? "min-h-11 px-2" : ""}`}
               >
                 {t("session.stopReconnect")}
-              </button>
+              </Button>
             </>
           )}
           {gaveUp && autoAttempt === null && (
-            <output className="font-mono text-xs text-amber-300">
+            <output className="font-mono text-xs text-warning-fg-soft">
               {t("session.reconnectGaveUp")}
             </output>
           )}
-          <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
-          {!narrow && showReconnect && reconnectButton}
-          {reconnectError && (
-            <span role="alert" className="font-mono text-xs text-red-300">
-              {reconnectError}
-            </span>
+          {narrow && showReconnect && (
+            <Button variant="bare"
+              type="button"
+              onClick={handleReconnect}
+              disabled={link === "reconnecting"}
+              className="min-h-11 min-w-11 shrink-0 px-2 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-ring-flush"
+            >
+              {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+            </Button>
           )}
         </div>
-        {narrow ? (
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-expanded={menuOpen}
-              aria-label={t("session.moreActions")}
-              className="min-h-11 min-w-11 shrink-0"
-            >
-              ⋯
-            </Button>
-            {menuOpen && (
-              <div
-                className="absolute right-2 top-full z-20 flex w-48 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg"
-              >
-                {showReconnect && reconnectButton}
-                <Button
-                  className="min-h-11 w-full"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onRequestClose();
-                  }}
-                >
-                  {t("session.disconnect")}
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <Button onClick={onRequestClose} className="shrink-0">
-            {t("session.disconnect")}
-          </Button>
-        )}
-      </header>
+      )}
+      {reconnectError && (
+        <div role="alert" className="shrink-0 border-b border-border px-4 py-1 font-mono text-xs text-danger-fg-soft break-words">
+          {reconnectError}
+        </div>
+      )}
       {narrow && (
         <Tabs
           tabs={narrowTabs}
@@ -468,10 +582,10 @@ export function SessionView({
             role="separator"
             aria-orientation="vertical"
             aria-label={t("session.splitHandle")}
-            className="group relative w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-slate-800"
+            className="group relative w-[5px] shrink-0 cursor-col-resize touch-none select-none bg-surface-sunken"
             {...splitHandlers}
           >
-            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-700 group-hover:bg-indigo-500" />
+            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-accent-strong" />
           </span>
         )}
         <div
@@ -479,43 +593,12 @@ export function SessionView({
             narrow
               ? narrowTab === "ai"
                 ? "hidden"
-                : "flex min-h-0 min-w-0 flex-1 flex-col bg-slate-950"
-              : "flex shrink-0 flex-col bg-slate-950"
+                : "flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken"
+              : "flex shrink-0 flex-col bg-surface-sunken"
           }
           style={narrow ? undefined : { width: effectiveRightWidth }}
         >
-          {!narrow && (
-            <div className="flex h-8 shrink-0 items-center gap-3 border-b border-slate-800 px-3">
-              <button
-                type="button"
-                onClick={() => setRightPanelView("terminal")}
-                aria-pressed={rightPanelView === "terminal"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {t("session.terminalTab")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setRightPanelView("files")}
-                aria-pressed={rightPanelView === "files"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  rightPanelView === "files" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {t("session.filesTab")}
-                {filesElevatedUser && (
-                  // Spec 0067, A5: erhöhter Modus bleibt auch bei verborgener
-                  // Dateien-Ansicht sichtbar.
-                  <span className="ml-1.5 normal-case tracking-normal text-amber-400">
-                    ⚠ {filesElevatedUser}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
-          <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1 p-2" : "hidden"}>
+          <div {...panelAria("terminal")} className={showTerminal ? "min-h-0 flex-1" : "hidden"}>
             <TerminalView
               sessionId={sessionId}
               link={autoAttempt !== null ? "reconnecting" : link}
@@ -525,6 +608,7 @@ export function SessionView({
           <div {...panelAria("files")} className={showFiles ? "min-h-0 flex-1" : "hidden"}>
             <FileBrowserPanel
               sessionId={sessionId}
+              serverId={serverId}
               isVisible={isActiveTab && showFiles}
               onElevationChange={setFilesElevatedUser}
             />

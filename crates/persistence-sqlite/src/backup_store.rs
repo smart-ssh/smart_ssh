@@ -72,7 +72,6 @@ fn is_false(b: &bool) -> bool {
 /// Row of `groups`. `is_copy` is an optional field (Spec 0109, F7): absent
 /// means `false`, and it is only written when set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct GroupRow {
     pub id: Uuid,
     pub name: String,
@@ -88,7 +87,6 @@ pub struct GroupRow {
 /// a key file is exported as the path the record holds). `is_copy` as for
 /// [`GroupRow`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ServerRow {
     pub id: Uuid,
     pub name: String,
@@ -107,6 +105,13 @@ pub struct ServerRow {
     pub start_directory: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub is_copy: bool,
+    /// Backups made before issue #1194 lack the field: restore as allowed.
+    #[serde(default = "default_true")]
+    pub elevation_allowed: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 rows! {
@@ -214,18 +219,14 @@ impl SqliteBackupStore {
 
     /// Writes (or replaces) the backup key blob.
     pub async fn store_backup_key(&self, blob: &SecretString) -> Result<(), BackupStoreError> {
-        sqlx::query(
-            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
-             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
-             updated_at = excluded.updated_at",
+        let mut conn = self.pool.acquire().await.map_err(|e| kind(&e))?;
+        upsert_secret(
+            &mut conn,
+            BACKUP_KEY_REF,
+            blob.expose_secret(),
+            &chrono::Utc::now().to_rfc3339(),
         )
-        .bind(BACKUP_KEY_REF)
-        .bind(blob.expose_secret())
-        .bind(chrono::Utc::now().to_rfc3339())
-        .execute(&self.pool)
         .await
-        .map_err(|e| kind(&e))?;
-        Ok(())
     }
 
     /// Reads every C1 table in **one** read transaction (X2).
@@ -250,6 +251,7 @@ impl SqliteBackupStore {
 }
 
 /// The snapshot read, on an open transaction's connection.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn read_in<F, Fut>(
     conn: &mut sqlx::SqliteConnection,
     between: &mut F,
@@ -306,6 +308,7 @@ where
                 sftp_server_path: r.get("sftp_server_path"),
                 start_directory: r.get("start_directory"),
                 is_copy: r.get("is_copy"),
+                elevation_allowed: r.get("elevation_allowed"),
             });
         }
         between("servers").await;
@@ -548,17 +551,13 @@ impl SqliteBackupStore {
         insert_owned_rows(&mut *conn, &moved).await?;
         insert_all(&mut *conn, &plan.data).await?;
 
-        sqlx::query(
-            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
-             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
-             updated_at = excluded.updated_at",
+        upsert_secret(
+            &mut *conn,
+            PENDING_HOST_KEYS_REF,
+            &plan.pending_host_keys,
+            &plan.now,
         )
-        .bind(PENDING_HOST_KEYS_REF)
-        .bind(&plan.pending_host_keys)
-        .bind(&plan.now)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        .await?;
         if abort_after("replace") {
             return Err(BackupStoreError::Database("aborted"));
         }
@@ -613,17 +612,7 @@ impl SqliteBackupStore {
         }
         delete_difference(&mut *conn, &current, &target).await?;
         if let Some(json) = pending_host_keys {
-            sqlx::query(
-                "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
-                 ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
-                 updated_at = excluded.updated_at",
-            )
-            .bind(PENDING_HOST_KEYS_REF)
-            .bind(json)
-            .bind(now)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| kind(&e))?;
+            upsert_secret(&mut *conn, PENDING_HOST_KEYS_REF, &json, now).await?;
         }
         if abort_after("delete") {
             return Err(BackupStoreError::Database("aborted").into());
@@ -654,52 +643,15 @@ async fn write_difference(
             .collect()
     }
     for g in changed(&current.groups, &target.groups, |g| g.id) {
-        sqlx::query(
-            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
-             parent_id = excluded.parent_id, notes = excluded.notes, \
-             created_at = excluded.created_at, updated_at = excluded.updated_at",
-        )
-        .bind(g.id.to_string())
-        .bind(&g.name)
-        .bind(g.parent_id.map(|p| p.to_string()))
-        .bind(&g.notes)
-        .bind(&g.created_at)
-        .bind(&g.updated_at)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_group(conn, g, true).await?;
     }
     for s in changed(&current.servers, &target.servers, |s| s.id) {
-        sqlx::query(
-            "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, host = excluded.host, \
-             port = excluded.port, username = excluded.username, group_id = excluded.group_id, \
-             auth_method = excluded.auth_method, notes = excluded.notes, \
-             jump_host_id = excluded.jump_host_id, created_at = excluded.created_at, \
-             updated_at = excluded.updated_at, post_ingest_policy = excluded.post_ingest_policy, \
-             ai_injection_check_enabled = excluded.ai_injection_check_enabled, \
-             sftp_server_path = excluded.sftp_server_path, \
-             start_directory = excluded.start_directory",
+        crate::server_columns::bind_all(
+            sqlx::query(sqlx::AssertSqlSafe(
+                crate::server_columns::UPSERT_ALL.as_str(),
+            )),
+            s,
         )
-        .bind(s.id.to_string())
-        .bind(&s.name)
-        .bind(&s.host)
-        .bind(i64::from(s.port))
-        .bind(&s.username)
-        .bind(s.group_id.map(|p| p.to_string()))
-        .bind(&s.auth_method)
-        .bind(&s.notes)
-        .bind(s.jump_host_id.map(|p| p.to_string()))
-        .bind(&s.created_at)
-        .bind(&s.updated_at)
-        .bind(&s.post_ingest_policy)
-        .bind(s.ai_injection_check_enabled)
-        .bind(&s.sftp_server_path)
-        .bind(&s.start_directory)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
@@ -707,103 +659,19 @@ async fn write_difference(
     for t in changed(&current.tags, &target.tags, |t| {
         (t.server_id, t.tag.clone())
     }) {
-        sqlx::query("INSERT OR IGNORE INTO server_tags (server_id, tag) VALUES (?, ?)")
-            .bind(t.server_id.to_string())
-            .bind(&t.tag)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| kind(&e))?;
+        write_tag(conn, t, "INSERT OR IGNORE").await?;
     }
     for r in changed(&current.rules, &target.rules, |r| r.id) {
-        sqlx::query(
-            "INSERT INTO filter_rules (id, pattern_type, pattern_value, action, scope_type, \
-             scope_value, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET pattern_type = excluded.pattern_type, \
-             pattern_value = excluded.pattern_value, action = excluded.action, \
-             scope_type = excluded.scope_type, scope_value = excluded.scope_value, \
-             priority = excluded.priority, created_at = excluded.created_at, \
-             updated_at = excluded.updated_at",
-        )
-        .bind(r.id.to_string())
-        .bind(&r.pattern_type)
-        .bind(&r.pattern_value)
-        .bind(&r.action)
-        .bind(&r.scope_type)
-        .bind(&r.scope_value)
-        .bind(r.priority)
-        .bind(&r.created_at)
-        .bind(&r.updated_at)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_rule(conn, r, true).await?;
     }
     for n in changed(&current.notes, &target.notes, |n| n.id) {
-        sqlx::query(
-            "INSERT INTO note_revisions (id, target_type, target_id, content, editor_type, \
-             ai_provider, ai_model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET target_type = excluded.target_type, \
-             target_id = excluded.target_id, content = excluded.content, \
-             editor_type = excluded.editor_type, ai_provider = excluded.ai_provider, \
-             ai_model = excluded.ai_model, created_at = excluded.created_at",
-        )
-        .bind(n.id.to_string())
-        .bind(&n.target_type)
-        .bind(n.target_id.to_string())
-        .bind(&n.content)
-        .bind(&n.editor_type)
-        .bind(&n.ai_provider)
-        .bind(&n.ai_model)
-        .bind(&n.created_at)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_note(conn, n, true).await?;
     }
     for a in changed(&current.ai_providers, &target.ai_providers, |a| a.id) {
-        sqlx::query(
-            "INSERT INTO ai_provider_configs (id, provider_type, display_name, base_url, model, \
-             supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
-             extra_headers, attestation_url, max_tokens_override, web_research_enabled) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET provider_type = excluded.provider_type, \
-             display_name = excluded.display_name, base_url = excluded.base_url, \
-             model = excluded.model, \
-             supports_native_tool_calling = excluded.supports_native_tool_calling, \
-             credential_ref = excluded.credential_ref, is_active = excluded.is_active, \
-             created_at = excluded.created_at, updated_at = excluded.updated_at, \
-             extra_headers = excluded.extra_headers, attestation_url = excluded.attestation_url, \
-             max_tokens_override = excluded.max_tokens_override, \
-             web_research_enabled = excluded.web_research_enabled",
-        )
-        .bind(a.id.to_string())
-        .bind(&a.provider_type)
-        .bind(&a.display_name)
-        .bind(&a.base_url)
-        .bind(&a.model)
-        .bind(a.supports_native_tool_calling)
-        .bind(&a.credential_ref)
-        .bind(a.is_active)
-        .bind(&a.created_at)
-        .bind(&a.updated_at)
-        .bind(&a.extra_headers)
-        .bind(&a.attestation_url)
-        .bind(a.max_tokens_override)
-        .bind(a.web_research_enabled)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_ai_provider(conn, a, true).await?;
     }
     for s in changed(&current.secrets, &target.secrets, |s| s.owner_ref.clone()) {
-        sqlx::query(
-            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
-             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
-             updated_at = excluded.updated_at",
-        )
-        .bind(&s.owner_ref)
-        .bind(&s.value)
-        .bind(now)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        upsert_secret(conn, &s.owner_ref, &s.value, now).await?;
     }
     Ok(())
 }
@@ -1125,11 +993,9 @@ async fn archive(
     insert_all(&mut *conn, &head).await?;
     // History follows its server to the copy.
     for (old, new) in &server_map {
-        for sql in [
-            "UPDATE chat_sessions SET server_id = ? WHERE server_id = ?",
-            "UPDATE prompt_history SET server_id = ? WHERE server_id = ?",
-        ] {
-            sqlx::query(sql)
+        for table in ["chat_sessions", "prompt_history"] {
+            let sql = format!("UPDATE {table} SET server_id = ? WHERE server_id = ?");
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(new.to_string())
                 .bind(old.to_string())
                 .execute(&mut *conn)
@@ -1183,33 +1049,63 @@ async fn archive(
     })
 }
 
-/// Notes, rules and secrets (the rows that need no ordering).
-async fn insert_owned_rows(
-    conn: &mut sqlx::SqliteConnection,
-    d: &DatabaseSnapshot,
-) -> Result<(), BackupStoreError> {
-    for n in &d.notes {
-        sqlx::query(
-            "INSERT INTO note_revisions (id, target_type, target_id, content, editor_type, \
-             ai_provider, ai_model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(n.id.to_string())
-        .bind(&n.target_type)
-        .bind(n.target_id.to_string())
-        .bind(&n.content)
-        .bind(&n.editor_type)
-        .bind(&n.ai_provider)
-        .bind(&n.ai_model)
-        .bind(&n.created_at)
+type Conn = sqlx::SqliteConnection;
+type Res = Result<(), BackupStoreError>;
+/// One writer per table: plain `INSERT` (a conflict fails) or, with `upsert`,
+/// `ON CONFLICT(<first col>) DO UPDATE SET c = excluded.c, …` on every other column.
+fn insert_sql(table: &str, cols: &str, upsert: bool) -> sqlx::AssertSqlSafe<String> {
+    let cols: Vec<&str> = cols.split(", ").collect();
+    let marks = vec!["?"; cols.len()].join(", ");
+    let mut sql = format!("INSERT INTO {table} ({}) VALUES ({marks})", cols.join(", "));
+    if upsert {
+        let set = cols[1..]
+            .iter()
+            .map(|c| format!("{c} = excluded.{c}"))
+            .collect::<Vec<_>>();
+        sql += &format!(" ON CONFLICT({}) DO UPDATE SET {}", cols[0], set.join(", "));
+    }
+    sqlx::AssertSqlSafe(sql)
+}
+
+const GROUP_COLS: &str = "id, name, parent_id, notes, created_at, updated_at, is_copy";
+const RULE_COLS: &str = "id, pattern_type, pattern_value, action, scope_type, scope_value, \
+     priority, created_at, updated_at";
+const NOTE_COLS: &str = "id, target_type, target_id, content, editor_type, ai_provider, \
+     ai_model, created_at";
+
+mod ai_provider_writer;
+use ai_provider_writer::write_ai_provider;
+
+async fn write_group(conn: &mut Conn, g: &GroupRow, upsert: bool) -> Res {
+    sqlx::query(insert_sql("groups", GROUP_COLS, upsert))
+        .bind(g.id.to_string())
+        .bind(&g.name)
+        .bind(g.parent_id.map(|p| p.to_string()))
+        .bind(&g.notes)
+        .bind(&g.created_at)
+        .bind(&g.updated_at)
+        .bind(g.is_copy)
         .execute(&mut *conn)
         .await
-        .map_err(|e| kind(&e))?;
-    }
-    for r in &d.rules {
-        sqlx::query(
-            "INSERT INTO filter_rules (id, pattern_type, pattern_value, action, scope_type, \
-             scope_value, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
+        .map(drop)
+        .map_err(|e| kind(&e))
+}
+
+/// `verb` is `INSERT` (conflict fails) or `INSERT OR IGNORE`.
+async fn write_tag(conn: &mut Conn, t: &TagRow, verb: &str) -> Res {
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "{verb} INTO server_tags (server_id, tag) VALUES (?, ?)"
+    )))
+    .bind(t.server_id.to_string())
+    .bind(&t.tag)
+    .execute(&mut *conn)
+    .await
+    .map(drop)
+    .map_err(|e| kind(&e))
+}
+
+async fn write_rule(conn: &mut Conn, r: &RuleRow, upsert: bool) -> Res {
+    sqlx::query(insert_sql("filter_rules", RULE_COLS, upsert))
         .bind(r.id.to_string())
         .bind(&r.pattern_type)
         .bind(&r.pattern_value)
@@ -1221,20 +1117,61 @@ async fn insert_owned_rows(
         .bind(&r.updated_at)
         .execute(&mut *conn)
         .await
-        .map_err(|e| kind(&e))?;
-    }
-    for s in &d.secrets {
-        sqlx::query(
-            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
-             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
-             updated_at = excluded.updated_at",
-        )
-        .bind(&s.owner_ref)
-        .bind(&s.value)
-        .bind(chrono::Utc::now().to_rfc3339())
+        .map(drop)
+        .map_err(|e| kind(&e))
+}
+
+async fn write_note(conn: &mut Conn, n: &NoteRevisionRow, upsert: bool) -> Res {
+    sqlx::query(insert_sql("note_revisions", NOTE_COLS, upsert))
+        .bind(n.id.to_string())
+        .bind(&n.target_type)
+        .bind(n.target_id.to_string())
+        .bind(&n.content)
+        .bind(&n.editor_type)
+        .bind(&n.ai_provider)
+        .bind(&n.ai_model)
+        .bind(&n.created_at)
         .execute(&mut *conn)
         .await
-        .map_err(|e| kind(&e))?;
+        .map(drop)
+        .map_err(|e| kind(&e))
+}
+
+/// Secrets are always upserted (restore overwrites a stored value).
+async fn upsert_secret(conn: &mut Conn, key: &str, value: &str, updated_at: &str) -> Res {
+    sqlx::query(
+        "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
+         ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
+         updated_at = excluded.updated_at",
+    )
+    .bind(key)
+    .bind(value)
+    .bind(updated_at)
+    .execute(&mut *conn)
+    .await
+    .map(drop)
+    .map_err(|e| kind(&e))
+}
+
+/// Notes, rules and secrets (the rows that need no ordering).
+async fn insert_owned_rows(
+    conn: &mut sqlx::SqliteConnection,
+    d: &DatabaseSnapshot,
+) -> Result<(), BackupStoreError> {
+    for n in &d.notes {
+        write_note(conn, n, false).await?;
+    }
+    for r in &d.rules {
+        write_rule(conn, r, false).await?;
+    }
+    for s in &d.secrets {
+        upsert_secret(
+            conn,
+            &s.owner_ref,
+            &s.value,
+            &chrono::Utc::now().to_rfc3339(),
+        )
+        .await?;
     }
     Ok(())
 }
@@ -1244,81 +1181,27 @@ async fn insert_all(
     d: &DatabaseSnapshot,
 ) -> Result<(), BackupStoreError> {
     for g in &d.groups {
-        sqlx::query(
-            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at, is_copy) \
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(g.id.to_string())
-        .bind(&g.name)
-        .bind(g.parent_id.map(|p| p.to_string()))
-        .bind(&g.notes)
-        .bind(&g.created_at)
-        .bind(&g.updated_at)
-        .bind(g.is_copy)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_group(conn, g, false).await?;
     }
     for s in &d.servers {
-        sqlx::query(
-            "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
-             jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory, is_copy) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        crate::server_columns::bind_all(
+            sqlx::query(sqlx::AssertSqlSafe(
+                crate::server_columns::INSERT_ALL.as_str(),
+            )),
+            s,
         )
-        .bind(s.id.to_string())
-        .bind(&s.name)
-        .bind(&s.host)
-        .bind(i64::from(s.port))
-        .bind(&s.username)
-        .bind(s.group_id.map(|p| p.to_string()))
-        .bind(&s.auth_method)
-        .bind(&s.notes)
-        .bind(s.jump_host_id.map(|p| p.to_string()))
-        .bind(&s.created_at)
-        .bind(&s.updated_at)
-        .bind(&s.post_ingest_policy)
-        .bind(s.ai_injection_check_enabled)
-        .bind(&s.sftp_server_path)
-        .bind(&s.start_directory)
-        .bind(s.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
     }
     for t in &d.tags {
-        sqlx::query("INSERT INTO server_tags (server_id, tag) VALUES (?, ?)")
-            .bind(t.server_id.to_string())
-            .bind(&t.tag)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| kind(&e))?;
+        write_tag(conn, t, "INSERT").await?;
     }
     insert_owned_rows(&mut *conn, d).await?;
     for a in &d.ai_providers {
-        sqlx::query(
-            "INSERT INTO ai_provider_configs (id, provider_type, display_name, base_url, model, \
-             supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
-             extra_headers, attestation_url, max_tokens_override, web_research_enabled) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(a.id.to_string())
-        .bind(&a.provider_type)
-        .bind(&a.display_name)
-        .bind(&a.base_url)
-        .bind(&a.model)
-        .bind(a.supports_native_tool_calling)
-        .bind(&a.credential_ref)
-        .bind(a.is_active)
-        .bind(&a.created_at)
-        .bind(&a.updated_at)
-        .bind(&a.extra_headers)
-        .bind(&a.attestation_url)
-        .bind(a.max_tokens_override)
-        .bind(a.web_research_enabled)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| kind(&e))?;
+        write_ai_provider(conn, a, false).await?;
     }
     Ok(())
 }
+#[cfg(test)]
+mod tests_insert_sql;

@@ -10,7 +10,7 @@ use app_logic::dto::{
     DeleteServerResult, DeleteUnusableServerResult, ServerDto, ServerInput, TestConnectionReport,
     UnusableServerDto,
 };
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandError, CommandResult};
 use app_logic::server_credentials::clear_sudo_password;
 use app_logic::servers::reject_local_jump_host;
 use app_logic::state::AppState;
@@ -63,15 +63,18 @@ async fn list_servers_impl<R: tauri::Runtime>(
     // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer das erste
     // Element, unabhängig von `group_id` — er gehört nie einer Gruppe an,
     // ein Gruppenfilter kann ihn also nie sinnvoll ausschließen.
-    let local = ServerDto::from_server(
-        &crate::local_server::synthetic_server(app),
-        credential_store,
-    );
+    // Android (Spec 0114): no local shell; the entry is not offered there.
+    let local = crate::local_server::offered().then(|| {
+        ServerDto::from_server(
+            &crate::local_server::synthetic_server(app),
+            credential_store,
+        )
+    });
     let rest = servers
         .iter()
         .filter(|s| group_id.is_none() || s.group_id == group_id)
         .map(|s| ServerDto::from_server(s, credential_store));
-    Ok(std::iter::once(local).chain(rest).collect())
+    Ok(local.into_iter().chain(rest).collect())
 }
 
 /// Spec 0058, Teil 2 (spec-reviewer-Fund, Review des Politur-Pakets):
@@ -141,17 +144,31 @@ pub async fn create_server(
 /// `app_logic::servers::update_server`, testbar ohne `tauri::State`.
 #[tauri::command]
 pub async fn update_server(
+    app: AppHandle,
     state: State<'_, AppState>,
+    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
     id: ServerId,
     input: ServerInput,
 ) -> CommandResult<()> {
+    let elevation_allowed = input.elevation_allowed;
     app_logic::servers::update_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         input,
     )
-    .await
+    .await?;
+    // Issue #1194: turning the setting off revokes an active elevated channel
+    // of every session to this server (after the profile is saved).
+    if !elevation_allowed {
+        let emitter = crate::event_emitter::TauriEventEmitter(app);
+        for session_id in
+            crate::elevated_sftp::revoke_for_server(&state.sessions, elevated.inner(), id)
+        {
+            app_logic::elevation_events::emit_elevation_revoked_by_profile(&emitter, session_id);
+        }
+    }
+    Ok(())
 }
 
 /// Issue #48: Drag-and-drop in der Server-Liste — ändert nur `group_id`
@@ -175,22 +192,35 @@ pub async fn move_server_to_group(
 /// dann DB-Zeile — nur eben erst nach Bestätigung.
 #[tauri::command]
 pub async fn delete_server(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: ServerId,
     confirm: bool,
 ) -> CommandResult<DeleteServerResult> {
     if app_logic::dto::is_local(id) {
         // Spec 0032, Abschnitt 3: existiert nicht als löschbare Zeile.
-        return Err("Der lokale Pseudo-Server kann nicht gelöscht werden".into());
+        return Err(CommandError::with_code(
+            "Der lokale Pseudo-Server kann nicht gelöscht werden",
+            "SERVER_LOCAL_NOT_DELETABLE",
+        ));
     }
-    app_logic::servers::delete_server(
+    let result = app_logic::servers::delete_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         confirm,
         state.session_extension.as_deref(),
     )
-    .await
+    .await?;
+    if result.executed {
+        // Issue #1195: drop the id from the "notice dismissed" list. The
+        // server is gone either way; a failed settings write must not turn
+        // the delete into an error, but it is not silent.
+        if let Err(err) = crate::ui_preferences::forget_deleted_server(&app, &id.0.to_string()) {
+            tracing::warn!(error = %err.message, "could not clear elevation notice preference");
+        }
+    }
+    Ok(result)
 }
 
 /// Issue #100: die gespeicherten Server, deren Anmeldeart diese Version
@@ -209,18 +239,25 @@ pub async fn list_unusable_servers(
 /// `app_logic::servers::delete_unusable_server`.
 #[tauri::command]
 pub async fn delete_unusable_server(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: ServerId,
     confirm: bool,
 ) -> CommandResult<DeleteUnusableServerResult> {
-    app_logic::servers::delete_unusable_server(
+    let result = app_logic::servers::delete_unusable_server(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         confirm,
         state.session_extension.as_deref(),
     )
-    .await
+    .await?;
+    if result.executed {
+        if let Err(err) = crate::ui_preferences::forget_deleted_server(&app, &id.0.to_string()) {
+            tracing::warn!(error = %err.message, "could not clear elevation notice preference");
+        }
+    }
+    Ok(result)
 }
 
 /// Spec 0018, Abschnitt 4: expliziter "Entfernen"-Weg — ein leeres
@@ -292,7 +329,10 @@ pub async fn test_connection(
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
         // lokalen Pseudo-Server (er hat gar keine Verbindung, die getestet
         // werden könnte).
-        return Err("Für den lokalen Pseudo-Server gibt es keinen Verbindungstest".into());
+        return Err(CommandError::with_code(
+            "Für den lokalen Pseudo-Server gibt es keinen Verbindungstest",
+            "SERVER_LOCAL_NO_CONNECTION_TEST",
+        ));
     }
     // Issue #633: live `connect-progress` events and `cancel_connect` for
     // this attempt id.

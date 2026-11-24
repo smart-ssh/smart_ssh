@@ -8,6 +8,7 @@
 //! Mock-Implementierungen testbar.
 
 mod auth;
+mod auth_prompt;
 pub mod connect_log;
 pub mod elevated;
 mod error;
@@ -16,6 +17,7 @@ pub mod input_prompt;
 mod jump_host;
 #[cfg(any(test, feature = "test-support"))]
 pub mod mock;
+mod task_spawner;
 mod transport;
 mod types;
 
@@ -26,19 +28,26 @@ pub use auth::{
     resolve_auth, KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader, ResolvedAuth,
     MAX_KEY_FILE_BYTES,
 };
+pub use auth_prompt::{
+    sanitize_server_text, AuthPromptItem, AuthPromptKind, AuthPromptRequest, AuthPrompter,
+    NoPrompter, PromptCancelled, AUTH_PROMPT_TIMEOUT, MAX_PROMPTS_PER_REQUEST,
+    MAX_PROMPT_TEXT_BYTES,
+};
 pub use connect_log::{
     AuthMethodKind, ConnectLog, ConnectStep, ConnectStepRecord, ConnectStepSnapshot,
-    HostKeyCheckResult, ProgressSink, StepDetail, StepId, StepStatus, HOST_KEY_CHANGED,
-    HOST_KEY_UNKNOWN,
+    ConnectWarning, HostKeyCheckResult, ProgressSink, PromptPause, StepDetail, StepId, StepStatus,
+    HOST_KEY_CHANGED, HOST_KEY_UNKNOWN, OUTDATED_ALGORITHMS_CODE, STRICT_KEX_MISSING,
 };
-pub use error::{HopLabel, SecretKind, SshError};
+pub use error::{AlgorithmKind, HopLabel, SecretKind, SshError};
 pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
+pub use task_spawner::{BoxedTask, TaskSpawner};
 pub use transport::{
     ChunkControl, ChunkSource, ConnectionLoss, ConnectionLossWatch, InteractiveShell, RunningExec,
-    SftpSession, SshTransport, TransferEnd,
+    SftpSession, SshTransport, SudoPromptError, TransferEnd,
 };
 pub use types::{
-    CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk, ExecOutputSink, Hop,
-    HostKeyDecision, OutputStream, PtySize, RemoteEntry,
+    exec_output_channel, CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk,
+    ExecOutputSink, Hop, HostKeyDecision, OutputStream, PtySize, RemoteEntry,
+    EXEC_OUTPUT_SINK_CAPACITY,
 };

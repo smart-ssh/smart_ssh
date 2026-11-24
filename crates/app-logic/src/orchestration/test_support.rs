@@ -5,6 +5,7 @@
 //! Verschiebung aus dem bisherigen `orchestration::tests`-Modulkopf, keine
 //! Verhaltensänderung.
 
+use ssh_manager_core::filter::PolicyRules;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -12,12 +13,11 @@ use async_trait::async_trait;
 use tokio::sync::Mutex as AsyncMutex;
 
 use ssh_manager_core::ai::{
-    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
+    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RedactedContext,
+    SessionContext,
 };
 use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
-use ssh_manager_core::profiles::{
-    AiAction, Group, GroupId, NoteRevision, ProfileResult, ProfileStore, Server,
-};
+use ssh_manager_core::profiles::{AiAction, ProfileStore, Server};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError};
 
@@ -25,7 +25,9 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::TestEmitter;
 use crate::policy::NoRulesPolicyStore;
-use crate::session::{Session, SessionParts};
+use crate::session::{
+    AiConfig, ChatPersistence, SafetyState, Session, SessionParts, TransportState,
+};
 use crate::state::ActionId;
 
 use super::action_exec::handle_action_proposed;
@@ -82,8 +84,9 @@ impl MockAiProvider {
 impl AiProvider for MockAiProvider {
     fn send(
         &self,
-        context: SessionContext,
+        context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+        let context = context.into_parts();
         self.received_contexts.lock().unwrap().push(context);
         let events = self
             .rounds
@@ -233,7 +236,7 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         if let Some(chunks) = self.streamed.get(command).cloned() {
             for chunk in chunks {
-                let _ = sink.send(chunk);
+                let _ = sink.send(chunk).await;
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
@@ -290,7 +293,7 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
         sink: ssh_manager_core::ssh::ExecOutputSink,
     ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
         for chunk in self.chunks {
-            let _ = sink.send(chunk);
+            let _ = sink.send(chunk).await;
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
         // Like a real transport, keep the live channel open until the
@@ -310,70 +313,7 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct InMemoryProfileStore {
-    pub(crate) note_revisions: StdMutex<Vec<NoteRevision>>,
-    /// Nur von den Spec-0040-Abschnitt-6-Tests ("In Notiz übernehmen")
-    /// befüllt, die einen tatsächlich auflösbaren `get_server`-Aufruf
-    /// brauchen, um einen bestehenden Notizinhalt vorzuspiegeln — alle
-    /// anderen Tests in diesem Modul lassen die Map leer und verlassen
-    /// sich weiterhin auf den bisherigen `ServerNotFound`-Fallback
-    /// unten.
-    pub(crate) servers: StdMutex<HashMap<ServerId, Server>>,
-}
-
-#[async_trait]
-impl ProfileStore for InMemoryProfileStore {
-    async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
-        self.servers.lock().unwrap().get(id).cloned().ok_or(
-            ssh_manager_core::profiles::ProfileError::ServerNotFound(*id),
-        )
-    }
-    async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
-        Err(ssh_manager_core::profiles::ProfileError::GroupNotFound(*id))
-    }
-    async fn list_servers(&self) -> ProfileResult<Vec<Server>> {
-        Ok(Vec::new())
-    }
-    async fn list_groups(&self) -> ProfileResult<Vec<Group>> {
-        Ok(Vec::new())
-    }
-    async fn create_group(&self, _group: &Group) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn update_group(&self, _group: &Group) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn delete_group(&self, _id: &GroupId) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn create_server(&self, _server: &Server) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn update_server(&self, _server: &Server) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn delete_server(&self, _id: &ServerId) -> ProfileResult<()> {
-        Ok(())
-    }
-    async fn record_note_revision(&self, revision: &NoteRevision) -> ProfileResult<()> {
-        self.note_revisions.lock().unwrap().push(revision.clone());
-        Ok(())
-    }
-    async fn list_note_revisions(
-        &self,
-        target: ssh_manager_core::profiles::NoteTarget,
-    ) -> ProfileResult<Vec<NoteRevision>> {
-        Ok(self
-            .note_revisions
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|r| r.target == target)
-            .cloned()
-            .collect())
-    }
-}
+pub(crate) use ssh_manager_core::testing::InMemoryProfileStore;
 
 pub(crate) fn test_session(ai_events: Vec<AiEvent>, transport: MockSshTransport) -> Session {
     session_with_ai_provider(MockAiProvider::new(ai_events), transport)
@@ -406,62 +346,73 @@ pub(crate) fn session_with_ai_provider(
 ) -> Session {
     Session::new(SessionParts {
         transport: crate::session::SessionTransport::new(Box::new(transport)),
-        ai_provider: Box::new(ai_provider),
-        ai_provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
-        context: AsyncMutex::new(SessionContext {
-            system_context: "Testkontext".to_string(),
-            history: Vec::new(),
-            available_actions: default_action_schemas(),
-            max_tokens_hint: None,
-        }),
-        filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
         server_id: ServerId::new(),
         tags: Vec::new(),
-        terminal: StdMutex::new(None),
         redactor: crate::session::SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
-        ai_provider_label: "test-provider".to_string(),
-        ai_model: "test-model".to_string(),
-        system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
-        model_context_window_tokens: usize::MAX / 1_000,
-        summary: AsyncMutex::new(None),
-        context_usage: Default::default(),
-        mcp_origin_flags: StdMutex::new(Vec::new()),
-        sudo_password: crate::session::SwappableSudoPassword::new(None),
-        status: StdMutex::new(crate::events::ConnectionStatus::Connected),
-        pending_action: StdMutex::new(None),
-        mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
-        auto_continue_stop_notify: tokio::sync::Notify::new(),
-        chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
-        risk_second_opinion_provider: None,
-        risk_second_opinion_budget: None,
-        // Spec 0092, A1.2: standardmäßig „an", damit ein Test mit rotem
-        // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
-        // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
-        // prüfen, setzen es ausdrücklich über
-        // `set_red_risk_always_confirm_for_tests(false)`.
-        red_risk_always_confirm: true,
-        running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
-        outgoing_transform: None,
-        chat_content: Default::default(),
-        untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        injection_check_provider: None,
-        injection_check_budget: None,
-        injection_suspected: std::sync::atomic::AtomicBool::new(false),
-        injection_suspected_reason: std::sync::Mutex::new(None),
-        injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
-        second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
-        // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
-        // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
-        // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
-        // no-opt bei `None` bereits vollständig.
-        chat_session_store: None,
-        ledger_store: None,
-        chat_session_id: AsyncMutex::new(None),
-        ai_request_paced_at: AsyncMutex::new(None),
-        auto_reconnect: Default::default(),
+        ai: AiConfig {
+            provider: Box::new(ai_provider),
+            provider_budget: Arc::new(ai_providers::ProviderBudgetGuard::new()),
+            context: AsyncMutex::new(SessionContext {
+                system_context: "Testkontext".to_string(),
+                history: Vec::new(),
+                available_actions: default_action_schemas(),
+                max_tokens_hint: None,
+            }),
+            label: "test-provider".to_string(),
+            model: "test-model".to_string(),
+            system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
+            model_context_window_tokens: usize::MAX / 1_000,
+            summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
+            request_paced_at: AsyncMutex::new(None),
+        },
+        safety: SafetyState {
+            filter_engine: Box::new(FilterEngine::new(NoRulesPolicyStore)),
+            mcp_origin_flags: StdMutex::new(Vec::new()),
+            sudo_password: crate::session::SwappableSudoPassword::new(None),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
+            risk_second_opinion_provider: None,
+            risk_second_opinion_budget: None,
+            // Spec 0092, A1.2: standardmäßig „an", damit ein Test mit rotem
+            // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
+            // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
+            // prüfen, setzen es ausdrücklich über
+            // `set_red_risk_always_confirm_for_tests(false)`.
+            red_risk_always_confirm: true,
+            outgoing_transform: None,
+            untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
+            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
+            injection_check_provider: None,
+            injection_check_budget: None,
+            injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
+            injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
+            second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(false),
+        },
+        persistence: ChatPersistence {
+            chat_content: Default::default(),
+            title_attempts: Default::default(),
+            // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
+            // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
+            // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`
+            // no-opt bei `None` bereits vollständig.
+            chat_session_store: None,
+            chat_session_id: AsyncMutex::new(None),
+        },
+        conn: TransportState {
+            terminal: StdMutex::new(None),
+            status: StdMutex::new(crate::events::ConnectionStatus::Connected),
+            pending_action: StdMutex::new(None),
+            auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
+            auto_continue_stop_notify: tokio::sync::Notify::new(),
+            user_decided_in_turn: std::sync::atomic::AtomicBool::new(false),
+            chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
+            running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            auto_reconnect: Default::default(),
+        },
     })
 }
 
@@ -522,15 +473,15 @@ pub(crate) fn event_names_excluding_auto_continuation(
 pub(crate) struct AllowEverythingPolicyStore;
 #[async_trait]
 impl PolicyStore for AllowEverythingPolicyStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
             pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
             action: ssh_manager_core::filter::RuleAction::Allow,
             scope: ssh_manager_core::filter::Scope::Global,
             priority: 0,
             origin: ssh_manager_core::filter::RuleOrigin::User,
-        }]
+        }])
     }
 }
 
@@ -687,27 +638,6 @@ pub(crate) async fn session_with_real_chat_persistence(
     Uuid,
     tempfile::TempDir,
 ) {
-    let (session, chat_store, chat_session_id, tmp_dir, _ledger_store) =
-        session_with_real_chat_and_ledger_persistence(ai_events, transport).await;
-    (session, chat_store, chat_session_id, tmp_dir)
-}
-
-/// Wie [`session_with_real_chat_persistence`], zusätzlich mit einem
-/// echten, migrierten In-Memory-`SqliteLedgerStore` (Spec 0057, §1) —
-/// derselbe Verschlüsselungs-Cipher wie für `chat_session_store`
-/// (Spec 0057, §1.3: "wie die Chat-Historie", kein zweiter
-/// Mechanismus), auf dieselbe `chat_sessions`-Zeile gebunden (Migration
-/// 0011: `ledger_entries.session_id` referenziert `chat_sessions(id)`).
-pub(crate) async fn session_with_real_chat_and_ledger_persistence(
-    ai_events: Vec<AiEvent>,
-    transport: MockSshTransport,
-) -> (
-    Session,
-    persistence_sqlite::SqliteChatSessionStore,
-    Uuid,
-    tempfile::TempDir,
-    persistence_sqlite::SqliteLedgerStore,
-) {
     // Nur die öffentliche `connect(db_path)`-API steht app-shell zur
     // Verfügung (`connect_with`/`:memory:` sind `pub(crate)` in
     // `persistence-sqlite`, s. dortiger Doc-Kommentar) — eine echte,
@@ -736,6 +666,7 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: now,
             updated_at: now,
@@ -744,15 +675,13 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
         .unwrap();
     let chat_store = profile_store.chat_session_store();
     let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
-    let ledger_store = profile_store.ledger_store();
 
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
     session.set_server_id_for_tests(server_id);
     session.set_chat_session_store_for_tests(Some(chat_store.clone()));
-    session.set_ledger_store_for_tests(Some(ledger_store.clone()));
     session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
-    (session, chat_store, chat_session_id, tmp_dir, ledger_store)
+    (session, chat_store, chat_session_id, tmp_dir)
 }
 
 /// Beantwortet den ersten Bestätigungsdialog (Spec 0068: Secret-Pfade
@@ -775,4 +704,55 @@ pub(crate) async fn resolve_first_confirm(
         }
         tokio::task::yield_now().await;
     }
+}
+
+/// Records every activity event a session reports (issue #1506: the core
+/// keeps no record, so tests read what observers receive).
+#[derive(Default)]
+pub(crate) struct ActivityProbe(std::sync::Mutex<Vec<crate::activity::ActivityEvent>>);
+
+impl crate::activity::ActivityObserver for ActivityProbe {
+    fn on_event(&self, event: &crate::activity::ActivityEvent) {
+        self.0.lock().unwrap().push(event.clone());
+    }
+}
+
+impl ActivityProbe {
+    pub(crate) fn events(&self) -> Vec<crate::activity::ActivityEvent> {
+        self.0.lock().unwrap().clone()
+    }
+
+    /// The kinds of all events, session start/end left out.
+    pub(crate) fn kinds(&self) -> Vec<crate::activity::ActivityEventKind> {
+        use crate::activity::ActivityEventKind as K;
+        self.events()
+            .into_iter()
+            .map(|e| e.kind)
+            .filter(|k| !matches!(k, K::SessionStarted { .. } | K::SessionEnded { .. }))
+            .collect()
+    }
+}
+
+/// Reports `session`'s activity to a probe, delivered synchronously.
+pub(crate) fn with_activity_probe(session: Session) -> (Session, Arc<ActivityProbe>) {
+    let probe = Arc::new(ActivityProbe::default());
+    let hub = Arc::new(crate::activity::ActivityHub::new_inline_for_tests(vec![
+        probe.clone(),
+    ]));
+    let snapshot = crate::activity::ServerSnapshot {
+        id: "srv".into(),
+        name: "Test".into(),
+        host: "example.test".into(),
+        port: 22,
+        user: "deploy".into(),
+        group_ids: vec![],
+        group_names: vec![],
+        tags: vec![],
+    };
+    let session = session.with_activity_reporting(crate::activity::ActivityReporting::new(
+        &hub,
+        "runtime-1".into(),
+        snapshot,
+    ));
+    (session, probe)
 }

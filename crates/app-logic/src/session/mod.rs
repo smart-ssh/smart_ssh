@@ -1,0 +1,1198 @@
+//! Laufende Server-Sessions (Spec 0007, Abschnitt 3) und deren
+//! Nebenläufigkeits-Modell.
+//!
+//! **Drei verschiedene Synchronisierungsmechanismen, bewusst nicht
+//! einheitlich `Mutex<HashMap<...>>` überall:**
+//!
+//! 1. `SessionManager`s äußere Map (`SessionId -> Arc<Session>`) ist ein
+//!    simples `std::sync::Mutex`: sie wird nur für kurze, nie über einen
+//!    `.await`-Punkt hinweg gehaltene Zeigervorgänge (Einfügen/Nachschlagen/
+//!    Entfernen) gesperrt — dafür ist eine synchrone Std-Mutex leichter und
+//!    genügt völlig; `tokio::sync::Mutex` wäre hier nur unnötiger Overhead.
+//! 2. `Session.transport` (seit Spec 0086 gekapselt in [`SessionTransport`])
+//!    und `Session.context` nutzen dagegen
+//!    `tokio::sync::Mutex`: beide werden über `.await`-Punkte hinweg
+//!    gehalten (`SshTransport::execute()`, `AiProvider::send()`-Stream
+//!    konsumieren) — eine `std::sync::MutexGuard` über einen Await-Punkt
+//!    hinweg zu halten ist nicht `Send` und lässt sich in einer async
+//!    Tauri-Command-Funktion nicht compilieren.
+//! 3. Der interaktive Terminal-Kanal (`InteractiveShell`) bekommt **keinen**
+//!    Mutex, sondern einen Aktor: ein einzelner Hintergrund-Task besitzt
+//!    die `Box<dyn InteractiveShell>` exklusiv und wählt per `tokio::select!`
+//!    zwischen "nächster Chunk vom Server" (`shell.read()`, kann beliebig
+//!    lange blockieren) und "nächstes Kommando vom Frontend"
+//!    (`terminal_input`/`terminal_resize` über einen `mpsc`-Kanal). Ein
+//!    Mutex um die Shell hätte hier ein echtes Problem: `read()` "blockiert,
+//!    bis Daten verfügbar sind" (s. `core::ssh::InteractiveShell`-Doc) — ein
+//!    Hintergrund-Task, der den Mutex während eines laufenden `read()`-Awaits
+//!    hält, würde `terminal_input`/`terminal_resize` bis zum nächsten
+//!    Server-Chunk blockieren und die Eingabe spürbar verzögern. Der Aktor
+//!    umgeht das vollständig, da nur er selbst je auf die Shell zugreift.
+
+use ssh_manager_core::sync::lock_tolerating_poison;
+use std::sync::Arc;
+#[cfg(test)]
+use std::sync::Mutex as StdMutex;
+
+use async_trait::async_trait;
+use tokio::sync::{mpsc, Mutex as AsyncMutex};
+
+#[cfg(any(test, feature = "test-support"))]
+use ssh_manager_core::ai::AiProvider;
+use ssh_manager_core::ai::{ChatMessage, MessageContent, OutputRedactor};
+use ssh_manager_core::filter::{EvalContext, EvaluationTrace, FilterEngine, PolicyStore};
+use ssh_manager_core::shared::ServerId;
+use ssh_manager_core::ssh::{PtySize, SftpSession, SshError, SshTransport};
+
+use crate::confirmation::ConfirmationRegistry;
+use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
+use crate::state::{ActionId, SessionId};
+
+mod activity_events;
+pub use activity_events::{spawn_user_activity_tick, USER_ACTIVITY_INTERVAL};
+mod ai_config;
+mod chat_persistence;
+mod locks;
+mod manager;
+mod require;
+mod safety_state;
+mod swappable;
+mod transport_state;
+
+pub use ai_config::AiConfig;
+mod terminal_output;
+pub use chat_persistence::{ChatPersistence, TitleAttempts};
+pub use locks::SessionLocks;
+pub use manager::*;
+pub use require::{require_session, session_not_found};
+pub use safety_state::SafetyState;
+pub use swappable::{SwappableRedactor, SwappableSudoPassword};
+pub use terminal_output::{
+    TERMINAL_COALESCE_INTERVAL, TERMINAL_COALESCE_MAX_BYTES, TERMINAL_COMMAND_CAPACITY,
+};
+pub use transport_state::TransportState;
+
+/// Objektsicherer Wrapper um `FilterEngine<S>::evaluate` (Aufgabenstellung
+/// Teil 1, Punkt 4). `FilterEngine<S>` selbst ist über den `PolicyStore`-Typ
+/// generisch, `Session` soll dieses Detail aber nicht nach außen tragen
+/// (Tests wollen unterschiedliche `PolicyStore`-Implementierungen
+/// einsetzen können, ohne `Session` selbst generisch machen zu müssen) —
+/// ein kleines, dyn-kompatibles Trait löst das, analog zu `EventEmitter`.
+///
+/// `async fn` seit Spec 0009 (`PolicyStore::rules_for` liest jetzt aus der
+/// SQLite-Datenbank).
+///
+/// Nur `evaluate_explained` (Spec 0057, §1.1: das Ledger braucht die
+/// `matched_rule`/`matched_rule_origin` einer Entscheidung, nicht nur
+/// deren `Decision`) — bisher gab es hier zusätzlich ein reines
+/// `evaluate` ohne Erklärung, das nach der Umstellung aller Aufrufer auf
+/// `evaluate_explained` (für die Ledger-`Decision`-Einträge in
+/// `orchestration::evaluate_action`/`handle_user_decision`) ungenutzt
+/// blieb und deshalb entfernt wurde — `Decision` ist über `.decision` auf
+/// der zurückgegebenen [`EvaluationTrace`] weiterhin trivial erreichbar.
+#[async_trait]
+pub trait CommandEvaluator: Send + Sync {
+    async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace;
+
+    /// Read-only evaluation as if `candidates` were additional stored rules
+    /// (issue #596: verdict for a rule suggestion). Stores nothing.
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace;
+
+    /// Resolves rule ids of a trace to the rules currently stored (display
+    /// only, issue #696). Deleted rules are absent from the result.
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule>;
+}
+
+#[async_trait]
+impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
+    async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
+        FilterEngine::evaluate_explained(self, command, ctx).await
+    }
+
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace {
+        FilterEngine::evaluate_explained_with_candidates(self, command, ctx, candidates).await
+    }
+
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule> {
+        FilterEngine::rules_by_ids(self, ctx, ids).await
+    }
+}
+
+/// Kommando an den Terminal-Aktor (s. Modul-Kommentar, Punkt 3).
+pub enum TerminalCommand {
+    Write(Vec<u8>),
+    Resize(PtySize),
+}
+
+/// Spec 0085, A3: der **normale** SFTP-Kanal einer Sitzung.
+///
+/// Spec 0020, Abschnitt 3: lazy geöffnet (erst beim ersten
+/// `ReadRemoteFile`/`WriteRemoteFile`/Dateibrowser-Zugriff, s.
+/// [`crate::orchestration::ensure_sftp_open`]), danach für die Dauer der
+/// Session offengehalten statt pro Zugriff neu aufgebaut. `AsyncMutex` wie
+/// `transport`/`context` (über `.await`-Punkte hinweg gehalten).
+///
+/// **Eigener Typ mit privatem Inneren, und ein privates Feld an [`Session`]**
+/// (Spec 0085, A3.1): Über diesen Kanal laufen die KI-Dateiaktionen
+/// (`ReadRemoteFile`/`WriteRemoteFile`) und MCP. Könnte Code außerhalb von
+/// `app-logic` ihn setzen, ließe sich ein **erhöhter** Kanal hineinschieben —
+/// und KI und MCP liefen erhöht, entgegen Spec 0067 A. Befüllt wird er
+/// deshalb nur hier, aus dem Transport der Sitzung selbst
+/// ([`NormalSftpGuard::install`], einziger Aufrufer `ensure_sftp_open`);
+/// nach außen gibt [`Session::lock_sftp`] nur eine Referenz auf das
+/// Trait-Objekt heraus, und die lässt sich nicht ersetzen.
+#[derive(Default)]
+pub struct NormalSftpChannel {
+    inner: AsyncMutex<Option<Box<dyn SftpSession>>>,
+}
+
+/// Der gesperrte normale SFTP-Kanal — s. [`Session::lock_sftp`].
+pub struct NormalSftpGuard<'a>(tokio::sync::MutexGuard<'a, Option<Box<dyn SftpSession>>>);
+
+impl NormalSftpGuard<'_> {
+    /// Der Kanal, **nur zum Benutzen**.
+    ///
+    /// Spec 0085, A3.1: bewusst `&mut dyn SftpSession` und nicht
+    /// `&mut Box<dyn SftpSession>` oder `&mut Option<…>`. Ein Trait-Objekt
+    /// ist nicht `Sized`, damit scheitern `std::mem::replace`, `swap` und
+    /// `take` auf dieser Referenz schon beim Kompilieren — die Grenze verläuft
+    /// am Typ der herausgegebenen Referenz, nicht bloß an der Sichtbarkeit
+    /// des Felds.
+    ///
+    /// `None`, solange niemand `ensure_sftp_open` aufgerufen hat.
+    pub fn sftp(&mut self) -> Option<&mut (dyn SftpSession + 'static)> {
+        self.0.as_deref_mut()
+    }
+
+    /// Wie [`Self::sftp`], aber mit einem Fehler statt `None` — für alle
+    /// Aufrufer, die den Kanal **benutzen wollen** statt nur nachzusehen, ob
+    /// er offen ist (Spec 0088, A3.2).
+    ///
+    /// Das ist die **eine** Stelle, an der ein leerer Kanal zu einem Fehler
+    /// wird. Vorher stand an jedem der sechs Aufrufer in
+    /// `orchestration::remote_files` ein
+    /// `expect("ensure_sftp_open lief erfolgreich durch")` — sechs Kopien
+    /// derselben Invariante, die keiner der Aufrufer selbst garantieren
+    /// kann. Garantieren kann sie nur dieser Typ: Befüllt wird der Kanal
+    /// ausschließlich über [`Self::install`], und keine Operation leert ihn
+    /// wieder (s. [`NormalSftpChannel`]). Genau deshalb steht der Hinweis
+    /// hier am Typ und nicht am Aufrufer — und genau deshalb endet ein
+    /// künftiger Umbau, der den Kanal doch einmal leert, in einem sichtbaren
+    /// Aktionsfehler im Chat statt in einem Panic mitten im Chat-Turn.
+    ///
+    /// Der `SshError` ist bewusst ein gewöhnlicher Kanalfehler mit Code: Die
+    /// Aufrufer reichen ihn über ihren bestehenden Fehlerpfad weiter, ohne
+    /// dafür einen zweiten Mechanismus zu brauchen.
+    pub fn sftp_or_err(&mut self) -> Result<&mut (dyn SftpSession + 'static), SshError> {
+        self.0.as_deref_mut().ok_or_else(|| {
+            SshError::ChannelError("der SFTP-Kanal dieser Sitzung ist nicht geöffnet".to_string())
+        })
+    }
+
+    /// Ist der Kanal schon geöffnet?
+    pub fn is_open(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// Spec 0085, A3.2: Befüllt den Kanal. `pub(crate)` — nur `app-logic`
+    /// darf das, und dort nur `ensure_sftp_open` aus dem Transport **dieser**
+    /// Sitzung.
+    pub(crate) fn install(&mut self, sftp: Box<dyn SftpSession>) {
+        *self.0 = Some(sftp);
+    }
+}
+
+/// Serialises "swap the redactor, then store the flag" across rebuilds, so
+/// the flag always mirrors the last applied swap (issue #1541). One lock for
+/// all sessions: it is held only around the swap and the store, never across
+/// an `.await`.
+pub(crate) static REDACTOR_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Swaps in a reconnect redactor and, if its lookup was incomplete, raises
+/// the "redaction incomplete" flag in the same locked step (issue #1543).
+/// Keeps the session's literal set and never lowers the flag: a reconnect
+/// keeps the literal set, so a complete lookup proves nothing. `between` runs
+/// after the swap, before the flag (a test hook). Never held across `.await`.
+pub(crate) fn apply_reconnect_redactor(
+    session: &Session,
+    redactor: Box<dyn OutputRedactor>,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    session.swap_redactor(redactor);
+    between();
+    if incomplete {
+        session
+            .safety
+            .redaction_incomplete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        session
+            .safety
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Issue #355: proof that this caller owns the running reconnect of a
+/// session. Dropped without [`ReconnectClaim::succeed`], the session goes
+/// back to `Disconnected`, so the button stays usable after a failure.
+pub struct ReconnectClaim<'a> {
+    session: &'a Session,
+    settled: bool,
+}
+
+impl ReconnectClaim<'_> {
+    /// Installs the new connection and marks the session `Connected`.
+    pub async fn succeed(
+        mut self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
+        sudo_password: Option<secrecy::SecretString>,
+    ) {
+        self.session
+            .replace_connection(transport, redactor, redaction_incomplete, sudo_password)
+            .await;
+        *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
+            ConnectionStatus::Connected;
+        self.settled = true;
+    }
+}
+
+impl Drop for ReconnectClaim<'_> {
+    fn drop(&mut self) {
+        if !self.settled {
+            *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
+                ConnectionStatus::Disconnected;
+        }
+    }
+}
+
+/// Spec 0086, A3: der Transport einer Sitzung — ihre eine SSH-Verbindung.
+///
+/// **Eigener Typ mit privatem Inneren** statt eines nackten
+/// `AsyncMutex<Box<dyn SshTransport>>`: Der normale SFTP-Kanal einer Sitzung
+/// (s. [`NormalSftpChannel`]) wird aus **diesem** Transport geöffnet
+/// (`ensure_sftp_open`) und danach für die Dauer der Sitzung offengehalten.
+/// Ließe sich der Transport danach von außen ersetzen oder mit dem einer
+/// anderen Sitzung tauschen, gehörte der schon offene Kanal zu einer
+/// anderen Verbindung als die Sitzung — die Paarung „ein Transport, sein
+/// Kanal" wäre gebrochen, und damit die Grundlage von Spec 0067 A (KI und
+/// MCP laufen nie über den erhöhten Kanal) und Spec 0085 A3.
+///
+/// Nach außen gibt [`SessionTransport::lock`] deshalb nur eine Referenz auf
+/// das **Trait-Objekt** heraus (`dyn SshTransport`, nicht `Sized`) — die
+/// lässt sich benutzen, aber nicht ersetzen, tauschen oder entnehmen. Und
+/// [`Session`] hat kein `DerefMut`, also ist auch das Feld selbst von außen
+/// nur lesbar.
+pub struct SessionTransport {
+    inner: AsyncMutex<Box<dyn SshTransport>>,
+    /// Issue #328: AI commands of one session stay serial even though the
+    /// transport lock is released while a command runs. Held for the whole
+    /// command by [`SessionTransport::begin_command`].
+    command_guard: AsyncMutex<()>,
+    /// Issue #328: set by [`SessionTransport::mark_closed`] on disconnect;
+    /// no new command starts and no follow-up AI round follows afterwards.
+    closed: std::sync::atomic::AtomicBool,
+    /// Issue #565: counts the connections this session has held; bumped by
+    /// [`SessionTransport::replace`]. A connection-loss watch only reports
+    /// for the epoch it was started in, so a signal of a replaced transport
+    /// never marks the new connection as lost.
+    epoch: std::sync::atomic::AtomicU64,
+    /// Issue #328: action currently running as an AI command, so a
+    /// disconnect can cancel it (Spec 0027).
+    running_action: std::sync::Mutex<Option<(ActionId, bool)>>,
+}
+
+/// Issue #328: proof that this AI command is the only one running in its
+/// session; dropping it lets the next one start.
+pub struct CommandSlot<'a> {
+    owner: &'a SessionTransport,
+    _guard: tokio::sync::MutexGuard<'a, ()>,
+}
+
+impl Drop for CommandSlot<'_> {
+    fn drop(&mut self) {
+        *lock_tolerating_poison(&self.owner.running_action) = None;
+    }
+}
+
+impl SessionTransport {
+    /// Spec 0086, A3.2: Das Bauen einer Sitzung aus allen Bestandteilen
+    /// bleibt erlaubt — `connect()` in `app-shell` legt den frisch
+    /// aufgebauten Transport hier ab, bevor die [`Session`] entsteht.
+    pub fn new(transport: Box<dyn SshTransport>) -> Self {
+        Self {
+            inner: AsyncMutex::new(transport),
+            command_guard: AsyncMutex::new(()),
+            closed: std::sync::atomic::AtomicBool::new(false),
+            epoch: std::sync::atomic::AtomicU64::new(0),
+            running_action: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Issue #328: waits until no other AI command of this session runs and
+    /// claims the slot for `action_id`. `None` if the session was closed.
+    pub async fn begin_command(&self, action_id: ActionId) -> Option<CommandSlot<'_>> {
+        self.begin_command_from(action_id, false).await
+    }
+
+    /// Like `begin_command`; `from_mcp` marks a command an MCP client started.
+    pub async fn begin_command_from(
+        &self,
+        action_id: ActionId,
+        from_mcp: bool,
+    ) -> Option<CommandSlot<'_>> {
+        let guard = self.command_guard.lock().await;
+        if self.is_closed() {
+            return None;
+        }
+        *lock_tolerating_poison(&self.running_action) = Some((action_id, from_mcp));
+        Some(CommandSlot {
+            owner: self,
+            _guard: guard,
+        })
+    }
+
+    /// Issue #328: the AI command running right now, if any.
+    pub fn running_action(&self) -> Option<ActionId> {
+        (*lock_tolerating_poison(&self.running_action)).map(|(id, _)| id)
+    }
+
+    /// A running command not started through MCP (activity tick).
+    pub fn user_command_running(&self) -> bool {
+        let running = *lock_tolerating_poison(&self.running_action);
+        matches!(running, Some((_, false)))
+    }
+
+    /// Issue #328: the session is being disconnected.
+    pub fn mark_closed(&self) {
+        self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn epoch(&self) -> u64 {
+        self.epoch.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Issue #355: puts the freshly connected transport of a reconnect in
+    /// place of the dead one and reopens the session for commands. Only
+    /// [`Session::replace_connection`] calls this, so transport and the
+    /// normal SFTP channel are always replaced together.
+    async fn replace(&self, transport: Box<dyn SshTransport>) {
+        *self.inner.lock().await = transport;
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.closed
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Issue #328: resolves once no AI command runs in this session.
+    pub async fn wait_until_idle(&self) {
+        drop(self.command_guard.lock().await);
+    }
+
+    /// Der Transport, gesperrt — **zum Benutzen**.
+    ///
+    /// Spec 0086, A3.1/T11: Weder über diese Sperre noch über das Feld lässt
+    /// sich der Transport einer bestehenden Sitzung ersetzen, entnehmen oder
+    /// mit dem einer anderen Sitzung tauschen. Die folgenden Beispiele
+    /// belegen das aus der Sicht eines **anderen** Crates (ein Doctest wird
+    /// als eigene Kiste gegen `app_logic` gebaut); zu jedem verbotenen Fall
+    /// steht der kompilierende Zwilling daneben, der sich nur in der
+    /// verbotenen Zeile unterscheidet — so scheitert der Fall nachweislich an
+    /// ihr und nicht an einem Tippfehler. (Der Fehlercode selbst wird von
+    /// `rustdoc` nicht geprüft, deshalb dieses Zwillingspaar statt einer
+    /// Codeangabe.)
+    ///
+    /// **Diese Fälle hängen bewusst an keinem `cfg`/Feature.** Der
+    /// Test-Zugang (die `set_*_for_tests`-Setter, z. B.
+    /// [`Session::set_filter_engine_for_tests`]) steht hinter
+    /// `feature = "test-support"`, und dieses Feature ist im Doctest-Lauf von
+    /// `cargo test --workspace` **aktiv** (Feature-Unification über
+    /// `app-shell`s dev-dependency). Ein `DerefMut` hinter demselben Feature
+    /// hätte die Fälle (a)–(d) unten also im Gate-Lauf leer bestehen lassen —
+    /// gemessen, s. ADR 0080. Deshalb ist `DerefMut` ganz entfallen, statt
+    /// nur für Tests zu bestehen.
+    ///
+    /// **(a)** `mem::swap` der Transporte zweier Sitzungen — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut a.transport, &mut b.transport);
+    /// }
+    /// ```
+    /// Zwilling (tauscht zwei **ganze** Sitzungen, Transport und Kanal
+    /// wandern zusammen — A3.2):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(a, b);
+    /// }
+    /// ```
+    ///
+    /// **(b)** `mem::replace` des Transports — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     let _old = std::mem::replace(&mut session.transport, replacement);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     let _old = replacement;
+    /// }
+    /// ```
+    ///
+    /// **(c)** Tausch **aller mitgegebenen Bestandteile** zweier Sitzungen —
+    /// verboten (nimmt den Transport mit, ließe aber den privaten SFTP-Kanal
+    /// zurück):
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut **a, &mut **b);
+    /// }
+    /// ```
+    /// Zwilling (ein `*` weniger je Seite: zwei ganze `Session`-Werte):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// fn f(a: &mut Session, b: &mut Session) {
+    ///     std::mem::swap(&mut *a, &mut *b);
+    /// }
+    /// ```
+    ///
+    /// **(d)** Zuweisung eines neuen Transports — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     session.transport = replacement;
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{Session, SessionTransport};
+    /// fn f(session: &mut Session, replacement: SessionTransport) {
+    ///     drop(replacement);
+    /// }
+    /// ```
+    ///
+    /// **(e1)** Schon mit **nur `&Session`** (also auch hinter dem `Arc` in
+    /// der Registry): Ersetzen des Transport-Werts über die Sperre —
+    /// verboten, `dyn SshTransport` ist nicht `Sized`:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// # use ssh_manager_core::ssh::SshTransport;
+    /// async fn f(session: &Session, replacement: Box<dyn SshTransport>) {
+    ///     let mut guard = session.transport.lock().await;
+    ///     let _old = std::mem::replace(&mut *guard, replacement);
+    /// }
+    /// ```
+    /// Zwilling (benutzt den Transport über die Sperre — A3.2):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// # use ssh_manager_core::ssh::SshTransport;
+    /// async fn f(session: &Session, replacement: Box<dyn SshTransport>) {
+    ///     let mut guard = session.transport.lock().await;
+    ///     let _old = guard.execute("true").await;
+    /// }
+    /// ```
+    ///
+    /// **(e2)** Mit nur `&Session`: `mem::swap` der Inhalte zweier gesperrter
+    /// Transporte — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::Session;
+    /// async fn f(a: &Session, b: &Session) {
+    ///     let mut ga = a.transport.lock().await;
+    ///     let mut gb = b.transport.lock().await;
+    ///     std::mem::swap(&mut *ga, &mut *gb);
+    /// }
+    /// ```
+    /// Zwilling (benutzt beide Transporte, tauscht sie nur nicht):
+    /// ```
+    /// # use app_logic::session::Session;
+    /// async fn f(a: &Session, b: &Session) {
+    ///     let mut ga = a.transport.lock().await;
+    ///     let mut gb = b.transport.lock().await;
+    ///     let _ = (ga.execute("true").await, gb.execute("true").await);
+    /// }
+    /// ```
+    pub async fn lock(&self) -> TransportGuard<'_> {
+        TransportGuard(self.inner.lock().await)
+    }
+}
+
+/// Der gesperrte Transport einer Sitzung — s. [`SessionTransport::lock`].
+///
+/// Spec 0086, A3.2: `Deref`/`DerefMut` auf `dyn SshTransport` (nicht auf
+/// `Box<dyn SshTransport>`). Alle Methoden von [`SshTransport`] bleiben
+/// dadurch unverändert über die Sperre erreichbar (`guard.execute(…)`),
+/// aber `mem::replace`/`swap`/`take` scheitern an der Größe des
+/// Trait-Objekts — dasselbe Muster wie [`NormalSftpGuard::sftp`].
+pub struct TransportGuard<'a>(tokio::sync::MutexGuard<'a, Box<dyn SshTransport>>);
+
+impl std::ops::Deref for TransportGuard<'_> {
+    type Target = dyn SshTransport + 'static;
+    fn deref(&self) -> &Self::Target {
+        &**self.0
+    }
+}
+
+impl std::ops::DerefMut for TransportGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut **self.0
+    }
+}
+
+/// Eine laufende Server-Session.
+///
+/// Spec 0085, A3: Die Struktur ist in zwei Teile getrennt. Alles, was der
+/// Aufrufer beim Verbinden mitgibt, steht in [`SessionParts`] und ist über
+/// `Deref` unverändert als `session.<feld>` **lesbar**. Der normale
+/// SFTP-Kanal dagegen ist ein **privates** Feld: er wird nie übergeben,
+/// sondern startet leer und wird nur hier befüllt (s.
+/// [`NormalSftpChannel`]).
+///
+/// Spec 0086, A3: **kein `DerefMut`.** Mit einem `DerefMut` ließe sich von
+/// außen jedes mitgegebene Feld überschreiben — auch der Transport
+/// (`session.transport = …`), und über `mem::swap(&mut **a, &mut **b)` sogar
+/// alle mitgegebenen Bestandteile zweier Sitzungen auf einmal, während der
+/// private SFTP-Kanal zurückbliebe. Ohne `DerefMut` ist von außen kein Feld
+/// einer bestehenden Sitzung schreibbar; Tests bekommen den Zugang über
+/// feldweise `set_<feld>_for_tests`-Setter hinter
+/// `cfg(test)`/`feature = "test-support"` (A3.3, Muster wie
+/// [`Session::set_sftp_for_tests`]).
+pub struct Session {
+    parts: SessionParts,
+    sftp: NormalSftpChannel,
+    /// Spec 0102: konfiguriertes Startverzeichnis und das einmalige
+    /// Prüfergebnis dieser Sitzung (s. `crate::start_directory`). Privat
+    /// wie `sftp`: gesetzt nur über [`Session::with_start_directory`] beim
+    /// Bau, danach nur lesbar.
+    start_directory: crate::start_directory::SessionStartDirectory,
+    /// Issue #544: result of the connect-time `id -u` probe. `Some(true)` =
+    /// uid 0, `None` = unknown (probe failed or not run). UI hint only.
+    is_root: Option<bool>,
+    /// Issue #653: uid/gid → name maps, read once per session on first use.
+    id_names: tokio::sync::OnceCell<crate::owner_names::IdNames>,
+    /// Issue #610: where completed AI requests are reported (observers an
+    /// edition registered). `None` = nobody listens. Private: set at build.
+    usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
+    /// Issue #1505: where activity events go (observers an edition
+    /// registered). `None` = nobody listens, nothing is built.
+    activity: Option<crate::activity::ActivityReporting>,
+    /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
+    /// event is only sent for sessions the observers know.
+    activity_started: std::sync::atomic::AtomicBool,
+    /// `true` once `ChatStarted` was queued: events carry the chat session id
+    /// from then on.
+    activity_chat_announced: std::sync::atomic::AtomicBool,
+    /// Issue #1539: `true` once `SessionEnded` was queued; later events of
+    /// this session are dropped so none follows its end.
+    activity_ended: std::sync::Mutex<bool>,
+    /// Issue #1545: set once the app exit began; `SessionStarted` is then
+    /// refused. Only written while holding the `activity_ended` lock.
+    activity_exiting: std::sync::atomic::AtomicBool,
+}
+
+impl std::ops::Deref for Session {
+    type Target = SessionParts;
+    fn deref(&self) -> &SessionParts {
+        &self.parts
+    }
+}
+
+/// Alle Bestandteile einer [`Session`], die beim Verbinden mitgegeben werden
+/// — der normale SFTP-Kanal gehört bewusst **nicht** dazu (Spec 0085, A3:
+/// „Der Konstruktor nimmt keinen Kanal an", ein neu erzeugter Kanal ist
+/// immer leer).
+///
+/// Issue #871: `transport`, `server_id`, `tags` and `redactor` stay direct
+/// fields (used by embedding crates); everything else is grouped by concern.
+pub struct SessionParts {
+    /// Spec 0086, A3: eigener Typ statt `AsyncMutex<Box<dyn SshTransport>>`
+    /// — s. [`SessionTransport`] zur Begründung.
+    pub transport: SessionTransport,
+    pub server_id: ServerId,
+    pub tags: Vec<String>,
+    /// Läuft über jeden `SshTransport::execute()`-Output, bevor er in
+    /// `chat-action-result` und `context.history` landet (Spec 0006,
+    /// Abschnitt 5) — pro Session eine Instanz statt bei jeder Ausführung
+    /// neu aufgebaut (baut intern eine feste Regex-Liste auf).
+    pub redactor: SwappableRedactor,
+    // Spec 0085, A3: Der normale SFTP-Kanal war bis hierhin ein `pub`-Feld
+    // dieser Struktur. Er liegt jetzt als privates Feld an `Session` selbst
+    // (s. `NormalSftpChannel`): so kann Code außerhalb von `app-logic` ihn
+    // weder setzen noch ersetzen noch herausnehmen, sondern nur benutzen.
+    // Spec 0067, Teil A: Der erhöhte SFTP-Kanal (`sudo -n <sftp-server>`)
+    // war bis Spec 0084 ein Feld dieser Struktur. Er liegt jetzt in
+    // `app_shell::elevated_sftp::ElevatedSftpRegistry`, einem eigenen, von Tauri
+    // verwalteten Zustand von `app-shell` (Spec 0084, A1): so führt von
+    // einer `Session` aus kein Weg mehr zu ihm, auch nicht für Code, der
+    // eine `Session` in der Hand hat.
+    /// AI configuration and conversation state.
+    pub ai: AiConfig,
+    /// Safety-model state.
+    pub safety: SafetyState,
+    /// Chat persistence handles.
+    pub persistence: ChatPersistence,
+    /// Connection status and turn control.
+    pub conn: TransportState,
+}
+
+/// Spec 0066, §2 — s. `Session::chat_turn`.
+#[derive(Debug, Default)]
+pub struct ChatTurnState {
+    pub running: bool,
+    pub queued: Vec<String>,
+    /// Issue #315: `true`, solange „Neuer Chat" den Turn-Slot hält. Nutzer-Nachrichten
+    /// werden dann abgelehnt statt eingereiht (sonst landeten sie unbemerkt in der ersten
+    /// Anfrage des neuen Chats).
+    pub swapping: bool,
+    pub pending_proposal: Option<(ActionId, serde_json::Value)>, // issue #1020
+}
+
+impl Session {
+    /// Id handed to every `ChatContentExtension` hook (Issue #620): the saved
+    /// chat session id, which survives a resume under a new tab id. Only a
+    /// session without a saved chat (persistence off, local server) falls
+    /// back to the tab id; such content can never be resumed anyway.
+    pub async fn extension_content_key(&self, tab_id: SessionId) -> uuid::Uuid {
+        (*self.persistence.chat_session_id.lock().await).unwrap_or(tab_id)
+    }
+
+    /// Spec 0085, A3: der einzige Weg, eine `Session` zu bauen. Der normale
+    /// SFTP-Kanal startet immer leer; er wird beim ersten Zugriff aus dem
+    /// Transport **dieser** Sitzung geöffnet (`ensure_sftp_open`).
+    pub fn new(parts: SessionParts) -> Self {
+        Self {
+            parts,
+            sftp: NormalSftpChannel::default(),
+            start_directory: Default::default(),
+            is_root: None,
+            id_names: tokio::sync::OnceCell::new(),
+            usage_reporting: None,
+            activity: None,
+            activity_started: std::sync::atomic::AtomicBool::new(false),
+            activity_chat_announced: std::sync::atomic::AtomicBool::new(false),
+            activity_ended: std::sync::Mutex::new(false),
+            activity_exiting: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    /// Issue #1505: sets up reporting of activity events to observers. Only
+    /// at construction.
+    pub fn with_activity_reporting(
+        mut self,
+        reporting: Option<crate::activity::ActivityReporting>,
+    ) -> Self {
+        self.activity = reporting;
+        self
+    }
+
+    pub(crate) fn activity_reporting(&self) -> Option<&crate::activity::ActivityReporting> {
+        self.activity.as_ref()
+    }
+
+    /// Issue #610: sets up reporting of completed AI requests to observers.
+    /// Only at construction. An empty observer list is the same as none.
+    pub fn with_usage_reporting(
+        mut self,
+        reporting: Option<crate::ai_usage::AiUsageReporting>,
+    ) -> Self {
+        self.usage_reporting = reporting.filter(|r| !r.observers.is_empty());
+        self
+    }
+
+    /// Issue #610: tells the observers about one completed AI request of
+    /// this session. Passive: returns nothing, never waits for an observer,
+    /// carries no content. Call it when the provider's `RequestUsage` arrived
+    /// before the stream loop stopped; never wait for it.
+    pub async fn report_ai_usage(
+        &self,
+        purpose: crate::ai_usage::AiUsagePurpose,
+        usage: ssh_manager_core::ai::AiUsage,
+    ) {
+        let Some(reporting) = &self.usage_reporting else {
+            return;
+        };
+        let Some(source) = reporting.source_for(purpose) else {
+            return;
+        };
+        let chat_session_id =
+            (*self.persistence.chat_session_id.lock().await).map(|id| id.to_string());
+        let record = crate::ai_usage::AiUsageRecord {
+            chat_session_id,
+            runtime_session_id: reporting.runtime_session_id.clone(),
+            server_id: (!crate::dto::is_local(self.server_id))
+                .then(|| self.server_id.0.to_string()),
+            provider_config_id: source.provider_config_id.clone(),
+            provider_type: source.provider_type,
+            configured_model: source.configured_model.clone(),
+            purpose,
+            usage,
+            completed_at: chrono::Utc::now(),
+        };
+        crate::ai_usage::notify(&reporting.observers, record);
+    }
+
+    /// Issue #544: records the `id -u` probe result; only at construction.
+    pub fn with_is_root(mut self, is_root: Option<bool>) -> Self {
+        self.is_root = is_root;
+        self
+    }
+
+    /// Issue #653: the session's uid/gid name maps; `load` runs only for the
+    /// first caller, later calls reuse the result (even an empty one).
+    pub async fn id_names_or_init<F, Fut>(&self, load: F) -> &crate::owner_names::IdNames
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = crate::owner_names::IdNames>,
+    {
+        self.id_names.get_or_init(load).await
+    }
+
+    /// Issue #544: `Some(true)` if the login user is root, `None` if unknown.
+    pub fn is_root(&self) -> Option<bool> {
+        self.is_root
+    }
+
+    /// Spec 0102: setzt das Startverzeichnis für Terminal und Dateibrowser
+    /// dieser Sitzung — nur beim Bau, bevor die Sitzung geteilt wird.
+    /// `None` = Home wie bisher. Der KI-Ausführungspfad liest diesen Wert
+    /// nie.
+    pub fn with_start_directory(mut self, configured: Option<String>) -> Self {
+        self.start_directory = crate::start_directory::SessionStartDirectory::new(configured);
+        self
+    }
+
+    pub(crate) fn start_directory_state(&self) -> &crate::start_directory::SessionStartDirectory {
+        &self.start_directory
+    }
+
+    /// Issue #355, Spec 0105: claims the reconnect of a disconnected
+    /// session. Only a session in `Disconnected` state can be claimed, and
+    /// only once: the state flips to `Reconnecting` under the lock, so a
+    /// second trigger (double click, `R` key held down) gets `None`.
+    pub fn begin_reconnect(&self) -> Option<ReconnectClaim<'_>> {
+        let mut status = ssh_manager_core::sync::lock_tolerating_poison(&self.conn.status);
+        if *status != ConnectionStatus::Disconnected {
+            return None;
+        }
+        *status = ConnectionStatus::Reconnecting;
+        Some(ReconnectClaim {
+            session: self,
+            settled: false,
+        })
+    }
+
+    /// Issue #355: retires the dead connection before a reconnect: no new
+    /// command starts, a running AI command is told to stop (by the
+    /// caller, via `running_action`), the old transport is closed on a
+    /// best-effort basis.
+    pub async fn retire_connection(&self) {
+        self.transport.mark_closed();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            self.transport.wait_until_idle(),
+        )
+        .await;
+        let _ = self.transport.lock().await.disconnect().await;
+        *ssh_manager_core::sync::lock_tolerating_poison(&self.conn.terminal) = None;
+    }
+
+    /// Issue #355: replaces transport, normal SFTP channel and redactor of
+    /// this session in place. Tab, session id, chat history, AI context,
+    /// summary and system context parts stay untouched. The normal SFTP
+    /// channel is emptied (it belonged to the old transport) and reopens
+    /// lazily from the new one. Elevated state lives outside the session
+    /// and is dropped by the caller.
+    async fn replace_connection(
+        &self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
+        sudo_password: Option<secrecy::SecretString>,
+    ) {
+        *self.sftp.inner.lock().await = None;
+        self.transport.replace(transport).await;
+        // One read feeds both: the password sent to `sudo -S` and the
+        // redactor always agree.
+        self.safety.sudo_password.replace(sudo_password);
+        // Issue #1543: swap and flag under one lock, after the awaits above.
+        apply_reconnect_redactor(self, redactor, redaction_incomplete, || {});
+    }
+
+    /// Replaces the redactor of the open session (an extension's secret
+    /// values changed). History is re-redacted on the next send.
+    ///
+    /// Literal secret values (issue #464, added by placeholder substitution)
+    /// are **kept**: this is the swap for anything but an extension rebuild.
+    pub fn swap_redactor(&self, redactor: Box<dyn OutputRedactor>) {
+        self.redactor.replace(redactor);
+    }
+
+    /// Issue #635: like [`Self::swap_redactor`], but the session's literal
+    /// secret values are **replaced** by `literals` (the extension's
+    /// currently known secrets), so a withdrawn value is no longer masked.
+    /// Only the extension rebuild path uses this; reconnect keeps literals.
+    /// Already redacted stored text is not re-read.
+    pub fn swap_redactor_with_literals(
+        &self,
+        redactor: Box<dyn OutputRedactor>,
+        literals: &[secrecy::SecretString],
+    ) {
+        self.redactor.replace_with_literals(redactor, literals);
+    }
+
+    /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
+    ///
+    /// Spec 0085, A3.1/T11: Weder über diese Referenz noch über das Feld
+    /// lässt sich der Kanal setzen, ersetzen oder herausnehmen. Die folgenden
+    /// Beispiele belegen das aus der Sicht eines **anderen** Crates (ein
+    /// Doctest wird als eigene Kiste gegen `app_logic` gebaut); zu jedem
+    /// verbotenen Fall steht der kompilierende Zwilling daneben, der sich nur
+    /// in der verbotenen Zeile unterscheidet — so scheitert der Fall
+    /// nachweislich an ihr und nicht an einem Tippfehler. (Der Fehlercode
+    /// selbst wird von `rustdoc` nicht geprüft, deshalb dieses Zwillingspaar
+    /// statt einer Codeangabe.)
+    ///
+    /// **Spec 0086, A3.4:** Die verbotenen Fälle sind unverändert
+    /// `compile_fail`. Ihre kompilierenden Zwillinge schrieben bisher ein
+    /// anderes, öffentliches Feld (`session.tags = …`) — das ging nur über
+    /// `DerefMut`, und das ist mit Spec 0086 A3 entfallen. Sie führen die
+    /// jeweilige Mechanik jetzt an einem **lokalen** [`NormalSftpChannel`]
+    /// vor: Der Zwilling belegt damit weiter, dass `Default`, `replace`,
+    /// `swap` und `take` für diesen Typ sehr wohl übersetzen, und der
+    /// verbotene Fall kann nur noch daran scheitern, dass `Session::sftp` ein
+    /// privates Feld ist. Ein Zwilling, der bloß `lock_sftp()` aufruft, hätte
+    /// das nicht mehr gezeigt: fiele eines Tages `#[derive(Default)]` an
+    /// `NormalSftpChannel` weg, bestünden die Fälle still aus dem falschen
+    /// Grund (spec-reviewer, Runde 1).
+    ///
+    /// Zuweisung ans Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     session.sftp = Default::default();
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     local = Default::default();
+    /// }
+    /// ```
+    ///
+    /// `std::mem::replace` am Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     let _old = std::mem::replace(&mut session.sftp, Default::default());
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, mut local: NormalSftpChannel) {
+    ///     let _old = std::mem::replace(&mut local, Default::default());
+    /// }
+    /// ```
+    ///
+    /// `std::mem::swap` zwischen zwei Sitzungen — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(a: &mut Session, b: &mut Session, x: &mut NormalSftpChannel, y: &mut NormalSftpChannel) {
+    ///     std::mem::swap(&mut a.sftp, &mut b.sftp);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(a: &mut Session, b: &mut Session, x: &mut NormalSftpChannel, y: &mut NormalSftpChannel) {
+    ///     std::mem::swap(x, y);
+    /// }
+    /// ```
+    ///
+    /// `std::mem::take` am Feld — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, local: &mut NormalSftpChannel) {
+    ///     let _taken = std::mem::take(&mut session.sftp);
+    /// }
+    /// ```
+    /// Zwilling:
+    /// ```
+    /// # use app_logic::session::{NormalSftpChannel, Session};
+    /// fn f(session: &mut Session, local: &mut NormalSftpChannel) {
+    ///     let _taken = std::mem::take(local);
+    /// }
+    /// ```
+    ///
+    /// Und über die **erhaltene Referenz**: `&mut dyn SftpSession` ist nicht
+    /// `Sized`, `mem::swap` scheitert schon an der Signatur — verboten:
+    /// ```compile_fail
+    /// # use app_logic::session::NormalSftpGuard;
+    /// fn f(a: &mut NormalSftpGuard<'_>, b: &mut NormalSftpGuard<'_>) {
+    ///     std::mem::swap(a.sftp().unwrap(), b.sftp().unwrap());
+    /// }
+    /// ```
+    /// Zwilling (benutzt beide Kanäle, tauscht sie nur nicht):
+    /// ```
+    /// # use app_logic::session::NormalSftpGuard;
+    /// async fn f(a: &mut NormalSftpGuard<'_>, b: &mut NormalSftpGuard<'_>) {
+    ///     let _ = a.sftp().unwrap().stat("/x").await;
+    ///     let _ = b.sftp().unwrap().stat("/x").await;
+    /// }
+    /// ```
+    pub async fn lock_sftp(&self) -> NormalSftpGuard<'_> {
+        NormalSftpGuard(self.sftp.inner.lock().await)
+    }
+
+    /// Spec 0066, §2: entnimmt alle eingereihten Nutzer-Nachrichten.
+    pub(crate) fn take_queued_user_messages(&self) -> Vec<String> {
+        std::mem::take(&mut lock_tolerating_poison(&self.conn.chat_turn).queued)
+    }
+
+    /// Spec 0066, §1: setzt das Stopp-Flag und weckt eine gerade laufende
+    /// Runde auf (bricht deren KI-Stream ab).
+    pub fn request_auto_continue_stop(&self) {
+        self.conn
+            .auto_continue_stop
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.conn.auto_continue_stop_notify.notify_waiters();
+    }
+
+    /// Spec 0017, Abschnitt 5 / Spec 0104, Abschnitt 5 (Issue #66): Lehnt
+    /// eine noch wartende Bestätigung dieser Sitzung ab (fail closed). Gilt
+    /// für **jede** Sitzung, ohne Unterscheidung nach Herkunft — die Aktion
+    /// wird über denselben Kanal abgelehnt wie per Klick auf "Ablehnen", die
+    /// wartende Ausführungskette verbucht sie also genau wie eine
+    /// Nutzer-Ablehnung. Kann nie genehmigen.
+    ///
+    /// Ist nichts mehr offen (keine Aktion, oder schon per Klick, Timeout
+    /// oder Frontend-Ablehnung aufgelöst), ist der Aufruf ein No-op ohne
+    /// Fehler. Gibt zurück, ob dieser Aufruf die Bestätigung abgelehnt hat.
+    pub fn reject_pending_confirmation(
+        &self,
+        confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+    ) -> bool {
+        let Some(action_id) =
+            *ssh_manager_core::sync::lock_tolerating_poison(&self.conn.pending_action)
+        else {
+            return false;
+        };
+        // Kann nur scheitern, wenn die Bestätigung im selben Moment
+        // anderweitig aufgelöst wurde (Klick, Timeout, Frontend-Ablehnung)
+        // — dann gibt es nichts mehr abzulehnen.
+        match confirmations.resolve(&action_id, crate::dto::ActionUserDecision::Deny) {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::debug!(error = %err, "pending confirmation already settled on close");
+                false
+            }
+        }
+    }
+
+    /// Wird fertig, sobald `auto_continue_stop` gesetzt ist.
+    pub(crate) async fn auto_continue_stop_requested(&self) {
+        loop {
+            // `notified()` vor der Flag-Prüfung anlegen: ein `Notified`
+            // empfängt `notify_waiters()` ab seiner Erzeugung, auch
+            // ungepollt — sonst ginge ein Stopp zwischen Prüfung und
+            // `.await` verloren.
+            let notified = self.conn.auto_continue_stop_notify.notified();
+            if self
+                .conn
+                .auto_continue_stop
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+/// Issue #66: Der Tauri-freie Teil von `disconnect` für **jede** Sitzung,
+/// aufgerufen, nachdem die Sitzung aus dem `SessionManager` genommen wurde
+/// und bevor ihr Transport getrennt wird. `session` ist `None`, wenn sie
+/// dort nicht (mehr) stand (z. B. Schließen während des Host-Key-Dialogs).
+///
+/// Reihenfolge ist Absicht: Erst die MCP-Buchhaltung
+/// ([`McpSessionRegistry::end_session`](crate::mcp_sessions::McpSessionRegistry::end_session)
+/// — Austragen, und bei MCP-Sitzungen schon dort das Ablehnen), danach das
+/// sitzungsunabhängige Ablehnen. So ist eine MCP-Sitzung bereits
+/// ausgetragen, wenn ihre wartende Aktion aufwacht, und der MCP-Client
+/// bekommt weiter "Sitzung geschlossen" statt "vom Nutzer abgelehnt"
+/// (Spec 0104, Abschnitt 5). Für eine MCP-Sitzung ist der zweite Schritt
+/// dann ein No-op; für eine Nutzer-Sitzung ist er der einzige.
+pub fn reject_pending_confirmation_on_close(
+    session_id: SessionId,
+    session: Option<&Session>,
+    mcp_sessions: &crate::mcp_sessions::McpSessionRegistry,
+    confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+) {
+    mcp_sessions.end_session(session_id, session, confirmations);
+    if let Some(session) = session {
+        session.reject_pending_confirmation(confirmations);
+    }
+}
+
+/// Spec 0039, Abschnitt 5: "Bei Session Resume mit vorbelasteter Historie
+/// startet die Sitzung mit `true`." Es gibt aktuell **keinen** Resume-Pfad
+/// (`docs/specs/0034-chat-session-persistence.md` ist noch Entwurf,
+/// `SessionContext.history` startet in `app_shell::commands::connect` immer
+/// mit `Vec::new()`) — diese Funktion ist die dafür vorbereitete Prüfung,
+/// heute aber faktisch immer mit einer leeren Historie aufgerufen.
+///
+/// `MessageContent::CommandResult` zählt IMMER als untrusted-Inhalt: das
+/// darin gehaltene `CommandOutput` wird erst beim tatsächlichen Versand an
+/// den KI-Provider über `ai::fence_untrusted` in `<stdout>`/`<stderr>`-Tags
+/// gepackt (`ai-providers::{anthropic,openai_compatible}::
+/// format_command_result`) — im in-memory `ChatMessage` selbst steht noch
+/// kein Fence-Text, ein reiner String-Scan würde solche Einträge sonst
+/// übersehen. `MessageContent::Text` (SFTP-Dateiinhalt, ggf. künftig
+/// weitere Fälle) wird dagegen bereits VOR dem Push in die Historie
+/// gefenced (s. `orchestration::execute_read_remote_file`), erkennbar am
+/// literalen Tag-Text.
+pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
+    // Spec 0064 Nachtrag: aus `fence_markers()` abgeleitet statt einer
+    // separat hier gepflegten Tag-Liste — ein hartcodiertes Array hätte
+    // bei der Einführung von `UntrustedKind::RemoteOsInfo` in diesem
+    // Schritt still unvollständig bleiben können (genau die Drift-Gefahr,
+    // vor der `fence_markers()`s eigener Doc-Kommentar warnt). Filtert auf
+    // öffnende Tags (kein `</...>`, kein gemeinsames `<source>`).
+    let open_tags: Vec<String> = ssh_manager_core::ai::fence_markers()
+        .into_iter()
+        .filter(|marker| {
+            marker.starts_with('<') && !marker.starts_with("</") && marker != "<source>"
+        })
+        .collect();
+    history.iter().any(|message| match &message.content {
+        MessageContent::CommandResult { .. } => true,
+        MessageContent::Text(text) => open_tags.iter().any(|tag| text.contains(tag.as_str())),
+        // Kommando/Grund stammen von der KI selbst bzw. der lokalen
+        // Filter-Engine, nie vom Remote-Server (s. `format_action_
+        // rejected`-Doc-Kommentar in `ai-providers`) — keine untrusted
+        // Quelle.
+        MessageContent::ActionRejected { .. } => false,
+        // Issue #162: Inhalt aus dem offenen Web (Spec 0039).
+        MessageContent::WebActivity(_) => true,
+        // Issue #504 (ADR 0141, decision 4): every extension part, also
+        // after resume and whatever its source.
+        MessageContent::Extension(_) => true,
+        MessageContent::Sealed(_) => true,
+        // Issue #545: AI-originated text, like an assistant `Text`.
+        MessageContent::Question { .. } => false,
+    })
+}
+
+mod terminal_actor;
+pub use terminal_actor::{spawn_terminal_actor, spawn_terminal_actor_with_idle};
+
+/// Issue #353: the one status transition for every way a connection can end
+/// unexpectedly (terminal EOF, keepalive timeout, any other loss the
+/// transport reports). Sets `Disconnected` and emits
+/// `connection-status-changed` — exactly once per session: later reports
+/// find the status already `Disconnected` and do nothing. Returns whether
+/// this call made the transition.
+pub async fn report_connection_lost(
+    session_id: SessionId,
+    session: &Session,
+    emitter: &dyn EventEmitter,
+    reason: Option<String>,
+) -> bool {
+    {
+        let mut status = lock_tolerating_poison(&session.conn.status);
+        if *status == ConnectionStatus::Disconnected {
+            return false;
+        }
+        *status = ConnectionStatus::Disconnected;
+    }
+    // Issue #356: remember that an AI turn was cut off by the loss (running
+    // command, waiting confirmation or a pending follow-up round), so the
+    // AI can continue after an automatic reconnect.
+    let turn_active =
+        ssh_manager_core::sync::lock_tolerating_poison(&session.conn.chat_turn).running;
+    session
+        .conn
+        .auto_reconnect
+        .set_ai_turn_interrupted(turn_active);
+    // The hook runs first: it announces the automatic attempts before the
+    // status event, so the UI never shows "lost" for a moment.
+    session.conn.auto_reconnect.fire_hook(session_id);
+    // Issue #1507: observers learn of the loss (no reason text).
+    session
+        .emit_connection(
+            crate::activity::ConnectionChange::Disconnected(
+                crate::activity::DisconnectReason::Network,
+            ),
+            crate::activity::ActivitySource::User,
+        )
+        .await;
+    emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
+    true
+}
+
+/// Issue #353: watches the transport's loss signal for a session, also when
+/// no terminal is open. An explicit `disconnect()` marks the transport
+/// closed first, so the resulting signal is not reported as a loss. Holds
+/// only a weak reference: it never keeps a removed session alive.
+pub fn spawn_connection_watch(
+    session_id: SessionId,
+    session: &Arc<Session>,
+    mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
+    emitter: Arc<dyn EventEmitter>,
+    tasks: &crate::tasks::TaskScope,
+) {
+    let epoch = session.transport.epoch();
+    let session = Arc::downgrade(session);
+    tasks.spawn("connection-watch", async move {
+        let loss = loop {
+            if let Some(loss) = watch.borrow_and_update().clone() {
+                break loss;
+            }
+            if watch.changed().await.is_err() {
+                return; // transport dropped without a loss
+            }
+        };
+        let Some(session) = session.upgrade() else {
+            return;
+        };
+        // Issue #565: a replaced transport's signal is not this connection's.
+        if session.transport.is_closed() || session.transport.epoch() != epoch {
+            return;
+        }
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason).await;
+    });
+}
+
+#[cfg(any(test, feature = "test-support"))]
+mod test_setters;
+
+#[cfg(test)]
+mod tests;

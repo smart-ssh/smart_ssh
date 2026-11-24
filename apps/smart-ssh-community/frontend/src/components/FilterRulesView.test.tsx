@@ -6,21 +6,22 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { EvaluationTraceDto, RuleDto, ServerDto } from "../types";
-import { TestPanel } from "./FilterRulesView";
+import type { EvaluationTraceDto, RuleDto, ServerDto } from "../api/types";
+import { RuleTester as TestPanel } from "./filterRules/RuleTester";
 
 const evaluateExplainedMock = vi.fn<
   (command: string, ctx: { serverId: string | null; tags: string[] }) => Promise<EvaluationTraceDto>
 >();
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
-    evaluateExplainedMock(command, ctx),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    evaluateExplained: (command: string, ctx: { serverId: string | null; tags: string[] }) =>
+      evaluateExplainedMock(command, ctx),
+  }),
+);
 
 function taggedServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "server-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -38,6 +39,7 @@ function taggedServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 
@@ -64,7 +66,7 @@ const noRuleTrace: EvaluationTraceDto = {
 function renderPanel(servers: ServerDto[]) {
   return render(
     <I18nextProvider i18n={testI18n}>
-      <TestPanel servers={servers} rules={[] as RuleDto[]} />
+      <TestPanel servers={servers} rules={[] as RuleDto[]} scopeText={() => "Global"} />
     </I18nextProvider>,
   );
 }
@@ -103,7 +105,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
 
-    await waitFor(() => expect(screen.getByText("AutoExec")).toBeInTheDocument());
+    expect(await screen.findByText("AutoExec")).toBeInTheDocument();
   });
 
   it("still shows 'no rule matched' when no server is selected (regression baseline)", async () => {
@@ -155,6 +157,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
       <I18nextProvider i18n={testI18n}>
         <TestPanel
           servers={[]}
+          scopeText={() => "Global"}
           rules={[
             { id: "rule-1", patternValue: "ps *", action: "Allow" },
             { id: "rule-2", patternValue: "grep *", action: "Allow" },
@@ -167,7 +170,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
 
-    await waitFor(() => expect(screen.getByText("ps *")).toBeInTheDocument());
+    expect(await screen.findByText("ps *")).toBeInTheDocument();
     expect(screen.getByText("grep *")).toBeInTheDocument();
     expect(screen.getAllByTestId("trace-checks")).toHaveLength(1);
     expect(screen.getByTestId("trace-checks").textContent).toMatch(/redirection|Umleitung/i);

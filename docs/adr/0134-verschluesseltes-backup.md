@@ -1,6 +1,8 @@
 # ADR 0134 — Verschlüsseltes Voll-Backup: Hüllenmodell, Wiederherstellungscode, Ersetzen statt Zusammenführen
 
-Status: angenommen · Issue: #419 · Spec 0109
+## Status
+
+Accepted · Issue: #419 · Spec 0109
 
 ## Kontext
 

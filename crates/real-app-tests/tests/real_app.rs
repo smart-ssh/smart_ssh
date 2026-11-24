@@ -21,8 +21,8 @@ static ONE_AT_A_TIME: Mutex<()> = Mutex::const_new(());
 #[ignore = "needs a built app, tauri-driver, a display and a Secret Service session"]
 async fn fresh_install_in_keychain_mode_lists_servers() -> TestResult {
     let _serial = ONE_AT_A_TIME.lock().await;
-    clear_test_keychain()?;
     let data_dir = tempfile::tempdir()?;
+    clear_test_keychain(data_dir.path())?;
 
     let app = RealApp::start(data_dir.path()).await?;
     let result = async {
@@ -41,7 +41,7 @@ async fn fresh_install_in_keychain_mode_lists_servers() -> TestResult {
     }
     .await;
     app.quit().await?;
-    clear_test_keychain()?;
+    clear_test_keychain(data_dir.path())?;
     result
 }
 
@@ -51,8 +51,8 @@ async fn fresh_install_in_keychain_mode_lists_servers() -> TestResult {
 #[ignore = "needs a built app, tauri-driver, a display and a Secret Service session"]
 async fn upgraded_plaintext_database_lists_its_servers() -> TestResult {
     let _serial = ONE_AT_A_TIME.lock().await;
-    clear_test_keychain()?;
     let data_dir = tempfile::tempdir()?;
+    clear_test_keychain(data_dir.path())?;
     seed_plaintext_upgrade(data_dir.path())?;
 
     let app = RealApp::start(data_dir.path()).await?;
@@ -69,7 +69,7 @@ async fn upgraded_plaintext_database_lists_its_servers() -> TestResult {
     }
     .await;
     app.quit().await?;
-    clear_test_keychain()?;
+    clear_test_keychain(data_dir.path())?;
     result
 }
 
@@ -82,8 +82,8 @@ async fn password_mode_starts_locked_then_unlocks_and_lists() -> TestResult {
     use thirtyfour::prelude::*;
 
     let _serial = ONE_AT_A_TIME.lock().await;
-    clear_test_keychain()?;
     let data_dir = tempfile::tempdir()?;
+    clear_test_keychain(data_dir.path())?;
     seed_password_mode(data_dir.path()).await?;
 
     let app = RealApp::start(data_dir.path()).await?;
@@ -142,6 +142,6 @@ async fn password_mode_starts_locked_then_unlocks_and_lists() -> TestResult {
     }
     .await;
     app.quit().await?;
-    clear_test_keychain()?;
+    clear_test_keychain(data_dir.path())?;
     result
 }

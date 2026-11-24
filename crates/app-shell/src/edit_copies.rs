@@ -60,6 +60,25 @@ pub(crate) fn instance_root_for(cache_dir: &Path, data_dir: &Path) -> PathBuf {
     shared_root(cache_dir).join(scope_name(data_dir))
 }
 
+/// The OS cache directory. On Android there is no `HOME`, so the app-private
+/// cache directory is used (Spec 0114).
+///
+/// Issue #1313: with a data-directory override the cache lives inside it
+/// (`<data dir>/cache`), so the instance writes nothing outside.
+fn platform_cache_dir() -> Option<PathBuf> {
+    if let Some(dir) = persistence_sqlite::data_dir_override() {
+        return Some(dir.join("cache"));
+    }
+    #[cfg(target_os = "android")]
+    {
+        Some(persistence_sqlite::android_cache_dir())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Some(directories::BaseDirs::new()?.cache_dir().to_path_buf())
+    }
+}
+
 /// The edit-copy root of this process; `None` if the OS reports no cache
 /// directory (the caller turns that into its error, as before issue #93).
 pub(crate) fn instance_root() -> Option<PathBuf> {
@@ -68,7 +87,7 @@ pub(crate) fn instance_root() -> Option<PathBuf> {
             // Fallback for tests only: in the app, `sweep_at_startup` has
             // already set the value from the locked data directory before
             // any session can ask for it.
-            let cache = directories::BaseDirs::new()?.cache_dir().to_path_buf();
+            let cache = platform_cache_dir()?;
             let db_path = persistence_sqlite::default_db_path();
             let data_dir = db_path.parent()?;
             // Same form as `DataDirLock::dir()` (canonical), so the lazy and
@@ -91,6 +110,38 @@ pub(crate) fn clipboard_root() -> Option<PathBuf> {
     let scope = root.file_name()?.to_owned();
     let cache_smart_ssh = root.parent()?.parent()?;
     Some(cache_smart_ssh.join("clipboard-files").join(scope))
+}
+
+/// Issue #679: root of the staging area for files picked through the Android
+/// system picker (`<cache>/smart-ssh/picked-files/<scope>`), a sibling of the
+/// edit-copy root with the same scope. Swept at startup with the edit copies.
+pub(crate) fn picked_root() -> Option<PathBuf> {
+    let root = instance_root()?;
+    let scope = root.file_name()?.to_owned();
+    let cache_smart_ssh = root.parent()?.parent()?;
+    Some(cache_smart_ssh.join("picked-files").join(scope))
+}
+
+/// Issue #679: removes the staging copy of a picked upload (and its now empty
+/// numbered/per-pick directories) once the upload is over. Only paths inside
+/// `root` are touched; any other path (a real file the user picked on
+/// desktop) is never deleted. Failures are logged, never fatal.
+pub(crate) fn remove_staged_pick(path: &Path, root: &Path) {
+    if !path.starts_with(root) || path == root {
+        return;
+    }
+    if let Err(err) = std::fs::remove_file(path) {
+        tracing::warn!(path = %path.display(), error = %err, "could not remove staged upload copy");
+        return;
+    }
+    // `<root>/<pick>/<index>/<name>`: drop the empty parents up to `root`.
+    let mut dir = path.parent();
+    while let Some(d) = dir {
+        if d == root || !d.starts_with(root) || std::fs::remove_dir(d).is_err() {
+            break;
+        }
+        dir = d.parent();
+    }
 }
 
 /// What a sweep did. Only counts — the paths of failures go to the log.
@@ -125,6 +176,7 @@ fn remove_entry(path: &Path) -> std::io::Result<()> {
 /// effort: each failure is logged (path and error, never file content) and
 /// the sweep continues. A link or file in place of `dir` itself is removed
 /// as such, never followed.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(crate) fn sweep_dir(dir: &Path) -> SweepReport {
     let mut report = SweepReport::default();
     match std::fs::symlink_metadata(dir) {
@@ -189,11 +241,11 @@ pub(crate) fn sweep_instance(cache_dir: &Path, data_dir: &Path) -> SweepReport {
 /// instance left behind. Never fails — a problem is logged and the start
 /// goes on.
 pub(crate) fn sweep_at_startup(locked_data_dir: &Path) {
-    let Some(base) = directories::BaseDirs::new() else {
+    let Some(cache) = platform_cache_dir() else {
         tracing::warn!("edit-copy sweep skipped: no cache directory");
         return;
     };
-    let cache = base.cache_dir();
+    let cache = cache.as_path();
     let root = instance_root_for(cache, locked_data_dir);
     if INSTANCE_ROOT.set(Some(root.clone())).is_err() && instance_root() != Some(root) {
         // Cannot happen in the app (this runs once, before any session);
@@ -202,6 +254,9 @@ pub(crate) fn sweep_at_startup(locked_data_dir: &Path) {
         return;
     }
     let report = sweep_instance(cache, locked_data_dir);
+    if let Some(picked) = picked_root() {
+        let _ = sweep_dir(&picked);
+    }
     tracing::info!(
         removed = report.removed,
         failed = report.failed,
@@ -478,5 +533,26 @@ mod tests {
             "an edit copy of an earlier version must stay byte for byte"
         );
         assert!(foreign.exists());
+    }
+
+    /// Issue #679: a staged pick is removed after the upload, with its empty
+    /// directories; a file outside the staging root is never removed.
+    #[test]
+    fn test_remove_staged_pick_removes_only_inside_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("picked");
+        let staged = root.join("pick").join("0").join("a.txt");
+        std::fs::create_dir_all(staged.parent().unwrap()).unwrap();
+        std::fs::write(&staged, b"x").unwrap();
+        let outside = tmp.path().join("real.txt");
+        std::fs::write(&outside, b"y").unwrap();
+
+        remove_staged_pick(&outside, &root);
+        assert!(outside.exists());
+
+        remove_staged_pick(&staged, &root);
+        assert!(!staged.exists());
+        assert!(!root.join("pick").exists());
+        assert!(root.exists());
     }
 }

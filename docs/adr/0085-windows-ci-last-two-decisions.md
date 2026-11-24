@@ -1,6 +1,8 @@
 # ADR 0085 — Entscheidungen bei der Umsetzung von Spec 0093
 
-Status: akzeptiert (A1–A2, A5–A7) · Spec:
+## Status
+
+Accepted · (A1–A2, A5–A7) · Spec:
 `docs/specs/0093-windows-ci-last-two.md` · Backlog: BL-0281
 
 ## 1. A2 — Manifest-Einbettung: zwei getrennte Wege statt einem gemeinsamen

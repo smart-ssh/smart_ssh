@@ -7,7 +7,6 @@ use tauri_plugin_store::StoreExt;
 /// Spec 0024-Muster (s. `crate::risk_second_opinion`-Moduldoc): derselbe
 /// `tauri-plugin-store`-Ablageort wie die übrigen reinen UI-/App-
 /// Einstellungen, kein SQLite nötig für ein einzelnes Bool.
-use crate::settings_store::SETTINGS_STORE_FILE;
 const ACKNOWLEDGED_KEY: &str = "first_run_notice_acknowledged";
 
 /// Spec 0031, Abschnitt 4, letzter Punkt: `connect_session` prüft dies
@@ -18,7 +17,7 @@ const ACKNOWLEDGED_KEY: &str = "first_run_notice_acknowledged";
 /// Store/Schlüssel (Erststart) — Fail-safe: im Zweifel gilt der Hinweis als
 /// nicht bestätigt, nie automatisch als bestätigt.
 pub fn is_acknowledged<R: Runtime>(app: &AppHandle<R>) -> bool {
-    let Ok(store) = app.store(SETTINGS_STORE_FILE) else {
+    let Ok(store) = app.store(crate::settings_store::settings_store_file()) else {
         return false;
     };
     store
@@ -92,17 +91,22 @@ pub(crate) mod test_support {
         // A file that cannot be parsed still opens as an empty store here,
         // exactly like on the first `app.store(..)`.
         app.handle()
-            .store_builder(super::SETTINGS_STORE_FILE)
+            .store_builder(crate::settings_store::SETTINGS_STORE_FILE)
             .disable_auto_save()
             .build()
             .expect("settings store konnte nicht geöffnet werden");
+        // Session-scoped tasks (issue #881) need the supervisor in state.
+        let tasks = std::sync::Arc::new(app_logic::tasks::TaskSupervisor::with_handle(
+            tauri::async_runtime::handle().inner().clone(),
+        ));
+        tauri::Manager::manage(&app, tasks);
         app
     }
 
     /// Löscht den Bestätigungs-Schlüssel wieder — Aufrufer muss bereits
     /// `lock()` halten.
     pub(crate) fn reset(handle: &AppHandle<MockRuntime>) {
-        if let Ok(store) = handle.store(super::SETTINGS_STORE_FILE) {
+        if let Ok(store) = handle.store(crate::settings_store::settings_store_file()) {
             store.delete(super::ACKNOWLEDGED_KEY);
             let _ = store.save();
         }
@@ -131,7 +135,7 @@ mod tests {
         let handle = app.handle().clone();
         reset(&handle);
         let store = handle
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("Store sollte sich öffnen lassen");
         store.set(ACKNOWLEDGED_KEY, serde_json::json!(true));
 
@@ -146,7 +150,7 @@ mod tests {
         let handle = app.handle().clone();
         reset(&handle);
         let store = handle
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("Store sollte sich öffnen lassen");
         store.set(ACKNOWLEDGED_KEY, serde_json::json!(false));
 

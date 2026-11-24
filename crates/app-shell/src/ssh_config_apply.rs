@@ -14,9 +14,10 @@ use ssh_manager_core::profiles::ssh_config::{ImportPlan, JumpTarget};
 use ssh_manager_core::profiles::{CredentialStore, Group, GroupId, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{KeyFileError, KeyFileReader};
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 use app_logic::dto::{AuthMethodInput, ServerInput};
-use app_logic::error::{CommandError, CommandResult};
+use app_logic::error::{CommandError, CommandResult, StoreResultExt};
 
 /// Was mit `IdentityFile` geschehen soll (§3.1.9). Gilt für den ganzen
 /// Import und ist je Eintrag umstellbar; Vorgabe ist [`Self::KeepAsFile`],
@@ -131,37 +132,18 @@ impl From<&KeyFileError> for IdentityFallbackReason {
     }
 }
 
-/// Ergebnis eines erfolgreichen Lesens auf Weg (b) — der Inhalt für den
-/// Schlüsselbund plus, ob der Schlüssel verschlüsselt war (Grundlage für
-/// [`IdentityEncryptedNotice`], §3.1.9 b).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyFileRead {
-    pub content: String,
-    pub encrypted: bool,
-}
-
-/// Liest eine Schlüsseldatei für Weg (b). Getrennt als Trait, damit die
-/// Tests belegen können, **welche** Dateien geöffnet wurden — und dass die
-/// Vorschau keine öffnet (§6.4.1b).
-///
-/// `Send + Sync`: Die Quelle wird über ein `await` hinweg gehalten (das
-/// Anlegen jedes Profils ist async), und ohne diese Schranke wäre das
-/// Future des Tauri-Kommandos nicht `Send`.
-pub trait KeyFileSource: Send + Sync {
-    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason>;
-}
-
 /// Führt den bestätigten Plan aus (§3.1.11).
 ///
 /// `choices` ist die Wahl des Nutzers je Eintrag; ein Eintrag ohne Wahl
 /// gilt als ausgewählt mit den Vorgaben. Konflikte werden **übersprungen**,
 /// solange kein `rename_to` gesetzt ist (§3.1.8, Vorgabe).
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn apply_import(
     plan: &ImportPlan,
     choices: &[EntryChoice],
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keys: &dyn KeyFileSource,
+    keys: &(dyn KeyFileReader + Send + Sync),
 ) -> CommandResult<ApplyOutcome> {
     let choice_of = |i: usize| -> EntryChoice {
         choices
@@ -283,44 +265,50 @@ pub async fn apply_import(
 
         // §3.1.9: Der Weg entscheidet, ob überhaupt eine Datei aufgeht.
         let auth = match (&e.identity_file, c.identity_mode) {
-            (Some(idf), IdentityMode::IntoKeychain) => match keys.read_key(&idf.path) {
-                Ok(read) => {
-                    // §3.1.9 (b), letzter Punkt: Die Vorschau konnte das
-                    // nicht wissen (§5.1) — jetzt, nach dem tatsächlichen
-                    // Lesen, steht es in der Abschlussmeldung, damit der
-                    // Nutzer die Passphrase nachträgt, bevor er sich zum
-                    // ersten Mal verbindet.
-                    if read.encrypted {
-                        outcome.identity_encrypted.push(IdentityEncryptedNotice {
+            (Some(idf), IdentityMode::IntoKeychain) =>
+            // `enforce_permissions = false`: for the import a permission problem is
+            // a finding, not a block (§5.5). Same checks as the manual path.
+            {
+                match keys.read(&idf.path, false) {
+                    Ok(read) => {
+                        // §3.1.9 (b), letzter Punkt: Die Vorschau konnte das
+                        // nicht wissen (§5.1) — jetzt, nach dem tatsächlichen
+                        // Lesen, steht es in der Abschlussmeldung, damit der
+                        // Nutzer die Passphrase nachträgt, bevor er sich zum
+                        // ersten Mal verbindet.
+                        if read.encrypted {
+                            outcome.identity_encrypted.push(IdentityEncryptedNotice {
+                                entry: e.name.clone(),
+                                path: idf.path.clone(),
+                            });
+                        }
+                        AuthMethodInput::PrivateKey {
+                            key_content: Some(read.key.expose_secret().to_string()),
+                            // §3.1.9 (b): Nach einer Passphrase wird beim Import
+                            // **nicht** gefragt; ein verschlüsselter Schlüssel
+                            // geht byte-gleich in den Schlüsselbund (Spec 0076,
+                            // C-4).
+                            passphrase: None,
+                        }
+                    }
+                    Err(err) => {
+                        let reason = IdentityFallbackReason::from(&err);
+                        // Ein Fehler lässt den Import **nicht** scheitern:
+                        // dieser eine Server fällt auf Weg (a) zurück, und die
+                        // Meldung sagt warum (§3.1.9 b). Der Grund trägt nie
+                        // Dateiinhalt.
+                        outcome.identity_fallbacks.push(IdentityFallback {
                             entry: e.name.clone(),
                             path: idf.path.clone(),
+                            reason,
                         });
-                    }
-                    AuthMethodInput::PrivateKey {
-                        key_content: Some(read.content),
-                        // §3.1.9 (b): Nach einer Passphrase wird beim Import
-                        // **nicht** gefragt; ein verschlüsselter Schlüssel
-                        // geht byte-gleich in den Schlüsselbund (Spec 0076,
-                        // C-4).
-                        passphrase: None,
+                        AuthMethodInput::IdentityFile {
+                            path: idf.path.clone(),
+                            passphrase: None,
+                        }
                     }
                 }
-                Err(reason) => {
-                    // Ein Fehler lässt den Import **nicht** scheitern:
-                    // dieser eine Server fällt auf Weg (a) zurück, und die
-                    // Meldung sagt warum (§3.1.9 b). Der Grund trägt nie
-                    // Dateiinhalt.
-                    outcome.identity_fallbacks.push(IdentityFallback {
-                        entry: e.name.clone(),
-                        path: idf.path.clone(),
-                        reason,
-                    });
-                    AuthMethodInput::IdentityFile {
-                        path: idf.path.clone(),
-                        passphrase: None,
-                    }
-                }
-            },
+            }
             // (a) — der Pfad wandert unverändert in die Anmeldeart, die
             // Datei bleibt zu (§4.6, §5.5).
             (Some(idf), IdentityMode::KeepAsFile) => AuthMethodInput::IdentityFile {
@@ -363,6 +351,7 @@ pub async fn apply_import(
             post_ingest_policy: Default::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
         };
 
@@ -427,53 +416,6 @@ async fn rollback(
                 error = %err,
                 "Rücknahme einer importierten Gruppe fehlgeschlagen"
             );
-        }
-    }
-}
-
-/// Weg (b) im Betrieb - ueber **denselben** [`KeyFileReader`], den das
-/// Anlegen eines Servers von Hand benutzt.
-///
-/// §5.5 ist hier woertlich zu nehmen: "dann gelten die Pruefungen aus Spec
-/// 0076 (Dateirechte, symbolische Links, Gueltigkeit des Schluessels), und
-/// zwar dieselben wie beim Anlegen eines Servers von Hand. Der Import
-/// erfindet dafuer keine eigenen, schwaecheren Regeln."
-///
-/// Die erste Fassung tat genau das - `exists()` + `read_to_string` +
-/// Teilstring-Suche nach `PRIVATE KEY` - und war damit an drei Stellen
-/// schwaecher als die Handstelle (Review-Runde 1): keine Groessengrenze,
-/// keine Pruefung der Dateiart (ein FIFO haette das Kommando unbegrenzt
-/// haengen lassen), und eine Teilstring-Pruefung statt echter
-/// Schluesselgueltigkeit, ueber die eine beliebige Textdatei mit dieser
-/// Zeichenfolge als "privater Schluessel" in den Schluesselbund gewandert
-/// waere.
-///
-/// `enforce_permissions: false` - fuer den Import ist ein Rechte-Mangel ein
-/// **Befund**, keine Sperre; genau so sieht es der Trait-Kommentar zu
-/// [`KeyFileReader::read`] fuer den Import ausdruecklich vor.
-///
-/// §5.1: Geoeffnet wird **nur**, was im Plan stand. Diese Quelle bekommt
-/// deshalb den Pfad aus dem Plan, nie einen aus dem Frontend.
-pub struct DiskKeyFiles<'a> {
-    pub reader: &'a (dyn KeyFileReader + Send + Sync),
-}
-
-impl KeyFileSource for DiskKeyFiles<'_> {
-    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason> {
-        match self.reader.read(path, false) {
-            // §3.1.9 (b) / Spec 0076 C-4: Der Dateiinhalt geht byte-gleich
-            // in den Schluesselbund, auch wenn er verschluesselt ist - nach
-            // einer Passphrase wird beim Import nicht gefragt. `encrypted`
-            // wandert mit, damit die Abschlussmeldung sagen kann, dass die
-            // Passphrase nachzutragen ist (spec-reviewer-Fund, Runde 1).
-            Ok(content) => Ok(KeyFileRead {
-                content: content.key.expose_secret().to_string(),
-                encrypted: content.encrypted,
-            }),
-            // Kein Fehler laesst den Import scheitern: dieser eine Server
-            // faellt auf Weg (a) zurueck, und die Meldung sagt warum
-            // (§3.1.9 b). Der Grund traegt nie Dateiinhalt.
-            Err(err) => Err(IdentityFallbackReason::from(&err)),
         }
     }
 }
@@ -834,28 +776,59 @@ pub async fn preview_ssh_config_import(
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
-
-    let read = app_logic::ssh_config_import::read_import(&path).map_err(|abort| match abort {
+    // Issue #679: a `content://` URI (Android) is copied into an app-private
+    // staging directory first (`read_import` works on paths); the copy is
+    // removed right after reading. `Include`s next to the chosen file are not
+    // reachable through a URI and are reported as not found.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
+    let staging = match handle.as_path() {
+        Some(_) => None,
+        None => Some(
+            crate::edit_copies::picked_root()
+                .ok_or_else(|| {
+                    CommandError::with_code("No cache directory available", "NO_CACHE_DIR")
+                })?
+                .join(uuid::Uuid::new_v4().to_string()),
+        ),
+    };
+    let path = match &staging {
+        Some(dir) => handle.stage_into(crate::local_file::platform_opener(&app).as_ref(), dir)?,
+        None => handle
+            .as_path()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default(),
+    };
+    let read_result = app_logic::ssh_config_import::read_import(&path);
+    if let Some(dir) = &staging {
+        if let Err(err) = std::fs::remove_dir_all(dir) {
+            tracing::warn!(error = %err, "could not remove the staged ssh_config copy");
+        }
+    }
+    let read = read_result.map_err(|abort| match abort {
         app_logic::ssh_config_import::ImportAbort::ChosenIsBackup => {
             CommandError::with_code(abort.to_string(), "SSH_CONFIG_IS_BACKUP")
         }
-        other => CommandError::from(other.to_string()),
+        other => CommandError::with_code(other.to_string(), "SSH_CONFIG_IMPORT_ABORTED"),
     })?;
 
     // §4.1: Ohne den Bestand sind weder Konflikte noch `ProxyJump`-Ziele im
     // Bestand noch Schlagwort-Treffer bestimmbar.
     // Nicht nutzbare Server zählen nur für die Konflikterkennung (Spec
     // 0008 §6a), nie als Jump-Ziel — sie stehen getrennt im Inventory.
-    let listing = state.profile_store.list_server_entries().await?;
+    let listing = state
+        .profile_store
+        .list_server_entries()
+        .await
+        .store_err()?;
     let servers = listing.servers;
-    let groups = state.profile_store.list_groups().await?;
+    let groups = state.profile_store.list_groups().await.store_err()?;
     // §5.2a: die bestehenden Regeln, damit die Vorschau kennzeichnen kann,
     // welches importierte Schlagwort eine davon trifft.
     let rules: Vec<ssh_manager_core::filter::Rule> = state
         .policy_store
         .list_all()
-        .await?
+        .await
+        .store_err()?
         .into_iter()
         .map(|r| r.into_rule())
         .collect();
@@ -876,10 +849,8 @@ pub async fn preview_ssh_config_import(
     plan.skipped.extend(read.include_issues.clone());
 
     let dto = build_preview_dto(&plan, &read.files, &servers);
-    *state
-        .pending_ssh_config_import
-        .lock()
-        .expect("pending import lock") = Some(app_logic::state::PendingImport { plan });
+    *lock_tolerating_poison(&state.pending_ssh_config_import) =
+        Some(app_logic::state::PendingImport { plan });
     Ok(Some(dto))
 }
 
@@ -894,14 +865,11 @@ pub async fn apply_ssh_config_import(
     // wurde nur geklont und erst nach Erfolg geleert - zwei ueberlappende
     // Aufrufe sahen beide `Some` und haetten beide angelegt (Review-Runde 1).
     // `take` macht aus dem Kommentar "der Plan ist verbraucht" eine Tatsache.
-    let pending = state
-        .pending_ssh_config_import
-        .lock()
-        .expect("pending import lock")
-        .take();
+    let pending = lock_tolerating_poison(&state.pending_ssh_config_import).take();
     let Some(pending) = pending else {
-        return Err(CommandError::from(
-            "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.".to_string(),
+        return Err(CommandError::with_code(
+            "Es liegt keine Import-Vorschau vor. Bitte die Datei erneut wählen.",
+            "SSH_CONFIG_NO_IMPORT_PREVIEW",
         ));
     };
 
@@ -910,9 +878,7 @@ pub async fn apply_ssh_config_import(
         &choices,
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        &DiskKeyFiles {
-            reader: state.key_file_reader.as_ref(),
-        },
+        state.key_file_reader.as_ref(),
     )
     .await?;
     Ok(outcome)

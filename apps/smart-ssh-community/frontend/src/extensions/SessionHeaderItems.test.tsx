@@ -1,13 +1,13 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetChatSessionIdsForTests, setChatSessionId } from "../chatSessionIds";
+import { resetChatSessionIdsForTests, setChatSessionId } from "../lib/chatSessionIds";
 import {
   registerSessionHeaderItem,
   resetRegistryForTests,
   unregisterSessionHeaderItem,
 } from "./registry";
 import { SessionHeaderItems } from "./SessionHeaderItems";
-import { requestResumeChatSession, subscribeRequestResumeChatSession } from "../navigationBus";
+import { requestResumeChatSession, subscribeRequestResumeChatSession } from "../buses/navigationBus";
 
 function Probe({ id }: { id: string }) {
   return (props: { runtimeSessionId: string; serverId: string; chatSessionId: string | null }) => (
@@ -68,5 +68,18 @@ describe("requestResumeChatSession (Issue #611)", () => {
     requestResumeChatSession("srv", "chat-2");
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ serverId: "srv", chatSessionId: "chat-1" });
+  });
+
+  it("isolates an item that throws while rendering (issue #880)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken header item");
+    };
+    registerSessionHeaderItem({ id: "bad", order: 1, component: Broken });
+    registerSessionHeaderItem({ id: "good", order: 2, component: probe("good") });
+    render(<SessionHeaderItems runtimeSessionId="s1" serverId="srv" />);
+    expect(screen.getByTestId("good")).toBeInTheDocument();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("session-header-item:bad"))).toBe(true);
+    spy.mockRestore();
   });
 });

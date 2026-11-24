@@ -24,7 +24,7 @@ const longServers = () => ({
 
 async function showToasts(page: Page) {
   await page.evaluate(async () => {
-    const path = "/src/toastBus.ts";
+    const path = "/src/buses/toastBus.ts";
     const bus = await import(/* @vite-ignore */ path);
     bus.showToast({ kind: "error", message: `Could not save the settings: ${"a very long reason ".repeat(8)}` });
     bus.showToast({ kind: "info", message: "Heads up" });
@@ -35,9 +35,9 @@ async function showToasts(page: Page) {
 
 async function openSeveral(app: AppDriver) {
   await openSession(app, "db-primary");
-  await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+  await app.page.getByRole("button", { name: "Connect", exact: true }).click();
   await openSession(app, "web-1");
-  await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+  await app.page.getByRole("button", { name: "Connect", exact: true }).click();
   await openSession(app, LONG_NAME);
 }
 
@@ -107,6 +107,19 @@ test("session: long names stay inside the tab bar and the session header", async
   await openSeveral(app);
   await expectNoClippedText(page.locator("#root"));
   await expectUsable(page.getByRole("button", { name: "Disconnect", exact: true }));
+  // The left cluster stays on one row inside the fixed-height header box.
+  const header = page.locator("header:visible").last();
+  const box = (await header.boundingBox())!;
+  const cluster = header.locator("> div").first();
+  const square = cluster.locator("> span").first();
+  const name = cluster.getByText(LONG_NAME).first();
+  const sq = (await square.boundingBox())!;
+  const nm = (await name.boundingBox())!;
+  expect(Math.abs(sq.y + sq.height / 2 - (nm.y + nm.height / 2))).toBeLessThan(4);
+  for (const b of [sq, nm]) {
+    expect(b.y).toBeGreaterThanOrEqual(box.y);
+    expect(b.y + b.height).toBeLessThanOrEqual(box.y + box.height);
+  }
 });
 
 test("toasts: long messages wrap, actions and dismiss are reachable by keyboard", async ({ app }) => {

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { useChatSessionId } from "../chatSessionIds";
+import { ErrorBoundary } from "../components/ui";
+import { useChatSessionId } from "../lib/chatSessionIds";
 import { listSessionHeaderItems, subscribeFormSlots } from "./registry";
 
 /** Issue #611 (Spec 0038, Abschnitt 4): renders the registered session
@@ -18,11 +19,13 @@ export function SessionHeaderItems({
     <>
       {items.map(({ id, component: Item }) => (
         <div key={id} data-extension-session-header-item={id} className="shrink-0">
-          <Item
-            runtimeSessionId={runtimeSessionId}
-            serverId={serverId}
-            chatSessionId={chatSessionId}
-          />
+          <ErrorBoundary id={`session-header-item:${id}`} resetKeys={[runtimeSessionId]}>
+            <Item
+              runtimeSessionId={runtimeSessionId}
+              serverId={serverId}
+              chatSessionId={chatSessionId}
+            />
+          </ErrorBoundary>
         </div>
       ))}
     </>

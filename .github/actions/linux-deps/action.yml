@@ -39,7 +39,7 @@ runs:
     # key falls back to the debs of an earlier image for the same list.
     - name: Restore cached .deb files
       id: restore
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pkgs.outputs.dir }}
         key: linux-deps-${{ runner.os }}-${{ steps.pkgs.outputs.image-os }}-${{ steps.pkgs.outputs.hash }}-${{ steps.pkgs.outputs.image-version }}
@@ -89,7 +89,7 @@ runs:
 
     - name: Save .deb files to the cache
       if: steps.restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pkgs.outputs.dir }}
         key: linux-deps-${{ runner.os }}-${{ steps.pkgs.outputs.image-os }}-${{ steps.pkgs.outputs.hash }}-${{ steps.pkgs.outputs.image-version }}

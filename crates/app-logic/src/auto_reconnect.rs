@@ -210,7 +210,7 @@ impl AutoReconnectState {
     /// Starts a new run; an older one still registered is stopped.
     pub fn begin_run(&self) -> Arc<StopHandle> {
         let handle = Arc::new(StopHandle::default());
-        let mut slot = crate::poison::lock_tolerating_poison(&self.stop);
+        let mut slot = ssh_manager_core::sync::lock_tolerating_poison(&self.stop);
         if let Some(old) = slot.replace(handle.clone()) {
             old.stop();
         }
@@ -219,20 +219,20 @@ impl AutoReconnectState {
 
     /// Ends the running attempts, if any.
     pub fn stop(&self) {
-        if let Some(handle) = crate::poison::lock_tolerating_poison(&self.stop).take() {
+        if let Some(handle) = ssh_manager_core::sync::lock_tolerating_poison(&self.stop).take() {
             handle.stop();
         }
     }
 
     pub fn is_running(&self) -> bool {
-        crate::poison::lock_tolerating_poison(&self.stop)
+        ssh_manager_core::sync::lock_tolerating_poison(&self.stop)
             .as_ref()
             .is_some_and(|h| !h.is_stopped())
     }
 
     /// Forgets the handle of a finished run (only if it is still the same).
     pub fn finish_run(&self, handle: &Arc<StopHandle>) {
-        let mut slot = crate::poison::lock_tolerating_poison(&self.stop);
+        let mut slot = ssh_manager_core::sync::lock_tolerating_poison(&self.stop);
         if slot.as_ref().is_some_and(|h| Arc::ptr_eq(h, handle)) {
             *slot = None;
         }
@@ -242,6 +242,7 @@ impl AutoReconnectState {
 /// What the header shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AutoReconnectPhase {
     /// Attempts run (the payload carries the number of the next/current one).
     Running,
@@ -253,7 +254,8 @@ pub enum AutoReconnectPhase {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AutoReconnectChangedPayload {
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
+pub(crate) struct AutoReconnectChangedPayload {
     session_id: SessionId,
     phase: AutoReconnectPhase,
     attempt: u32,
@@ -270,7 +272,7 @@ pub fn emit_auto_reconnect_changed(
         phase,
         attempt,
     }) {
-        emitter.emit_event("auto-reconnect-changed", value);
+        emitter.emit_event(crate::event_names::AUTO_RECONNECT_CHANGED, value);
     }
 }
 

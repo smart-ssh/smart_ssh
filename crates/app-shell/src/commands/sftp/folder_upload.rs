@@ -45,22 +45,10 @@ pub async fn pick_upload_folder(
     session_id: SessionId,
     title: String,
 ) -> CommandResult<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
-
-    if state.sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title(&title)
-        .pick_folder(move |path| {
-            let _ = tx.send(path);
-        });
-    let Some(picked) = rx.await.ok().flatten() else {
+    app_logic::session::require_session(&state.sessions, session_id)?;
+    let Some(path) = super::pick_folder_dialog(&app, &title).await? else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
     Ok(
         grant_for_live_session(&state.sessions, grants.inner(), session_id, vec![path])
             .into_iter()
@@ -113,9 +101,7 @@ fn snapshot_for(
     session_id: SessionId,
 ) -> CommandResult<GrantSnapshot> {
     if sessions.get(session_id).is_none() {
-        return Err(CommandError::from(
-            app_logic::local_path_grants::LOCAL_PATH_NOT_GRANTED,
-        ));
+        return Err(app_logic::local_path_grants::local_path_not_granted());
     }
     let edit_dir = super::edit_session_dir_in(edit_root, session_id).ok();
     Ok(grants.snapshot(session_id, edit_dir.as_deref()))
@@ -128,7 +114,12 @@ async fn plan_blocking(
     let (root, snapshot) = (root.clone(), snapshot.clone());
     tokio::task::spawn_blocking(move || plan_folder(&root, &snapshot))
         .await
-        .map_err(|e| format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"))?
+        .map_err(|e| {
+            app_logic::error::CommandError::with_code(
+                format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"),
+                "BACKGROUND_TASK_FAILED",
+            )
+        })?
 }
 
 /// `Some(is_dir)` if the remote path exists, `None` otherwise.
@@ -208,7 +199,7 @@ pub(super) async fn preview_impl(
 /// Second step: the upload. `confirmed_overwrites` are the remote paths the
 /// user saw in the preview and agreed to overwrite; any other existing file
 /// is left untouched and listed as skipped.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 #[tauri::command]
 pub async fn sftp_upload_folder(
     app: AppHandle,
@@ -269,19 +260,20 @@ async fn ensure_remote_dir(
     let mut sftp = guard.sftp().await?;
     match remote_kind(&mut sftp, path).await {
         Some(true) => Ok(false),
-        Some(false) => Err(CommandError::from(
+        Some(false) => Err(CommandError::with_code(
             "Am Zielpfad existiert bereits eine Datei, kein Ordner.",
+            "SFTP_TARGET_IS_A_FILE",
         )),
         None => {
             let result = sftp.create_dir(path).await;
-            audit_elevated_change(elevated_user.as_deref(), "mkdir", path, result.is_ok());
+            audit_elevated_change(elevated_user.as_ref(), "mkdir", path, result.is_ok());
             result?;
             Ok(true)
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(super) async fn upload_folder_impl(
     emitter: &dyn EventEmitter,
     session: &Session,
@@ -405,7 +397,12 @@ pub(super) async fn upload_folder_impl(
         let (snap, path) = (snapshot.clone(), file.local.as_path().to_path_buf());
         let fresh = tokio::task::spawn_blocking(move || snap.check(&path))
             .await
-            .map_err(|e| format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"))?;
+            .map_err(|e| {
+                app_logic::error::CommandError::with_code(
+                    format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"),
+                    "BACKGROUND_TASK_FAILED",
+                )
+            })?;
         let result = match fresh {
             Ok(local) => {
                 upload_file(

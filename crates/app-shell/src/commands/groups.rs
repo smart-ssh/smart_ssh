@@ -7,7 +7,7 @@ use tauri::State;
 use ssh_manager_core::profiles::{Group, GroupId};
 
 use app_logic::dto::{DeleteGroupResult, GroupDto, KeepGroupResult};
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandResult, StoreResultExt};
 use app_logic::groups::{move_group as move_group_impl, validate_no_cycle};
 use app_logic::state::AppState;
 
@@ -15,7 +15,7 @@ use app_logic::state::AppState;
 
 #[tauri::command]
 pub async fn list_groups(state: State<'_, AppState>) -> CommandResult<Vec<GroupDto>> {
-    let groups = state.profile_store.list_groups().await?;
+    let groups = state.profile_store.list_groups().await.store_err()?;
     let marked = copy_marked(&state).await?;
     Ok(groups
         .iter()
@@ -70,7 +70,7 @@ pub async fn create_group(
         created_at: now,
         updated_at: now,
     };
-    state.profile_store.create_group(&group).await?;
+    state.profile_store.create_group(&group).await.store_err()?;
     Ok(group.id)
 }
 
@@ -83,11 +83,11 @@ pub async fn update_group(
 ) -> CommandResult<()> {
     validate_no_cycle(state.profile_store.as_ref(), Some(id), parent_id).await?;
 
-    let mut group = state.profile_store.get_group(&id).await?;
+    let mut group = state.profile_store.get_group(&id).await.store_err()?;
     group.name = name;
     group.parent_id = parent_id;
     group.updated_at = Utc::now();
-    state.profile_store.update_group(&group).await?;
+    state.profile_store.update_group(&group).await.store_err()?;
     Ok(())
 }
 

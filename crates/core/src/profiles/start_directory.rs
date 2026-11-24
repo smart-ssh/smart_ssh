@@ -10,6 +10,8 @@
 
 use std::fmt;
 
+use crate::ssh::elevated::shell_single_quote;
+
 /// Präfix für Pfade relativ zum Home-Verzeichnis des Login-Nutzers.
 const HOME_PREFIX: &str = "~/";
 
@@ -94,14 +96,10 @@ pub fn start_directory_sftp_path(dir: &str) -> String {
 pub fn start_directory_cd_command(dir: &str) -> String {
     let target = match dir.strip_prefix(HOME_PREFIX) {
         Some("") => "~".to_string(),
-        Some(rest) => format!("~/{}", single_quote(rest)),
-        None => single_quote(dir),
+        Some(rest) => format!("~/{}", shell_single_quote(rest)),
+        None => shell_single_quote(dir),
     };
     format!("cd -- {target}\r")
-}
-
-fn single_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
 }
 
 #[cfg(test)]

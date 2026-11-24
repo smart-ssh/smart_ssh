@@ -2,17 +2,13 @@
 // phone width. Tagged `@phone`: runs in the phone projects only.
 import { expect, test } from "../support/app";
 import type { Locator, Page } from "@playwright/test";
-import type { RemoteEntryDto, SshConfigImportPreviewDto } from "../../src/types";
+import type { RemoteEntryDto, SshConfigImportPreviewDto } from "../../src/api/types";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, populated, server } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 
 const FINGERPRINT = "SHA256:Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5";
-
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
 
 test("host key prompt is full-screen with the whole fingerprint and both actions @phone", async ({ app }) => {
   await app.launch({
@@ -30,7 +26,7 @@ test("host key prompt is full-screen with the whole fingerprint and both actions
   expect(box!.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
   await expectUsable(dialog.getByRole("button", { name: "Reject", exact: true }));
   await expectUsable(dialog.getByRole("button", { name: "Trust", exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
 });
 
 test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
@@ -43,7 +39,21 @@ test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
   });
   const page = app.page;
   await expectUsable(page.getByRole("button", { name: "Unlock", exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
+});
+
+test("start-up card is content-height outside the unlock state @phone", async ({ app }) => {
+  await app.launch({
+    commands: {
+      get_startup_state: {
+        result: { screen: "unusableWrapping", mode: "password", offersStartOver: true, failedUnlockAttempts: 0, language: "en" },
+      },
+    },
+  });
+  const card = app.page.getByTestId("startup-card");
+  await expect(card).toBeVisible();
+  const box = await card.boundingBox();
+  expect(box!.height).toBeLessThan(app.page.viewportSize()!.height * 0.8);
 });
 
 const UNLOCK_STATE = {
@@ -64,7 +74,7 @@ async function expectSheet(page: Page, dialog: Locator, title: RegExp | string, 
   }, { message: "dialog fills the viewport" }).toBe(true);
   await expectUsable(dialog.getByRole("heading", { name: title }));
   for (const name of buttons) await expectUsable(dialog.getByRole("button", { name, exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
 }
 
 /** Navigation lives behind the burger menu at phone width (Spec 0113 §3). */
@@ -84,7 +94,7 @@ const entry = (name: string): RemoteEntryDto => ({
   uid: 1000,
   gid: 1000,
   owner: "deploy",
-  group: "deploy",
+  group: "deploy", isSymlink: false, linkTarget: null, linkKind: null,
 });
 
 async function openEntryMenuItem(app: import("../support/app").AppDriver, item: RegExp | string) {
@@ -95,13 +105,16 @@ async function openEntryMenuItem(app: import("../support/app").AppDriver, item: 
   await page.getByRole("tab", { name: "Files", exact: true }).click();
   await expect(page.getByText("notes.txt")).toBeVisible();
   await page.getByRole("button", { name: /^Actions: notes.txt$/ }).click();
-  await page.getByRole("button", { name: item, exact: typeof item === "string" }).click();
+  await page.getByRole("menuitem", { name: item, exact: typeof item === "string" }).click();
 }
 
 test("sm: file properties dialog is a full-screen sheet @phone", async ({ app }) => {
   await openEntryMenuItem(app, "Properties");
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /Properties/, ["Close"]);
+  // Issue #1386 anatomy: header icon, label/value rows with the path in mono.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  await expect(dialog.getByText("/home/deploy/notes.txt")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: properties");
   await captureScreen(app.page, "narrow-properties");
 });
@@ -110,6 +123,12 @@ test("sm: chmod dialog is a full-screen sheet @phone", async ({ app }) => {
   await openEntryMenuItem(app, /^Edit permissions|^Permissions/);
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /ermissions/, ["Cancel"]);
+  // Issue #1386 anatomy: header icon, path in its own mono paragraph, mono bit grid.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  const path = dialog.getByText("/home/deploy/notes.txt");
+  await expect(path).toHaveClass(/font-mono/);
+  expect(await path.evaluate((el) => el.tagName)).toBe("P");
+  await expect(dialog.getByTestId("chmod-grid")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: chmod");
   await captureScreen(app.page, "narrow-chmod");
 });
@@ -149,7 +168,7 @@ test("xl: ssh_config import dialog is a full-screen sheet @phone", async ({ app 
     entries: Array.from({ length: 6 }, (_, index) => ({
       index,
       name: `host-${index}`,
-      group: 0,
+      group: 0, isSymlink: false, linkTarget: null, linkKind: null,
       host: { value: `host-${index}.example.test`, origin: null },
       port: { value: 22, origin: null },
       username: { value: "deploy", origin: null },
@@ -189,6 +208,12 @@ test("unlock screen passes axe and is captured @phone", async ({ app }) => {
   await expectUsable(app.page.getByRole("button", { name: "Unlock", exact: true }));
   await expectNoSeriousA11yViolations(app.page, "narrow: unlock");
   await captureScreen(app.page, "narrow-unlock");
+  // The way-out area sits at the bottom of the screen with a full-width Quit.
+  const quit = app.page.getByRole("button", { name: "Quit", exact: true });
+  const box = (await quit.boundingBox())!;
+  const viewport = app.page.viewportSize()!;
+  expect(box.y + box.height).toBeGreaterThan(viewport.height - 64);
+  expect(box.width).toBeGreaterThan(viewport.width - 80);
 });
 
 test("toasts stay inside the viewport and do not cover the composer @phone", async ({ app }) => {
@@ -197,7 +222,7 @@ test("toasts stay inside the viewport and do not cover the composer @phone", asy
   await page.getByRole("button", { name: /^db-primary\b/ }).click();
   await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
   await page.evaluate(async () => {
-    const path = "/src/toastBus.ts";
+    const path = "/src/buses/toastBus.ts";
     const bus = await import(/* @vite-ignore */ path);
     bus.showToast({ kind: "error", message: `Could not save the settings: ${"a very long reason ".repeat(8)}` });
     bus.showToast({ kind: "info", message: "Saved", action: { label: "Undo", onClick: () => {} } });
@@ -211,6 +236,6 @@ test("toasts stay inside the viewport and do not cover the composer @phone", asy
   await expect(composer, "chat composer is on screen").toBeVisible();
   const [t, c] = await Promise.all([status.boundingBox(), composer.boundingBox()]);
   expect(t!.y + t!.height, "toasts end above the composer").toBeLessThanOrEqual(c!.y + 0.5);
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
   await captureScreen(page, "narrow-toasts");
 });

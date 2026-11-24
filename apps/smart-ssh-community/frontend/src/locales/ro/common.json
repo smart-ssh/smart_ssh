@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Navigare principală",
     "connect": "Conectare",
     "manage": "Gestionare",
     "rules": "Reguli de filtrare"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Niciun server adăugat încă",
     "emptyStateHint": "Adăugați primul server pentru a vă conecta prin SSH.",
     "emptyStateCreateFirstServer": "Adaugă primul server",
-    "newServerInGroup": "Server nou în grupul „{{name}}”",
-    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real."
+    "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real.",
+    "localBadge": "Local",
+    "thisDevice": "acest dispozitiv",
+    "sessionOpen": "Sesiune deschisă",
+    "sessionPending": "Așteaptă confirmarea",
+    "sessionDisconnected": "Sesiune deconectată",
+    "sessionReconnecting": "Se reconectează"
   },
   "settings": {
     "title": "Setări",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Date și copii de rezervă"
     }
   },
+  "appearance": {
+    "heading": "Aspect",
+    "language": "Limbă",
+    "system": "Urmează sistemul",
+    "light": "Luminos",
+    "dark": "Întunecat"
+  },
   "about": {
     "version": "Versiune",
     "copyHint": "Copiază în clipboard",
@@ -57,6 +70,7 @@
     "copyFailed": "Copierea a eșuat — textul poate fi selectat în schimb.",
     "loadFailed": "Informațiile despre versiune/build nu au putut fi încărcate.",
     "buildDev": "Build de dezvoltare",
+    "dataDirMarker": "Date: {{path}}",
     "buildRelease": "Build de lansare",
     "thirdPartyLicenses": {
       "openButton": "Licențe terță parte",
@@ -79,6 +93,7 @@
       "no_session_bus": "indisponibil — nu este accesibil niciun D-Bus session bus. Pasul următor: `sudo apt install dbus-user-session`, apoi autentificați-vă din nou.",
       "no_secret_service_provider": "indisponibil — nu rulează niciun furnizor Secret Service. Pasul următor: `sudo apt install gnome-keyring`, apoi autentificați-vă din nou — funcționează și pe KDE. Dacă folosiți deja KWallet (`kwallet6`) sau KeePassXC: integrarea lor Secret Service trebuie să ruleze sau să fie activată; instalarea singură nu este suficientă.",
       "locked": "indisponibil — există, dar este blocat. Pasul următor: deblocați-l și reporniți Smart SSH. Nu lipsește niciun pachet.",
+      "no_keystore": "indisponibil — Android Keystore nu este disponibil. Pasul următor: folosiți în schimb o parolă principală; secretele dvs. rămân în baza de date criptată.",
       "unknown": "indisponibil — cauză necunoscută. Pasul următor: verificați dacă rulează și este deblocat un furnizor Secret Service (gnome-keyring, sau KWallet ori KeePassXC cu integrarea Secret Service activată), apoi reporniți Smart SSH."
     },
     "keychainBlocked": "Aceasta nu afectează secretele dvs. — cheile API, parolele serverelor, frazele-parolă și parolele sudo se află în baza de date criptată, nu în portchei.",
@@ -91,8 +106,10 @@
       "hostKeys": "Chei de host",
       "wrappingFile": "Fișierul cheii parolei principale",
       "mcpSettings": "Setări MCP",
+      "speechModels": "Modele vocale",
       "sessions": "Sesiuni",
       "sessionsInDatabase": "stocate în baza de date",
+      "keychainService": "Serviciul breloului de chei",
       "copy": "Copiază",
       "copied": "Cale copiată",
       "copyFailed": "Copierea a eșuat:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importă …",
     "importSshConfigHint": "Importă servere dintr-un fișier OpenSSH ssh_config",
     "exportSshConfig": "Exportă …",
-    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config"
+    "exportSshConfigHint": "Exportă serverele în OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Restrânge grupul „{{name}}”",
+    "expandGroup": "Extinde grupul „{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
+    "current": "curent",
     "hintGroup": "→ mută în acest grup",
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Aceasta șterge definitiv și istoricul conversațiilor, notițele și etichetele acestui server.",
     "confirmDeleteServer": "Șterge definitiv",
     "testResult": {
-      "success": "✓ Conectare reușită",
-      "authFailed": "✗ Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
+      "success": "Conectare reușită",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Autentificare respinsă. Verificați numele de utilizator și parola sau cheia.",
       "hostKeyUnknown": "Cheie de host necunoscută — este necesară confirmarea",
-      "hostKeyMismatch": "⚠ Cheia de host s-a schimbat",
-      "networkError": "✗ Eroare de rețea: {{message}}",
-      "timeout": "✗ Serverul nu răspunde. Verificați adresa, portul și firewall-ul."
+      "hostKeyMismatch": "Cheia de host s-a schimbat",
+      "networkError": "Eroare de rețea: {{message}}",
+      "timeout": "Serverul nu răspunde. Verificați adresa, portul și firewall-ul."
     },
     "largeNoteHint": "Această notiță este foarte mare și poate fi scurtată pentru contextul IA în sesiunile lungi. Notița stocată rămâne complet intactă.",
     "summarizeNow": "Rezumă acum",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Calea către sftp-server (acces la fișiere cu drepturi ridicate)",
     "sftpServerPathPlaceholder": "Automat",
     "sftpServerPathHint": "Necesar doar dacă detectarea automată eșuează pentru browserul de fișiere cu drepturi ridicate, de ex. /usr/lib/openssh/sftp-server. Gol = automat.",
+    "elevationAllowedLabel": "Permite drepturi ridicate în browserul de fișiere",
+    "elevationAllowedHint": "Dacă este dezactivat, browserul de fișiere nu oferă drepturi ridicate pentru acest server.",
     "startDirectoryLabel": "Director de pornire (terminal și browser de fișiere)",
     "startDirectoryPlaceholder": "Directorul home",
     "startDirectoryHint": "Cale absolută (/…) sau o cale care începe cu ~/. Terminalul trece acolo printr-un cd vizibil, browserul de fișiere se deschide acolo. Comenzile IA rulează întotdeauna în directorul home. Gol = directorul home.",
@@ -294,6 +318,13 @@
       "connection": "Conexiune",
       "security": "Securitate",
       "invalid": "Conține erori"
+    },
+    "importKey": {
+      "title": "Importați cheia în Smart SSH?",
+      "import": "Importă cheia",
+      "keep": "Păstrează calea fișierului",
+      "importHint": "Cheia este stocată criptat în Smart SSH și ajunge odată cu copiile de rezervă pe celelalte dispozitive.",
+      "keepHint": "Doar calea fișierului este stocată și ajunge pe alte dispozitive. Fișierul trebuie să existe la aceeași cale pe fiecare dispozitiv."
     }
   },
   "filterRules": {
@@ -337,10 +368,15 @@
     "matchedRuleLabel": "Regulă:",
     "segmentLabel": "Segmentul {{index}}",
     "checksLabel": "Verificări:",
-    "hardBlacklistLabel": "Listă neagră fixă:"
+    "hardBlacklistLabel": "Listă neagră fixă:",
+    "invalidPattern": "Model nevalid",
+    "rowActions": "Acțiuni rând",
+    "ruleCount_one": "{{count}} regulă",
+    "ruleCount_few": "{{count}} reguli",
+    "ruleCount_other": "{{count}} de reguli"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași — trimiteți un mesaj pentru a continua.",
+    "autoContinuationLimitReached": "Continuarea automată s-a oprit după {{limit}} pași fără confirmarea dvs. — trimiteți un mesaj pentru a continua.",
     "aiBudgetWaiting": "Se așteaptă bugetul IA — următoarea încercare în {{seconds}}s…",
     "suggestCommand": "Sugerează comandă",
     "generateDocument": "Generează document: {{title}}",
@@ -354,8 +390,12 @@
     "blocked": "blocată",
     "rejected": "respinsă",
     "rejectedByUser": "Respinsă de utilizator.",
-    "usesStoredSudoPassword": "🔑 Rulează cu parola sudo stocată.",
-    "writeMayUseStoredSudoPassword": "🔑 Dacă lipsește permisiunea de scriere, aplicația scrie cu parola sudo stocată (sudo).",
+    "expired": "expirată",
+    "discardedAfterReconnect": "Eliminată după restabilirea conexiunii. Nu s-a executat nimic.",
+    "expiredTimeout": "Fără răspuns la timp, eliminată. Nu s-a executat nimic.",
+    "expiredUnknown": "Cererea nu mai este în așteptare. Nu s-a executat nimic.",
+    "usesStoredSudoPassword": "Rulează cu parola sudo stocată.",
+    "writeMayUseStoredSudoPassword": "Dacă lipsește permisiunea de scriere, aplicația scrie cu parola sudo stocată (sudo).",
     "takeIntoNote": "Preia în notiță",
     "takeIntoNoteFailed": "Eșuat — încercați din nou",
     "riskServerLabel": "Server",
@@ -365,12 +405,13 @@
     "riskSecondOpinionUnavailableHint": "A doua opinie a IA nu a putut fi obținută. Riscul afișat este cel bazat pe reguli.",
     "riskHint": "Evaluare bazată pe modele cunoscute — fără garanție.",
     "runningSince": "rulează de {{seconds}}s…",
+    "exitCode": "cod de ieșire: {{code}}",
     "cancelCommand": "Deconectează această comandă",
     "cancellingCommand": "Se deconectează…",
-    "commandCancelledNotice": "⚠ Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",
-    "commandTruncatedNotice": "⚠ Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
+    "commandCancelledNotice": "Anulată manual — rezultatul poate fi incomplet, fără cod de ieșire obișnuit.",
+    "commandTruncatedNotice": "Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
     "liveOutputLabel": "Rezultat în timp real",
-    "liveOutputTruncatedNotice": "⚠ Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
+    "liveOutputTruncatedNotice": "Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
     "autoRanLead": "Rulat automat",
     "autoRanRule": "regulă",
     "autoRanScopeGlobal": "globală",
@@ -386,17 +427,15 @@
     "editableCommand": "Comandă — editabilă",
     "execute": "Execută",
     "deny": "Refuză",
-    "quickRule": "Acceptă + regulă",
-    "quickRuleDropdownAria": "Afișează sugestiile de reguli",
-    "newRulePatternHeading": "Modelul pentru noua regulă de permitere",
     "scopeThisServer": "Acest server",
     "scopeGlobal": "Global",
     "scopeTag": "Etichetă",
     "tagNamePlaceholder": "Numele etichetei",
     "loadingSuggestions": "Se încarcă sugestiile…",
     "noSuggestions": "Nicio sugestie.",
-    "binaryFileHint": "⚠ Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
+    "binaryFileHint": "Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
+    "fileTooLargeHint": "Fișierul este mai mare de {{limit}}, fără comparație de text. Dimensiune nouă: {{newSize}}.",
+    "diffTooLargeHint": "Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
     "noContentChange": "(conținut nemodificat)",
     "quickRuleLabel": {
       "exact": "Identic: {{patterns}}",
@@ -414,10 +453,25 @@
       "blocked": "întreabă mereu, indiferent de reguli: {{reasons}}",
       "verdictAuto": "data viitoare rulează automat",
       "verdictAsk": "va întreba în continuare: {{reasons}}",
-      "notice": "Regulă creată. Această comandă va întreba și data viitoare: {{reasons}}",
       "reasonOther": "altă verificare de securitate",
-      "loadFailed": "Acoperirea regulilor nu a putut fi încărcată"
+      "loadFailed": "Acoperirea regulilor nu a putut fi încărcată",
+      "summaryHeading": "Deja permis",
+      "toDecideHeading": "De hotărât",
+      "expandAria": "Sugestii de reguli pentru {{segment}}",
+      "stagedBadge": "încă nesalvată",
+      "removeStaged": "Elimină",
+      "saveRules": "Salvează regulile ({{count}})",
+      "saveFailed": "Regulile nu au putut fi salvate: {{message}}",
+      "unsavedHint": "Reguli nesalvate: {{count}}",
+      "segmentCovered": "acoperă această parte; comanda tot va cere confirmare: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Autentificare la {{hop}}",
+    "password": "Parolă",
+    "submit": "Autentificare",
+    "notStored": "Serverul cere aceste informații pentru autentificare. Nu sunt salvate.",
+    "expired": "Cererea de autentificare a expirat. Conexiunea nu a fost stabilită."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Avertisment de securitate · Cheia de host s-a schimbat",
@@ -426,6 +480,7 @@
     "mismatchBodyAfterHost": " prezintă o cheie diferită de cea stocată ultima dată. Aceasta poate indica un atac de tip man-in-the-middle. Continuați doar dacă sunteți sigur că cheia serverului s-a schimbat legitim (de ex. reinstalarea serverului).",
     "known": "Cunoscută",
     "offeredNow": "Oferită acum",
+    "offered": "Oferită",
     "keyType": "Tip de cheie",
     "cancelConnection": "Anulează conexiunea",
     "trustAnyway": "Acceptă oricum",
@@ -438,13 +493,18 @@
   },
   "sessionTabs": {
     "newSession": "Sesiune nouă",
-    "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
     "menu": {
       "open": "Deschide meniul de navigare",
       "title": "Meniu de navigare",
-      "sessions": "Sesiuni deschise"
+      "sessions": "Sesiuni deschise",
+      "close": "Închide meniul de navigare",
+      "needsConfirmation": "Necesită confirmare",
+      "activities": "Activități",
+      "activitiesRunning_one": "{{count}} în curs",
+      "activitiesRunning_few": "{{count}} în curs",
+      "activitiesRunning_other": "{{count}} în curs"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +513,11 @@
       "pendingBadge": "Necesită confirmare",
       "readOnlyHint": "Această sesiune aparține unui instrument extern (MCP). Arată doar acțiunile instrumentului de confirmat sau respins și rezultatele lor; aici nu există intrare de chat sau terminal. Închiderea ei încheie sesiunea MCP și respinge confirmările în așteptare."
     },
-    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă."
+    "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă.",
+    "pendingBadge": "În așteptare",
+    "newConnection": "Conexiune nouă"
   },
   "aiProvider": {
-    "title": "Furnizor IA",
     "openLogs": "Deschide jurnalele de diagnosticare în managerul de fișiere",
     "noProviders": "Niciun furnizor configurat încă.",
     "configuredProvidersTitle": "Furnizori configurați",
@@ -476,16 +537,16 @@
     "apiKeyFormatHint": "Nu pare o cheie {{providerLabel}} – se aștepta un prefix precum „{{expectedPrefix}}”. O puteți salva oricum; furnizorii își schimbă ocazional formatele.",
     "testCredentials": "Testează datele de autentificare",
     "testingCredentials": "Se testează…",
-    "testResultValid": "✓ Date de autentificare valide",
-    "testResultAuthFailed": "✗ Autentificare eșuată – verificați cheia API",
-    "testResultUnreachable": "✗ Furnizor inaccesibil: {{message}}",
+    "testResultValid": "Date de autentificare valide",
+    "testResultAuthFailed": "Autentificare eșuată – verificați cheia API",
+    "testResultUnreachable": "Furnizor inaccesibil: {{message}}",
     "testResultRateLimited": "Datele de autentificare par valide, dar furnizorul limitează acum cererile. Testați din nou peste un minut.",
     "nativeToolCalling": "Acceptă apelarea nativă a instrumentelor",
     "discoverModels": "Încarcă modelele",
     "discoveringModels": "Se încarcă modelele…",
     "modelDiscoveryFailedHint": "Modelele nu au putut fi încărcate automat — introduceți manual numele modelului.",
     "modelDiscoveryEmptyHint": "Furnizorul nu a returnat niciun model. Introduceți numele modelului manual.",
-    "modelDiscoveryAuthFailed": "✗ Furnizorul a respins aceste date de autentificare – verificați cheia API",
+    "modelDiscoveryAuthFailed": "Furnizorul a respins aceste date de autentificare – verificați cheia API",
     "advanced": "Avansat",
     "extraHeadersLabel": "Anteturi suplimentare",
     "extraHeadersHint": "Atașate fiecărei cereri către acest furnizor (de ex. HTTP-Referer/X-Title de la OpenRouter).",
@@ -528,6 +589,7 @@
     "ollamaProbeRetry": "Caută din nou",
     "ollamaProbeNotFoundHeading": "Niciun Ollama local găsit (port implicit 11434).",
     "ollamaProbeNotFoundInstructions": "Instalați Ollama de la ollama.com, porniți-l și încărcați un model (de ex. `ollama pull llama3`), apoi căutați din nou.",
+    "typeLabel": "Tip",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +654,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Posibilă încercare de a injecta instrucțiuni prin conținutul serverului detectată – necesită confirmare",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Solicitată prin MCP – necesită întotdeauna confirmare",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Folosește parola sudo stocată – necesită întotdeauna confirmare",
+    "FILTER_RULES_UNAVAILABLE": "Regulile de filtrare nu au putut fi încărcate – nimic nu rulează automat, este necesară confirmarea",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserează o valoare secretă stocată înainte de trimitere – necesită întotdeauna confirmare",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Citește un fișier cu date de autentificare (de ex. cheie SSH, .env, /etc/shadow) – necesită întotdeauna confirmare",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "O acțiune anterioară din acest răspuns a fost respinsă – necesită confirmare",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Pornește sftp-server (cu sudo: acces la fișiere cu privilegii root) – necesită întotdeauna confirmare",
@@ -601,6 +665,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Verificarea instrucțiunilor injectate nu a putut fi efectuată (problemă la furnizorul de IA). Următoarea acțiune propusă necesită confirmare.",
     "AI_INJECTION_CHECK_INACTIVE": "Verificarea instrucțiunilor injectate este activată pentru acest server, dar nu este activă în această sesiune (a doua opinie a IA este dezactivată sau nu a putut fi configurată). Activați a doua opinie în setări și reconectați-vă.",
     "AI_SECOND_OPINION_SETUP_FAILED": "A doua opinie a IA este activată, dar nu a putut fi configurată pentru această sesiune (furnizor eliminat sau date de autentificare negăsite). Comenzile nu sunt verificate de ea – corectați setarea și reconectați-vă.",
+    "REDACTION_INCOMPLETE": "Unele valori secrete ale acestui server nu au putut fi încărcate; este posibil să nu fie mascate în ceea ce se trimite către IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Etichetele curente ale serverului nu au putut fi citite – necesită confirmare",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risc evaluat ca roșu sau care nu a putut fi evaluat fiabil (de ex. prea lung) – necesită întotdeauna confirmare",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Actualizările notițelor necesită întotdeauna confirmare",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Scrierile de fișiere necesită întotdeauna confirmare",
@@ -638,7 +704,13 @@
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
     "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
-    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Furnizorul AI selectat nu este configurat. Alegeți un furnizor configurat.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Alegeți un furnizor AI înainte de a activa a doua opinie despre risc.",
+    "CHAT_SESSION_NOT_FOUND": "Această conversație salvată nu mai există. Alegeți Reîncearcă pentru a vă conecta normal, fără a o relua.",
+    "SESSION_NOT_FOUND": "Această sesiune nu mai este deschisă. Deschide-o din nou din lista de servere.",
+    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv",
+    "SSH_NO_COMMON_ALGORITHM": "Niciun algoritm SSH în comun cu serverul. Software-ul lui SSH este prea vechi sau prea restrictiv. Actualizează-l sau activează algoritmi moderni."
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -726,13 +798,17 @@
     "openedLocally": "„{{name}}” deschis local — modificările vor fi oferite spre încărcare",
     "openLocallyFailed": "„{{name}}” nu a putut fi deschis local: {{reason}}",
     "editUploaded": "Modificarea „{{name}}” a fost încărcată",
-    "editUploadFailed": "Modificarea „{{name}}” nu a putut fi încărcată: {{reason}}",
     "uploadedFolder": "Folderul „{{name}}” încărcat — fișiere: {{count}}",
     "uploadFolderFailed": "Încărcarea folderului „{{name}}” a eșuat: {{reason}}",
     "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
     "nothingToPaste": "Nimic de lipit: clipboardul nu conține fișiere",
     "createFileDone": "Fișierul „{{name}}” a fost creat",
-    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
+    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}",
+    "chownDone": "Proprietarul pentru „{{name}}” a fost schimbat",
+    "chownRecursive": "Proprietar schimbat — {{count}} elemente în „{{name}}”",
+    "chownFailed": "Proprietarul pentru „{{name}}” nu a putut fi schimbat: {{reason}}",
+    "chownUnknownUser": "Proprietarul pentru „{{name}}” nu a fost schimbat: utilizator necunoscut",
+    "chownUnknownGroup": "Proprietarul pentru „{{name}}” nu a fost schimbat: grup necunoscut"
   },
   "fileElevation": {
     "toggle": "Drepturi ridicate",
@@ -746,6 +822,17 @@
     "opDelete": "Ștergere",
     "opChmod": "Schimbarea permisiunilor",
     "banner": "Drepturi ridicate active: toate acțiunile asupra fișierelor din acest browser rulează ca {{user}}.",
+    "bannerLogged": "Înregistrat pe server.",
+    "notice": {
+      "title": "Despre drepturile ridicate",
+      "intro": "Acum citești și scrii fișiere ca {{user}}. Modificările au efect imediat și aplicația nu le poate anula.",
+      "loggedApp": "Fiecare modificare este înregistrată în jurnalul aplicației.",
+      "loggedAppAndServer": "Fiecare modificare este înregistrată în jurnalul aplicației și în jurnalul de autentificare al serverului.",
+      "passwordless": "Regula sudo pentru sftp-server îi oferă lui {{user}} acces fără parolă la tot ce rulează sub această autentificare, nu doar la această aplicație.",
+      "alternative": "Dacă administrezi des acest server ca root, o autentificare root separată cu cheie (PermitRootLogin prohibit-password) face acel acces explicit.",
+      "gotIt": "Am înțeles",
+      "dontShowAgain": "Nu mai afișa pentru acest server"
+    },
     "deleteFileTitle": "Ștergeți fișierul ca {{user}}?",
     "deleteDirTitle": "Ștergeți folderul ca {{user}}?",
     "overwriteTitle": "Suprascrieți fișierul ca {{user}}?",
@@ -767,7 +854,8 @@
     "close": "Închide",
     "detail": "Detalii: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo necesită o parolă pentru sftp-server pe acest server. Aplicația nu solicită niciodată o parolă sudo.",
+      "passwordRequired": "sudo cere o parolă pentru sftp-server pe acest server. Adăugați regula sudoers de mai jos sau salvați o parolă sudo în profilul serverului pentru a activa drepturile ridicate.",
+      "wrongSudoPassword": "sudo a respins parola sudo salvată. Verificați parola sudo în profilul serverului.",
       "notAllowed": "Această autentificare SSH nu poate porni sftp-server prin sudo fără parolă.",
       "requireTty": "sudo refuză să ruleze fără terminal („requiretty” în sudoers). Dezactivați requiretty pentru această autentificare, de ex. cu „Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server nu a fost găsit pe server. Introduceți calea lui în profilul serverului la „Avansat”.",
@@ -777,7 +865,8 @@
       "invalidUser": "Utilizator țintă invalid.",
       "unsupported": "Serverul local nu are mod cu drepturi ridicate.",
       "checkFailed": "Verificarea drepturilor sudo a eșuat.",
-      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
+      "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers).",
+      "disabledForServer": "Drepturile ridicate sunt dezactivate pentru acest server în profilul serverului."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
     "group": "Drepturi ridicate",
@@ -785,7 +874,11 @@
     "otherUser": "Ca alt utilizator…",
     "targetUser": "Utilizator țintă",
     "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
-    "confirm": "Ridică"
+    "confirm": "Ridică",
+    "opChown": "Schimbarea proprietarului",
+    "chownNote": "Proprietarul va fi schimbat ca {{user}}.",
+    "idleSwitchedOff": "Drepturile ridicate au fost dezactivate după {{minutes}} minute fără activitate",
+    "revokedByProfile": "Drepturile ridicate s-au încheiat — profilul serverului nu le mai permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -799,6 +892,8 @@
     "groupsHeading": "Structura de foldere rezultată",
     "entriesHeading": "Servere: {{count}}",
     "field": {
+      "name": "Nume",
+      "include": "Include",
       "host": "Adresă",
       "port": "Port",
       "username": "Utilizator",
@@ -874,6 +969,9 @@
       "proxyJumpLocalPseudoServer": "indică spre pseudo-serverul local"
     },
     "confirm": "Importă",
+    "confirmCount_one": "Importă {{count}} server",
+    "confirmCount_few": "Importă {{count}} servere",
+    "confirmCount_other": "Importă {{count}} de servere",
     "applying": "Se importă …",
     "result": {
       "success": "Servere create: {{created}}, foldere: {{groups}}, conflicte omise: {{skipped}}.",
@@ -974,14 +1072,17 @@
       "hostKeyCheck": "Verificarea cheii de host",
       "authentication": "Autentificare",
       "sessionReady": "Sesiune stabilită",
-      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare"
+      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare",
+      "outdatedAlgorithms": "Algoritmi învechiți",
+      "banner": "Banner server"
     },
     "status": {
       "ok": "OK",
       "running": "în curs",
       "failed": "eșuat ({{code}})",
       "skipped": "omis",
-      "failedReason": "eșuat: {{reason}}"
+      "failedReason": "eșuat: {{reason}}",
+      "warning": "avertisment"
     },
     "hostKeyResult": {
       "known": "cunoscută",
@@ -994,7 +1095,8 @@
       "privateKey": "Cheie privată",
       "agent": "Agent SSH",
       "certificate": "Certificat",
-      "identityFile": "Fișier de cheie"
+      "identityFile": "Fișier de cheie",
+      "keyboardInteractive": "Interactiv de la tastatură"
     },
     "detail": {
       "addresses": "Adrese: {{addresses}}",
@@ -1003,7 +1105,9 @@
       "cipher": "Cifru: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "acceptată parțial, este necesară autentificare suplimentară",
-      "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)"
+      "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)",
+      "round": "Runda {{round}}",
+      "prompts": "Solicitările serverului: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Conexiunea TCP a expirat",
@@ -1021,6 +1125,7 @@
     "parentDirectory": "Director părinte",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "Acțiuni pe fișiere",
+    "directoryActions": "Acțiuni director",
     "upload": "Încarcă",
     "uploadDialogTitle": "Încarcă fișiere",
     "uploadFolder": "Încarcă folder",
@@ -1055,8 +1160,10 @@
       "name": "Nume",
       "size": "Dimensiune",
       "permissions": "Permisiuni",
-      "modified": "Modificat"
+      "modified": "Modificat",
+      "owner": "Proprietar"
     },
+    "columnsMenu": "Afișează sau ascunde coloanele",
     "localEdit": {
       "uploading": "Se încarcă „{{name}}”…",
       "changed": "„{{name}}” a fost modificat local. Îl încărcați pe server?",
@@ -1064,8 +1171,7 @@
       "editing": "Se editează „{{name}}” local…",
       "end": "Oprește editarea",
       "uploadTitle": "Încărcați modificările locale?",
-      "remoteChanged": "Fișierul de pe server a fost modificat de la descărcare — încărcarea ar suprascrie acea altă modificare.",
-      "noDiff": "Comparație de text imposibilă (fișier binar sau prea mare). Dimensiune nouă: {{size}}."
+      "remoteChanged": "Fișierul de pe server a fost modificat de la descărcare — încărcarea ar suprascrie acea altă modificare."
     },
     "deleteDialog": {
       "fileTitle": "Ștergeți fișierul?",
@@ -1089,7 +1195,6 @@
       "conflictTitle": "Suprascrieți fișierele din folder?",
       "conflictBody": "Încărcarea „{{name}}” ar suprascrie aceste {{count}} fișiere de pe server. Nimic nu este suprascris fără confirmarea dvs.",
       "summaryTitle": "Încărcare folder: „{{name}}”",
-      "summary": "Fișiere încărcate: {{uploaded}}, omise: {{skipped}}, eșuate: {{failed}}.",
       "notAttempted": "{{count}} fișiere nu au fost încercate deoarece folderul lor nu a putut fi creat.",
       "skipped": "Omise",
       "failed": "Eșuate",
@@ -1100,12 +1205,14 @@
         "unsupported": "nu este fișier obișnuit sau folder",
         "notGranted": "nu este inclus în selecția dvs.",
         "overwriteNotConfirmed": "există pe server, suprascrierea nu a fost confirmată"
-      }
+      },
+      "uploaded": "Încărcate"
     },
     "uploadConflict": {
       "title": "Suprascrieți fișierul?",
       "body": "există deja pe server.",
-      "noDiff": "Comparație de text imposibilă (fișier binar sau prea mare). Dimensiune curentă: {{remoteSize}}, dimensiune nouă: {{localSize}}."
+      "currentSize": "Dimensiune curentă",
+      "newSize": "Dimensiune nouă"
     },
     "menu": {
       "download": "Descarcă",
@@ -1121,8 +1228,10 @@
       "cut": "Taie",
       "delete": "Șterge",
       "newFolder": "Dosar nou",
-      "newFile": "Fișier nou"
+      "newFile": "Fișier nou",
+      "chown": "Schimbă proprietarul…"
     },
+    "linkMarker": "legătură simbolică",
     "properties": {
       "title": "Proprietăți",
       "name": "Nume",
@@ -1130,6 +1239,10 @@
       "type": "Tip",
       "typeFolder": "Folder",
       "typeFile": "Fișier",
+      "typeLinkFolder": "Legătură simbolică către un dosar",
+      "typeLinkFile": "Legătură simbolică către un fișier",
+      "typeLinkBroken": "Legătură simbolică ruptă",
+      "linkTarget": "Ținta legăturii",
       "size": "Dimensiune",
       "permissionsSymbolic": "Permisiuni (simbolic)",
       "permissionsNumeric": "Permisiuni (numeric)",
@@ -1179,10 +1292,24 @@
       "notText": "Diferență de text imposibilă: fișierul este binar (nu este text UTF-8 valid).",
       "permission": "Diferență de text imposibilă: cu drepturile curente nu ai permisiunea de citire pentru acest fișier.",
       "other": "Diferență de text imposibilă: fișierul nu a putut fi citit ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Schimbare proprietar",
+      "owner": "Utilizator",
+      "group": "Grup",
+      "hint": "Introduceți un nume sau un număr. O parte lăsată neschimbată rămâne neschimbată. Serverul decide dacă modificarea este permisă (de obicei doar root poate schimba proprietarul).",
+      "recursive": "Aplică pe conținut",
+      "recursiveWarning": "— schimbă proprietarul TUTUROR fișierelor și subfolderelor din acest folder. Legăturile simbolice nu sunt urmate. Nu poate fi anulat."
+    },
+    "transferChown": "Se schimbă proprietarul pentru {{name}}",
+    "stopProgress": "Progres",
+    "noTextDiff": "Diferența de text nu este posibilă (fișier binar sau prea mare)."
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "copyCode": "Copiază codul",
+    "codeCopied": "Cod copiat",
+    "codeCopyFailed": "Copierea a eșuat",
     "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
@@ -1206,12 +1333,18 @@
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
     "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
-    "contextUsage": "Context utilizat {{used}} / {{window}}",
     "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
+    "messageLabel": "Mesaj",
+    "headerProviderTooltip": "Furnizor: {{provider}}",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "refusedResponse": "Modelul a refuzat această cerere. Reformulați-o sau începeți o conversație nouă.",
     "outputTruncated": "(trunchiat)",
+    "outputMoreLines_one": "… încă {{count}} rând",
+    "outputMoreLines_few": "… încă {{count}} rânduri",
+    "outputMoreLines_other": "… încă {{count}} rânduri",
+    "outputShowAll": "Afișează tot",
+    "outputShowLess": "Afișează mai puțin",
     "fileWritten": "Fișierul '{{path}}' a fost scris.",
     "writtenWithSudoPassword": "Scris cu parola sudo stocată.",
     "documentGenerated": "Document generat",
@@ -1286,7 +1419,18 @@
     "aiTab": "IA",
     "paneTabs": "Panourile sesiunii",
     "moreActions": "Mai multe acțiuni",
+    "thisDevice": "acest dispozitiv",
+    "paneSwitch": "Comutator de panouri",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
+    "extraKeys": {
+      "group": "Taste suplimentare",
+      "up": "Săgeată sus",
+      "down": "Săgeată jos",
+      "left": "Săgeată stânga",
+      "right": "Săgeată dreapta",
+      "pageUp": "Pagină sus",
+      "pageDown": "Pagină jos"
+    },
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",
     "reconnectedSeparator": "— reconectat —",
@@ -1323,7 +1467,8 @@
       "body": "Un model vocal ({{model}}, aprox. {{size}} MiB) va fi descărcat o singură dată de la {{source}}. După aceea, recunoașterea vocală rulează integral pe acest calculator; sunetul și textul nu îl părăsesc niciodată.",
       "download": "Descarcă",
       "cancel": "Anulează",
-      "progress": "Progresul descărcării"
+      "progress": "Progresul descărcării",
+      "parakeetLicense": "Licență: {{license}}"
     },
     "errors": {
       "noDevice": "Nu a fost găsit niciun microfon. Conectează un microfon și verifică dispozitivul de intrare în setările sistemului.",
@@ -1339,7 +1484,8 @@
       "model": "Model vocal",
       "models": {
         "base": "Base (aprox. {{size}} MiB, implicit)",
-        "small": "Small (aprox. {{size}} MiB, mai precis, mai lent)"
+        "small": "Small (aprox. {{size}} MiB, mai precis, mai lent)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (aprox. {{size}} MiB, multilingv, rapid; detectează limba automat)"
       },
       "statusReady": "Descărcat",
       "statusNotDownloaded": "Nedescărcat",
@@ -1347,7 +1493,8 @@
       "download": "Descarcă",
       "delete": "Șterge modelul",
       "language": "Limba de recunoaștere",
-      "languageAuto": "Automat"
+      "languageAuto": "Automat",
+      "languageParakeetHint": "Parakeet detectează limba automat; această setare se aplică modelelor Whisper."
     }
   },
   "connectTab": {
@@ -1407,6 +1554,8 @@
     "import": {
       "title": "Restaurează din copie",
       "pickTitle": "Alegeți un fișier de copie",
+      "pickFailed": "Fișierul nu a putut fi deschis din locația aleasă.",
+      "chooseAgain": "Alege din nou fișierul",
       "file": "Fișier: {{name}}",
       "kind": "Ce deschide această copie",
       "useCode": "Cod de recuperare",
@@ -1423,6 +1572,9 @@
       "file": "Copie",
       "sessions": "Sesiuni deschise care vor fi închise: {{count}}",
       "safety": "Datele curente se salvează mai întâi în {{dir}}. Serverele dvs. se mută într-un folder nou numit “Previous data”, cu data de azi.",
+      "pickDirTitle": "Alege un folder pentru copia de siguranță",
+      "changeSafetyDir": "Schimbă…",
+      "changeSafetyDirFailed": "Folderul nu a putut fi ales. Rămâne folderul implicit.",
       "replace": "Înlocuiește datele"
     },
     "counts": {
@@ -1447,5 +1599,61 @@
       "newerVersion": "Această copie a fost creată de o versiune mai nouă a Smart SSH. Actualizați aplicația și încercați din nou.",
       "failed": "Operația a eșuat. Nu s-a schimbat nimic."
     }
+  },
+  "errorBoundary": {
+    "title": "Ceva nu a mers bine",
+    "body": "Smart SSH a întâlnit o eroare neașteptată în interfață. Reîncarcă pentru a continua. Dacă se repetă, după reîncărcare creează un pachet de diagnosticare în Setări → Diagnosticare.",
+    "reload": "Reîncarcă"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Acest server folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul SSH al serverului, dacă poți.",
+    "outdatedAlgorithmsHop": "{{hop}} folosește algoritmi SSH învechiți ({{algorithms}}). Conexiunea este mai puțin sigură. Actualizează software-ul lui SSH, dacă poți."
+  },
+  "elevatedIdle": {
+    "label": "Dezactivează drepturile ridicate după inactivitate",
+    "minutes5": "5 minute",
+    "minutes15": "15 minute",
+    "minutes30": "30 minute",
+    "minutes60": "60 minute",
+    "never": "Niciodată",
+    "hint": "Browserul de fișiere iese singur din modul ridicat după acest timp fără activitate ridicată. O operațiune în curs contează ca activitate."
+  },
+  "activities": {
+    "title": "Activități",
+    "buttonRunning": "Activități: {{running}} în curs",
+    "buttonFailed": "Activități: o activitate a eșuat",
+    "buttonDone": "Activități: finalizat",
+    "cancel": "Anulează",
+    "cancelNamed": "Anulează {{title}}",
+    "dismiss": "Închide",
+    "dismissNamed": "Închide {{title}}",
+    "succeeded": "Gata",
+    "cancelled": "Anulat",
+    "failed": "Eșuat",
+    "inProgress": "În curs",
+    "verifying": "Se verifică",
+    "speechModelTitle": "Model vocal {{name}}",
+    "buttonInterrupted": "Activități: unele au fost întrerupte",
+    "interrupted": "Întrerupt",
+    "resume": "Reia",
+    "resumeNamed": "Reia {{title}}",
+    "discard": "Renunță",
+    "discardNamed": "Renunță la {{title}}",
+    "resumeFailed": "Nu s-a putut relua.",
+    "quitTitle": "Ieși cât timp rulează activități?",
+    "quitBody": "Aceste activități încă rulează și vor fi oprite:",
+    "quitResumeHint": "Descărcările întrerupte pot fi reluate la următoarea pornire a aplicației.",
+    "quitAnyway": "Ieși oricum",
+    "keepRunning": "Lasă să ruleze",
+    "summaryRunning_one": "{{count}} în curs",
+    "summaryRunning_few": "{{count}} în curs",
+    "summaryRunning_other": "{{count}} în curs",
+    "summaryInterrupted_one": "{{count}} întreruptă",
+    "summaryInterrupted_few": "{{count}} întrerupte",
+    "summaryInterrupted_other": "{{count}} întrerupte",
+    "summaryFailed_one": "{{count}} eșuată",
+    "summaryFailed_few": "{{count}} eșuate",
+    "summaryFailed_other": "{{count}} eșuate",
+    "remaining": "mai rămân {{time}}"
   }
 }

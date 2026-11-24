@@ -1,9 +1,9 @@
 // Issue #51: die zugeklappte Detailansicht des Schritt-Protokolls.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { ConnectStepRecord } from "../types";
+import type { ConnectStepRecord } from "../api/types";
 import { ConnectStepLog } from "./ConnectStepLog";
 
 const steps: ConnectStepRecord[] = [
@@ -29,6 +29,8 @@ const steps: ConnectStepRecord[] = [
       method: "identityFile",
       remainingMethods: ["publickey"],
       partialSuccess: false,
+      round: null,
+      prompts: [],
     },
     status: { state: "failed", code: "SSH_AUTH_FAILED" },
     durationMs: 12,
@@ -57,12 +59,18 @@ describe("ConnectStepLog (issue #51)", () => {
     expect(failed[0].textContent).toContain("12 ms");
   });
 
+  it("shows status icons in the UI while the copied text keeps its markers (issue #1363)", () => {
+    const { container } = renderLog();
+    expect(container.querySelector('[data-icon="x"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("✗");
+  });
+
   it("copies the text version to the clipboard", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     renderLog();
     fireEvent.click(screen.getByText("Kopieren"));
-    await waitFor(() => expect(screen.getByText("Kopiert")).toBeInTheDocument());
+    expect(await screen.findByText("Kopiert")).toBeInTheDocument();
     const text = (writeText.mock.calls[0] as unknown as [string])[0];
     expect(text).toContain("Hop 2: root@target:22");
     expect(text).toContain("✗ Anmeldung — fehlgeschlagen: Anmeldung fehlgeschlagen");
@@ -73,10 +81,6 @@ describe("ConnectStepLog (issue #51)", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     renderLog();
     fireEvent.click(screen.getByText("Kopieren"));
-    await waitFor(() =>
-      expect(
-        screen.getByText("Kopieren in die Zwischenablage ist fehlgeschlagen."),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Kopieren in die Zwischenablage ist fehlgeschlagen.")).toBeInTheDocument();
   });
 });

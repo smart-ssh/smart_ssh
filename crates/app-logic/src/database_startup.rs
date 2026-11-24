@@ -136,7 +136,7 @@ pub fn decide_startup(file: DatabaseFileState, key: &KeyState) -> StartupPlan {
 }
 
 /// D1, Einschränkung (A3): „Master-Passwort einrichten“ nur bei
-/// `NoSecretServiceProvider` oder `NoSessionBus`.
+/// `NoSecretServiceProvider`, `NoSessionBus` oder (Android) `NoKeystore`.
 ///
 /// Begründung aus der Spec, und sie ist der Kern dieser Einschränkung: Nur
 /// bei diesen beiden Gründen kann **kein** erreichbarer K existieren — es
@@ -152,6 +152,9 @@ fn password_setup_is_safe(reason: Option<KeychainUnavailableReason>) -> bool {
         reason,
         Some(KeychainUnavailableReason::NoSecretServiceProvider)
             | Some(KeychainUnavailableReason::NoSessionBus)
+            // Android: the Keystore store could not be initialised, so no
+            // reachable key exists (Spec 0101, Spec 0114).
+            | Some(KeychainUnavailableReason::NoKeystore)
     )
 }
 
@@ -371,6 +374,7 @@ pub struct OpenedDatabase {
 /// [`lock_data_directory`]. Der Aufrufer nimmt sie **vor** diesem Aufruf
 /// und hält sie, solange der Prozess läuft; die Umwandlung (A6) verlangt
 /// sie ausdrücklich.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub async fn open_or_prepare_database(
     db_path: &Path,
     access: RootKeyAccess<'_>,
@@ -1095,6 +1099,9 @@ fn sibling(db_path: &Path, suffix: &str) -> PathBuf {
 mod instance_lock_tests;
 #[cfg(test)]
 mod tests;
+
 /// Issue #15: wiederholter Start und Downgrade an echten Datenbankdateien.
 #[cfg(test)]
 mod tests_release_upgrade;
+#[cfg(test)]
+mod tests_service_namespace;

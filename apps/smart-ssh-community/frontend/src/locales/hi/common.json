@@ -16,6 +16,7 @@
     "ok": "ठीक है"
   },
   "nav": {
+    "label": "मुख्य नेविगेशन",
     "connect": "कनेक्ट करें",
     "manage": "प्रबंधित करें",
     "rules": "फ़िल्टर नियम"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "अभी तक कोई सर्वर नहीं जोड़ा गया",
     "emptyStateHint": "SSH से कनेक्ट करने के लिए अपना पहला सर्वर जोड़ें।",
     "emptyStateCreateFirstServer": "पहला सर्वर जोड़ें",
-    "newServerInGroup": "समूह \"{{name}}\" में नया सर्वर",
-    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।"
+    "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।",
+    "localBadge": "स्थानीय",
+    "thisDevice": "यह डिवाइस",
+    "sessionOpen": "सत्र खुला है",
+    "sessionPending": "पुष्टि की प्रतीक्षा",
+    "sessionDisconnected": "सत्र डिस्कनेक्ट हुआ",
+    "sessionReconnecting": "फिर से कनेक्ट हो रहा है"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -49,6 +55,13 @@
       "dataAndBackup": "डेटा और बैकअप"
     }
   },
+  "appearance": {
+    "heading": "दिखावट",
+    "language": "भाषा",
+    "system": "सिस्टम का पालन करें",
+    "light": "लाइट",
+    "dark": "डार्क"
+  },
   "about": {
     "version": "संस्करण",
     "copyHint": "क्लिपबोर्ड पर कॉपी करें",
@@ -57,6 +70,7 @@
     "copyFailed": "कॉपी नहीं हो सका — इसके बजाय टेक्स्ट चुना जा सकता है।",
     "loadFailed": "संस्करण/बिल्ड जानकारी लोड नहीं हो सकी।",
     "buildDev": "डेव बिल्ड",
+    "dataDirMarker": "डेटा: {{path}}",
     "buildRelease": "रिलीज़ बिल्ड",
     "thirdPartyLicenses": {
       "openButton": "थर्ड-पार्टी लाइसेंस",
@@ -79,6 +93,7 @@
       "no_session_bus": "अनुपलब्ध — कोई D-Bus सत्र बस उपलब्ध नहीं है। अगला कदम: `sudo apt install dbus-user-session`, फिर दोबारा साइन इन करें।",
       "no_secret_service_provider": "अनुपलब्ध — कोई Secret Service प्रदाता नहीं चल रहा है। अगला कदम: `sudo apt install gnome-keyring`, फिर दोबारा साइन इन करें — यह KDE पर भी काम करता है। यदि आप पहले से KWallet (`kwallet6`) या KeePassXC का उपयोग करते हैं: उनका Secret Service एकीकरण चालू होना चाहिए; सिर्फ़ इंस्टॉल करना काफ़ी नहीं है।",
       "locked": "अनुपलब्ध — मौजूद है लेकिन लॉक है। अगला कदम: इसे अनलॉक करें और Smart SSH पुनः आरंभ करें। कोई पैकेज गायब नहीं है।",
+      "no_keystore": "अनुपलब्ध — Android Keystore उपलब्ध नहीं है। अगला कदम: इसके बजाय मास्टर पासवर्ड का उपयोग करें; आपके सीक्रेट एन्क्रिप्टेड डेटाबेस में ही रहते हैं।",
       "unknown": "अनुपलब्ध — कारण अज्ञात। अगला कदम: जाँचें कि कोई Secret Service प्रदाता चल रहा और अनलॉक है (gnome-keyring, या Secret Service एकीकरण चालू किए हुए KWallet या KeePassXC), फिर Smart SSH पुनः आरंभ करें।"
     },
     "keychainBlocked": "इसका आपके सीक्रेट्स पर कोई असर नहीं पड़ता — API कुंजियाँ, सर्वर पासवर्ड, पासफ़्रेज़ और sudo पासवर्ड एन्क्रिप्टेड डेटाबेस में रहते हैं, कीचेन में नहीं।",
@@ -91,8 +106,10 @@
       "hostKeys": "होस्ट कुंजियाँ",
       "wrappingFile": "मास्टर पासवर्ड कुंजी फ़ाइल",
       "mcpSettings": "MCP सेटिंग्स",
+      "speechModels": "वाक् मॉडल",
       "sessions": "सत्र",
       "sessionsInDatabase": "डेटाबेस में संग्रहीत",
+      "keychainService": "कीचेन सेवा",
       "copy": "कॉपी करें",
       "copied": "पथ कॉपी हो गया",
       "copyFailed": "कॉपी करना विफल रहा:",
@@ -126,11 +143,15 @@
     "importSshConfig": "आयात करें …",
     "importSshConfigHint": "OpenSSH ssh_config फ़ाइल से सर्वर आयात करें",
     "exportSshConfig": "निर्यात करें …",
-    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें"
+    "exportSshConfigHint": "सर्वर को OpenSSH ssh_config में निर्यात करें",
+    "title": "सर्वर",
+    "collapseGroup": "समूह “{{name}}” समेटें",
+    "expandGroup": "समूह “{{name}}” फैलाएँ"
   },
   "treeDrag": {
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
     "hintRoot": "→ शीर्ष स्तर (बिना समूह)",
+    "current": "वर्तमान",
     "hintGroup": "→ इस समूह में ले जाएँ",
     "hintCycle": "किसी समूह को उसके ही उप-समूह में नहीं ले जाया जा सकता",
     "moveTo": "“{{name}}” को यहाँ ले जाएँ…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "इससे इस सर्वर का चैट इतिहास, नोट्स और टैग भी स्थायी रूप से हट जाते हैं।",
     "confirmDeleteServer": "स्थायी रूप से हटाएँ",
     "testResult": {
-      "success": "✓ कनेक्शन सफल",
-      "authFailed": "✗ लॉगिन अस्वीकृत। उपयोगकर्ता नाम और पासवर्ड या कुंजी जाँचें।",
+      "success": "कनेक्शन सफल",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "लॉगिन अस्वीकृत। उपयोगकर्ता नाम और पासवर्ड या कुंजी जाँचें।",
       "hostKeyUnknown": "होस्ट कुंजी अज्ञात — पुष्टि आवश्यक",
-      "hostKeyMismatch": "⚠ होस्ट कुंजी बदल गई है",
-      "networkError": "✗ नेटवर्क त्रुटि: {{message}}",
-      "timeout": "✗ सर्वर जवाब नहीं दे रहा। पता, पोर्ट और फ़ायरवॉल जाँचें।"
+      "hostKeyMismatch": "होस्ट कुंजी बदल गई है",
+      "networkError": "नेटवर्क त्रुटि: {{message}}",
+      "timeout": "सर्वर जवाब नहीं दे रहा। पता, पोर्ट और फ़ायरवॉल जाँचें।"
     },
     "largeNoteHint": "यह नोट बहुत बड़ा है और लंबे सत्रों में AI संदर्भ के लिए छोटा किया जा सकता है। संग्रहीत नोट पूरी तरह सुरक्षित रहता है।",
     "summarizeNow": "अभी सारांश बनाएँ",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "sftp-server का पथ (उन्नत फ़ाइल एक्सेस)",
     "sftpServerPathPlaceholder": "स्वचालित",
     "sftpServerPathHint": "केवल तब आवश्यक जब उन्नत अधिकारों वाले फ़ाइल ब्राउज़र के लिए स्वचालित पहचान विफल हो, जैसे /usr/lib/openssh/sftp-server। खाली = स्वचालित।",
+    "elevationAllowedLabel": "फ़ाइल ब्राउज़र में उन्नत अधिकारों की अनुमति दें",
+    "elevationAllowedHint": "बंद होने पर, फ़ाइल ब्राउज़र इस सर्वर के लिए उन्नत अधिकार नहीं देता।",
     "startDirectoryLabel": "प्रारंभ डायरेक्टरी (टर्मिनल और फ़ाइल ब्राउज़र)",
     "startDirectoryPlaceholder": "होम डायरेक्टरी",
     "startDirectoryHint": "निरपेक्ष पथ (/…) या ~/ से शुरू होने वाला पथ। टर्मिनल दिखने वाले cd से वहाँ जाता है, फ़ाइल ब्राउज़र वहीं खुलता है। AI कमांड हमेशा होम डायरेक्टरी में चलते हैं। खाली = होम डायरेक्टरी।",
@@ -294,6 +318,13 @@
       "connection": "कनेक्शन",
       "security": "सुरक्षा",
       "invalid": "त्रुटियाँ हैं"
+    },
+    "importKey": {
+      "title": "क्या कुंजी को Smart SSH में आयात करें?",
+      "import": "कुंजी आयात करें",
+      "keep": "फ़ाइल पथ रखें",
+      "importHint": "कुंजी Smart SSH में एन्क्रिप्ट करके सहेजी जाती है और बैकअप के साथ आपके अन्य डिवाइस तक पहुँचती है।",
+      "keepHint": "केवल फ़ाइल पथ सहेजा जाता है और अन्य डिवाइस तक जाता है। फ़ाइल हर डिवाइस पर उसी पथ पर मौजूद होनी चाहिए।"
     }
   },
   "filterRules": {
@@ -337,10 +368,14 @@
     "matchedRuleLabel": "नियम:",
     "segmentLabel": "खंड {{index}}",
     "checksLabel": "जाँच:",
-    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
+    "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:",
+    "invalidPattern": "अमान्य पैटर्न",
+    "rowActions": "पंक्ति की क्रियाएँ",
+    "ruleCount_one": "{{count}} नियम",
+    "ruleCount_other": "{{count}} नियम"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "{{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
+    "autoContinuationLimitReached": "आपकी पुष्टि के बिना {{limit}} चरणों के बाद स्वचालित निरंतरता रुकी — जारी रखने के लिए संदेश भेजें।",
     "aiBudgetWaiting": "AI बजट की प्रतीक्षा — अगला प्रयास {{seconds}} सेकंड में…",
     "suggestCommand": "कमांड सुझाएँ",
     "generateDocument": "दस्तावेज़ बनाएँ: {{title}}",
@@ -354,8 +389,12 @@
     "blocked": "अवरुद्ध",
     "rejected": "अस्वीकृत",
     "rejectedByUser": "उपयोगकर्ता द्वारा अस्वीकृत।",
-    "usesStoredSudoPassword": "🔑 संग्रहीत sudo पासवर्ड से चलता है।",
-    "writeMayUseStoredSudoPassword": "🔑 लिखने की अनुमति न होने पर ऐप संग्रहीत sudo पासवर्ड (sudo) से लिखता है।",
+    "expired": "समाप्त",
+    "discardedAfterReconnect": "कनेक्शन फिर से बनने के बाद छोड़ दिया गया। कुछ भी नहीं चलाया गया।",
+    "expiredTimeout": "समय पर उत्तर नहीं मिला, छोड़ दिया गया। कुछ भी नहीं चलाया गया।",
+    "expiredUnknown": "यह अनुरोध अब लंबित नहीं है। कुछ भी नहीं चलाया गया।",
+    "usesStoredSudoPassword": "संग्रहीत sudo पासवर्ड से चलता है।",
+    "writeMayUseStoredSudoPassword": "लिखने की अनुमति न होने पर ऐप संग्रहीत sudo पासवर्ड (sudo) से लिखता है।",
     "takeIntoNote": "नोट में लें",
     "takeIntoNoteFailed": "विफल — फिर कोशिश करें",
     "riskServerLabel": "सर्वर",
@@ -365,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "AI की दूसरी राय प्राप्त नहीं हो सकी। दिखाया गया जोखिम नियम-आधारित है।",
     "riskHint": "ज्ञात पैटर्न पर आधारित आकलन — कोई गारंटी नहीं।",
     "runningSince": "{{seconds}} सेकंड से चल रहा है…",
+    "exitCode": "एग्ज़िट कोड: {{code}}",
     "waitingForInputHint": "यह कमांड संभवतः इनपुट की प्रतीक्षा कर रहा है। इसे रोकें, तो AI एक गैर-इंटरैक्टिव विकल्प सुझाएगा।",
     "cancelCommand": "इस कमांड को डिस्कनेक्ट करें",
     "cancellingCommand": "डिस्कनेक्ट हो रहा है…",
-    "commandCancelledNotice": "⚠ हाथ से रद्द किया गया — आउटपुट अधूरा हो सकता है, सामान्य एग्ज़िट कोड नहीं।",
-    "commandTruncatedNotice": "⚠ आउटपुट आकार सीमा पर काट दिया गया — यह अधूरा हो सकता है।",
+    "commandCancelledNotice": "हाथ से रद्द किया गया — आउटपुट अधूरा हो सकता है, सामान्य एग्ज़िट कोड नहीं।",
+    "commandTruncatedNotice": "आउटपुट आकार सीमा पर काट दिया गया — यह अधूरा हो सकता है।",
     "liveOutputLabel": "लाइव आउटपुट",
-    "liveOutputTruncatedNotice": "⚠ आकार सीमा पूरी हुई — आगे का आउटपुट अब नहीं दिखाया जाता।",
+    "liveOutputTruncatedNotice": "आकार सीमा पूरी हुई — आगे का आउटपुट अब नहीं दिखाया जाता।",
     "autoRanLead": "अपने आप चलाया गया",
     "autoRanRule": "नियम",
     "autoRanScopeGlobal": "वैश्विक",
@@ -386,17 +426,15 @@
     "editableCommand": "कमांड — संपादन योग्य",
     "execute": "चलाएँ",
     "deny": "अस्वीकार करें",
-    "quickRule": "स्वीकार करें + नियम",
-    "quickRuleDropdownAria": "नियम सुझाव दिखाएँ",
-    "newRulePatternHeading": "नए अनुमति नियम के लिए पैटर्न",
     "scopeThisServer": "यह सर्वर",
     "scopeGlobal": "वैश्विक",
     "scopeTag": "टैग",
     "tagNamePlaceholder": "टैग का नाम",
     "loadingSuggestions": "सुझाव लोड हो रहे हैं…",
     "noSuggestions": "कोई सुझाव नहीं।",
-    "binaryFileHint": "⚠ बाइनरी फ़ाइल — टेक्स्ट तुलना संभव नहीं। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
-    "diffTooLargeHint": "⚠ पंक्ति-अंतर के लिए सामग्री बहुत बड़ी है। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
+    "binaryFileHint": "बाइनरी फ़ाइल — टेक्स्ट तुलना संभव नहीं। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
+    "fileTooLargeHint": "फ़ाइल {{limit}} से बड़ी है, टेक्स्ट तुलना नहीं दी जाती। नया आकार: {{newSize}}।",
+    "diffTooLargeHint": "पंक्ति-अंतर के लिए सामग्री बहुत बड़ी है। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
     "noContentChange": "(सामग्री में कोई बदलाव नहीं)",
     "quickRuleLabel": {
       "exact": "सटीक: {{patterns}}",
@@ -414,10 +452,25 @@
       "blocked": "नियमों से स्वतंत्र रूप से हमेशा पूछता है: {{reasons}}",
       "verdictAuto": "अगली बार अपने-आप चलेगा",
       "verdictAsk": "फिर भी पूछेगा: {{reasons}}",
-      "notice": "नियम बन गया। यह कमांड अगली बार भी पूछेगी: {{reasons}}",
       "reasonOther": "एक और सुरक्षा जाँच",
-      "loadFailed": "नियम कवरेज लोड नहीं हो सका"
+      "loadFailed": "नियम कवरेज लोड नहीं हो सका",
+      "summaryHeading": "पहले से अनुमत",
+      "toDecideHeading": "तय करना बाकी",
+      "expandAria": "{{segment}} के लिए नियम सुझाव",
+      "stagedBadge": "अभी सहेजा नहीं गया",
+      "removeStaged": "हटाएँ",
+      "saveRules": "नियम सहेजें ({{count}})",
+      "saveFailed": "नियम सहेजे नहीं जा सके: {{message}}",
+      "unsavedHint": "न सहेजे गए नियम: {{count}}",
+      "segmentCovered": "यह भाग कवर होता है; कमांड फिर भी पूछेगा: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "{{hop}} पर लॉगिन",
+    "password": "पासवर्ड",
+    "submit": "लॉग इन करें",
+    "notStored": "सर्वर लॉगिन के लिए यह जानकारी माँगता है। इसे सहेजा नहीं जाता।",
+    "expired": "लॉगिन अनुरोध समाप्त हो गया। कनेक्शन स्थापित नहीं हुआ।"
   },
   "hostKeyDialog": {
     "mismatchLabel": "सुरक्षा चेतावनी · होस्ट कुंजी बदली",
@@ -426,6 +479,7 @@
     "mismatchBodyAfterHost": " पिछली बार संग्रहीत कुंजी से अलग कुंजी प्रस्तुत कर रहा है। यह मैन-इन-द-मिडल हमले का संकेत हो सकता है। केवल तभी आगे बढ़ें जब आपको भरोसा हो कि सर्वर की कुंजी वैध कारण से बदली है (जैसे सर्वर का पुनः इंस्टॉलेशन)।",
     "known": "ज्ञात",
     "offeredNow": "अभी प्रस्तुत",
+    "offered": "प्रस्तुत",
     "keyType": "कुंजी प्रकार",
     "cancelConnection": "कनेक्शन रद्द करें",
     "trustAnyway": "फिर भी भरोसा करें",
@@ -438,13 +492,17 @@
   },
   "sessionTabs": {
     "newSession": "नया सत्र",
-    "overview": "अवलोकन",
     "pendingAction": "पुष्टि की प्रतीक्षा",
     "closeTab": "टैब \"{{name}}\" बंद करें",
     "menu": {
       "open": "नेविगेशन मेनू खोलें",
       "title": "नेविगेशन मेनू",
-      "sessions": "खुले सत्र"
+      "sessions": "खुले सत्र",
+      "close": "नेविगेशन मेनू बंद करें",
+      "needsConfirmation": "पुष्टि आवश्यक",
+      "activities": "गतिविधियाँ",
+      "activitiesRunning_one": "{{count}} चल रही है",
+      "activitiesRunning_other": "{{count}} चल रही हैं"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +511,11 @@
       "pendingBadge": "पुष्टि आवश्यक",
       "readOnlyHint": "यह सत्र एक बाहरी टूल (MCP) का है। यह केवल टूल की कार्रवाइयाँ पुष्टि या अस्वीकार करने के लिए और उनके परिणाम दिखाता है; यहाँ कोई चैट इनपुट या टर्मिनल नहीं है। इसे बंद करने से MCP सत्र समाप्त होता है और लंबित पुष्टियाँ अस्वीकृत हो जाती हैं।"
     },
-    "confirmClosePending": "\"{{name}}\" के लिए एक पुष्टि अभी लंबित है। फिर भी टैब बंद करें? तब लंबित कार्रवाई अस्वीकृत मानी जाएगी।"
+    "confirmClosePending": "\"{{name}}\" के लिए एक पुष्टि अभी लंबित है। फिर भी टैब बंद करें? तब लंबित कार्रवाई अस्वीकृत मानी जाएगी।",
+    "pendingBadge": "लंबित",
+    "newConnection": "नया कनेक्शन"
   },
   "aiProvider": {
-    "title": "AI प्रदाता",
     "openLogs": "डायग्नोस्टिक लॉग फ़ाइल मैनेजर में खोलें",
     "noProviders": "अभी तक कोई प्रदाता कॉन्फ़िगर नहीं है।",
     "configuredProvidersTitle": "कॉन्फ़िगर किए गए प्रदाता",
@@ -476,16 +535,16 @@
     "apiKeyFormatHint": "यह {{providerLabel}} कुंजी जैसी नहीं दिखती – \"{{expectedPrefix}}\" जैसा उपसर्ग अपेक्षित है। आप फिर भी इसे सहेज सकते हैं; प्रदाता कभी-कभी प्रारूप बदलते हैं।",
     "testCredentials": "क्रेडेंशियल जाँचें",
     "testingCredentials": "जाँच हो रही है…",
-    "testResultValid": "✓ क्रेडेंशियल मान्य",
-    "testResultAuthFailed": "✗ प्रमाणीकरण विफल – API कुंजी जाँचें",
-    "testResultUnreachable": "✗ प्रदाता तक पहुँच नहीं: {{message}}",
+    "testResultValid": "क्रेडेंशियल मान्य",
+    "testResultAuthFailed": "प्रमाणीकरण विफल – API कुंजी जाँचें",
+    "testResultUnreachable": "प्रदाता तक पहुँच नहीं: {{message}}",
     "testResultRateLimited": "क्रेडेंशियल मान्य लगते हैं, लेकिन प्रदाता अभी दर-सीमा लगा रहा है। एक मिनट बाद फिर जाँचें।",
     "nativeToolCalling": "नेटिव टूल कॉलिंग का समर्थन करता है",
     "discoverModels": "मॉडल लोड करें",
     "discoveringModels": "मॉडल लोड हो रहे हैं…",
     "modelDiscoveryFailedHint": "मॉडल अपने-आप लोड नहीं हो सके — मॉडल का नाम हाथ से दर्ज करें।",
     "modelDiscoveryEmptyHint": "प्रदाता ने कोई मॉडल नहीं लौटाया। मॉडल का नाम हाथ से दर्ज करें।",
-    "modelDiscoveryAuthFailed": "✗ प्रदाता ने ये क्रेडेंशियल अस्वीकार किए – API कुंजी जाँचें",
+    "modelDiscoveryAuthFailed": "प्रदाता ने ये क्रेडेंशियल अस्वीकार किए – API कुंजी जाँचें",
     "advanced": "उन्नत",
     "extraHeadersLabel": "अतिरिक्त हेडर",
     "extraHeadersHint": "इस प्रदाता को भेजे जाने वाले हर अनुरोध में जोड़े जाते हैं (जैसे OpenRouter के HTTP-Referer/X-Title)।",
@@ -528,6 +587,7 @@
     "ollamaProbeRetry": "फिर खोजें",
     "ollamaProbeNotFoundHeading": "कोई स्थानीय Ollama नहीं मिला (डिफ़ॉल्ट पोर्ट 11434)।",
     "ollamaProbeNotFoundInstructions": "ollama.com से Ollama इंस्टॉल करें, उसे शुरू करें और एक मॉडल लोड करें (जैसे `ollama pull llama3`), फिर दोबारा खोजें।",
+    "typeLabel": "प्रकार",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +652,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "सर्वर सामग्री के ज़रिए निर्देश इंजेक्ट करने का संभावित प्रयास मिला – पुष्टि आवश्यक",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP के ज़रिए माँगा गया – हमेशा पुष्टि आवश्यक",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "संग्रहीत sudo पासवर्ड उपयोग करता है – हमेशा पुष्टि आवश्यक",
+    "FILTER_RULES_UNAVAILABLE": "फ़िल्टर नियम लोड नहीं हो सके – कुछ भी स्वचालित रूप से नहीं चलता, पुष्टि आवश्यक है",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "भेजने से पहले संग्रहीत गुप्त मान डालता है – हमेशा पुष्टि आवश्यक",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "क्रेडेंशियल वाली फ़ाइल पढ़ता है (जैसे SSH कुंजी, .env, /etc/shadow) – हमेशा पुष्टि आवश्यक",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "इस उत्तर की एक पिछली कार्रवाई अस्वीकृत हुई थी – पुष्टि आवश्यक",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-server शुरू करता है (sudo के साथ: root अधिकारों से फ़ाइल एक्सेस) – हमेशा पुष्टि आवश्यक",
@@ -601,6 +663,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "इंजेक्ट किए गए निर्देशों की जाँच नहीं चल सकी (AI प्रदाता की समस्या)। अगली प्रस्तावित कार्रवाई के लिए पुष्टि आवश्यक है।",
     "AI_INJECTION_CHECK_INACTIVE": "इस सर्वर के लिए इंजेक्ट किए गए निर्देशों की जाँच चालू है, पर इस सत्र में सक्रिय नहीं है (AI की दूसरी राय बंद है या सेट अप नहीं हो सकी)। सेटिंग्स में दूसरी राय चालू करें और दोबारा कनेक्ट करें।",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI की दूसरी राय चालू है, पर इस सत्र के लिए सेट अप नहीं हो सकी (प्रदाता हटाया गया या क्रेडेंशियल नहीं मिला)। कमांड इससे जाँचे नहीं जाते – सेटिंग सुधारें और दोबारा कनेक्ट करें।",
+    "REDACTION_INCOMPLETE": "इस सर्वर के कुछ गुप्त मान लोड नहीं हो सके; AI को भेजी जाने वाली सामग्री में वे छिपाए नहीं गए हो सकते हैं।",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "सर्वर के वर्तमान टैग पढ़े नहीं जा सके – पुष्टि आवश्यक",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "जोखिम लाल आँका गया, या भरोसेमंद ढंग से आँका नहीं जा सका (जैसे बहुत लंबा) – हमेशा पुष्टि आवश्यक",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "नोट अपडेट के लिए हमेशा पुष्टि आवश्यक है",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "फ़ाइल लिखने के लिए हमेशा पुष्टि आवश्यक है",
@@ -638,7 +702,13 @@
     "KEYCHAIN_KEY_MISMATCH": "कीचेन की कुंजी इस डेटाबेस की नहीं है। कुछ नहीं बदला — उसे संग्रहीत करने से अगले स्टार्टअप पर डेटाबेस अपठनीय हो जाएगा।",
     "SFTP_CONTENT_TOO_LARGE": "फ़ाइल 50 MB से बड़ी है और क्लिपबोर्ड पर कॉपी नहीं की जा सकती।",
     "CLIPBOARD_FILE_FAILED": "इस सिस्टम पर फ़ाइल को क्लिपबोर्ड पर नहीं रखा जा सका।",
-    "SSH_SFTP_ALREADY_EXISTS": "इस नाम की फ़ाइल या फ़ोल्डर पहले से मौजूद है"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "चुना गया AI प्रदाता कॉन्फ़िगर नहीं है। कोई कॉन्फ़िगर किया हुआ प्रदाता चुनें।",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "जोखिम पर दूसरी राय चालू करने से पहले कोई AI प्रदाता चुनें।",
+    "CHAT_SESSION_NOT_FOUND": "यह सहेजी गई चैट अब मौजूद नहीं है। इसे फिर से शुरू किए बिना सामान्य रूप से कनेक्ट करने के लिए पुनः प्रयास चुनें।",
+    "SESSION_NOT_FOUND": "यह सत्र अब खुला नहीं है। इसे सर्वर सूची से फिर से खोलें।",
+    "SSH_SFTP_ALREADY_EXISTS": "इस नाम की फ़ाइल या फ़ोल्डर पहले से मौजूद है",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "इस डिवाइस पर कुंजी फ़ाइल नहीं मिली",
+    "SSH_NO_COMMON_ALGORITHM": "सर्वर के साथ कोई समान SSH एल्गोरिदम नहीं है। उसका SSH सॉफ़्टवेयर बहुत पुराना या बहुत सख़्त है। उसे अपडेट करें या आधुनिक एल्गोरिदम चालू करें।"
   },
   "mcpServer": {
     "hint": "बाहरी MCP क्लाइंट इसके ज़रिए अनुमति-सूची वाले सर्वरों पर कमांड, फ़ाइल पढ़ना/लिखना और नोट अपडेट प्रस्तावित कर सकते हैं — हर अनुरोध के लिए ऐप में हमेशा पुष्टि आवश्यक है, मौजूदा अनुमति नियमों से स्वतंत्र।",
@@ -721,13 +791,17 @@
     "openedLocally": "“{{name}}” स्थानीय रूप से खोली गई — बदलाव अपलोड के लिए प्रस्तावित होंगे",
     "openLocallyFailed": "“{{name}}” स्थानीय रूप से नहीं खोली जा सकी: {{reason}}",
     "editUploaded": "“{{name}}” में बदलाव अपलोड हुआ",
-    "editUploadFailed": "“{{name}}” में बदलाव अपलोड नहीं हो सका: {{reason}}",
     "uploadedFolder": "फ़ोल्डर “{{name}}” अपलोड हुआ — {{count}} फ़ाइलें",
     "uploadFolderFailed": "फ़ोल्डर “{{name}}” अपलोड करना विफल रहा: {{reason}}",
     "uploadFailedMany": "{{name}} फ़ाइलें अपलोड नहीं हो सकीं, जैसे: {{reason}}",
     "nothingToPaste": "चिपकाने के लिए कुछ नहीं: क्लिपबोर्ड में कोई फ़ाइल नहीं है",
     "createFileDone": "फ़ाइल “{{name}}” बनाई गई",
-    "createFileFailed": "फ़ाइल “{{name}}” नहीं बनाई जा सकी: {{reason}}"
+    "createFileFailed": "फ़ाइल “{{name}}” नहीं बनाई जा सकी: {{reason}}",
+    "chownDone": "“{{name}}” का स्वामी बदला गया",
+    "chownRecursive": "स्वामी बदला गया — “{{name}}” में {{count}} प्रविष्टियाँ",
+    "chownFailed": "“{{name}}” का स्वामी नहीं बदला जा सका: {{reason}}",
+    "chownUnknownUser": "“{{name}}” का स्वामी नहीं बदला: अज्ञात उपयोगकर्ता",
+    "chownUnknownGroup": "“{{name}}” का स्वामी नहीं बदला: अज्ञात समूह"
   },
   "fileElevation": {
     "toggle": "उन्नत अधिकार",
@@ -741,6 +815,17 @@
     "opDelete": "हटाना",
     "opChmod": "अनुमतियाँ बदलना",
     "banner": "उन्नत अधिकार सक्रिय: इस ब्राउज़र की सभी फ़ाइल कार्रवाइयाँ {{user}} के रूप में चलती हैं।",
+    "bannerLogged": "सर्वर पर लॉग किया जाता है।",
+    "notice": {
+      "title": "ऊँचे अधिकारों के बारे में",
+      "intro": "अब आप फ़ाइलें {{user}} के रूप में पढ़ और लिख रहे हैं। बदलाव तुरंत लागू होते हैं और ऐप उन्हें वापस नहीं ले सकता।",
+      "loggedApp": "हर बदलाव ऐप के लॉग में दर्ज होता है।",
+      "loggedAppAndServer": "हर बदलाव ऐप के लॉग और सर्वर के ऑथ लॉग में दर्ज होता है।",
+      "passwordless": "sftp-server के लिए sudo नियम {{user}} को इस लॉगिन के तहत चलने वाली हर चीज़ तक बिना पासवर्ड पहुँच देता है, केवल इस ऐप तक नहीं।",
+      "alternative": "यदि आप इस सर्वर को नियमित रूप से root के रूप में चलाते हैं, तो कुंजी वाला अलग root लॉगिन (PermitRootLogin prohibit-password) उस पहुँच को स्पष्ट बनाता है।",
+      "gotIt": "समझ गया",
+      "dontShowAgain": "इस सर्वर के लिए दोबारा न दिखाएँ"
+    },
     "deleteFileTitle": "फ़ाइल को {{user}} के रूप में हटाएँ?",
     "deleteDirTitle": "फ़ोल्डर को {{user}} के रूप में हटाएँ?",
     "overwriteTitle": "फ़ाइल को {{user}} के रूप में अधिलेखित करें?",
@@ -762,7 +847,8 @@
     "close": "बंद करें",
     "detail": "विवरण: {{detail}}",
     "failure": {
-      "passwordRequired": "इस सर्वर पर sftp-server के लिए sudo पासवर्ड माँगता है। ऐप कभी sudo पासवर्ड नहीं माँगती।",
+      "passwordRequired": "इस सर्वर पर sudo, sftp-server के लिए पासवर्ड माँगता है। नीचे दी गई sudoers पंक्ति जोड़ें, या उन्नत अधिकार चालू करने के लिए सर्वर प्रोफ़ाइल में sudo पासवर्ड सहेजें।",
+      "wrongSudoPassword": "sudo ने सहेजा गया sudo पासवर्ड अस्वीकार कर दिया। सर्वर प्रोफ़ाइल में sudo पासवर्ड जाँचें।",
       "notAllowed": "यह SSH लॉगिन बिना पासवर्ड के sudo से sftp-server शुरू नहीं कर सकता।",
       "requireTty": "sudo बिना टर्मिनल के चलने से मना करता है (sudoers में “requiretty”)। इस लॉगिन के लिए requiretty बंद करें, जैसे “Defaults:<login> !requiretty” से।",
       "sftpServerNotFound": "सर्वर पर sftp-server नहीं मिला। कृपया सर्वर प्रोफ़ाइल में “उन्नत” के अंतर्गत उसका पथ दर्ज करें।",
@@ -772,7 +858,8 @@
       "invalidUser": "अमान्य लक्ष्य उपयोगकर्ता।",
       "unsupported": "स्थानीय सर्वर में उन्नत मोड नहीं है।",
       "checkFailed": "sudo अधिकारों की जाँच विफल रही।",
-      "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।"
+      "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।",
+      "disabledForServer": "सर्वर प्रोफ़ाइल में इस सर्वर के लिए उन्नत अधिकार बंद हैं।"
     },
     "channelLost": "उन्नत अधिकार समाप्त हुए — उन्नत चैनल अब सक्रिय नहीं है।",
     "group": "उन्नत अधिकार",
@@ -780,7 +867,11 @@
     "otherUser": "किसी अन्य उपयोगकर्ता के रूप में…",
     "targetUser": "लक्षित उपयोगकर्ता",
     "targetUserHelp": "sudo के ज़रिए फ़ाइल ब्राउज़र को इस उपयोगकर्ता के रूप में चलाता है। डिफ़ॉल्ट: root।",
-    "confirm": "बढ़ाएँ"
+    "confirm": "बढ़ाएँ",
+    "opChown": "स्वामी बदलना",
+    "chownNote": "स्वामी {{user}} के रूप में बदला जाएगा।",
+    "idleSwitchedOff": "{{minutes}} मिनट की निष्क्रियता के बाद उन्नत अधिकार बंद कर दिए गए",
+    "revokedByProfile": "उन्नत अधिकार समाप्त हुए — सर्वर प्रोफ़ाइल अब उन्हें अनुमति नहीं देती।"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config आयात करें",
@@ -794,6 +885,8 @@
     "groupsHeading": "परिणामी फ़ोल्डर संरचना",
     "entriesHeading": "{{count}} सर्वर",
     "field": {
+      "name": "नाम",
+      "include": "शामिल करें",
       "host": "पता",
       "port": "पोर्ट",
       "username": "उपयोगकर्ता",
@@ -869,6 +962,8 @@
       "proxyJumpLocalPseudoServer": "स्थानीय छद्म-सर्वर की ओर इशारा करता है"
     },
     "confirm": "आयात करें",
+    "confirmCount_one": "{{count}} सर्वर आयात करें",
+    "confirmCount_other": "{{count}} सर्वर आयात करें",
     "applying": "आयात हो रहा है …",
     "result": {
       "success": "{{created}} सर्वर बनाए गए, {{groups}} फ़ोल्डर, {{skipped}} टकराव छोड़े गए।",
@@ -969,14 +1064,17 @@
       "hostKeyCheck": "होस्ट कुंजी जाँच",
       "authentication": "प्रमाणीकरण",
       "sessionReady": "सत्र स्थापित",
-      "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं"
+      "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं",
+      "outdatedAlgorithms": "पुराने एल्गोरिदम",
+      "banner": "सर्वर बैनर"
     },
     "status": {
       "ok": "ठीक",
       "running": "जारी है",
       "failed": "विफल ({{code}})",
       "skipped": "छोड़ा गया",
-      "failedReason": "विफल: {{reason}}"
+      "failedReason": "विफल: {{reason}}",
+      "warning": "चेतावनी"
     },
     "hostKeyResult": {
       "known": "ज्ञात",
@@ -989,7 +1087,8 @@
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
       "certificate": "प्रमाणपत्र",
-      "identityFile": "कुंजी फ़ाइल"
+      "identityFile": "कुंजी फ़ाइल",
+      "keyboardInteractive": "कीबोर्ड-इंटरएक्टिव"
     },
     "detail": {
       "addresses": "पते: {{addresses}}",
@@ -998,7 +1097,9 @@
       "cipher": "सिफ़र: {{value}}",
       "mac": "MAC (संदेश प्रमाणीकरण): {{value}}",
       "partialSuccess": "आंशिक रूप से स्वीकृत, आगे प्रमाणीकरण आवश्यक",
-      "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)"
+      "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)",
+      "round": "चरण {{round}}",
+      "prompts": "सर्वर के प्रॉम्प्ट: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP कनेक्शन का समय समाप्त हो गया",
@@ -1016,6 +1117,7 @@
     "parentDirectory": "मूल डायरेक्टरी",
     "newFolderButton": "+ फ़ोल्डर",
     "fileActionsGroup": "फ़ाइल क्रियाएँ",
+    "directoryActions": "निर्देशिका क्रियाएँ",
     "upload": "अपलोड करें",
     "uploadDialogTitle": "फ़ाइल(ें) अपलोड करें",
     "uploadFolder": "फ़ोल्डर अपलोड करें",
@@ -1050,8 +1152,10 @@
       "name": "नाम",
       "size": "आकार",
       "permissions": "अनुमतियाँ",
-      "modified": "संशोधित"
+      "modified": "संशोधित",
+      "owner": "स्वामी"
     },
+    "columnsMenu": "कॉलम दिखाएँ या छिपाएँ",
     "localEdit": {
       "uploading": "“{{name}}” अपलोड हो रही है…",
       "changed": "“{{name}}” स्थानीय रूप से बदली गई। इसे सर्वर पर अपलोड करें?",
@@ -1059,8 +1163,7 @@
       "editing": "“{{name}}” स्थानीय रूप से संपादित हो रही है…",
       "end": "संपादन रोकें",
       "uploadTitle": "स्थानीय बदलाव अपलोड करें?",
-      "remoteChanged": "डाउनलोड के बाद दूरस्थ फ़ाइल बदल गई है — अपलोड करने से वह दूसरा बदलाव अधिलेखित हो जाएगा।",
-      "noDiff": "टेक्स्ट अंतर संभव नहीं (बाइनरी फ़ाइल या बहुत बड़ी)। नया आकार: {{size}}।"
+      "remoteChanged": "डाउनलोड के बाद दूरस्थ फ़ाइल बदल गई है — अपलोड करने से वह दूसरा बदलाव अधिलेखित हो जाएगा।"
     },
     "deleteDialog": {
       "fileTitle": "फ़ाइल हटाएँ?",
@@ -1082,7 +1185,6 @@
       "conflictTitle": "फ़ोल्डर की फ़ाइलें अधिलेखित करें?",
       "conflictBody": "“{{name}}” अपलोड करने से सर्वर पर ये {{count}} फ़ाइलें अधिलेखित हो जाएँगी। आपकी पुष्टि के बिना कुछ अधिलेखित नहीं होता।",
       "summaryTitle": "फ़ोल्डर अपलोड: “{{name}}”",
-      "summary": "{{uploaded}} फ़ाइलें अपलोड हुईं, {{skipped}} छोड़ी गईं, {{failed}} विफल रहीं।",
       "notAttempted": "{{count}} फ़ाइलों का प्रयास नहीं हुआ क्योंकि उनका फ़ोल्डर नहीं बनाया जा सका।",
       "skipped": "छोड़ी गईं",
       "failed": "विफल",
@@ -1093,12 +1195,14 @@
         "unsupported": "सामान्य फ़ाइल या फ़ोल्डर नहीं",
         "notGranted": "आपके चयन में शामिल नहीं",
         "overwriteNotConfirmed": "सर्वर पर मौजूद है, अधिलेखन की पुष्टि नहीं हुई"
-      }
+      },
+      "uploaded": "अपलोड किए गए"
     },
     "uploadConflict": {
       "title": "फ़ाइल अधिलेखित करें?",
       "body": "सर्वर पर पहले से मौजूद है।",
-      "noDiff": "टेक्स्ट अंतर संभव नहीं (बाइनरी फ़ाइल या बहुत बड़ी)। वर्तमान आकार: {{remoteSize}}, नया आकार: {{localSize}}।"
+      "currentSize": "वर्तमान आकार",
+      "newSize": "नया आकार"
     },
     "menu": {
       "download": "डाउनलोड करें",
@@ -1114,8 +1218,10 @@
       "cut": "कट करें",
       "delete": "हटाएँ",
       "newFolder": "नया फ़ोल्डर",
-      "newFile": "नई फ़ाइल"
+      "newFile": "नई फ़ाइल",
+      "chown": "स्वामी बदलें…"
     },
+    "linkMarker": "सिम्बॉलिक लिंक",
     "properties": {
       "title": "गुण",
       "name": "नाम",
@@ -1123,6 +1229,10 @@
       "type": "प्रकार",
       "typeFolder": "फ़ोल्डर",
       "typeFile": "फ़ाइल",
+      "typeLinkFolder": "फ़ोल्डर का सिम्बॉलिक लिंक",
+      "typeLinkFile": "फ़ाइल का सिम्बॉलिक लिंक",
+      "typeLinkBroken": "टूटा हुआ सिम्बॉलिक लिंक",
+      "linkTarget": "लिंक का लक्ष्य",
       "size": "आकार",
       "permissionsSymbolic": "अनुमतियाँ (सांकेतिक)",
       "permissionsNumeric": "अनुमतियाँ (संख्यात्मक)",
@@ -1172,10 +1282,24 @@
       "notText": "टेक्स्ट अंतर संभव नहीं: फ़ाइल बाइनरी है (मान्य UTF-8 टेक्स्ट नहीं)।",
       "permission": "टेक्स्ट अंतर संभव नहीं: वर्तमान अधिकारों से इस फ़ाइल को पढ़ने की अनुमति नहीं है।",
       "other": "टेक्स्ट अंतर संभव नहीं: फ़ाइल पढ़ी नहीं जा सकी ({{message}})।"
-    }
+    },
+    "chown": {
+      "title": "स्वामी बदलें",
+      "owner": "उपयोगकर्ता",
+      "group": "समूह",
+      "hint": "नाम या संख्या दर्ज करें। जिस पक्ष को आप जैसा है वैसा छोड़ते हैं, वह अपरिवर्तित रहता है। परिवर्तन की अनुमति है या नहीं, यह सर्वर तय करता है (आमतौर पर केवल root स्वामी बदल सकता है)।",
+      "recursive": "सामग्री पर लागू करें",
+      "recursiveWarning": "— इस फ़ोल्डर की सभी फ़ाइलों और उपफ़ोल्डरों का स्वामी बदलता है। सिमेंटिक लिंक का अनुसरण नहीं किया जाता। पूर्ववत नहीं किया जा सकता।"
+    },
+    "transferChown": "{{name}} का स्वामी बदला जा रहा है",
+    "stopProgress": "प्रगति",
+    "noTextDiff": "टेक्स्ट अंतर संभव नहीं (बाइनरी फ़ाइल या बहुत बड़ी)।"
   },
   "chat": {
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",
+    "copyCode": "कोड कॉपी करें",
+    "codeCopied": "कोड कॉपी हो गया",
+    "codeCopyFailed": "कॉपी विफल रही",
     "composerMore": "और इनपुट क्रियाएँ",
     "newChat": "नई चैट",
     "newChatDisabledHint": "AI के उत्तर देते समय या पुष्टि खुली होने पर उपलब्ध नहीं।",
@@ -1199,12 +1323,17 @@
     "queued": "अगले अनुरोध के साथ भेजा जाएगा",
     "responseCancelled": "उत्तर रद्द किया गया।",
     "contextCompactedNotice": "इस चैट के पुराने हिस्सों का सारांश बनाया गया ताकि वे मॉडल के संदर्भ में समा सकें।",
-    "contextUsage": "संदर्भ {{used}} / {{window}}",
     "contextUsageTooltip": "संदर्भ भर जाने पर चैट के पुराने हिस्सों का सारांश अपने-आप बन जाता है।",
+    "messageLabel": "संदेश",
+    "headerProviderTooltip": "प्रदाता: {{provider}}",
     "webResearchUnavailable": "इस प्रदाता खाते के लिए वेब शोध उपलब्ध नहीं है (वहाँ वेब खोज बंद है)। यह सत्र वेब शोध के बिना उत्तर देता है। इसे स्थायी रूप से बंद करने के लिए: सेटिंग्स → AI प्रदाता → “वेब शोध”।",
     "emptyResponse": "मॉडल ने कोई उत्तर नहीं लौटाया। सोचने के चरण वाले मॉडलों के लिए प्रदाता सेटिंग्स में ऊँची आउटपुट सीमा मदद करती है।",
     "refusedResponse": "मॉडल ने इस अनुरोध को अस्वीकार कर दिया। इसे दूसरे शब्दों में लिखें या नई चैट शुरू करें।",
     "outputTruncated": "(छोटा किया गया)",
+    "outputMoreLines_one": "… {{count}} और पंक्ति",
+    "outputMoreLines_other": "… {{count}} और पंक्तियाँ",
+    "outputShowAll": "सभी दिखाएँ",
+    "outputShowLess": "कम दिखाएँ",
     "fileWritten": "फ़ाइल '{{path}}' लिखी गई।",
     "writtenWithSudoPassword": "संग्रहीत sudo पासवर्ड से लिखा गया।",
     "documentGenerated": "दस्तावेज़ बना",
@@ -1282,7 +1411,18 @@
     "aiTab": "एआई",
     "paneTabs": "सत्र पैनल",
     "moreActions": "अधिक क्रियाएँ",
+    "thisDevice": "यह डिवाइस",
+    "paneSwitch": "पैनल स्विच",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
+    "extraKeys": {
+      "group": "अतिरिक्त कुंजियाँ",
+      "up": "ऊपर तीर",
+      "down": "नीचे तीर",
+      "left": "बायाँ तीर",
+      "right": "दायाँ तीर",
+      "pageUp": "पेज ऊपर",
+      "pageDown": "पेज नीचे"
+    },
     "reconnectingAuto": "फिर से कनेक्ट हो रहा है… (प्रयास {{attempt}})",
     "stopReconnect": "रोकें",
     "reconnectGaveUp": "कनेक्शन बहाल नहीं हो सका।"
@@ -1315,7 +1455,8 @@
       "body": "एक स्पीच मॉडल ({{model}}, लगभग {{size}} MiB) {{source}} से एक बार डाउनलोड किया जाएगा। इसके बाद आवाज़ की पहचान पूरी तरह इसी कंप्यूटर पर चलती है; ऑडियो और टेक्स्ट कभी बाहर नहीं जाते।",
       "download": "डाउनलोड करें",
       "cancel": "रद्द करें",
-      "progress": "डाउनलोड की प्रगति"
+      "progress": "डाउनलोड की प्रगति",
+      "parakeetLicense": "लाइसेंस: {{license}}"
     },
     "errors": {
       "noDevice": "कोई माइक्रोफ़ोन नहीं मिला। माइक्रोफ़ोन जोड़ें और सिस्टम सेटिंग में इनपुट डिवाइस जाँचें।",
@@ -1331,7 +1472,8 @@
       "model": "स्पीच मॉडल",
       "models": {
         "base": "Base (लगभग {{size}} MiB, डिफ़ॉल्ट)",
-        "small": "Small (लगभग {{size}} MiB, अधिक सटीक, धीमा)"
+        "small": "Small (लगभग {{size}} MiB, अधिक सटीक, धीमा)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (लगभग {{size}} MiB, बहुभाषी, तेज़; भाषा अपने आप पहचानता है)"
       },
       "statusReady": "डाउनलोड हो चुका",
       "statusNotDownloaded": "डाउनलोड नहीं हुआ",
@@ -1339,7 +1481,8 @@
       "download": "डाउनलोड करें",
       "delete": "मॉडल हटाएँ",
       "language": "पहचान की भाषा",
-      "languageAuto": "स्वचालित"
+      "languageAuto": "स्वचालित",
+      "languageParakeetHint": "Parakeet भाषा अपने आप पहचानता है; यह सेटिंग Whisper मॉडल पर लागू होती है।"
     }
   },
   "connectTab": {
@@ -1399,6 +1542,8 @@
     "import": {
       "title": "बैकअप से रीस्टोर करें",
       "pickTitle": "बैकअप फ़ाइल चुनें",
+      "pickFailed": "चुनी गई जगह से फ़ाइल नहीं खोली जा सकी।",
+      "chooseAgain": "फ़ाइल फिर से चुनें",
       "file": "फ़ाइल: {{name}}",
       "kind": "यह बैकअप किससे खुलता है",
       "useCode": "रिकवरी कोड",
@@ -1415,6 +1560,9 @@
       "file": "बैकअप",
       "sessions": "बंद होने वाले खुले सेशन: {{count}}",
       "safety": "आपका मौजूदा डेटा पहले {{dir}} में सहेजा जाता है। आपके सर्वर आज की तारीख वाले नए फ़ोल्डर “Previous data” में चले जाते हैं।",
+      "pickDirTitle": "सुरक्षा बैकअप के लिए फ़ोल्डर चुनें",
+      "changeSafetyDir": "बदलें…",
+      "changeSafetyDirFailed": "फ़ोल्डर चुना नहीं जा सका। डिफ़ॉल्ट फ़ोल्डर ही रहेगा।",
       "replace": "डेटा बदलें"
     },
     "counts": {
@@ -1439,5 +1587,58 @@
       "newerVersion": "यह बैकअप Smart SSH के नए संस्करण से बना है। ऐप अपडेट करें और फिर कोशिश करें।",
       "failed": "कार्रवाई विफल रही। कुछ नहीं बदला।"
     }
+  },
+  "errorBoundary": {
+    "title": "कुछ गड़बड़ हो गई",
+    "body": "Smart SSH को इंटरफ़ेस में एक अप्रत्याशित त्रुटि मिली। जारी रखने के लिए रीलोड करें। यदि यह फिर हो, तो रीलोड के बाद सेटिंग्स → निदान में डायग्नोस्टिक्स बंडल बनाएँ।",
+    "reload": "रीलोड करें"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "यह सर्वर पुराने SSH एल्गोरिदम ({{algorithms}}) का उपयोग करता है। कनेक्शन कम सुरक्षित है। हो सके तो सर्वर का SSH सॉफ़्टवेयर अपडेट करें।",
+    "outdatedAlgorithmsHop": "{{hop}} पुराने SSH एल्गोरिदम ({{algorithms}}) का उपयोग करता है। कनेक्शन कम सुरक्षित है। हो सके तो उसका SSH सॉफ़्टवेयर अपडेट करें।"
+  },
+  "elevatedIdle": {
+    "label": "निष्क्रियता के बाद उन्नत अधिकार बंद करें",
+    "minutes5": "5 मिनट",
+    "minutes15": "15 मिनट",
+    "minutes30": "30 मिनट",
+    "minutes60": "60 मिनट",
+    "never": "कभी नहीं",
+    "hint": "इतने समय तक उन्नत गतिविधि न होने पर फ़ाइल ब्राउज़र अपने आप उन्नत मोड से बाहर निकल जाता है। चल रहा ऑपरेशन गतिविधि माना जाता है।"
+  },
+  "activities": {
+    "title": "गतिविधियाँ",
+    "buttonRunning": "गतिविधियाँ: {{running}} चल रही हैं",
+    "buttonFailed": "गतिविधियाँ: एक गतिविधि विफल रही",
+    "buttonDone": "गतिविधियाँ: पूर्ण",
+    "cancel": "रद्द करें",
+    "cancelNamed": "{{title}} रद्द करें",
+    "dismiss": "हटाएँ",
+    "dismissNamed": "{{title}} हटाएँ",
+    "succeeded": "पूर्ण",
+    "cancelled": "रद्द किया गया",
+    "failed": "विफल",
+    "inProgress": "प्रगति पर",
+    "verifying": "सत्यापित हो रहा है",
+    "speechModelTitle": "वाक् मॉडल {{name}}",
+    "buttonInterrupted": "गतिविधियाँ: कुछ बाधित हो गईं",
+    "interrupted": "बाधित",
+    "resume": "फिर शुरू करें",
+    "resumeNamed": "{{title}} फिर शुरू करें",
+    "discard": "छोड़ें",
+    "discardNamed": "{{title}} छोड़ें",
+    "resumeFailed": "फिर शुरू नहीं हो सका।",
+    "quitTitle": "गतिविधियाँ चल रही हैं, फिर भी बंद करें?",
+    "quitBody": "ये गतिविधियाँ अभी चल रही हैं और रोक दी जाएँगी:",
+    "quitResumeHint": "बाधित डाउनलोड अगली बार ऐप शुरू करने पर फिर शुरू किए जा सकते हैं।",
+    "quitAnyway": "फिर भी बंद करें",
+    "keepRunning": "चलने दें",
+    "summaryRunning_one": "{{count}} चल रही",
+    "summaryRunning_other": "{{count}} चल रही",
+    "summaryInterrupted_one": "{{count}} बाधित",
+    "summaryInterrupted_other": "{{count}} बाधित",
+    "summaryFailed_one": "{{count}} विफल",
+    "summaryFailed_other": "{{count}} विफल",
+    "remaining": "{{time}} शेष"
   }
 }

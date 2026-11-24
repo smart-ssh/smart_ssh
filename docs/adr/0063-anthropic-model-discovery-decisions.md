@@ -1,6 +1,9 @@
 # ADR 0063: Entscheidungen bei der Umsetzung von Spec 0072 (Anthropic: strukturierte Fehlererkennung, Modell-Discovery, Locale-Fix)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0072-model-not-found-structured-detection.md, Commits
 `978e091` (Teil 1), `395095c` (Teil 2), `d0d14f2` (Teil 3), `7ba6aeb`
 (Review-Nacharbeit Runde 1), `8597245` (Review-Nacharbeit Runde 2)

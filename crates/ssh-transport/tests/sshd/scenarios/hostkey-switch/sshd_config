@@ -1,0 +1,6 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+Subsystem sftp internal-sftp
+Include /etc/ssh/hostkey-switch.conf

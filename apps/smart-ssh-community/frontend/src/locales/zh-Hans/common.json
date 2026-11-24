@@ -16,6 +16,7 @@
     "ok": "确定"
   },
   "nav": {
+    "label": "主导航",
     "connect": "连接",
     "manage": "管理",
     "rules": "过滤规则"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "尚未添加服务器",
     "emptyStateHint": "添加您的第一台服务器，即可通过 SSH 连接。",
     "emptyStateCreateFirstServer": "添加第一台服务器",
-    "newServerInGroup": "在分组“{{name}}”中新建服务器",
-    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。"
+    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。",
+    "localBadge": "本地",
+    "thisDevice": "此设备",
+    "sessionOpen": "会话已打开",
+    "sessionPending": "等待确认",
+    "sessionDisconnected": "会话已断开",
+    "sessionReconnecting": "正在重新连接"
   },
   "settings": {
     "title": "设置",
@@ -49,6 +55,13 @@
       "dataAndBackup": "数据与备份"
     }
   },
+  "appearance": {
+    "heading": "外观",
+    "language": "语言",
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色"
+  },
   "about": {
     "version": "版本",
     "copyHint": "复制到剪贴板",
@@ -57,6 +70,7 @@
     "copyFailed": "复制失败——可改为手动选中文本。",
     "loadFailed": "无法加载版本/构建信息。",
     "buildDev": "开发构建",
+    "dataDirMarker": "数据：{{path}}",
     "buildRelease": "发布构建",
     "thirdPartyLicenses": {
       "openButton": "第三方许可证",
@@ -79,6 +93,7 @@
       "no_session_bus": "不可用——无法访问 D-Bus 会话总线。下一步：执行 `sudo apt install dbus-user-session`，然后重新登录。",
       "no_secret_service_provider": "不可用——没有正在运行的 Secret Service 提供程序。下一步：执行 `sudo apt install gnome-keyring`，然后重新登录——在 KDE 上同样适用。如果您已在使用 KWallet（`kwallet6`）或 KeePassXC：必须运行或开启其 Secret Service 集成，仅安装是不够的。",
       "locked": "不可用——存在但已锁定。下一步：将其解锁并重启 Smart SSH。无需安装任何软件包。",
+      "no_keystore": "不可用——Android Keystore 不可用。下一步：请改用主密码；您的机密仍保存在加密数据库中。",
       "unknown": "不可用——原因未知。下一步：请检查 Secret Service 提供程序是否正在运行且已解锁（gnome-keyring，或已开启 Secret Service 集成的 KWallet 或 KeePassXC），然后重启 Smart SSH。"
     },
     "keychainBlocked": "这不会影响您的机密——API 密钥、服务器密码、口令短语和 sudo 密码都保存在加密数据库中，而不是密钥环里。",
@@ -91,8 +106,10 @@
       "hostKeys": "主机密钥",
       "wrappingFile": "主密码密钥文件",
       "mcpSettings": "MCP 设置",
+      "speechModels": "语音模型",
       "sessions": "会话",
       "sessionsInDatabase": "保存在数据库中",
+      "keychainService": "钥匙串服务",
       "copy": "复制",
       "copied": "路径已复制",
       "copyFailed": "复制失败：",
@@ -126,11 +143,15 @@
     "importSshConfig": "导入…",
     "importSshConfigHint": "从 OpenSSH ssh_config 文件导入服务器",
     "exportSshConfig": "导出…",
-    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config"
+    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config",
+    "title": "服务器",
+    "collapseGroup": "折叠分组“{{name}}”",
+    "expandGroup": "展开分组“{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
+    "current": "当前",
     "hintGroup": "→ 移入此分组",
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "这也会永久删除该服务器的聊天记录、备注和标签。",
     "confirmDeleteServer": "永久删除",
     "testResult": {
-      "success": "✓ 连接成功",
-      "authFailed": "✗ 登录被拒绝。请检查用户名以及密码或密钥。",
+      "success": "连接成功",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "登录被拒绝。请检查用户名以及密码或密钥。",
       "hostKeyUnknown": "主机密钥未知——需要确认",
-      "hostKeyMismatch": "⚠ 主机密钥已更改",
-      "networkError": "✗ 网络错误：{{message}}",
-      "timeout": "✗ 服务器没有响应。请检查地址、端口和防火墙。"
+      "hostKeyMismatch": "主机密钥已更改",
+      "networkError": "网络错误：{{message}}",
+      "timeout": "服务器没有响应。请检查地址、端口和防火墙。"
     },
     "largeNoteHint": "此备注非常大，在长时间会话中可能会被缩短后再提供给 AI 作为上下文。已保存的备注保持完整。",
     "summarizeNow": "立即总结",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "sftp-server 路径（提权文件访问）",
     "sftpServerPathPlaceholder": "自动",
     "sftpServerPathHint": "仅当文件浏览器在提权时自动检测失败才需要填写，例如 /usr/lib/openssh/sftp-server。留空 = 自动。",
+    "elevationAllowedLabel": "允许在文件浏览器中使用提升的权限",
+    "elevationAllowedHint": "关闭后，文件浏览器不会为此服务器提供提升的权限。",
     "startDirectoryLabel": "起始目录（终端和文件浏览器）",
     "startDirectoryPlaceholder": "主目录",
     "startDirectoryHint": "绝对路径（/…）或以 ~/ 开头的路径。终端会通过可见的 cd 切换到该目录，文件浏览器会在此打开。AI 命令始终在主目录中运行。留空 = 主目录。",
@@ -294,6 +318,13 @@
       "connection": "连接",
       "security": "安全",
       "invalid": "包含错误"
+    },
+    "importKey": {
+      "title": "将密钥导入 Smart SSH？",
+      "import": "导入密钥",
+      "keep": "保留文件路径",
+      "importHint": "密钥将加密存储在 Smart SSH 中，并随备份同步到您的其他设备。",
+      "keepHint": "仅保存文件路径并同步到其他设备。该文件必须在每台设备的相同路径下存在。"
     }
   },
   "filterRules": {
@@ -337,10 +368,13 @@
     "matchedRuleLabel": "规则：",
     "segmentLabel": "片段 {{index}}",
     "checksLabel": "检查：",
-    "hardBlacklistLabel": "硬性黑名单："
+    "hardBlacklistLabel": "硬性黑名单：",
+    "invalidPattern": "无效的模式",
+    "rowActions": "行操作",
+    "ruleCount_other": "{{count}} 条规则"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "自动继续已在 {{limit}} 步后暂停——发送一条消息即可继续。",
+    "autoContinuationLimitReached": "在 {{limit}} 步内未经您确认，自动继续已暂停——发送一条消息即可继续。",
     "aiBudgetWaiting": "正在等待 AI 额度——{{seconds}} 秒后再次尝试…",
     "suggestCommand": "建议命令",
     "generateDocument": "生成文档：{{title}}",
@@ -354,8 +388,12 @@
     "blocked": "已拦截",
     "rejected": "已拒绝",
     "rejectedByUser": "已被用户拒绝。",
-    "usesStoredSudoPassword": "🔑 使用已保存的 sudo 密码运行。",
-    "writeMayUseStoredSudoPassword": "🔑 如果缺少写入权限，应用会使用已保存的 sudo 密码（sudo）进行写入。",
+    "expired": "已过期",
+    "discardedAfterReconnect": "连接重新建立后已丢弃。未执行任何操作。",
+    "expiredTimeout": "未及时答复，已丢弃。未执行任何操作。",
+    "expiredUnknown": "此请求已不再待处理。未执行任何操作。",
+    "usesStoredSudoPassword": "使用已保存的 sudo 密码运行。",
+    "writeMayUseStoredSudoPassword": "如果缺少写入权限，应用会使用已保存的 sudo 密码（sudo）进行写入。",
     "takeIntoNote": "记入备注",
     "takeIntoNoteFailed": "失败——请重试",
     "riskServerLabel": "服务器",
@@ -365,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "无法获取 AI 二次意见。所示风险为基于规则的评估。",
     "riskHint": "基于已知模式的评估——不作保证。",
     "runningSince": "已运行 {{seconds}} 秒…",
+    "exitCode": "退出码：{{code}}",
     "waitingForInputHint": "该命令可能正在等待输入。停止它后，AI 会建议一个非交互式的替代方案。",
     "cancelCommand": "断开此命令",
     "cancellingCommand": "正在断开…",
-    "commandCancelledNotice": "⚠ 已手动取消——输出可能不完整，也没有正常的退出码。",
-    "commandTruncatedNotice": "⚠ 输出已在大小上限处被截断——可能不完整。",
+    "commandCancelledNotice": "已手动取消——输出可能不完整，也没有正常的退出码。",
+    "commandTruncatedNotice": "输出已在大小上限处被截断——可能不完整。",
     "liveOutputLabel": "实时输出",
-    "liveOutputTruncatedNotice": "⚠ 已达到大小上限——不再显示后续输出。",
+    "liveOutputTruncatedNotice": "已达到大小上限——不再显示后续输出。",
     "autoRanLead": "已自动执行",
     "autoRanRule": "规则",
     "autoRanScopeGlobal": "全局",
@@ -386,17 +425,15 @@
     "editableCommand": "命令——可编辑",
     "execute": "执行",
     "deny": "拒绝",
-    "quickRule": "接受并添加规则",
-    "quickRuleDropdownAria": "显示规则建议",
-    "newRulePatternHeading": "新允许规则的模式",
     "scopeThisServer": "此服务器",
     "scopeGlobal": "全局",
     "scopeTag": "标签",
     "tagNamePlaceholder": "标签名称",
     "loadingSuggestions": "正在加载建议…",
     "noSuggestions": "没有建议。",
-    "binaryFileHint": "⚠ 二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
-    "diffTooLargeHint": "⚠ 内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
+    "binaryFileHint": "二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
+    "fileTooLargeHint": "文件大于 {{limit}}，不提供文本比较。新大小：{{newSize}}。",
+    "diffTooLargeHint": "内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
     "noContentChange": "（内容无变化）",
     "quickRuleLabel": {
       "exact": "精确：{{patterns}}",
@@ -414,10 +451,25 @@
       "blocked": "无论规则如何都会询问：{{reasons}}",
       "verdictAuto": "下次将自动运行",
       "verdictAsk": "仍会询问：{{reasons}}",
-      "notice": "规则已创建。此命令下次仍会询问：{{reasons}}",
       "reasonOther": "另一项安全检查",
-      "loadFailed": "无法加载规则覆盖情况"
+      "loadFailed": "无法加载规则覆盖情况",
+      "summaryHeading": "已允许",
+      "toDecideHeading": "待决定",
+      "expandAria": "{{segment}} 的规则建议",
+      "stagedBadge": "尚未保存",
+      "removeStaged": "移除",
+      "saveRules": "保存规则（{{count}}）",
+      "saveFailed": "无法保存规则：{{message}}",
+      "unsavedHint": "未保存的规则：{{count}}",
+      "segmentCovered": "已覆盖此部分；该命令仍会询问：{{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "登录 {{hop}}",
+    "password": "密码",
+    "submit": "登录",
+    "notStored": "服务器需要这些信息才能登录。这些信息不会被保存。",
+    "expired": "登录请求已过期。连接未建立。"
   },
   "hostKeyDialog": {
     "mismatchLabel": "安全警告 · 主机密钥已更改",
@@ -426,6 +478,7 @@
     "mismatchBodyAfterHost": " 出示的密钥与上次保存的不同。这可能意味着存在中间人攻击。仅当您确定服务器密钥是合理更改（例如服务器重装）时，才可继续。",
     "known": "已知",
     "offeredNow": "当前出示",
+    "offered": "出示",
     "keyType": "密钥类型",
     "cancelConnection": "取消连接",
     "trustAnyway": "仍然信任",
@@ -438,13 +491,16 @@
   },
   "sessionTabs": {
     "newSession": "新建会话",
-    "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
     "menu": {
       "open": "打开导航菜单",
       "title": "导航菜单",
-      "sessions": "已打开的会话"
+      "sessions": "已打开的会话",
+      "close": "关闭导航菜单",
+      "needsConfirmation": "需要确认",
+      "activities": "活动",
+      "activitiesRunning_other": "{{count}} 个运行中"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +509,11 @@
       "pendingBadge": "需要确认",
       "readOnlyHint": "此会话属于外部工具（MCP）。这里只显示该工具待确认或待拒绝的操作及其结果，没有聊天输入框或终端。关闭它会结束该 MCP 会话，并拒绝所有待确认的操作。"
     },
-    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。"
+    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。",
+    "pendingBadge": "待处理",
+    "newConnection": "新建连接"
   },
   "aiProvider": {
-    "title": "AI 提供商",
     "openLogs": "在文件管理器中打开诊断日志",
     "noProviders": "尚未配置提供商。",
     "configuredProvidersTitle": "已配置的提供商",
@@ -476,16 +533,16 @@
     "apiKeyFormatHint": "看起来不像 {{providerLabel}} 的密钥——预期前缀类似“{{expectedPrefix}}”。您仍可保存；提供商偶尔会更改格式。",
     "testCredentials": "测试凭据",
     "testingCredentials": "正在测试…",
-    "testResultValid": "✓ 凭据有效",
-    "testResultAuthFailed": "✗ 验证失败——请检查 API 密钥",
-    "testResultUnreachable": "✗ 无法连接提供商：{{message}}",
+    "testResultValid": "凭据有效",
+    "testResultAuthFailed": "验证失败——请检查 API 密钥",
+    "testResultUnreachable": "无法连接提供商：{{message}}",
     "testResultRateLimited": "凭据看起来有效，但提供商目前正在限流。请一分钟后再测试。",
     "nativeToolCalling": "支持原生工具调用",
     "discoverModels": "加载模型",
     "discoveringModels": "正在加载模型…",
     "modelDiscoveryFailedHint": "无法自动加载模型——请手动输入模型名称。",
     "modelDiscoveryEmptyHint": "提供商没有返回任何模型。请手动输入模型名称。",
-    "modelDiscoveryAuthFailed": "✗ 提供商拒绝了这些凭据——请检查 API 密钥",
+    "modelDiscoveryAuthFailed": "提供商拒绝了这些凭据——请检查 API 密钥",
     "advanced": "高级",
     "extraHeadersLabel": "额外请求头",
     "extraHeadersHint": "附加到发往此提供商的每个请求（例如 OpenRouter 的 HTTP-Referer/X-Title）。",
@@ -528,6 +585,7 @@
     "ollamaProbeRetry": "重新搜索",
     "ollamaProbeNotFoundHeading": "未找到本地 Ollama（默认端口 11434）。",
     "ollamaProbeNotFoundInstructions": "请从 ollama.com 安装 Ollama，启动并加载一个模型（例如 `ollama pull llama3`），然后重新搜索。",
+    "typeLabel": "类型",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +650,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "检测到可能通过服务器内容注入指令的企图——需要确认",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "经由 MCP 请求——始终需要确认",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "使用已保存的 sudo 密码——始终需要确认",
+    "FILTER_RULES_UNAVAILABLE": "无法加载过滤规则——不会自动执行任何命令，需要确认",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "发送前会插入已保存的机密值——始终需要确认",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "读取含有凭据的文件（例如 SSH 密钥、.env、/etc/shadow）——始终需要确认",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "本次回复中较早的操作已被拒绝——需要确认",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "启动 sftp-server（使用 sudo 时：以 root 权限访问文件）——始终需要确认",
@@ -601,6 +661,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "无法执行注入指令检查（AI 提供商出现问题）。下一个建议的操作需要确认。",
     "AI_INJECTION_CHECK_INACTIVE": "此服务器已启用注入指令检查，但在本会话中并未生效（AI 二次意见已关闭或无法建立）。请在设置中启用二次意见并重新连接。",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI 二次意见已开启，但无法为本会话建立（提供商已被移除或找不到凭据）。命令不会经过它的检查——请修正设置并重新连接。",
+    "REDACTION_INCOMPLETE": "无法加载此服务器的部分机密值；发送给 AI 的内容中可能未对其进行遮盖。",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "无法读取服务器的当前标签——需要确认",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "风险被评为红色，或无法可靠评估（例如过长）——始终需要确认",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "更新备注始终需要确认",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "写入文件始终需要确认",
@@ -638,7 +700,13 @@
     "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
     "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。",
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
-    "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "所选的 AI 提供商尚未配置。请选择已配置的提供商。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
+    "CHAT_SESSION_NOT_FOUND": "这个已保存的聊天已不存在。选择“重试”即可正常连接，而不恢复它。",
+    "SESSION_NOT_FOUND": "此会话已不再打开。请从服务器列表重新打开。",
+    "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件",
+    "SSH_NO_COMMON_ALGORITHM": "与服务器没有共同的 SSH 算法。其 SSH 软件过旧或限制过严。请更新，或启用现代算法。"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",
@@ -716,13 +784,17 @@
     "openedLocally": "“{{name}}”已在本地打开——更改后将提示上传",
     "openLocallyFailed": "无法在本地打开“{{name}}”：{{reason}}",
     "editUploaded": "对“{{name}}”的更改已上传",
-    "editUploadFailed": "无法上传对“{{name}}”的更改：{{reason}}",
     "uploadedFolder": "文件夹“{{name}}”已上传——{{count}} 个文件",
     "uploadFolderFailed": "上传文件夹“{{name}}”失败：{{reason}}",
     "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}",
     "nothingToPaste": "没有可粘贴的内容：剪贴板中没有文件",
     "createFileDone": "已创建文件“{{name}}”",
-    "createFileFailed": "无法创建文件“{{name}}”：{{reason}}"
+    "createFileFailed": "无法创建文件“{{name}}”：{{reason}}",
+    "chownDone": "“{{name}}”的所有者已更改",
+    "chownRecursive": "所有者已更改 — “{{name}}”中共 {{count}} 项",
+    "chownFailed": "无法更改“{{name}}”的所有者:{{reason}}",
+    "chownUnknownUser": "未更改“{{name}}”的所有者:未知用户",
+    "chownUnknownGroup": "未更改“{{name}}”的所有者:未知组"
   },
   "fileElevation": {
     "toggle": "提权",
@@ -736,6 +808,17 @@
     "opDelete": "删除",
     "opChmod": "更改权限",
     "banner": "提权已启用：此浏览器中的所有文件操作均以 {{user}} 身份运行。",
+    "bannerLogged": "已在服务器上记录。",
+    "notice": {
+      "title": "关于提升权限",
+      "intro": "现在您以 {{user}} 身份读写文件。更改会立即生效，应用无法撤销。",
+      "loggedApp": "每项更改都会记录在应用日志中。",
+      "loggedAppAndServer": "每项更改都会记录在应用日志和服务器的认证日志中。",
+      "passwordless": "sftp-server 的 sudo 规则让 {{user}} 可无密码访问此登录下运行的一切，而不仅是此应用。",
+      "alternative": "如果您经常以 root 管理此服务器，使用密钥的独立 root 登录 (PermitRootLogin prohibit-password) 可使该访问更明确。",
+      "gotIt": "知道了",
+      "dontShowAgain": "不再为此服务器显示"
+    },
     "deleteFileTitle": "以 {{user}} 身份删除文件？",
     "deleteDirTitle": "以 {{user}} 身份删除文件夹？",
     "overwriteTitle": "以 {{user}} 身份覆盖文件？",
@@ -757,7 +840,8 @@
     "close": "关闭",
     "detail": "详情：{{detail}}",
     "failure": {
-      "passwordRequired": "sudo 要求在此服务器上为 sftp-server 输入密码。应用绝不会询问 sudo 密码。",
+      "passwordRequired": "此服务器上的 sudo 要求为 sftp-server 输入密码。请添加下方的 sudoers 规则，或在服务器配置文件中保存 sudo 密码，以启用提升权限。",
+      "wrongSudoPassword": "sudo 拒绝了已保存的 sudo 密码。请检查服务器配置文件中的 sudo 密码。",
       "notAllowed": "此 SSH 登录不允许在无密码的情况下通过 sudo 启动 sftp-server。",
       "requireTty": "sudo 拒绝在没有终端的情况下运行（sudoers 中的“requiretty”）。请为此登录禁用 requiretty，例如使用“Defaults:<login> !requiretty”。",
       "sftpServerNotFound": "在服务器上找不到 sftp-server。请在服务器配置的“高级”中填写其路径。",
@@ -767,7 +851,8 @@
       "invalidUser": "目标用户无效。",
       "unsupported": "本地服务器没有提权模式。",
       "checkFailed": "检查 sudo 权限失败。",
-      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。"
+      "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。",
+      "disabledForServer": "此服务器的服务器配置文件已关闭提升的权限。"
     },
     "channelLost": "提权已结束——提权通道已不再有效。",
     "group": "提升的权限",
@@ -775,7 +860,11 @@
     "otherUser": "以其他用户身份…",
     "targetUser": "目标用户",
     "targetUserHelp": "通过 sudo 以该用户身份运行文件浏览器。默认：root。",
-    "confirm": "提权"
+    "confirm": "提权",
+    "opChown": "更改所有者",
+    "chownNote": "所有者将以 {{user}} 身份更改。",
+    "idleSwitchedOff": "已在 {{minutes}} 分钟无活动后关闭提升的权限",
+    "revokedByProfile": "提升的权限已结束——服务器配置文件不再允许。"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -789,6 +878,8 @@
     "groupsHeading": "生成的文件夹结构",
     "entriesHeading": "{{count}} 台服务器",
     "field": {
+      "name": "名称",
+      "include": "包含",
       "host": "地址",
       "port": "端口",
       "username": "用户",
@@ -864,6 +955,7 @@
       "proxyJumpLocalPseudoServer": "指向本地伪服务器"
     },
     "confirm": "导入",
+    "confirmCount_other": "导入 {{count}} 台服务器",
     "applying": "正在导入…",
     "result": {
       "success": "已创建 {{created}} 台服务器、{{groups}} 个文件夹，跳过 {{skipped}} 个冲突。",
@@ -964,14 +1056,17 @@
       "hostKeyCheck": "主机密钥检查",
       "authentication": "身份验证",
       "sessionReady": "会话已建立",
-      "dnsSkipped": "IP 地址 – 无需解析"
+      "dnsSkipped": "IP 地址 – 无需解析",
+      "outdatedAlgorithms": "过时的算法",
+      "banner": "服务器横幅"
     },
     "status": {
       "ok": "正常",
       "running": "进行中",
       "failed": "失败（{{code}}）",
       "skipped": "已跳过",
-      "failedReason": "失败：{{reason}}"
+      "failedReason": "失败：{{reason}}",
+      "warning": "警告"
     },
     "hostKeyResult": {
       "known": "已知",
@@ -984,7 +1079,8 @@
       "privateKey": "私钥",
       "agent": "SSH 代理",
       "certificate": "证书",
-      "identityFile": "密钥文件"
+      "identityFile": "密钥文件",
+      "keyboardInteractive": "键盘交互式"
     },
     "detail": {
       "addresses": "地址：{{addresses}}",
@@ -993,7 +1089,9 @@
       "cipher": "加密算法：{{value}}",
       "mac": "MAC：{{value}}",
       "partialSuccess": "已部分接受，还需要进一步验证",
-      "remainingMethods": "服务器还提供：{{methods}}（未尝试）"
+      "remainingMethods": "服务器还提供：{{methods}}（未尝试）",
+      "round": "第 {{round}} 轮",
+      "prompts": "服务器提示：{{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP 连接超时",
@@ -1011,6 +1109,7 @@
     "parentDirectory": "上级目录",
     "newFolderButton": "+ 文件夹",
     "fileActionsGroup": "文件操作",
+    "directoryActions": "目录操作",
     "upload": "上传",
     "uploadDialogTitle": "上传文件",
     "uploadFolder": "上传文件夹",
@@ -1045,8 +1144,10 @@
       "name": "名称",
       "size": "大小",
       "permissions": "权限",
-      "modified": "修改时间"
+      "modified": "修改时间",
+      "owner": "所有者"
     },
+    "columnsMenu": "显示或隐藏列",
     "localEdit": {
       "uploading": "正在上传“{{name}}”…",
       "changed": "“{{name}}”已在本地被更改。要将其上传到服务器吗？",
@@ -1054,8 +1155,7 @@
       "editing": "正在本地编辑“{{name}}”…",
       "end": "停止编辑",
       "uploadTitle": "上传本地更改？",
-      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。新大小：{{size}}。"
+      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。"
     },
     "deleteDialog": {
       "fileTitle": "删除文件？",
@@ -1075,7 +1175,6 @@
       "conflictTitle": "覆盖文件夹中的文件？",
       "conflictBody": "上传“{{name}}”会覆盖服务器上的这 {{count}} 个文件。除非您确认，否则不会覆盖任何内容。",
       "summaryTitle": "文件夹上传：“{{name}}”",
-      "summary": "已上传 {{uploaded}} 个文件，跳过 {{skipped}} 个，失败 {{failed}} 个。",
       "notAttempted": "有 {{count}} 个文件因其文件夹无法创建而未尝试上传。",
       "skipped": "已跳过",
       "failed": "失败",
@@ -1086,12 +1185,14 @@
         "unsupported": "不是普通文件或文件夹",
         "notGranted": "不在您的选择范围内",
         "overwriteNotConfirmed": "服务器上已存在，且未确认覆盖"
-      }
+      },
+      "uploaded": "已上传"
     },
     "uploadConflict": {
       "title": "覆盖文件？",
       "body": "在服务器上已存在。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。当前大小：{{remoteSize}}，新大小：{{localSize}}。"
+      "currentSize": "当前大小",
+      "newSize": "新大小"
     },
     "menu": {
       "download": "下载",
@@ -1107,8 +1208,10 @@
       "cut": "剪切",
       "delete": "删除",
       "newFolder": "新建文件夹",
-      "newFile": "新建文件"
+      "newFile": "新建文件",
+      "chown": "更改所有者…"
     },
+    "linkMarker": "符号链接",
     "properties": {
       "title": "属性",
       "name": "名称",
@@ -1116,6 +1219,10 @@
       "type": "类型",
       "typeFolder": "文件夹",
       "typeFile": "文件",
+      "typeLinkFolder": "指向文件夹的符号链接",
+      "typeLinkFile": "指向文件的符号链接",
+      "typeLinkBroken": "失效的符号链接",
+      "linkTarget": "链接目标",
       "size": "大小",
       "permissionsSymbolic": "权限（符号）",
       "permissionsNumeric": "权限（数字）",
@@ -1165,10 +1272,24 @@
       "notText": "无法显示文本差异：文件是二进制文件（不是有效的 UTF-8 文本）。",
       "permission": "无法显示文本差异：以当前权限无法读取此文件。",
       "other": "无法显示文本差异：无法读取该文件（{{message}}）。"
-    }
+    },
+    "chown": {
+      "title": "更改所有者",
+      "owner": "用户",
+      "group": "组",
+      "hint": "输入名称或数字。保持原样的一项不会更改。是否允许更改由服务器决定(通常只有 root 可以更改所有者)。",
+      "recursive": "应用到内容",
+      "recursiveWarning": "— 更改此文件夹中所有文件和子文件夹的所有者。不会跟随符号链接。无法撤销。"
+    },
+    "transferChown": "正在更改 {{name}} 的所有者",
+    "stopProgress": "进度",
+    "noTextDiff": "无法显示文本差异(二进制文件或文件过大)。"
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "copyCode": "复制代码",
+    "codeCopied": "代码已复制",
+    "codeCopyFailed": "复制失败",
     "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
@@ -1192,12 +1313,16 @@
     "queued": "将随下一次请求一并发送",
     "responseCancelled": "回复已取消。",
     "contextCompactedNotice": "此聊天较早的部分已被总结，以适应模型的上下文。",
-    "contextUsage": "上下文 {{used}} / {{window}}",
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
+    "messageLabel": "消息",
+    "headerProviderTooltip": "提供商：{{provider}}",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
     "refusedResponse": "模型拒绝了此请求。请换一种说法，或开始新的聊天。",
     "outputTruncated": "（已截断）",
+    "outputMoreLines_other": "… 还有 {{count}} 行",
+    "outputShowAll": "显示全部",
+    "outputShowLess": "收起",
     "fileWritten": "文件“{{path}}”已写入。",
     "writtenWithSudoPassword": "已使用保存的 sudo 密码写入。",
     "documentGenerated": "文档已生成",
@@ -1274,7 +1399,18 @@
     "aiTab": "AI",
     "paneTabs": "会话面板",
     "moreActions": "更多操作",
+    "thisDevice": "本设备",
+    "paneSwitch": "面板切换",
     "terminalOpenFailed": "无法打开终端：{{error}}",
+    "extraKeys": {
+      "group": "附加按键",
+      "up": "上箭头",
+      "down": "下箭头",
+      "left": "左箭头",
+      "right": "右箭头",
+      "pageUp": "向上翻页",
+      "pageDown": "向下翻页"
+    },
     "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
     "stopReconnect": "停止",
     "reconnectGaveUp": "无法恢复连接。"
@@ -1307,7 +1443,8 @@
       "body": "将从 {{source}} 一次性下载语音模型（{{model}}，约 {{size}} MiB）。之后语音识别完全在本机运行，音频和文本绝不会离开本机。",
       "download": "下载",
       "cancel": "取消",
-      "progress": "下载进度"
+      "progress": "下载进度",
+      "parakeetLicense": "许可证：{{license}}"
     },
     "errors": {
       "noDevice": "未找到麦克风。请连接麦克风，并在系统设置中检查输入设备。",
@@ -1323,7 +1460,8 @@
       "model": "语音模型",
       "models": {
         "base": "Base（约 {{size}} MiB，默认）",
-        "small": "Small（约 {{size}} MiB，更准确，更慢）"
+        "small": "Small（约 {{size}} MiB，更准确，更慢）",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (约 {{size}} MiB，多语言，速度快；自动检测语言)"
       },
       "statusReady": "已下载",
       "statusNotDownloaded": "未下载",
@@ -1331,7 +1469,8 @@
       "download": "下载",
       "delete": "删除模型",
       "language": "识别语言",
-      "languageAuto": "自动"
+      "languageAuto": "自动",
+      "languageParakeetHint": "Parakeet 会自动检测语言；此设置适用于 Whisper 模型。"
     }
   },
   "connectTab": {
@@ -1391,6 +1530,8 @@
     "import": {
       "title": "从备份恢复",
       "pickTitle": "选择备份文件",
+      "pickFailed": "无法从所选位置打开该文件。",
+      "chooseAgain": "重新选择文件",
       "file": "文件：{{name}}",
       "kind": "用什么打开此备份",
       "useCode": "恢复码",
@@ -1407,6 +1548,9 @@
       "file": "备份",
       "sessions": "将被关闭的打开会话：{{count}}",
       "safety": "当前数据会先保存到 {{dir}}。你的服务器会移到带今天日期的新文件夹“Previous data”中。",
+      "pickDirTitle": "选择安全备份的文件夹",
+      "changeSafetyDir": "更改…",
+      "changeSafetyDirFailed": "无法选择文件夹，仍使用默认文件夹。",
       "replace": "替换数据"
     },
     "counts": {
@@ -1431,5 +1575,55 @@
       "newerVersion": "此备份由更新版本的 Smart SSH 创建。请更新应用后重试。",
       "failed": "操作失败。未更改任何内容。"
     }
+  },
+  "errorBoundary": {
+    "title": "出了点问题",
+    "body": "Smart SSH 的界面发生了意外错误。请重新加载后继续。如果再次发生，请在重新加载后到“设置 → 诊断”中创建诊断包。",
+    "reload": "重新加载"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "此服务器使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新服务器的 SSH 软件。",
+    "outdatedAlgorithmsHop": "{{hop}} 使用过时的 SSH 算法（{{algorithms}}），连接安全性较低。如有可能，请更新其 SSH 软件。"
+  },
+  "elevatedIdle": {
+    "label": "无操作后关闭提升的权限",
+    "minutes5": "5 分钟",
+    "minutes15": "15 分钟",
+    "minutes30": "30 分钟",
+    "minutes60": "60 分钟",
+    "never": "从不",
+    "hint": "在此时间内没有提升操作时，文件浏览器会自动退出提升模式。正在运行的操作视为活动。"
+  },
+  "activities": {
+    "title": "活动",
+    "buttonRunning": "活动：{{running}} 个进行中",
+    "buttonFailed": "活动：有一个活动失败",
+    "buttonDone": "活动：已完成",
+    "cancel": "取消",
+    "cancelNamed": "取消 {{title}}",
+    "dismiss": "关闭",
+    "dismissNamed": "关闭 {{title}}",
+    "succeeded": "完成",
+    "cancelled": "已取消",
+    "failed": "失败",
+    "inProgress": "进行中",
+    "verifying": "正在验证",
+    "speechModelTitle": "语音模型 {{name}}",
+    "buttonInterrupted": "活动：部分已中断",
+    "interrupted": "已中断",
+    "resume": "继续",
+    "resumeNamed": "继续 {{title}}",
+    "discard": "放弃",
+    "discardNamed": "放弃 {{title}}",
+    "resumeFailed": "无法继续。",
+    "quitTitle": "仍有活动在运行，要退出吗？",
+    "quitBody": "以下活动仍在运行，退出后将被停止：",
+    "quitResumeHint": "中断的下载可在下次启动应用时继续。",
+    "quitAnyway": "仍然退出",
+    "keepRunning": "继续运行",
+    "summaryRunning_other": "{{count}} 个运行中",
+    "summaryInterrupted_other": "{{count}} 个已中断",
+    "summaryFailed_other": "{{count}} 个失败",
+    "remaining": "剩余 {{time}}"
   }
 }

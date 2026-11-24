@@ -38,17 +38,36 @@ tippen muss. Die Fälle unterscheiden sich nur im Inhalt des Eintrags:
    nennt den Blockier-Grund, damit die KI nicht denselben Vorschlag später
    wiederholt.
 
+Eine vom Nutzer bestätigte und gespeicherte Notiz-Änderung erscheint für die
+KI als eigener, ausgezeichneter Ergebnis-Eintrag: Er sagt, dass der Vorschlag
+der KI bestätigt und angewendet wurde, nennt das Ziel (aktueller Server oder
+Servergruppe) mit seinem Namen und gibt den gespeicherten (bereits
+geschwärzten) Notiztext wieder, in der Sprache der Sitzung. Er wird nie mit
+Text des Nutzers zu einer Nachricht verschmolzen (etwa einer Frage, die der
+Nutzer bei offener Karte getippt hat). Die automatische Fortsetzung sieht
+die neue Notiz im System-Prompt.
+
 Abgelehnte Notiz-Änderungen folgen demselben Muster (Ergebnis-Eintrag und
 automatische Fortsetzung); für die KI ist das dieselbe Art Rückmeldung wie
 ein abgelehntes Kommando.
 
 ## 4. Sicherheits-Cap gegen Endlosschleifen
 
-Pro Nutzer-Nachricht zählt die App die automatischen Fortsetzungsrunden;
-das Limit ist fest 10. Bei Erreichen stoppt die Automatik, eine sichtbare
-Chat-Systemnachricht erscheint („Automatische Fortsetzung nach 10 Schritten
-angehalten — schreib weiter, um fortzufahren"). Eine neue Nutzer-Nachricht
-setzt den Zähler zurück.
+Die App zählt die automatischen Fortsetzungsrunden **seit der letzten
+Nutzer-Beteiligung**; das Limit ist fest 10 und nicht konfigurierbar. Bei
+10 Runden in Folge ohne Nutzer-Beteiligung stoppt die Automatik, eine
+sichtbare Chat-Systemnachricht erscheint („Automatische Fortsetzung nach 10
+Schritten ohne deine Bestätigung angehalten — schreib weiter, um
+fortzufahren"). Den Zähler auf 0 setzen: eine neue Nutzer-Nachricht, eine
+während der Automatik eingereihte Nutzer-Nachricht, die in eine Runde
+eingespeist wird, und jede Entscheidung des Nutzers über einen
+Bestätigungsdialog (Genehmigen, Bearbeiten und Genehmigen, Ablehnen). Das
+Zeitlimit eines Dialogs, eine Ablehnung wegen Wiederverbindung, ein
+verworfener Dialog, ohne Dialog ausgeführte Aktionen (Regel erlaubt),
+blockierte Aktionen und ungültige Werkzeugaufrufe setzen den Zähler nicht
+zurück; KI-Ausgabe oder Kommando-Ausgabe können ihn nie zurücksetzen. Wer
+also mindestens alle 10 Runden eine Bestätigung entscheidet, lässt eine
+lange Aufgabe durchlaufen.
 
 ## 5. Sichtbare Kontrolle
 

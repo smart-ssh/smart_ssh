@@ -1,11 +1,11 @@
 import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, respondToAction } from "../api";
-import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../events";
-import type { NoteUpdateSuggestedEvent } from "../types";
+import { commandErrorCode, commandErrorMessage, respondToAction } from "../api/api";
+import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../api/events";
+import type { NoteUpdateSuggestedEvent } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 interface PendingSuggestion {
   sessionId: string;
@@ -38,7 +38,14 @@ interface PendingSuggestion {
 }
 
 function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
-  return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
+  const update = noteUpdateOf(event);
+  return update?.target === "CurrentServer" ? "server" : "group";
+}
+
+/** The note update of the event; the backend only sends this event for a
+ * `ProposeNoteUpdate` action. */
+function noteUpdateOf(event: NoteUpdateSuggestedEvent) {
+  return "ProposeNoteUpdate" in event.action ? event.action.ProposeNoteUpdate : null;
 }
 
 /** Spec 0023, Abschnitt 3/4: prominenter Titel statt der früheren
@@ -81,7 +88,7 @@ export function NoteSuggestionToast() {
           actionId: event.actionId,
           targetKind: targetKindFromEvent(event),
           targetName: event.targetName,
-          newContent: event.action.ProposeNoteUpdate.new_content,
+          newContent: noteUpdateOf(event)?.new_content ?? "",
           previousNoteContent: event.previousNoteContent,
           summaryIncomplete: event.summaryIncomplete === true,
           expanded: false,
@@ -144,15 +151,15 @@ export function NoteSuggestionToast() {
       {suggestions.map((suggestion) => (
         <div
           key={suggestion.actionId}
-          className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
+          className="border border-border bg-surface-raised p-3 text-sm"
         >
           {suggestion.expired ? (
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-fg">
                   {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
-                <output className="block text-xs text-slate-300">
+                <output className="block text-xs text-fg-muted">
                   {t("noteSuggestion.expired")}
                 </output>
               </div>
@@ -161,12 +168,12 @@ export function NoteSuggestionToast() {
                 onClick={() => close(suggestion)}
                 aria-label={t("noteSuggestion.dismiss")}
               >
-                ✕
+                <Icon name="x" />
               </Button>
             </div>
           ) : !suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-slate-100">
+              <span className="font-semibold text-fg">
                 {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
@@ -183,14 +190,14 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
-                  ✕
+                  <Icon name="x" />
                 </Button>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-fg">
                   {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
                 <Button
@@ -199,13 +206,13 @@ export function NoteSuggestionToast() {
                   disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
-                  ✕
+                  <Icon name="x" />
                 </Button>
               </div>
               {suggestion.summaryIncomplete && (
                 <p
                   role="alert"
-                  className="rounded border border-amber-600 bg-amber-950 px-2 py-1 text-xs text-amber-200"
+                  className="rounded border border-warning bg-warning-subtle px-2 py-1 text-xs text-warning-fg-softer"
                 >
                   {t("noteSuggestion.summaryIncomplete")}
                 </p>
@@ -217,7 +224,7 @@ export function NoteSuggestionToast() {
                 />
               </div>
               {suggestion.error && (
-                <p role="alert" className="text-xs text-red-300">
+                <p role="alert" className="text-xs text-danger-fg-soft">
                   {suggestion.error}
                 </p>
               )}

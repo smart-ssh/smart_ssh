@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-pause-target"
+networks = ["hop-pause-net"]
+publish = false

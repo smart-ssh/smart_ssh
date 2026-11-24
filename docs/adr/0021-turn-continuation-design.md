@@ -1,7 +1,7 @@
 # 0021-turn-continuation-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

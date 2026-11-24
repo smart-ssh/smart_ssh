@@ -12,12 +12,14 @@
 //! frei von I/O-Abhängigkeiten (kein HTTP-Client hier) und schnell über
 //! Mock-Implementierungen testbar.
 
+mod error_codes;
 mod extension_content;
 mod extension_part;
 mod fencing;
 pub mod keywords;
 mod live_redaction;
 mod provider;
+mod redacted_context;
 mod redactor;
 #[cfg(test)]
 mod redactor_generators;
@@ -25,11 +27,14 @@ mod redactor_generators;
 mod redactor_property;
 #[cfg(test)]
 mod redactor_reference;
+mod rejection;
 mod second_opinion;
 mod types;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_issue270;
 
 pub use extension_content::{
     seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,
@@ -40,13 +45,18 @@ pub use extension_part::{ExtensionMedia, ExtensionPart, ExtensionSource};
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;
+pub use redacted_context::{
+    reapply_redaction_for_send, redact_web_activity, ExtensionSealer, NoExtensionSealer,
+    RedactedContext,
+};
 pub use redactor::{
     default_log_redactor, DefaultOutputRedactor, OutputRedactor, REDACTED_PLACEHOLDER,
 };
+pub use rejection::RejectionReason;
 pub use second_opinion::{truncate_for_second_opinion, DEFAULT_SECOND_OPINION_MAX_LEN};
 pub use types::{
     default_action_schemas, english_action_schemas, sanitize_tool_name, ActionParameter,
     ActionParameterKind, ActionSchema, AiError, AiEvent, AiUsage, ChatMessage,
-    InvalidToolCallReason, MediaClass, MessageContent, ProviderId, ProviderType, RejectionReason,
-    Role, SessionContext, WebActivity, WebActivityKind, WebSource, WEB_CONTENT_MAX_CHARS,
+    InvalidToolCallReason, MediaClass, MessageContent, ProviderId, ProviderType, Role,
+    SessionContext, WebActivity, WebActivityKind, WebSource, WEB_CONTENT_MAX_CHARS,
 };

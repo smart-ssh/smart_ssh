@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
-  commandErrorMessage,
   getStartupState,
   quitApplication,
   startOverFromUnlockScreen,
   unlockWithMasterPassword,
   answerStartupPrompt,
-} from "../api";
-import { onStartupPrompt, onStartupUnlocked } from "../events";
+} from "../api/api";
+import { onStartupPrompt, onStartupUnlocked } from "../api/events";
 import { applyStoredLanguage } from "../i18n";
-import { translateErrorCode } from "../errorCodes";
-import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
-import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { applyStoredTheme } from "../lib/theme";
+import { commandErrorText } from "../api/errorCodes";
+import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../api/types";
+import { Button, CornerTicks, Field, FIELD_CONTROL_CLASS, Icon, Logo } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
+import type { TranslateFn } from "../i18nTypes";
 
 interface StartupGateProps {
   /** Der Zustand, den `main.tsx` schon geholt hat, damit die Maske ohne
@@ -91,7 +91,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     try {
       setState(await getStartupState());
     } catch (err) {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     }
   }, [t]);
 
@@ -129,6 +129,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // gespeicherte Sprachwahl aus Spec 0024 wird nachgeholt (ADR 0095
       // §8). Ein Fehler dabei ist kein Grund, die App nicht zu zeigen.
       void applyStoredLanguage().catch((err: unknown) => console.error(err));
+      void applyStoredTheme().catch((err: unknown) => console.error(err));
       void refresh();
     });
 
@@ -151,7 +152,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // ist wirkungslos. Ohne dieses `catch` stünde davon nur eine
       // unbehandelte Ablehnung in der Konsole, die niemand sieht.
       if (cancelled) return;
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     });
 
     return () => {
@@ -159,6 +160,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       void prompt.then((unlisten) => unlisten()).catch(() => {});
       void unlocked.then((unlisten) => unlisten()).catch(() => {});
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a language change must not re-register the listeners
   }, [initialState, refresh, listenAttempt]);
 
   // §2 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
@@ -178,6 +180,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Abhängigkeiten sind allein der Bildschirm und der Zuhörer: `run`
     // entsteht bei jedem Render neu, und der Merker oben stellt ohnehin
     // sicher, dass es bei genau einem Aufruf bleibt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run is recreated each render; a ref guards the single call
   }, [listening, state?.screen, continueAttempt]);
 
   async function run(action: () => Promise<StartupStateDto>) {
@@ -193,7 +196,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // andersherum stünde die Meldung schon, während `refresh` noch läuft,
       // und ein Fehler dort überschriebe sie.
       await refresh();
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     } finally {
       setBusy(false);
       setPassword("");
@@ -208,7 +211,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   ) => {
     setQuestion(null);
     void answerStartupPrompt(answer, pw, repeated, warningConfirmed).catch((err: unknown) => {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     });
   };
 
@@ -235,14 +238,27 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Titelleistenhöhe frei (`pt-9` zusätzlich zum `p-6`, also
     // `pt-15`), über dem die Drag-Leiste liegt — die Karte rückt nie
     // darunter.
-    <div className="flex h-screen flex-col items-center overflow-y-auto bg-slate-900 px-6 pb-6 pt-15 text-slate-100 narrow:px-4">
+    <div
+      data-testid="startup-screen"
+      className="flex h-screen flex-col items-center overflow-y-auto bg-surface bg-[linear-gradient(to_right,var(--color-grid-line)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-grid-line)_1px,transparent_1px)] bg-[size:32px_32px] px-6 pb-6 pt-15 text-fg narrow:bg-[size:26px_26px] narrow:px-4"
+    >
       <StartupTitleBarDragStrip />
-      <div className="my-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl narrow:p-4">
-        <h1 className="font-heading mb-1 text-xl font-semibold tracking-wide">Smart SSH</h1>
+      <div
+        data-testid="startup-card"
+        className={`relative my-auto flex w-full max-w-[460px] flex-col border border-border-strong bg-surface-raised p-8 narrow:p-5 ${
+          // Only the unlock card fills the narrow screen (its way-out area is
+          // pinned to the bottom); the other states keep a content-height card.
+          state?.screen === "unlock" ? "narrow:my-0 narrow:flex-1" : ""
+        }`}
+      >
+        <CornerTicks tone="accent" corners="all" />
+        <Logo variant="lockup" wordmark="full" size={40} className="mb-6" />
+
+        {state?.screen !== "unlock" && <h1 className="sr-only">Smart SSH</h1>}
 
         {state === null ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.stateUnknown")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.stateUnknown")}</p>
             <Actions>
               <Secondary onClick={retry}>{t("startup.answers.retry")}</Secondary>
               <Secondary onClick={() => void quitApplication()}>
@@ -252,18 +268,26 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
           </>
         ) : state.screen === "unlock" ? (
           <form
+            className="flex flex-1 flex-col"
             onSubmit={(e) => {
               e.preventDefault();
               void run(() => unlockWithMasterPassword(password));
             }}
           >
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unlockIntro")}</p>
+            <h1 className="text-display mb-3 flex items-center gap-3 text-fg-strong">
+              <Icon name="lock" size={24} className="text-accent" />
+              {t("startup.unlockButton")}
+            </h1>
+            <p className="mb-5 text-sm text-fg-muted">{t("startup.unlockIntro")}</p>
             <Field
               label={t("startup.passwordLabel")}
               help={
-                state.failedUnlockAttempts > 0
-                  ? t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })
-                  : undefined
+                state.failedUnlockAttempts > 0 ? (
+                  <span className="flex items-center gap-1.5 text-warning-fg">
+                    <Icon name="warn" size={14} className="shrink-0" />
+                    {t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })}
+                  </span>
+                ) : undefined
               }
             >
               {(control) => (
@@ -275,31 +299,41 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                   autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={FIELD_CONTROL_CLASS}
+                  className={`${FIELD_CONTROL_CLASS} h-[42px] narrow:h-12`}
                 />
               )}
             </Field>
-            <Actions>
-              <Button type="submit" variant="primary" disabled={busy || password.length === 0}>
-                {t("startup.unlockButton")}
-              </Button>
-              <Secondary onClick={() => void quitApplication()}>
-                {t("startup.answers.quit")}
-              </Secondary>
-            </Actions>
-            {/* Klarstellung 11: erst nach dem dritten Fehlversuch — und nie
-             * bei einer Datei, die sich bloß nicht lesen lässt. Beides
-             * entscheidet das Backend. */}
-            {state.offersStartOver && (
-              <div className="mt-6 border-t border-slate-700 pt-4">
-                <p className="mb-3 text-sm text-slate-400">{t("startup.wayOutHint")}</p>
-                <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
+            <Button
+              type="submit"
+              variant="primary"
+              className="mt-5 w-full"
+              disabled={busy || password.length === 0}
+            >
+              {t("startup.unlockButton")}
+            </Button>
+            {/* Way-out area: Quit is always there (Spec 0101 A16). Klarstellung
+             * 11: Start over only after the third failed attempt — and never
+             * for a file that merely cannot be read. The backend decides. */}
+            <div
+              data-testid="unlock-way-out"
+              className="mt-6 flex flex-col gap-3 border-t border-border pt-4 narrow:mt-auto narrow:[&_button]:w-full"
+            >
+              {state.offersStartOver && (
+                <p className="text-xs text-fg-subtle">{t("startup.wayOutHint")}</p>
+              )}
+              <div className="flex flex-wrap gap-2 narrow:flex-col">
+                {state.offersStartOver && (
+                  <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
+                )}
+                <Secondary onClick={() => void quitApplication()}>
+                  {t("startup.answers.quit")}
+                </Secondary>
               </div>
-            )}
+            </div>
           </form>
         ) : state.screen === "unusableWrapping" ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unusableWrapping")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.unusableWrapping")}</p>
             <Actions>
               <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
               <Secondary onClick={() => void quitApplication()}>
@@ -312,7 +346,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             {/* A3 *nicht erreichbar* (D1), Klarstellung 10a: Über den Inhalt
              * der Datei ist nichts gesagt — hier gibt es **kein** „Neu
              * anfangen", auch nach beliebig vielen Versuchen nicht. */}
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unreachableWrapping")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.unreachableWrapping")}</p>
             <Actions>
               <Button variant="primary" onClick={retry}>
                 {t("startup.answers.retry")}
@@ -324,7 +358,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
           </>
         ) : (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.continuingInTheWindow")}</p>
+            <p className="mb-4 text-sm text-fg-muted">{t("startup.continuingInTheWindow")}</p>
             {/* **Diese Maske braucht eigene Knöpfe** (Review-Fund Runde 1,
               * A16/Spec 0059): Wählt der Nutzer im Dialog D1 „Beenden",
               * kommt der Startablauf als Fehler zurück („Der Start wurde
@@ -363,7 +397,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
         {error && (
           <p
             role="alert"
-            className="mt-4 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+            className="mt-4 rounded border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
           >
             {error}
           </p>
@@ -407,7 +441,7 @@ function StartOver({
 }: {
   busy: boolean;
   onClick: () => void;
-  t: (key: string) => string;
+  t: TranslateFn;
 }) {
   return (
     <Button variant="danger" onClick={onClick} disabled={busy}>
@@ -416,11 +450,3 @@ function StartOver({
   );
 }
 
-/** Der Fehlertext: übersetzter Code, sonst der Text des Backends (Spec
- * 0024, Abschnitt 5) — nie eine leere Anzeige. */
-function messageFor(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-}

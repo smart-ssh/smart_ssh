@@ -1,15 +1,17 @@
 // Spec 0029, Abschnitt 4: strukturelle DOM-Prüfung, dass die Risiko-Badges
 // im selben Zeilen-Container wie das Aktions-Label sitzen, statt als
 // eigener Block über dem Kommando-Text.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   registerDocumentAction,
   resetRegistryForTests,
+  unregisterDocumentAction,
 } from "../extensions/registry";
 import { testI18n } from "../testI18n";
-import type { RiskAssessment } from "../types";
+import type { RiskAssessment } from "../api/types";
 import { ChatItemView, type ChatItem } from "./ChatPanel";
 
 type ActionItem = Extract<ChatItem, { type: "action" }>;
@@ -26,6 +28,7 @@ function buildActionItem(overrides: Partial<ActionItem> = {}): ChatItem {
     usesStoredSudoPassword: false,
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: null,
     riskSecondOpinionPending: false,
@@ -58,7 +61,6 @@ function renderItem(item: ChatItem) {
       <ChatItemView
         item={item}
         onRespond={vi.fn()}
-        onAcceptWithRule={vi.fn()}
         onExport={vi.fn()}
         onContinueTruncated={vi.fn()}
         serverId="server-1"
@@ -132,7 +134,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
     ]) {
       const badge = screen.getByText(label).closest("button");
       expect(badge).not.toBeNull();
-      expect(badge?.textContent).toContain("ⓘ");
+      expect(badge?.querySelector('[data-icon="info"]')).not.toBeNull();
       expect(badge).toHaveAccessibleDescription(reason);
       expect(badge?.hasAttribute("title")).toBe(false);
     }
@@ -145,7 +147,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
       }),
     );
     const badge = screen.getByText("Daten");
-    expect(badge.textContent).not.toContain("ⓘ");
+    expect(badge.querySelector('[data-icon="info"]')).toBeNull();
     expect(badge.closest("button")).toBeNull();
     expect(badge.hasAttribute("title")).toBe(false);
   });
@@ -199,7 +201,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -239,7 +240,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -252,8 +252,32 @@ describe("registered document actions (Spec 0045)", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("title", "Erfordert einen kostenpflichtigen Plan");
 
-    fireEvent.click(button);
+    clickDisabled(button);
     expect(onInvoke).not.toHaveBeenCalled();
+  });
+
+  it("does not render a document action that throws while rendering (issue #880)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken label");
+    };
+    registerDocumentAction({ id: "bad", label: (<Broken />) as unknown as string, onInvoke: vi.fn() });
+    registerDocumentAction({ id: "good", label: "Als Word speichern", onInvoke: vi.fn() });
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={documentItem()}
+          onRespond={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("document-action:bad"))).toBe(true);
+    spy.mockRestore();
   });
 
   it("still renders the unchanged markdown export button alongside registered actions", () => {
@@ -264,7 +288,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -291,7 +314,6 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
         <ChatItemView
           item={assistantItem(text)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -347,7 +369,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(false)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -366,7 +387,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(true)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -389,7 +409,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(true)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={onContinueTruncated}
           serverId="server-1"
@@ -420,7 +439,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={emptyTruncatedItem}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -446,7 +464,6 @@ describe("empty response notice (Spec 0080, A3)", () => {
         <ChatItemView
           item={{ type: "emptyResponse", id: "empty-1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -512,7 +529,6 @@ describe("chat notices follow the UI language (issue #116)", () => {
         <ChatItemView
           item={item}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -524,26 +540,26 @@ describe("chat notices follow the UI language (issue #116)", () => {
 
   it("renders the English texts with an English UI", () => {
     renderItemIn("en", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Response cancelled.")).toBeInTheDocument();
+    expect(screen.getByText("Response cancelled.")).toBeInTheDocument();
 
     renderItemIn("en", { type: "user", id: "u-1", text: "hi", queued: true });
-    expect(screen.getByText("⏳ Will be sent with the next request")).toBeInTheDocument();
+    expect(screen.getByText("Will be sent with the next request")).toBeInTheDocument();
 
     renderItemIn("en", { type: "emptyResponse", id: "e-1" });
     expect(screen.getByText(/^The model returned no response\./)).toBeInTheDocument();
 
     renderItemIn("en", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Response was cut off (length limit reached).")).toBeInTheDocument();
+    expect(screen.getByText("Response was cut off (length limit reached).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "📄 As Markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "As Markdown" })).toBeInTheDocument();
   });
 
   it("keeps the German wording with a German UI", () => {
     renderItemIn("de", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
+    expect(screen.getByText("Antwort abgebrochen.")).toBeInTheDocument();
 
     renderItemIn("de", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
+    expect(screen.getByText("Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });
@@ -565,19 +581,26 @@ describe("resumed command results (issue #167)", () => {
   it("shows exit code 0 instead of the placeholder", () => {
     renderItem(historyCommandResult(0));
 
-    expect(screen.getByText("exit code: 0")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 0")).toBeTruthy();
   });
 
   it("shows a non-zero exit code", () => {
     renderItem(historyCommandResult(1));
 
-    expect(screen.getByText("exit code: 1")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 1")).toBeTruthy();
   });
 
   it("falls back to the placeholder only when no exit code is known", () => {
     renderItem(historyCommandResult(null));
 
-    expect(screen.getByText("exit code: —")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: —")).toBeTruthy();
+  });
+
+  it("renders the translated (German) exit-code text, not the English one", () => {
+    renderItem(historyCommandResult(2));
+
+    expect(screen.queryByText(/exit code/i)).toBeNull();
+    expect(screen.getByText("Exit-Code: 2")).toBeTruthy();
   });
 });
 
@@ -591,7 +614,6 @@ describe("web research unavailable notice (issue #169)", () => {
         <ChatItemView
           item={{ type: "webResearchUnavailable", id: "w-1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -629,7 +651,6 @@ describe("context compaction note (Issue #601)", () => {
         <ChatItemView
           item={{ type: "contextCompacted", id: "c1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -638,5 +659,48 @@ describe("context compaction note (Issue #601)", () => {
       </I18nextProvider>,
     );
     expect(screen.getByText(/zusammengefasst/)).toBeInTheDocument();
+  });
+});
+
+describe("document actions are reactive (#884)", () => {
+  afterEach(() => {
+    resetRegistryForTests();
+  });
+
+  function renderDocument() {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={{ type: "document", id: "doc-1", title: "T", contentMarkdown: "# T" }}
+          onRespond={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("shows an action registered after the first render and removes it again", () => {
+    renderDocument();
+    expect(screen.queryByRole("button", { name: "Late" })).toBeNull();
+
+    act(() => registerDocumentAction({ id: "late", label: "Late", onInvoke: vi.fn() }));
+    expect(screen.getByRole("button", { name: "Late" })).toBeInTheDocument();
+
+    act(() => unregisterDocumentAction("late"));
+    expect(screen.queryByRole("button", { name: "Late" })).toBeNull();
+  });
+
+  it("updates the button when an action is replaced under the same id", () => {
+    registerDocumentAction({ id: "a", label: "Act", onInvoke: vi.fn() });
+    renderDocument();
+    expect(screen.getByRole("button", { name: "Act" })).toBeEnabled();
+
+    act(() =>
+      registerDocumentAction({ id: "a", label: "Act", onInvoke: vi.fn(), disabled: true }),
+    );
+    expect(screen.getByRole("button", { name: "Act" })).toBeDisabled();
   });
 });

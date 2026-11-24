@@ -1,6 +1,7 @@
 //! Issue #672: the coalesced "data changed" notification fires after
 //! committed changes to the user data set, and only then.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::collections::BTreeSet;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
@@ -15,10 +16,9 @@ use ssh_manager_core::ai::{ProviderId, ProviderType};
 use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 use ssh_manager_core::filter::{Pattern, RuleAction, RuleId, Scope};
 use ssh_manager_core::profiles::{
-    AuthMethod, CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision,
-    NoteTarget, PostIngestPolicy, ProfileStore, Server,
+    CredentialRef, CredentialStore, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,
+    ProfileStore,
 };
-use ssh_manager_core::shared::ServerId;
 
 use crate::{AiProviderConfig, SqliteProfileStore, StoredRule};
 
@@ -57,28 +57,6 @@ fn group() -> Group {
         name: "g".into(),
         parent_id: None,
         notes: String::new(),
-        created_at: now,
-        updated_at: now,
-    }
-}
-
-fn server(tags: Vec<String>) -> Server {
-    let now = Utc::now();
-    Server {
-        id: ServerId::new(),
-        name: "s".into(),
-        host: "example.invalid".into(),
-        port: 22,
-        username: "u".into(),
-        group_id: None,
-        tags,
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
         created_at: now,
         updated_at: now,
     }
@@ -128,7 +106,12 @@ async fn groups_servers_and_notes_notify_after_create_update_delete() {
     store.update_group(&g).await.unwrap();
     assert_eq!(got(&rx), kinds(&[DataKind::Groups]));
 
-    let mut s = server(vec!["t".into()]);
+    let mut s = ServerBuilder::new()
+        .name("s")
+        .host("example.invalid")
+        .username("u")
+        .tags(vec!["t".into()])
+        .build();
     store.create_server(&s).await.unwrap();
     assert_eq!(got(&rx), kinds(&[DataKind::Servers, DataKind::Tags]));
     s.name = "renamed".into();
@@ -242,7 +225,14 @@ async fn a_rolled_back_write_emits_nothing() {
     .await
     .unwrap();
     assert!(store
-        .create_server(&server(vec!["t".into()]))
+        .create_server(
+            &ServerBuilder::new()
+                .name("s")
+                .host("example.invalid")
+                .username("u")
+                .tags(vec!["t".into()])
+                .build()
+        )
         .await
         .is_err());
     silent(&rx);
@@ -252,7 +242,12 @@ async fn a_rolled_back_write_emits_nothing() {
 async fn chat_messages_emit_nothing() {
     use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
     let (store, rx) = store().await;
-    let s = server(Vec::new());
+    let s = ServerBuilder::new()
+        .name("s")
+        .host("example.invalid")
+        .username("u")
+        .tags(Vec::new())
+        .build();
     store.create_server(&s).await.unwrap();
     got(&rx);
 

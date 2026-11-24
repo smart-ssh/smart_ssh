@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "../thirdPartyNoticesMarker";
+import { THIRD_PARTY_NOTICES_MARKER as MARKER } from "../lib/thirdPartyNoticesMarker";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
 
 function renderDialog() {
@@ -65,7 +65,7 @@ describe("ThirdPartyLicensesDialog (Spec 0099)", () => {
 
     const { container } = renderDialog();
 
-    await waitFor(() => expect(screen.getByText(/onerror=alert/)).toBeInTheDocument());
+    expect(await screen.findByText(/onerror=alert/)).toBeInTheDocument();
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
     expect(screen.getByText(/onerror=alert/).textContent).toContain("<script>alert(1)</script>");

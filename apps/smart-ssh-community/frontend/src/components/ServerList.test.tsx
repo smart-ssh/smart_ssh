@@ -7,8 +7,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { GroupDto, ServerDto } from "../types";
-import { ServerList } from "./ServerList";
+import type { GroupDto, ServerDto } from "../api/types";
+import { ServerList, serverSessionMarkers, type ServerMarker } from "./ServerList";
 import {
   listChatSessions,
   listGroups,
@@ -17,9 +17,9 @@ import {
   moveGroup,
   moveServerToGroup,
   resumeChatSession,
-} from "../api";
-import { onHostKeyVerificationNeeded } from "../events";
-import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
+} from "../api/api";
+import { onDataChanged, onHostKeyVerificationNeeded } from "../api/events";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
 import {
   registerFirstRunNoticeExtension,
   resetRegistryForTests,
@@ -45,11 +45,14 @@ function localServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
+    startDirectory: null,
   };
 }
 
 function remoteServer(): ServerDto {
-  return {
+  return { isCopy: false, startDirectory: null,
     id: "remote-1",
     name: "prod-1",
     host: "prod-1.internal",
@@ -67,16 +70,16 @@ function remoteServer(): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
   };
 }
 
-vi.mock("../api", async () => {
+vi.mock("../api/api", async () => {
   // Spec 0047, Fund D2: `commandErrorCode`/`commandErrorMessage` bleiben die
   // echten Implementierungen (nicht gemockt) statt der bisherigen
   // Ad-hoc-`String(err)`-Attrappe — der neue Test unten prüft genau ihr
   // Zusammenspiel mit `translateErrorCode` in `ServerList`s `describeError`.
-  const actual = await vi.importActual<typeof import("../api")>("../api");
-  return {
+  return (await import("../test/apiMock")).createApiMock({
     listServers: vi.fn(() => Promise.resolve([localServer(), remoteServer()])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
@@ -84,17 +87,15 @@ vi.mock("../api", async () => {
     resumeChatSession: vi.fn(),
     moveServerToGroup: vi.fn(() => Promise.resolve()),
     moveGroup: vi.fn(() => Promise.resolve()),
-    commandErrorMessage: actual.commandErrorMessage,
-    commandErrorCode: actual.commandErrorCode,
-    commandErrorConnectLog: actual.commandErrorConnectLog,
-  };
+  });
 });
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onHostKeyVerificationNeeded: vi.fn(() => Promise.resolve(() => {})),
+  onDataChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../firstRunNotice", () => ({
+vi.mock("../lib/firstRunNotice", () => ({
   loadFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve(true)),
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
@@ -103,12 +104,13 @@ const startConnectMock = vi.fn();
 
 function renderList(
   onCreateFirstServer: () => void = vi.fn(),
-  onCreateServerInGroup: (groupId: string) => void = vi.fn(),
   onToggleGroup: (groupId: string) => void = vi.fn(),
+  serverMarkers: ReadonlyMap<string, ServerMarker> = new Map(),
 ) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <ServerList
+        serverMarkers={serverMarkers}
         onStartConnect={startConnectMock}
         connectingServerIds={new Set()}
         findExistingSessionId={() => undefined}
@@ -116,7 +118,6 @@ function renderList(
         collapsedGroupIds={new Set()}
         onToggleGroup={onToggleGroup}
         onCreateFirstServer={onCreateFirstServer}
-        onCreateServerInGroup={onCreateServerInGroup}
       />
     </I18nextProvider>,
   );
@@ -128,6 +129,7 @@ function group(overrides: Partial<GroupDto> = {}): GroupDto {
     name: "Prod",
     parentId: null,
     notes: "",
+    isCopy: false,
     ...overrides,
   };
 }
@@ -136,17 +138,26 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
   it("hides the port for the local pseudo-server", async () => {
     renderList();
 
-    await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
+    expect(await screen.findByText("Localhost")).toBeInTheDocument();
 
-    expect(screen.getByText("me@localhost")).toBeInTheDocument();
+    // Issue #1367: the local pseudo-server says "this device" instead (test locale: de).
+    expect(screen.getByText("dieses Gerät")).toBeInTheDocument();
+    expect(screen.getByText("Lokal")).toBeInTheDocument();
+    expect(screen.queryByText("me@localhost")).toBeNull();
     expect(screen.queryByText(/:0\b/)).toBeNull();
     expect(screen.queryByText("me@localhost:0")).toBeNull();
+  });
+
+  it("omits the port when it is 22 (Issue #1367)", async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer(), { ...remoteServer(), port: 22 }]);
+    renderList();
+    expect(await screen.findByText("deploy@prod-1.internal")).toBeInTheDocument();
   });
 
   it("still shows the port for a normal remote server", async () => {
     renderList();
 
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
 
     expect(screen.getByText("deploy@prod-1.internal:2222")).toBeInTheDocument();
   });
@@ -182,9 +193,9 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     renderList();
 
     await screen.findByText("Noch kein Server angelegt");
-    // Issue #49: `/📁 Prod/` statt `/Prod/` — die Gruppenzeile hat jetzt
-    // zusätzlich einen „+"-Button, dessen Name den Gruppennamen enthält.
-    expect(screen.getByRole("button", { name: /📁 Prod/ })).toBeInTheDocument();
+    // Issue #49: the group row additionally has a "+" button whose name
+    // contains the group name.
+    expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
   });
 
   it('clicking "Ersten Server anlegen" invokes the callback', async () => {
@@ -209,7 +220,7 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
 describe("ServerList host key prompt ownership (Issue #12)", () => {
   it("does not subscribe to host-key-verification-needed itself", async () => {
     renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
     expect(onHostKeyVerificationNeeded).not.toHaveBeenCalled();
   });
 });
@@ -232,7 +243,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
   it("moves a server into a group via the narrow command, reloads, and does not connect", async () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
     const loadsBefore = vi.mocked(listServers).mock.calls.length;
 
     dragOnto(screen.getByText("prod-1"), screen.getByText(/Prod$/));
@@ -249,7 +260,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
     startConnectMock.mockClear();
     vi.mocked(moveServerToGroup).mockClear();
     renderList();
-    await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
+    expect(await screen.findByText("Localhost")).toBeInTheDocument();
 
     dragOnto(screen.getByText("Localhost"), screen.getByText(/Prod$/));
 
@@ -264,7 +275,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
       Promise.reject({ message: "Zyklus", code: "GROUP_CYCLE_DETECTED" }),
     );
     renderList();
-    await waitFor(() => expect(screen.getByText(/Web$/)).toBeInTheDocument());
+    expect(await screen.findByText(/Web$/)).toBeInTheDocument();
 
     dragOnto(screen.getByText(/Prod$/), screen.getByText(/Web$/));
 
@@ -300,22 +311,40 @@ describe("ServerList new server in a group (issue #49)", () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
   });
 
-  it("the + action on a group row opens the form for that group without toggling it", async () => {
-    vi.mocked(listGroups).mockImplementation(() =>
-      Promise.resolve([group(), group({ id: "group-2", name: "Web", parentId: "group-1" })]),
+  it("shows the open-folder icon for an expanded group and the folder icon for a collapsed one (issue #1363)", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
+    const { unmount } = renderList();
+    const open = await screen.findByRole("button", { name: /Prod/ });
+    expect(open.querySelector('[data-icon="folder-open"]')).not.toBeNull();
+    unmount();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerList
+          onStartConnect={startConnectMock}
+          connectingServerIds={new Set()}
+          findExistingSessionId={() => undefined}
+          onSwitchToExistingTab={vi.fn()}
+          collapsedGroupIds={new Set(["group-1"])}
+          onToggleGroup={vi.fn()}
+          onCreateFirstServer={vi.fn()}
+        />
+      </I18nextProvider>,
     );
-    startConnectMock.mockClear();
-    const onCreateServerInGroup = vi.fn();
+    const closed = await screen.findByRole("button", { name: /Prod/ });
+    expect(closed.querySelector('[data-icon="folder"]')).not.toBeNull();
+  });
+
+  it("group rows have no + action and expose aria-expanded (Issue #978)", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     const onToggleGroup = vi.fn();
-    renderList(vi.fn(), onCreateServerInGroup, onToggleGroup);
-
-    fireEvent.click(await screen.findByRole("button", {
-        name: testI18n.t("mainScreen.newServerInGroup", { name: "Web" }),
-      }));
-
-    expect(onCreateServerInGroup).toHaveBeenCalledWith("group-2");
-    expect(onToggleGroup).not.toHaveBeenCalled();
-    expect(startConnectMock).not.toHaveBeenCalled();
+    renderList(vi.fn(), onToggleGroup);
+    const header = await screen.findByRole("button", { name: /Prod/ });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByRole("button", { name: /^(New server in|Neuer Server in)/ })).toBeNull();
+    expect(header.textContent).not.toMatch(/[▸▾]/);
+    expect(header.querySelector("svg")).toHaveAttribute("width", "16");
+    fireEvent.click(header);
+    expect(onToggleGroup).toHaveBeenCalledWith("group-1");
   });
 });
 
@@ -405,7 +434,6 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     fireEvent.click(screen.getByText("prod-1"));
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
-    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("prod-1").closest("button")).toBeEnabled());
 
     fireEvent.click(screen.getByText("Localhost"));
@@ -474,8 +502,8 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
 
+    await waitFor(() => expect(screen.queryByText(noticeTitle())).toBeNull());
     await waitFor(() => expect(startConnectMock).toHaveBeenCalledWith(expect.objectContaining({ id: "remote-1" })));
-    expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
@@ -551,7 +579,6 @@ describe("ServerList resume request (Issue #611)", () => {
           collapsedGroupIds={new Set()}
           onToggleGroup={vi.fn()}
           onCreateFirstServer={vi.fn()}
-          onCreateServerInGroup={vi.fn()}
           resumeRequest={{ serverId: "remote-1", chatSessionId: "chat-9" }}
           onResumeRequestConsumed={opts.onConsumed}
         />
@@ -579,7 +606,7 @@ describe("ServerList resume request (Issue #611)", () => {
 
   it("shows the first-run notice before resuming when it is not acknowledged", async () => {
     startConnectMock.mockClear();
-    const { loadFirstRunNoticeAcknowledged } = await import("../firstRunNotice");
+    const { loadFirstRunNoticeAcknowledged } = await import("../lib/firstRunNotice");
     vi.mocked(loadFirstRunNoticeAcknowledged).mockResolvedValueOnce(false);
     renderWithRequest({});
     await screen.findByRole("dialog");
@@ -601,7 +628,6 @@ describe("ServerList new session (issue #657)", () => {
           collapsedGroupIds={new Set()}
           onToggleGroup={vi.fn()}
           onCreateFirstServer={vi.fn()}
-          onCreateServerInGroup={vi.fn()}
         />
       </I18nextProvider>,
     );
@@ -611,7 +637,7 @@ describe("ServerList new session (issue #657)", () => {
     renderWithTab();
     const row = (await screen.findByText("prod-1")).closest("button")!;
     fireEvent.contextMenu(row);
-    fireEvent.click(await screen.findByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Neue Sitzung" }));
     await waitFor(() =>
       expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }),
     );
@@ -624,5 +650,159 @@ describe("ServerList new session (issue #657)", () => {
     fireEvent.click((await screen.findByText("prod-1")).closest("button")!);
     await waitFor(() => expect(onSwitch).toHaveBeenCalledWith("tab-1"));
     expect(startConnectMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ServerList data-changed reload (issue #1292 / Spec 0033)", () => {
+  type Handler = (p: { kinds: string[] }) => void;
+  function captureHandler() {
+    const unlisten = vi.fn();
+    let handler: Handler | null = null;
+    vi.mocked(onDataChanged).mockImplementation(((h: Handler) => {
+      handler = h;
+      return Promise.resolve(unlisten);
+    }) as never);
+    return { unlisten, fire: (kinds: string[]) => act(() => handler?.({ kinds })) };
+  }
+  afterEach(() => {
+    vi.mocked(listServers).mockImplementation(() => Promise.resolve([localServer(), remoteServer()]));
+    vi.mocked(onDataChanged).mockImplementation(() => Promise.resolve(() => {}));
+  });
+
+  it("reloads on servers/groups and shows the new data", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    vi.mocked(listServers).mockImplementation(() =>
+      Promise.resolve([localServer(), { ...remoteServer(), id: "r2", name: "added-srv" }]),
+    );
+    fire(["groups"]);
+    expect(await screen.findByText("added-srv")).toBeInTheDocument();
+  });
+
+  it("does not reload for other kinds", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    const calls = vi.mocked(listServers).mock.calls.length;
+    fire(["tags", "rules"]);
+    expect(vi.mocked(listServers).mock.calls.length).toBe(calls);
+  });
+
+  it("unregisters on unmount and ignores later events", async () => {
+    const { fire, unlisten } = captureHandler();
+    const view = renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    view.unmount();
+    await waitFor(() => expect(unlisten).toHaveBeenCalled());
+    const calls = vi.mocked(listServers).mock.calls.length;
+    fire(["servers"]);
+    expect(vi.mocked(listServers).mock.calls.length).toBe(calls);
+  });
+
+  it("keeps the previous list and shows the error when the reload fails", async () => {
+    const { fire } = captureHandler();
+    renderList();
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
+    vi.mocked(listServers).mockImplementation(() => Promise.reject(new Error("boom")));
+    fire(["servers"]);
+    expect(await screen.findByText(/boom/)).toBeInTheDocument();
+    expect(screen.getByText("prod-1")).toBeInTheDocument();
+  });
+});
+
+// Issue #1367: tree counts and status markers.
+describe("ServerList counts and status markers (Issue #1367)", () => {
+  it("shows 2 for a group with one server and one subgroup, and 0 for an empty group", async () => {
+    vi.mocked(listGroups).mockResolvedValueOnce([
+      { isCopy: false, id: "g1", name: "staging", parentId: null, notes: "" },
+      { isCopy: false, id: "g2", name: "sub", parentId: "g1", notes: "" },
+    ]);
+    vi.mocked(listServers).mockResolvedValueOnce([
+      localServer(),
+      { ...remoteServer(), groupId: "g1" },
+    ]);
+    renderList();
+    const staging = (await screen.findByRole("button", { name: /staging/ })).closest("li")!;
+    expect(staging.querySelector("[data-testid=group-count]")).toHaveTextContent("2");
+    const sub = screen.getByRole("button", { name: /sub/ });
+    expect(sub.querySelector("[data-testid=group-count]")).toHaveTextContent("0");
+  });
+
+  it.each([
+    ["connected", "success", "Sitzung offen"],
+    ["attention", "warning", "Wartet auf Bestätigung"],
+    ["disconnected", "neutral", "Sitzung getrennt"],
+  ] as const)("renders a %s marker square on the row", async (marker, tone, text) => {
+    renderList(vi.fn(), vi.fn(), new Map([["remote-1", marker]]));
+    const row = (await screen.findByText("prod-1")).closest("button")!;
+    expect(row.querySelector("[data-status-square]")).toHaveAttribute("data-status-square", tone);
+    expect(row).toHaveTextContent(text);
+    const local = screen.getByText("Localhost").closest("button")!;
+    expect(local.querySelector("[data-status-square]")).toBeNull();
+  });
+
+  it("shows no marker without an open session", async () => {
+    renderList();
+    const row = (await screen.findByText("prod-1")).closest("button")!;
+    expect(row.querySelector("[data-status-square]")).toBeNull();
+  });
+});
+
+describe("serverSessionMarkers (Issue #1367)", () => {
+  const tab = (serverId: string, over: Record<string, unknown> = {}) => ({
+    serverId,
+    status: "connected" as const,
+    hasPendingAction: false,
+    mcp: null,
+    phase: "connected" as const,
+    ...over,
+  });
+
+  it("maps connected, pending confirmation, host-key wait and disconnected", () => {
+    const m = serverSessionMarkers([
+      tab("a"),
+      tab("b", { hasPendingAction: true }),
+      tab("c", { status: "awaiting_host_key" }),
+      tab("d", { status: "disconnected" }),
+    ]);
+    expect([m.get("a"), m.get("b"), m.get("c"), m.get("d")]).toEqual([
+      "connected",
+      "attention",
+      "attention",
+      "disconnected",
+    ]);
+  });
+
+  it("drops the marker when the tab is gone, and ignores MCP and connecting tabs", () => {
+    expect(serverSessionMarkers([]).size).toBe(0);
+    expect(
+      serverSessionMarkers([tab("a", { mcp: { clientName: "x" } }), tab("b", { phase: "connecting" })]).size,
+    ).toBe(0);
+  });
+
+  it("lets the most urgent of several tabs win", () => {
+    const m = serverSessionMarkers([tab("a", { hasPendingAction: true }), tab("a")]);
+    expect(m.get("a")).toBe("attention");
+  });
+
+  it("maps a reconnecting tab to its own marker (warning, like the tab bar)", () => {
+    expect(serverSessionMarkers([tab("a", { status: "reconnecting" })]).get("a")).toBe("reconnecting");
+  });
+
+  it("ranks reconnecting above connected/disconnected and below attention", () => {
+    const rec = tab("a", { status: "reconnecting" });
+    expect(serverSessionMarkers([tab("a"), rec]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { status: "disconnected" })]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { hasPendingAction: true })]).get("a")).toBe("attention");
+  });
+
+  it("gives no marker to reconnecting MCP tabs or tabs that are still connecting/failed", () => {
+    const m = serverSessionMarkers([
+      tab("a", { status: "reconnecting", mcp: { clientName: "x" } }),
+      tab("b", { status: "reconnecting", phase: "connecting" }),
+      tab("c", { status: "reconnecting", phase: "failed" }),
+    ]);
+    expect(m.size).toBe(0);
   });
 });

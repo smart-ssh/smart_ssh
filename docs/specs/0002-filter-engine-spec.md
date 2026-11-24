@@ -72,6 +72,16 @@ nebeneinander (Allow gegen Confirm), gewinnt die strengere.
 Trifft nichts, lautet die Entscheidung `Confirm` mit dem Grund „keine Regel
 gefunden".
 
+### 3.4 Regeln nicht ladbar
+
+Lassen sich die Regeln nicht (vollständig) laden – etwa weil der lokale
+Regelspeicher nicht lesbar ist oder eine Regelquelle ausfällt –, gilt keine
+Allow-Regel mehr: Ein Kommando, das sonst automatisch liefe, braucht
+Bestätigung, mit dem Code `FILTER_RULES_UNAVAILABLE` und dem Hinweis, dass die
+Regeln nicht geladen werden konnten. Deny-Regeln, die sich laden ließen, und
+die Hard-Blacklist gelten unverändert und gewinnen; der Ausfall senkt nie
+eine Entscheidung.
+
 ## 4. Zerlegung und Schutz vor Verkettung
 
 Dies ist der sicherheitskritischste Teil. Ein Vorschlag wie
@@ -203,6 +213,12 @@ Eine Auswertung bekommt das Kommando und einen Kontext: den Server, auf dem
 es laufen soll, und dessen Tags. Aus dem Kontext ergibt sich, welche Regeln
 gelten (Global immer, Server und Tag nur bei Übereinstimmung).
 
+Die Tags eines Servers liest die App für jede Aktion neu aus dem Profilspeicher.
+Schlägt das fehl (anders als „Server nicht gespeichert“, etwa beim lokalen
+Pseudo-Server), gelten die beim Verbinden gemerkten Tags, und eine Aktion, die
+sonst automatisch liefe, verlangt eine Bestätigung
+(`FILTER_SERVER_TAGS_UNAVAILABLE`); ein `Deny` bleibt `Deny`.
+
 Die Regeln kommen aus einer austauschbaren Quelle. Tests und die laufende
 App nutzen dieselbe Auswertung, nur mit anderer Quelle; die Logik hängt
 weder von SSH noch von einer KI-API noch von der Oberfläche ab.
@@ -230,7 +246,8 @@ gegriffen hat (Spec 0009, Abschnitt 4).
 
 ## 7. Sicherheitszusagen
 
-- Fail-safe: Zweifel führt zu `Confirm`, nie zu `AutoExec`.
+- Fail-safe: Zweifel führt zu `Confirm`, nie zu `AutoExec`. Das gilt auch,
+  wenn die Regeln nicht geladen werden können (3.4).
 - Eine Deny-Regel oder die Hard-Blacklist wird durch keinen weiteren Pfad
   abgeschwächt; Eskalation geht nur in eine Richtung (strenger).
 - Das Kommando wird vor jeder Prüfung normalisiert, und alle Ebenen sehen

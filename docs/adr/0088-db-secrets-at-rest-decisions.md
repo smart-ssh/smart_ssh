@@ -1,6 +1,8 @@
 # ADR 0088 — Entscheidungen bei der Umsetzung von Spec 0096 (Geheimnisse in der Datenbank)
 
-Status: angenommen · Spec: `docs/specs/0096-db-secrets-at-rest.md` · Backlog: BL-0295
+## Status
+
+Accepted · Spec: `docs/specs/0096-db-secrets-at-rest.md` · Backlog: BL-0295
 
 Spec 0096 verlangt, dass ein Geheimnis aus einem Kommando nicht im Klartext
 in einer Datei des Datenbank-Verzeichnisses landet. Sie lässt mehrere Punkte

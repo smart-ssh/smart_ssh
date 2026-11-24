@@ -37,6 +37,10 @@ anmelden. Eine Dokument-Aktion hat:
 Ob eine Aktion gesperrt ist, entscheidet das anmeldende Modul. Die
 Registry und die Dokument-Karte zeigen nur an, was sie bekommen.
 
+Dokument-Aktionen lassen sich jederzeit anmelden, ersetzen und wieder
+entfernen. Eine offene Dokument-Karte zeigt die Änderung sofort, ohne
+Neuladen und ohne dass sich sonst etwas ändert.
+
 ## 4. Darstellung der Dokument-Aktionen
 
 - Die Aktionen erscheinen **nur auf der Dokument-Karte** (Spec 0012,
@@ -66,12 +70,30 @@ gibt es nicht; die App hat dafür keine Darstellung.
   Befehl, den die Aktion aufruft. Wer die Sperre in der Oberfläche umgeht,
   scheitert dort.
 
+- Jeder Beitrag zu einem Andockpunkt (Einstellungs-Abschnitt,
+  Formular-Abschnitt, Server-Einstellungs-Reiter, Sitzungskopf-Element,
+  Composer-Aktion, Verwalten-Ansicht, Dokument-Aktion) ist für sich
+  abgesichert: Ein Beitrag, der beim Anzeigen einen Fehler wirft, wird
+  nicht angezeigt und einmal protokolliert; alle übrigen Beiträge und der
+  Rest der App bleiben bedienbar. Fehler in Ereignis-Handlern oder
+  asynchronem Code fängt das nicht ab.
+- Wirft die Oberfläche außerhalb der Andockpunkte beim Anzeigen einen
+  Fehler, erscheint statt eines leeren Fensters ein Wiederherstellungs-
+  Bildschirm („Something went wrong") mit der Schaltfläche „Reload", die
+  die Oberfläche neu lädt. Der Text verweist auf das Diagnosepaket unter
+  Einstellungen → Diagnose; die Fehlerdetails selbst werden nicht
+  angezeigt.
+
 ## 7. Akzeptanzfälle
 
 - Anmelden und Auflisten von Dokument-Aktionen; gleiche Kennung ersetzt.
 - Die Dokument-Karte zeigt eine angemeldete aktive Aktion (Klick ruft die
   Handlung mit Titel und Inhalt auf) und eine gesperrte (sichtbar, nicht
   klickbar, Begründung als Tooltip).
+- Ein Beitrag, der beim Anzeigen wirft, verschwindet allein; die anderen
+  Beiträge und die eingebauten Bereiche bleiben bedienbar.
+- Ein Fehler außerhalb der Andockpunkte zeigt den Wiederherstellungs-
+  Bildschirm; „Reload" lädt neu.
 
 ## 8. (entfallen)
 
@@ -83,6 +105,9 @@ Elemente hinzufügen.
 - Eine Erweiterung hat eine Kennung, eine Rangfolge und eine eigene
   Anzeige. Erweiterungen erscheinen aufsteigend nach Rangfolge, bei
   Gleichstand nach Kennung.
+- Erweiterungen lassen sich jederzeit anmelden, ersetzen und wieder
+  entfernen. Ein offener Erststart-Hinweis zeigt die Änderung sofort; die
+  Handlung einer entfernten Erweiterung wird nicht mehr ausgeführt.
 - Eine Erweiterung kann genau eine Handlung anmelden, die einmal
   ausgeführt wird, nachdem der Nutzer den Hinweis bestätigt hat und die
   Bestätigung gespeichert ist. Eine erneute Anmeldung ersetzt die

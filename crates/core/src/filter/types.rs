@@ -22,14 +22,39 @@ use crate::shared::ServerId;
 /// die Werte selbst bleiben trotzdem aus einer festen Konstanten-Menge
 /// (s. `engine`-Modul), nur die Repräsentation ist `String`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum Decision {
     AutoExec,
     Confirm { reason: String, code: String },
     Deny { reason: String, code: String },
 }
 
+impl Decision {
+    fn severity(&self) -> u8 {
+        match self {
+            Decision::AutoExec => 0,
+            Decision::Confirm { .. } => 1,
+            Decision::Deny { .. } => 2,
+        }
+    }
+
+    /// The stricter of two decisions: `Deny` > `Confirm` > `AutoExec`. On
+    /// equal severity `self` wins, so an earlier step keeps its code and
+    /// reason. This is the only way the escalation chain combines decisions,
+    /// which makes "escalate only" a property of the type of operation.
+    #[must_use]
+    pub fn stricter(self, other: Decision) -> Decision {
+        if other.severity() > self.severity() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 /// Wirkung einer Nutzerregel (Spec 0002, Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RuleAction {
     /// macht Kommando AutoExec-fähig
     Allow,
@@ -52,6 +77,7 @@ pub enum RuleAction {
 /// analog zu den anderen IDs), aber der Typ selbst bleibt so flexibel wie
 /// von Spec 0002 vorgesehen.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RuleId(pub String);
 
 impl std::fmt::Display for RuleId {
@@ -112,6 +138,7 @@ pub enum Pattern {
 /// Geltungsbereich einer Regel (Spec 0002, Abschnitt 2). Spezifität für die
 /// Präzedenz-Sortierung (Abschnitt 3): `Server` > `Tag` > `Global`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum Scope {
     Global,
     Server(ServerId),
@@ -206,6 +233,7 @@ pub struct EvaluationTrace {
 
 /// Kind of an [`EvaluationTrace`] inside `sub_command_traces`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum TraceKind {
     /// A pipeline/chain segment (or the command as a whole).
     #[default]

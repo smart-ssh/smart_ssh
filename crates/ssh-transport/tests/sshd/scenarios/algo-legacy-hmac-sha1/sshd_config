@@ -1,0 +1,6 @@
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no
+LogLevel VERBOSE
+Ciphers aes128-ctr
+MACs hmac-sha1

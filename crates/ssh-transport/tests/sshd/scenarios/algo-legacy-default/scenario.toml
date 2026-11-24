@@ -1,0 +1,4 @@
+image = "openssh-legacy"
+hostname = "algo-legacy-default"
+networks = ["algo-net"]
+publish = true

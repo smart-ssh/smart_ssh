@@ -1,0 +1,7 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LogLevel VERBOSE
+Subsystem sftp internal-sftp
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub

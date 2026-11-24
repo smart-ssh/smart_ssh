@@ -1,6 +1,6 @@
 // UI review of the server tree and server management (issue #382): axe scan,
 // Tab order, Escape + focus return and clipping for every screen in scope.
-import type { SshConfigExportResultDto, SshConfigImportPreviewDto } from "../../src/types";
+import type { SshConfigExportResultDto, SshConfigImportPreviewDto } from "../../src/api/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, failingStepLog, group, populated, server } from "../support/data";
@@ -83,9 +83,9 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("treeitem", { name: `${LONG}`, exact: true }).click();
       await expect(app.page.getByRole("tab", { name: "General", exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(app.page.getByRole("button", { name: "Delete Server" })).toBeVisible();
+      await expect(app.page.getByRole("button", { name: "Delete Server", exact: true })).toBeVisible();
     },
     tabs: 40,
   },
@@ -93,7 +93,7 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("treeitem", { name: `${LONG}`, exact: true }).click();
       await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await expect(app.page.getByRole("button", { name: "Test Connection", exact: true })).toBeVisible();
     },
@@ -103,7 +103,7 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("treeitem", { name: `${LONG}`, exact: true }).click();
       await app.page.getByRole("tab", { name: "Security", exact: true }).click();
       await expect(app.page.getByRole("radio").first()).toBeVisible();
     },
@@ -113,9 +113,9 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("treeitem", { name: `${LONG}`, exact: true }).click();
       await app.page.getByRole("tab", { name: "Notes", exact: true }).click();
-      await expect(app.page.getByRole("button", { name: "Context Preview" }).first()).toBeVisible();
+      await expect(app.page.getByRole("button", { name: "Context Preview", exact: true }).first()).toBeVisible();
     },
     tabs: 30,
   },
@@ -134,7 +134,7 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("treeitem", { name: "📁 Production" }).click();
+      await app.page.getByRole("treeitem", { name: "Production", exact: true }).click();
       await expect(app.page.getByRole("heading").first()).toBeVisible();
     },
     tabs: 30,
@@ -169,7 +169,7 @@ const SCREENS: Record<string, Screen> = {
         commands: { test_connection: { result: { kind: "authenticationFailed", steps: failingStepLog(2) } } },
       });
       await manage(app);
-      await app.page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
+      await app.page.getByRole("treeitem", { name: "db-primary", exact: true }).click();
       await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await app.page.getByRole("button", { name: "Test Connection", exact: true }).click();
       await app.page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
@@ -220,7 +220,7 @@ const DIALOGS: Record<string, DialogScreen> = {
       await expect(app.page.getByText("db-primary")).toBeVisible();
     },
     trigger: (app) => app.page.getByRole("button", { name: /db-primary/ }).first(),
-    marker: (app) => app.page.getByRole("button", { name: "New conversation" }),
+    marker: (app) => app.page.getByRole("button", { name: "New conversation", exact: true }),
   },
 };
 

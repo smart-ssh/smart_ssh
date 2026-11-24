@@ -7,8 +7,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { HostKeyInfo, HostKeyUserDecision } from "../types";
+import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
 import { HostKeyDialog } from "./HostKeyDialog";
+import { DialogFrame } from "./ui";
 
 const unknownEvent: HostKeyInfo = {
   host: "example.com",
@@ -56,6 +57,42 @@ describe.each(branches)("HostKeyDialog ($name)", ({ event, role, rejectLabel, tr
     expect(describedById).toBeTruthy();
     const description = document.getElementById(describedById as string);
     expect(description?.textContent?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("renders label/value rows and the danger header band only for the mismatch", () => {
+    renderDialog(event);
+    expect(screen.getByTestId("host-key-address")).toHaveClass("font-mono");
+    if (role === "alertdialog") {
+      expect(screen.getByTestId("host-key-header")).toHaveClass("bg-danger-subtle");
+      expect(screen.getByText("Bekannt")).toBeInTheDocument();
+    } else {
+      expect(screen.queryByTestId("host-key-header")).toBeNull();
+      expect(screen.queryByTestId("dialog-ticks")).toBeNull();
+    }
+  });
+
+  it("labels the fingerprint row 'Offered Now' for a mismatch and 'Offered' for an unknown host", () => {
+    renderDialog(event);
+    const labels = screen.getAllByRole("term").map((n) => n.textContent);
+    if (role === "alertdialog") {
+      expect(labels).toContain("Jetzt angeboten");
+    } else {
+      expect(labels).toContain("Angeboten");
+      expect(labels).not.toContain("Jetzt angeboten");
+    }
+  });
+
+  it("draws the danger corner ticks, hidden in the narrow layout, with an offset shadow", () => {
+    if (role !== "alertdialog") return;
+    renderDialog(event);
+    const wrapper = screen.getByTestId("dialog-ticks");
+    expect(wrapper).toHaveClass("narrow:hidden");
+    const ticks = wrapper.querySelectorAll("[data-corner-tick]");
+    expect(ticks).toHaveLength(2);
+    ticks.forEach((tick) => expect(tick).toHaveClass("border-danger"));
+    const dialog = screen.getByRole(role);
+    expect(dialog).toHaveClass("relative", "shadow-offset-lg", "narrow:shadow-none");
+    expect(dialog.className).not.toContain("shadow-xl");
   });
 
   it("T2: fokussiert die ablehnende Schaltfläche nach dem Rendern (A2)", () => {
@@ -397,10 +434,11 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
     expect(unknown.heading).toBe("Unbekannter Host");
     expect(mismatch.heading).toBe("Der Schlüssel dieses Servers ist nicht mehr derselbe.");
 
-    expect(unknown.className).toContain("border-slate-600");
+    expect(unknown.className).toContain("border-border-strong");
     expect(unknown.className).not.toContain("red");
-    expect(mismatch.className).toContain("border-red-600");
-    expect(mismatch.className).toContain("bg-red-950/95");
+    expect(mismatch.className).toContain("border-danger-border");
+    expect(unknown.className).not.toContain("border-danger-border");
+    expect(mismatch.className).toContain("bg-surface-raised");
 
     expect(unknown.buttons).toEqual(["Ablehnen", "Vertrauen"]);
     expect(mismatch.buttons).toEqual(["Verbindung abbrechen", "Trotzdem vertrauen"]);
@@ -419,7 +457,8 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
 describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
   it("shows the key type of the offered key", () => {
     renderDialog({ ...event, keyType: "ssh-ed25519" });
-    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltyp: ssh-ed25519");
+    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltypssh-ed25519");
+    expect(screen.getByText("ssh-ed25519")).toHaveClass("select-text");
     expect(screen.getByText("example.com:22")).toBeInTheDocument();
     expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
   });
@@ -428,5 +467,40 @@ describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
     renderDialog({ ...event, keyType });
     expect(screen.queryByTestId("host-key-type")).toBeNull();
     expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
+  });
+});
+
+describe("HostKeyDialog above other modals (issue #1150)", () => {
+  it("renders after (above) a modal that was already open, with the same z-index, and keeps the focus", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <DialogFrame layer="app" title="Other" onClose={vi.fn()}>
+          <button type="button">other action</button>
+        </DialogFrame>
+        <HostKeyDialog event={unknownEvent} onDecision={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const backdrops = Array.from(document.body.querySelectorAll<HTMLElement>("[data-modal-backdrop]"));
+    expect(backdrops).toHaveLength(2);
+    // Same z-index: the later portal child is painted on top.
+    expect(backdrops[1]).toContainElement(screen.getByRole("button", { name: "Ablehnen" }));
+    expect(backdrops[1]).toHaveClass("z-50");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ablehnen" }));
+  });
+});
+
+describe("HostKeyDialog server name", () => {
+  it("shows the saved server's name as the first line, plus host:port", () => {
+    renderDialog({ ...unknownEvent, serverName: "web-01" });
+    const name = screen.getByTestId("host-key-server-name");
+    expect(name).toHaveTextContent("web-01");
+    expect(screen.getByTestId("host-key-address")).toHaveTextContent("example.com:22");
+    expect(name.parentElement?.firstElementChild).toBe(name);
+  });
+
+  it("shows no name line without a server name (unsaved server)", () => {
+    renderDialog(unknownEvent);
+    expect(screen.queryByTestId("host-key-server-name")).toBeNull();
+    expect(screen.getByTestId("host-key-address")).toHaveTextContent("example.com:22");
   });
 });

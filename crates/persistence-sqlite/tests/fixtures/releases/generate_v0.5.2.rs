@@ -85,6 +85,7 @@ async fn generate_release_fixture() {
             post_ingest_policy: PostIngestPolicy::Strict,
             ai_injection_check_enabled: true,
             sftp_server_path: Some("/usr/lib/sftp-r052".into()),
+            elevation_allowed: true,
             created_at: ts("2026-10-01T10:02:00Z"),
             updated_at: ts("2026-10-01T10:02:00Z"),
         })
@@ -111,6 +112,7 @@ async fn generate_release_fixture() {
             post_ingest_policy: PostIngestPolicy::Balanced,
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             created_at: ts("2026-10-01T10:03:00Z"),
             updated_at: ts("2026-10-01T10:03:00Z"),
         })

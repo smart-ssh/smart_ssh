@@ -64,7 +64,13 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedTestWriter {
 /// Hält die Aufzeichnungs-Sperre, solange der Test läuft. Muss in einer
 /// Variablen gehalten werden (`let _guard = start_recording();`) — ein
 /// `let _ = ...` würde ihn sofort droppen und die Serialisierung aufheben.
-pub(crate) struct CaptureGuard(#[allow(dead_code)] MutexGuard<'static, ()>);
+pub(crate) struct CaptureGuard(
+    #[expect(
+        dead_code,
+        reason = "field only holds the recording lock for its lifetime; never read"
+    )]
+    MutexGuard<'static, ()>,
+);
 
 /// Installiert den Subscriber einmal pro Testprozess, übernimmt die
 /// Aufzeichnungs-Sperre und leert den Puffer. Jeder aufzeichnende Test ruft

@@ -2,6 +2,7 @@
 //! Zugangsdaten-Test, Attestierung) — Teil der Spec-0083-Aufteilung von
 //! `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use futures::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
 use tauri::State;
@@ -11,16 +12,16 @@ use ssh_manager_core::ai::{
     AiError, AiEvent, AiProvider, ChatMessage, MessageContent, ProviderId, Role, SessionContext,
 };
 
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::{build_ai_provider, decorate_provider};
 use app_logic::dto::{credential_ref_for, AiProviderConfigDto, AiProviderConfigInput};
-use app_logic::error::{secret_store_error, CommandError, CommandResult};
+use app_logic::error::{secret_store_error, CommandError, CommandResult, StoreResultExt};
 use app_logic::state::AppState;
 
 #[tauri::command]
 pub async fn list_ai_providers(
     state: State<'_, AppState>,
 ) -> CommandResult<Vec<AiProviderConfigDto>> {
-    let configs = state.ai_provider_store.list().await?;
+    let configs = state.ai_provider_store.list().await.store_err()?;
     Ok(configs.iter().map(AiProviderConfigDto::from).collect())
 }
 
@@ -47,7 +48,9 @@ pub async fn add_ai_provider(
     // wäre der richtige, aber über Fund 1 hinausgehende nächste Schritt.
     let config = config.trimmed();
     // Spec 0065, Teil 4: vor jedem Persistieren, wie `trimmed()` oben.
-    config.validate_max_tokens_override()?;
+    config
+        .validate_max_tokens_override()
+        .or_code("AI_MAX_TOKENS_OVERRIDE_INVALID")?;
     let id = ProviderId::new();
     let credential_ref = credential_ref_for(id);
     state
@@ -65,7 +68,7 @@ pub async fn add_ai_provider(
         // relevante Information für den Aufrufer, ein sekundärer
         // Keychain-Fehler beim Aufräumversuch soll ihn nicht überdecken.
         let _ = state.credential_store.delete(&credential_ref);
-        return Err(err.into());
+        return Err(app_logic::error::CommandError::from(err));
     }
     Ok(id)
 }
@@ -88,12 +91,15 @@ pub async fn update_ai_provider(
     // Whitespace bestehender Paste die Prüfung fälschlich und überschreibt
     // das bestehende Credential mit einem leeren Wert.
     let config = config.trimmed();
-    config.validate_max_tokens_override()?;
+    config
+        .validate_max_tokens_override()
+        .or_code("AI_MAX_TOKENS_OVERRIDE_INVALID")?;
     let api_key = config.api_key.clone();
     state
         .ai_provider_store
         .update_fields(&config.into_update(id))
-        .await?;
+        .await
+        .store_err()?;
 
     if !api_key.is_empty() {
         state
@@ -112,7 +118,7 @@ pub async fn update_ai_provider(
 /// aktiven, in der DB unverändert bleibenden Providers entfernen.
 #[tauri::command]
 pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> CommandResult<()> {
-    let existing = state.ai_provider_store.get(&id).await?;
+    let existing = state.ai_provider_store.get(&id).await.store_err()?;
     if existing.is_active {
         return Err(
             persistence_sqlite::AiProviderStoreError::ActiveProviderDeletionForbidden(id).into(),
@@ -123,7 +129,7 @@ pub async fn delete_ai_provider(state: State<'_, AppState>, id: ProviderId) -> C
         .credential_store
         .delete(&existing.credential_ref)
         .map_err(secret_store_error)?;
-    state.ai_provider_store.delete(&id).await?;
+    state.ai_provider_store.delete(&id).await.store_err()?;
     Ok(())
 }
 
@@ -135,7 +141,8 @@ pub async fn set_active_ai_provider(
     state
         .ai_provider_store
         .set_active(&id, chrono::Utc::now())
-        .await?;
+        .await
+        .store_err()?;
     Ok(())
 }
 
@@ -176,7 +183,10 @@ pub async fn discover_models(
             | ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
             | ssh_manager_core::ai::ProviderType::Ollama
     ) {
-        return Err("Modell-Discovery wird für diesen Provider-Typ nicht unterstützt".into());
+        return Err(CommandError::with_code(
+            "Modell-Discovery wird für diesen Provider-Typ nicht unterstützt",
+            "AI_MODEL_DISCOVERY_UNSUPPORTED",
+        ));
     }
 
     // Unabhängiger Review-Pass (Spec 0024/0025): ohne diese Prüfung fällt
@@ -190,40 +200,26 @@ pub async fn discover_models(
     // der eingegebene API-Key an `api.openai.com` gehen — einen Dritten,
     // mit dem der Nutzer nie interagieren wollte. Dieselbe
     // Verteidigung-in-der-Tiefe wie die `provider_type`-Prüfung oben.
-    let needs_base_url = matches!(
-        config.provider_type,
-        ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
-            | ssh_manager_core::ai::ProviderType::Ollama
-    );
-    if needs_base_url && config.base_url.as_deref().unwrap_or("").trim().is_empty() {
-        return Err("Base-URL erforderlich, bevor Modelle geladen werden können".into());
+    if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
+        return Err(CommandError::with_code(
+            "Base-URL erforderlich, bevor Modelle geladen werden können",
+            "AI_BASE_URL_REQUIRED",
+        ));
     }
 
-    let api_key = if !config.api_key.is_empty() {
-        config.api_key.clone()
-    } else if let Some(id) = existing_provider_id {
-        let existing = state.ai_provider_store.get(&id).await?;
-        state
-            .credential_store
-            .get(&existing.credential_ref)
-            .map_err(secret_store_error)?
-            .expose_secret()
-            .to_string()
-    } else {
-        return Err("API-Key erforderlich".into());
-    };
+    let api_key = resolve_api_key(
+        &state,
+        &config,
+        existing_provider_id,
+        "API-Key erforderlich",
+    )
+    .await?;
 
-    // Spec 0072, B1: derselbe provider-abhängige Default wie
-    // `ai_provider_factory::build_ai_provider` — sonst ginge ein Anthropic-
-    // Discovery-Aufruf ohne eingegebene `base_url` fälschlich gegen
-    // `api.openai.com`.
-    let default_base_url = match config.provider_type {
-        ssh_manager_core::ai::ProviderType::Anthropic => {
-            app_logic::ai_provider_factory::DEFAULT_ANTHROPIC_BASE_URL
-        }
-        _ => app_logic::ai_provider_factory::DEFAULT_OPENAI_BASE_URL,
-    };
-    let base_url = config.base_url.as_deref().unwrap_or(default_base_url);
+    // Spec 0072, B1: same per-provider default as `build_ai_provider`.
+    let base_url = config
+        .base_url
+        .as_deref()
+        .unwrap_or_else(|| app_logic::ai_provider_factory::default_base_url(config.provider_type));
 
     // Spec 0069, Teil A4: mit `err.code()` statt über das blanket `From<E:
     // Display>` unten (`CommandError::from`), das den Code verwirft — sonst
@@ -232,7 +228,7 @@ pub async fn discover_models(
     let models = ai_providers::discover_models(
         config.provider_type,
         base_url,
-        &api_key,
+        api_key.expose_secret(),
         &config.extra_headers,
     )
     .await
@@ -362,6 +358,27 @@ mod missing_required_base_url_tests {
     }
 }
 
+/// Form key if filled, else the stored key of `existing_provider_id`, else `missing_message`.
+async fn resolve_api_key(
+    state: &AppState,
+    config: &AiProviderConfigInput,
+    existing_provider_id: Option<ProviderId>,
+    missing_message: &str,
+) -> CommandResult<SecretString> {
+    if !config.api_key.is_empty() {
+        return Ok(SecretString::from(config.api_key.clone()));
+    }
+    let id = existing_provider_id
+        .ok_or(missing_message)
+        .or_code("AI_API_KEY_REQUIRED")?;
+    let existing = state.ai_provider_store.get(&id).await.store_err()?;
+    // Stays a `SecretString` (zeroed on drop) until the HTTP client needs it.
+    state
+        .credential_store
+        .get(&existing.credential_ref)
+        .map_err(secret_store_error)
+}
+
 #[tauri::command]
 pub async fn test_ai_provider_credentials(
     state: State<'_, AppState>,
@@ -372,45 +389,41 @@ pub async fn test_ai_provider_credentials(
     // `discover_models` — vor jeder Verwendung von `api_key`/`base_url`.
     let config = config.trimmed();
 
-    // Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): derselbe
-    // Schutz wie in `discover_models` oben — ohne diese Prüfung fällt ein
-    // fehlendes `base_url` bei `GenericOpenAiCompatible`/`Ollama`
-    // stillschweigend auf `DEFAULT_OPENAI_BASE_URL` zurück
-    // (`build_ai_provider`/`ai_provider_factory.rs`). Der "Zugangsdaten
-    // testen"-Button ist wie "Modelle laden" ein `type="button"` und läuft
-    // schon vor dem Formular-`required`-Attribut der Base-URL — ohne
-    // diese serverseitige Prüfung würde der eingegebene API-Key an
-    // `api.openai.com` gehen, einen Dritten, mit dem der Nutzer nie
-    // interagieren wollte.
+    // Same guard as in `discover_models` above (Spec 0050): never send the key
+    // to the default endpoint when a custom one is required but missing.
     if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
-        return Err("Base-URL erforderlich, bevor die Zugangsdaten getestet werden können".into());
+        return Err(CommandError::with_code(
+            "Base-URL erforderlich, bevor die Zugangsdaten getestet werden können",
+            "AI_BASE_URL_REQUIRED",
+        ));
     }
 
-    let api_key = if !config.api_key.is_empty() {
-        config.api_key.clone()
-    } else if let Some(id) = existing_provider_id {
-        let existing = state.ai_provider_store.get(&id).await?;
-        state
-            .credential_store
-            .get(&existing.credential_ref)
-            .map_err(secret_store_error)?
-            .expose_secret()
-            .to_string()
-    } else {
-        return Err("API-Key erforderlich, bevor die Zugangsdaten getestet werden können".into());
-    };
+    let api_key = resolve_api_key(
+        &state,
+        &config,
+        existing_provider_id,
+        "API-Key erforderlich, bevor die Zugangsdaten getestet werden können",
+    )
+    .await?;
 
     let (provider, _budget) = build_ai_provider(
         &state.rate_limit_registry,
         config.provider_type,
         config.base_url.as_deref(),
         &config.model,
-        SecretString::from(api_key),
+        api_key,
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
         config.max_tokens_override,
         // Issue #162: der Zugangsdaten-Test braucht keine Web-Werkzeuge.
         false,
+    );
+    let provider = decorate_provider(
+        &state.ai_provider_decorators,
+        config.provider_type,
+        config.base_url.as_deref(),
+        &config.model,
+        provider,
     );
 
     Ok(classify_credential_test_result(provider.as_ref()).await)
@@ -436,6 +449,13 @@ async fn classify_credential_test_result(
         max_tokens_hint: None,
     };
 
+    // Issue #833: fixed text, nothing to redact; still the common entry point.
+    let Ok(context) = ssh_manager_core::ai::RedactedContext::seal(
+        context,
+        ssh_manager_core::ai::default_log_redactor(),
+        &ssh_manager_core::ai::NoExtensionSealer,
+    )
+    .await;
     let mut events = provider.send(context);
     let first_event = events.next().await;
     // `events` wird hier fallen gelassen, statt den Stream zu Ende zu
@@ -577,11 +597,18 @@ pub async fn fetch_attestation_info(
     state: State<'_, AppState>,
     provider_id: ProviderId,
 ) -> CommandResult<String> {
-    let existing = state.ai_provider_store.get(&provider_id).await?;
+    let existing = state
+        .ai_provider_store
+        .get(&provider_id)
+        .await
+        .store_err()?;
     let url = existing
         .attestation_url
-        .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")?;
-    let info = ai_providers::fetch_attestation_info(&url).await?;
+        .ok_or("Kein Attestierungs-Endpunkt für diesen Provider konfiguriert")
+        .or_code("AI_ATTESTATION_UNAVAILABLE")?;
+    let info = ai_providers::fetch_attestation_info(&url)
+        .await
+        .map_err(CommandError::from)?;
     Ok(info)
 }
 
@@ -590,7 +617,7 @@ pub async fn fetch_attestation_info(
 /// über `list()`, ein zusätzlicher SQL-Pfad nur für diesen einen Aufrufer
 /// wäre unnötige API-Fläche.
 pub(super) async fn active_ai_provider_config(state: &AppState) -> CommandResult<AiProviderConfig> {
-    pick_active_provider(state.ai_provider_store.list().await?)
+    pick_active_provider(state.ai_provider_store.list().await.store_err()?)
 }
 
 /// Reine Auswahl-Logik aus `active_ai_provider_config` herausgezogen (wie

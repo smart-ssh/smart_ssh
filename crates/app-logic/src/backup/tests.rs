@@ -68,6 +68,7 @@ async fn fixture() -> Fixture {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -386,6 +387,7 @@ fn build(tag: &str, servers: usize, rules: usize, notes: usize) -> Snapshot {
             post_ingest_policy: "balanced".into(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             is_copy: false,
         });
@@ -973,7 +975,11 @@ async fn key_file_paths_are_not_opened_by_the_import() {
     // block until the test times out.
     let fifo = a.dir.path().join("fifo-key");
     let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
-    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    // SAFETY: `c_path` is a valid NUL-terminated path that outlives the call;
+    // `mkfifo` has no other memory preconditions.
+    #[expect(unsafe_code, reason = "libc::mkfifo to create a FIFO fixture")]
+    let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+    assert_eq!(rc, 0);
     let missing = "/definitely/not/here/id_ed25519".to_string();
     for (i, path) in [missing.clone(), fifo.to_str().unwrap().to_string()]
         .into_iter()
@@ -1088,6 +1094,7 @@ async fn read_snapshot_equals_the_export_content() {
 /// Inserts, updates and deletes across all entity types give exactly the
 /// expected state and fire the data-change notification.
 #[tokio::test(flavor = "multi_thread")]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 async fn apply_changes_inserts_updates_and_deletes_across_all_types() {
     let (f, base) = seeded_fixture().await;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1459,4 +1466,250 @@ async fn deleting_a_server_removes_its_dependents() {
     assert_eq!(after.servers.len(), before.servers.len() - 1);
     assert_eq!(after.groups, before.groups);
     assert_eq!(after.ai_providers, before.ai_providers);
+}
+
+#[tokio::test]
+async fn change_set_persists_copy_marker_on_insert_and_update() {
+    let (f, base) = seeded_fixture().await;
+    let t = now();
+    let mk_group = |copy: bool| GroupRow {
+        id: Uuid::new_v4(),
+        name: "g-new".into(),
+        parent_id: None,
+        notes: String::new(),
+        is_copy: copy,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    };
+    let g_copy = mk_group(true);
+    let g_plain = mk_group(false);
+    let mut s_copy = base.servers[2].clone();
+    s_copy.id = Uuid::new_v4();
+    s_copy.group_id = Some(g_copy.id);
+    s_copy.auth_method = serde_json::to_string(&AuthMethod::Agent).unwrap();
+    s_copy.is_copy = true;
+    let mut s_plain = s_copy.clone();
+    s_plain.id = Uuid::new_v4();
+    s_plain.is_copy = false;
+    let cs = ChangeSet {
+        groups: vec![
+            Change::Upsert(g_copy.clone()),
+            Change::Upsert(g_plain.clone()),
+        ],
+        servers: vec![
+            Change::Upsert(s_copy.clone()),
+            Change::Upsert(s_plain.clone()),
+        ],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    let after = state(&f).await;
+    let g = |id| after.groups.iter().find(|g| g.id == id).unwrap().is_copy;
+    let s = |id| after.servers.iter().find(|s| s.id == id).unwrap().is_copy;
+    assert!(g(g_copy.id) && s(s_copy.id));
+    assert!(!g(g_plain.id) && !s(s_plain.id));
+    // Existing unmarked rows stay unmarked when upserted unchanged-marker.
+    assert!(after
+        .servers
+        .iter()
+        .filter(|x| base.servers.iter().any(|b| b.id == x.id))
+        .all(|x| !x.is_copy));
+
+    // Update: the upserted row is authoritative for the marker.
+    let mut g_up = g_plain.clone();
+    g_up.is_copy = true;
+    let mut s_up = s_copy.clone();
+    s_up.is_copy = false;
+    let cs = ChangeSet {
+        groups: vec![Change::Upsert(g_up.clone())],
+        servers: vec![Change::Upsert(s_up.clone())],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    let after = state(&f).await;
+    assert!(
+        after
+            .groups
+            .iter()
+            .find(|g| g.id == g_up.id)
+            .unwrap()
+            .is_copy
+    );
+    assert!(
+        !after
+            .servers
+            .iter()
+            .find(|s| s.id == s_up.id)
+            .unwrap()
+            .is_copy
+    );
+}
+
+/// `start_import_snapshot`: an invalid snapshot is rejected with the same
+/// error as for a file and changes nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_rejects_invalid_content_and_changes_nothing() {
+    let local = empty_fixture().await;
+    seed(&local, &build("L", 2, 2, 2)).await;
+    let before = state(&local).await;
+    let safety = local.dir.path().join("safety");
+    let mut bad = build("F", 2, 2, 2);
+    bad.rules[1].pattern_type = "regex".into();
+    bad.rules[1].pattern_value = "(".into();
+    let err = start_import_snapshot(&ctx(&local, &safety), bad)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, BackupOpError::Invalid(_)), "{err:?}");
+    assert_eq!(state(&local).await, before);
+    assert!(!safety.exists());
+}
+
+/// `start_import_snapshot`: empty local data imports at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_imports_directly_into_empty_data() {
+    let snap = build("F", 3, 4, 5);
+    let b = empty_fixture().await;
+    let safety = b.dir.path().join("safety");
+    let start = start_import_snapshot(&ctx(&b, &safety), snap.clone())
+        .await
+        .unwrap();
+    let ImportStart::Imported(summary) = start else {
+        panic!("empty local data imports without asking");
+    };
+    assert_eq!(summary.safety_backup, None);
+    assert_eq!(summary.previous_data_folder, None);
+    assert!(!safety.exists());
+    assert_eq!(sorted(state(&b).await), sorted(snap));
+}
+
+/// `start_import_snapshot`: non-empty local data needs the confirmation;
+/// only `confirm` replaces data, with safety backup and "Previous data" folder.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_over_data_asks_and_confirm_replaces() {
+    let local = empty_fixture().await;
+    let old = build("L", 12, 30, 8);
+    seed(&local, &old).await;
+    let device_code = BackupKey::create_with_code(&local.backup).await.unwrap();
+    let before = state(&local).await;
+    let safety = local.dir.path().join("safety");
+    let c = ctx(&local, &safety);
+    let p = pending(
+        start_import_snapshot(&c, build("F", 15, 42, 11))
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        (p.preview().file.servers, p.preview().local.servers),
+        (15, 12)
+    );
+    assert_eq!(state(&local).await, before);
+    assert!(!safety.exists());
+
+    let summary = p.confirm(&c).await.unwrap();
+    let path = summary.safety_backup.unwrap();
+    assert!(path.starts_with(&safety));
+    assert_eq!(
+        sorted(open_file(&path, &code_secret(&device_code)).unwrap()),
+        sorted(old)
+    );
+    let folder_name = format!("{LABEL} {}", chrono::Local::now().format("%Y-%m-%d"));
+    assert_eq!(summary.previous_data_folder.as_deref(), Some(&*folder_name));
+    assert_ne!(state(&local).await, before);
+}
+
+// ---- Issue #792: optional precondition on the apply ----------------------
+
+fn group_rename(base: &Snapshot, name: &str) -> ChangeSet {
+    let mut g = base.groups[1].clone();
+    g.name = name.into();
+    ChangeSet {
+        groups: vec![Change::Upsert(g)],
+        ..Default::default()
+    }
+}
+
+/// The token depends on content only, not on row order.
+#[test]
+fn snapshot_token_is_order_independent_and_content_sensitive() {
+    let base = build("C", 3, 3, 3);
+    let mut shuffled = base.clone();
+    shuffled.servers.reverse();
+    shuffled.secrets.reverse();
+    assert_eq!(base.token(), shuffled.token());
+    let mut edited = base.clone();
+    edited.secrets[0].value.push('x');
+    assert_ne!(base.token(), edited.token());
+    let mut edited = base.clone();
+    edited.groups[0].name.push('x');
+    assert_ne!(base.token(), edited.token());
+}
+
+/// A matching precondition applies as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_with_matching_precondition_succeeds() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let cs = group_rename(&snap, "via-token");
+    apply_changes_expecting(&f.backup, &f.host_keys, &cs, &snap.token())
+        .await
+        .unwrap();
+    assert!(state(&f).await.groups.iter().any(|g| g.name == "via-token"));
+}
+
+/// A local edit between read and apply is rejected with `Conflict`: nothing
+/// is written and no notification fires. A fresh snapshot then applies.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_after_a_concurrent_edit_conflicts_and_changes_nothing() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let stale = snap.token();
+    // The injected local edit.
+    apply_changes(&f.backup, &f.host_keys, &group_rename(&snap, "local-edit"))
+        .await
+        .unwrap();
+    let before = state(&f).await;
+
+    let notified = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let n = notified.clone();
+    f.db.data_changes().subscribe(std::sync::Arc::new(move |_| {
+        n.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }));
+    let cs = group_rename(&snap, "stale-overwrite");
+    let err = apply_changes_expecting(&f.backup, &f.host_keys, &cs, &stale)
+        .await
+        .unwrap_err();
+    assert_eq!(err, BackupOpError::Conflict);
+    assert_eq!(state(&f).await, before);
+    assert_eq!(notified.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+    let fresh = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    assert!(fresh.groups.iter().any(|g| g.name == "local-edit"));
+    let cs = group_rename(&fresh, "recomputed");
+    apply_changes_expecting(&f.backup, &f.host_keys, &cs, &fresh.token())
+        .await
+        .unwrap();
+}
+
+/// Host-key changes made before the apply starts are part of the token.
+#[tokio::test(flavor = "multi_thread")]
+async fn host_key_edit_before_apply_conflicts() {
+    let (f, _) = seeded_fixture().await;
+    let snap = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    let del = ChangeSet {
+        host_keys: vec![Change::Delete((
+            snap.host_keys[0].host.clone(),
+            snap.host_keys[0].port,
+        ))],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &del).await.unwrap();
+    let err = apply_changes_expecting(
+        &f.backup,
+        &f.host_keys,
+        &group_rename(&snap, "x"),
+        &snap.token(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err, BackupOpError::Conflict);
 }

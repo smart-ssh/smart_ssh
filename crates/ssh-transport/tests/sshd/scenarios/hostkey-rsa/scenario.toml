@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hostkey-rsa"
+networks = ["hostkey-net"]
+publish = true

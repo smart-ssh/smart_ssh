@@ -1,6 +1,8 @@
 # ADR 0095 — Entscheidungen beim Verpacken des Wurzelschlüssels (Spec 0101, Etappe 3)
 
-Status: angenommen · Spec: `docs/specs/0101-database-encryption.md` (A13–A19) ·
+## Status
+
+Accepted · Spec: `docs/specs/0101-database-encryption.md` (A13–A19) ·
 Backlog: BL-0203, BL-0314
 
 Protokoll der Entscheidungen, die Spec 0101 für Etappe 3 offen gelassen hat

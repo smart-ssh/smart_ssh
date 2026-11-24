@@ -57,12 +57,39 @@ impl fmt::Display for HopLabel {
     }
 }
 
+/// Which negotiation list had no common algorithm (Issue #1173).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlgorithmKind {
+    KeyExchange,
+    HostKey,
+    Cipher,
+    Mac,
+}
+
+impl fmt::Display for AlgorithmKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            AlgorithmKind::KeyExchange => "key exchange",
+            AlgorithmKind::HostKey => "host key",
+            AlgorithmKind::Cipher => "cipher",
+            AlgorithmKind::Mac => "MAC",
+        })
+    }
+}
+
 /// Fehler rund um Aufbau und Nutzung einer SSH-Verbindung (Spec 0005,
 /// Abschnitt 7).
 #[derive(Debug, Clone, PartialEq)]
 pub enum SshError {
     ConnectionFailed(String),
     AuthenticationFailed,
+    /// Issue #1184: login failed because the server wants a method the
+    /// client could not supply (no prompter, or the prompt was cancelled).
+    /// Same code as [`SshError::AuthenticationFailed`] (the user-facing
+    /// text is the same); the message names the server's methods.
+    AuthenticationMethodRequired {
+        methods: Vec<String>,
+    },
     HostKeyRejected,
     ChannelError(String),
     Timeout,
@@ -133,6 +160,25 @@ pub enum SshError {
         /// `ssh_transport::auth::name_hop` (Spec 0076, A-8).
         hop: Option<HopLabel>,
     },
+    /// Issue #667 (Spec 0076/0109 C3): Die Schlüsseldatei einer
+    /// `IdentityFile`-Anmeldung gibt es auf diesem Gerät nicht (z. B. nach
+    /// einem Backup-Import). Eigene Variante, damit die Oberfläche den
+    /// Zustand „Schlüsseldatei auf diesem Gerät nicht gefunden“ mit dem Pfad
+    /// zeigt und nicht „Credential-Auflösung fehlgeschlagen“. Kein
+    /// Rückfall auf eine andere Anmeldeart.
+    KeyFileNotFound {
+        path: String,
+        hop: Option<HopLabel>,
+    },
+    /// Issue #1173: client and server share no algorithm of one kind (for
+    /// example a server that only offers `ssh-dss`). Raised during key
+    /// exchange, so no credential has been sent.
+    NoCommonAlgorithm {
+        hop: HopLabel,
+        kind: AlgorithmKind,
+        /// What the server offered for `kind`; empty if unknown.
+        server_offers: Vec<String>,
+    },
 }
 
 impl fmt::Display for SshError {
@@ -140,6 +186,11 @@ impl fmt::Display for SshError {
         match self {
             SshError::ConnectionFailed(msg) => write!(f, "Verbindung fehlgeschlagen: {msg}"),
             SshError::AuthenticationFailed => write!(f, "Authentifizierung fehlgeschlagen"),
+            SshError::AuthenticationMethodRequired { methods } => write!(
+                f,
+                "Authentifizierung fehlgeschlagen: The server requires {} login, which could not be completed",
+                methods.join(" or ")
+            ),
             SshError::HostKeyRejected => write!(f, "Host-Key abgelehnt"),
             SshError::ChannelError(msg) => write!(f, "Channel-Fehler: {msg}"),
             SshError::Timeout => write!(f, "Zeitüberschreitung"),
@@ -178,11 +229,59 @@ impl fmt::Display for SshError {
                     secret.label()
                 )
             }
+            SshError::KeyFileNotFound { path, hop } => {
+                if let Some(hop) = hop {
+                    write!(f, "{hop}: ")?;
+                }
+                write!(f, "Schlüsseldatei auf diesem Gerät nicht gefunden: {path}")
+            }
+            SshError::NoCommonAlgorithm {
+                hop,
+                kind,
+                server_offers,
+            } => {
+                write!(
+                    f,
+                    "{hop}: no common SSH {kind} algorithm; the server offers: {}",
+                    if server_offers.is_empty() {
+                        "(unknown)".to_string()
+                    } else {
+                        server_offers.join(", ")
+                    }
+                )
+            }
         }
     }
 }
 
+impl crate::ipc_error::ErrorCode for SshError {
+    fn code(&self) -> &'static str {
+        SshError::code(self)
+    }
+}
+
 impl SshError {
+    /// Every code [`Self::code`] can return (uniqueness test in `app-logic`).
+    pub const CODES: &'static [&'static str] = &[
+        "SSH_CONNECTION_FAILED",
+        "SSH_AUTH_FAILED",
+        "SSH_HOST_KEY_REJECTED",
+        "SSH_CHANNEL_ERROR",
+        "SSH_TIMEOUT",
+        "SSH_JUMP_HOST_CYCLE",
+        "SSH_CREDENTIAL_RESOLUTION_FAILED",
+        "SSH_SFTP_PERMISSION_DENIED",
+        "SSH_SFTP_ALREADY_EXISTS",
+        "SSH_CONNECTION_REFUSED",
+        "SSH_HOST_NOT_FOUND",
+        "SSH_HOST_UNREACHABLE",
+        "SSH_CONNECTION_CLOSED",
+        "SSH_SESSION_CLOSED",
+        "KEY_FILE_NOT_FOUND_ON_DEVICE",
+        "SSH_NO_COMMON_ALGORITHM",
+        SECRET_STORE_FAILED,
+    ];
+
     /// Stabiler, sprachunabhängiger Bezeichner je Fehlerart (Spec 0024,
     /// Abschnitt 5) — fürs Frontend-Mapping auf Übersetzungs-Keys. Bleibt
     /// über Code-Änderungen hinweg stabil, anders als der `Display`-Text
@@ -191,7 +290,9 @@ impl SshError {
     pub fn code(&self) -> &'static str {
         match self {
             SshError::ConnectionFailed(_) => "SSH_CONNECTION_FAILED",
-            SshError::AuthenticationFailed => "SSH_AUTH_FAILED",
+            SshError::AuthenticationFailed | SshError::AuthenticationMethodRequired { .. } => {
+                "SSH_AUTH_FAILED"
+            }
             SshError::HostKeyRejected => "SSH_HOST_KEY_REJECTED",
             SshError::ChannelError(_) => "SSH_CHANNEL_ERROR",
             SshError::Timeout => "SSH_TIMEOUT",
@@ -219,6 +320,8 @@ impl SshError {
             // entfallen. `core` vergibt den Code damit endgültig, und keine
             // Schicht darüber kann ihn noch verändern.
             SshError::CredentialStoreFailed { .. } => SECRET_STORE_FAILED,
+            SshError::KeyFileNotFound { .. } => "KEY_FILE_NOT_FOUND_ON_DEVICE",
+            SshError::NoCommonAlgorithm { .. } => "SSH_NO_COMMON_ALGORITHM",
         }
     }
 
@@ -266,6 +369,14 @@ impl SshError {
                     }),
                 }
             }
+            SshError::KeyFileNotFound { path, hop: None } => SshError::KeyFileNotFound {
+                path,
+                hop: Some(HopLabel {
+                    username: username.to_string(),
+                    host: host.to_string(),
+                    port,
+                }),
+            },
             other => other,
         }
     }
@@ -300,6 +411,21 @@ mod code_tests {
             SshError::CredentialStoreFailed {
                 secret: SecretKind::Password,
                 hop: None,
+            },
+            // Issue #667.
+            SshError::KeyFileNotFound {
+                path: "/x".to_string(),
+                hop: None,
+            },
+            // Issue #1173.
+            SshError::NoCommonAlgorithm {
+                hop: HopLabel {
+                    username: "u".to_string(),
+                    host: "h".to_string(),
+                    port: 22,
+                },
+                kind: AlgorithmKind::Cipher,
+                server_offers: vec!["x".to_string()],
             },
         ];
         let codes: Vec<&'static str> = samples.iter().map(SshError::code).collect();

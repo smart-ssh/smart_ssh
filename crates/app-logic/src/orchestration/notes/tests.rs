@@ -9,6 +9,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use ssh_manager_core::ai::{AiError, AiEvent, DefaultOutputRedactor};
 use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
 use ssh_manager_core::shared::ServerId;
+use ssh_manager_core::testing::ServerBuilder;
 
 use crate::dto::ActionUserDecision;
 use crate::events::TestEmitter;
@@ -68,6 +69,7 @@ async fn test_disconnect_suggestion_calls_ai_with_restricted_actions_when_comman
     let contexts = provider.received_contexts_handle();
     let session = session_with_ai_provider(provider, MockSshTransport::default());
     session
+        .ai
         .context
         .lock()
         .await
@@ -134,6 +136,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
     let contexts = provider.received_contexts_handle();
     let mut session = session_with_ai_provider(provider, MockSshTransport::default());
     session
+        .ai
         .context
         .lock()
         .await
@@ -147,7 +150,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         language: crate::system_prompt::PromptLanguage::De,
     };
     {
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.system_context = parts.assemble();
     }
     session.set_system_context_parts_for_tests(AsyncMutex::new(parts));
@@ -182,6 +185,7 @@ async fn test_disconnect_suggestion_no_event_when_ai_proposes_nothing() {
         MockSshTransport::default(),
     );
     session
+        .ai
         .context
         .lock()
         .await
@@ -223,6 +227,7 @@ async fn test_disconnect_suggestion_ignores_group_target_proposal() {
         MockSshTransport::default(),
     );
     session
+        .ai
         .context
         .lock()
         .await
@@ -266,13 +271,15 @@ async fn test_disconnect_suggestion_emits_event_and_accept_persists_revision() {
     );
     let expected_server_id = session.server_id;
     session
+        .ai
         .context
         .lock()
         .await
         .history
         .push(command_result_message());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
 
@@ -359,6 +366,7 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
         MockSshTransport::default(),
     );
     session
+        .ai
         .context
         .lock()
         .await
@@ -366,25 +374,11 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
         .push(command_result_message());
     let server_id = session.server_id;
 
-    let now = chrono::Utc::now();
-    let server = Server {
-        id: server_id,
-        name: "Produktions-Proxy".to_string(),
-        host: "proxy.example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    };
+    let server = ServerBuilder::new()
+        .id(server_id)
+        .name("Produktions-Proxy")
+        .host("proxy.example.invalid")
+        .build();
     let profile_store = crate::test_support::InMemoryProfileStore::new().with_server(server);
     let emitter = TestEmitter::default();
     let confirmations = ConfirmationRegistry::new();
@@ -430,25 +424,11 @@ async fn test_disconnect_suggestion_note_update_suggested_includes_target_name()
 // --- Spec 0057, §4.2 (Etappe 4): Sitzungsende-Notiz-Kürzungs-Dialog ----
 
 fn server_with_notes(id: ServerId, notes: &str) -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id,
-        name: "Test-Server".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: ssh_manager_core::profiles::AuthMethod::Agent,
-        notes: notes.to_string(),
-        jump_host: None,
-        post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
+    ServerBuilder::new()
+        .id(id)
+        .name("Test-Server")
+        .notes(notes)
+        .build()
 }
 
 /// spec-reviewer-Fund (Review dieses Schritts): Test-Double, das
@@ -1623,135 +1603,23 @@ async fn test_generate_document_emits_event_without_filter_engine_or_confirmatio
     assert_eq!(payload["contentMarkdown"], "# Analyse\n\nInhalt.");
 
     // Spec 0012, Abschnitt 5: landet als Assistant-Text in der Historie.
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert!(history.iter().any(|m| matches!(
         &m.content,
         MessageContent::Text(t) if t.contains("Inhalt.")
     )));
 }
 
-// --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------
+// --- Approve mit bearbeitetem Kommando (Spec 0007/0008) ----------------
 
-/// Spec 0011, Abschnitt 3: "legt die Regel an ... löst danach die
-/// wartende Confirm-Entscheidung ... auf, exakt wie ein
-/// `respond_to_action`-Aufruf mit `Approve`". Der eigentliche
-/// `accept_and_create_rule`-Tauri-Command (`app_shell::commands`) ist ein
-/// dünner Wrapper genau um diese zwei Aufrufe
-/// (`crate::rule_suggestions::create_quick_rule` +
-/// `ConfirmationRegistry::resolve(..., Approve)`) — dieser Test bildet
-/// exakt diese Kombination nach und prüft beide Effekte: die Regel
-/// landet in einer echten `SqlitePolicyStore`, **und** das ursprünglich
-/// vorgeschlagene Kommando wird tatsächlich über `MockSshTransport`
-/// ausgeführt (nicht nur "irgendwie aufgelöst").
+/// Spec 0007/0008: bearbeitet der Nutzer im Bestätigungsdialog das
+/// Kommando und führt es aus (`EditThenApprove`), muss tatsächlich das
+/// bearbeitete Kommando ausgeführt werden — nicht das ursprüngliche.
+/// Der `MockSshTransport` antwortet NUR auf das bearbeitete Kommando;
+/// würde das ursprüngliche ausgeführt, schlüge es am unkonfigurierten
+/// Mock-Eintrag fehl statt einen `chat-action-result` zu liefern.
 #[tokio::test]
-async fn test_accept_and_create_rule_creates_rule_and_resolves_confirm_like_approve() {
-    let session = test_session(
-        vec![
-            AiEvent::ActionProposed(AiAction::SuggestCommand {
-                command: "systemctl status nginx".to_string(),
-            }),
-            AiEvent::Done,
-        ],
-        MockSshTransport::default().with_response("systemctl status nginx", output("active")),
-    );
-    // `test_session`s Standard `NoRulesPolicyStore` landet für jedes
-    // Kommando auf `Confirm` (kein Allow-Match) — genau der Pfad, den
-    // dieser Test braucht.
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-    let session_id = Uuid::new_v4();
-
-    let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store =
-        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
-            .await
-            .expect(
-                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
-            )
-            .policy_store();
-
-    let turn = run_chat_turn(
-        &session,
-        session_id,
-        &emitter,
-        &profile_store,
-        &confirmations,
-    );
-    let responder = async {
-        loop {
-            let action_id = {
-                let events = emitter.events.lock().unwrap();
-                events.iter().find_map(|(name, payload)| {
-                    (name == "chat-action-proposed")
-                        .then(|| payload["actionId"].as_str().unwrap().to_string())
-                })
-            };
-            if let Some(action_id) = action_id {
-                let action_id: ActionId = action_id.parse().unwrap();
-                // Nachbau von `commands::accept_and_create_rule`:
-                // zuerst die Regel anlegen, dann exakt wie `Approve`
-                // auflösen.
-                crate::rule_suggestions::create_quick_rule(
-                    &policy_store,
-                    crate::dto::PatternType::Glob,
-                    "systemctl status *".to_string(),
-                    ssh_manager_core::filter::Scope::Global,
-                    None,
-                )
-                .await
-                .unwrap();
-                confirmations
-                    .resolve(&action_id, ActionUserDecision::Approve)
-                    .unwrap();
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    };
-
-    tokio::join!(turn, responder);
-
-    let events = emitter.events.lock().unwrap().clone();
-    let event_names = event_names_excluding_auto_continuation(&events);
-    assert_eq!(
-        event_names,
-        vec!["chat-action-proposed", "chat-action-result"],
-        "die Regel-Erstellung muss die Ausführung des ursprünglichen \
-         Kommandos wie ein normales Approve auslösen"
-    );
-
-    let rules = policy_store.list_all().await.unwrap();
-    assert_eq!(rules.len(), 1);
-    assert_eq!(
-        rules[0].pattern,
-        ssh_manager_core::filter::Pattern::Glob("systemctl status *".to_string())
-    );
-    assert_eq!(rules[0].action, ssh_manager_core::filter::RuleAction::Allow);
-    assert_eq!(rules[0].scope, ssh_manager_core::filter::Scope::Global);
-    assert_eq!(
-        rules[0].priority, 0,
-        "keine Priorität angegeben -> Default 0"
-    );
-}
-
-/// Regressionstest für den unabhängigen Review-Pass (Spec 0007/0008/
-/// 0011): akzeptiert der Nutzer eine Schnellregel für ein im
-/// Bestätigungsdialog BEARBEITETES Kommando, muss tatsächlich das
-/// bearbeitete Kommando ausgeführt werden — nicht das ursprüngliche,
-/// unbearbeitete. Vorher löste `commands::accept_and_create_rule` immer
-/// mit `ActionUserDecision::Approve` auf, was IMMER die ursprüngliche
-/// `AiAction` ausführt, unabhängig davon, was der Nutzer im
-/// Bearbeiten-Feld sah/anpasste. Bildet `commands::accept_and_create_rule`
-/// mit gesetztem `edited_command` nach (Auflösung über
-/// `EditThenApprove`, wie beim regulären "Ausführen"-Button) und beweist
-/// über einen `MockSshTransport`, der NUR auf das bearbeitete Kommando
-/// antwortet, dass tatsächlich dieses ausgeführt wird — würde
-/// stattdessen (der Bug) das ursprüngliche Kommando ausgeführt, schlägt
-/// es am unkonfigurierten `MockSshTransport`-Eintrag fehl statt einen
-/// `chat-action-result` zu liefern.
-#[tokio::test]
-async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_command() {
+async fn test_edit_then_approve_executes_the_edited_command() {
     let session = test_session(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -1769,15 +1637,6 @@ async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_com
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
 
-    let dir = tempfile::tempdir().expect("Temp-Verzeichnis sollte anlegbar sein");
-    let policy_store =
-        persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("test.db"))
-            .await
-            .expect(
-                "frische SQLite-Datenbank mit angewendeten Migrationen sollte immer aufbaubar sein",
-            )
-            .policy_store();
-
     let turn = run_chat_turn(
         &session,
         session_id,
@@ -1796,17 +1655,6 @@ async fn test_accept_and_create_rule_with_edited_command_executes_the_edited_com
             };
             if let Some(action_id) = action_id {
                 let action_id: ActionId = action_id.parse().unwrap();
-                // Nachbau von `commands::accept_and_create_rule` MIT
-                // gesetztem `edited_command`.
-                crate::rule_suggestions::create_quick_rule(
-                    &policy_store,
-                    crate::dto::PatternType::Glob,
-                    "ls /var/log".to_string(),
-                    ssh_manager_core::filter::Scope::Global,
-                    None,
-                )
-                .await
-                .unwrap();
                 confirmations
                     .resolve(
                         &action_id,
@@ -1922,7 +1770,8 @@ async fn test_propose_note_update_current_server_resolves_to_session_server_id()
     );
     let expected_server_id = session.server_id;
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let turn = run_chat_turn(
@@ -1971,27 +1820,13 @@ async fn test_propose_note_from_chat_content_appends_to_existing_note_and_persis
     let server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
-    let now = chrono::Utc::now();
     profile_store.servers.lock().unwrap().insert(
         server_id,
-        Server {
-            id: server_id,
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: ssh_manager_core::profiles::AuthMethod::Agent,
-            notes: "Bestehende Notiz".to_string(),
-            jump_host: None,
-            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        },
+        ServerBuilder::new()
+            .id(server_id)
+            .name("Test-Server")
+            .notes("Bestehende Notiz")
+            .build(),
     );
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
@@ -2046,27 +1881,12 @@ async fn test_propose_note_from_chat_content_with_empty_existing_note_uses_conte
     let server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
-    let now = chrono::Utc::now();
     profile_store.servers.lock().unwrap().insert(
         server_id,
-        Server {
-            id: server_id,
-            name: "Test-Server".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id: None,
-            tags: Vec::new(),
-            auth: ssh_manager_core::profiles::AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        },
+        ServerBuilder::new()
+            .id(server_id)
+            .name("Test-Server")
+            .build(),
     );
     let confirmations = ConfirmationRegistry::new();
     let session_id = Uuid::new_v4();
@@ -2162,7 +1982,8 @@ async fn test_t8_spec_0096_note_proposal_from_chat_is_redacted_in_event_and_revi
         MockSshTransport::default(),
     );
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let turn = run_chat_turn(
@@ -2215,13 +2036,15 @@ async fn test_t9_spec_0096_note_proposal_on_disconnect_is_redacted_in_event_and_
         MockSshTransport::default(),
     );
     session
+        .ai
         .context
         .lock()
         .await
         .history
         .push(command_result_message());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let flow = suggest_note_update_on_disconnect(
@@ -2285,7 +2108,8 @@ async fn test_t9_spec_0096_note_proposal_on_disconnect_is_redacted_in_event_and_
 async fn test_t11_spec_0096_note_proposal_via_mcp_is_redacted_in_event_and_revision() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
     let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
+    let profile_store =
+        InMemoryProfileStore::new().with_server(ServerBuilder::new().id(session.server_id).build());
     let confirmations = ConfirmationRegistry::new();
 
     let flow = crate::orchestration::handle_mcp_action_proposed(
@@ -2467,6 +2291,7 @@ fn disconnect_session_with_note_proposal() -> Session {
         MockSshTransport::default(),
     );
     session
+        .ai
         .context
         .try_lock()
         .expect("frische Session, niemand hält den Kontext")
@@ -2579,345 +2404,4 @@ async fn test_issue_107_dropping_the_note_shrink_wait_removes_the_registry_entry
     );
 }
 
-#[tokio::test(start_paused = true)]
-async fn test_issue_107_disconnect_suggestion_timeout_leaves_no_entry_and_rejects_late_resolve() {
-    let session = disconnect_session_with_note_proposal();
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let flow = suggest_note_update_on_disconnect(
-        &session,
-        Uuid::new_v4(),
-        &emitter,
-        &profile_store,
-        &confirmations,
-    );
-    let advancer = async {
-        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
-        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
-            .await;
-        action_id
-    };
-    let (suggested, action_id) = tokio::join!(flow, advancer);
-
-    assert!(suggested, "der Vorschlag wurde emittiert");
-    assert!(!confirmations.contains(&action_id));
-    assert!(
-        confirmations
-            .resolve(&action_id, ActionUserDecision::Approve)
-            .is_err(),
-        "nach dem Timeout muss ein spätes `resolve` fehlschlagen"
-    );
-    assert!(
-        profile_store.note_revisions.lock().unwrap().is_empty(),
-        "ein Timeout gilt als Ablehnung"
-    );
-    assert_expired_event_emitted(&emitter, action_id);
-}
-
-/// Issue #628: the timeout tells the frontend which card expired.
-fn assert_expired_event_emitted(emitter: &TestEmitter, action_id: ActionId) {
-    let events = emitter.events.lock().unwrap();
-    let expired: Vec<_> = events
-        .iter()
-        .filter(|(name, _)| name == "note-update-expired")
-        .collect();
-    assert_eq!(expired.len(), 1);
-    assert_eq!(expired[0].1["actionId"], action_id.to_string());
-}
-
-#[tokio::test(start_paused = true)]
-async fn test_issue_107_note_shrink_timeout_leaves_no_entry_and_rejects_late_resolve() {
-    let provider = shrink_provider();
-    let redactor = DefaultOutputRedactor::new();
-    let server_id = ServerId::new();
-    let profile_store = crate::test_support::InMemoryProfileStore::new()
-        .with_server(server_with_notes(server_id, "Unveränderte Notiz."));
-    let emitter = TestEmitter::default();
-    let confirmations = ConfirmationRegistry::new();
-    let target = shrink_target(&profile_store, server_id);
-    let budget = ai_providers::ProviderBudgetGuard::new();
-
-    let flow = execute_note_shrink_request(
-        Uuid::new_v4(),
-        server_id,
-        &provider,
-        &budget,
-        &redactor,
-        &emitter,
-        &target,
-        &confirmations,
-        PromptLanguage::De,
-    );
-    let advancer = async {
-        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
-        tokio::time::advance(PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1))
-            .await;
-        action_id
-    };
-    let ((), action_id) = tokio::join!(flow, advancer);
-
-    assert!(!confirmations.contains(&action_id));
-    assert!(confirmations
-        .resolve(&action_id, ActionUserDecision::Approve)
-        .is_err());
-    assert_eq!(
-        profile_store.get_server(&server_id).await.unwrap().notes,
-        "Unveränderte Notiz."
-    );
-    assert_expired_event_emitted(&emitter, action_id);
-}
-
-/// Der Vorschlag beim Verbindungsende ist app-weit (Spec 0010, Abschnitt
-/// 2, Punkt 6) — der Tab-Indikator darf weder während des Wartens noch
-/// danach gesetzt sein. Geprüft wird in dem Moment, in dem der Ablauf
-/// nachweislich auf die Entscheidung wartet.
-///
-/// Die Notiz-Kürzung bekommt keine `Session` übergeben und kann den
-/// Indikator deshalb gar nicht setzen; ihr Guard
-/// (`RegisteredConfirmation`) hält ebenfalls keine.
-#[tokio::test]
-async fn test_issue_107_disconnect_suggestion_never_sets_the_pending_action_indicator() {
-    let session = disconnect_session_with_note_proposal();
-    let emitter = TestEmitter::default();
-    let profile_store = InMemoryProfileStore::default();
-    let confirmations = ConfirmationRegistry::new();
-
-    let flow = suggest_note_update_on_disconnect(
-        &session,
-        Uuid::new_v4(),
-        &emitter,
-        &profile_store,
-        &confirmations,
-    );
-    let responder = async {
-        let action_id = await_registered_suggestion(&emitter, &confirmations).await;
-        // Ein paar weitere Runden, damit der Ablauf sicher im Warten steckt.
-        for _ in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(
-            *session.pending_action.lock().unwrap(),
-            None,
-            "eine app-weite Notiz-Benachrichtigung darf keinen Tab-Indikator setzen"
-        );
-        confirmations
-            .resolve(&action_id, ActionUserDecision::Deny)
-            .unwrap();
-    };
-    let (suggested, ()) = tokio::time::timeout(ISSUE_107_TEST_TIMEOUT, async {
-        tokio::join!(flow, responder)
-    })
-    .await
-    .expect("der Ablauf muss nach der Ablehnung enden");
-
-    assert!(suggested);
-    assert_eq!(*session.pending_action.lock().unwrap(), None);
-}
-
-/// Issue #330: Titel- und Abschluss-Instruktion folgen der Prompt-Sprache.
-#[test]
-fn test_title_and_disconnect_instructions_follow_the_prompt_language() {
-    use crate::system_prompt::{prompt_language, PromptLanguage};
-    let lang = |c: &str| prompt_language(Some(&serde_json::json!(c)), None);
-    let de_title = super::title_generation_instruction(PromptLanguage::De);
-    assert!(!de_title.contains("beendet"));
-    assert!(de_title.starts_with("Fasse den Zweck"));
-    let en_title = super::title_generation_instruction(PromptLanguage::En);
-    assert!(!en_title.contains("ending now"));
-    assert!(en_title.starts_with("Summarize the purpose"));
-    assert!(!en_title.contains("Always respond in"));
-    assert_eq!(
-        super::title_generation_instruction(lang("fr")),
-        format!("{en_title} Always respond in French.")
-    );
-    assert_eq!(super::title_generation_instruction(lang("xx")), en_title);
-
-    let de = super::disconnect_completion_instruction(PromptLanguage::De);
-    assert!(de.contains("künftige Sitzungen"));
-    let en = super::disconnect_completion_instruction(PromptLanguage::En);
-    assert!(en.starts_with("The session is ending now"));
-    assert_eq!(
-        super::disconnect_completion_instruction(lang("fr")),
-        format!("{en} Always respond in French.")
-    );
-    assert_eq!(super::disconnect_completion_instruction(lang("xx")), en);
-}
-
-/// Issue #359: Abschluss- und Kürzen-Instruktion beschreiben in beiden
-/// Sprachen dasselbe Notiz-Format und folgen der Prompt-Sprache.
-#[test]
-fn test_disconnect_and_shrink_instructions_carry_the_note_format_in_both_languages() {
-    use crate::system_prompt::{NOTE_FORMAT_DE, NOTE_FORMAT_EN};
-    let d_de = super::disconnect_completion_instruction(PromptLanguage::De);
-    let d_en = super::disconnect_completion_instruction(PromptLanguage::En);
-    let s_de = super::note_shrink_instruction(PromptLanguage::De);
-    let s_en = super::note_shrink_instruction(PromptLanguage::En);
-    for text in [&d_de, &s_de] {
-        assert!(text.contains(NOTE_FORMAT_DE));
-        assert!(text.contains("7.500 Zeichen"));
-        assert!(!text.contains("getroffene Entscheidungen"));
-    }
-    for text in [&d_en, &s_en] {
-        assert!(text.contains(NOTE_FORMAT_EN));
-        assert!(text.contains("7,500 characters"));
-        assert!(text.contains("rewrite it into this format"));
-        assert!(!text.contains("decisions made"));
-    }
-    assert!(s_en.starts_with("Rewrite the following"));
-    assert!(s_de.starts_with("Schreibe die folgende"));
-    assert!(
-        super::note_shrink_instruction(crate::system_prompt::prompt_language(
-            Some(&serde_json::json!("fr")),
-            None
-        ))
-        .ends_with("Always respond in French.")
-    );
-}
-
-/// Issue #359: die Kürzen-Anfrage nutzt die englische Instruktion für
-/// Englisch.
-#[tokio::test]
-async fn test_summarize_note_for_shrink_uses_the_prompt_language_instruction() {
-    let provider = MockAiProvider::new(vec![AiEvent::TextDelta("x".to_string()), AiEvent::Done]);
-    let contexts = provider.received_contexts_handle();
-    let redactor = DefaultOutputRedactor::new();
-    let budget = ai_providers::ProviderBudgetGuard::new();
-    let emitter = TestEmitter::default();
-    summarize_note_for_shrink(
-        &provider,
-        &budget,
-        &emitter,
-        Uuid::new_v4(),
-        &redactor,
-        "srv",
-        "note",
-        PromptLanguage::En,
-    )
-    .await;
-    let sent = contexts.lock().unwrap();
-    let MessageContent::Text(text) = &sent[0].history[0].content else {
-        panic!("expected text");
-    };
-    assert!(text.starts_with("Rewrite the following"), "{text}");
-}
-
-// --- Issue #564: disconnect note-update request goes through sealing ---
-
-/// Extension whose content cannot be resolved, so sealing fails.
-struct GoneExt;
-
-impl crate::chat_content_extension::ChatContentExtension for GoneExt {
-    fn name(&self) -> &str {
-        "files"
-    }
-    fn take_pending(
-        &self,
-        _s: Uuid,
-        _id: &str,
-    ) -> Option<crate::chat_content_extension::PendingContent> {
-        None
-    }
-    fn persist(
-        &self,
-        _s: Uuid,
-        _part_id: &str,
-        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
-    ) -> Result<(), crate::chat_content_extension::ChatContentError> {
-        Ok(())
-    }
-    fn resolve(
-        &self,
-        _s: Uuid,
-        _part: &ssh_manager_core::ai::ExtensionPart,
-    ) -> Result<
-        Option<Vec<ssh_manager_core::ai::ResolvedBlock>>,
-        crate::chat_content_extension::ChatContentError,
-    > {
-        Err(crate::chat_content_extension::ChatContentError(
-            "gone".into(),
-        ))
-    }
-}
-
-/// Issue #564: when sealing fails, no provider request is made, no note
-/// update is proposed and the function returns `false`.
-#[tokio::test]
-async fn test_issue_564_disconnect_suggestion_not_sent_when_sealing_fails() {
-    let provider = MockAiProvider::new(vec![note_proposal("Neue Notiz"), AiEvent::Done]);
-    let contexts = provider.received_contexts_handle();
-    let mut session = session_with_ai_provider(provider, MockSshTransport::default());
-    session.set_chat_content_for_tests(std::sync::Arc::new(
-        crate::chat_content_extension::ChatContentRegistry::new(vec![std::sync::Arc::new(GoneExt)]),
-    ));
-    {
-        let mut ctx = session.context.lock().await;
-        ctx.history.push(command_result_message());
-        ctx.history.push(ChatMessage {
-            role: Role::User,
-            content: MessageContent::Extension(ssh_manager_core::ai::ExtensionPart {
-                extension: "files".into(),
-                kind: "doc".into(),
-                id: Uuid::new_v4().to_string(),
-                label: "a.txt".into(),
-                media: ssh_manager_core::ai::ExtensionMedia::Text,
-                estimated_tokens: 1,
-            }),
-        });
-    }
-    let emitter = TestEmitter::default();
-    let suggested = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        suggest_note_update_on_disconnect(
-            &session,
-            Uuid::new_v4(),
-            &emitter,
-            &InMemoryProfileStore::default(),
-            &ConfirmationRegistry::new(),
-        ),
-    )
-    .await
-    .expect("disconnect must complete");
-    assert!(contexts.lock().unwrap().is_empty(), "no provider request");
-    assert!(emitter.events.lock().unwrap().is_empty(), "no proposal");
-    assert!(!suggested);
-}
-
-/// Issue #564: for a plain session the request is unchanged (history plus
-/// the completion instruction) and a planted secret is absent from it.
-#[tokio::test]
-async fn test_issue_564_disconnect_request_plain_session_and_secret_absent() {
-    let provider = MockAiProvider::new(vec![AiEvent::Done]);
-    let contexts = provider.received_contexts_handle();
-    let session = session_with_ai_provider(provider, MockSshTransport::default());
-    {
-        let mut ctx = session.context.lock().await;
-        ctx.history.push(ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text(format!("prüfe password={SECRET_0096} bitte")),
-        });
-        ctx.history.push(command_result_message());
-    }
-    suggest_note_update_on_disconnect(
-        &session,
-        Uuid::new_v4(),
-        &TestEmitter::default(),
-        &InMemoryProfileStore::default(),
-        &ConfirmationRegistry::new(),
-    )
-    .await;
-    let sent = contexts.lock().unwrap().clone();
-    assert_eq!(sent.len(), 1);
-    let history = &sent[0].history;
-    assert_eq!(history.len(), 3, "user, command result, instruction");
-    assert!(matches!(
-        history[1].content,
-        MessageContent::CommandResult { .. }
-    ));
-    let MessageContent::Text(first) = &history[0].content else {
-        panic!("plain text expected");
-    };
-    assert!(first.starts_with("prüfe"));
-    assert!(!format!("{history:?}").contains(SECRET_0096));
-}
+mod more;

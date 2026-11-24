@@ -154,6 +154,25 @@ impl SftpSession for MismatchSftp {
         unreachable!("dieser Test lädt nichts hoch")
     }
 
+    async fn read_range(
+        &mut self,
+        _path: &str,
+        _offset: u64,
+        _len: usize,
+    ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+        unreachable!("this test does not transfer files")
+    }
+
+    async fn write_range(
+        &mut self,
+        _path: &str,
+        _offset: u64,
+        _data: &[u8],
+        _truncate: bool,
+    ) -> Result<(), ssh_manager_core::ssh::SshError> {
+        unreachable!("this test does not transfer files")
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.0.ops.lock().unwrap().push(format!("stat {path}"));
         match self.0.stat {
@@ -168,6 +187,7 @@ impl SftpSession for MismatchSftp {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             }),
             StatResult::Fails => Err(SshError::ChannelError("stat nicht möglich".to_string())),
         }
@@ -200,6 +220,9 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests löschen kein Verzeichnis")
     }
 
+    async fn set_owner(&mut self, _path: &str, _uid: u32, _gid: u32) -> Result<(), SshError> {
+        unreachable!()
+    }
     async fn set_permissions(&mut self, _path: &str, _mode: u32) -> Result<(), SshError> {
         unreachable!("diese Tests ändern keine Rechte")
     }
@@ -248,6 +271,8 @@ async fn setup(normal: MismatchSftp, elevated: MismatchSftp) -> Setup {
         session_id,
         ElevatedSftp {
             target_user: "root".to_string(),
+            sudo_auth: Default::default(),
+            server_logging: false,
             sftp: Box::new(elevated),
         },
     );

@@ -21,6 +21,10 @@ Je Chat-Sitzung: Server, Titel (leer bis automatisch erzeugt), Start- und
 Endzeit (leer, solange aktiv) und der Anbieter, mit dem sie begann.
 Je Nachricht: Rolle (Nutzer, Assistent, Aktionsergebnis), Inhaltsart (Text,
 Kommando-Ergebnis, abgelehnte Aktion, Verweise auf Erweiterungsinhalt nach Spec 0110), Inhalt, Reihenfolge, Zeitpunkt.
+Die Reihenfolge ist je Sitzung eindeutig: Zwei Nachrichten, die gleichzeitig
+angehängt werden, bekommen immer verschiedene, fortlaufende Nummern. Älteren
+Datenbanken, in denen eine Sitzung doppelte Nummern hatte, nummeriert das
+Update diese Sitzung unter Beibehaltung der Reihenfolge ab 0 neu.
 Löscht man den Server, verschwinden seine Sitzungen und Nachrichten mit.
 
 Der Anbieter einer Sitzung ist rein informativ: Beim Fortsetzen ist
@@ -47,10 +51,9 @@ pro Arbeitsblock, keine endlose Historie pro Server.
   geleert, die Reihenfolge läuft weiter) — kein Kopieren. Der Verlauf bleibt
   ein durchgehender Thread über mehrere Verbinden/Trennen-Zyklen.
 - **Leere Sitzungen werden verworfen.** Endet eine Sitzung (Trennen,
-  Tab schließen, „Neuer Chat"), ohne dass sie eine Nachricht oder einen
-  Ledger-Eintrag (z. B. MCP-Aktivität im Tab) enthält, wird sie gelöscht
+  Tab schließen, „Neuer Chat"), ohne dass sie eine Nachricht enthält, wird sie gelöscht
   statt als beendet markiert; sie erscheint nie in der Auswahlliste. Eine
-  Sitzung mit mindestens einer Nachricht oder einem Ledger-Eintrag bleibt
+  Sitzung mit mindestens einer Nachricht bleibt
   unverändert erhalten. Bereits vor dieser Regel entstandene leere Sitzungen
   werden nicht aufgeräumt. Beim Beenden der App werden offene Sitzungen
   nicht beendet; ein App-Absturz oder -Ende mit offenem leerem Chat kann
@@ -133,7 +136,9 @@ Spec 0104).
 
 ## 11. Neuer Chat innerhalb einer Verbindung
 
-Im Chat-Panel eines verbundenen Tabs gibt es eine Schaltfläche „Neuer
+Im Chat-Panel eines verbundenen Tabs gibt es in der Kopfzeile — links die
+Beschriftung „AI · <Modell>“ des KI-Anbieters, an den diese Sitzung beim Verbinden gebunden wurde (Anbieter-Name im
+Tooltip; nur „AI“, wenn unbekannt) — eine Schaltfläche „Neuer
 Chat". Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
 Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein
 bereits erhöhter Kanal bleiben unverändert.
@@ -146,8 +151,7 @@ bereits erhöhter Kanal bleiben unverändert.
    Verlauf, rollierende Zusammenfassung und Chat-Zustand sind leer, die
    Chat-Ansicht zeigt einen leeren Chat. Der alte Chat erscheint mit
    seinem Titel in der Auswahlliste (Abschnitt 6) und ist wie jeder
-   beendete Chat fortsetzbar. Die Ledger-Einträge des alten Chats bleiben
-   an diesem; neue Einträge gehören zum neuen Chat.
+   beendete Chat fortsetzbar.
 2. **Misstrauens-Markierung bleibt.** Die Markierung „nicht
    vertrauenswürdiger Inhalt gesehen" (Spec 0039, Abschnitt 5) gilt für die
    Verbindung, nicht für den Chat. Der neue Chat erbt sie und setzt sie nie

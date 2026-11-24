@@ -46,6 +46,9 @@ pub(crate) struct CappedOutput {
     /// truncation notice), plus one `Truncated` when the cap is reached.
     /// Display only — `None` for the non-streaming paths.
     sink: Option<ExecOutputSink>,
+    /// Issue #922: set once the live copy was cut off (consumer too slow or
+    /// cap reached); nothing more is forwarded afterwards.
+    live_closed: bool,
 }
 
 impl CappedOutput {
@@ -57,6 +60,7 @@ impl CappedOutput {
             stdout_truncated: false,
             stderr_truncated: false,
             sink,
+            live_closed: false,
         }
     }
 
@@ -83,18 +87,31 @@ impl CappedOutput {
     /// Sends the kept part of a chunk to the live sink. A closed receiver
     /// only ends the live display, never the command — send errors are
     /// deliberately ignored (the final result does not depend on them).
-    fn forward(&self, stream: OutputStream, kept: &[u8], newly_truncated: bool) {
+    fn forward(&mut self, stream: OutputStream, kept: &[u8], newly_truncated: bool) {
         let Some(sink) = &self.sink else {
             return;
         };
+        if self.live_closed {
+            return;
+        }
         if !kept.is_empty() {
-            let _ = sink.send(ExecOutputChunk::Data {
-                stream,
-                bytes: kept.to_vec(),
-            });
+            // Issue #922: the last slot is reserved for `Truncated`, so the
+            // consumer always learns that the live copy ends here. Whole
+            // chunks only are dropped, never part of one.
+            if sink.capacity() > 1 {
+                let _ = sink.try_send(ExecOutputChunk::Data {
+                    stream,
+                    bytes: kept.to_vec(),
+                });
+            } else {
+                let _ = sink.try_send(ExecOutputChunk::Truncated);
+                self.live_closed = true;
+                return;
+            }
         }
         if newly_truncated {
-            let _ = sink.send(ExecOutputChunk::Truncated);
+            let _ = sink.try_send(ExecOutputChunk::Truncated);
+            self.live_closed = true;
         }
     }
 
@@ -155,6 +172,28 @@ impl CappedOutput {
     }
 }
 
+/// Shell-style exit code (128 + Linux signal number) for an SSH signal name;
+/// `None` for names without a well-known number.
+fn signal_exit_code(sig: &russh::Sig) -> Option<i32> {
+    use russh::Sig;
+    let n = match sig {
+        Sig::HUP => 1,
+        Sig::INT => 2,
+        Sig::QUIT => 3,
+        Sig::ILL => 4,
+        Sig::ABRT => 6,
+        Sig::FPE => 8,
+        Sig::KILL => 9,
+        Sig::USR1 => 10,
+        Sig::SEGV => 11,
+        Sig::PIPE => 13,
+        Sig::ALRM => 14,
+        Sig::TERM => 15,
+        Sig::Custom(_) => return None,
+    };
+    Some(128 + n)
+}
+
 /// Inkrementeller Sammler für `ChannelMsg`s eines Exec-Channels (Spec 0043,
 /// Fund A) — dünner `ChannelMsg`-spezifischer Wrapper um [`CappedOutput`],
 /// ergänzt um den Exit-Code (den der lokale Pfad anders bekommt, s.
@@ -167,18 +206,14 @@ pub(crate) struct ExecAccumulator {
 
 impl ExecAccumulator {
     /// Nur für Tests (s. `accumulate_exec_output` unten) — die echte
-    /// `RusshTransport`-Implementierung ruft immer `with_limit` mit ihrem
+    /// `RusshTransport`-Implementierung ruft immer `with_limit_and_sink` mit ihrem
     /// konfigurierten `max_output_bytes` auf, nie den Default direkt.
     #[cfg(test)]
     pub(crate) fn new() -> Self {
-        Self::with_limit(MAX_STREAM_OUTPUT_BYTES)
+        Self::with_limit_and_sink(MAX_STREAM_OUTPUT_BYTES, None)
     }
 
-    pub(crate) fn with_limit(limit: usize) -> Self {
-        Self::with_limit_and_sink(limit, None)
-    }
-
-    /// Issue #325: like [`Self::with_limit`], with a live copy of the kept
+    /// Issue #325: like [`Self::new`], with a live copy of the kept
     /// output (see [`CappedOutput::with_limit_and_sink`]).
     pub(crate) fn with_limit_and_sink(limit: usize, sink: Option<ExecOutputSink>) -> Self {
         Self {
@@ -194,6 +229,13 @@ impl ExecAccumulator {
             // nicht spezifiziert und werden ignoriert.
             ChannelMsg::ExtendedData { data, ext: 1 } => self.capped.push_stderr(&data),
             ChannelMsg::ExitStatus { exit_status } => self.exit_code = Some(exit_status as i32),
+            // A command killed by a signal ends with `exit-signal` instead of
+            // `exit-status` (RFC 4254 6.10). Report it the way a shell does
+            // (128 + signal number) instead of "no exit code"; a real
+            // exit status, if any, wins.
+            ChannelMsg::ExitSignal { signal_name, .. } if self.exit_code.is_none() => {
+                self.exit_code = signal_exit_code(&signal_name);
+            }
             _ => {}
         }
     }
@@ -227,4 +269,72 @@ pub(crate) fn accumulate_exec_output(
         acc.push(msg);
     }
     acc.into_output()
+}
+
+#[cfg(test)]
+mod exit_signal_tests {
+    use super::*;
+
+    fn signal(sig: russh::Sig) -> ChannelMsg {
+        ChannelMsg::ExitSignal {
+            signal_name: sig,
+            core_dumped: false,
+            error_message: String::new(),
+            lang_tag: String::new(),
+        }
+    }
+
+    #[test]
+    fn kill_signal_reports_137_and_exit_status_wins() {
+        let mut acc = ExecAccumulator::new();
+        acc.push(signal(russh::Sig::KILL));
+        assert_eq!(acc.into_output().exit_code, Some(137));
+
+        let mut acc = ExecAccumulator::new();
+        acc.push(ChannelMsg::ExitStatus { exit_status: 3 });
+        acc.push(signal(russh::Sig::KILL));
+        assert_eq!(acc.into_output().exit_code, Some(3));
+
+        let mut acc = ExecAccumulator::new();
+        acc.push(signal(russh::Sig::Custom("X".into())));
+        assert_eq!(acc.into_output().exit_code, None);
+    }
+}
+
+#[cfg(test)]
+mod live_sink_tests {
+    use super::*;
+
+    /// Issue #922: 50 MB in small chunks with a consumer that never reads —
+    /// the channel stays within its capacity, the last slot holds
+    /// `Truncated`, and the captured output is complete (up to its own cap).
+    #[test]
+    fn paused_consumer_bounds_channel_and_keeps_captured_output() {
+        let (sink, mut rx) = ssh_manager_core::ssh::exec_output_channel();
+        let total = 50 * 1024 * 1024;
+        let mut out = CappedOutput::with_limit_and_sink(total, Some(sink));
+        let chunk = vec![b'x'; 1024];
+        for _ in 0..(total / chunk.len()) {
+            out.push_stdout(&chunk);
+        }
+        let (stdout, _) = out.into_parts();
+        assert_eq!(stdout.len(), total);
+
+        let mut data = 0;
+        let mut truncated = 0;
+        while let Ok(c) = rx.try_recv() {
+            match c {
+                ExecOutputChunk::Data { .. } => {
+                    assert_eq!(truncated, 0, "no data after Truncated");
+                    data += 1;
+                }
+                ExecOutputChunk::Truncated => truncated += 1,
+            }
+        }
+        assert_eq!(
+            data + truncated,
+            ssh_manager_core::ssh::EXEC_OUTPUT_SINK_CAPACITY
+        );
+        assert_eq!(truncated, 1);
+    }
 }

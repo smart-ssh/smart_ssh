@@ -13,6 +13,7 @@ use super::{fence_untrusted, UntrustedKind};
 /// Media class of an extension part, derived by the core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum ExtensionMedia {
     Text,
     Image,

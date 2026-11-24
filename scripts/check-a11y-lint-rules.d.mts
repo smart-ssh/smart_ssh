@@ -10,6 +10,13 @@ export interface A11yRuleProblem {
   severity: unknown;
 }
 
+export interface RequiredRuleProblem {
+  name: string;
+  severity: string | number | undefined;
+}
+
+export const REQUIRED_ERROR_RULES: string[];
+export function findRequiredRuleProblems(configText: string, required?: string[]): RequiredRuleProblem[];
 export function severityOf(value: unknown): string | number | undefined;
 export function parseEnabledA11yRules(printConfigText: string): string[];
 export function parseConfiguredA11yRules(configText: string): Map<string, unknown>;
@@ -21,5 +28,5 @@ export function runOxlintPrintConfig(frontendDir?: string): string;
 export function checkA11yRules(options?: {
   frontendDir?: string;
   printConfig?: (frontendDir: string) => string;
-}): { problems: A11yRuleProblem[]; enabledCount: number };
+}): { problems: A11yRuleProblem[]; requiredProblems: RequiredRuleProblem[]; enabledCount: number };
 export function describeProblem(p: A11yRuleProblem): string;

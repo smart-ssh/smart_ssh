@@ -1,19 +1,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getMcpServerSettings, listServers } from "../api";
+import { getMcpServerSettings, listServers } from "../api/api";
 import { testI18n } from "../testI18n";
 import { McpServerSettings } from "./McpServerSettings";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (e: unknown) => String(e),
-  getMcpServerSettings: vi.fn(),
-  listServers: vi.fn(),
-  regenerateMcpServerToken: vi.fn(),
-  setMcpServerAllowedServers: vi.fn(),
-  setMcpServerConfirmTimeoutSecs: vi.fn(),
-  setMcpServerEnabled: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getMcpServerSettings: vi.fn(),
+    listServers: vi.fn(),
+    regenerateMcpServerToken: vi.fn(),
+    setMcpServerAllowedServers: vi.fn(),
+    setMcpServerConfirmTimeoutSecs: vi.fn(),
+    setMcpServerEnabled: vi.fn(),
+  }),
+);
 
 const settings = {
   enabled: true,
@@ -43,6 +44,7 @@ describe("McpServerSettings copy action (issue #184)", () => {
     const { container } = renderIt();
     const button = await screen.findByRole("button", { name: "Konfiguration kopieren" });
     fireEvent.click(button);
+    // wait-ok: the snippet <pre> is rendered together with the copy button found above
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const shown = container.querySelector("pre")?.textContent;
     expect(shown).not.toContain("tok-secret-123");

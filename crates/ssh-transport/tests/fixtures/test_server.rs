@@ -121,6 +121,8 @@ impl FirstLineSentWatch {
 #[derive(Default)]
 pub struct SetstatModeWatch {
     last_mode: std::sync::Mutex<Option<u32>>,
+    /// Issue #654: last `(uid, gid)` pair sent by `setstat`.
+    last_ids: std::sync::Mutex<Option<(u32, u32)>>,
 }
 
 impl SetstatModeWatch {
@@ -128,9 +130,109 @@ impl SetstatModeWatch {
         *self.last_mode.lock().expect("Mutex nicht vergiftet")
     }
 
+    pub fn last_ids(&self) -> Option<(u32, u32)> {
+        *self.last_ids.lock().expect("Mutex nicht vergiftet")
+    }
+
+    fn record_ids(&self, uid: Option<u32>, gid: Option<u32>) {
+        if let (Some(uid), Some(gid)) = (uid, gid) {
+            *self.last_ids.lock().expect("Mutex nicht vergiftet") = Some((uid, gid));
+        }
+    }
+
     fn record(&self, mode: Option<u32>) {
         if let Some(mode) = mode {
             *self.last_mode.lock().expect("Mutex nicht vergiftet") = Some(mode);
+        }
+    }
+}
+
+/// Issue #1184: how the test server authenticates `TEST_USERNAME`.
+///
+/// `russh` 0.63's server sends `partial_success` only when a
+/// `keyboard-interactive` login ends in `Auth::Reject { partial_success:
+/// true, .. }` (its password and public key paths reset the flag), so the
+/// multi-step scenarios start with such a login. A `publickey,…` first step
+/// is covered against real OpenSSH (issue #1177).
+#[allow(dead_code, reason = "each test file uses only some scenarios")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AuthScenario {
+    /// Password (and any public key), as before.
+    #[default]
+    Standard,
+    /// Only `keyboard-interactive`: one prompt "Password: " (echo off).
+    KeyboardInteractivePassword,
+    /// Only `keyboard-interactive`: "Password: ", then "Verification code: "
+    /// (echo on, answer `TEST_CODE`).
+    KeyboardInteractiveTwoRounds,
+    /// Only `keyboard-interactive`: an info request without prompts, then
+    /// "Password: ".
+    KeyboardInteractiveEmptyRound,
+    /// Only `keyboard-interactive`: asks one more question after every answer.
+    KeyboardInteractiveEndless,
+    /// `keyboard-interactive,password`: the "Password: " round ends with
+    /// partial success; the password is then required again.
+    KeyboardInteractiveThenPassword,
+    /// `keyboard-interactive,keyboard-interactive`: "Password: " ends with
+    /// partial success, a second login asks "Verification code: ".
+    KeyboardInteractiveTwice,
+    /// Only `keyboard-interactive`: every login ends with partial success.
+    PartialForever,
+}
+
+pub const TEST_CODE: &str = "123456";
+
+type KiRound = &'static [(&'static str, bool)];
+
+const PW: KiRound = &[("Password: ", false)];
+const CODE: KiRound = &[("Verification code: ", true)];
+
+impl AuthScenario {
+    fn methods(self) -> Option<&'static [russh::MethodKind]> {
+        use russh::MethodKind as K;
+        match self {
+            Self::Standard => None,
+            Self::KeyboardInteractiveThenPassword => Some(&[K::KeyboardInteractive, K::Password]),
+            _ => Some(&[K::KeyboardInteractive]),
+        }
+    }
+
+    /// Questions per round of the given login (`stage` counts completed
+    /// partial logins).
+    fn rounds(self, stage: usize) -> &'static [KiRound] {
+        match (self, stage) {
+            (Self::KeyboardInteractiveTwoRounds, _) => &[PW, CODE],
+            (Self::KeyboardInteractiveEmptyRound, _) => &[&[], PW],
+            (Self::KeyboardInteractiveTwice, 1) => &[CODE],
+            (Self::Standard | Self::KeyboardInteractiveEndless, _) => &[],
+            _ => &[PW],
+        }
+    }
+
+    /// Expected answers of that round.
+    fn answers(self, stage: usize, round: usize) -> &'static [&'static str] {
+        match (self, stage, round) {
+            (Self::KeyboardInteractiveTwoRounds, _, 1) | (Self::KeyboardInteractiveTwice, 1, _) => {
+                &[TEST_CODE]
+            }
+            (Self::KeyboardInteractiveEmptyRound, _, 0) => &[],
+            _ => &[TEST_PASSWORD],
+        }
+    }
+
+    /// What follows when the last round of a login was answered correctly.
+    fn after_last_round(self, stage: usize) -> Auth {
+        use russh::{MethodKind as K, MethodSet};
+        match (self, stage) {
+            (Self::KeyboardInteractiveThenPassword, _) => Auth::Reject {
+                proceed_with_methods: Some(MethodSet::from(&[K::Password][..])),
+                partial_success: true,
+            },
+            (Self::KeyboardInteractiveTwice, 0) | (Self::PartialForever, _) => Auth::Reject {
+                proceed_with_methods: Some(MethodSet::from(&[K::KeyboardInteractive][..])),
+                partial_success: true,
+            },
+            _ => Auth::Accept,
         }
     }
 }
@@ -153,10 +255,10 @@ pub struct AuthAttemptLog {
 
 impl AuthAttemptLog {
     pub fn attempts(&self) -> Vec<&'static str> {
-        self.attempts.lock().unwrap().clone()
+        self.attempts.lock().expect("attempt log lock").clone()
     }
     fn record(&self, what: &'static str) {
-        self.attempts.lock().unwrap().push(what);
+        self.attempts.lock().expect("attempt log lock").push(what);
     }
 }
 
@@ -180,6 +282,9 @@ pub struct RunningTestServer {
     pub sftp_root: TempDir,
     /// Spec 0085, A2.1/T14 — s. [`ExecChannelWatch`].
     pub exec_channel: Arc<ExecChannelWatch>,
+    /// Issue #1191: every byte a simulated `sudo -S` received on stdin.
+    #[allow(dead_code, reason = "read by tests/sudo_password.rs only")]
+    pub sudo_stdin: Arc<std::sync::Mutex<Vec<u8>>>,
     /// ADR 0122, R4 — s. [`SetstatModeWatch`].
     pub setstat_mode: Arc<SetstatModeWatch>,
     /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
@@ -206,6 +311,16 @@ impl RunningTestServer {
     /// Wie [`Self::start`], mit festgelegtem Verhalten für `none` und leeres
     /// Passwort (Issue #632).
     pub async fn start_with_auth(auth_behavior: AuthBehavior) -> Self {
+        Self::start_inner(auth_behavior, AuthScenario::Standard).await
+    }
+
+    /// Issue #1184: a server with a `keyboard-interactive` or multi-step login.
+    #[allow(dead_code, reason = "used by interactive_auth only")]
+    pub async fn start_with_scenario(scenario: AuthScenario) -> Self {
+        Self::start_inner(AuthBehavior::default(), scenario).await
+    }
+
+    async fn start_inner(auth_behavior: AuthBehavior, scenario: AuthScenario) -> Self {
         let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519)
             .expect("Ed25519-Testschlüssel sollte immer erzeugbar sein");
         let host_public_key = key
@@ -215,7 +330,19 @@ impl RunningTestServer {
 
         static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let instance_id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let methods = match scenario.methods() {
+            Some(list) => russh::MethodSet::from(list),
+            None => Config::default().methods,
+        };
         let config = Arc::new(Config {
+            methods,
+            // Rejections otherwise take a second each, which would eat the
+            // authentication limits the scenario tests set.
+            auth_rejection_time: if scenario == AuthScenario::Standard {
+                Config::default().auth_rejection_time
+            } else {
+                std::time::Duration::from_millis(10)
+            },
             keys: vec![key],
             server_id: russh::SshId::Standard(format!("SSH-2.0-testfixture{instance_id}").into()),
             ..Default::default()
@@ -234,6 +361,8 @@ impl RunningTestServer {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
         let exec_channel = Arc::new(ExecChannelWatch::default());
         let exec_channel_for_loop = exec_channel.clone();
+        let sudo_stdin = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sudo_stdin_for_loop = sudo_stdin.clone();
         let setstat_mode = Arc::new(SetstatModeWatch::default());
         let setstat_mode_for_loop = setstat_mode.clone();
         let first_line_sent = Arc::new(FirstLineSentWatch::default());
@@ -255,6 +384,7 @@ impl RunningTestServer {
                         let config = config.clone();
                         let sftp_root = sftp_root_path.clone();
                         let exec_channel = exec_channel_for_loop.clone();
+                        let sudo_stdin = sudo_stdin_for_loop.clone();
                         let setstat_mode = setstat_mode_for_loop.clone();
                         let first_line_sent = first_line_sent_for_loop.clone();
                         let auth_attempts = auth_attempts_for_loop.clone();
@@ -264,10 +394,14 @@ impl RunningTestServer {
                                 no_echo: HashSet::new(),
                                 sftp_root,
                                 exec_channel,
+                                sudo_stdin,
                                 setstat_mode,
                                 first_line_sent,
                                 auth_attempts,
                                 auth_behavior,
+                                scenario,
+                                ki_round: 0,
+                                ki_stage: 0,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -281,6 +415,7 @@ impl RunningTestServer {
             host_public_key,
             sftp_root,
             exec_channel,
+            sudo_stdin,
             setstat_mode,
             first_line_sent,
             auth_attempts,
@@ -317,6 +452,7 @@ struct TestHandler {
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
     /// nicht mitbewegen.
     exec_channel: Arc<ExecChannelWatch>,
+    sudo_stdin: Arc<std::sync::Mutex<Vec<u8>>>,
     /// ADR 0122, R4 — beide SFTP-Subsysteme (normal und über `exec`)
     /// bewegen hier denselben Beobachter, s. `SftpTestHandler::setstat`.
     setstat_mode: Arc<SetstatModeWatch>,
@@ -324,6 +460,25 @@ struct TestHandler {
     first_line_sent: Arc<FirstLineSentWatch>,
     auth_attempts: Arc<AuthAttemptLog>,
     auth_behavior: AuthBehavior,
+    scenario: AuthScenario,
+    /// Issue #1184: index of the next `keyboard-interactive` round.
+    ki_round: usize,
+    /// Issue #1184: completed partial `keyboard-interactive` logins.
+    ki_stage: usize,
+}
+
+impl TestHandler {
+    fn ki_partial(round: KiRound) -> Auth {
+        Auth::Partial {
+            name: "test".into(),
+            instructions: "".into(),
+            prompts: round
+                .iter()
+                .map(|(t, e)| (std::borrow::Cow::Borrowed(*t), *e))
+                .collect::<Vec<_>>()
+                .into(),
+        }
+    }
 }
 
 impl Handler for TestHandler {
@@ -344,6 +499,15 @@ impl Handler for TestHandler {
         } else {
             "password:nonempty"
         });
+        let scenario = self.scenario;
+        let allowed = match scenario {
+            AuthScenario::Standard => true,
+            AuthScenario::KeyboardInteractiveThenPassword => self.ki_stage > 0,
+            _ => false,
+        };
+        if !allowed {
+            return Ok(Auth::reject());
+        }
         if user == TEST_USERNAME
             && (password == TEST_PASSWORD
                 || (password.is_empty() && self.auth_behavior.accept_empty_password))
@@ -370,11 +534,53 @@ impl Handler for TestHandler {
         user: &str,
         _key: &russh::keys::PublicKey,
     ) -> Result<Auth, Self::Error> {
-        if user == TEST_USERNAME {
+        if user == TEST_USERNAME && self.scenario == AuthScenario::Standard {
             Ok(Auth::Accept)
         } else {
             Ok(Auth::reject())
         }
+    }
+
+    async fn auth_keyboard_interactive<'a>(
+        &'a mut self,
+        user: &str,
+        _submethods: &str,
+        response: Option<russh::server::Response<'a>>,
+    ) -> Result<Auth, Self::Error> {
+        let scenario = self.scenario;
+        let rounds = scenario.rounds(self.ki_stage);
+        if user != TEST_USERNAME {
+            return Ok(Auth::reject());
+        }
+        if scenario == AuthScenario::KeyboardInteractiveEndless {
+            return Ok(Self::ki_partial(&[("More: ", true)]));
+        }
+        if rounds.is_empty() {
+            return Ok(Auth::reject());
+        }
+        let Some(response) = response else {
+            self.auth_attempts.record("keyboard-interactive");
+            self.ki_round = 0;
+            return Ok(Self::ki_partial(rounds[0]));
+        };
+        let given: Vec<String> = response
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .collect();
+        let expected = scenario.answers(self.ki_stage, self.ki_round);
+        let ok = scenario == AuthScenario::PartialForever
+            || (given.len() == expected.len() && given.iter().zip(expected).all(|(g, e)| g == e));
+        if !ok {
+            return Ok(Auth::reject());
+        }
+        self.ki_round += 1;
+        if let Some(next) = rounds.get(self.ki_round) {
+            return Ok(Self::ki_partial(next));
+        }
+        let outcome = scenario.after_last_round(self.ki_stage);
+        if matches!(outcome, Auth::Reject { .. }) {
+            self.ki_stage += 1;
+        }
+        Ok(outcome)
     }
 
     /// Muss explizit überschrieben werden: der *Default* von
@@ -425,6 +631,75 @@ impl Handler for TestHandler {
                 setstat_mode: self.setstat_mode.clone(),
             };
             russh_sftp::server::run(chan.into_stream(), handler).await;
+            return Ok(());
+        }
+        // Issue #1191: simulated `sudo -S -k -p '<marker>' … <path>`. The
+        // sftp-server path selects the behaviour: `/pw/` asks for the
+        // password "secret" (marker on stderr) and serves SFTP after it,
+        // answering a wrong one with a second marker; `/noprompt/` never
+        // asks; `/notallowed/` refuses. Every stdin byte is logged.
+        if let Some(rest) = command.strip_prefix("sudo -S -k -p '") {
+            let marker = rest.split('\'').next().unwrap_or("").to_string();
+            let Some(mut chan) = self.channels.remove(&channel) else {
+                session.channel_failure(channel)?;
+                return Ok(());
+            };
+            session.channel_success(channel)?;
+            self.no_echo.insert(channel);
+            let log = self.sudo_stdin.clone();
+            let root = self.sftp_root.join("elevated");
+            let (closed, setstat_mode) = (self.exec_channel.clone(), self.setstat_mode.clone());
+            let mode = if command.contains("/noprompt/") {
+                1
+            } else if command.contains("/notallowed/") {
+                2
+            } else {
+                0
+            };
+            tokio::spawn(async move {
+                let mut err = chan.make_writer_ext(Some(1));
+                match mode {
+                    2 => {
+                        let _ = err
+                            .write_all(b"sudo: deploy is not allowed to run sudo on host.\n")
+                            .await;
+                        let _ = chan.exit_status(1).await;
+                        let _ = chan.close().await;
+                        return;
+                    }
+                    0 => {
+                        let _ = err.write_all(marker.as_bytes()).await;
+                    }
+                    _ => {}
+                }
+                let mut line = Vec::new();
+                while !line.ends_with(b"\n") {
+                    match chan.wait().await {
+                        Some(russh::ChannelMsg::Data { data }) => {
+                            log.lock().unwrap().extend_from_slice(&data);
+                            line.extend_from_slice(&data);
+                        }
+                        Some(russh::ChannelMsg::Eof | russh::ChannelMsg::Close) | None => return,
+                        Some(_) => {}
+                    }
+                }
+                if mode == 0 && line == b"secret\n" {
+                    let handler = SftpTestHandler {
+                        root,
+                        open_files: HashMap::new(),
+                        open_dirs: HashMap::new(),
+                        next_handle: 0,
+                        closed: Some(closed),
+                        setstat_mode,
+                    };
+                    russh_sftp::server::run(chan.into_stream(), handler).await;
+                } else {
+                    let _ = err.write_all(b"Sorry, try again.\n").await;
+                    let _ = err.write_all(marker.as_bytes()).await;
+                    // Keep the channel open until the client closes it.
+                    while chan.wait().await.is_some() {}
+                }
+            });
             return Ok(());
         }
         // Spec 0067, Teil A: sudo verweigert ohne Passwort — Meldung nur auf
@@ -839,6 +1114,7 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         // was der Client tatsächlich sendet — unabhängig davon, ob dieser
         // Testserver es anwendet.
         self.setstat_mode.record(attrs.permissions);
+        self.setstat_mode.record_ids(attrs.uid, attrs.gid);
         // Windows kennt keine Unix-`mode`-Bits; `path` bliebe dort sonst
         // unbenutzt (ADR 0122, R1) — der Testserver wendet dort schlicht
         // keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).

@@ -1,6 +1,9 @@
 # ADR 0099 — Der Backend-Riegel für die Warnung aus A13/E10
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0101 (A13, A20, E10, Klarstellung 12), ADR 0098 §6.1
 
 Klarstellung 12 (Q-BL-0314-02) schließt den Punkt, der in ADR 0098 §6.1

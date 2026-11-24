@@ -36,4 +36,30 @@ describe("FeatureLockedDialog", () => {
     expect(document.body.textContent).toContain("document_export");
     expect(document.body.textContent).toContain("free");
   });
+
+  it("shows a feature_locked error published before the dialog mounted (issue #905)", () => {
+    publishFeatureLocked({ feature: "early_feature", tier: "free" });
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <FeatureLockedDialog />
+      </I18nextProvider>,
+    );
+
+    expect(document.body.textContent).toContain("early_feature");
+  });
+
+  it("uses the foundation dialog with a lock icon in the header", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <FeatureLockedDialog />
+      </I18nextProvider>,
+    );
+    act(() => {
+      publishFeatureLocked({ feature: "document_export", tier: "free" });
+    });
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.querySelector('[data-icon="lock"]')).not.toBeNull();
+    expect(dialog).toHaveClass("bg-surface-raised");
+  });
 });

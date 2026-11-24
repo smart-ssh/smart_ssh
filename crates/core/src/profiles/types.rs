@@ -10,6 +10,7 @@ use crate::shared::ServerId;
 /// Konzept "Gruppe" nicht, es gibt daher keinen Grund, den Typ nach
 /// `crate::shared` auszulagern (s. dortiger Modul-Kommentar).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct GroupId(pub Uuid);
 
 impl GroupId {
@@ -81,8 +82,17 @@ pub struct Server {
     /// im Home.
     #[serde(default)]
     pub start_directory: Option<String>,
+    /// Issue #1194, Spec 0067 A5: whether the file browser may offer elevated
+    /// rights for this server. Default `true`; when `false` the backend
+    /// refuses `sftp_elevation_enable` without probing the server.
+    #[serde(default = "default_elevation_allowed")]
+    pub elevation_allowed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+fn default_elevation_allowed() -> bool {
+    true
 }
 
 /// Issue #100: Warum ein gespeicherter Server nicht nutzbar ist.
@@ -134,6 +144,7 @@ pub struct ServerListing {
 /// implizieren, die anderen seien unsicher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum PostIngestPolicy {
     /// Sobald Serverinhalt gelesen wurde, wird JEDE weitere Aktion
     /// bestätigt.
@@ -238,6 +249,7 @@ pub enum NoteTarget {
 /// **selbst** aus dem Session-Kontext auf (nie eine von der KI gelieferte
 /// ID, s. `app-shell::orchestration::resolve_note_target`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum NoteTargetSelector {
     CurrentServer,
     CurrentServerGroup,
@@ -262,6 +274,7 @@ pub enum NoteTargetSelector {
 /// (reguläres Shell-Kommando durch dieselbe Filter-Engine samt
 /// Hard-Blacklist) der einzige Weg.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum AiAction {
     SuggestCommand {
         command: String,
@@ -299,6 +312,7 @@ pub enum AiAction {
 
 /// One answer option of an [`AiAction::AskUser`] question.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct AskUserOption {
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

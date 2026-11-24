@@ -12,6 +12,7 @@
 //! Die Zuordnung liegt in der [`crate::elevated_sftp::ElevatedSftpRegistry`],
 //! weil jede Stelle, die einen erhöhten Kanal widerruft, dort vorbeikommt.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -41,6 +42,7 @@ pub(crate) enum OpKind {
     Upload,
     Delete,
     Chmod,
+    Chown,
 }
 
 impl OpKind {
@@ -50,6 +52,7 @@ impl OpKind {
             Self::Upload => "upload",
             Self::Delete => "delete",
             Self::Chmod => "chmod",
+            Self::Chown => "chown",
         }
     }
 }
@@ -99,6 +102,23 @@ struct OpState {
 /// Geteilter Zustand **einer** Operation.
 #[derive(Clone)]
 pub(crate) struct OpHandle(Arc<OpState>);
+
+/// Issue #849: `app-logic`'s file-browser logic sees the operation only
+/// through this trait.
+impl app_logic::sftp_ops::OpProgress for OpHandle {
+    fn is_user_stopped(&self) -> bool {
+        OpHandle::is_user_stopped(self)
+    }
+    fn begin_entries(&self) {
+        OpHandle::begin_entries(self);
+    }
+    fn set_files(&self, done: u64, total: Option<u64>) {
+        OpHandle::set_files(self, done, total);
+    }
+    fn add_files_done(&self) {
+        OpHandle::add_files_done(self);
+    }
+}
 
 impl OpHandle {
     pub(crate) fn id(&self) -> Uuid {
@@ -197,7 +217,7 @@ impl OpHandle {
     }
 
     pub(crate) fn set_current_transfer(&self, id: Uuid) {
-        *self.0.current_transfer.lock().unwrap() = Some(id);
+        *lock_tolerating_poison(&self.0.current_transfer) = Some(id);
     }
 
     pub(crate) fn add_files_done(&self) {
@@ -249,9 +269,18 @@ pub(crate) struct OpGuard {
     registry: Arc<FileOps>,
     session_id: SessionId,
     handle: OpHandle,
+    /// Issue #1193: touched when an elevated operation ends, so the idle
+    /// timer starts again from the end of the operation.
+    activity: Option<crate::elevated_sftp::IdleActivity>,
 }
 
 impl OpGuard {
+    pub(crate) fn with_activity(mut self, activity: crate::elevated_sftp::IdleActivity) -> Self {
+        activity.touch();
+        self.activity = Some(activity);
+        self
+    }
+
     pub(crate) fn handle(&self) -> &OpHandle {
         &self.handle
     }
@@ -259,7 +288,7 @@ impl OpGuard {
 
 impl Drop for OpGuard {
     fn drop(&mut self) {
-        let mut ops = self.registry.ops.lock().unwrap();
+        let mut ops = lock_tolerating_poison(&self.registry.ops);
         if let Some(list) = ops.get_mut(&self.session_id) {
             list.retain(|h| h.id() != self.handle.id());
             if list.is_empty() {
@@ -267,6 +296,9 @@ impl Drop for OpGuard {
             }
         }
         drop(ops);
+        if let Some(activity) = &self.activity {
+            activity.touch();
+        }
         self.registry.ended.notify_waiters();
     }
 }
@@ -293,9 +325,7 @@ impl FileOps {
             entries_begun: AtomicBool::new(false),
             current_transfer: StdMutex::new(None),
         }));
-        self.ops
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.ops)
             .entry(session_id)
             .or_default()
             .push(handle.clone());
@@ -303,16 +333,18 @@ impl FileOps {
             registry: self.clone(),
             session_id,
             handle,
+            activity: None,
         }
     }
 
     /// Abbrechen-Knopf: stoppt genau diese Operation. `false`: unbekannt
     /// (schon fertig oder anderer Sitzung).
     pub(crate) fn cancel(&self, session_id: SessionId, id: Uuid) -> bool {
-        let ops = self.ops.lock().unwrap();
+        let ops = lock_tolerating_poison(&self.ops);
         match ops.get(&session_id).and_then(|l| {
-            l.iter()
-                .find(|h| h.id() == id || *h.0.current_transfer.lock().unwrap() == Some(id))
+            l.iter().find(|h| {
+                h.id() == id || *lock_tolerating_poison(&h.0.current_transfer) == Some(id)
+            })
         }) {
             Some(h) => {
                 h.request_stop(StopReason::Cancelled);
@@ -325,7 +357,7 @@ impl FileOps {
     /// Stoppt alle Operationen dieser Sitzung, die über den erhöhten Kanal
     /// laufen.
     pub(crate) fn stop_elevated(&self, session_id: SessionId, reason: StopReason) {
-        if let Some(list) = self.ops.lock().unwrap().get(&session_id) {
+        if let Some(list) = lock_tolerating_poison(&self.ops).get(&session_id) {
             for h in list.iter().filter(|h| h.0.elevated) {
                 h.request_stop(reason);
             }
@@ -333,9 +365,7 @@ impl FileOps {
     }
 
     pub(crate) fn running_elevated(&self, session_id: SessionId) -> Vec<RunningOperationDto> {
-        self.ops
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.ops)
             .get(&session_id)
             .map(|l| {
                 l.iter()
@@ -350,17 +380,13 @@ impl FileOps {
     /// gestoppt? Tests warten darauf, bevor sie den Mock freigeben.
     #[cfg(test)]
     pub(crate) fn has_stopped_elevated(&self, session_id: SessionId) -> bool {
-        self.ops
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.ops)
             .get(&session_id)
             .is_some_and(|l| l.iter().any(|h| h.0.elevated && h.is_stopped()))
     }
 
-    fn has_elevated(&self, session_id: SessionId) -> bool {
-        self.ops
-            .lock()
-            .unwrap()
+    pub(crate) fn has_elevated(&self, session_id: SessionId) -> bool {
+        lock_tolerating_poison(&self.ops)
             .get(&session_id)
             .is_some_and(|l| l.iter().any(|h| h.0.elevated))
     }
@@ -372,18 +398,22 @@ impl FileOps {
         session_id: SessionId,
         timeout: Duration,
     ) -> bool {
-        let wait = async {
-            loop {
-                let notified = self.ended.notified();
-                tokio::pin!(notified);
-                notified.as_mut().enable();
-                if !self.has_elevated(session_id) {
-                    return;
-                }
-                notified.await;
+        tokio::time::timeout(timeout, self.wait_until_elevated_idle(session_id))
+            .await
+            .is_ok()
+    }
+
+    /// Waits, without limit, until no elevated operation of this session runs.
+    pub(crate) async fn wait_until_elevated_idle(&self, session_id: SessionId) {
+        loop {
+            let notified = self.ended.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !self.has_elevated(session_id) {
+                return;
             }
-        };
-        tokio::time::timeout(timeout, wait).await.is_ok()
+            notified.await;
+        }
     }
 }
 

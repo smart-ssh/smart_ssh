@@ -17,7 +17,6 @@ use tauri::{Builder, Wry};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edition {
     Community,
-    #[allow(dead_code)]
     Official,
 }
 
@@ -26,6 +25,9 @@ pub enum Edition {
 /// startet. Community nutzt aktuell keinen (`Wiring::community`s Liste ist
 /// leer) — die Infrastruktur existiert für ein künftiges Official-Binary.
 pub type PluginHook = Box<dyn FnOnce(Builder<Wry>) -> Builder<Wry> + Send>;
+
+/// Factory of an extension plugin that is registered only after unlock.
+pub type UnlockedPlugin = crate::extension_plugins::UnlockedPluginFactory<Wry>;
 
 pub struct Wiring {
     pub entitlements: Arc<dyn EntitlementProvider>,
@@ -36,7 +38,16 @@ pub struct Wiring {
     /// **Im Passwort-Modus** (Master-Passwort, Spec 0101) dürfen Hooks, die
     /// Befehle registrieren, diese erst **nach dem Entsperren** registrieren,
     /// sonst wären sie vor dem Entsperren aufrufbar (ADR 0095 §8).
+    ///
+    /// Hooks here run **before** unlock. Extension plugins with commands that
+    /// need an unlocked app belong in [`Wiring::plugins_after_unlock`].
     pub plugins: Vec<PluginHook>,
+    /// Issue #894 (Spec 0038, section 2): extension plugins registered only
+    /// after unlock (password mode: after the startup gate opened and after
+    /// the core's own plugins; keyring mode: at build time), in order, once
+    /// per process. A failing registration is logged and skipped.
+    /// Community registers none.
+    pub plugins_after_unlock: Vec<UnlockedPlugin>,
     /// Issue #462 (Spec 0038, 2a): extensions that keep their own tables in
     /// the encrypted application database. Their migrations run after the
     /// core migrations and **only after unlock** (never while the app is
@@ -48,13 +59,27 @@ pub struct Wiring {
     /// Community registers none.
     pub services: Vec<Arc<dyn crate::services::BackgroundService>>,
     pub edition: Edition,
+    /// Issue #862: additional UI preference keys (with their value shape)
+    /// the webview may write to the settings store through
+    /// `set_ui_preference`, for an embedding app's own frontend modules.
+    /// Default empty. Registering a security key or an already registered
+    /// key makes the app fail at startup.
+    pub ui_preferences: Vec<crate::ui_preferences::UiPreference>,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
     /// anzeigen. Community liefert keine.
     pub extra_data_paths: Vec<app_logic::data_paths::ExtraDataPath>,
     /// Spec 0038, section 2a: per-server session context section, known
     /// secrets for redaction and removal callbacks. Community has none.
+    ///
+    /// Superseded by [`Wiring::session_extensions`] and will be removed in a
+    /// later release. When set, it counts as the first entry of that list.
     pub session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
+    /// Issue #892 (Spec 0038, section 2a): any number of session extensions,
+    /// in registration order. The core combines them (context sections
+    /// joined, secrets united, removal callbacks to all). Community
+    /// registers none.
+    pub session_extensions: Vec<Arc<dyn app_logic::session_extension::SessionExtension>>,
     /// Issue #504 (ADR 0141, Spec 0038 §2a): content extensions that attach
     /// their own content to user chat messages. The core stores only an
     /// opaque reference and tells them when chat sessions are removed.
@@ -66,13 +91,42 @@ pub struct Wiring {
     /// Issue #464 (Spec 0038, section 2): transforms approved commands and
     /// file content right before they are sent to the server. Community
     /// registers none, so text is sent unchanged.
+    ///
+    /// Superseded by [`Wiring::outgoing_transforms`] and will be removed in a
+    /// later release. When set, it runs first, before the list entries.
     pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    /// Issue #893 (Spec 0038, section 2): several outgoing transforms. They
+    /// run in this order on the approved text; each one receives the output
+    /// of the previous one, the inserted secrets are collected, and the first
+    /// rejection stops the chain. Community registers none.
+    pub outgoing_transforms: Vec<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 
     /// Issue #610 (Spec 0038, section 2): observers told about every
     /// completed AI request of a session (ids, provider, purpose, usage;
     /// never content). Passive: they cannot influence the chat flow.
     /// Community registers none.
     pub ai_usage_observers: Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>,
+
+    /// Issue #1505 (Spec 0057, hook): observers told about the activity of a
+    /// session (started/ended, command proposed/decided/executed, AI message,
+    /// file read/written) as already-redacted events, off the session flow.
+    /// Passive: they cannot influence filter, confirmation or execution. The
+    /// core keeps no activity record; with none registered no event is built.
+    /// Community registers none.
+    pub activity_observers: Vec<Arc<dyn app_logic::activity::ActivityObserver>>,
+
+    /// Issue #1246 (Spec 0038, section 2): decorators that wrap every AI
+    /// provider the app constructs (chat connect, notes, second opinion,
+    /// credential test), applied in registration order. They see type,
+    /// endpoint and model, never the API key. Community registers none.
+    pub ai_provider_decorators: Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
+
+    /// Issue #876 (Spec 0037, section 2): the edition's catalogue of the
+    /// entitlement features it gates. Only these reach the frontend
+    /// (`get_entitlements`, `entitlements:changed`); other ids from the
+    /// provider are dropped. Duplicates are logged and skipped at startup.
+    /// Community registers none.
+    pub entitlement_features: Vec<ssh_manager_core::entitlements::Feature>,
 }
 
 impl Wiring {
@@ -99,14 +153,66 @@ impl Wiring {
             policy_sources: Vec::new(),
             services: Vec::new(),
             plugins: Vec::new(),
+            plugins_after_unlock: Vec::new(),
             db_extensions: Vec::new(),
             edition: Edition::Community,
+            ui_preferences: Vec::new(),
             extra_data_paths: Vec::new(),
             session_extension: None,
+            session_extensions: Vec::new(),
             chat_content_extensions: Vec::new(),
 
             outgoing_transform: None,
+            outgoing_transforms: Vec::new(),
             ai_usage_observers: Vec::new(),
+            activity_observers: Vec::new(),
+            ai_provider_decorators: Vec::new(),
+            entitlement_features: Vec::new(),
+        }
+    }
+}
+
+impl Wiring {
+    /// The single `Option` the rest of the app works with: `None` without
+    /// extensions, the extension itself for exactly one, otherwise a
+    /// [`CompositeSessionExtension`] (legacy field first).
+    pub fn combined_session_extension(
+        &self,
+    ) -> Option<Arc<dyn app_logic::session_extension::SessionExtension>> {
+        let mut all: Vec<_> = self
+            .session_extension
+            .iter()
+            .chain(self.session_extensions.iter())
+            .cloned()
+            .collect();
+        match all.len() {
+            0 => None,
+            1 => all.pop(),
+            _ => Some(Arc::new(
+                app_logic::session_extension::CompositeSessionExtension::new(all),
+            )),
+        }
+    }
+
+    /// Issue #893: the single transform the session gets. The old
+    /// `outgoing_transform` runs first, then `outgoing_transforms` in order.
+    /// Zero transforms give `None` (text is sent as is), one is passed
+    /// through, two or more are combined into a composite.
+    pub fn combined_outgoing_transform(
+        &self,
+    ) -> Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>> {
+        let mut all: Vec<_> = self
+            .outgoing_transform
+            .iter()
+            .chain(self.outgoing_transforms.iter())
+            .cloned()
+            .collect();
+        match all.len() {
+            0 => None,
+            1 => all.pop(),
+            _ => Some(Arc::new(
+                ssh_manager_core::outgoing::CompositeOutgoingTransform::new(all),
+            )),
         }
     }
 }
@@ -115,15 +221,200 @@ impl Wiring {
 mod tests {
     use super::*;
 
+    /// Issue #894: Community registers no plugin after unlock.
+    #[test]
+    fn test_community_registers_no_plugins_after_unlock() {
+        assert!(Wiring::community().plugins_after_unlock.is_empty());
+    }
+
+    /// Issue #892: Community registers no session extension, builds no composite.
+    #[test]
+    fn test_community_builds_no_session_extension() {
+        let w = Wiring::community();
+        assert!(w.session_extensions.is_empty());
+        assert!(w.combined_session_extension().is_none());
+    }
+
+    struct Named(&'static str);
+
+    #[async_trait::async_trait]
+    impl app_logic::session_extension::SessionExtension for Named {
+        async fn context_section(
+            &self,
+            _scope: &app_logic::session_extension::ServerScope,
+            _language: app_logic::system_prompt::PromptLanguage,
+        ) -> Option<String> {
+            Some(self.0.to_string())
+        }
+    }
+
+    /// Issue #892: legacy field and list entry are both active, legacy first.
+    #[tokio::test]
+    async fn test_legacy_field_and_list_entry_are_both_active_legacy_first() {
+        let mut w = Wiring::community();
+        w.session_extension = Some(Arc::new(Named("legacy")));
+        w.session_extensions.push(Arc::new(Named("listed")));
+        let combined = w.combined_session_extension().expect("combined");
+        let scope = app_logic::session_extension::ServerScope {
+            server_id: ssh_manager_core::shared::ServerId::new(),
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        };
+        let text = combined
+            .context_section(&scope, app_logic::system_prompt::PromptLanguage::En)
+            .await
+            .expect("section");
+        assert_eq!(text, "legacy\n\nlisted");
+    }
+
+    /// Issue #892: only the legacy field behaves as before (no wrapper needed).
+    #[tokio::test]
+    async fn test_only_legacy_field_passes_through() {
+        let mut w = Wiring::community();
+        w.session_extension = Some(Arc::new(Named("legacy")));
+        assert!(w.combined_session_extension().is_some());
+    }
+
     /// Issue #504: Community registers no chat content extension.
     #[test]
     fn test_community_registers_no_chat_content_extensions() {
         assert!(Wiring::community().chat_content_extensions.is_empty());
     }
 
+    /// Issue #893: Community registers no outgoing transform, so the session
+    /// gets `None`.
+    #[test]
+    fn test_community_registers_no_outgoing_transforms() {
+        let w = Wiring::community();
+        assert!(w.outgoing_transforms.is_empty());
+        assert!(w.outgoing_transform.is_none());
+        assert!(w.combined_outgoing_transform().is_none());
+    }
+
+    /// Issue #893: zero -> `None`, one -> passed through, two or more ->
+    /// composite; the old field runs first.
+    #[tokio::test]
+    async fn test_combined_outgoing_transform_orders_old_field_first() {
+        use ssh_manager_core::outgoing::{
+            OutgoingKind, OutgoingTransform, Prepared, Rejection, ServerScope,
+        };
+        struct Append(&'static str);
+        #[async_trait::async_trait]
+        impl OutgoingTransform for Append {
+            async fn prepare_outgoing(
+                &self,
+                _: &ServerScope,
+                _: OutgoingKind,
+                text: &str,
+            ) -> Result<Prepared, Rejection> {
+                Ok(Prepared::new(format!("{text}{}", self.0), Vec::new()))
+            }
+        }
+        let scope = ServerScope {
+            server_id: Default::default(),
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        };
+        let run = |t: Arc<dyn OutgoingTransform>| {
+            let scope = scope.clone();
+            async move {
+                use secrecy::ExposeSecret;
+                t.prepare_outgoing(&scope, OutgoingKind::Command, "x")
+                    .await
+                    .unwrap()
+                    .text()
+                    .expose_secret()
+                    .to_string()
+            }
+        };
+
+        let mut w = Wiring::community();
+        w.outgoing_transforms = vec![Arc::new(Append("1"))];
+        assert_eq!(run(w.combined_outgoing_transform().unwrap()).await, "x1");
+
+        let mut w = Wiring::community();
+        w.outgoing_transform = Some(Arc::new(Append("0")));
+        w.outgoing_transforms = vec![Arc::new(Append("1")), Arc::new(Append("2"))];
+        assert_eq!(run(w.combined_outgoing_transform().unwrap()).await, "x012");
+    }
+
     /// Issue #610: Community registers no AI usage observer.
+    #[test]
+    fn test_community_registers_no_ai_provider_decorators() {
+        assert!(Wiring::community().ai_provider_decorators.is_empty());
+    }
+
+    #[test]
+    fn test_community_registers_no_activity_observers() {
+        assert!(Wiring::community().activity_observers.is_empty());
+    }
+
     #[test]
     fn test_community_registers_no_ai_usage_observers() {
         assert!(Wiring::community().ai_usage_observers.is_empty());
+    }
+}
+
+/// The deduplicated catalogue of registered entitlement features, managed as
+/// Tauri state. Filters what the frontend sees.
+pub struct EntitlementCatalogue(Vec<ssh_manager_core::entitlements::Feature>);
+
+impl EntitlementCatalogue {
+    /// Builds the catalogue; logs and skips duplicates.
+    pub fn new(features: Vec<ssh_manager_core::entitlements::Feature>) -> Self {
+        let mut unique: Vec<ssh_manager_core::entitlements::Feature> = Vec::new();
+        for f in features {
+            if unique.contains(&f) {
+                tracing::warn!(feature = %f, "duplicate entitlement feature skipped");
+            } else {
+                unique.push(f);
+            }
+        }
+        Self(unique)
+    }
+
+    /// The entitlements as the frontend may see them: only registered
+    /// features; unknown ids are dropped (logged at debug, id only).
+    pub fn filter(
+        &self,
+        mut e: ssh_manager_core::entitlements::Entitlements,
+    ) -> ssh_manager_core::entitlements::Entitlements {
+        for f in &e.features {
+            if !self.0.contains(f) {
+                tracing::debug!(feature = %f, "unregistered entitlement feature dropped");
+            }
+        }
+        e.retain_catalogue(&self.0);
+        e
+    }
+}
+
+#[cfg(test)]
+mod entitlement_catalogue_tests {
+    use super::*;
+    use ssh_manager_core::entitlements::{Entitlements, Feature};
+
+    const A: Feature = Feature::new("feature_a");
+    const B: Feature = Feature::new("feature_b");
+
+    fn granting_a_and_b() -> Entitlements {
+        let mut e = Entitlements::free();
+        e.features.insert(A);
+        e.features.insert(B);
+        e
+    }
+
+    #[test]
+    fn test_registered_catalogue_passes_only_its_features() {
+        let c = EntitlementCatalogue::new(vec![A, A]);
+        let out = c.filter(granting_a_and_b());
+        assert_eq!(out.features.len(), 1);
+        assert!(out.has(&A));
+    }
+
+    #[test]
+    fn test_community_catalogue_returns_no_features() {
+        let c = EntitlementCatalogue::new(Wiring::community().entitlement_features);
+        assert!(c.filter(granting_a_and_b()).features.is_empty());
     }
 }

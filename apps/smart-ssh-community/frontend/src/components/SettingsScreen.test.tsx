@@ -12,56 +12,46 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
-import { SUPPORTED_LANGUAGES } from "../languages";
+import { SUPPORTED_LANGUAGES } from "../lib/languages";
 import { testI18n } from "../testI18n";
 import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
 import { SettingsScreen } from "./SettingsScreen";
+import { SettingsSectionAction } from "./SettingsSectionAction";
 
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  addAiProvider: vi.fn(),
-  deleteAiProvider: vi.fn(),
-  discoverModels: vi.fn(),
-  fetchAttestationInfo: vi.fn(),
-  setActiveAiProvider: vi.fn(),
-  openLogDirectory: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-  // Spec 0069, Teil B1: `AiProviderSettings` (gerendert unter "KI-Provider")
-  // löst beim Mounten ohne vorhandenen Ollama-Provider automatisch eine
-  // Hintergrund-Probe aus (`discoverModels` → im Fehlerfall
-  // `commandErrorCode`) — ohne diesen Eintrag bricht die Probe mit einer
-  // "No commandErrorCode export" Unhandled Rejection ab.
-  commandErrorCode: (err: unknown) => {
-    if (typeof err === "object" && err !== null && "code" in err) {
-      const code = (err as { code: unknown }).code;
-      if (typeof code === "string") return code;
-    }
-    return null;
-  },
-  // Spec 0055, Teil 3: die Regressionstests unten klicken tatsächlich in
-  // "Sitzungen & Daten"/"MCP-Server" hinein (anders als die Tests oben, die
-  // nur die Nav-Einträge prüfen) — beide Sektionen laden beim Mounten
-  // echte Daten.
-  getChatSessionRetentionDays: vi.fn(() => Promise.resolve(null)),
-  setChatSessionRetentionDays: vi.fn(),
-  getMcpServerSettings: vi.fn(() =>
-    Promise.resolve({
-      enabled: false,
-      endpoint: "http://127.0.0.1:0",
-      token: "",
-      confirmTimeoutSecs: 120,
-      allowedServerIds: [],
-    }),
-  ),
-  listServers: vi.fn(() => Promise.resolve([])),
-  regenerateMcpServerToken: vi.fn(),
-  setMcpServerAllowedServers: vi.fn(),
-  setMcpServerConfirmTimeoutSecs: vi.fn(),
-  setMcpServerEnabled: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    addAiProvider: vi.fn(),
+    deleteAiProvider: vi.fn(),
+    discoverModels: vi.fn(),
+    fetchAttestationInfo: vi.fn(),
+    setActiveAiProvider: vi.fn(),
+    openLogDirectory: vi.fn(),
+    // Spec 0055, Teil 3: die Regressionstests unten klicken tatsächlich in
+    // "Sitzungen & Daten"/"MCP-Server" hinein (anders als die Tests oben, die
+    // nur die Nav-Einträge prüfen) — beide Sektionen laden beim Mounten
+    // echte Daten.
+    getChatSessionRetentionDays: vi.fn(() => Promise.resolve(null)),
+    setChatSessionRetentionDays: vi.fn(),
+    getMcpServerSettings: vi.fn(() =>
+      Promise.resolve({
+        enabled: false,
+        endpoint: "http://127.0.0.1:0",
+        token: "",
+        confirmTimeoutSecs: 120,
+        allowedServerIds: [],
+      }),
+    ),
+    listServers: vi.fn(() => Promise.resolve([])),
+    regenerateMcpServerToken: vi.fn(),
+    setMcpServerAllowedServers: vi.fn(),
+    setMcpServerConfirmTimeoutSecs: vi.fn(),
+    setMcpServerEnabled: vi.fn(),
+  }),
+);
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
   saveRiskClassifierSettings: vi.fn(),
   loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),
@@ -98,12 +88,12 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
 
     renderSettingsScreen();
 
-    await waitFor(() => expect(screen.getByText("Test-Sektion")).toBeInTheDocument());
+    expect(await screen.findByText("Test-Sektion")).toBeInTheDocument();
     expect(screen.queryByText("test-section-content")).not.toBeInTheDocument();
 
     screen.getByText("Test-Sektion").click();
 
-    await waitFor(() => expect(screen.getByText("test-section-content")).toBeInTheDocument());
+    expect(await screen.findByText("test-section-content")).toBeInTheDocument();
   });
 
   it("falls back to the id as the nav label when a registered section has no label", async () => {
@@ -111,7 +101,7 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
 
     renderSettingsScreen();
 
-    await waitFor(() => expect(screen.getByText("unlabeled-section")).toBeInTheDocument());
+    expect(await screen.findByText("unlabeled-section")).toBeInTheDocument();
   });
 
   it("still shows the built-in categories alongside registered sections", async () => {
@@ -122,6 +112,28 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
     await waitFor(() => expect(screen.getAllByText("KI-Provider").length).toBeGreaterThan(0));
     expect(screen.getByText("Anzeige & Sprache")).toBeInTheDocument();
     expect(screen.getByText("Diagnose")).toBeInTheDocument();
+  });
+});
+
+describe("SettingsScreen failing section (issue #880)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("does not show a section that throws; the other sections stay usable", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken settings section");
+    };
+    registerSettingsSection({ id: "bad-section", label: "Bad", component: Broken });
+    registerSettingsSection({ id: "ok-section", label: "Fine", component: TestSection });
+    renderSettingsScreen();
+    fireEvent.click(await screen.findByText("Bad"));
+    await waitFor(() =>
+      expect(spy.mock.calls.some((c) => String(c[0]).includes("settings-section:bad-section"))).toBe(true),
+    );
+    fireEvent.click(screen.getByText("Fine"));
+    expect(await screen.findByText("test-section-content")).toBeInTheDocument();
+    spy.mockRestore();
   });
 });
 
@@ -149,7 +161,7 @@ describe("SettingsScreen late-registered sections (issue #243)", () => {
   it("keeps the selected category when a section is registered later", async () => {
     registerSettingsSection({ id: "early-section", label: "Frueh-Sektion", component: TestSection });
     renderSettingsScreen();
-    await waitFor(() => expect(screen.getByText("Frueh-Sektion")).toBeInTheDocument());
+    expect(await screen.findByText("Frueh-Sektion")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Frueh-Sektion" }));
     expect(screen.getByRole("button", { name: "Frueh-Sektion" })).toHaveAttribute(
       "aria-current",
@@ -213,7 +225,7 @@ describe("SettingsScreen section headings (Spec 0055, Teil 3)", () => {
     fireEvent.click(await screen.findByText(categoryLabel));
     await waitForSectionContent();
     const headings = screen.getAllByRole("heading");
-    expect(headings).toHaveLength(2); // "Einstellungen" (h2) + Kategorie-Titel (h3)
+    expect(headings).toHaveLength(2); // "Einstellungen" (h1) + Kategorie-Titel (h2)
   };
 
   it("'Anzeige & Sprache' (LanguageSettings) shows the category title exactly once", async () => {
@@ -384,5 +396,40 @@ describe("SettingsScreen keyboard behaviour (issue #385)", () => {
     view.unmount();
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+});
+
+describe("SettingsScreen shell (Issue #1376)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("numbers the categories by position and shows the index in the section header", async () => {
+    renderSettingsScreen();
+    const nav = await screen.findByRole("navigation");
+    const rows = within(nav).getAllByRole("button");
+    expect(rows[0]).toHaveTextContent("01");
+    expect(rows[1]).toHaveTextContent("02");
+    fireEvent.click(rows[1]);
+    const h2 = screen.getByRole("heading", { level: 2 });
+    expect(h2.previousElementSibling).toHaveTextContent("02");
+  });
+
+  it("renders an action passed by a section into the section header", async () => {
+    registerSettingsSection({
+      id: "ext-action",
+      label: "Ext action",
+      component: () => <SettingsSectionAction><button type="button">+ Add thing</button></SettingsSectionAction>,
+    });
+    renderSettingsScreen();
+    fireEvent.click(await screen.findByText("Ext action"));
+    const slot = await screen.findByTestId("settings-section-actions");
+    expect(await within(slot).findByRole("button", { name: "+ Add thing" })).toBeInTheDocument();
+  });
+
+  it("is not a modal frame: no dimmed backdrop class", async () => {
+    renderSettingsScreen();
+    await screen.findByRole("navigation");
+    const backdrop = document.querySelector("[data-modal-backdrop]")!;
+    expect(backdrop.className).not.toMatch(/bg-overlay/);
   });
 });

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, confirmHostKey } from "../api";
-import { translateErrorCode } from "../errorCodes";
-import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "../events";
-import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
-import { showToast } from "../toastBus";
-import type { HostKeyVerificationNeededEvent } from "../types";
+import { confirmHostKey } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
+import { onHostKeyVerificationEnded, onHostKeyVerificationNeeded } from "../api/events";
+import { subscribeHostKeyPromptClear } from "../buses/hostKeyPromptBus";
+import { showToast } from "../buses/toastBus";
+import type { HostKeyVerificationNeededEvent } from "../api/types";
 import { HostKeyDialog } from "./HostKeyDialog";
 
 /**
@@ -82,7 +82,7 @@ export function HostKeyPromptHost() {
     } catch (err) {
       showToast({
         kind: "error",
-        message: translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+        message: commandErrorText(t, err),
       });
     }
   };

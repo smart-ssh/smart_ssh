@@ -1,7 +1,7 @@
 # 0018-ai-generated-document-export-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

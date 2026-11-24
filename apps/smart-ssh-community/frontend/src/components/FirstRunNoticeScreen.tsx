@@ -1,11 +1,12 @@
-import { Component as ReactComponent, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listFirstRunNoticeExtensions,
+  subscribeFirstRunNoticeExtensions,
   type FirstRunNoticeContinueHandler,
   type FirstRunNoticeExtensionContext,
 } from "../extensions/registry";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, ErrorBoundary } from "./ui";
 
 interface FirstRunNoticeScreenProps {
   /** Aufgerufen bei "Weiter". Der Aufrufer speichert die Pflicht-
@@ -32,34 +33,6 @@ function runContinueHandlers(handlers: [string, FirstRunNoticeContinueHandler][]
   }
 }
 
-interface ExtensionBoundaryProps {
-  id: string;
-  onError: (id: string, error: unknown, info: ErrorInfo) => void;
-  children: ReactNode;
-}
-
-/** Fängt Render-, Lifecycle- und Effect-Fehler genau einer Erweiterung ab
- * (Spec 0031, Abschnitt 6, issue #159). Danach rendert sie nichts mehr für
- * diese Erweiterung — auch nicht den umgebenden Bereich —, damit
- * Hinweistext, Pflicht-Checkbox und "Weiter" bedienbar bleiben. Ohne sie
- * würde ein Wurf den ganzen Baum aushängen und damit die einzige
- * Möglichkeit, den Hinweis zu bestätigen. */
-class ExtensionBoundary extends ReactComponent<ExtensionBoundaryProps, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: unknown, info: ErrorInfo): void {
-    this.props.onError(this.props.id, error, info);
-  }
-
-  render(): ReactNode {
-    return this.state.failed ? null : this.props.children;
-  }
-}
-
 /**
  * Spec 0031: Zustimmungs-Screen vor der ersten Server-Verbindung
  * (Verantwortung für bestätigte Kommandos + Hinweis auf fehlende
@@ -73,30 +46,43 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   const [checked, setChecked] = useState(false);
   const checkboxRef = useRef<HTMLInputElement>(null);
 
-  // Spec 0031, Abschnitt 6: Erweiterungen werden beim Öffnen einmal
-  // gelesen. Jede bekommt nur `onContinue` — keinen Zugriff auf
+  // Spec 0031, Abschnitt 6: Erweiterungen werden reaktiv gelesen
+  // (Registrierung/Entfernen bei offenem Hinweis wirkt sofort). Jede bekommt nur `onContinue` — keinen Zugriff auf
   // `checked`, den Text oder den "Weiter"-Button.
   const continueHandlers = useRef(new Map<string, FirstRunNoticeContinueHandler>());
   const handlersRan = useRef(false);
   // Erweiterungen, deren Darstellung gescheitert ist: ihr Handler wird
   // verworfen und darf auch später nicht mehr registriert werden.
   const failedExtensions = useRef(new Set<string>());
-  const [extensions] = useState(() =>
-    listFirstRunNoticeExtensions().map(({ id, Component }) => {
-      const context: FirstRunNoticeExtensionContext = {
-        onContinue: (handler) => {
-          if (failedExtensions.current.has(id)) return;
-          continueHandlers.current.set(id, handler);
-        },
-      };
-      return { id, Component, context };
-    }),
+  const registered = useSyncExternalStore(
+    subscribeFirstRunNoticeExtensions,
+    listFirstRunNoticeExtensions,
   );
+  const extensions = useMemo(
+    () =>
+      registered.map(({ id, Component }) => {
+        const context: FirstRunNoticeExtensionContext = {
+          onContinue: (handler) => {
+            if (failedExtensions.current.has(id)) return;
+            continueHandlers.current.set(id, handler);
+          },
+        };
+        return { id, Component, context };
+      }),
+    [registered],
+  );
+  // An extension removed while the notice is open no longer runs its handler.
+  useEffect(() => {
+    const ids = new Set(registered.map((e) => e.id));
+    for (const id of Array.from(continueHandlers.current.keys())) {
+      if (!ids.has(id)) continueHandlers.current.delete(id);
+    }
+  }, [registered]);
 
-  const onExtensionError = (id: string, error: unknown) => {
+  // The boundary itself logs the failure (once, with the extension id).
+  const onExtensionError = (id: string) => {
     failedExtensions.current.add(id);
     continueHandlers.current.delete(id);
-    console.error(`First-run notice extension "${id}" failed to render:`, error);
   };
 
   const afterStored = () => {
@@ -113,6 +99,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   return (
     <DialogFrame
       layer="app"
+      ticks="accent"
       title={t("firstRunNotice.title")}
       onClose={() => {}}
       initialFocusRef={checkboxRef}
@@ -128,25 +115,28 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
     >
       <p className="mb-3">{t("firstRunNotice.responsibilityText")}</p>
       <p className="mb-3">{t("firstRunNotice.encryptionText")}</p>
-      <label className="flex items-start gap-2 text-slate-200">
+      <label className="flex items-start gap-2 text-fg-soft">
         <input
           ref={checkboxRef}
           type="checkbox"
           checked={checked}
           onChange={(e) => setChecked(e.target.checked)}
-          className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+          className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-fg"
         />
         {t("firstRunNotice.checkboxLabel")}
       </label>
       {extensions.map(({ id, Component, context }) => (
-        <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
+        <ErrorBoundary key={id} id={id}
+          label="First-run notice extension"
+          onError={onExtensionError}
+        >
           <section
             data-testid={`first-run-notice-extension-${id}`}
-            className="mt-3 min-w-0 max-w-full break-words border-t border-slate-700 pt-3 text-slate-300"
+            className="mt-3 min-w-0 max-w-full break-words border-t border-border pt-3 text-fg-muted"
           >
             <Component {...context} />
           </section>
-        </ExtensionBoundary>
+        </ErrorBoundary>
       ))}
     </DialogFrame>
   );

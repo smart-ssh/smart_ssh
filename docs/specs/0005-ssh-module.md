@@ -35,7 +35,13 @@ hängt nicht an ihrem Speicherort.
 Smart SSH bringt seinen SSH-Client mit. Ein installiertes OpenSSH oder
 `libssh` ist weder nötig noch wird es benutzt; das Verhalten ist auf Windows,
 macOS und Linux gleich. Ein SSH-Agent des Systems wird nur für die Anmeldeart
-„Agent" befragt (Spec 0003).
+„Agent" befragt (Spec 0003). Hält der Agent mehrere Identitäten, probiert
+Smart SSH sie in der Reihenfolge des Agents der Reihe nach durch, bis der Server
+eine akzeptiert; die Anmeldung endet mit dem ersten Treffer. Wird keine
+akzeptiert, schlägt die Anmeldung fehl. Trennt der Server vorher (etwa wegen
+`MaxAuthTries`), endet sie mit diesem Verbindungsfehler. Ein Zertifikat im
+Agent wird als Zertifikat angeboten (der Agent signiert), sodass auch Server
+anmelden, die nur der Zertifizierungsstelle vertrauen.
 
 ## 4. Betriebsarten im Einzelnen
 
@@ -79,6 +85,12 @@ verbunden:
 - Eine Kette, die auf sich selbst zurückführt, endet vor jedem Netzwerkzugriff
   mit dem Fehler „Jump-Host-Zyklus". Ein Jump-Host, der nicht mehr gefunden
   wird, endet mit einem Verbindungsfehler, der ihn nennt.
+- Verweigert eine Bastion die Weiterleitung zum nächsten Hop (z. B. wegen
+  `AllowTcpForwarding no`), gilt der Schritt als gescheitert **an der
+  Bastion**: Verbindungsprotokoll und Fehlermeldung nennen die Bastion als
+  verweigernden Hop. Schlägt dagegen das Erreichen des Ziels fehl
+  (unauflösbarer Host, geschlossener Port), nennt der Fehler weiterhin den
+  Ziel-Hop.
 - Der lokale Pseudo-Server kann kein Jump-Host sein (Spec 0032).
 
 Befehle, Dateizugriffe und das Terminal laufen auf dem **letzten** Hop; die
@@ -173,6 +185,7 @@ verständliche Meldung zeigen kann (Texte und Codes: Spec 0069, Spec 0024):
 | Host-Key abgelehnt | siehe Abschnitt 6 |
 | Zeitüberschreitung | eine Zeitgrenze (unten) ist abgelaufen |
 | Jump-Host-Zyklus | siehe Abschnitt 5 |
+| Kein gemeinsamer Algorithmus | siehe Abschnitt 7b |
 | Zugangsdaten nicht auflösbar | Eintrag fehlt oder ist ungültig |
 | Secret-Speicher nicht erreichbar | der Speicher der Zugangsdaten hat nicht geantwortet (Spec 0098, Spec 0101) |
 | Kanalfehler | Fehler bei einem Kommando, einer Shell oder einem Dateizugriff |
@@ -192,6 +205,86 @@ Schritt-Protokoll geschrieben, das im Fehlerfall und beim Verbindungstest
 zugeklappt unter der Meldung steht (ADR 0110). Es enthält keine
 Zugangsdaten, nur die Art der Anmeldung, und geht nie in die Log-Datei oder den
 Diagnose-Export.
+
+## 7a. Interaktive und mehrstufige Anmeldung
+
+Die Anmeldung an einem Hop kennt neben Schlüssel, Agent und Passwort das
+Verfahren `keyboard-interactive` (Zwei-Faktor-Codes, PAM-Abfragen) und
+mehrstufige Anmeldungen, bei denen der Server eine Methode nur als Teilerfolg
+annimmt und weitere verlangt (etwa `publickey` und danach
+`keyboard-interactive`, oder die umgekehrte Reihenfolge).
+
+- **Ablauf.** Die zuerst verwendete Methode ergibt sich aus dem Profil. Meldet
+  der Server einen Teilerfolg, werden die danach angebotenen Methoden der Reihe
+  nach versucht. Jeder Versuch und jede Abfragerunde steht im Schritt-Protokoll
+  (Methode, Nummer der Runde, Texte der Abfrage, Teilerfolg, noch angebotene
+  Methoden).
+- **Abfragen.** Bei `keyboard-interactive` schickt der Server beliebig viele
+  Runden mit je null oder mehr Eingabefeldern (mit oder ohne Anzeige der
+  Eingabe). Die Antworten kommen vom Nutzer; die Texte der Abfrage stammen vom
+  Server und werden nur als Text angezeigt, nie als Anweisung gedeutet.
+- **Gespeichertes Passwort.** Hat das Profil ein gespeichertes Passwort und
+  bietet der Server `password` nicht an, wohl aber `keyboard-interactive`,
+  beantwortet das gespeicherte Passwort einmal ein einzelnes Eingabefeld ohne
+  Anzeige. Alles andere wird dem Nutzer vorgelegt. Das Passwort wird nie an
+  eine Abfrage mit sichtbarer Eingabe oder mit mehreren Feldern gesendet.
+- **Keine Antwortmöglichkeit.** Gibt es keinen Weg, eine Abfrage zu
+  beantworten, oder bricht der Nutzer ab, endet der Versuch als „Anmeldung
+  fehlgeschlagen"; die Meldung nennt die vom Server noch angebotenen Methoden.
+  Antwortet der Nutzer 5 Minuten lang nicht, gilt das als Abbruch. Ein Aufbau
+  ohne Nutzer (automatischer Wiederaufbau, Verbindungstest) hat keinen solchen
+  Weg und fragt nie.
+- **Anmeldedialog.** Verlangt der Server bei einem vom Nutzer ausgelösten
+  Verbindungsaufbau eine Eingabe, öffnet die App einen Dialog „Anmeldung bei
+  {Hop}" (Hop als `Benutzer@Host:Port`, bei mehreren Hops der Hop, der fragt).
+  Er zeigt Name und Hinweistext des Servers als reinen Text (kein HTML, kein
+  Markdown), je Abfrage ein Feld — verdeckt, wenn der Server keine Anzeige der
+  Eingabe wünscht — und den Hinweis, dass die Angaben nur zur Anmeldung dienen
+  und nicht gespeichert werden. Der Fokus liegt im ersten Feld; Enter sendet die
+  Antworten, Escape und „Abbrechen" brechen die Anmeldung ab (Fehler wie bei
+  fehlender Antwortmöglichkeit, keine weitere Abfrage). Eine weitere Runde oder
+  ein weiterer Hop öffnet den Dialog erneut mit den neuen Abfragen. Die
+  Antworten werden einmal gesendet, nicht im Zustand der Oberfläche gehalten
+  und nach dem Senden aus den Feldern gelöscht. Fragen mehrere Verbindungsaufbauten gleichzeitig, werden ihre Dialoge
+  nacheinander in der Reihenfolge des Eintreffens gezeigt; der offene Dialog wird
+  nie ersetzt, und der nächste öffnet sich erst, wenn der vorige beantwortet oder
+  abgebrochen ist (Fokus im ersten Feld). Endet eine wartende Abfrage (Frist,
+  abgebrochener Aufbau), verschwindet sie aus der Warteschlange. Wird der Aufbau abgebrochen
+  oder läuft die Frist ab, schließt sich der Dialog von selbst.
+- **Grenzen.** Höchstens 10 Abfragerunden je Methode und 3 Teilerfolge je Hop;
+  danach endet die Anmeldung als fehlgeschlagen. Die Zeitgrenze von 60 Sekunden
+  für die Anmeldung (Abschnitt 7) ruht, solange auf den Nutzer gewartet wird.
+- **Geheimnisse.** Antworten und Passwörter stehen weder im Schritt-Protokoll
+  noch in Logs oder Fehlermeldungen.
+
+## 7b. Veraltete Algorithmen
+
+Die App verbindet sich auch mit älteren Servern und Geräten, die nur
+veraltete Algorithmen sprechen.
+
+- Angeboten werden zuerst immer die aktuellen Algorithmen; veraltete stehen
+  ausschließlich dahinter. Ein moderner Server handelt deshalb nie einen
+  veralteten Algorithmus aus.
+- Als veraltet gelten: die Schlüsselaustausche `diffie-hellman-group14-sha1`,
+  `diffie-hellman-group-exchange-sha1` und `diffie-hellman-group1-sha1`, der
+  Host-Key- und Anmelde-Signaturalgorithmus `ssh-rsa` (RSA mit SHA-1), die
+  CBC-Verschlüsselungen (`aes128-cbc`, `aes192-cbc`, `aes256-cbc`,
+  `3des-cbc`) und die MACs `hmac-sha1` und `hmac-sha1-etm@openssh.com`.
+  Dasselbe gilt für jeden Hop einer Kette.
+- Wird mit dem Server ein veralteter Algorithmus ausgehandelt, oder
+  unterstützt er die strikte Schlüsselaustausch-Erweiterung nicht
+  (Schutz vor dem Terrapin-Angriff), bleibt die Verbindung bestehen. Die
+  Oberfläche zeigt einen Hinweis, der die Algorithmen nennt und rät, die
+  SSH-Software des Servers zu aktualisieren; bei einer Kette nennt er den
+  betroffenen Hop. Im Schritt-Protokoll (Spec 0112) steht je betroffenem Hop
+  ein Schritt „Veraltete Algorithmen“ mit Status `warning` und den Namen.
+  Wird ein Anmeldeschlüssel mit `ssh-rsa` signiert, zählt auch das dazu.
+- Es gibt keine Einstellung, die einen Server mit veralteten Algorithmen
+  ablehnt oder den Hinweis unterdrückt.
+- Gibt es für den Schlüsselaustausch, den Host-Key, die Verschlüsselung oder
+  den MAC keinen gemeinsamen Algorithmus, scheitert die Verbindung vor dem
+  Senden von Zugangsdaten mit dem Code `SSH_NO_COMMON_ALGORITHM`. Die Meldung
+  nennt Hop, Art und die Angebote des Servers.
 
 ## 8. Prüfbarkeit
 
@@ -217,6 +310,8 @@ Docker-Container oder ein externer Server ist dafür nicht nötig.
   nächsten nicht vertrauenswürdig.
 - Ein Fehler im Fehlerpfad (Schreibfehler der Ablage, unlesbarer Schlüssel
   des Servers) endet als Fehler der Verbindung, nie als stilles „vertraut".
+- Veraltete Algorithmen werden nur angeboten, wenn die aktuellen nicht
+  reichen, und jede Aushandlung eines veralteten wird dem Nutzer gezeigt.
 - Das Schritt-Protokoll beobachtet nur; keine Vertrauens- oder
   Anmeldeentscheidung hängt an ihm.
 
@@ -225,7 +320,7 @@ Docker-Container oder ein externer Server ist dafür nicht nötig.
 - **Kein automatischer Wiederaufbau.** Reißt die Verbindung ab, schlagen
   Kommandos und Dateizugriffe mit „Sitzung verloren" fehl. Der Tab zeigt
   „getrennt", sobald das Terminal endet; ohne geöffnetes Terminal bleibt der
-  Statuspunkt auf „verbunden", bis der Tab geschlossen wird (Spec 0017). Der
+  Statusquadrat auf „verbunden", bis der Tab geschlossen wird (Spec 0017). Der
   Nutzer schließt den Tab und verbindet neu.
 - **Keine geteilten Verbindungen.** Ein Server-Tab hat seine eigene Verbindung;
   mehrere Tabs zum selben Server oder ein Pool werden nicht angeboten.

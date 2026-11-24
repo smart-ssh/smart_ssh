@@ -1,0 +1,4 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+Banner /etc/ssh/test-banner
+PermitRootLogin no

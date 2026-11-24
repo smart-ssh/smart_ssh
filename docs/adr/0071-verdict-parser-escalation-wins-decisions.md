@@ -1,6 +1,9 @@
 # ADR 0071: Urteils-Parser der Zweitmeinung — Entscheidungen bei der Umsetzung von Spec 0074
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0074-verdict-parser-escalation-wins.md, ADR 0024
 („nur Eskalation, nie Abschwächung"), Spec 0026 Abschnitt 3, Spec 0039
 Abschnitt 5.2

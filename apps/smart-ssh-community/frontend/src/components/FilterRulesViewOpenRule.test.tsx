@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { RuleDto } from "../types";
+import type { RuleDto } from "../api/types";
 import { FilterRulesView } from "./FilterRulesView";
 
 const rules: RuleDto[] = [
@@ -11,13 +11,14 @@ const rules: RuleDto[] = [
   { id: "r2", patternType: "glob", patternValue: "df *", action: "Allow", scope: "Global", priority: 1, patternError: null },
 ];
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
-  listRules: () => Promise.resolve(rules),
-  listServers: () => Promise.resolve([]),
-  listKnownTags: () => Promise.resolve([]),
-  listHardBlacklist: () => Promise.resolve([]),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listRules: () => Promise.resolve(rules),
+    listServers: () => Promise.resolve([]),
+    listKnownTags: () => Promise.resolve([]),
+    listHardBlacklist: () => Promise.resolve([]),
+  }),
+);
 
 function renderView(initialRuleId: string | null, onConsumed = vi.fn()) {
   render(
@@ -38,6 +39,8 @@ describe("FilterRulesView initialRuleId (issue #696)", () => {
   it("ignores an unknown rule id but still consumes the request", async () => {
     const consumed = renderView("gone");
     await waitFor(() => expect(consumed).toHaveBeenCalled());
+    // The rule list is rendered (loaded) before the absence of an opened form means anything.
+    expect(await screen.findByText("df *")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("df *")).toBeNull();
   });
 });

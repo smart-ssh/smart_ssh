@@ -1,6 +1,9 @@
 # ADR 0117 — Web-Recherche über die serverseitigen Werkzeuge des Providers
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0105, Issue #162
 
 ## Kontext

@@ -1,17 +1,19 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   backupKeyStatus,
   cancelBackupImport,
   commandErrorCode,
-  commandErrorMessage,
   confirmBackupImport,
   pickBackupImportFile,
+  pickBackupSafetyDir,
   startBackupImport,
-} from "../api";
-import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+} from "../api/api";
+import type { BackupCountsDto, BackupImportPreviewDto, BackupImportSummaryDto } from "../api/api";
+import { platformCapabilities, usePlatform } from "../lib/platform";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon } from "./ui";
 import { BackupKeySetup } from "./BackupKeySetup";
 
 interface Props {
@@ -20,7 +22,7 @@ interface Props {
   onRestored: () => void;
 }
 
-const ERROR_KEYS: Record<string, string> = {
+const ERROR_KEYS: Record<string, TranslationKey> = {
   BACKUP_CANNOT_OPEN: "backup.errors.cannotOpen",
   BACKUP_CODE_TYPO: "backup.errors.typo",
   BACKUP_NOT_A_BACKUP: "backup.errors.notBackup",
@@ -33,6 +35,7 @@ const COUNT_ROWS: (keyof BackupCountsDto)[] = ["servers", "groups", "rules", "no
  * The secret is sent once and dropped from state right after the call. */
 export function BackupImportDialog({ onClose, onRestored }: Props) {
   const { t } = useTranslation();
+  const { folderPicker } = platformCapabilities(usePlatform());
   const [fileName, setFileName] = useState<string | null>(null);
   const [kind, setKind] = useState<"code" | "passphrase">("code");
   const [secret, setSecret] = useState("");
@@ -43,24 +46,34 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
   const [needsKey, setNeedsKey] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const finished = useRef(false);
+  const mounted = useRef(true);
+  // A failed file choice: persistent (not cleared by the code/passphrase
+  // switch) and answered by "Choose file again".
+  const [pickError, setPickError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const pick = (initial: boolean) => {
+    setPickError(null);
     pickBackupImportFile(t("backup.import.pickTitle"))
       .then((name) => {
-        if (cancelled) return;
-        if (name === null) onClose();
-        else setFileName(name);
+        if (!mounted.current) return;
+        if (name !== null) setFileName(name);
+        else if (initial) onClose();
+        else if (fileName === "") setPickError(t("backup.import.pickFailed"));
       })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(commandErrorMessage(err));
+      .catch(() => {
+        if (!mounted.current) return;
         setFileName("");
+        setPickError(t("backup.import.pickFailed"));
       });
+  };
+
+  useEffect(() => {
+    mounted.current = true;
+    pick(true);
     return () => {
-      cancelled = true;
+      mounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens the file picker once on mount
   }, []);
 
   const describe = (err: unknown) => {
@@ -91,6 +104,22 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       setError(describe(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const changeSafetyDir = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const dir = await pickBackupSafetyDir(t("backup.confirm.pickDirTitle"));
+      if (dir !== null && mounted.current) {
+        setPreview((p) => (p ? { ...p, safetyBackupDir: dir } : p));
+      }
+    } catch {
+      if (mounted.current) setError(t("backup.confirm.changeSafetyDirFailed"));
+    } finally {
+      if (mounted.current) setBusy(false);
     }
   };
 
@@ -136,10 +165,11 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
     return (
       <DialogFrame
         layer="app"
+        icon={<Icon name="file-check" />}
         title={t("backup.summary.title")}
         onClose={done}
         actions={
-          <Button variant="primary" className="narrow:min-h-11" onClick={done}>
+          <Button variant="primary" onClick={done}>
             {t("backup.summary.done")}
           </Button>
         }
@@ -159,14 +189,16 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       <DialogFrame
         layer="app"
         role="alertdialog"
+        tone="danger"
+        icon={<Icon name="warn" />}
         title={t("backup.confirm.title")}
         onClose={close}
         actions={
           <>
-            <Button className="narrow:min-h-11" onClick={close} disabled={busy}>
+            <Button onClick={close} disabled={busy}>
               {t("common.cancel")}
             </Button>
-            <Button variant="danger" className="narrow:min-h-11" onClick={() => void confirm()} disabled={busy}>
+            <Button variant="danger" onClick={() => void confirm()} disabled={busy}>
               {t("backup.confirm.replace")}
             </Button>
           </>
@@ -194,7 +226,12 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           </table>
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
-          {error && <p role="alert" className="text-red-300">{error}</p>}
+          {folderPicker && (
+            <Button type="button" onClick={() => void changeSafetyDir()} disabled={busy}>
+              {t("backup.confirm.changeSafetyDir")}
+            </Button>
+          )}
+          {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
         </div>
       </DialogFrame>
     );
@@ -203,6 +240,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="import" />}
       title={t("backup.import.title")}
       onClose={close}
       initialFocusRef={inputRef}
@@ -212,21 +250,34 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       }}
       actions={
         <>
-          <Button type="button" className="narrow:min-h-11" onClick={close}>
+          <Button type="button" onClick={close}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={busy || secret.trim() === "" || fileName === ""}>
+          <Button type="submit" variant="primary" disabled={busy || secret.trim() === "" || fileName === ""}>
             {t("backup.import.open")}
           </Button>
         </>
       }
     >
       <div className="space-y-3 break-words">
+        {pickError && (
+          <div role="alert" className="space-y-2 text-danger-fg-soft">
+            <p>{pickError}</p>
+            <Button type="button" onClick={() => pick(false)}>
+              {t("backup.import.chooseAgain")}
+            </Button>
+          </div>
+        )}
         {fileName !== "" && <p>{t("backup.import.file", { name: fileName })}</p>}
-        <fieldset className="flex flex-wrap gap-4">
-          <legend className="sr-only">{t("backup.import.kind")}</legend>
+        <fieldset className="grid gap-2 border-t border-border pt-3">
+          <legend className="text-label pr-2">{t("backup.import.kind")}</legend>
           {(["code", "passphrase"] as const).map((k) => (
-            <label key={k} className="flex items-center gap-2 narrow:min-h-11">
+            <label
+              key={k}
+              className={`flex items-center gap-2 border px-3 py-2 narrow:min-h-11 ${
+                kind === k ? "border-accent bg-surface-hover" : "border-border-strong"
+              }`}
+            >
               <input
                 type="radio"
                 name="backup-secret-kind"

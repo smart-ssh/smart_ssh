@@ -6,19 +6,32 @@ live in `apps/smart-ssh-community/frontend/src/components/ui/` (`Button`,
 hand-written Tailwind class strings. Behaviour of the product is described in
 `docs/specs/`; this document is about how screens look and respond.
 
-The theme tokens (slate surfaces, indigo accent, emerald/amber/red for
-allow/confirm/deny per Spec 0009, nearly square radii, Barlow / Barlow
-Condensed / JetBrains Mono) are defined in `src/index.css`. The app has a dark
-theme only.
+The theme tokens (neutral graphite surfaces, signal-cyan accent,
+emerald/amber/red for allow/confirm/deny per Spec 0009, radius 0 everywhere,
+Barlow / Barlow Condensed / JetBrains Mono) follow the "Angular" design in
+the Angular design reference (docs/design/angular) and are defined in `src/theme/dark.css`,
+`src/theme/light.css` and `src/index.css`; the app has a dark and a light
+theme (see `THEMING.md`). Depth comes from 1 px rules, not shadows; only
+floating layers (menu, tooltip, popovers, dialogs) have a hard offset shadow
+without blur. Type scale: `text-display`, `text-title`, `text-label`
+(uppercase Barlow Condensed); body Barlow 14 px; hosts, paths, commands and
+counts in JetBrains Mono. Status is always an 8 px `StatusSquare`, never a
+dot. A `DialogFrame` can draw decorative `CornerTicks` (`ticks="danger"` for
+the host-key warning); the narrow layout has none.
+
+## Switches
+
+Use the shared `.switch` class on a native checkbox for on/off settings. It has its own forced-colors (high-contrast) rules in `index.css`; don't restyle it per use.
 
 ## Buttons
 
 | Variant | Use for | Look |
 |---|---|---|
-| `primary` | The one action the user most likely wants in this view (Save, Connect, Close in an info dialog). At most one per dialog or form. | Indigo fill, dark text |
-| `secondary` | Every other action, Cancel. The default. | Slate fill, border |
-| `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Red tint |
-| `ghost` | Low-emphasis actions inside content, link-like actions. | No fill, accent text |
+| `primary` | The one action the user most likely wants in this view (Save, Connect, Close in an info dialog). At most one per dialog or form. | Cyan fill, dark text (white in the light theme) |
+| `secondary` | Every other action, Cancel. The default. | Transparent, `border-strong` outline |
+| `danger` | Destructive or irreversible actions (Delete, Reject). Never the initial focus of a dialog that approves something risky. | Transparent, red outline and text |
+| `ghost` | Low-emphasis actions inside content, link-like actions. | No border, muted text |
+| `bare` | Controls with their own look (tabs, list rows, icon toggles, inline links). The caller passes all classes; no base styling or size. | None |
 
 Sizes: `md` (default) for dialogs and forms, `sm` for toolbars and inline
 actions. A button's label says what it does ("Delete server", not "OK").
@@ -53,6 +66,14 @@ Tailwind's 4 px scale, with these steps: `1` (4 px) inside compact controls,
 form fields and between paragraphs, `4` between a dialog body and its action
 row, `6` as dialog padding. Prefer `gap-*` and `space-y-*` over single margins.
 
+## Tag input
+
+Use `TagInput` (`components/ui/TagInput.tsx`) for every free-form tag editor.
+Enter or comma adds the trimmed draft (empty and duplicate drafts are
+dropped), blur adds too, Backspace on an empty draft removes the last tag, and
+every chip has a remove button labelled with the tag. `readOnlyTags` are shown
+first and cannot be removed; give the input an `aria-label` (or `labelledBy`).
+
 ## Form fields
 
 Use `Field`. Layout, top to bottom: label, control, help text, error text.
@@ -67,9 +88,11 @@ Use `Field`. Layout, top to bottom: label, control, help text, error text.
 
 ## Focus ring
 
-Every interactive element shows a 2 px indigo ring (`indigo-400`) on
+Every interactive element shows a 2 px cyan ring (`focus`, no offset) on
 `:focus-visible`; never remove an outline without replacing it. The ring has at
-least 3:1 contrast against the surface it sits on.
+least 3:1 contrast against the surface it sits on. Use the `focus-ring`,
+`focus-ring-flush` or `focus-ring-inset` utilities (`index.css`), not a literal
+ring chain; the ring is changed in one place.
 
 ## Text size and contrast
 
@@ -77,7 +100,7 @@ least 3:1 contrast against the surface it sits on.
   Body text is `text-sm` (14 px).
 - Contrast targets (WCAG 2.1 AA): 4.5:1 for text (3:1 for large text), 3:1 for
   UI component boundaries and focus indicators. Disabled controls are exempt.
-  Secondary text uses `slate-400` or lighter. The axe scans in the browser tests
+  Secondary text uses `fg-subtle` or lighter. The axe scans in the browser tests
   check this on every covered screen (Spec 0055).
 
 ## Truncation
@@ -145,8 +168,23 @@ Spec 0113 describes the behaviour; this section is the rulebook for code.
 
 Every context menu, dropdown and popup is `position: fixed` and positioned with
 `useMenuPlacement` (`src/hooks/useMenuPlacement.ts`, geometry in
-`src/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
+`src/lib/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
 edges, shifts as a last resort and scrolls when the window is smaller than the
 menu. Do not hand-position menus with `absolute`/`top-full` or raw click
 coordinates. In the narrow layout menus remain bottom sheets (the hook returns
 no style).
+
+## Menus: use `Menu` (issue #914)
+
+Context and dropdown menus use `Menu`, `MenuItem` and `MenuSeparator` from
+`components/ui` (role `menu`/`menuitem`; arrow up/down, Home, End move focus
+over the enabled items, Escape closes and returns focus to the opener, Tab and
+a click outside close; placement via `useMenuPlacement`). `MenuItem` takes an
+optional `icon`, `shortcut` hint, `disabled` and `danger`; use
+`checked` for toggles (`menuitemcheckbox`). Do not hand-build menus.
+
+Two ratchets keep the UI kit used (`apps/smart-ssh-community/frontend/src/uiKitGuards.test.ts`): raw `<button`
+in production TSX outside `components/ui/` may only decrease per file
+(`src/uiKitRawButtons.json`; use `Button` or `MenuItem`), and `<dialog` /
+`fixed inset-0` may appear only in `components/ui/`, `components/ModalBackdrop.tsx` and
+the (now empty) allowlist `src/uiKitDialogAllowlist.json` (use `DialogFrame`; its `bare`, `layout="sheet"` and `yieldToNested` options cover full-window, drawer and custom-styled prompts).

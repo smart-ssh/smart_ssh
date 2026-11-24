@@ -16,6 +16,7 @@
 //!
 //! Reading is unchanged and keeps its fail-safe defaults.
 
+use app_logic::error::ResultCodeExt;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -27,6 +28,19 @@ use app_logic::error::{CommandError, CommandResult};
 /// File name of the settings store, shared by all modules.
 pub(crate) const SETTINGS_STORE_FILE: &str = "settings.json";
 
+/// The store file as passed to `app.store(..)` (issue #1313): the bare name
+/// without a data-directory override (resolved by the plugin against the
+/// Tauri app data dir, unchanged), an absolute path inside the data
+/// directory with one — an absolute path is not re-based by the plugin.
+/// Every store access goes through this, so nothing can silently resolve
+/// against `app_data_dir()` while an override is active.
+pub(crate) fn settings_store_file() -> std::path::PathBuf {
+    match persistence_sqlite::data_dir_override() {
+        Some(dir) => dir.join(SETTINGS_STORE_FILE),
+        None => std::path::PathBuf::from(SETTINGS_STORE_FILE),
+    }
+}
+
 /// Where `settings.json` lives: via `tauri_plugin_store::resolve_store_path`,
 /// the same resolution the store uses when reading and writing
 /// (`BaseDirectory::AppData`). Deliberately not `app_config_dir`: on Linux
@@ -37,7 +51,7 @@ pub(crate) const SETTINGS_STORE_FILE: &str = "settings.json";
 pub(crate) fn settings_store_path<R: Runtime>(
     app: &AppHandle<R>,
 ) -> tauri_plugin_store::Result<std::path::PathBuf> {
-    tauri_plugin_store::resolve_store_path(app, SETTINGS_STORE_FILE)
+    tauri_plugin_store::resolve_store_path(app, settings_store_file())
 }
 
 /// Sets `settings.json` to owner-only (0600) on Unix, best-effort: a failed
@@ -111,10 +125,13 @@ fn check_file_loadable(path: &std::path::Path) -> CommandResult<bool> {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
     }
-    Err(CommandError::from(format!(
-        "{SETTINGS_STORE_FILE} could not be read and was left unchanged; \
-         repair or remove the file and try again"
-    )))
+    Err(CommandError::with_code(
+        format!(
+            "{SETTINGS_STORE_FILE} could not be read and was left unchanged; \
+             repair or remove the file and try again"
+        ),
+        "SETTINGS_STORE_UNREADABLE",
+    ))
 }
 
 /// Applies `change` to the settings store and saves it. On a failed save the
@@ -123,13 +140,15 @@ pub(crate) fn update<R: Runtime>(
     app: &AppHandle<R>,
     change: impl FnOnce(&mut Changes<R>),
 ) -> CommandResult<()> {
-    let path = settings_store_path(app)?;
+    let path = settings_store_path(app).or_code("SETTINGS_STORE_UNAVAILABLE")?;
     let file_has_entries = check_file_loadable(&path)?;
-    let store = app.store(SETTINGS_STORE_FILE)?;
+    let store = app
+        .store(crate::settings_store::settings_store_file())
+        .or_code("SETTINGS_STORE_FAILED")?;
     if file_has_entries && store.is_empty() {
         // The store was opened while the file was unreadable and is cached
         // empty; pick up the repaired file before writing on top of it.
-        store.reload()?;
+        store.reload().or_code("SETTINGS_STORE_FAILED")?;
     }
 
     let mut changes = Changes {
@@ -141,7 +160,10 @@ pub(crate) fn update<R: Runtime>(
     // The one place that saves the settings store.
     if let Err(err) = store.save() {
         changes.roll_back();
-        return Err(err.into());
+        return Err(CommandError::with_code(
+            err.to_string(),
+            "SETTINGS_STORE_FAILED",
+        ));
     }
     harden_settings_store_permissions(app);
     Ok(())
@@ -210,7 +232,7 @@ mod tests {
         let app = test_app();
         let store = app
             .handle()
-            .store(SETTINGS_STORE_FILE)
+            .store(crate::settings_store::settings_store_file())
             .expect("the plugin returns Ok for a broken file");
         assert!(store.is_empty(), "broken file is loaded as an empty store");
     }
@@ -304,7 +326,9 @@ mod tests {
         assert!(save_notes(handle, "new note").is_err());
         assert!(save_tags(handle, &["new".to_string()]).is_err());
 
-        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        let store = handle
+            .store(crate::settings_store::settings_store_file())
+            .unwrap();
         assert_eq!(
             store.get("localServerNotes"),
             Some(serde_json::json!("old note"))

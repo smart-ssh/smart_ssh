@@ -11,7 +11,7 @@ import type {
   ServerDto,
   SessionSummaryDto,
   ChatSessionSummaryDto,
-} from "../../src/types";
+} from "../../src/api/types";
 import type {
   CannedResponse,
   E2eBridge,
@@ -105,7 +105,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
   const openSession = (server: ServerDto): string => {
     const sessionId = freshId("session");
-    model.sessions.push({
+    model.sessions.push({ chatSessionId: null,
       sessionId,
       serverId: server.id,
       serverName: server.name,
@@ -118,6 +118,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
   };
 
   const store = model.settings;
+  let backupSafetyDir: string | null = null;
   let backupKey = { exists: false, hasCode: false, hasPassphrase: false };
   const handlers: Record<string, Handler> = {
     // --- Tauri plumbing --------------------------------------------------
@@ -136,6 +137,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
     "plugin:os|locale": () => model.locale,
+    "plugin:window|set_theme": () => null,
     "plugin:store|load": () => 1,
     "plugin:store|get": ({ key }) => [store[key as string] ?? null, key as string in store],
     "plugin:store|has": ({ key }) => (key as string) in store,
@@ -151,6 +153,14 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // `save()` is what makes a setting survive a restart; the fake keeps the
     // model in `sessionStorage`, which survives a reload of the page.
     "plugin:store|save": () => {
+      persist();
+      return null;
+    },
+
+    // Issue #862: the webview only reads the store; the backend writes UI
+    // preferences (the fake accepts any key, validation is Rust-tested).
+    set_ui_preference: ({ key, value }) => {
+      store[key as string] = value;
       persist();
       return null;
     },
@@ -180,6 +190,9 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       versionDisplay: "0.0.0-e2e (e2e)",
       edition: "Community",
       buildType: "Dev",
+      dataDir: null,
+      dataDirDisplay: null,
+      settingsStorePath: null,
     }),
 
     // --- Servers and groups ----------------------------------------------
@@ -193,6 +206,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     list_unusable_servers: () => [],
     list_known_tags: () => [...new Set(model.servers.flatMap((s) => s.tags))].sort(),
     explain_confirmation: () => ({ segments: [], suggestions: [] }),
+    create_quick_rules_batch: () => [],
     move_server_to_group: ({ id, groupId }) => {
       findServer(id).groupId = (groupId as string | null) ?? null;
       persist();
@@ -201,6 +215,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     move_group: ({ id, parentId }) => {
       const group = model.groups.find((g) => g.id === id);
       if (!group) throw commandError(`group not found: ${String(id)}`);
+      // Like the real backend: a group cannot move into itself or a descendant.
+      for (let cur = (parentId as string | null) ?? null; cur; ) {
+        if (cur === group.id) throw commandError("group cycle", "GROUP_CYCLE_DETECTED");
+        cur = model.groups.find((g) => g.id === cur)?.parentId ?? null;
+      }
       group.parentId = (parentId as string | null) ?? null;
       persist();
       return null;
@@ -240,11 +259,17 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
     // --- Settings screens ------------------------------------------------
     list_ai_providers: () => model.aiProviders,
+    get_session_ai_provider: () => {
+      const active = model.aiProviders.find((p) => p.isActive);
+      if (!active) throw commandError("no active provider");
+      return { displayName: active.displayName, model: active.model };
+    },
     discover_models: () => [],
     get_data_paths: () => [
       { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },
       { id: "logs", label: null, path: "/data/smart-ssh/logs", isDirectory: true },
     ],
+    get_keychain_service: () => "Smart SSH",
     get_keychain_status: () => ({ available: true, reason: null }),
     get_master_password_mode: () => "keychain",
     // --- Encrypted backup (Spec 0109, #666) ------------------------------
@@ -290,17 +315,26 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
         },
       };
     },
+    pick_backup_safety_dir: () => {
+      backupSafetyDir = "/mnt/e2e/safety";
+      return backupSafetyDir;
+    },
     confirm_backup_import: () => {
       if (!backupKey.exists) throw commandError("no key", "BACKUP_KEY_REQUIRED");
+      const dir = backupSafetyDir ?? "/home/e2e/Documents/Smart SSH backups";
+      backupSafetyDir = null;
       return {
         counts: { servers: 15, groups: 2, rules: 42, notes: 11, aiProviders: 1 },
-        safetyBackup: "/home/e2e/Documents/Smart SSH backups/smart-ssh-before-import.sshbackup",
+        safetyBackup: `${dir}/smart-ssh-before-import.sshbackup`,
         previousDataFolder: "Previous data 2026-01-01",
         hostKeysPending: false,
       };
     },
     cancel_backup_import: () => null,
     get_chat_session_retention_days: () => null,
+    set_chat_session_retention_days: () => null,
+    get_elevated_idle_timeout: () => 15,
+    set_elevated_idle_timeout: () => null,
     get_mcp_server_settings: () => MCP_SETTINGS,
     // The timeout field commits on blur, so tabbing through it calls this.
     set_mcp_server_confirm_timeout_secs: () => MCP_SETTINGS,
@@ -325,6 +359,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
           fingerprint: hostKey.fingerprint,
           expectedFingerprint: hostKey.expectedFingerprint ?? null,
           keyType: hostKey.keyType ?? null,
+          serverName: server.name,
         });
       });
       if (!trusted) throw commandError("Host key was rejected", null);
@@ -338,10 +373,13 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       waiter((decision as { decision: string }).decision === "trust");
       return null;
     },
+    answer_auth_prompt: () => null,
+    cancel_auth_prompt: () => null,
     // An open session: empty history, a terminal that echoes nothing, an
     // empty home directory in the file browser.
     send_chat_message: () => null,
     get_chat_history: () => [],
+    get_chat_resync: () => ({ history: [], pendingProposal: null }),
     list_prompt_history: () => [],
     open_terminal: () => ({ missingDirectory: null }),
     terminal_resize: () => null,
@@ -356,6 +394,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     sftp_elevation_disable: () => ({ disabled: true, runningOperations: [] }),
     sftp_cancel_transfer: () => true,
     sftp_elevation_status: () => null,
+    sftp_elevation_allowed: () => true,
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.
@@ -363,7 +402,15 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     reconnect_session: () => null,
     stop_auto_reconnect: () => null,
     get_selected_speech_model: () => "base",
+    activities_list: () => [],
+    activities_interrupted: () => [],
+    activity_cancel: () => null,
+    activity_dismiss: () => null,
+    activity_start: () => "fake-activity",
+    activity_update: () => null,
+    activity_finish: () => null,
     get_speech_language: () => "auto",
+    list_speech_models: () => [],
     get_speech_model_status: (args) => ({ model: (args as { model: string }).model, state: "not_downloaded" }),
     set_selected_speech_model: () => null,
     set_speech_language: () => null,

@@ -28,6 +28,9 @@ dem Zielserver abgelegt.
 - KI-Kanal und interaktives Terminal werden nicht zusammengelegt. Im Terminal
   gibt der Nutzer das Passwort weiterhin selbst ein; es wird dort nie
   automatisch eingespeist.
+- Das gespeicherte Sudo-Passwort dient zusätzlich dem Dateibrowser mit
+  erhöhten Rechten (Spec 0067, A1): nur wenn sudo für `sftp-server` ein
+  Passwort verlangt, nur nach einem Prompt-Marker und ohne Passwort-Dialog.
 - Der lokale Pseudo-Server unterstützt die Übergabe über die Standardeingabe nicht.
 
 ## 4. Speicherung
@@ -95,7 +98,7 @@ Nach Filter-Engine und Bestätigung gilt für das freigegebene Kommando:
   Sudo-Passwort, wörtlich und nur für diesen Server, maskiert.
 - Das Passwort liegt wie alle Secrets nur in der verschlüsselten Datenbank
   (Spec 0096, Spec 0101).
-- Das Passwort ist kein Teil von Kommandotext, Ledger, Chatverlauf oder
+- Das Passwort ist kein Teil von Kommandotext, Chatverlauf oder
   Log-Eintrag.
 
 ## 9. Grenzen

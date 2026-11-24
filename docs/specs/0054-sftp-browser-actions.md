@@ -52,6 +52,14 @@ sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
 
+Solange das Kontextmenü oder das Drei-Punkte-Menü eines Eintrags offen ist,
+bleibt dessen Zeile deutlich hervorgehoben (stärker als beim Überfahren) –
+bis das Menü schließt (Escape, Klick außerhalb, Aktion). Es ist immer höchstens
+eine Zeile so markiert. Die überfahrene Zeile ist besser sichtbar als zuvor,
+und ihr Dateiname ist unterstrichen. Tastaturfokus in einer Zeile nutzt
+dieselbe Hervorhebung wie die aktive Zeile; der Kontrast genügt im hellen und
+im dunklen Erscheinungsbild.
+
 In der Release-Version unterdrückt die App das eingebaute Webview-Menü (mit
 „Neu laden“, das Tabs und Layout verwerfen würde) überall, außer in
 Eingabefeldern, Textbereichen und dem Terminal, wo Ausschneiden/Kopieren/
@@ -59,12 +67,11 @@ Einfügen bzw. Kopieren der Auswahl erhalten bleiben. Entwicklungs-Builds
 behalten das Webview-Menü.
 
 Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
-Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular
+Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung (Knopf mit Chevron-nach-unten-Symbol) mit dem Formular
 „Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
 rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
 und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
-das Menü. Beim Ändern der Fenstergröße wird neu platziert. Dasselbe gilt für
-das Dropdown der Schnellregel im Chat. Im schmalen Layout bleiben die Menüs
+das Menü. Beim Ändern der Fenstergröße wird neu platziert. Im schmalen Layout bleiben die Menüs
 unten angedockt.
 
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
@@ -73,7 +80,7 @@ unten angedockt.
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
-- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt unter dem
   Fortschrittsbalken die übertragenen und die gesamten Bytes, die
   Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
   oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die
@@ -122,6 +129,27 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   „rekursiv“ zeigt der Dialog eine Zeile wie „Ordner: 755, Dateien: 644“.
   Ohne „rekursiv“ wird genau der Dialogwert gesetzt. Die Eigenschaften
   zeigen die Rechte ebenfalls vierstellig.
+- **Besitzer ändern (chown):** Der Menüeintrag „Besitzer ändern…“ (Dateien und
+  Ordner) öffnet einen Dialog mit Benutzer und Gruppe, vorbelegt mit dem
+  aktuellen Namen (oder der Nummer, wenn der Name unbekannt ist). Eingabe ist
+  ein Name oder eine Nummer. Namen werden über `/etc/passwd` und `/etc/group`
+  des Servers (wie die Besitzer-Spalte) in Nummern aufgelöst; ein unbekannter
+  Name bricht mit einer klaren Meldung ab, ohne etwas zu ändern. Eine Seite,
+  die der Nutzer nicht verändert (oder leer lässt), bleibt unverändert; sind
+  beide unverändert, ist „Übernehmen“ gesperrt. Für Ordner optional „auf den
+  Inhalt anwenden“ mit Warnhinweis: Es läuft denselben Baum ab wie das
+  rekursive chmod (erst lesen, dann von unten nach oben ändern), folgt
+  symbolischen Links nicht (Links unterhalb des Ordners bleiben unberührt),
+  zeigt eine Fortschrittszeile mit Abbrechen-Knopf („Besitzer ändern: …“)
+  und meldet am Ende die Zahl geänderter Einträge; bei einem Fehler mitten
+  im Baum bleibt Geändertes geändert und der Fehler wird gezeigt. Ohne erhöhte
+  Rechte entscheidet der Server (meist darf nur root den Besitzer ändern); ein
+  Rechtefehler wird klar angezeigt. Im erhöhten Modus (Spec 0067/0085) läuft
+  die Änderung über den erhöhten Kanal mit denselben Prüfungen wie die
+  anderen Aktionen (Vermerk im Dialog, Protokollzeile als erhöhte Änderung,
+  Hinweis „(als <Nutzer>)“ am Ende der Meldung); wurde der erhöhte Modus vor
+  dem Start ausgeschaltet, scheitert die Aktion mit der Meldung zum
+  inaktiven erhöhten Modus und ändert nichts.
 - **Ordner ohne „ausführen“:** Liefert das Auflisten eines Ordners keine
   Einträge und hat der Ordner selbst kein „ausführen“-Bit, zeigt die Liste
   „Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)“ statt eines leeren

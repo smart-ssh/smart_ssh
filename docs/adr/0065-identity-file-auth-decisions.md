@@ -1,6 +1,9 @@
 # ADR 0065: Entscheidungen bei der Umsetzung von Spec 0076 (Anmeldung mit einer Schlüsseldatei)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0076-identity-file-auth.md, Commits `8062078` (Variante,
 Schnittstelle, Kette, Leseumsetzung), `f3d13c3` (DTO-Pfad, Hop-Angabe),
 `489718c` (Überführung), `d0cc3a4` (§9 K-3, `libc::O_NONBLOCK`), `28b14fd`
@@ -330,7 +333,7 @@ mitzuerledigen hieße, eine fremde Klasse still in einem Spec-0076-Commit zu
 ändern.
 
 **c) Die Frontend-Typen kennen `identity_file` nicht.**
-`apps/smart-ssh-community/frontend/src/types.ts:13`, dazu `ServerDto` ohne
+`apps/smart-ssh-community/frontend/src/api/types.ts:13`, dazu `ServerDto` ohne
 `identityFilePath` und `ServerForm.tsx`.
 
 *Warum nicht behoben:* Schritt 5, ausdrücklich nicht Teil dieses Laufs.

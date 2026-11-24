@@ -1,6 +1,9 @@
 # ADR 0059: Entscheidungen bei der Umsetzung von Spec 0068 (Sicherheitshärtung vor dem Launch)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0068-security-hardening-prelaunch.md, Commits `37c55a1`,
 `8817a6f`, `46efd7f`, `372c338`, `1ec4955`, `12dc876`, Review-Nacharbeit
 `ab1fd08`, `322af3f`, `df7bcc4` und zweite Review-Runde (s. Abschnitt 7)

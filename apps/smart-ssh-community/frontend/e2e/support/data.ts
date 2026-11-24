@@ -1,6 +1,6 @@
 // Builders for fake-backend data. Defaults mirror what the real backend
 // sends for an ordinary password server; tests override only what matters.
-import type { AiProviderConfigDto, ConnectStepRecord, GroupDto, ServerDto } from "../../src/types";
+import type { AiProviderConfigDto, ConnectStepRecord, GroupDto, ServerDto } from "../../src/api/types";
 import type { FakeBackendFixture } from "../harness/fixtureTypes";
 
 export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "name">): ServerDto {
@@ -20,13 +20,15 @@ export function server(overrides: Partial<ServerDto> & Pick<ServerDto, "id" | "n
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
     startDirectory: null,
+    isCopy: false,
     ...overrides,
   };
 }
 
 export function group(overrides: Partial<GroupDto> & Pick<GroupDto, "id" | "name">): GroupDto {
-  return { parentId: null, notes: "", ...overrides };
+  return { parentId: null, notes: "", isCopy: false, ...overrides };
 }
 
 export function aiProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
@@ -96,7 +98,7 @@ export function failingStepLog(hops: number): ConnectStepRecord[] {
       {
         hopIndex,
         hop,
-        step: { kind: "authentication", method: "password", remainingMethods: ["publickey"], partialSuccess: false },
+        step: { kind: "authentication", method: "password", remainingMethods: ["publickey"], partialSuccess: false, round: null, prompts: [] },
         status: last ? { state: "failed", code: "AUTH_FAILED" } : ok,
         durationMs: 210,
       },

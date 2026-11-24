@@ -5,16 +5,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getDataPaths, openDataPathFolder } from "../api";
+import { getDataPaths, getKeychainService, openDataPathFolder } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { DataPathEntryDto } from "../types";
+import type { DataPathEntryDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  getDataPaths: vi.fn(),
-  openDataPathFolder: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getDataPaths: vi.fn(),
+    getKeychainService: vi.fn(() => Promise.resolve("Smart SSH")),
+    openDataPathFolder: vi.fn(),
+  }),
+);
 
 const ENTRIES: DataPathEntryDto[] = [
   { id: "database", label: null, path: "/data/smart-ssh.db", isDirectory: false },
@@ -45,6 +47,15 @@ function renderSection() {
 }
 
 describe("DataPathsSection (Issue #16)", () => {
+  it("renders the copy buttons icon-only, keeping the accessible name", async () => {
+    vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
+    renderSection();
+    await screen.findByText("/data/smart-ssh.db");
+    const button = screen.getByRole("button", { name: "Kopieren: Datenbank" });
+    expect(button.textContent?.trim()).toBe("");
+    expect(button.querySelector("svg")).not.toBeNull();
+  });
+
   it("zeigt alle eingebauten Pfade mit übersetzter Beschriftung und Sitzungen als 'in der Datenbank'", async () => {
     vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
 
@@ -62,6 +73,18 @@ describe("DataPathsSection (Issue #16)", () => {
     expect(screen.getByTestId("data-path-sessions")).toHaveTextContent(
       "in der Datenbank gespeichert",
     );
+  });
+
+  it("zeigt den Schlüsselbund-Dienst (Issue #1314)", async () => {
+    vi.mocked(getDataPaths).mockResolvedValue(ENTRIES);
+    vi.mocked(getKeychainService).mockResolvedValue("Smart SSH (0123456789ab)");
+
+    renderSection();
+
+    expect(await screen.findByTestId("data-path-keychainService")).toHaveTextContent(
+      "Smart SSH (0123456789ab)",
+    );
+    expect(screen.getByTestId("data-path-keychainService")).toHaveTextContent("Schlüsselbund-Dienst");
   });
 
   it("zeigt Einträge einer Edition mit deren Beschriftung", async () => {
@@ -83,8 +106,8 @@ describe("DataPathsSection (Issue #16)", () => {
     renderSection();
     fireEvent.click(await screen.findByLabelText("Kopieren: Host-Keys"));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("/data/host_keys.json"));
     expect(await screen.findByText("Pfad kopiert")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith("/data/host_keys.json");
   });
 
   it("öffnet den Ordner über den Bezeichner, nie über einen Pfad", async () => {

@@ -62,6 +62,28 @@ automatisch abgelehnt."), kein „Vom Nutzer abgelehnt", und das Protokoll
 unterscheidet Ablauf von einer echten Ablehnung. Das gilt für vorgeschlagene
 Aktionen und für vorgeschlagene Notiz-Änderungen.
 
+### Zustand der Bestätigungskarte im Chat (Issue #1019)
+
+Löst das Backend eine wartende Bestätigung ohne Nutzer auf, zeigt die Karte im
+Chat das sofort als Endzustand („abgelaufen") ohne Knöpfe:
+
+- **Ablauf nach einer Stunde:** Hinweis „Nicht rechtzeitig beantwortet und
+  verworfen. Es wurde nichts ausgeführt."
+- **Neuaufbau der Verbindung** (manuell oder automatisch): Hinweis „Verworfen,
+  nachdem die Verbindung neu aufgebaut wurde. Es wurde nichts ausgeführt." Im
+  Verlauf steht dafür ein eigener Grund („Verworfen, weil die Verbindung neu
+  aufgebaut wurde — der Nutzer hat nicht entschieden."), und die KI erfährt
+  genau das, nicht „der Nutzer hat abgelehnt".
+- **Klick auf eine dem Backend unbekannte Bestätigung:** Die Karte gilt nie als
+  genehmigt. Sie wechselt in den Zustand „abgelehnt/abgelaufen" mit dem Hinweis
+  „Diese Anfrage ist nicht mehr offen. Es wurde nichts ausgeführt." und die
+  Fehlermeldung erscheint im Chat. Scheitert die Antwort aus anderem Grund, ist die
+  Anfrage weiter offen und die Knöpfe sind wieder da.
+
+Der Zustand gilt für jede Bestätigungskarte (Kommandos, Dateiaktionen,
+Notiz-Änderungen im Chat). Ein solcher Endzustand ist nie wieder bestätigbar.
+Klick auf „Ausführen" und „Ablehnen" verhalten sich sonst unverändert.
+
 ## Fund 5 — Lokaler Pseudo-Server ohne Port-Anzeige
 
 Der lokale Pseudo-Server (Spec 0032) läuft über direkte Prozessausführung und hat

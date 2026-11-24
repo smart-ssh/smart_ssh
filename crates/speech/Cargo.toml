@@ -1,6 +1,7 @@
 [package]
 name = "speech"
 version.workspace = true
+rust-version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -10,15 +11,29 @@ name = "speech"
 path = "src/lib.rs"
 
 [dependencies]
-futures = "0.3.34"
-reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls"] }
-serde = { version = "1.0.229", features = ["derive"] }
-sha2 = "0.11.0"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "time"] }
-tracing = "0.1.44"
-whisper-rs = "0.16.0"
+futures = { workspace = true }
+ssh-manager-core = { workspace = true }
+reqwest = { workspace = true, features = ["stream", "rustls"] }
+serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "time"] }
+tracing = { workspace = true }
+serde_json = { workspace = true }
 cpal = "0.18.2"
 
+# Parakeet and Whisper run on ONNX Runtime, statically linked from the prebuilt binaries
+# `ort-sys` fetches at build time (never at run time). On Android the prebuilt
+# set is the `nnapi` one (aarch64 and x86_64, the ABIs the APK ships); the
+# execution provider is not used at run time, the CPU provider is.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "api-22", "download-binaries", "tls-rustls"] }
+
 [dev-dependencies]
-tempfile = "3.27.0"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "net", "time"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "net", "time"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["nnapi"] }
+tls-config = { workspace = true }
+
+[lints]
+workspace = true

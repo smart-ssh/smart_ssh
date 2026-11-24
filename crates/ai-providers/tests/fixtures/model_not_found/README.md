@@ -12,7 +12,7 @@
 "model: …"}}`. Die zuvor rekonstruierte Fassung nahm fälschlich `"model not
 found: …"` an — keiner der `MODEL_NOT_FOUND_MARKERS` traf darauf zu; erkannt
 wird dieser Fall seit Spec 0072 stattdessen strukturell über `error.type`
-(s. `src/error.rs::is_structured_model_not_found`).
+(s. `src/error.rs::ProviderErrorInfo::is_model_not_found_structured`).
 
 Alle vier Dateien sind gemessen (Modellname `no-such-model-xyz`). Keine
 enthält Zugangsdaten oder kontokorrelierbare Werte.

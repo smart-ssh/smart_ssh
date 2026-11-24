@@ -68,28 +68,8 @@ pub(crate) fn require_identity_file_path(path: &str) -> Result<(), CommandError>
     Ok(())
 }
 
-/// Deterministischer `CredentialRef` pro `(server_id, slot)` — kein
-/// zusätzlicher Zustand nötig, um sich "den Ref von vorhin" zu merken; bei
-/// `update_server` wird derselbe String einfach erneut berechnet.
-///
-/// `pub(crate)` seit Spec 0082, damit die Tests des Bearbeiten-Ablaufs in
-/// [`crate::servers`] dieselbe Berechnung benutzen wie der Produktivcode,
-/// statt das Format `server:{id}:{slot}` ein zweites Mal hinzuschreiben —
-/// eine Kopie würde bei einer Änderung hier still danebenliegen und die
-/// Tests gegen Slots prüfen lassen, die es gar nicht gibt.
-pub(crate) fn credential_ref(server_id: ServerId, slot: &str) -> CredentialRef {
-    CredentialRef::new(format!("server:{}:{slot}", server_id.0))
-}
-
-/// Spec 0018, Abschnitt 4: eigener, vom Login-Auth-Secret unabhängiger Slot
-/// — ein Server hat unabhängig von seiner `AuthMethod` (Passwort/Key/Agent/
-/// Zertifikat) höchstens **ein** optionales Sudo-Passwort. Deterministisch
-/// wie die übrigen Slots: kein eigenes DB-Feld nötig, "ist eines
-/// hinterlegt" wird per `CredentialStore::get(...).is_ok()` ermittelt (s.
-/// `crate::dto::ServerDto::has_sudo_password`).
-pub fn sudo_password_credential_ref(server_id: ServerId) -> CredentialRef {
-    credential_ref(server_id, "sudo_password")
-}
+pub(crate) use crate::credential_slots::credential_ref;
+pub use crate::credential_slots::sudo_password_credential_ref;
 
 /// Spec 0018, Abschnitt 4: "leer = unverändert" wie bei den Login-Auth-
 /// Secrets (Abschnitt 3 dieses Moduls) — anders als dort ist ein fehlender
@@ -205,6 +185,28 @@ pub fn clear_sudo_password(
             );
             Err(secret_store_error(err))
         }
+    }
+}
+
+/// Stores a new optional key passphrase or keeps the existing ref. The value
+/// is edge-trimmed first (Spec 0049, Fund 1; Spec 0073, A3: shared
+/// `trim_credential_value`, so an all-whitespace or invisible-only paste
+/// counts like an empty field and leaves the existing passphrase alone).
+fn write_or_keep_passphrase(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+    passphrase: Option<String>,
+    existing_ref: Option<CredentialRef>,
+) -> Result<Option<CredentialRef>, CommandError> {
+    match passphrase.map(|p| trim_credential_value(&p)) {
+        Some(p) if !p.is_empty() => {
+            let r = credential_ref(server_id, "passphrase");
+            credential_store
+                .set(&r, SecretString::from(p))
+                .map_err(secret_store_error)?;
+            Ok(Some(r))
+        }
+        _ => Ok(existing_ref),
     }
 }
 
@@ -435,7 +437,7 @@ impl<'a> RecordingCredentialStore<'a> {
     /// Die aufgezeichneten Refs in Schreibreihenfolge, ohne Dubletten.
     pub(crate) fn written(&self) -> Vec<CredentialRef> {
         let mut unique: Vec<CredentialRef> = Vec::new();
-        for r in self.written.lock().unwrap().iter() {
+        for r in ssh_manager_core::sync::lock_tolerating_poison(&self.written).iter() {
             if !unique.contains(r) {
                 unique.push(r.clone());
             }
@@ -456,7 +458,7 @@ impl CredentialStore for RecordingCredentialStore<'_> {
         // nichts hinterlassen hat. Ein Ref zu viel kostet höchstens ein
         // Löschen ins Leere (`NotFound` gilt als Erfolg); ein Ref zu
         // wenig hieße, einen verwaisten Eintrag stehen zu lassen (A3).
-        self.written.lock().unwrap().push(r.clone());
+        ssh_manager_core::sync::lock_tolerating_poison(&self.written).push(r.clone());
         self.inner.set(r, value)
     }
 
@@ -526,32 +528,15 @@ pub fn resolve_auth_method(
             )?;
 
             let existing_passphrase_ref = match existing {
-                Some(AuthMethod::PrivateKey {
-                    passphrase_ref: Some(r),
-                    ..
-                }) => Some(r.clone()),
+                Some(AuthMethod::PrivateKey { passphrase_ref, .. }) => passphrase_ref.clone(),
                 _ => None,
             };
-            // Spec 0049, Fund 1: rand-trimmen, bevor entschieden wird, ob
-            // überhaupt eine neue Passphrase vorliegt — sonst würde ein
-            // rein aus Whitespace bestehender Paste (kommt von der
-            // Frontend-Leer-Prüfung `passphrase === ""` nicht ab, s.
-            // `ServerForm.tsx`s `toAuthMethodInput`) fälschlich als "neue
-            // Passphrase gesetzt" gewertet, statt wie ein echtes Leerfeld
-            // die bestehende Passphrase unverändert zu lassen.
-            // Spec 0073, A3: über den geteilten `trim_credential_value` —
-            // dasselbe gilt damit auch für einen Paste, der nur aus
-            // unsichtbaren Zeichen besteht.
-            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
-                Some(p) if !p.is_empty() => {
-                    let r = credential_ref(server_id, "passphrase");
-                    credential_store
-                        .set(&r, SecretString::from(p))
-                        .map_err(secret_store_error)?;
-                    Some(r)
-                }
-                _ => existing_passphrase_ref,
-            };
+            let passphrase_ref = write_or_keep_passphrase(
+                credential_store,
+                server_id,
+                passphrase,
+                existing_passphrase_ref,
+            )?;
             Ok(AuthMethod::PrivateKey {
                 credential_ref: key_ref,
                 passphrase_ref,
@@ -594,22 +579,15 @@ pub fn resolve_auth_method(
             require_identity_file_path(&path)?;
 
             let existing_passphrase_ref = match existing {
-                Some(AuthMethod::IdentityFile {
-                    passphrase_ref: Some(r),
-                    ..
-                }) => Some(r.clone()),
+                Some(AuthMethod::IdentityFile { passphrase_ref, .. }) => passphrase_ref.clone(),
                 _ => None,
             };
-            let passphrase_ref = match passphrase.map(|p| trim_credential_value(&p)) {
-                Some(p) if !p.is_empty() => {
-                    let r = credential_ref(server_id, "passphrase");
-                    credential_store
-                        .set(&r, SecretString::from(p))
-                        .map_err(secret_store_error)?;
-                    Some(r)
-                }
-                _ => existing_passphrase_ref,
-            };
+            let passphrase_ref = write_or_keep_passphrase(
+                credential_store,
+                server_id,
+                passphrase,
+                existing_passphrase_ref,
+            )?;
             Ok(AuthMethod::IdentityFile {
                 path,
                 passphrase_ref,

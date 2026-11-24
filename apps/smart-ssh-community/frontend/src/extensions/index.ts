@@ -5,11 +5,25 @@ export {
   listSettingsSectionsForCategory,
   unregisterSettingsSection,
   listDocumentActions,
+  unregisterDocumentAction,
+  subscribeDocumentActions,
   registerFirstRunNoticeExtension,
   listFirstRunNoticeExtensions,
+  unregisterFirstRunNoticeExtension,
+  subscribeFirstRunNoticeExtensions,
+  registerServerSettingsTab,
+  unregisterServerSettingsTab,
+  listServerSettingsTabs,
+  registerComposerAction,
+  unregisterComposerAction,
+  registerComposerDropHandler,
+  unregisterComposerDropHandler,
+  subscribeSettingsSections,
+  subscribeComposer,
   registerServerFormSection,
   registerGroupFormSection,
   registerManageView,
+  unregisterManageView,
   registerSessionHeaderItem,
   unregisterSessionHeaderItem,
   listSessionHeaderItems,
@@ -36,12 +50,15 @@ export type {
 
 /** Issue #611: asks the app to resume a saved chat session of a server,
  * exactly like choosing it in the session picker. */
-export { requestResumeChatSession } from "../navigationBus";
+export { requestResumeChatSession } from "../buses/navigationBus";
 
 export { useEntitlements } from "./useEntitlements";
 export type { UseEntitlementsResult } from "./useEntitlements";
 
 export type { Entitlements, Feature, Tier, FeatureLockedPayload } from "./entitlements";
+export { FREE_TIER } from "./entitlements";
+export { registerTier, tierLabel } from "./tiers";
+export type { TierContribution } from "./tiers";
 
 export { publishFeatureLocked, subscribeFeatureLocked } from "./featureLockedBus";
 export { FeatureLockedDialog } from "./FeatureLockedDialog";

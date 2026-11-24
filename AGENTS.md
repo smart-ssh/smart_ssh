@@ -8,9 +8,21 @@ server** — the AI is a copilot, never an autonomous actor. Code quality
 rules here exist to protect that promise, not as bureaucracy.
 
 This file holds the project facts and conventions that apply to every
-contributor and every coding agent. Role-specific workflows — how an
-implementation run is carried out and reviewed — live in the agent and
-skill definitions under `.claude/`.
+contributor and every coding agent. Issues and this file define the work.
+The agent and skill definitions under `.claude/` are optional helpers for
+interactive Claude Code sessions; on conflict, this file and the issue win.
+
+## Product principles
+
+Use these to decide edge cases an issue leaves open:
+
+- Core promise: full transparency and control over every command that reaches
+  a server. The AI is a copilot, never an autonomous actor.
+- Safety before convenience — but no patronising of manual actions (the file
+  browser and the terminal are trusted user actions).
+- Honest notices instead of playing things down.
+- When a command is refused by a permission (e.g. `rm`), offer it to the user
+  to run themselves; never work around the refusal.
 
 ## Before every commit
 
@@ -28,24 +40,32 @@ current finding (Spec 0090, A4) — a stale exemption (e.g. for a withdrawn
 advisory) fails the job too.
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --workspace
+scripts/gate.sh                  # all stages, in order
+scripts/gate.sh rust             # fmt --check, clippy, test, build
+scripts/gate.sh boundary         # app-logic stays free of Tauri (Spec 0084, A3)
+scripts/gate.sh frontend         # tsc -b, npm run lint, vitest, npm run build
+scripts/gate.sh --ci rust        # as CI: cargo-nextest (profile ci), clipboard test required, under xvfb-run on Linux
 ```
 
-The last step builds without the `test-support` feature, which `cargo
-test`/`clippy --all-targets` both enable — it's the only one of the four
+CI runs the Rust tests with `cargo nextest run --profile ci` (retries,
+JUnit report, a step that fails the job on tests that pass only on retry,
+Spec 0090 A9) plus `cargo test --doc`; locally `scripts/gate.sh` uses
+nextest if installed and otherwise falls back to `cargo test`, and
+developers may keep using `cargo test`.
+
+`scripts/gate.sh` is the single definition of the gate; CI calls it too
+(Windows keeps its Cargo steps inline with the same commands, see the
+comment in `.github/workflows/community.yml`). Every Cargo build/test/clippy/tree call uses
+`--locked`, so the checked-in `Cargo.lock` is what gets tested and a stale
+lockfile fails instead of being re-resolved silently (guarded by
+`src/cargoLockedCheck.test.ts`).
+
+The `rust` stage's last step builds without the `test-support` feature, which `cargo
+test`/`clippy --all-targets` both enable — it is the only one of the four
 that catches a production-code call into a test-only access point (e.g.
 `parts_mut_for_tests`, gated on `cfg(any(test, feature = "test-support"))`),
 since that call compiles fine as long as `test-support` is on.
 
-```bash
-cd apps/smart-ssh-community/frontend
-npx tsc -b
-npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then oxlint
-npx vitest run
-```
 
 Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
 WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
@@ -54,7 +74,7 @@ screen or command needs a handler in `e2e/harness/fakeBackend.ts` or a
 per-test override. Layout checks (inside the viewport, not covered, reachable
 by Tab, only the content scrolls) live in `e2e/support/layout.ts`; known axe
 findings are listed with a reason in `e2e/support/axe.ts`. CI runs the
-suite in the separate `browser-tests` job (`ubuntu-latest` only); on
+suite in the separate `browser-tests` job (`ubuntu-24.04` only, pinned for Playwright's WebKit); on
 failure it uploads traces and the HTML report as the `playwright-traces`
 artifact.
 
@@ -69,12 +89,30 @@ npm run test:e2e:ui   # Playwright UI mode, for local debugging
 `#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
 entry has no definition, a non-test frontend file `invoke`s an
 unregistered name, or a name in the startup gate's allow list is not
-registered (issue #101). Then it runs `npm run check-a11y-rules`
+registered (issue #101). Then `npm run check-events` (`scripts/check-event-names.mjs`, issue #918) fails when the event name constants in `crates/app-logic/src/event_names.rs` and `src/api/eventNames.ts` drift apart or a `listen(`/`once(` call uses a string literal. Then it runs `npm run check-a11y-rules`
 (`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
 `jsx-a11y` rule that the installed oxlint enables is not listed with
 `error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
-upgrade that adds a rule, add it there. CI runs both through the same
+upgrade that adds a rule, add it there. Finally `npm run check-conventions`
+(`scripts/check-conventions.mjs`, issue #858) fails on a new `*_tests.rs` file
+(see "Testing conventions"), on a stale entry in its list of the existing
+ones, and on `LOCAL_SERVER_ID` / `local_server` anywhere under
+`crates/core/src/filter/` or `crates/core/src/risk/` (see "No special-casing
+the local pseudo-server"). `npm run check-doc-paths` (`scripts/check-doc-paths.mjs`,
+issue #874) fails on a backticked path or a quoted section reference in these
+guidance documents that does not exist; intentional non-paths go into
+`scripts/doc-paths-allowlist.json` with a reason. CI runs all of them through the same
 `npm run lint` step.
+
+`npm run lint` also runs `npm run check-file-size`
+(`scripts/check-file-size.mjs`, issue #841): tracked `*.rs`, `*.ts`, `*.tsx`,
+`*.mjs` and `*.kt` files may have at most 1,200 lines (test files: 2,000).
+Files above their limit are listed in `scripts/file-size-allowlist.json` with
+their maximum size; such a file may not grow past its entry, and an entry for a
+file that is now within the limit or deleted fails as stale. `node
+scripts/check-file-size.mjs --update` lowers or removes entries (never raises
+or adds). On pull requests CI also compares with the base branch (`--base`),
+so entries can only go down: split the file instead of raising an entry.
 
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
 if formatting is off, clippy and test never even execute, so a red CI run
@@ -89,6 +127,13 @@ not feature correctness. On macOS use `./scripts/tauri-dev.sh`, not plain
 `docs/adr/0022-stable-dev-code-signature.md`). Don't relaunch it
 repeatedly while iterating — build/test/lint don't need a running window;
 start it once, when a change is actually ready to look at.
+
+## Toolchain
+
+The Rust version comes from `rust-toolchain.toml` (exact `x.y.z`); CI reads
+the channel from that file, and `[workspace.package] rust-version` carries
+the same minor. A bump is its own pull request that also fixes any new
+clippy findings. Projects embedding the core can reuse the same file.
 
 ## Git staging — never blanket-add
 
@@ -109,23 +154,34 @@ crates/
 │   ├── filter/            # policy/filter engine (security-critical)
 │   ├── risk/               # command risk classification
 │   ├── ai/                  # AI provider abstraction + output redaction
-│   └── profiles/              # server/group/credential domain types
+│   ├── profiles/              # server/group/credential domain types
+│   └── entitlements.rs         # `Feature` enum and `EntitlementProvider` trait
 ├── ssh-transport/       # concrete SshTransport impl (russh + local pseudo-server)
 ├── persistence-sqlite/  # concrete ProfileStore/PolicyStore impl
 ├── credentials-keyring/ # concrete CredentialStore impl (OS keychain)
 ├── ai-providers/        # concrete AiProvider impls (Anthropic, OpenAI-compatible, ...)
 ├── mcp-server/           # MCP server exposing sessions to external clients
+├── speech/               # speech-to-text
 ├── app-logic/            # Tauri-free application logic: chat-turn orchestration,
 │                         # compaction, confirmation registry, connection test,
 │                         # server/group/credential management, DTOs, AppState
 │                         # (Spec 0084; see docs/architecture.md for the app-logic/
 │                         # app-shell boundary and its one deliberate exception)
-└── app-shell/            # thin wrapper: Tauri commands/events <-> app-logic/core APIs,
-                           # edition-parametrized via `Wiring` (Spec 0038)
+├── app-shell/            # Tauri layer: commands, events, wiring (`Wiring`, Spec 0038);
+│                         # depends on `app-logic` and directly on the adapter crates
+└── real-app-tests/       # starts the real app in CI
 apps/
 └── smart-ssh-community/  # thin binary: app_shell::run(Wiring::community())
     └── frontend/           # React, talks only to app-shell via invoke()
 ```
+
+Extension points:
+
+- `app_shell::Wiring` — `crates/app-shell/src/wiring.rs`
+- Frontend extension registry —
+  `apps/smart-ssh-community/frontend/src/extensions/registry.ts`
+- Namespaced extension tables — `extension_db` in `crates/persistence-sqlite`
+  (`crates/persistence-sqlite/src/extension_db.rs`)
 
 **`core` never depends on Tauri or a UI framework.** All domain logic
 belongs there; `app-shell` only translates between Tauri commands/events
@@ -151,6 +207,26 @@ code, that's a sign something is architecturally wrong — the special
 casing belongs at the transport/session-construction boundary, never
 inside the security logic itself.
 
+## Where to look
+
+- `docs/codemap.md` — read this first when you look for the file, symbol or extension point for a change (checked by `npm run check-codemap`).
+- `docs/recipes/README.md` — read this before a change that always touches the same files (new Tauri command, new UI text, new database migration).
+- `docs/architecture.md` — read this when you need the crate boundaries, in particular app-logic vs. app-shell.
+- `THREAT-MODEL.md` — read this when a change touches what the AI sees, redaction, where data lives, network connections or trust boundaries.
+- `.claude/skills/smart-ssh-coder/references/security-invariants.md` — read this before changing anything security-critical.
+- `docs/ui-guidelines.md` — read this when you build or change UI.
+- `docs/i18n-glossary.md` — read this when you add or change translated texts.
+- `docs/glossary.md` — read this when you meet a project or domain term (Wiring, fencing, ledger, …) you do not know.
+- `docs/datenpfade.md` — read this when you need to know where the app stores data on disk.
+- `docs/netzwerkverbindungen.md` — read this when you add or change an outgoing network connection.
+- `docs/android-build.md` — read this when you build for or debug on Android.
+- `docs/dev-environment.md` — read this when you set up a development environment.
+- `README_DEV.md` — read this for developer-facing build and run instructions.
+- `docs/specs/INDEX.md` — read this to find the spec for an area (generated, `node scripts/check-spec-index.mjs --write-index`).
+- `docs/specs/README.md` — read this when you change user-visible behaviour or write a spec.
+- `docs/adr/README.md` — read this when you make or look up an architecture decision.
+- `changelog.d/README.md` — read this when you add a changelog fragment.
+
 ## Security-critical modules — extra care
 
 `crates/core/src/filter/` (policy engine), `crates/core/src/risk/` (risk
@@ -175,6 +251,26 @@ irreversible happening on a real server. For changes here:
 - Redaction (`crates/core/src/ai/`) must run before content is persisted
   or sent anywhere — verify with a test that plants a redaction-worthy
   secret and asserts it never appears in plaintext in the output/DB.
+
+- Types that carry plaintext secrets (input DTOs with keys, passwords,
+  passphrases, tokens) have a redacting `Debug` that prints `[REDACTED]`,
+  never a derived one — add a test that plants a secret and checks the
+  `{:?}` output.
+- **Keep `THREAT-MODEL.md` current.** A pull request that changes the
+  filter engine, risk classifier, redaction or fencing, credential
+  handling, the command execution/confirmation path, a network boundary
+  (new outgoing connection, listener, MCP), an IPC command with side
+  effects, a stored secret, an external process, or a trust boundary
+  updates `THREAT-MODEL.md` in the same pull request. This applies to
+  `crates/core/src/filter/`, `crates/core/src/risk/`, `crates/core/src/ai/`,
+  `crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`,
+  `crates/app-logic/src/orchestration/`, `crates/mcp-server/`,
+  `crates/ssh-transport/` and `crates/app-shell/src/elevated_sftp.rs`. If it
+  does not need to change, the pull request description says
+  `Threat model: no change – <reason>`. CI enforces this (job
+  `threat-model-note`, `scripts/check-threat-model-note.mjs`); the
+  authoritative list of security-critical path prefixes is
+  `.github/security-paths.txt` (test-only changes do not count).
 
 ## Spec workflow
 
@@ -221,10 +317,7 @@ places Tauri and the build actually read it: `apps/smart-ssh-community/
 tauri.conf.json` (`version`), the workspace `Cargo.toml`
 (`[workspace.package].version`, inherited by every crate via
 `version.workspace = true`), the internal path-dependency version pins in
-each crate's `Cargo.toml` (e.g. `ssh-manager-core = { version = "0.4.0",
-path = "../core" }` — these must match the workspace version or the
-workspace fails to build, since Cargo's default caret requirement on a
-0.x version only matches that patch range), and the frontend
+the root `Cargo.toml` `[workspace.dependencies]` entries for the internal crates (e.g. `ssh-manager-core = { version = "0.7.0", path = "crates/core" }` — these must match the workspace version or the workspace fails to build, since Cargo's default caret requirement on a 0.x version only matches that patch range), and the frontend
 `package.json`/`package-lock.json` (bump both together via `npm version
 X.Y.Z --no-git-tag-version` from `apps/smart-ssh-community/frontend/`,
 not by hand-editing, so the lockfile stays consistent).
@@ -263,17 +356,28 @@ not by hand-editing, so the lockfile stays consistent).
 
 ## Testing conventions
 
-- Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
-  trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
+- Rust: small test modules stay inline (`#[cfg(test)] mod tests { … }`).
+  Larger ones go in `<module>/tests.rs` or `<module>/tests_<topic>.rs` next
+  to `<module>.rs`, declared with `#[cfg(test)] mod tests;`. Cross-crate or
+  real-connection tests live in the crate's `tests/` directory
+  (`crates/ssh-transport/tests/integration.rs` is the one place real
+  test-fixture SSH connections are exercised). Shared helpers live in
+  `test_support.rs` behind `cfg(any(test, feature = "test-support"))`. Tests
+  use trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
   in-memory `ProfileStore`/`CredentialStore` in
   `crates/app-logic/src/test_support.rs`) — no real network/SSH/keychain
-  access in unit tests. `crates/ssh-transport/tests/integration.rs` is the
-  one place real (test-fixture) SSH connections are exercised.
-- Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
+  access in unit tests. **No new `*_tests.rs` files**: seven exist
+  (listed in `scripts/check-conventions.mjs`) and stay until they are
+  touched anyway; when one is renamed or removed, drop it from that list.
+  Note that `crates/app-logic/src/test_connection.rs` is production code (the
+  "test connection" feature), not a test file.
+- Frontend: pure logic (`lib/groupTree.ts`, `lib/remotePath.ts`, `api/errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
-  trickier interactive pieces, not for every component.
+  trickier interactive pieces, not for every component. Async frontend tests
+  follow ADR 0122 R6–R15 (`docs/adr/0122-plattform-und-zeitunabhaengige-tests.md`):
+  wait for the final DOM state, re-query after transitions, send events in `act`.
 - When a bug is fixed, add the regression test that would have caught it,
-  not just the fix — see `crates/app-logic/src/dto.rs`'s
+  not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.
 - **Prove a regression test is real: it must fail against the un-fixed
   code.** Before accepting a regression test as green, verify it actually
@@ -282,6 +386,38 @@ not by hand-editing, so the lockfile stays consistent).
   that passes both before and after the fix tests nothing; this is the
   single most effective guard against the tautological tests that a past
   audit found across the codebase.
+
+## Workspace dependencies
+
+A third-party crate used by two or more workspace crates is pinned once in
+the root `Cargo.toml` under `[workspace.dependencies]`; crates inherit it with
+`name = { workspace = true }` and add only their own `features`/`optional`.
+`default-features = false` belongs in the workspace entry. New shared
+dependencies go there too. `scripts/check-workspace-deps.mjs` (run by
+`npm run lint`) fails on a crate that pins its own version of such a
+dependency. Remaining duplicate versions in the lockfile come from upstream
+crates and are listed with a reason under `[bans] skip` in `deny.toml`
+(`multiple-versions` stays `warn`); add an entry there when an upstream update
+introduces a new one.
+
+## Code comments
+
+Comments in new code are written in English; existing German comments stay
+as they are (translate only when the surrounding function is substantially
+rewritten, never in bulk). Spec references (`Spec NNNN, A<n>`) stay as they
+are. See `docs/adr/0152-code-comment-language.md`.
+
+## Locks and poisoning
+
+Production code locks `std::sync` primitives (`Mutex`, `RwLock`) only through
+`ssh_manager_core::sync::{lock,read,write}_tolerating_poison` — never
+`lock().unwrap()`, `lock().expect(..)` or the `read`/`write` equivalents. Where
+a poisoned value could be half-updated and continuing would be wrong, the call
+site resets the value to a safe default after recovering and says so in a
+comment; it never panics, and never skips a revocation or turns a pending
+decision into an approval (Spec 0088, A5). A guard test
+(`crates/core/tests/lock_poison_guard.rs`) enforces it; tests may keep
+`unwrap`. `tokio::sync` locks are not poisoned and are out of scope.
 
 ## Commits
 

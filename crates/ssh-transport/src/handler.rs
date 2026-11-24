@@ -113,6 +113,19 @@ impl russh::client::Handler for ClientHandler {
         }
     }
 
+    /// Issue #1227: record the server's login banner in the connect log.
+    /// The text is sanitized and capped by the log; it is never interpreted.
+    async fn auth_banner(
+        &mut self,
+        banner: &str,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        self.steps
+            .log
+            .record_banner(self.steps.hop_index, &self.steps.hop, banner);
+        Ok(())
+    }
+
     /// Issue #51: nur die Namen der ausgehandelten Algorithmen und die
     /// Versionskennung des Servers werden gelesen. Das gemeinsame Geheimnis
     /// des Schlüsselaustauschs wird nicht angefasst.
@@ -144,6 +157,20 @@ impl russh::client::Handler for ClientHandler {
             }
         });
         self.steps.log.succeed(self.steps.handshake);
+        // Issue #1173: outdated algorithms are a warning, never a refusal.
+        let outdated = crate::algorithms::outdated(
+            names.kex.as_ref(),
+            names.key.as_str(),
+            names.cipher.as_ref(),
+            names.client_mac.as_ref(),
+            names.server_mac.as_ref(),
+            names.strict_kex(),
+        );
+        if !outdated.is_empty() {
+            self.steps
+                .log
+                .warn_outdated(self.steps.hop_index, &self.steps.hop, outdated);
+        }
         self.steps.host_key_step();
         Ok(())
     }

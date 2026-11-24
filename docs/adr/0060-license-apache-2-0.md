@@ -1,6 +1,9 @@
 # ADR 0060: Lizenzwechsel FSL-1.1-MIT → Apache License 2.0
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0070-license-apache-2-0.md, Commit `ef756d3`
 
 ## Kontext

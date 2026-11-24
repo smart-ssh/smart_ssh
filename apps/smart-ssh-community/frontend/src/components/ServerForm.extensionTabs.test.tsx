@@ -2,13 +2,13 @@
 // (Mocks and helpers mirror ServerForm.tabs.test.tsx.)
 // Issue #606: the server form is split into General, Connection, Security
 // and Notes tabs (Spec 0008). One draft, one Save.
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import axe from "axe-core";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createServer, getServer, updateServer } from "../api";
+import { createServer, getServer, updateServer } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { ServerDto } from "../types";
+import type { ServerDto } from "../api/types";
 import {
   registerServerFormSection,
   registerServerSettingsTab,
@@ -17,46 +17,36 @@ import {
 } from "../extensions/registry";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  // Spec 0069, Teil B (echte `code`-Extraktion für `runOllamaProbe`,
-  // s. `ServerList.test.tsx`) und Spec 0071 (echte `.message`-Extraktion
-  // für `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte) — echte
-  // Implementierungen statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -81,6 +71,9 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
@@ -121,7 +114,7 @@ afterEach(() => resetRegistryForTests());
 describe("ServerForm extension tabs (issue #608)", () => {
   it("shows no extra tab or markup without registrations", async () => {
     const { container } = renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen"]);
     expect(container.querySelector("[data-extension-section]")).toBeNull();
     expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(4);
@@ -138,7 +131,7 @@ describe("ServerForm extension tabs (issue #608)", () => {
     registerServerSettingsTab({ id: "a", label: "Ten", component: Ext });
     registerServerFormSection({ id: "s-conn", tab: "connection", component: Sec });
     const { container } = renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     const region = screen.getByText("sec-body").closest('section') as HTMLElement;
     const connTab = screen.getByRole("tab", { name: "Verbindung" });
     expect(region.getAttribute("aria-labelledby")).toBe(connTab.id);
@@ -155,7 +148,7 @@ describe("ServerForm extension tabs (issue #608)", () => {
     registerServerSettingsTab({ id: "b", label: "Twenty", order: 20, component: Ext });
     registerServerSettingsTab({ id: "a", label: "Ten", order: 10, component: Ext });
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen", "Ten", "Twenty"]);
     expect(screen.queryByTestId("ext-tab")).toBeNull();
     openTab("Ten");
@@ -170,21 +163,44 @@ describe("ServerForm extension tabs (issue #608)", () => {
       Promise.resolve(serverDto({ id, name: id === OTHER_ID ? "web-02" : "web-01" })),
     );
     const view = renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Ten");
     view.rerender(
       <I18nextProvider i18n={testI18n}>
         <ServerForm serverId={OTHER_ID} defaultGroupId={null} allGroups={[]} allServers={[]} onSaved={vi.fn()} onDeleted={vi.fn()} />
       </I18nextProvider>,
     );
-    await waitFor(() => expect(screen.getByDisplayValue("web-02")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-02")).toBeInTheDocument();
     openTab("Ten");
     expect(screen.getByTestId("ext-tab")).toHaveTextContent(`ext for ${OTHER_ID}`);
   });
 
+  it("mounts an extension tab on first open, keeps it while switching tabs and unmounts it for another server", async () => {
+    registerServerSettingsTab({ id: "a", label: "Ten", component: Ext });
+    vi.mocked(getServer).mockImplementation((id: string) =>
+      Promise.resolve(serverDto({ id, name: id === OTHER_ID ? "web-02" : "web-01" })),
+    );
+    const view = renderForm();
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    expect(screen.queryByTestId("ext-tab")).toBeNull();
+    openTab("Ten");
+    expect(screen.getByTestId("ext-tab")).toBeVisible();
+    openTab("Sicherheit");
+    openTab("Allgemein");
+    expect(screen.getByTestId("ext-tab")).not.toBeVisible();
+    view.rerender(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm serverId={OTHER_ID} defaultGroupId={null} allGroups={[]} allServers={[]} onSaved={vi.fn()} onDeleted={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-02")).toBeInTheDocument();
+    expect(screen.queryByTestId("ext-tab")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("adds a late tab without losing the draft and falls back to General on unregister", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "draft" } });
     act(() => registerServerSettingsTab({ id: "a", label: "Late", component: Ext }));
     expect(tabNames()).toContain("Late");
@@ -201,7 +217,7 @@ describe("ServerForm extension tabs (issue #608)", () => {
     registerServerSettingsTab({ id: "a", label: "Ten", component: Ext });
     vi.mocked(getServer).mockResolvedValue(serverDto({ isLocal: true, name: "Local" }));
     const view = renderForm();
-    await waitFor(() => expect(screen.getByText("Local")).toBeInTheDocument());
+    expect(await screen.findByText("Local")).toBeInTheDocument();
     expect(tabNames()).toEqual(["Allgemein", "Notizen", "Ten"]);
     view.unmount();
     renderForm(null);
@@ -212,7 +228,7 @@ describe("ServerForm extension tabs (issue #608)", () => {
     registerServerFormSection({ id: "s-default", component: Sec });
     registerServerFormSection({ id: "s-conn", tab: "connection", component: Sec });
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     const wrapper = (id: string) => document.querySelector(`[data-extension-section="${id}"]`) as HTMLElement;
     expect(wrapper("s-default").parentElement).toBeVisible();
     expect(wrapper("s-conn").parentElement).not.toBeVisible();

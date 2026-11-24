@@ -1,44 +1,15 @@
-/** Spiegelt `ssh_manager_core::entitlements::{Tier, Feature, Entitlements}`
- * (Spec 0037, Abschnitt 2) — Feldnamen `camelCase` gemäß dem
- * `#[serde(rename_all = "camelCase")]` auf `Entitlements` selbst. */
-export type Tier = "free" | "personal" | "pro" | "team" | "business" | "enterprise";
+import type { Entitlements, Feature, FeatureLocked, TierId } from "../generated/ipc";
 
-export type Feature =
-  | "shared_inventory"
-  | "shared_notes"
-  | "curated_rule_packs"
-  | "org_policy"
-  | "multi_server_actions"
-  | "managed_ai"
-  | "org_ai_policy"
-  | "team_agents"
-  | "session_history"
-  | "activity_report"
-  | "session_handover"
-  | "cloud_sync"
-  | "document_export"
-  | "audit_export"
-  | "sso"
-  | "self_hosted"
-  | "server_environment"
-  | "chat_attachments"
-  | "self_hosted_sync";
+/** Generated from `ssh_manager_core::entitlements` (Spec 0037, section 2);
+ * see `src/generated/ipc.ts` (issue #919). */
+export type { Entitlements, Feature };
 
-export interface Entitlements {
-  tier: Tier;
-  features: Feature[];
-  seats: number | null;
-  expiresAt: string | null;
-  nonCommercial: boolean;
-  licensee: string | null;
-}
+/** A tier id (`TierId` on the Rust side). */
+export type Tier = TierId;
 
-/** Von `crate::entitlements::FeatureLocked` (`ssh_manager_core`) —
- * eingebettet in `crate::error::CommandError.feature_locked` (Spec 0037,
- * Abschnitt 2/3 — `CommandError` selbst hat kein `camelCase`-Rename, anders
- * als `Entitlements` oben, daher der Feldname `feature_locked` statt
- * `featureLocked` beim Zugriff über `CommandErrorPayload` in `api.ts`). */
-export interface FeatureLockedPayload {
-  feature: Feature;
-  tier: Tier;
-}
+/** The only tier the core knows; editions register their own (see `tiers.ts`). */
+export const FREE_TIER: Tier = "free";
+
+/** Embedded in `CommandError.feature_locked` (Spec 0037, sections 2/3);
+ * `CommandError` has no camelCase rename, hence `feature_locked` in `api.ts`. */
+export type FeatureLockedPayload = FeatureLocked;

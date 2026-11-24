@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Navegación principal",
     "connect": "Conectar",
     "manage": "Administrar",
     "rules": "Reglas de filtro"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Aún no se ha añadido ningún servidor",
     "emptyStateHint": "Añada su primer servidor para conectarse por SSH.",
     "emptyStateCreateFirstServer": "Añadir primer servidor",
-    "newServerInGroup": "Nuevo servidor en el grupo “{{name}}”",
-    "emptyStateTryLocalhost": "Pruébelo sin servidor: “Localhost”, arriba, abre una sesión en este equipo, con las mismas confirmaciones que en un servidor real."
+    "emptyStateTryLocalhost": "Pruébelo sin servidor: “Localhost”, arriba, abre una sesión en este equipo, con las mismas confirmaciones que en un servidor real.",
+    "localBadge": "Local",
+    "thisDevice": "este dispositivo",
+    "sessionOpen": "Sesión abierta",
+    "sessionPending": "Esperando confirmación",
+    "sessionDisconnected": "Sesión desconectada",
+    "sessionReconnecting": "Reconectando"
   },
   "settings": {
     "title": "Ajustes",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Datos y copia de seguridad"
     }
   },
+  "appearance": {
+    "heading": "Apariencia",
+    "language": "Idioma",
+    "system": "Seguir el sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
   "about": {
     "version": "Versión",
     "copyHint": "Copiar al portapapeles",
@@ -57,6 +70,7 @@
     "copyFailed": "Error al copiar: en su lugar puede seleccionar el texto.",
     "loadFailed": "No se pudo cargar la información de versión y compilación.",
     "buildDev": "Compilación de desarrollo",
+    "dataDirMarker": "Datos: {{path}}",
     "buildRelease": "Compilación de lanzamiento",
     "thirdPartyLicenses": {
       "openButton": "Licencias de terceros",
@@ -79,6 +93,7 @@
       "no_session_bus": "no disponible: no hay ningún bus de sesión D-Bus accesible. Siguiente paso: `sudo apt install dbus-user-session` y vuelva a iniciar sesión.",
       "no_secret_service_provider": "no disponible: no se está ejecutando ningún proveedor de Secret Service. Siguiente paso: `sudo apt install gnome-keyring` y vuelva a iniciar sesión; también funciona en KDE. Si ya usa KWallet (`kwallet6`) o KeePassXC, su integración con Secret Service debe estar en ejecución o activada; instalarlos no basta.",
       "locked": "no disponible: existe, pero está bloqueado. Siguiente paso: desbloquéelo y reinicie Smart SSH. No falta ningún paquete.",
+      "no_keystore": "no disponible: el Keystore de Android no está disponible. Siguiente paso: use una contraseña maestra; sus secretos permanecen en la base de datos cifrada.",
       "unknown": "no disponible: causa desconocida. Siguiente paso: compruebe si un proveedor de Secret Service está en ejecución y desbloqueado (gnome-keyring, o KWallet o KeePassXC con la integración de Secret Service activada) y reinicie Smart SSH."
     },
     "keychainBlocked": "Esto no afecta a sus secretos: las claves de API, contraseñas de servidores, frases de contraseña y contraseñas de sudo se guardan en la base de datos cifrada, no en el llavero.",
@@ -91,8 +106,10 @@
       "hostKeys": "Claves de host",
       "wrappingFile": "Archivo de clave de la contraseña maestra",
       "mcpSettings": "Ajustes de MCP",
+      "speechModels": "Modelos de voz",
       "sessions": "Sesiones",
       "sessionsInDatabase": "guardadas en la base de datos",
+      "keychainService": "Servicio del llavero",
       "copy": "Copiar",
       "copied": "Ruta copiada",
       "copyFailed": "Error al copiar:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importar …",
     "importSshConfigHint": "Importar servidores desde un archivo ssh_config de OpenSSH",
     "exportSshConfig": "Exportar …",
-    "exportSshConfigHint": "Exportar servidores a ssh_config de OpenSSH"
+    "exportSshConfigHint": "Exportar servidores a ssh_config de OpenSSH",
+    "title": "Servidores",
+    "collapseGroup": "Contraer el grupo «{{name}}»",
+    "expandGroup": "Expandir el grupo «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Suelte aquí para mover al nivel superior (sin grupo)",
     "hintRoot": "→ nivel superior (sin grupo)",
+    "current": "actual",
     "hintGroup": "→ mover a este grupo",
     "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
     "moveTo": "Mover «{{name}}» a…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Esto también elimina definitivamente el historial de chat, las notas y las etiquetas de este servidor.",
     "confirmDeleteServer": "Eliminar definitivamente",
     "testResult": {
-      "success": "✓ Conexión correcta",
-      "authFailed": "✗ Inicio de sesión rechazado. Compruebe el usuario y la contraseña o la clave.",
+      "success": "Conexión correcta",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Inicio de sesión rechazado. Compruebe el usuario y la contraseña o la clave.",
       "hostKeyUnknown": "Clave de host desconocida: se requiere confirmación",
-      "hostKeyMismatch": "⚠ La clave de host ha cambiado",
-      "networkError": "✗ Error de red: {{message}}",
-      "timeout": "✗ El servidor no responde. Compruebe la dirección, el puerto y el cortafuegos."
+      "hostKeyMismatch": "La clave de host ha cambiado",
+      "networkError": "Error de red: {{message}}",
+      "timeout": "El servidor no responde. Compruebe la dirección, el puerto y el cortafuegos."
     },
     "largeNoteHint": "Esta nota es muy grande y puede acortarse para el contexto de la IA en sesiones largas. La nota guardada permanece íntegra.",
     "summarizeNow": "Resumir ahora",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Ruta de sftp-server (acceso elevado a archivos)",
     "sftpServerPathPlaceholder": "Automático",
     "sftpServerPathHint": "Solo es necesario si la detección automática falla para el explorador de archivos con derechos elevados, p. ej. /usr/lib/openssh/sftp-server. Vacío = automático.",
+    "elevationAllowedLabel": "Permitir derechos elevados en el explorador de archivos",
+    "elevationAllowedHint": "Si está desactivado, el explorador de archivos no ofrece derechos elevados para este servidor.",
     "startDirectoryLabel": "Directorio de inicio (terminal y explorador de archivos)",
     "startDirectoryPlaceholder": "Directorio personal",
     "startDirectoryHint": "Ruta absoluta (/…) o una ruta que empiece por ~/. El terminal cambia allí con un cd visible y el explorador de archivos se abre allí. Los comandos de la IA siempre se ejecutan en el directorio personal. Vacío = directorio personal.",
@@ -294,6 +318,13 @@
       "connection": "Conexión",
       "security": "Seguridad",
       "invalid": "Contiene errores"
+    },
+    "importKey": {
+      "title": "¿Importar la clave en Smart SSH?",
+      "import": "Importar clave",
+      "keep": "Mantener la ruta del archivo",
+      "importHint": "La clave se guarda cifrada en Smart SSH y viaja con las copias de seguridad a tus otros dispositivos.",
+      "keepHint": "Solo se guarda la ruta del archivo y viaja a otros dispositivos. El archivo debe existir en la misma ruta en cada dispositivo."
     }
   },
   "filterRules": {
@@ -337,10 +368,15 @@
     "matchedRuleLabel": "Regla:",
     "segmentLabel": "Segmento {{index}}",
     "checksLabel": "Comprobaciones:",
-    "hardBlacklistLabel": "Lista negra fija:"
+    "hardBlacklistLabel": "Lista negra fija:",
+    "invalidPattern": "Patrón no válido",
+    "rowActions": "Acciones de la fila",
+    "ruleCount_one": "{{count}} regla",
+    "ruleCount_many": "{{count}} reglas",
+    "ruleCount_other": "{{count}} reglas"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Continuación automática en pausa tras {{limit}} pasos: envíe un mensaje para continuar.",
+    "autoContinuationLimitReached": "Continuación automática en pausa tras {{limit}} pasos sin su confirmación: envíe un mensaje para continuar.",
     "aiBudgetWaiting": "Esperando presupuesto de IA: próximo intento en {{seconds}} s…",
     "suggestCommand": "Sugerir comando",
     "generateDocument": "Generar documento: {{title}}",
@@ -354,8 +390,12 @@
     "blocked": "bloqueado",
     "rejected": "rechazado",
     "rejectedByUser": "Rechazado por el usuario.",
-    "usesStoredSudoPassword": "🔑 Se ejecuta con la contraseña de sudo guardada.",
-    "writeMayUseStoredSudoPassword": "🔑 Si falta el permiso de escritura, la aplicación escribe con la contraseña de sudo guardada (sudo).",
+    "expired": "caducada",
+    "discardedAfterReconnect": "Descartada tras restablecerse la conexión. No se ejecutó nada.",
+    "expiredTimeout": "Sin respuesta a tiempo y descartada. No se ejecutó nada.",
+    "expiredUnknown": "Esta solicitud ya no está pendiente. No se ejecutó nada.",
+    "usesStoredSudoPassword": "Se ejecuta con la contraseña de sudo guardada.",
+    "writeMayUseStoredSudoPassword": "Si falta el permiso de escritura, la aplicación escribe con la contraseña de sudo guardada (sudo).",
     "takeIntoNote": "Añadir a la nota",
     "takeIntoNoteFailed": "Error: inténtelo de nuevo",
     "riskServerLabel": "Servidor",
@@ -365,13 +405,14 @@
     "riskSecondOpinionUnavailableHint": "No se pudo obtener la segunda opinión de la IA. El riesgo mostrado es el basado en reglas.",
     "riskHint": "Evaluación basada en patrones conocidos: sin garantía.",
     "runningSince": "en ejecución desde hace {{seconds}} s…",
+    "exitCode": "código de salida: {{code}}",
     "waitingForInputHint": "Este comando probablemente está esperando una entrada. Deténlo y la IA propondrá una variante no interactiva.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",
-    "commandCancelledNotice": "⚠ Cancelado manualmente: la salida puede estar incompleta y no hay código de salida normal.",
-    "commandTruncatedNotice": "⚠ La salida se cortó en el límite de tamaño: puede estar incompleta.",
+    "commandCancelledNotice": "Cancelado manualmente: la salida puede estar incompleta y no hay código de salida normal.",
+    "commandTruncatedNotice": "La salida se cortó en el límite de tamaño: puede estar incompleta.",
     "liveOutputLabel": "Salida en directo",
-    "liveOutputTruncatedNotice": "⚠ Límite de tamaño alcanzado: ya no se muestra más salida.",
+    "liveOutputTruncatedNotice": "Límite de tamaño alcanzado: ya no se muestra más salida.",
     "autoRanLead": "Ejecutado automáticamente",
     "autoRanRule": "regla",
     "autoRanScopeGlobal": "global",
@@ -386,17 +427,15 @@
     "editableCommand": "Comando — editable",
     "execute": "Ejecutar",
     "deny": "Denegar",
-    "quickRule": "Aceptar + regla",
-    "quickRuleDropdownAria": "Mostrar sugerencias de reglas",
-    "newRulePatternHeading": "Patrón de la nueva regla de permiso",
     "scopeThisServer": "Este servidor",
     "scopeGlobal": "Global",
     "scopeTag": "Etiqueta",
     "tagNamePlaceholder": "Nombre de la etiqueta",
     "loadingSuggestions": "Cargando sugerencias…",
     "noSuggestions": "Sin sugerencias.",
-    "binaryFileHint": "⚠ Archivo binario: no es posible la comparación de texto. Tamaño anterior: {{oldSize}}, tamaño nuevo: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Contenido demasiado grande para una comparación por líneas. Tamaño anterior: {{oldSize}}, tamaño nuevo: {{newSize}}.",
+    "binaryFileHint": "Archivo binario: no es posible la comparación de texto. Tamaño anterior: {{oldSize}}, tamaño nuevo: {{newSize}}.",
+    "fileTooLargeHint": "El archivo supera {{limit}}, sin comparación de texto. Tamaño nuevo: {{newSize}}.",
+    "diffTooLargeHint": "Contenido demasiado grande para una comparación por líneas. Tamaño anterior: {{oldSize}}, tamaño nuevo: {{newSize}}.",
     "noContentChange": "(sin cambios en el contenido)",
     "quickRuleLabel": {
       "exact": "Exacto: {{patterns}}",
@@ -414,10 +453,25 @@
       "blocked": "siempre pregunta, sean cuales sean las reglas: {{reasons}}",
       "verdictAuto": "se ejecutará automáticamente la próxima vez",
       "verdictAsk": "seguirá preguntando: {{reasons}}",
-      "notice": "Regla creada. Este comando seguirá preguntando la próxima vez: {{reasons}}",
       "reasonOther": "otra comprobación de seguridad",
-      "loadFailed": "No se pudo cargar la cobertura de reglas"
+      "loadFailed": "No se pudo cargar la cobertura de reglas",
+      "summaryHeading": "Ya permitido",
+      "toDecideHeading": "Pendiente de decidir",
+      "expandAria": "Sugerencias de regla para {{segment}}",
+      "stagedBadge": "aún sin guardar",
+      "removeStaged": "Quitar",
+      "saveRules": "Guardar reglas ({{count}})",
+      "saveFailed": "No se pudieron guardar las reglas: {{message}}",
+      "unsavedHint": "Reglas sin guardar: {{count}}",
+      "segmentCovered": "cubre esta parte; el comando sigue pidiendo confirmación: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Inicio de sesión en {{hop}}",
+    "password": "Contraseña",
+    "submit": "Iniciar sesión",
+    "notStored": "El servidor pide esta información para iniciar sesión. No se guarda.",
+    "expired": "La solicitud de inicio de sesión ha caducado. No se estableció la conexión."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Advertencia de seguridad · La clave de host ha cambiado",
@@ -426,6 +480,7 @@
     "mismatchBodyAfterHost": " presenta una clave distinta de la guardada la última vez. Esto puede indicar un ataque de intermediario (man-in-the-middle). Continúe solo si está seguro de que la clave del servidor cambió legítimamente (p. ej. por una reinstalación del servidor).",
     "known": "Conocida",
     "offeredNow": "Ofrecida ahora",
+    "offered": "Ofrecida",
     "keyType": "Tipo de clave",
     "cancelConnection": "Cancelar conexión",
     "trustAnyway": "Confiar de todos modos",
@@ -438,13 +493,18 @@
   },
   "sessionTabs": {
     "newSession": "Nueva sesión",
-    "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
     "menu": {
       "open": "Abrir el menú de navegación",
       "title": "Menú de navegación",
-      "sessions": "Sesiones abiertas"
+      "sessions": "Sesiones abiertas",
+      "close": "Cerrar el menú de navegación",
+      "needsConfirmation": "Requiere confirmación",
+      "activities": "Actividades",
+      "activitiesRunning_one": "{{count}} en curso",
+      "activitiesRunning_many": "{{count}} en curso",
+      "activitiesRunning_other": "{{count}} en curso"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +513,11 @@
       "pendingBadge": "Requiere confirmación",
       "readOnlyHint": "Esta sesión pertenece a una herramienta externa (MCP). Solo muestra las acciones de la herramienta para confirmar o rechazar y sus resultados; aquí no hay entrada de chat ni terminal. Al cerrarla finaliza la sesión MCP y se rechazan las confirmaciones pendientes."
     },
-    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada."
+    "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada.",
+    "pendingBadge": "Pendiente",
+    "newConnection": "Nueva conexión"
   },
   "aiProvider": {
-    "title": "Proveedor de IA",
     "openLogs": "Abrir registros de diagnóstico en el administrador de archivos",
     "noProviders": "Aún no hay ningún proveedor configurado.",
     "configuredProvidersTitle": "Proveedores configurados",
@@ -476,16 +537,16 @@
     "apiKeyFormatHint": "No parece una clave de {{providerLabel}}: se esperaba un prefijo como “{{expectedPrefix}}”. Aun así puede guardarla; los proveedores cambian los formatos de vez en cuando.",
     "testCredentials": "Probar credenciales",
     "testingCredentials": "Probando…",
-    "testResultValid": "✓ Credenciales válidas",
-    "testResultAuthFailed": "✗ Error de autenticación: compruebe la clave de API",
-    "testResultUnreachable": "✗ Proveedor inaccesible: {{message}}",
+    "testResultValid": "Credenciales válidas",
+    "testResultAuthFailed": "Error de autenticación: compruebe la clave de API",
+    "testResultUnreachable": "Proveedor inaccesible: {{message}}",
     "testResultRateLimited": "Las credenciales parecen válidas, pero el proveedor está limitando las solicitudes ahora mismo. Pruebe de nuevo en un minuto.",
     "nativeToolCalling": "Admite llamadas nativas a herramientas",
     "discoverModels": "Cargar modelos",
     "discoveringModels": "Cargando modelos…",
     "modelDiscoveryFailedHint": "No se pudieron cargar los modelos automáticamente: introduzca el nombre del modelo manualmente.",
     "modelDiscoveryEmptyHint": "El proveedor no devolvió ningún modelo. Introduzca el nombre del modelo a mano.",
-    "modelDiscoveryAuthFailed": "✗ El proveedor rechazó estas credenciales: compruebe la clave de API",
+    "modelDiscoveryAuthFailed": "El proveedor rechazó estas credenciales: compruebe la clave de API",
     "advanced": "Avanzado",
     "extraHeadersLabel": "Encabezados adicionales",
     "extraHeadersHint": "Se adjuntan a cada solicitud a este proveedor (p. ej. HTTP-Referer/X-Title de OpenRouter).",
@@ -528,6 +589,7 @@
     "ollamaProbeRetry": "Buscar de nuevo",
     "ollamaProbeNotFoundHeading": "No se encontró ningún Ollama local (puerto predeterminado 11434).",
     "ollamaProbeNotFoundInstructions": "Instale Ollama desde ollama.com, inícielo y cargue un modelo (p. ej. `ollama pull llama3`); después vuelva a buscar.",
+    "typeLabel": "Tipo",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +654,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Se detectó un posible intento de inyectar instrucciones mediante contenido del servidor: requiere confirmación",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Solicitado mediante MCP: siempre requiere confirmación",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Usa la contraseña de sudo guardada: siempre requiere confirmación",
+    "FILTER_RULES_UNAVAILABLE": "No se pudieron cargar las reglas de filtro: nada se ejecuta automáticamente, se requiere confirmación",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserta un valor secreto guardado antes de enviar: siempre requiere confirmación",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Lee un archivo con credenciales (p. ej. clave SSH, .env, /etc/shadow): siempre requiere confirmación",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Se rechazó una acción anterior de esta respuesta: requiere confirmación",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Inicia sftp-server (con sudo: acceso a archivos con privilegios de root): siempre requiere confirmación",
@@ -601,6 +665,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "No se pudo ejecutar la comprobación de instrucciones inyectadas (problema con el proveedor de IA). La siguiente acción propuesta requiere confirmación.",
     "AI_INJECTION_CHECK_INACTIVE": "La comprobación de instrucciones inyectadas está activada para este servidor, pero no está activa en esta sesión (la segunda opinión de la IA está desactivada o no se pudo configurar). Active la segunda opinión en los ajustes y vuelva a conectar.",
     "AI_SECOND_OPINION_SETUP_FAILED": "La segunda opinión de la IA está activada, pero no se pudo configurar para esta sesión (proveedor eliminado o credencial no encontrada). Los comandos no se comprueban con ella: corrija el ajuste y vuelva a conectar.",
+    "REDACTION_INCOMPLETE": "No se pudieron cargar algunos valores secretos de este servidor; es posible que no se enmascaren en lo que se envía a la IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "No se pudieron leer las etiquetas actuales del servidor: requiere confirmación",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Riesgo evaluado como rojo o no evaluable de forma fiable (p. ej. por ser demasiado largo): siempre requiere confirmación",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Las actualizaciones de notas siempre requieren confirmación",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Las escrituras de archivos siempre requieren confirmación",
@@ -638,7 +704,13 @@
     "KEYCHAIN_KEY_MISMATCH": "La clave del llavero no pertenece a esta base de datos. No se cambió nada: guardarla dejaría la base de datos ilegible en el próximo inicio.",
     "SFTP_CONTENT_TOO_LARGE": "El archivo supera los 50 MB y no se puede copiar al portapapeles.",
     "CLIPBOARD_FILE_FAILED": "No se pudo colocar el archivo en el portapapeles de este sistema.",
-    "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "El proveedor de IA seleccionado no está configurado. Elija un proveedor configurado.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Elija un proveedor de IA antes de activar la segunda opinión sobre el riesgo.",
+    "CHAT_SESSION_NOT_FOUND": "Este chat guardado ya no existe. Seleccione Reintentar para conectarse normalmente sin reanudarlo.",
+    "SESSION_NOT_FOUND": "Esta sesión ya no está abierta. Ábrela de nuevo desde la lista de servidores.",
+    "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo",
+    "SSH_NO_COMMON_ALGORITHM": "No hay ningún algoritmo SSH en común con el servidor. Su software SSH es demasiado antiguo o restrictivo. Actualízalo o activa algoritmos modernos."
   },
   "mcpServer": {
     "hint": "Los clientes MCP externos pueden usarlo para proponer comandos, lecturas y escrituras de archivos y actualizaciones de notas en servidores de la lista de permitidos; cada solicitud requiere siempre confirmación en la aplicación, con independencia de las reglas de permiso existentes.",
@@ -726,13 +798,17 @@
     "openedLocally": "“{{name}}” abierto localmente: se ofrecerá subir los cambios",
     "openLocallyFailed": "No se pudo abrir “{{name}}” localmente: {{reason}}",
     "editUploaded": "Cambio en “{{name}}” subido",
-    "editUploadFailed": "No se pudo subir el cambio en “{{name}}”: {{reason}}",
     "uploadedFolder": "Carpeta “{{name}}” subida: {{count}} archivos",
     "uploadFolderFailed": "Error al subir la carpeta “{{name}}”: {{reason}}",
     "uploadFailedMany": "No se pudieron subir {{name}} archivos, p. ej.: {{reason}}",
     "nothingToPaste": "Nada que pegar: el portapapeles no contiene archivos",
     "createFileDone": "Archivo «{{name}}» creado",
-    "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}"
+    "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}",
+    "chownDone": "Propietario de “{{name}}” cambiado",
+    "chownRecursive": "Propietario cambiado — {{count}} elementos en “{{name}}”",
+    "chownFailed": "No se pudo cambiar el propietario de “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Propietario de “{{name}}” sin cambios: usuario desconocido",
+    "chownUnknownGroup": "Propietario de “{{name}}” sin cambios: grupo desconocido"
   },
   "fileElevation": {
     "toggle": "Derechos elevados",
@@ -746,6 +822,17 @@
     "opDelete": "Eliminación",
     "opChmod": "Cambio de permisos",
     "banner": "Derechos elevados activos: todas las acciones de archivos en este explorador se ejecutan como {{user}}.",
+    "bannerLogged": "Registrado en el servidor.",
+    "notice": {
+      "title": "Sobre los derechos elevados",
+      "intro": "Ahora lees y escribes archivos como {{user}}. Los cambios se aplican de inmediato y la aplicación no puede deshacerlos.",
+      "loggedApp": "Cada cambio se registra en el registro de la aplicación.",
+      "loggedAppAndServer": "Cada cambio se registra en el registro de la aplicación y en el registro de autenticación del servidor.",
+      "passwordless": "La regla sudo para sftp-server da a {{user}} acceso sin contraseña a todo lo que se ejecuta con este inicio de sesión, no solo a esta aplicación.",
+      "alternative": "Si administras este servidor a menudo como root, un inicio de sesión root aparte con clave (PermitRootLogin prohibit-password) hace explícito ese acceso.",
+      "gotIt": "Entendido",
+      "dontShowAgain": "No volver a mostrar para este servidor"
+    },
     "deleteFileTitle": "¿Eliminar archivo como {{user}}?",
     "deleteDirTitle": "¿Eliminar carpeta como {{user}}?",
     "overwriteTitle": "¿Sobrescribir archivo como {{user}}?",
@@ -767,7 +854,8 @@
     "close": "Cerrar",
     "detail": "Detalles: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo requiere una contraseña para sftp-server en este servidor. La aplicación nunca pide una contraseña de sudo.",
+      "passwordRequired": "sudo exige una contraseña para sftp-server en este servidor. Añade la regla de sudoers de abajo o guarda una contraseña de sudo en el perfil del servidor para activar los permisos elevados.",
+      "wrongSudoPassword": "sudo rechazó la contraseña de sudo guardada. Revisa la contraseña de sudo en el perfil del servidor.",
       "notAllowed": "Este inicio de sesión SSH no puede iniciar sftp-server mediante sudo sin contraseña.",
       "requireTty": "sudo se niega a ejecutarse sin terminal (“requiretty” en sudoers). Desactive requiretty para este inicio de sesión, p. ej. con “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "No se encontró sftp-server en el servidor. Introduzca su ruta en el perfil del servidor, en “Avanzado”.",
@@ -777,7 +865,8 @@
       "invalidUser": "Usuario de destino no válido.",
       "unsupported": "El servidor local no tiene modo elevado.",
       "checkFailed": "Error al comprobar los derechos de sudo.",
-      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers)."
+      "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers).",
+      "disabledForServer": "Los derechos elevados están desactivados para este servidor en el perfil del servidor."
     },
     "channelLost": "Derechos elevados finalizados: el canal elevado ya no está activo.",
     "group": "Derechos elevados",
@@ -785,7 +874,11 @@
     "otherUser": "Como otro usuario…",
     "targetUser": "Usuario de destino",
     "targetUserHelp": "Ejecuta el explorador de archivos como este usuario mediante sudo. Predeterminado: root.",
-    "confirm": "Elevar"
+    "confirm": "Elevar",
+    "opChown": "Cambio de propietario",
+    "chownNote": "El propietario se cambiará como {{user}}.",
+    "idleSwitchedOff": "Derechos elevados desactivados tras {{minutes}} minutos sin actividad",
+    "revokedByProfile": "Derechos elevados finalizados: el perfil del servidor ya no los permite."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -799,6 +892,8 @@
     "groupsHeading": "Estructura de carpetas resultante",
     "entriesHeading": "{{count}} servidores",
     "field": {
+      "name": "Nombre",
+      "include": "Incluir",
       "host": "Dirección",
       "port": "Puerto",
       "username": "Usuario",
@@ -874,6 +969,9 @@
       "proxyJumpLocalPseudoServer": "apunta al seudoservidor local"
     },
     "confirm": "Importar",
+    "confirmCount_one": "Importar {{count}} servidor",
+    "confirmCount_many": "Importar {{count}} de servidores",
+    "confirmCount_other": "Importar {{count}} servidores",
     "applying": "Importando …",
     "result": {
       "success": "{{created}} servidores creados, {{groups}} carpetas, {{skipped}} conflicto(s) omitido(s).",
@@ -974,14 +1072,17 @@
       "hostKeyCheck": "Comprobación de la clave de host",
       "authentication": "Autenticación",
       "sessionReady": "Sesión establecida",
-      "dnsSkipped": "Dirección IP: no hace falta resolución"
+      "dnsSkipped": "Dirección IP: no hace falta resolución",
+      "outdatedAlgorithms": "Algoritmos obsoletos",
+      "banner": "Banner del servidor"
     },
     "status": {
       "ok": "OK",
       "running": "en curso",
       "failed": "fallido ({{code}})",
       "skipped": "omitido",
-      "failedReason": "falló: {{reason}}"
+      "failedReason": "falló: {{reason}}",
+      "warning": "advertencia"
     },
     "hostKeyResult": {
       "known": "conocida",
@@ -994,7 +1095,8 @@
       "privateKey": "Clave privada",
       "agent": "Agente SSH",
       "certificate": "Certificado",
-      "identityFile": "Archivo de clave"
+      "identityFile": "Archivo de clave",
+      "keyboardInteractive": "Interactivo por teclado"
     },
     "detail": {
       "addresses": "Direcciones: {{addresses}}",
@@ -1003,7 +1105,9 @@
       "cipher": "Cifrado: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceptada parcialmente, se requiere más autenticación",
-      "remainingMethods": "El servidor también ofrece: {{methods}} (no probados)"
+      "remainingMethods": "El servidor también ofrece: {{methods}} (no probados)",
+      "round": "Ronda {{round}}",
+      "prompts": "Solicitudes del servidor: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Se agotó el tiempo de la conexión TCP",
@@ -1021,6 +1125,7 @@
     "parentDirectory": "Directorio superior",
     "newFolderButton": "+ Carpeta",
     "fileActionsGroup": "Acciones de archivos",
+    "directoryActions": "Acciones del directorio",
     "upload": "Subir",
     "uploadDialogTitle": "Subir archivo(s)",
     "uploadFolder": "Subir carpeta",
@@ -1055,8 +1160,10 @@
       "name": "Nombre",
       "size": "Tamaño",
       "permissions": "Permisos",
-      "modified": "Modificado"
+      "modified": "Modificado",
+      "owner": "Propietario"
     },
+    "columnsMenu": "Mostrar u ocultar columnas",
     "localEdit": {
       "uploading": "Subiendo “{{name}}”…",
       "changed": "“{{name}}” se modificó localmente. ¿Subirlo al servidor?",
@@ -1064,8 +1171,7 @@
       "editing": "Editando “{{name}}” localmente…",
       "end": "Dejar de editar",
       "uploadTitle": "¿Subir los cambios locales?",
-      "remoteChanged": "El archivo remoto cambió desde la descarga: la subida sobrescribiría ese otro cambio.",
-      "noDiff": "No es posible una comparación de texto (archivo binario o demasiado grande). Tamaño nuevo: {{size}}."
+      "remoteChanged": "El archivo remoto cambió desde la descarga: la subida sobrescribiría ese otro cambio."
     },
     "deleteDialog": {
       "fileTitle": "¿Eliminar archivo?",
@@ -1089,7 +1195,6 @@
       "conflictTitle": "¿Sobrescribir archivos de la carpeta?",
       "conflictBody": "Subir “{{name}}” sobrescribiría estos {{count}} archivos en el servidor. No se sobrescribe nada si no lo confirma.",
       "summaryTitle": "Subida de carpeta: “{{name}}”",
-      "summary": "{{uploaded}} archivos subidos, {{skipped}} omitidos, {{failed}} fallidos.",
       "notAttempted": "No se intentó subir {{count}} archivos porque no se pudo crear su carpeta.",
       "skipped": "Omitidos",
       "failed": "Fallidos",
@@ -1100,12 +1205,14 @@
         "unsupported": "no es un archivo ni una carpeta normal",
         "notGranted": "no incluido en su selección",
         "overwriteNotConfirmed": "existe en el servidor, sobrescritura no confirmada"
-      }
+      },
+      "uploaded": "Subidos"
     },
     "uploadConflict": {
       "title": "¿Sobrescribir archivo?",
       "body": "ya existe en el servidor.",
-      "noDiff": "No es posible una comparación de texto (archivo binario o demasiado grande). Tamaño actual: {{remoteSize}}, tamaño nuevo: {{localSize}}."
+      "currentSize": "Tamaño actual",
+      "newSize": "Tamaño nuevo"
     },
     "menu": {
       "download": "Descargar",
@@ -1121,8 +1228,10 @@
       "cut": "Cortar",
       "delete": "Eliminar",
       "newFolder": "Nueva carpeta",
-      "newFile": "Nuevo archivo"
+      "newFile": "Nuevo archivo",
+      "chown": "Cambiar propietario…"
     },
+    "linkMarker": "enlace simbólico",
     "properties": {
       "title": "Propiedades",
       "name": "Nombre",
@@ -1130,6 +1239,10 @@
       "type": "Tipo",
       "typeFolder": "Carpeta",
       "typeFile": "Archivo",
+      "typeLinkFolder": "Enlace simbólico a una carpeta",
+      "typeLinkFile": "Enlace simbólico a un archivo",
+      "typeLinkBroken": "Enlace simbólico roto",
+      "linkTarget": "Destino del enlace",
       "size": "Tamaño",
       "permissionsSymbolic": "Permisos (simbólicos)",
       "permissionsNumeric": "Permisos (numéricos)",
@@ -1179,10 +1292,24 @@
       "notText": "No es posible un diff de texto: el archivo es binario (no es texto UTF-8 válido).",
       "permission": "No es posible un diff de texto: no tienes permiso de lectura sobre este archivo con los derechos actuales.",
       "other": "No es posible un diff de texto: no se pudo leer el archivo ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Cambiar propietario",
+      "owner": "Usuario",
+      "group": "Grupo",
+      "hint": "Introduzca un nombre o un número. Un lado que deje como está no se modifica. El servidor decide si se permite el cambio (normalmente solo root puede cambiar el propietario).",
+      "recursive": "Aplicar al contenido",
+      "recursiveWarning": "— cambia el propietario de TODOS los archivos y subcarpetas de esta carpeta. No se siguen los enlaces simbólicos. No se puede deshacer."
+    },
+    "transferChown": "Cambiando propietario de {{name}}",
+    "stopProgress": "Progreso",
+    "noTextDiff": "No es posible un diff de texto (archivo binario o demasiado grande)."
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",
+    "copyCode": "Copiar código",
+    "codeCopied": "Código copiado",
+    "codeCopyFailed": "Error al copiar",
     "composerMore": "Más acciones de entrada",
     "newChat": "Nuevo chat",
     "newChatDisabledHint": "No disponible mientras la IA responde o hay una confirmación abierta.",
@@ -1206,12 +1333,18 @@
     "queued": "Se enviará con la siguiente solicitud",
     "responseCancelled": "Respuesta cancelada.",
     "contextCompactedNotice": "Las partes más antiguas de este chat se resumieron para caber en el contexto del modelo.",
-    "contextUsage": "Contexto {{used}} / {{window}}",
     "contextUsageTooltip": "Las partes más antiguas del chat se resumen automáticamente cuando el contexto se llena.",
+    "messageLabel": "Mensaje",
+    "headerProviderTooltip": "Proveedor: {{provider}}",
     "webResearchUnavailable": "La investigación web no está disponible para esta cuenta de proveedor (la búsqueda web está desactivada allí). Esta sesión responde sin investigación web. Para desactivarla de forma permanente: Ajustes → Proveedor de IA → “Investigación web”.",
     "emptyResponse": "El modelo no devolvió ninguna respuesta. En modelos con fase de razonamiento, ayuda un límite de salida mayor en los ajustes del proveedor.",
     "refusedResponse": "El modelo rechazó esta solicitud. Reformúlala o inicia un chat nuevo.",
     "outputTruncated": "(truncado)",
+    "outputMoreLines_one": "… {{count}} línea más",
+    "outputMoreLines_many": "… {{count}} líneas más",
+    "outputMoreLines_other": "… {{count}} líneas más",
+    "outputShowAll": "Mostrar todo",
+    "outputShowLess": "Mostrar menos",
     "fileWritten": "Archivo '{{path}}' escrito.",
     "writtenWithSudoPassword": "Escrito con la contraseña de sudo guardada.",
     "documentGenerated": "Documento generado",
@@ -1290,7 +1423,18 @@
     "aiTab": "IA",
     "paneTabs": "Paneles de la sesión",
     "moreActions": "Más acciones",
+    "thisDevice": "este dispositivo",
+    "paneSwitch": "Selector de panel",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
+    "extraKeys": {
+      "group": "Teclas adicionales",
+      "up": "Flecha arriba",
+      "down": "Flecha abajo",
+      "left": "Flecha izquierda",
+      "right": "Flecha derecha",
+      "pageUp": "Retroceder página",
+      "pageDown": "Avanzar página"
+    },
     "reconnectingAuto": "Reconectando… (intento {{attempt}})",
     "stopReconnect": "Detener",
     "reconnectGaveUp": "No se pudo restablecer la conexión."
@@ -1323,7 +1467,8 @@
       "body": "Se descargará una sola vez un modelo de voz ({{model}}, unos {{size}} MiB) desde {{source}}. Después, el reconocimiento de voz se ejecuta por completo en este equipo; el audio y el texto nunca salen de él.",
       "download": "Descargar",
       "cancel": "Cancelar",
-      "progress": "Progreso de la descarga"
+      "progress": "Progreso de la descarga",
+      "parakeetLicense": "Licencia: {{license}}"
     },
     "errors": {
       "noDevice": "No se encontró ningún micrófono. Conecta uno y revisa el dispositivo de entrada en los ajustes del sistema.",
@@ -1339,7 +1484,8 @@
       "model": "Modelo de voz",
       "models": {
         "base": "Base (unos {{size}} MiB, predeterminado)",
-        "small": "Small (unos {{size}} MiB, más preciso, más lento)"
+        "small": "Small (unos {{size}} MiB, más preciso, más lento)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (unos {{size}} MiB, multilingüe, rápido; detecta el idioma automáticamente)"
       },
       "statusReady": "Descargado",
       "statusNotDownloaded": "No descargado",
@@ -1347,7 +1493,8 @@
       "download": "Descargar",
       "delete": "Eliminar modelo",
       "language": "Idioma de reconocimiento",
-      "languageAuto": "Automático"
+      "languageAuto": "Automático",
+      "languageParakeetHint": "Parakeet detecta el idioma automáticamente; este ajuste se aplica a los modelos Whisper."
     }
   },
   "connectTab": {
@@ -1407,6 +1554,8 @@
     "import": {
       "title": "Restaurar desde copia",
       "pickTitle": "Elige un archivo de copia",
+      "pickFailed": "No se pudo abrir el archivo desde la ubicación elegida.",
+      "chooseAgain": "Elegir el archivo de nuevo",
       "file": "Archivo: {{name}}",
       "kind": "Qué abre esta copia",
       "useCode": "Código de recuperación",
@@ -1423,6 +1572,9 @@
       "file": "Copia",
       "sessions": "Sesiones abiertas que se cerrarán: {{count}}",
       "safety": "Tus datos actuales se guardan antes en {{dir}}. Tus servidores pasan a una carpeta nueva llamada “Previous data” con la fecha de hoy.",
+      "pickDirTitle": "Elegir una carpeta para la copia de seguridad",
+      "changeSafetyDir": "Cambiar…",
+      "changeSafetyDirFailed": "No se pudo elegir la carpeta. Se mantiene la carpeta predeterminada.",
       "replace": "Reemplazar datos"
     },
     "counts": {
@@ -1447,5 +1599,61 @@
       "newerVersion": "Esta copia fue creada por una versión más reciente de Smart SSH. Actualiza la app e inténtalo de nuevo.",
       "failed": "La operación falló. No se cambió nada."
     }
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "body": "Smart SSH encontró un error inesperado en la interfaz. Recarga para continuar. Si vuelve a ocurrir, crea un paquete de diagnóstico en Ajustes → Diagnóstico tras recargar.",
+    "reload": "Recargar"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Este servidor usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza el software SSH del servidor si puedes.",
+    "outdatedAlgorithmsHop": "{{hop}} usa algoritmos SSH obsoletos ({{algorithms}}). La conexión es menos segura. Actualiza su software SSH si puedes."
+  },
+  "elevatedIdle": {
+    "label": "Desactivar los derechos elevados tras inactividad",
+    "minutes5": "5 minutos",
+    "minutes15": "15 minutos",
+    "minutes30": "30 minutos",
+    "minutes60": "60 minutos",
+    "never": "Nunca",
+    "hint": "El explorador de archivos sale solo del modo elevado tras este tiempo sin actividad elevada. Una operación en curso cuenta como actividad."
+  },
+  "activities": {
+    "title": "Actividades",
+    "buttonRunning": "Actividades: {{running}} en curso",
+    "buttonFailed": "Actividades: una actividad falló",
+    "buttonDone": "Actividades: finalizado",
+    "cancel": "Cancelar",
+    "cancelNamed": "Cancelar {{title}}",
+    "dismiss": "Descartar",
+    "dismissNamed": "Descartar {{title}}",
+    "succeeded": "Hecho",
+    "cancelled": "Cancelado",
+    "failed": "Falló",
+    "inProgress": "En curso",
+    "verifying": "Verificando",
+    "speechModelTitle": "Modelo de voz {{name}}",
+    "buttonInterrupted": "Actividades: algunas se interrumpieron",
+    "interrupted": "Interrumpida",
+    "resume": "Reanudar",
+    "resumeNamed": "Reanudar {{title}}",
+    "discard": "Descartar",
+    "discardNamed": "Descartar {{title}}",
+    "resumeFailed": "No se pudo reanudar.",
+    "quitTitle": "¿Salir con actividades en curso?",
+    "quitBody": "Estas actividades siguen en curso y se detendrán:",
+    "quitResumeHint": "Las descargas interrumpidas se pueden reanudar la próxima vez que inicies la aplicación.",
+    "quitAnyway": "Salir de todos modos",
+    "keepRunning": "Seguir en ejecución",
+    "summaryRunning_one": "{{count}} en curso",
+    "summaryRunning_many": "{{count}} en curso",
+    "summaryRunning_other": "{{count}} en curso",
+    "summaryInterrupted_one": "{{count}} interrumpida",
+    "summaryInterrupted_many": "{{count}} interrumpidas",
+    "summaryInterrupted_other": "{{count}} interrumpidas",
+    "summaryFailed_one": "{{count}} fallida",
+    "summaryFailed_many": "{{count}} fallidas",
+    "summaryFailed_other": "{{count}} fallidas",
+    "remaining": "quedan {{time}}"
   }
 }

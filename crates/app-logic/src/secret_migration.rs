@@ -173,6 +173,7 @@ pub(crate) fn is_migratable(reference: &CredentialRef) -> bool {
 /// Übernahme fortfahren“ an. Im Schlüsselbund-Modus wäre die Wahl sinnlos —
 /// K kommt von dort, der Schlüsselbund ist also erreichbar, und die Secrets
 /// liegen im Zweifel nur dort.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub async fn migrate_secrets_into_database(
     store: &SqliteProfileStore,
     keyring: &(dyn CredentialStore + Send + Sync),

@@ -1,6 +1,9 @@
 # ADR 0067: Verbindungstest und Speichern bewerten leere Zugangsdaten gleich
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0073-shared-credential-trim.md (§9, Q-BL-0149-02,
 Q-BL-0149-03),
 ADR 0066 §3 (dort als offen protokolliert), Spec 0049 (Fund 1),

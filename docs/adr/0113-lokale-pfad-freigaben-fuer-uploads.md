@@ -1,6 +1,9 @@
 # ADR 0113 — Freigaben für lokale Pfade beim Upload
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0020 (Abschnitt 5.2), Spec 0054 (Teil 3 und 4), Issue #89
 
 ## Problem

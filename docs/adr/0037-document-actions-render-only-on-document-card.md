@@ -1,7 +1,7 @@
 # 0037-document-actions-render-only-on-document-card
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

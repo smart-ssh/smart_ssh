@@ -43,6 +43,9 @@ const COMMANDS_UNDER_TEST: &[&str] = &[
     "send_chat_message",
     "get_mcp_server_settings",
     "set_mcp_server_enabled",
+    "record_list_sessions",
+    "record_list_entries",
+    "record_session_entries",
     "get_app_info",
     "create_overlay_titlebar",
     "unlock_with_master_password",
@@ -151,6 +154,10 @@ fn test_t18_a_locked_app_answers_every_command_with_an_error_and_no_data() {
         // Ausschalten des Servers und das Lesen seiner Zugangsdaten.
         "get_mcp_server_settings",
         "set_mcp_server_enabled",
+        // Activity record read API (issue #1450).
+        "record_list_sessions",
+        "record_list_entries",
+        "record_session_entries",
         // Ohne `AppState` im Argument — sie liefen ohne das Tor.
         "get_app_info",
         "create_overlay_titlebar",
@@ -257,6 +264,7 @@ const PLUGINS_DEFERRED_WHILE_LOCKED: &[&str] = &[
     "tauri_plugin_store::Builder::new().build()",
     "tauri_plugin_os::init()",
     "tauri_plugin_notification::init()",
+    "microphone_plugin()",
 ];
 
 /// Der Rumpf einer Funktion in `lib.rs` als **Bereich** — von ihrem Kopf
@@ -340,7 +348,7 @@ fn test_the_deferred_plugins_are_registered_in_exactly_those_two_places() {
         .collect();
     assert_eq!(
         elsewhere,
-        vec![".plugin(tauri_plugin_decoration::init())"],
+        vec![".plugin(tauri_plugin_decoration::init());"],
         "A16: Außerhalb der beiden Funktionen darf nur das Plugin registriert werden, das den \
          Fensterrahmen gestaltet und keine Datei, Einstellung und keinen Zustand des \
          Betriebssystems liest. Kommt hier eines dazu, gehört es in \

@@ -2,18 +2,19 @@
 //! strukturiertes Logging/Diagnose, Zugangsdatei-Lesen — Teil der
 //! Spec-0083-Aufteilung von `commands.rs`.
 
+use app_logic::error::ResultCodeExt;
 use tauri::AppHandle;
 use tauri::State;
 
 use persistence_sqlite::AiProviderConfig;
-use ssh_manager_core::ai::{
-    fence_untrusted, ChatMessage, DefaultOutputRedactor, MessageContent, Role, UntrustedKind,
-};
+use ssh_manager_core::ai::DefaultOutputRedactor;
+#[cfg(test)]
+use ssh_manager_core::ai::{MessageContent, Role};
 use ssh_manager_core::shared::ServerId;
 
 use app_logic::dto::DocumentFormat;
 use app_logic::dto::KeychainStatusDto;
-use app_logic::error::CommandResult;
+use app_logic::error::{CommandError, CommandResult};
 use app_logic::state::AppState;
 
 // --- Spec 0012: KI-generierte Dokumente -------------------------------
@@ -57,14 +58,16 @@ pub async fn export_document(
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(());
     };
-    let path = path.into_path()?;
+    // Issue #679: path on the desktop, `content://` URI on Android.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    let opener = crate::local_file::platform_opener(&app);
 
-    // `std::fs::write` statt `tokio::fs`: Letzteres bräuchte das
-    // ungenutzte `fs`-Feature nur für diesen einen, durch eine explizite
-    // Nutzeraktion ausgelösten Einzelschreibvorgang — für eine
-    // Analyse-Dokumentgröße unkritisch blockierend.
+    // Blocking write instead of `tokio::fs`: a single write triggered by an
+    // explicit user action, small document.
     match format {
-        DocumentFormat::Markdown => std::fs::write(path, content_markdown)?,
+        DocumentFormat::Markdown => {
+            handle.write_all(opener.as_ref(), content_markdown.as_bytes())?
+        }
     }
 
     Ok(())
@@ -107,7 +110,8 @@ pub async fn open_log_directory(app: AppHandle) -> CommandResult<()> {
     let dir = app_logic::logging::default_log_dir();
     std::fs::create_dir_all(&dir)?;
     app.opener()
-        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)?;
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)
+        .or_code("OPEN_PATH_FAILED")?;
     Ok(())
 }
 
@@ -125,7 +129,7 @@ pub(crate) struct EditionDataPaths(pub Vec<app_logic::data_paths::ExtraDataPath>
 fn mcp_settings_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> CommandResult<std::path::PathBuf> {
-    Ok(crate::settings_store::settings_store_path(app)?)
+    crate::settings_store::settings_store_path(app).or_code("SETTINGS_STORE_UNAVAILABLE")
 }
 
 fn current_data_paths<R: tauri::Runtime>(
@@ -134,6 +138,7 @@ fn current_data_paths<R: tauri::Runtime>(
 ) -> CommandResult<Vec<app_logic::data_paths::DataPathEntry>> {
     Ok(app_logic::data_paths::effective_data_paths(
         &mcp_settings_path(app)?,
+        &crate::speech_models::models_dir(app)?,
         &extra.0,
     ))
 }
@@ -151,6 +156,13 @@ pub async fn get_data_paths<R: tauri::Runtime>(
         .collect())
 }
 
+/// Issue #1314: name of the keychain service this instance uses (Settings →
+/// Diagnostics). The name only, never an entry or a secret.
+#[tauri::command]
+pub fn get_keychain_service() -> String {
+    crate::keychain::process_keychain_service()
+}
+
 /// Issue #16: öffnet den Ordner zum Eintrag `id` im Dateimanager.
 ///
 /// Das Frontend übergibt nur den Bezeichner aus `get_data_paths`, nie einen
@@ -165,12 +177,17 @@ pub async fn open_data_path_folder(
     use tauri_plugin_opener::OpenerExt;
 
     let entries = current_data_paths(&app, &extra)?;
-    let folder = app_logic::data_paths::open_folder_target(&entries, &id)?;
+    let folder =
+        app_logic::data_paths::open_folder_target(&entries, &id).or_code("DATA_FOLDER_UNKNOWN")?;
     if !folder.is_dir() {
-        return Err(format!("folder does not exist: {}", folder.display()).into());
+        return Err(CommandError::with_code(
+            format!("folder does not exist: {}", folder.display()),
+            "DATA_FOLDER_MISSING",
+        ));
     }
     app.opener()
-        .open_path(folder.to_string_lossy().into_owned(), None::<&str>)?;
+        .open_path(folder.to_string_lossy().into_owned(), None::<&str>)
+        .or_code("OPEN_PATH_FAILED")?;
     Ok(())
 }
 
@@ -340,8 +357,11 @@ pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> Command
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(());
     };
-    let path = path.into_path()?;
-    std::fs::write(path, content)?;
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    handle.write_all(
+        crate::local_file::platform_opener(&app).as_ref(),
+        content.as_bytes(),
+    )?;
 
     Ok(())
 }
@@ -353,16 +373,8 @@ pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> Command
 /// ActionResult`) ohne einen vollen `connect()`-Durchlauf direkt testen
 /// lässt (spec-reviewer-Fund, Follow-up-Review: die vorherigen Tests
 /// prüften nur den System-Prompt, nie diesen konkreten Nachrichtenbau).
-pub(crate) fn build_os_banner_message(sanitized_os: &str) -> ChatMessage {
-    ChatMessage {
-        role: Role::ActionResult,
-        content: MessageContent::Text(fence_untrusted(
-            UntrustedKind::RemoteOsInfo,
-            "uname -a",
-            sanitized_os,
-        )),
-    }
-}
+#[cfg(test)]
+pub(crate) use app_logic::connect::session_builder::build_os_banner_message;
 
 /// Liest den Textinhalt einer vom Nutzer im nativen Dateidialog ausgewählten
 /// Schlüssel-/Zertifikatsdatei (Spec 0013, SEC-06). Ersetzt globale Dateilese-
@@ -396,8 +408,13 @@ pub async fn read_credential_file(app: AppHandle, title: String) -> CommandResul
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = path.into_path()?;
-    let content = std::fs::read_to_string(path)?;
+    // Issue #679: a `content://` URI on Android is read through the platform
+    // opener, never as a path.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    let content = handle.read_to_string(
+        crate::local_file::platform_opener(&app).as_ref(),
+        crate::local_file::MAX_TEXT_FILE_BYTES,
+    )?;
     Ok(Some(content))
 }
 
@@ -432,6 +449,7 @@ mod unusable_server_tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),

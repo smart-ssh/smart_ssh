@@ -1,3 +1,4 @@
+import { dynamicKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,10 +7,10 @@ import {
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
-} from "../api";
-import type { KeychainStatusDto } from "../types";
+} from "../api/api";
+import type { KeychainStatusDto } from "../api/types";
 import { DataPathsSection } from "./DataPathsSection";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
@@ -41,7 +42,7 @@ export function DiagnosticsSettings() {
     if (keychain.available) return t("diagnostics.keychainAvailable");
     const reason = keychain.reason ?? "unknown";
     const key = `diagnostics.keychainUnavailable.${reason}`;
-    const text = t(key);
+    const text = t(dynamicKey(key)); // an unknown reason falls back to the "unknown" text below
     return text === key ? t("diagnostics.keychainUnavailable.unknown") : text;
   };
 
@@ -86,15 +87,15 @@ export function DiagnosticsSettings() {
 
   return (
     <div className="space-y-4">
-      {error && <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
       <div
-        className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300"
+        className="border border-border px-3 py-2 text-sm text-fg-muted"
         data-testid="keychain-status"
       >
-        <span className="text-slate-400">{t("diagnostics.keychainLabel")}:</span>{" "}
+        <span className="label-condensed text-fg-subtle">{t("diagnostics.keychainLabel")}:</span>{" "}
         <span>{keychainStateText()}</span>
         {keychain && !keychain.available && (
-          <p className="mt-1 text-xs text-slate-400">{t("diagnostics.keychainBlocked")}</p>
+          <p className="mt-1 text-xs text-fg-subtle">{t("diagnostics.keychainBlocked")}</p>
         )}
       </div>
       <DataPathsSection />
@@ -106,13 +107,13 @@ export function DiagnosticsSettings() {
       </Button>
       {bundle && (
         <div className="space-y-2">
-          <p className="text-xs text-slate-400">{t("diagnostics.previewHint")}</p>
+          <p className="text-xs text-fg-subtle">{t("diagnostics.previewHint")}</p>
           <textarea
             {...TECHNICAL_INPUT_PROPS}
             aria-label={t("diagnostics.generateBundle")}
             readOnly
             value={bundle}
-            className="h-64 w-full select-text rounded border border-slate-600 bg-slate-900 p-2 font-mono text-xs text-slate-100"
+            className="h-64 w-full select-text border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg"
           />
           <Button className="w-full" onClick={handleSaveBundle}>
             {t("diagnostics.save")}

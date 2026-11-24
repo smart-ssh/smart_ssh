@@ -18,6 +18,29 @@ use persistence_sqlite::{detect_database_file_state, DatabaseFileState};
 
 use crate::startup_dialog::{self, DialogAnswer};
 
+/// Where the keychain-mode startup runs its choice dialogs (Issue #944).
+///
+/// Plain data, no `cfg`: the decision is a function of the target OS name so
+/// host tests cover the Android branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupPromptPlacement {
+    /// Native dialogs before the window exists (desktop).
+    Native,
+    /// The startup runs in the window with `WindowStartupPrompt`: the
+    /// platform has no native dialog backend (Android, `rfd` has none).
+    Window,
+}
+
+/// Which prompt runs the keychain-mode startup on `target_os`
+/// (`std::env::consts::OS`). Every OS without a native dialog backend gets
+/// the window; the answer is never chosen by the app.
+pub fn startup_prompt_placement(target_os: &str) -> StartupPromptPlacement {
+    match target_os {
+        "android" => StartupPromptPlacement::Window,
+        _ => StartupPromptPlacement::Native,
+    }
+}
+
 pub struct NativeStartupPrompt {
     pub db_path: PathBuf,
     pub language: Language,
@@ -185,5 +208,25 @@ impl StartupPrompt for NativeStartupPrompt {
 
     fn can_ask_for_a_password(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_android_startup_runs_in_the_window_and_desktop_stays_native() {
+        assert_eq!(
+            startup_prompt_placement("android"),
+            StartupPromptPlacement::Window
+        );
+        for os in ["macos", "linux", "windows"] {
+            assert_eq!(
+                startup_prompt_placement(os),
+                StartupPromptPlacement::Native,
+                "{os}"
+            );
+        }
     }
 }

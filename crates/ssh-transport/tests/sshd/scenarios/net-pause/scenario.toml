@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "net-pause"
+networks = ["net-net"]
+publish = true

@@ -1,5 +1,6 @@
 //! Issue #664, S-7 (Spec 0094): key handling and export log events and counts
 //! only. Its own test binary: the subscriber is process-wide state.
+#![expect(clippy::unwrap_used, reason = "integration test")]
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -54,6 +55,7 @@ async fn fixture_named(
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,

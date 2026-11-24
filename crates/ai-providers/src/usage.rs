@@ -34,16 +34,11 @@ pub(crate) fn merge_anthropic(acc: &mut AiUsage, usage: &Value) {
     let breakdown = usage
         .get("cache_creation")
         .and_then(Value::as_object)
+        .filter(|o| o.values().any(Value::is_u64))
         .map(|o| {
             o.values()
                 .filter_map(Value::as_u64)
                 .fold(0u64, u64::saturating_add)
-        })
-        .filter(|_| {
-            usage
-                .get("cache_creation")
-                .and_then(Value::as_object)
-                .is_some_and(|o| o.values().any(Value::is_u64))
         });
     if let Some(n) = breakdown.or_else(|| u64_at(usage, "cache_creation_input_tokens")) {
         acc.cache_write_tokens = Some(n);

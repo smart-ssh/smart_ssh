@@ -75,8 +75,14 @@ async fn test_suspected_emits_running_then_redacted_truncated_reason() {
 
     // The reason was consumed with the flag: a later, unrelated escalation
     // must not show it.
-    assert!(session.injection_suspected_reason.lock().unwrap().is_none());
+    assert!(session
+        .safety
+        .injection_suspected_reason
+        .lock()
+        .unwrap()
+        .is_none());
     session
+        .safety
         .injection_check_unavailable
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let (_, payload) = proposed_decision_code(
@@ -104,7 +110,7 @@ async fn test_reason_is_not_in_ai_context() {
         "file_read",
     )
     .await;
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(!history.contains("unique-reason-marker"), "{history}");
 }
 

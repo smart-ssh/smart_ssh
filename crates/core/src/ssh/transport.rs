@@ -4,6 +4,20 @@ use tokio::sync::{oneshot, watch};
 use super::error::SshError;
 use super::types::{CommandOutput, ExecOutcome, ExecOutputSink, PtySize, RemoteEntry};
 
+/// Issue #1191: why the sudo password path of
+/// [`SshTransport::open_sftp_via_exec_with_sudo_password`] failed. No variant
+/// carries the password.
+#[derive(Debug)]
+pub enum SudoPromptError {
+    /// The prompt marker did not appear in time (sudo did not ask).
+    NoPrompt,
+    /// The marker appeared a second time: sudo rejected the password.
+    WrongPassword,
+    /// sudo reported that the command is not allowed (first stderr line).
+    NotAllowed(String),
+    Failed(SshError),
+}
+
 /// Offene Verbindung zu einem SSH-Server (Spec 0005, Abschnitt 1/4). Exec-
 /// und interaktiver Modus laufen über **denselben** Transport (SSH-
 /// Multiplexing über Channels), nicht über separate Neuverbindungen.
@@ -132,6 +146,23 @@ pub trait SshTransport: Send + Sync {
             "Erhöhter Dateizugriff wird von diesem Transport nicht unterstützt".to_string(),
         ))
     }
+    /// Issue #1191: like [`open_sftp_via_exec`](Self::open_sftp_via_exec) for
+    /// `sudo -S -k -p '<marker>' …`. The transport reads stderr until
+    /// `marker` appears and only then writes `password` plus `\n` to the
+    /// channel, exactly once; if the marker does not appear in time the
+    /// channel is closed without a single password byte written. Default:
+    /// not supported.
+    async fn open_sftp_via_exec_with_sudo_password(
+        &mut self,
+        command: &str,
+        marker: &str,
+        password: &secrecy::SecretString,
+    ) -> Result<Box<dyn SftpSession>, SudoPromptError> {
+        let _ = (command, marker, password);
+        Err(SudoPromptError::Failed(SshError::ChannelError(
+            "Erhöhter Dateizugriff wird von diesem Transport nicht unterstützt".to_string(),
+        )))
+    }
     async fn disconnect(&mut self) -> Result<(), SshError>;
 
     /// Testhook (Spec 0043, Fund A; Spec 0044 für den lokalen Pseudo-
@@ -146,6 +177,11 @@ pub trait SshTransport: Send + Sync {
     /// Default nach oben geklemmt, s. jeweiliger `set_max_output_bytes`-
     /// Kommentar).
     fn set_max_output_bytes(&mut self, _limit: usize) {}
+
+    /// Issue #881: where this transport starts its own background tasks
+    /// (SFTP tap pumps). The application passes the session scope, so
+    /// closing the session cancels them. Default: no-op (mocks start none).
+    fn set_task_spawner(&mut self, _spawner: super::TaskSpawner) {}
 
     /// Issue #353: a watch that turns to `Some` once the connection is
     /// gone (keepalive timeout, server disconnect, stream error, local
@@ -271,6 +307,26 @@ pub trait SftpSession: Send {
         chunk_size: usize,
         next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
     ) -> Result<TransferEnd, SshError>;
+    /// Issue #921: reads up to `len` bytes of `path` starting at `offset`
+    /// (one SFTP open/read/close). An empty result means end of file. Lets a
+    /// caller release the session's SFTP lock between two chunks of a long
+    /// download instead of holding it for the whole transfer.
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError>;
+    /// Issue #921: writes `data` to `path` at `offset`. With `truncate` the
+    /// file is created or emptied first (first chunk of an upload, also for
+    /// an empty file); without it the existing file is opened as is.
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP
     /// `LSTAT`) — meldet für einen Symlink dessen eigenen Typ (`is_dir ==
@@ -280,6 +336,12 @@ pub trait SftpSession: Send {
     /// (s. `commands::delete_recursive`/`chmod_recursive`, die den
     /// Wurzelpfad damit statt mit `stat` prüfen).
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
+    /// Issue #1291: target string of the symbolic link at `path` (SFTP
+    /// `READLINK`), exactly as stored. The default reports "unsupported" so
+    /// fakes need no change; callers treat any error as "target unknown".
+    async fn read_link(&mut self, _path: &str) -> Result<String, SshError> {
+        Err(SshError::ChannelError("read_link is not supported".into()))
+    }
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
     /// Issue #625: benennt `from` atomar nach `to` um und **ersetzt** dabei
@@ -305,6 +367,11 @@ pub trait SftpSession: Send {
     /// `SETSTAT` könnte das, aber der chmod-Dialog braucht nur dieses eine
     /// Feld).
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError>;
+    /// Sets owner and group by numeric id (issue #654, chown): SFTP `SETSTAT`
+    /// with uid and gid, which the protocol only accepts as a pair. The
+    /// caller resolves names and fills in the side it does not change. The
+    /// server decides whether the change is allowed.
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError>;
 }
 
 /// Offene PTY-Shell für den interaktiven Modus (Terminal-Tab, xterm.js im

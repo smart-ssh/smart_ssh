@@ -64,6 +64,33 @@ stabile Präfix gecacht. Wird die Server-Notiz verkürzt gesendet, ändert sich
 dagegen ein Präfix-Teil und der Rest ist ein Cache-Miss; das ist ein
 bewusst hingenommener Konflikt zwischen Notiz-Kürzung und Caching.
 
+## Teil 7: Gesprächsverlauf cachen (Anthropic)
+
+Im Haupt-Chat markiert der Anthropic-Request zusätzlich den **letzten nicht
+leeren Inhaltsblock der letzten Nachricht** als Cache-Breakpoint, sodass
+jede Folgerunde den unveränderten Verlauf aus dem Cache liest und nur den
+neuen Teil als normale Input-Tokens zählt. Regeln:
+
+- Insgesamt höchstens 4 Breakpoints (System, letztes Werkzeug, Verlauf,
+  ggf. ein zweiter Verlaufs-Breakpoint).
+- Hat der Verlauf mehr als 20 Inhaltsblöcke, steht ein zweiter Breakpoint 20
+  Blöcke vor dem letzten, damit der vorige Cache-Eintrag nach einer Runde
+  mit vielen neuen Blöcken innerhalb des Rückwärts-Suchfensters des Anbieters
+  bleibt.
+- Nie auf einem leeren oder nur aus Leerraum bestehenden Textblock (Spec
+  0081); stattdessen der vorherige nicht leere Block, sonst keiner.
+- Nebenaufrufe (Zweitmeinung, Titel, Notiz-Vorschlag, Kompaktierung) setzen
+  keinen Verlaufs-Breakpoint.
+- **Präfix-Stabilität:** Die serialisierten früheren Nachrichten ändern sich
+  nicht, wenn neue angehängt werden. Der Inhalt jeder Nachricht ist immer ein
+  Block-Array; Redaction, Fencing und Versiegelung liefern für unveränderte
+  Einträge bei jedem Senden dasselbe Ergebnis; keine zeit- oder
+  zufallsabhängigen Werte im Verlauf. Die Kompaktierung schreibt den Verlauf
+  bewusst einmal um (ein Cache-Miss ab der Änderungsstelle).
+- Cache-Lebensdauer: Standard (5 Minuten).
+
+Entscheidung und Messung: ADR 0158.
+
 ## Sicherheitszusagen
 
 - Fencing und Redaction bleiben unverändert; nur Reihenfolge und Struktur
@@ -78,4 +105,7 @@ bewusst hingenommener Konflikt zwischen Notiz-Kürzung und Caching.
 - Kein Datum und kein Banner im System-Prompt.
 - Die Cache-Markierung ist gesetzt, die Nutzungsangaben werden geloggt.
 - Andere Anbieter funktionieren unverändert.
+- Der Haupt-Chat-Request trägt einen Breakpoint auf dem letzten nicht leeren
+  Block des Verlaufs; nie mehr als 4, nie auf einem leeren Block.
+- Das Anhängen von Nachrichten verändert die früheren Nachrichten nicht.
 - Fencing und Redaction sind unverändert.

@@ -114,16 +114,19 @@ impl std::fmt::Debug for PendingImport {
 
 /// I1 and U1–U7: reads, decrypts and validates everything in memory.
 pub async fn open_backup(path: &Path, secret: BackupSecret) -> Result<Snapshot, BackupOpError> {
-    let meta = std::fs::metadata(path).map_err(|_| BackupOpError::Read)?;
-    if meta.len() > MAX_FILE_BYTES as u64 {
-        return Err(BackupOpError::Format(
-            ssh_manager_core::backup::BackupError::LimitExceeded(
-                ssh_manager_core::backup::Limit::FileSize,
-            ),
-        ));
-    }
-    let bytes = std::fs::read(path).map_err(|_| BackupOpError::Read)?;
+    // File access and decoding both block: they run on the blocking pool, not
+    // on the async worker (issue #898).
+    let path = path.to_path_buf();
     let snapshot = tokio::task::spawn_blocking(move || {
+        let meta = std::fs::metadata(&path).map_err(|_| BackupOpError::Read)?;
+        if meta.len() > MAX_FILE_BYTES as u64 {
+            return Err(BackupOpError::Format(
+                ssh_manager_core::backup::BackupError::LimitExceeded(
+                    ssh_manager_core::backup::Limit::FileSize,
+                ),
+            ));
+        }
+        let bytes = std::fs::read(&path).map_err(|_| BackupOpError::Read)?;
         let opened = open(&bytes, &secret, KNOWN_SECTIONS)?;
         Snapshot::from_sections(&opened.sections)
     })
@@ -150,12 +153,35 @@ pub async fn start_import(
     result
 }
 
+/// Like [`start_import`] for a [`Snapshot`] the caller already holds in
+/// memory: validates it, then imports directly into empty local data or
+/// returns [`ImportStart::NeedsConfirmation`]. Nothing is written to disk
+/// by this function itself; a rejected snapshot changes no local data.
+pub async fn start_import_snapshot(
+    ctx: &ImportContext<'_>,
+    snapshot: Snapshot,
+) -> Result<ImportStart, BackupOpError> {
+    let result = start_snapshot(ctx, snapshot).await;
+    if let Err(err) = &result {
+        tracing::warn!(result = ?err, "backup import rejected");
+    }
+    result
+}
+
 async fn start(
     ctx: &ImportContext<'_>,
     file: &Path,
     secret: BackupSecret,
 ) -> Result<ImportStart, BackupOpError> {
     let snapshot = open_backup(file, secret).await?;
+    start_snapshot(ctx, snapshot).await
+}
+
+async fn start_snapshot(
+    ctx: &ImportContext<'_>,
+    snapshot: Snapshot,
+) -> Result<ImportStart, BackupOpError> {
+    validate(&snapshot)?;
     let local = Snapshot::read(ctx.store, ctx.host_keys).await?.counts();
     let preview = ImportPreview {
         local,

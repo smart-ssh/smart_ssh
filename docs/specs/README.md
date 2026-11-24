@@ -6,8 +6,16 @@ Sicherheitszusagen. Für Bereiche ohne Oberfläche (Build, CI, Release) ist
 „der Nutzer" der Beitragende oder der, der ein Release-Paket bekommt.
 
 Eine Spec beschreibt den Stand von `main`, keinen Plan. Sie ändert sich im
-selben Pull Request wie der Code (siehe `CLAUDE.md`, Abschnitt „Spec
+selben Pull Request wie der Code (siehe `AGENTS.md`, Abschnitt „Spec
 workflow").
+
+Welche Spec einen Bereich beschreibt, steht in [`INDEX.md`](INDEX.md): eine
+generierte Tabelle mit Nummer, Titel, Status und Zweck jeder Spec. Sie wird
+nicht von Hand bearbeitet; nach einer neuen, umbenannten oder in `Status:`
+bzw. `Zweck:` geänderten Spec neu erzeugen mit
+`node scripts/check-spec-index.mjs --write-index`. `npm run check-spec-index`
+(Teil von `npm run lint`) schlägt fehl, wenn der Index veraltet ist oder einer
+Spec die Zeile `Status:` oder `Zweck:` fehlt.
 
 ## Form
 

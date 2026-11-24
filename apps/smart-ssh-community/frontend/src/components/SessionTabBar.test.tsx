@@ -20,7 +20,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { SessionTab } from "../useSessionTabs";
+import type { SessionTab } from "../hooks/useSessionTabs";
 import { SessionTabBar } from "./SessionTabBar";
 
 const CONNECTED: Pick<SessionTab, "phase" | "attemptId" | "progress" | "failure"> = {
@@ -62,6 +62,7 @@ describe("SessionTabBar drag region", () => {
           activeSessionId="s1"
           onSwitch={vi.fn()}
           onRequestClose={vi.fn()}
+          onOpenConnect={vi.fn()}
         />
       </I18nextProvider>,
     );
@@ -105,7 +106,7 @@ describe("SessionTabBar MCP tabs", () => {
     ];
     render(
       <I18nextProvider i18n={testI18n}>
-        <SessionTabBar tabs={mcpTabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+        <SessionTabBar tabs={mcpTabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
       </I18nextProvider>,
     );
 
@@ -121,14 +122,14 @@ describe("SessionTabBar close button frame", () => {
   it("has a fixed 20x20 box with a reserved border and a hover/focus frame", () => {
     render(
       <I18nextProvider i18n={testI18n}>
-        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
       </I18nextProvider>,
     );
     const close = screen.getByRole("button", { name: testI18n.t("sessionTabs.closeTab", { name: "prod-db" }) });
     // Fixed size + transparent border at rest => no layout shift on hover.
-    expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent", "rounded");
+    expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent");
     for (const prefix of ["hover:", "focus-visible:"]) {
-      expect(close).toHaveClass(`${prefix}border-slate-500`, `${prefix}bg-slate-600/60`);
+      expect(close).toHaveClass(`${prefix}border-fg-faint`, `${prefix}bg-border-strong/60`);
     }
   });
 });
@@ -144,13 +145,109 @@ describe("SessionTabBar new session (issue #657)", () => {
           activeSessionId="s1"
           onSwitch={vi.fn()}
           onRequestClose={vi.fn()}
+          onOpenConnect={vi.fn()}
           onNewSession={onNewSession}
         />
       </I18nextProvider>,
     );
     expect(screen.getByText("prod-db (2)")).toBeInTheDocument();
     fireEvent.contextMenu(screen.getByText("prod-db (2)"));
-    fireEvent.click(screen.getByRole("button", { name: "Neue Sitzung" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Neue Sitzung" }));
     expect(onNewSession).toHaveBeenCalledWith({ id: "server-1", name: "prod-db" });
+  });
+});
+
+// Issue #1365: flat tabs, "+" button, local marker, Pending badge.
+describe("SessionTabBar flat tabs (issue #1365)", () => {
+  const renderBar = (list: SessionTab[], onOpenConnect = vi.fn()) =>
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={list} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={onOpenConnect} />
+      </I18nextProvider>,
+    );
+
+  it("has no Overview tile and the + button opens the Connect view", () => {
+    const onOpenConnect = vi.fn();
+    renderBar(tabs, onOpenConnect);
+    expect(screen.queryByRole("button", { name: "Overview" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: testI18n.t("sessionTabs.newConnection") }));
+    expect(onOpenConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows square markers: success, neutral and local", () => {
+    const { container } = renderBar([tabs[0]!, tabs[1]!, { ...tabs[0]!, sessionId: "s3", serverName: "local", isLocal: true }]);
+    const tones = Array.from(container.querySelectorAll("[data-status-square]")).map((e) => e.getAttribute("data-status-square"));
+    expect(tones).toEqual(["success", "neutral", "local"]);
+  });
+
+  it("shows the Pending badge with the tooltip on a user tab with a pending confirmation", () => {
+    renderBar([tabs[0]!, { ...tabs[1]!, hasPendingAction: true, pendingActionId: "a1" }]);
+    const badge = screen.getByText(testI18n.t("sessionTabs.pendingBadge"));
+    expect(badge.closest("[title]")).toHaveAttribute("title", testI18n.t("sessionTabs.pendingAction"));
+  });
+
+  it("keeps one Tab stop on the first tab when the overview is shown", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={tabs} activeSessionId={null} onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const stops = document.querySelectorAll("[data-tab-stop]");
+    expect(Array.from(stops).map((e) => e.getAttribute("tabindex"))).toEqual(["0", "-1", "-1"]);
+  });
+});
+
+// Issue #1408: overflow indication and wheel remapping.
+describe("SessionTabBar overflow (issue #1408)", () => {
+  const setup = (scrollWidth: number, clientWidth: number) => {
+    const { container } = render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} onOpenConnect={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const strip = container.querySelector<HTMLElement>("[role=toolbar]")!;
+    Object.defineProperty(strip, "scrollWidth", { configurable: true, value: scrollWidth });
+    Object.defineProperty(strip, "clientWidth", { configurable: true, value: clientWidth });
+    return strip;
+  };
+
+  it("maps the vertical wheel to horizontal scroll and fades the hidden edge when tabs overflow", () => {
+    const strip = setup(600, 300);
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute("data-overflow-end");
+    expect(strip.style.maskImage).toContain("linear-gradient");
+    const ev = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+    strip.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(strip.scrollLeft).toBe(40);
+  });
+
+  it("shows no indication and leaves the wheel alone when all tabs fit", () => {
+    const strip = setup(300, 300);
+    fireEvent.scroll(strip);
+    expect(strip).not.toHaveAttribute("data-overflow-end");
+    expect(strip).not.toHaveAttribute("data-overflow-start");
+    expect(strip.style.maskImage).toBe("");
+    const ev = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+    strip.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  it("converts line and page wheel deltas to pixels", () => {
+    const strip = setup(600, 300);
+    fireEvent.scroll(strip);
+    strip.dispatchEvent(new WheelEvent("wheel", { deltaY: 3, deltaMode: 1, cancelable: true }));
+    expect(strip.scrollLeft).toBe(48);
+    strip.scrollLeft = 0;
+    strip.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, deltaMode: 2, cancelable: true }));
+    expect(strip.scrollLeft).toBe(300);
+  });
+
+  it("fades the start edge once the strip is scrolled", () => {
+    const strip = setup(600, 300);
+    strip.scrollLeft = 50;
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute("data-overflow-start");
+    expect(strip.style.maskImage).toContain("transparent, currentColor");
   });
 });

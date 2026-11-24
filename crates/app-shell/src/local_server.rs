@@ -25,13 +25,20 @@ use ssh_manager_core::profiles::Server;
 // dieses Modul bleibt wegen `AppHandle`/`tauri-plugin-store` in `app-shell`.
 use app_logic::dto::LOCAL_SERVER_ID;
 
-use crate::settings_store::{self, SETTINGS_STORE_FILE};
+/// Whether the local pseudo-server is offered on this platform. Not on
+/// Android (Spec 0114: no local shell in the technical test). Decided here
+/// at the list boundary; the security logic never branches on it.
+pub(crate) const fn offered() -> bool {
+    !cfg!(target_os = "android")
+}
+
+use crate::settings_store;
 
 const NOTES_KEY: &str = "localServerNotes";
 const TAGS_KEY: &str = "localServerTags";
 
 fn load_notes<R: Runtime>(app: &AppHandle<R>) -> String {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|store| store.get(NOTES_KEY))
         .and_then(|v| v.as_str().map(str::to_string))
@@ -39,7 +46,7 @@ fn load_notes<R: Runtime>(app: &AppHandle<R>) -> String {
 }
 
 fn load_tags<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
-    app.store(SETTINGS_STORE_FILE)
+    app.store(crate::settings_store::settings_store_file())
         .ok()
         .and_then(|store| store.get(TAGS_KEY))
         .and_then(|v| v.as_array().cloned())
@@ -90,6 +97,7 @@ pub fn synthetic_server<R: Runtime>(app: &AppHandle<R>) -> Server {
         post_ingest_policy: PostIngestPolicy::default(),
         ai_injection_check_enabled: false,
         sftp_server_path: None,
+        elevation_allowed: true,
         start_directory: None,
         created_at: now,
         updated_at: now,
@@ -142,9 +150,10 @@ mod tests {
     use crate::first_run_notice::test_support::{lock, lock_async, test_app};
 
     use super::*;
+    use ssh_manager_core::filter::PolicyRules;
 
     fn reset_local_store<R: Runtime>(app: &AppHandle<R>) {
-        if let Ok(store) = app.store(SETTINGS_STORE_FILE) {
+        if let Ok(store) = app.store(crate::settings_store::settings_store_file()) {
             store.delete(NOTES_KEY);
             store.delete(TAGS_KEY);
             let _ = store.save();
@@ -257,12 +266,14 @@ mod tests {
         // `ssh_manager_core::filter::scope_applies`-Doc-Kommentar
         // ("öffentlich, damit PolicyStore-Implementierungen dieselbe Logik
         // verwenden").
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
-            if ssh_manager_core::filter::scope_applies(&self.0.scope, scope) {
-                vec![self.0.clone()]
-            } else {
-                Vec::new()
-            }
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(
+                if ssh_manager_core::filter::scope_applies(&self.0.scope, scope) {
+                    vec![self.0.clone()]
+                } else {
+                    Vec::new()
+                },
+            )
         }
     }
 

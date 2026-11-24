@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hoofdnavigatie",
     "connect": "Verbinden",
     "manage": "Beheren",
     "rules": "Filterregels"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Nog geen server toegevoegd",
     "emptyStateHint": "Voeg uw eerste server toe om via SSH te verbinden.",
     "emptyStateCreateFirstServer": "Eerste server toevoegen",
-    "newServerInGroup": "Nieuwe server in groep \"{{name}}\"",
-    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server."
+    "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server.",
+    "localBadge": "Lokaal",
+    "thisDevice": "dit apparaat",
+    "sessionOpen": "Sessie open",
+    "sessionPending": "Wacht op bevestiging",
+    "sessionDisconnected": "Sessie verbroken",
+    "sessionReconnecting": "Opnieuw verbinden"
   },
   "settings": {
     "title": "Instellingen",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Gegevens en back-up"
     }
   },
+  "appearance": {
+    "heading": "Weergave",
+    "language": "Taal",
+    "system": "Systeem volgen",
+    "light": "Licht",
+    "dark": "Donker"
+  },
   "about": {
     "version": "Versie",
     "copyHint": "Naar klembord kopiëren",
@@ -57,6 +70,7 @@
     "copyFailed": "Kopiëren mislukt — de tekst kan in plaats daarvan worden geselecteerd.",
     "loadFailed": "Versie- en buildgegevens konden niet worden geladen.",
     "buildDev": "Ontwikkelbuild",
+    "dataDirMarker": "Gegevens: {{path}}",
     "buildRelease": "Releasebuild",
     "thirdPartyLicenses": {
       "openButton": "Licenties van derden",
@@ -79,6 +93,7 @@
       "no_session_bus": "niet beschikbaar — geen D-Bus-sessiebus bereikbaar. Volgende stap: `sudo apt install dbus-user-session`, en meld u daarna opnieuw aan.",
       "no_secret_service_provider": "niet beschikbaar — er draait geen Secret Service-provider. Volgende stap: `sudo apt install gnome-keyring`, en meld u daarna opnieuw aan — dit werkt ook onder KDE. Gebruikt u al KWallet (`kwallet6`) of KeePassXC: hun Secret Service-integratie moet actief of ingeschakeld zijn; installeren alleen is niet voldoende.",
       "locked": "niet beschikbaar — aanwezig maar vergrendeld. Volgende stap: ontgrendel de sleutelhanger en start Smart SSH opnieuw. Er ontbreekt geen pakket.",
+      "no_keystore": "niet beschikbaar — de Android Keystore is niet beschikbaar. Volgende stap: gebruik in plaats daarvan een hoofdwachtwoord; uw geheimen blijven in de versleutelde database.",
       "unknown": "niet beschikbaar — oorzaak onbekend. Volgende stap: controleer of een Secret Service-provider draait en is ontgrendeld (gnome-keyring, of KWallet of KeePassXC met ingeschakelde Secret Service-integratie) en start Smart SSH daarna opnieuw."
     },
     "keychainBlocked": "Dit heeft geen invloed op uw geheimen — API-sleutels, serverwachtwoorden, wachtzinnen en sudo-wachtwoorden staan in de versleutelde database, niet in de sleutelhanger.",
@@ -91,8 +106,10 @@
       "hostKeys": "Hostsleutels",
       "wrappingFile": "Sleutelbestand hoofdwachtwoord",
       "mcpSettings": "MCP-instellingen",
+      "speechModels": "Spraakmodellen",
       "sessions": "Sessies",
       "sessionsInDatabase": "opgeslagen in de database",
+      "keychainService": "Sleutelhangerservice",
       "copy": "Kopiëren",
       "copied": "Pad gekopieerd",
       "copyFailed": "Kopiëren mislukt:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importeren …",
     "importSshConfigHint": "Servers importeren uit een OpenSSH ssh_config-bestand",
     "exportSshConfig": "Exporteren …",
-    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config"
+    "exportSshConfigHint": "Servers exporteren naar OpenSSH ssh_config",
+    "title": "Servers",
+    "collapseGroup": "Groep “{{name}}” samenvouwen",
+    "expandGroup": "Groep “{{name}}” uitvouwen"
   },
   "treeDrag": {
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
+    "current": "huidig",
     "hintGroup": "→ naar deze groep verplaatsen",
     "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
     "moveTo": "“{{name}}” verplaatsen naar…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Hiermee worden ook de chatgeschiedenis, notities en labels van deze server definitief verwijderd.",
     "confirmDeleteServer": "Definitief verwijderen",
     "testResult": {
-      "success": "✓ Verbinding geslaagd",
-      "authFailed": "✗ Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
+      "success": "Verbinding geslaagd",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Aanmelding geweigerd. Controleer de gebruikersnaam en het wachtwoord of de sleutel.",
       "hostKeyUnknown": "Hostsleutel onbekend — bevestiging vereist",
-      "hostKeyMismatch": "⚠ Hostsleutel is gewijzigd",
-      "networkError": "✗ Netwerkfout: {{message}}",
-      "timeout": "✗ De server reageert niet. Controleer adres, poort en firewall."
+      "hostKeyMismatch": "Hostsleutel is gewijzigd",
+      "networkError": "Netwerkfout: {{message}}",
+      "timeout": "De server reageert niet. Controleer adres, poort en firewall."
     },
     "largeNoteHint": "Deze notitie is erg groot en kan tijdens lange sessies worden ingekort voor de AI-context. De opgeslagen notitie blijft volledig intact.",
     "summarizeNow": "Nu samenvatten",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Pad naar sftp-server (verhoogde bestandstoegang)",
     "sftpServerPathPlaceholder": "Automatisch",
     "sftpServerPathHint": "Alleen nodig als automatische detectie mislukt voor het bestandsbeheer met verhoogde rechten, bijv. /usr/lib/openssh/sftp-server. Leeg laten = automatisch.",
+    "elevationAllowedLabel": "Verhoogde rechten toestaan in de bestandsbrowser",
+    "elevationAllowedHint": "Als dit uit staat, biedt de bestandsbrowser geen verhoogde rechten aan voor deze server.",
     "startDirectoryLabel": "Startmap (terminal en bestandsbeheer)",
     "startDirectoryPlaceholder": "Thuismap",
     "startDirectoryHint": "Absoluut pad (/…) of een pad dat met ~/ begint. De terminal gaat daarheen met een zichtbare cd, het bestandsbeheer opent daar. AI-opdrachten draaien altijd in de thuismap. Leeg laten = thuismap.",
@@ -294,6 +318,13 @@
       "connection": "Verbinding",
       "security": "Beveiliging",
       "invalid": "Bevat fouten"
+    },
+    "importKey": {
+      "title": "Sleutel importeren in Smart SSH?",
+      "import": "Sleutel importeren",
+      "keep": "Bestandspad behouden",
+      "importHint": "De sleutel wordt versleuteld opgeslagen in Smart SSH en gaat mee met back-ups naar je andere apparaten.",
+      "keepHint": "Alleen het bestandspad wordt opgeslagen en gaat mee naar andere apparaten. Het bestand moet op elk apparaat op hetzelfde pad bestaan."
     }
   },
   "filterRules": {
@@ -337,10 +368,14 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Deel {{index}}",
     "checksLabel": "Controles:",
-    "hardBlacklistLabel": "Vaste blokkeerlijst:"
+    "hardBlacklistLabel": "Vaste blokkeerlijst:",
+    "invalidPattern": "Ongeldig patroon",
+    "rowActions": "Rijacties",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regels"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen — stuur een bericht om door te gaan.",
+    "autoContinuationLimitReached": "Automatisch vervolg gepauzeerd na {{limit}} stappen zonder jouw bevestiging — stuur een bericht om door te gaan.",
     "aiBudgetWaiting": "Wachten op AI-budget — volgende poging over {{seconds}}s…",
     "suggestCommand": "Opdracht voorstellen",
     "generateDocument": "Document genereren: {{title}}",
@@ -354,8 +389,12 @@
     "blocked": "geblokkeerd",
     "rejected": "geweigerd",
     "rejectedByUser": "Door gebruiker geweigerd.",
-    "usesStoredSudoPassword": "🔑 Wordt uitgevoerd met het opgeslagen sudo-wachtwoord.",
-    "writeMayUseStoredSudoPassword": "🔑 Ontbreekt de schrijfrechten, dan schrijft de app met het opgeslagen sudo-wachtwoord (sudo).",
+    "expired": "verlopen",
+    "discardedAfterReconnect": "Verworpen nadat de verbinding opnieuw was opgebouwd. Er is niets uitgevoerd.",
+    "expiredTimeout": "Niet op tijd beantwoord en verworpen. Er is niets uitgevoerd.",
+    "expiredUnknown": "Dit verzoek staat niet meer open. Er is niets uitgevoerd.",
+    "usesStoredSudoPassword": "Wordt uitgevoerd met het opgeslagen sudo-wachtwoord.",
+    "writeMayUseStoredSudoPassword": "Ontbreekt de schrijfrechten, dan schrijft de app met het opgeslagen sudo-wachtwoord (sudo).",
     "takeIntoNote": "In notitie opnemen",
     "takeIntoNoteFailed": "Mislukt — probeer opnieuw",
     "riskServerLabel": "Server",
@@ -365,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "De AI second opinion kon niet worden verkregen. Het getoonde risico is het regelgebaseerde.",
     "riskHint": "Beoordeling op basis van bekende patronen — geen garantie.",
     "runningSince": "loopt al {{seconds}}s…",
+    "exitCode": "afsluitcode: {{code}}",
     "waitingForInputHint": "Dit commando wacht waarschijnlijk op invoer. Stop het, dan stelt de AI een niet-interactieve variant voor.",
     "cancelCommand": "Deze opdracht loskoppelen",
     "cancellingCommand": "Loskoppelen…",
-    "commandCancelledNotice": "⚠ Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",
-    "commandTruncatedNotice": "⚠ Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
+    "commandCancelledNotice": "Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",
+    "commandTruncatedNotice": "Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
     "liveOutputLabel": "Live-uitvoer",
-    "liveOutputTruncatedNotice": "⚠ Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
+    "liveOutputTruncatedNotice": "Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
     "autoRanLead": "Automatisch uitgevoerd",
     "autoRanRule": "regel",
     "autoRanScopeGlobal": "globaal",
@@ -386,17 +426,15 @@
     "editableCommand": "Opdracht — bewerkbaar",
     "execute": "Uitvoeren",
     "deny": "Weigeren",
-    "quickRule": "Accepteren + regel",
-    "quickRuleDropdownAria": "Regelsuggesties tonen",
-    "newRulePatternHeading": "Patroon voor de nieuwe toestaan-regel",
     "scopeThisServer": "Deze server",
     "scopeGlobal": "Globaal",
     "scopeTag": "Label",
     "tagNamePlaceholder": "Labelnaam",
     "loadingSuggestions": "Suggesties laden…",
     "noSuggestions": "Geen suggesties.",
-    "binaryFileHint": "⚠ Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
+    "binaryFileHint": "Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
+    "fileTooLargeHint": "Het bestand is groter dan {{limit}}, geen tekstvergelijking. Nieuwe grootte: {{newSize}}.",
+    "diffTooLargeHint": "Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
     "noContentChange": "(geen inhoudswijziging)",
     "quickRuleLabel": {
       "exact": "Precies: {{patterns}}",
@@ -414,10 +452,25 @@
       "blocked": "vraagt altijd, welke regels er ook zijn: {{reasons}}",
       "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
       "verdictAsk": "vraagt nog steeds: {{reasons}}",
-      "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
       "reasonOther": "een andere veiligheidscontrole",
-      "loadFailed": "Regeldekking kon niet worden geladen"
+      "loadFailed": "Regeldekking kon niet worden geladen",
+      "summaryHeading": "Al toegestaan",
+      "toDecideHeading": "Nog te beslissen",
+      "expandAria": "Regelsuggesties voor {{segment}}",
+      "stagedBadge": "nog niet opgeslagen",
+      "removeStaged": "Verwijderen",
+      "saveRules": "Regels opslaan ({{count}})",
+      "saveFailed": "Regels konden niet worden opgeslagen: {{message}}",
+      "unsavedHint": "Niet-opgeslagen regels: {{count}}",
+      "segmentCovered": "dekt dit deel; het commando vraagt nog steeds: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Aanmelden bij {{hop}}",
+    "password": "Wachtwoord",
+    "submit": "Aanmelden",
+    "notStored": "De server vraagt deze gegevens om u aan te melden. Ze worden niet opgeslagen.",
+    "expired": "De aanmeldvraag is verlopen. De verbinding is niet tot stand gebracht."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",
@@ -426,6 +479,7 @@
     "mismatchBodyAfterHost": " presenteert een andere sleutel dan de vorige keer is opgeslagen. Dit kan wijzen op een man-in-the-middle-aanval. Ga alleen door als u zeker weet dat de serversleutel legitiem is gewijzigd (bijv. herinstallatie van de server).",
     "known": "Bekend",
     "offeredNow": "Nu aangeboden",
+    "offered": "Aangeboden",
     "keyType": "Sleuteltype",
     "cancelConnection": "Verbinding annuleren",
     "trustAnyway": "Toch vertrouwen",
@@ -438,13 +492,17 @@
   },
   "sessionTabs": {
     "newSession": "Nieuwe sessie",
-    "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
     "menu": {
       "open": "Navigatiemenu openen",
       "title": "Navigatiemenu",
-      "sessions": "Open sessies"
+      "sessions": "Open sessies",
+      "close": "Navigatiemenu sluiten",
+      "needsConfirmation": "Bevestiging nodig",
+      "activities": "Activiteiten",
+      "activitiesRunning_one": "{{count}} bezig",
+      "activitiesRunning_other": "{{count}} bezig"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +511,11 @@
       "pendingBadge": "Bevestiging nodig",
       "readOnlyHint": "Deze sessie hoort bij een extern hulpmiddel (MCP). Ze toont alleen de te bevestigen of te weigeren acties van het hulpmiddel en hun resultaten; er is hier geen chatinvoer of terminal. Sluiten beëindigt de MCP-sessie en weigert openstaande bevestigingen."
     },
-    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd."
+    "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd.",
+    "pendingBadge": "In behandeling",
+    "newConnection": "Nieuwe verbinding"
   },
   "aiProvider": {
-    "title": "AI-provider",
     "openLogs": "Diagnostische logboeken openen in bestandsbeheer",
     "noProviders": "Nog geen provider ingesteld.",
     "configuredProvidersTitle": "Ingestelde providers",
@@ -476,16 +535,16 @@
     "apiKeyFormatHint": "Lijkt niet op een {{providerLabel}}-sleutel – verwacht wordt een voorvoegsel als \"{{expectedPrefix}}\". U kunt de sleutel toch opslaan; providers wijzigen hun formaten soms.",
     "testCredentials": "Inloggegevens testen",
     "testingCredentials": "Testen…",
-    "testResultValid": "✓ Inloggegevens geldig",
-    "testResultAuthFailed": "✗ Authenticatie mislukt – controleer de API-sleutel",
-    "testResultUnreachable": "✗ Provider onbereikbaar: {{message}}",
+    "testResultValid": "Inloggegevens geldig",
+    "testResultAuthFailed": "Authenticatie mislukt – controleer de API-sleutel",
+    "testResultUnreachable": "Provider onbereikbaar: {{message}}",
     "testResultRateLimited": "De inloggegevens lijken geldig, maar de provider beperkt nu het aantal verzoeken. Test over een minuut opnieuw.",
     "nativeToolCalling": "Ondersteunt native toolaanroepen",
     "discoverModels": "Modellen laden",
     "discoveringModels": "Modellen laden…",
     "modelDiscoveryFailedHint": "Modellen konden niet automatisch worden geladen — voer de modelnaam handmatig in.",
     "modelDiscoveryEmptyHint": "De provider gaf geen modellen terug. Voer de modelnaam handmatig in.",
-    "modelDiscoveryAuthFailed": "✗ De provider heeft deze inloggegevens geweigerd – controleer de API-sleutel",
+    "modelDiscoveryAuthFailed": "De provider heeft deze inloggegevens geweigerd – controleer de API-sleutel",
     "advanced": "Geavanceerd",
     "extraHeadersLabel": "Extra headers",
     "extraHeadersHint": "Wordt aan elk verzoek aan deze provider toegevoegd (bijv. HTTP-Referer/X-Title van OpenRouter).",
@@ -528,6 +587,7 @@
     "ollamaProbeRetry": "Opnieuw zoeken",
     "ollamaProbeNotFoundHeading": "Geen lokale Ollama gevonden (standaardpoort 11434).",
     "ollamaProbeNotFoundInstructions": "Installeer Ollama van ollama.com, start het en laad een model (bijv. `ollama pull llama3`), en zoek daarna opnieuw.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +652,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mogelijke poging tot het inbrengen van instructies via serverinhoud gedetecteerd – vereist bevestiging",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Via MCP aangevraagd – vereist altijd bevestiging",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Gebruikt het opgeslagen sudo-wachtwoord – vereist altijd bevestiging",
+    "FILTER_RULES_UNAVAILABLE": "De filterregels konden niet worden geladen – niets wordt automatisch uitgevoerd, bevestiging vereist",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Voegt vóór het verzenden een opgeslagen geheime waarde in – vereist altijd bevestiging",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Leest een bestand met inloggegevens (bijv. SSH-sleutel, .env, /etc/shadow) – vereist altijd bevestiging",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Een eerdere actie in dit antwoord is geweigerd – vereist bevestiging",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Start sftp-server (met sudo: bestandstoegang met rootrechten) – vereist altijd bevestiging",
@@ -601,6 +663,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "De controle op ingevoegde instructies kon niet worden uitgevoerd (probleem met de AI-provider). De volgende voorgestelde actie vereist bevestiging.",
     "AI_INJECTION_CHECK_INACTIVE": "De controle op ingevoegde instructies is voor deze server ingeschakeld, maar niet actief in deze sessie (de AI second opinion is uit of kon niet worden ingesteld). Schakel de second opinion in de instellingen in en verbind opnieuw.",
     "AI_SECOND_OPINION_SETUP_FAILED": "De AI second opinion is ingeschakeld, maar kon voor deze sessie niet worden ingesteld (provider verwijderd of inloggegevens niet gevonden). Opdrachten worden er niet door gecontroleerd – herstel de instelling en verbind opnieuw.",
+    "REDACTION_INCOMPLETE": "Sommige geheime waarden van deze server konden niet worden geladen; ze worden mogelijk niet gemaskeerd in wat naar de AI wordt gestuurd.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De huidige servertags konden niet worden gelezen – bevestiging vereist",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risico als rood beoordeeld, of niet betrouwbaar te beoordelen (bijv. te lang) – vereist altijd bevestiging",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notitiewijzigingen vereisen altijd bevestiging",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Bestandsschrijfacties vereisen altijd bevestiging",
@@ -638,7 +702,13 @@
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
     "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
-    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "De gekozen AI-provider is niet geconfigureerd. Kies een geconfigureerde provider.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Kies een AI-provider voordat je de tweede mening over risico inschakelt.",
+    "CHAT_SESSION_NOT_FOUND": "Deze opgeslagen chat bestaat niet meer. Kies Opnieuw proberen om normaal te verbinden zonder hem te hervatten.",
+    "SESSION_NOT_FOUND": "Deze sessie is niet meer geopend. Open haar opnieuw vanuit de serverlijst.",
+    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat",
+    "SSH_NO_COMMON_ALGORITHM": "Geen SSH-algoritme gemeenschappelijk met de server. De SSH-software is te oud of te streng. Werk deze bij of schakel moderne algoritmen in."
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -721,13 +791,17 @@
     "openedLocally": "“{{name}}” lokaal geopend — wijzigingen worden ter upload aangeboden",
     "openLocallyFailed": "“{{name}}” kon niet lokaal worden geopend: {{reason}}",
     "editUploaded": "Wijziging in “{{name}}” geüpload",
-    "editUploadFailed": "Wijziging in “{{name}}” kon niet worden geüpload: {{reason}}",
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
     "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
     "nothingToPaste": "Niets om te plakken: het klembord bevat geen bestanden",
     "createFileDone": "Bestand “{{name}}” aangemaakt",
-    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
+    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}",
+    "chownDone": "Eigenaar van “{{name}}” gewijzigd",
+    "chownRecursive": "Eigenaar gewijzigd — {{count}} items in “{{name}}”",
+    "chownFailed": "Eigenaar van “{{name}}” kon niet worden gewijzigd: {{reason}}",
+    "chownUnknownUser": "Eigenaar van “{{name}}” niet gewijzigd: onbekende gebruiker",
+    "chownUnknownGroup": "Eigenaar van “{{name}}” niet gewijzigd: onbekende groep"
   },
   "fileElevation": {
     "toggle": "Verhoogde rechten",
@@ -741,6 +815,17 @@
     "opDelete": "Verwijderen",
     "opChmod": "Rechten wijzigen",
     "banner": "Verhoogde rechten actief: alle bestandsacties in dit bestandsbeheer worden uitgevoerd als {{user}}.",
+    "bannerLogged": "Gelogd op de server.",
+    "notice": {
+      "title": "Over verhoogde rechten",
+      "intro": "Je leest en schrijft bestanden nu als {{user}}. Wijzigingen werken direct en de app kan ze niet ongedaan maken.",
+      "loggedApp": "Elke wijziging wordt vastgelegd in het logboek van de app.",
+      "loggedAppAndServer": "Elke wijziging wordt vastgelegd in het logboek van de app en in het auth-logboek van de server.",
+      "passwordless": "De sudo-regel voor sftp-server geeft {{user}} toegang zonder wachtwoord tot alles wat onder deze login draait, niet alleen tot deze app.",
+      "alternative": "Beheer je deze server regelmatig als root, dan maakt een aparte root-login met sleutel (PermitRootLogin prohibit-password) die toegang expliciet.",
+      "gotIt": "Begrepen",
+      "dontShowAgain": "Niet meer tonen voor deze server"
+    },
     "deleteFileTitle": "Bestand verwijderen als {{user}}?",
     "deleteDirTitle": "Map verwijderen als {{user}}?",
     "overwriteTitle": "Bestand overschrijven als {{user}}?",
@@ -762,7 +847,8 @@
     "close": "Sluiten",
     "detail": "Details: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo vereist op deze server een wachtwoord voor sftp-server. De app vraagt nooit om een sudo-wachtwoord.",
+      "passwordRequired": "sudo vraagt op deze server een wachtwoord voor sftp-server. Voeg de sudoers-regel hieronder toe of sla een sudo-wachtwoord op in het serverprofiel om verhoogde rechten te gebruiken.",
+      "wrongSudoPassword": "sudo heeft het opgeslagen sudo-wachtwoord geweigerd. Controleer het sudo-wachtwoord in het serverprofiel.",
       "notAllowed": "Deze SSH-aanmelding mag sftp-server niet zonder wachtwoord via sudo starten.",
       "requireTty": "sudo weigert te draaien zonder terminal (“requiretty” in sudoers). Schakel requiretty voor deze aanmelding uit, bijv. met “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server is op de server niet gevonden. Voer het pad in het serverprofiel in onder “Geavanceerd”.",
@@ -772,7 +858,8 @@
       "invalidUser": "Ongeldige doelgebruiker.",
       "unsupported": "De lokale server heeft geen verhoogde modus.",
       "checkFailed": "Het controleren van de sudo-rechten is mislukt.",
-      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers)."
+      "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers).",
+      "disabledForServer": "Verhoogde rechten zijn voor deze server uitgeschakeld in het serverprofiel."
     },
     "channelLost": "Verhoogde rechten beëindigd — het verhoogde kanaal is niet meer actief.",
     "group": "Verhoogde rechten",
@@ -780,7 +867,11 @@
     "otherUser": "Als andere gebruiker…",
     "targetUser": "Doelgebruiker",
     "targetUserHelp": "Voert de bestandsbrowser via sudo uit als deze gebruiker. Standaard: root.",
-    "confirm": "Verhogen"
+    "confirm": "Verhogen",
+    "opChown": "Eigenaar wijzigen",
+    "chownNote": "De eigenaar wordt gewijzigd als {{user}}.",
+    "idleSwitchedOff": "Verhoogde rechten uitgeschakeld na {{minutes}} minuten zonder activiteit",
+    "revokedByProfile": "Verhoogde rechten beëindigd — het serverprofiel staat ze niet meer toe."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",
@@ -794,6 +885,8 @@
     "groupsHeading": "Resulterende mapstructuur",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Naam",
+      "include": "Opnemen",
       "host": "Adres",
       "port": "Poort",
       "username": "Gebruiker",
@@ -869,6 +962,8 @@
       "proxyJumpLocalPseudoServer": "wijst naar de lokale pseudo-server"
     },
     "confirm": "Importeren",
+    "confirmCount_one": "{{count}} server importeren",
+    "confirmCount_other": "{{count}} servers importeren",
     "applying": "Importeren …",
     "result": {
       "success": "{{created}} servers aangemaakt, {{groups}} mappen, {{skipped}} conflict(en) overgeslagen.",
@@ -969,14 +1064,17 @@
       "hostKeyCheck": "Hostsleutelcontrole",
       "authentication": "Authenticatie",
       "sessionReady": "Sessie tot stand gebracht",
-      "dnsSkipped": "IP-adres – geen opzoeking nodig"
+      "dnsSkipped": "IP-adres – geen opzoeking nodig",
+      "outdatedAlgorithms": "Verouderde algoritmen",
+      "banner": "Serverbanner"
     },
     "status": {
       "ok": "OK",
       "running": "bezig",
       "failed": "mislukt ({{code}})",
       "skipped": "overgeslagen",
-      "failedReason": "mislukt: {{reason}}"
+      "failedReason": "mislukt: {{reason}}",
+      "warning": "waarschuwing"
     },
     "hostKeyResult": {
       "known": "bekend",
@@ -989,7 +1087,8 @@
       "privateKey": "Privésleutel",
       "agent": "SSH-agent",
       "certificate": "Certificaat",
-      "identityFile": "Sleutelbestand"
+      "identityFile": "Sleutelbestand",
+      "keyboardInteractive": "Toetsenbord-interactief"
     },
     "detail": {
       "addresses": "Adressen: {{addresses}}",
@@ -998,7 +1097,9 @@
       "cipher": "Cipher: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "gedeeltelijk geaccepteerd, verdere authenticatie vereist",
-      "remainingMethods": "Server biedt ook aan: {{methods}} (niet geprobeerd)"
+      "remainingMethods": "Server biedt ook aan: {{methods}} (niet geprobeerd)",
+      "round": "Ronde {{round}}",
+      "prompts": "Vragen van de server: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "TCP-verbinding is verlopen",
@@ -1016,6 +1117,7 @@
     "parentDirectory": "Bovenliggende map",
     "newFolderButton": "+ Map",
     "fileActionsGroup": "Bestandsacties",
+    "directoryActions": "Mapacties",
     "upload": "Uploaden",
     "uploadDialogTitle": "Bestand(en) uploaden",
     "uploadFolder": "Map uploaden",
@@ -1050,8 +1152,10 @@
       "name": "Naam",
       "size": "Grootte",
       "permissions": "Rechten",
-      "modified": "Gewijzigd"
+      "modified": "Gewijzigd",
+      "owner": "Eigenaar"
     },
+    "columnsMenu": "Kolommen tonen of verbergen",
     "localEdit": {
       "uploading": "“{{name}}” uploaden…",
       "changed": "“{{name}}” is lokaal gewijzigd. Naar de server uploaden?",
@@ -1059,8 +1163,7 @@
       "editing": "“{{name}}” lokaal bewerken…",
       "end": "Bewerken stoppen",
       "uploadTitle": "Lokale wijzigingen uploaden?",
-      "remoteChanged": "Het bestand op de server is sinds het downloaden gewijzigd — uploaden zou die andere wijziging overschrijven.",
-      "noDiff": "Geen tekstvergelijking mogelijk (binair bestand of te groot). Nieuwe grootte: {{size}}."
+      "remoteChanged": "Het bestand op de server is sinds het downloaden gewijzigd — uploaden zou die andere wijziging overschrijven."
     },
     "deleteDialog": {
       "fileTitle": "Bestand verwijderen?",
@@ -1082,7 +1185,6 @@
       "conflictTitle": "Bestanden in de map overschrijven?",
       "conflictBody": "Uploaden van “{{name}}” zou deze {{count}} bestanden op de server overschrijven. Er wordt niets overschreven zonder uw bevestiging.",
       "summaryTitle": "Map uploaden: “{{name}}”",
-      "summary": "{{uploaded}} bestanden geüpload, {{skipped}} overgeslagen, {{failed}} mislukt.",
       "notAttempted": "{{count}} bestanden zijn niet geprobeerd omdat hun map niet kon worden aangemaakt.",
       "skipped": "Overgeslagen",
       "failed": "Mislukt",
@@ -1093,12 +1195,14 @@
         "unsupported": "geen gewoon bestand of gewone map",
         "notGranted": "niet gedekt door uw selectie",
         "overwriteNotConfirmed": "bestaat op de server, overschrijven niet bevestigd"
-      }
+      },
+      "uploaded": "Geüpload"
     },
     "uploadConflict": {
       "title": "Bestand overschrijven?",
       "body": "bestaat al op de server.",
-      "noDiff": "Geen tekstvergelijking mogelijk (binair bestand of te groot). Huidige grootte: {{remoteSize}}, nieuwe grootte: {{localSize}}."
+      "currentSize": "Huidige grootte",
+      "newSize": "Nieuwe grootte"
     },
     "menu": {
       "download": "Downloaden",
@@ -1114,8 +1218,10 @@
       "cut": "Knippen",
       "delete": "Verwijderen",
       "newFolder": "Nieuwe map",
-      "newFile": "Nieuw bestand"
+      "newFile": "Nieuw bestand",
+      "chown": "Eigenaar wijzigen…"
     },
+    "linkMarker": "symbolische link",
     "properties": {
       "title": "Eigenschappen",
       "name": "Naam",
@@ -1123,6 +1229,10 @@
       "type": "Type",
       "typeFolder": "Map",
       "typeFile": "Bestand",
+      "typeLinkFolder": "Symbolische link naar een map",
+      "typeLinkFile": "Symbolische link naar een bestand",
+      "typeLinkBroken": "Verbroken symbolische link",
+      "linkTarget": "Doel van de link",
       "size": "Grootte",
       "permissionsSymbolic": "Rechten (symbolisch)",
       "permissionsNumeric": "Rechten (numeriek)",
@@ -1172,10 +1282,24 @@
       "notText": "Geen tekstdiff mogelijk: het bestand is binair (geen geldige UTF-8-tekst).",
       "permission": "Geen tekstdiff mogelijk: met de huidige rechten heb je geen leesrechten voor dit bestand.",
       "other": "Geen tekstdiff mogelijk: het bestand kon niet worden gelezen ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Eigenaar wijzigen",
+      "owner": "Gebruiker",
+      "group": "Groep",
+      "hint": "Voer een naam of nummer in. Een kant die u ongewijzigd laat, blijft ongewijzigd. De server bepaalt of de wijziging is toegestaan (meestal mag alleen root de eigenaar wijzigen).",
+      "recursive": "Toepassen op inhoud",
+      "recursiveWarning": "— wijzigt de eigenaar van ALLE bestanden en submappen in deze map. Symbolische koppelingen worden niet gevolgd. Kan niet ongedaan worden gemaakt."
+    },
+    "transferChown": "Eigenaar wijzigen van {{name}}",
+    "stopProgress": "Voortgang",
+    "noTextDiff": "Geen tekstverschil mogelijk (binair bestand of te groot)."
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "copyCode": "Code kopiëren",
+    "codeCopied": "Code gekopieerd",
+    "codeCopyFailed": "Kopiëren mislukt",
     "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",
@@ -1199,12 +1323,17 @@
     "queued": "Wordt met het volgende verzoek verzonden",
     "responseCancelled": "Antwoord geannuleerd.",
     "contextCompactedNotice": "Oudere delen van deze chat zijn samengevat zodat ze in de context van het model passen.",
-    "contextUsage": "Contextgrootte {{used}} / {{window}}",
     "contextUsageTooltip": "Oudere delen van de chat worden automatisch samengevat als de context vol raakt.",
+    "messageLabel": "Bericht",
+    "headerProviderTooltip": "Aanbieder: {{provider}}",
     "webResearchUnavailable": "Webonderzoek is voor dit provideraccount niet beschikbaar (webzoeken is daar uitgeschakeld). Deze sessie antwoordt zonder webonderzoek. Om het permanent uit te schakelen: Instellingen → AI-provider → “Webonderzoek”.",
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
     "refusedResponse": "Het model heeft dit verzoek geweigerd. Formuleer het anders of begin een nieuwe chat.",
     "outputTruncated": "(afgekapt)",
+    "outputMoreLines_one": "… nog {{count}} regel",
+    "outputMoreLines_other": "… nog {{count}} regels",
+    "outputShowAll": "Alles tonen",
+    "outputShowLess": "Minder tonen",
     "fileWritten": "Bestand '{{path}}' geschreven.",
     "writtenWithSudoPassword": "Geschreven met het opgeslagen sudo-wachtwoord.",
     "documentGenerated": "Document gegenereerd",
@@ -1282,7 +1411,18 @@
     "aiTab": "AI",
     "paneTabs": "Sessiedelen",
     "moreActions": "Meer acties",
+    "thisDevice": "dit apparaat",
+    "paneSwitch": "Paneelschakelaar",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
+    "extraKeys": {
+      "group": "Extra toetsen",
+      "up": "Pijl omhoog",
+      "down": "Pijl omlaag",
+      "left": "Pijl links",
+      "right": "Pijl rechts",
+      "pageUp": "Pagina omhoog",
+      "pageDown": "Pagina omlaag"
+    },
     "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
     "stopReconnect": "Stoppen",
     "reconnectGaveUp": "De verbinding kon niet worden hersteld."
@@ -1315,7 +1455,8 @@
       "body": "Een spraakmodel ({{model}}, ongeveer {{size}} MiB) wordt eenmalig gedownload van {{source}}. Daarna draait de spraakherkenning volledig op deze computer; audio en tekst verlaten hem nooit.",
       "download": "Downloaden",
       "cancel": "Annuleren",
-      "progress": "Voortgang van de download"
+      "progress": "Voortgang van de download",
+      "parakeetLicense": "Licentie: {{license}}"
     },
     "errors": {
       "noDevice": "Geen microfoon gevonden. Sluit een microfoon aan en controleer het invoerapparaat in de systeeminstellingen.",
@@ -1331,7 +1472,8 @@
       "model": "Spraakmodel",
       "models": {
         "base": "Base (ongeveer {{size}} MiB, standaard)",
-        "small": "Small (ongeveer {{size}} MiB, nauwkeuriger, trager)"
+        "small": "Small (ongeveer {{size}} MiB, nauwkeuriger, trager)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (ongeveer {{size}} MiB, meertalig, snel; herkent de taal automatisch)"
       },
       "statusReady": "Gedownload",
       "statusNotDownloaded": "Niet gedownload",
@@ -1339,7 +1481,8 @@
       "download": "Downloaden",
       "delete": "Model verwijderen",
       "language": "Herkenningstaal",
-      "languageAuto": "Automatisch"
+      "languageAuto": "Automatisch",
+      "languageParakeetHint": "Parakeet herkent de taal automatisch; deze instelling geldt voor Whisper-modellen."
     }
   },
   "connectTab": {
@@ -1399,6 +1542,8 @@
     "import": {
       "title": "Herstellen uit back-up",
       "pickTitle": "Kies een back-upbestand",
+      "pickFailed": "Het bestand kon niet worden geopend vanaf de gekozen locatie.",
+      "chooseAgain": "Bestand opnieuw kiezen",
       "file": "Bestand: {{name}}",
       "kind": "Waarmee deze back-up opent",
       "useCode": "Herstelcode",
@@ -1415,6 +1560,9 @@
       "file": "Back-up",
       "sessions": "Open sessies die worden gesloten: {{count}}",
       "safety": "Je huidige gegevens worden eerst opgeslagen in {{dir}}. Je servers gaan naar een nieuwe map “Previous data” met de datum van vandaag.",
+      "pickDirTitle": "Kies een map voor de veiligheidsback-up",
+      "changeSafetyDir": "Wijzigen…",
+      "changeSafetyDirFailed": "De map kon niet worden gekozen. De standaardmap blijft.",
       "replace": "Gegevens vervangen"
     },
     "counts": {
@@ -1439,5 +1587,58 @@
       "newerVersion": "Deze back-up is gemaakt met een nieuwere versie van Smart SSH. Werk de app bij en probeer het opnieuw.",
       "failed": "De bewerking is mislukt. Er is niets gewijzigd."
     }
+  },
+  "errorBoundary": {
+    "title": "Er is iets misgegaan",
+    "body": "Smart SSH heeft een onverwachte fout in de interface gevonden. Laad opnieuw om door te gaan. Gebeurt het weer, maak dan na het herladen een diagnosepakket onder Instellingen → Diagnose.",
+    "reload": "Opnieuw laden"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Deze server gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software van de server bij als dat kan.",
+    "outdatedAlgorithmsHop": "{{hop}} gebruikt verouderde SSH-algoritmen ({{algorithms}}). De verbinding is minder veilig. Werk de SSH-software ervan bij als dat kan."
+  },
+  "elevatedIdle": {
+    "label": "Verhoogde rechten uitschakelen na inactiviteit",
+    "minutes5": "5 minuten",
+    "minutes15": "15 minuten",
+    "minutes30": "30 minuten",
+    "minutes60": "60 minuten",
+    "never": "Nooit",
+    "hint": "De bestandsbrowser verlaat de verhoogde modus vanzelf na zo lang zonder verhoogde activiteit. Een lopende bewerking telt als activiteit."
+  },
+  "activities": {
+    "title": "Activiteiten",
+    "buttonRunning": "Activiteiten: {{running}} bezig",
+    "buttonFailed": "Activiteiten: een activiteit is mislukt",
+    "buttonDone": "Activiteiten: voltooid",
+    "cancel": "Annuleren",
+    "cancelNamed": "{{title}} annuleren",
+    "dismiss": "Verbergen",
+    "dismissNamed": "{{title}} verbergen",
+    "succeeded": "Klaar",
+    "cancelled": "Geannuleerd",
+    "failed": "Mislukt",
+    "inProgress": "Bezig",
+    "verifying": "Controleren",
+    "speechModelTitle": "Spraakmodel {{name}}",
+    "buttonInterrupted": "Activiteiten: sommige zijn onderbroken",
+    "interrupted": "Onderbroken",
+    "resume": "Hervatten",
+    "resumeNamed": "{{title}} hervatten",
+    "discard": "Verwerpen",
+    "discardNamed": "{{title}} verwerpen",
+    "resumeFailed": "Hervatten is niet gelukt.",
+    "quitTitle": "Afsluiten terwijl er activiteiten lopen?",
+    "quitBody": "Deze activiteiten lopen nog en worden gestopt:",
+    "quitResumeHint": "Onderbroken downloads kun je hervatten bij de volgende start van de app.",
+    "quitAnyway": "Toch afsluiten",
+    "keepRunning": "Blijven doorlopen",
+    "summaryRunning_one": "{{count}} bezig",
+    "summaryRunning_other": "{{count}} bezig",
+    "summaryInterrupted_one": "{{count}} onderbroken",
+    "summaryInterrupted_other": "{{count}} onderbroken",
+    "summaryFailed_one": "{{count}} mislukt",
+    "summaryFailed_other": "{{count}} mislukt",
+    "remaining": "nog {{time}}"
   }
 }

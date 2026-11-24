@@ -1,9 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { HostKeyInfo, HostKeyUserDecision } from "../types";
-import { useDialogFocusTrap } from "../useDialogFocusTrap";
-import { ModalBackdrop } from "./ModalBackdrop";
-import { Button } from "./ui";
+import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
+import { Button, DialogFrame, Icon } from "./ui";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -30,7 +28,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   const headingId = useId();
   const descriptionId = useId();
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const rejectButtonRef = useRef<HTMLButtonElement>(null);
   // A4/A5-Invariante: `onDecision` wird für dieses Ereignis höchstens
   // einmal gerufen — schützt vor doppeltem Escape (T5) und vor
@@ -48,14 +45,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
     onDecision({ decision });
   }
 
-  const { onKeyDown } = useDialogFocusTrap({
-    containerRef,
-    initialFocusRef: rejectButtonRef,
-    // A4: Escape lehnt ab, nie `trust`.
-    onEscape: () => decide("reject"),
-    resetKey: event,
-  });
-
   // Unabhängiger Review-Pass (Spec 0014/0017): dieser Dialog kann von
   // `ServerList` ausgelöst werden, während gerade ein Session-Tab aktiv ist
   // (z. B. ein MCP-initiierter `connect()` auf einen neuen Server) — der
@@ -71,138 +60,90 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // `ServerList`; das Portal bleibt trotzdem nötig — `ServerForm` zeigt
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
+  const rejectLabel = isMismatch ? t("hostKeyDialog.cancelConnection") : t("hostKeyDialog.reject");
+  const trustLabel = isMismatch ? t("hostKeyDialog.trustAnyway") : t("hostKeyDialog.trust");
+  const rowClass = "grid grid-cols-[6rem_1fr] gap-3 border-t border-border px-3 py-2 first:border-t-0 narrow:grid-cols-1 narrow:gap-1";
+  const labelClass = "label-condensed text-xs text-fg-subtle";
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
-      {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
-       * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
-       * damit kein String-Literal; die statische Analyse von
-       * `no-static-element-interactions` erkennt nur Literale und verlangt
-       * deshalb eine Rolle, die längst da ist (gemessen: ein Literal löst
-       * stattdessen `no-noninteractive-element-interactions` aus — das
-       * Zweig-Rendern über zwei fast identische Teilbäume nur für ein
-       * statisches `role`-Literal würde die Komponente ohne Nutzen
-       * duplizieren). */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div
-        ref={containerRef}
-        // A1: `alertdialog` im geänderten Zweig (höheres Dringlichkeits-
-        // signal für Screenreader), `dialog` im unbekannten Zweig.
-        role={dialogRole}
-        aria-modal="true"
-        aria-labelledby={headingId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 focus:outline-none ${
-          isMismatch ? "border-red-600 bg-red-950/95" : "border-slate-600 bg-slate-800"
-        }`}
-      >
-        {isMismatch ? (
-          <>
-            {/* Gefahren-Warnstreifen — Design-Import, Abschnitt "HOST-KEY
-             * GEÄNDERT"-Dialog: diagonale Rot-Schwarz-Schraffur als
-             * unübersehbarer Alarm-Kopf. */}
-            <div
-              className="h-3 shrink-0"
-              style={{
-                background:
-                  "repeating-linear-gradient(135deg, var(--color-red-600) 0 10px, var(--color-red-950) 10px 20px)",
-              }}
-            />
-            <div className="flex min-h-0 flex-1 flex-col p-6">
-              <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="font-mono text-xs tracking-[0.18em] text-red-400 uppercase">
-                {t("hostKeyDialog.mismatchLabel")}
-              </div>
-              <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
-                {t("hostKeyDialog.mismatchHeading")}
-              </h2>
-              <p id={descriptionId} className="mb-4 text-sm text-red-200/90">
-                {t("hostKeyDialog.mismatchBodyBeforeHost")}
-                <strong className="break-all">{event.host}:{event.port}</strong>
-                {t("hostKeyDialog.mismatchBodyAfterHost")}
-              </p>
-              {event.keyType ? (
-                <p className="mb-4 text-sm text-red-200/90" data-testid="host-key-type">
-                  {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
-                </p>
-              ) : null}
-              <div className="mb-4 grid grid-cols-2 gap-px narrow:grid-cols-1 border border-red-700/40 bg-red-700/25">
-                <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
-                    {t("hostKeyDialog.known")}
-                  </span>
-                  <span className="font-mono text-xs break-all text-emerald-300">
-                    {event.expectedFingerprint}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
-                    {t("hostKeyDialog.offeredNow")}
-                  </span>
-                  <span className="font-mono text-xs break-all text-red-300">
-                    {event.fingerprint}
-                  </span>
-                </div>
-              </div>
-
-              </div>
-
-              <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-red-700/30 pt-4">
-                <button
-                  ref={rejectButtonRef}
-                  type="button"
-                  onClick={() => decide("reject")}
-                  className="font-heading bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
-                >
-                  {t("hostKeyDialog.cancelConnection")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => decide("trust")}
-                  className="font-heading border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
-                >
-                  {t("hostKeyDialog.trustAnyway")}
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col p-6">
-            <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-slate-100">
-              {t("hostKeyDialog.unknownHeading")}
-            </h2>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-            <p id={descriptionId} className="mb-4 text-sm text-slate-300">
-              {t("hostKeyDialog.unknownBodyBeforeHost")}
-              <strong className="break-all">{event.host}:{event.port}</strong>
-              {t("hostKeyDialog.unknownBodyAfterHost")}
-            </p>
-            {event.keyType ? (
-              <p className="mb-2 text-sm text-slate-300" data-testid="host-key-type">
-                {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
-              </p>
-            ) : null}
-            <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs break-all text-slate-300">
-              {event.fingerprint}
-            </div>
-
-            </div>
-
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
-              <Button
-                ref={rejectButtonRef}
-                onClick={() => decide("reject")}
-              >
-                {t("hostKeyDialog.reject")}
-              </Button>
-              <Button variant="primary" onClick={() => decide("trust")}>
-                {t("hostKeyDialog.trust")}
-              </Button>
-            </div>
+    <DialogFrame
+      layer="app"
+      bare
+      // A1: `alertdialog` for a changed key (higher urgency for screen readers), `dialog` for an unknown one.
+      role={dialogRole}
+      labelledBy={headingId}
+      describedBy={descriptionId}
+      // A4: Escape rejects, never trusts. There is no backdrop click handler: a stray click decides nothing.
+      onClose={() => decide("reject")}
+      initialFocusRef={rejectButtonRef}
+      resetKey={event}
+      tone={isMismatch ? "danger" : undefined}
+      ticks={isMismatch ? "danger" : undefined}
+      panelClassName={`relative flex max-h-[85vh] w-full max-w-lg flex-col border ${isMismatch ? "" : "border-border-strong"} bg-surface-raised p-0 shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none`}
+    >
+      {isMismatch ? (
+        <div
+          className="flex shrink-0 items-center gap-2 border-b border-danger-border bg-danger-subtle px-5 py-3 text-danger-fg narrow:px-4"
+          data-testid="host-key-header"
+        >
+          <Icon name="warn" />
+          <div className="label-condensed text-xs">{t("hostKeyDialog.mismatchLabel")}</div>
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 narrow:px-4">
+        {event.serverName ? (
+          <div className="mb-1 break-words font-mono text-sm text-fg" data-testid="host-key-server-name">
+            {event.serverName}
           </div>
-        )}
+        ) : null}
+        <h2
+          id={headingId}
+          className="text-title mb-2 break-words text-fg-strong"
+        >
+          {isMismatch ? t("hostKeyDialog.mismatchHeading") : t("hostKeyDialog.unknownHeading")}
+        </h2>
+        <p id={descriptionId} className="mb-4 text-sm text-fg-muted">
+          {t(isMismatch ? "hostKeyDialog.mismatchBodyBeforeHost" : "hostKeyDialog.unknownBodyBeforeHost")}
+          <strong className="font-mono break-all text-fg" data-testid="host-key-address">
+            {event.host}:{event.port}
+          </strong>
+          {t(isMismatch ? "hostKeyDialog.mismatchBodyAfterHost" : "hostKeyDialog.unknownBodyAfterHost")}
+        </p>
+        <dl className="border border-border bg-surface font-mono text-xs">
+          {isMismatch ? (
+            <div className={rowClass}>
+              <dt className={labelClass}>{t("hostKeyDialog.known")}</dt>
+              <dd className="break-all text-fg select-text">{event.expectedFingerprint}</dd>
+            </div>
+          ) : null}
+          <div className={`${rowClass} ${isMismatch ? "bg-danger-subtle" : ""}`}>
+            <dt className={`${labelClass} ${isMismatch ? "text-danger-fg" : ""}`}>
+              {t(isMismatch ? "hostKeyDialog.offeredNow" : "hostKeyDialog.offered")}
+            </dt>
+            <dd className={`break-all select-text ${isMismatch ? "text-danger-fg" : "text-fg"}`}>{event.fingerprint}</dd>
+          </div>
+          {event.keyType ? (
+            <div className={rowClass} data-testid="host-key-type">
+              <dt className={labelClass}>{t("hostKeyDialog.keyType")}</dt>
+              <dd className="text-fg select-text">{event.keyType}</dd>
+            </div>
+          ) : null}
+        </dl>
       </div>
-    </ModalBackdrop>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-surface px-5 py-3 narrow:px-4">
+        <Button
+          ref={rejectButtonRef}
+          variant={isMismatch ? "primary" : "secondary"}
+          onClick={() => decide("reject")}
+        >
+          {rejectLabel}
+        </Button>
+        <Button
+          variant={isMismatch ? "danger" : "primary"}
+          onClick={() => decide("trust")}
+        >
+          {trustLabel}
+        </Button>
+      </div>
+    </DialogFrame>
   );
 }

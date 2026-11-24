@@ -1,7 +1,7 @@
 # 0025-mcp-server-integration-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

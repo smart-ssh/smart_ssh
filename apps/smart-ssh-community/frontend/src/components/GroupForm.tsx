@@ -1,13 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { createGroup, deleteGroup, updateGroup } from "../api/api";
+import { commandErrorText } from "../api/errorCodes";
 import { GroupFormSections } from "../extensions/FormSlots";
-import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
-import type { DeleteGroupResult, GroupDto } from "../types";
+import { flattenGroupOptions, groupOptionLabel } from "../lib/groupTree";
+import type { DeleteGroupResult, GroupDto } from "../api/types";
 import { NotesPanel } from "./NotesPanel";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button } from "./ui";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
+import { Button, Icon } from "./ui";
+import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 /** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen
  * Verschieben per Drag-and-drop — `groupId` ist die neue Gruppe (Server)
@@ -113,7 +114,7 @@ export function GroupForm({
       setDirty(false);
       onSaved();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setSaving(false);
     }
@@ -125,7 +126,7 @@ export function GroupForm({
     try {
       setDeletePreview(await deleteGroup(groupId, false));
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -137,7 +138,7 @@ export function GroupForm({
       await deleteGroup(groupId, true);
       onDeleted();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setDeleting(false);
     }
@@ -145,40 +146,47 @@ export function GroupForm({
 
   return (
     <div className="max-w-xl space-y-6 p-4">
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
-        {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
-      </h2>
+      <div className="flex items-center gap-3">
+        <Icon name="folder" size={24} className="shrink-0 text-fg-muted" />
+        <h2 className="min-w-0 flex-1 break-words font-heading text-2xl font-semibold uppercase tracking-wide text-fg-strong">
+          {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
+        </h2>
+      </div>
 
       <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
-        <label className="block text-sm text-slate-300">
-          {t("common.name")}
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-          />
-        </label>
+        <Field label={t("common.name")}>
+          {(control) => (
+            <input
+              {...control}
+              {...TECHNICAL_INPUT_PROPS}
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            />
+          )}
+        </Field>
 
-        <label className="block text-sm text-slate-300">
-          {t("groupForm.parent")}
-          <select
-            value={parentId ?? ""}
-            onChange={(e) => setParentId(e.target.value || null)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-          >
-            <option value="">{t("groupForm.noParent")}</option>
-            {availableParents.map((option) => (
-              <option key={option.group.id} value={option.group.id}>
-                {groupOptionLabel(option)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label={t("groupForm.parent")}>
+          {(control) => (
+            <select
+              {...control}
+              value={parentId ?? ""}
+              onChange={(e) => setParentId(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full narrow:min-h-11`}
+            >
+              <option value="">{t("groupForm.noParent")}</option>
+              {availableParents.map((option) => (
+                <option key={option.group.id} value={option.group.id}>
+                  {groupOptionLabel(option)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         <Button variant="primary"
           type="submit"
@@ -194,7 +202,7 @@ export function GroupForm({
           <GroupFormSections groupId={groupId} dirty={dirty} />
           <NotesPanel target={{ Group: groupId }} currentNotes={existing.notes} onNotesChanged={onSaved} />
 
-          <div className="border-t border-slate-700 pt-4">
+          <div className="border-t border-border pt-4">
             <Button variant="danger" size="sm"
               onClick={handleDeleteClick}
             >
@@ -202,14 +210,14 @@ export function GroupForm({
             </Button>
 
             {deletePreview && (
-              <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-                <p className="mb-2 font-medium text-red-200">{t("groupForm.deleteImpactTitle")}</p>
+              <div className="mt-3 rounded border border-danger-border bg-danger-subtle p-3 text-sm">
+                <p className="mb-2 font-medium text-danger-fg-softer">{t("groupForm.deleteImpactTitle")}</p>
                 {deletePreview.childGroupsToDelete.length === 0 &&
                 deletePreview.serversToUnassign.length === 0 &&
                 deletePreview.unusableServersToUnassign.length === 0 ? (
-                  <p className="text-red-200">{t("groupForm.deleteNoImpact")}</p>
+                  <p className="text-danger-fg-softer">{t("groupForm.deleteNoImpact")}</p>
                 ) : (
-                  <ul className="mb-2 space-y-1 text-red-200">
+                  <ul className="mb-2 space-y-1 text-danger-fg-softer">
                     {deletePreview.childGroupsToDelete.map((g) => (
                       <li key={g.id}>{t("groupForm.childGroupWillBeDeleted", { name: g.name })}</li>
                     ))}

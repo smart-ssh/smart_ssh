@@ -1,7 +1,7 @@
 # 0044-filemanager-layout-persistence-and-scope-choices
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

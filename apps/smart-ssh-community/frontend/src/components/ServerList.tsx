@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
+import { detectFallbackPlatform, platformCapabilities } from "../lib/platform";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
-  commandErrorMessage,
   keepGroupAsRegularEntry,
   keepServerAsRegularEntry,
   listChatSessions,
   listGroups,
   listServers,
   listUnusableServers,
-} from "../api";
-import { translateErrorCode } from "../errorCodes";
-import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
-import { buildGroupTree, type GroupTreeNode } from "../groupTree";
+  inspectKeyFile,
+} from "../api/api";
+import { onDataChanged } from "../api/events";
+import { commandErrorText } from "../api/errorCodes";
+import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../lib/firstRunNotice";
+import { buildGroupTree, groupItemCount, type GroupTreeNode } from "../lib/groupTree";
 import {
   classifyDrop,
   dropHighlightClass,
@@ -22,7 +23,7 @@ import {
   performMove,
   type DragItem,
   type DropTarget,
-} from "../treeDrag";
+} from "../lib/treeDrag";
 import type {
   ChatSessionSummaryDto,
   ConnectStepRecord,
@@ -30,15 +31,60 @@ import type {
   KeepGroupResult,
   ServerDto,
   UnusableServerDto,
-} from "../types";
-import { useTreeDrag } from "../useTreeDrag";
+} from "../api/types";
+import { useTreeDrag } from "../hooks/useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
-import { MoveToDialog } from "./MoveToDialog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
-import { unusableReasonText } from "../unusableServer";
-import { Button, DialogFrame } from "./ui";
+import { unusableReasonText } from "../lib/unusableServer";
+import type { SessionTab } from "../hooks/useSessionTabs";
+import { STATUS_TONE } from "./SessionTabParts";
+import { Badge, Button, DialogFrame, Icon, StatusSquare } from "./ui";
+
+/** Issue #1367: state of the open session(s) of a server, shown as a status
+ * square on its row. `attention` = pending confirmation or waiting for the
+ * host key. */
+export type ServerMarker = "connected" | "attention" | "reconnecting" | "disconnected";
+
+/** Most urgent last: disconnected < connected < reconnecting < attention. */
+const MARKER_RANK: Record<ServerMarker, number> = { disconnected: 0, connected: 1, reconnecting: 2, attention: 3 };
+
+/** One marker per server that has an open user session; with several tabs the
+ * most urgent state wins. MCP tabs and attempts that are still connecting or
+ * failed carry no marker ("Connecting…" stays as text). */
+export function serverSessionMarkers(
+  tabs: readonly Pick<SessionTab, "serverId" | "status" | "hasPendingAction" | "mcp" | "phase">[],
+): Map<string, ServerMarker> {
+  const markers = new Map<string, ServerMarker>();
+  for (const tab of tabs) {
+    if (tab.mcp || tab.phase !== "connected") continue;
+    const marker: ServerMarker =
+      tab.hasPendingAction || tab.status === "awaiting_host_key"
+        ? "attention"
+        : tab.status === "connected"
+          ? "connected"
+          : tab.status === "reconnecting"
+            ? "reconnecting"
+            : "disconnected";
+    const current = markers.get(tab.serverId);
+    if (!current || MARKER_RANK[marker] > MARKER_RANK[current]) markers.set(tab.serverId, marker);
+  }
+  return markers;
+}
+
+const MARKER_TONE = {
+  connected: STATUS_TONE.connected,
+  attention: "warning",
+  reconnecting: STATUS_TONE.reconnecting,
+  disconnected: STATUS_TONE.disconnected,
+} as const;
+const MARKER_TEXT = {
+  connected: "mainScreen.sessionOpen",
+  attention: "mainScreen.sessionPending",
+  reconnecting: "mainScreen.sessionReconnecting",
+  disconnected: "mainScreen.sessionDisconnected",
+} as const;
 
 /** Spec 0103: marks a server or group that the backup import moved into
  * "Previous data"; the tooltip (and screen-reader text) explains it. */
@@ -48,11 +94,28 @@ function CopyBadge() {
     <span
       data-testid="copy-badge"
       title={t("copyMarker.badgeHint")}
-      className="shrink-0 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200"
+      className="shrink-0 border border-warning-border bg-warning-subtle-hover px-1.5 font-mono text-[11px] text-warning-fg-softer"
     >
       {t("copyMarker.badge")}
       <span className="sr-only">. {t("copyMarker.badgeHint")}</span>
     </span>
+  );
+}
+
+const NO_MARKERS: ReadonlyMap<string, ServerMarker> = new Map();
+
+/** Container of a group's children: a 1 px rule under the parent's chevron
+ * centre (20 px, 22 px narrow). */
+const CHILDREN_CLASS = "ml-5 border-l border-border narrow:ml-[22px]";
+
+/** Short horizontal connector from the rule to a nested row (decorative). */
+function TreeTick() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="tree-tick"
+      className="pointer-events-none absolute left-0 top-[15px] h-px w-3 bg-border narrow:top-[26px]"
+    />
   );
 }
 
@@ -64,6 +127,8 @@ interface ServerListProps {
   /** Issue #548: servers with a running connect attempt (keeps the
    * "Connecting…" state of the row). */
   connectingServerIds: ReadonlySet<string>;
+  /** Issue #1367: status marker per server with an open session. */
+  serverMarkers?: ReadonlyMap<string, ServerMarker>;
   /** Spec 0017, Abschnitt 3: "existiert bereits ein Tab für diesen Server,
    * wird stattdessen zu diesem gewechselt (kein zweiter Tab zum selben
    * Server)" — die Prüfung muss **vor** `connect()` passieren, sonst würde
@@ -91,7 +156,6 @@ interface ServerListProps {
   onCreateFirstServer: () => void;
   /** Issue #49: „+" an einer Gruppenzeile — wechselt zu „Verwalten" mit
    * geöffnetem Neu-Formular, diese Gruppe vorbelegt. */
-  onCreateServerInGroup: (groupId: string) => void;
 }
 
 /** Spec 0047, Fund D2: bislang zeigte dieser Screen bei jedem Fehler nur
@@ -103,11 +167,30 @@ interface ServerListProps {
  * wirklich kein bekannter Code vorliegt. Als Modul-Funktion (statt einer
  * im Komponentenkörper geschlossenen Closure über `t`) definiert, damit
  * sie referenziell stabil ist und keine `useEffect`-Dependency wird. */
-function describeError(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
+/** Issue #667 / Spec 0109 C3: names the key file as missing on this device
+ * (e.g. after a backup import). A failed pre-check shows nothing — the file
+ * is checked again when connecting. */
+function KeyFileMissingNote({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setMissing(false);
+    inspectKeyFile(path)
+      .then((facts) => {
+        if (!cancelled) setMissing(facts.problem?.code === "KEY_FILE_NOT_FOUND");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+  if (!missing) return null;
+  return (
+    <p className="text-xs text-warning-fg">
+      {t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}
+    </p>
+  );
 }
 
 /**
@@ -124,6 +207,7 @@ function describeError(
 export function ServerList({
   onStartConnect,
   connectingServerIds,
+  serverMarkers = NO_MARKERS,
   findExistingSessionId,
   onSwitchToExistingTab,
   collapsedGroupIds,
@@ -133,12 +217,9 @@ export function ServerList({
   connectRequest = null,
   onConnectRequestConsumed,
   onCreateFirstServer,
-  onCreateServerInGroup,
 }: ServerListProps) {
   const { t } = useTranslation();
   const narrow = useIsNarrow();
-  // Issue #582: row whose "Move to…" dialog is open (narrow layout).
-  const [moveItem, setMoveItem] = useState<DragItem | null>(null);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [groups, setGroups] = useState<GroupDto[]>([]);
   // Issue #100: Server mit unlesbarer Anmeldeart — sichtbar, aber nicht
@@ -176,7 +257,7 @@ export function ServerList({
           setGroups(g);
           setUnusableServers(u);
         })
-        .catch((err) => setError(describeError(t, err)))
+        .catch((err) => setError(commandErrorText(t, err)))
         .finally(() => setLoading(false)),
     [t],
   );
@@ -189,6 +270,24 @@ export function ServerList({
     // exhaustive-deps-Lint-Suppressors.
   }, [loadTree]);
 
+  // Issue #1292 / Spec 0033: reload when the backend reports changed servers or
+  // groups (e.g. changes made while the settings dialog is open). Other kinds
+  // are ignored; events after unmount do nothing.
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | null = null;
+    void onDataChanged((payload) => {
+      if (active && payload.kinds.some((k) => k === "servers" || k === "groups")) void loadTree();
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [loadTree]);
+
   /** Issue #48 / Spec 0103: Ablage eines gezogenen Servers/einer Gruppe.
    * `noop` (schon dort) ruft nichts auf; ein Zyklus geht bewusst ans
    * Backend, das ihn mit `GROUP_CYCLE_DETECTED` ablehnt — die Meldung
@@ -199,25 +298,17 @@ export function ServerList({
     try {
       await performMove(item, target);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
   const { drag, handlersFor } = useTreeDrag((item, target) => void handleDrop(item, target), {
     touchDrag: !narrow,
   });
-  const indent = (depth: number) => (narrow ? depth * 12 + 12 : depth * 16 + 16);
-  const moreButton = (item: DragItem) => (
-    <Button
-      variant="ghost"
-      onClick={() => setMoveItem(item)}
-      title={t("treeDrag.moveTo", { name: item.label })}
-      aria-label={t("treeDrag.moveTo", { name: item.label })}
-      className="mr-1 min-h-11 min-w-11 shrink-0"
-    >
-      ⋯
-    </Button>
-  );
+  // Issue #1367: nesting is structural — children sit in a container with a
+  // 1 px left rule under the parent's chevron; the chevron is 16 px wide
+  // (20 px narrow) at 12 px padding, so its centre is at 20 px (22 px narrow).
+  const chevronPx = narrow ? 20 : 16;
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
   const highlightFor = (target: DropTarget) =>
     drag?.target &&
@@ -261,7 +352,7 @@ export function ServerList({
     try {
       await keepServerAsRegularEntry(server.id);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
@@ -270,7 +361,7 @@ export function ServerList({
     try {
       setKeepGroup({ group, scope: await keepGroupAsRegularEntry(group.id, false) });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
   const confirmKeepGroup = async () => {
@@ -280,7 +371,7 @@ export function ServerList({
     try {
       await keepGroupAsRegularEntry(group.id, true);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
@@ -315,7 +406,7 @@ export function ServerList({
       return;
     }
     void performConnect(server, resumeRequest.chatSessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- performConnect is recreated each render; the request is consumed once
   }, [resumeRequest, loading, firstRunAcknowledged, servers]);
 
   // Issue #692: same flow as a click on the server (open tab → switch,
@@ -329,7 +420,7 @@ export function ServerList({
       return;
     }
     void handleConnect(server);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleConnect is recreated each render; the request is consumed once
   }, [connectRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
@@ -381,7 +472,7 @@ export function ServerList({
       }
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -401,7 +492,7 @@ export function ServerList({
       const sessions = await listChatSessions(server.id);
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -420,7 +511,7 @@ export function ServerList({
     try {
       await saveFirstRunNoticeAcknowledged();
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
       return;
     }
     setFirstRunAcknowledged(true);
@@ -432,85 +523,101 @@ export function ServerList({
     }
   };
 
-  const renderServerRow = (server: ServerDto, depth: number) => (
-    <li key={server.id} className={narrow ? "flex items-center" : undefined}>
-      <button
-        type="button"
-        // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
-        {...(server.isLocal
-          ? {}
-          : handlersFor({ kind: "server", id: server.id, label: server.name }))}
-        onClick={() => handleConnect(server)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setNewSessionMenu({ x: e.clientX, y: e.clientY, server });
-        }}
-       
-        style={{ paddingLeft: `${indent(depth)}px` }}
-        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
-      >
-        <div className="min-w-0">
-          <p className="font-medium break-words text-slate-100">{server.name}</p>
-          {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
-           * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
-           * `server.port` wäre hier immer `0` (s. `local_server::
-           * synthetic_server`), das würde einen nicht existierenden Port
-           * suggerieren statt ihn einfach auszublenden. */}
-          <p className="text-sm text-slate-400 narrow:break-all">
-            {server.isLocal
-              ? `${server.username}@${server.host}`
-              : `${server.username}@${server.host}:${server.port}`}
-          </p>
-          {/* Spec 0076, B-4: erkennbar, dass die Anmeldung an einer Datei
-           * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
-           * er abgeschnitten wird. */}
-          {server.identityFilePath && (
-            <p className="truncate text-xs text-slate-400" title={server.identityFilePath}>
-              {/* spec-reviewer-Fund (Review dieses Schritts): das Emoji
-               * allein trägt keine barrierefreie Bedeutung — `aria-hidden`
-               * nimmt es aus dem Accessibility-Baum, der sichtbare Pfad
-               * daneben bleibt der eigentliche Inhalt der Zeile. */}
-              <span aria-hidden="true">🔑</span> {server.identityFilePath}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 narrow:flex-wrap">
-          {server.tags.map((tag) => (
-            <span key={tag} className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200">
-              {tag}
-            </span>
-          ))}
-          {server.isCopy && <CopyBadge />}
-          {connectingServerIds.has(server.id) && (
-            <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
-          )}
-        </div>
-      </button>
-      {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
-    </li>
-  );
+  const renderServerRow = (server: ServerDto, depth: number) => {
+    const marker = serverMarkers.get(server.id);
+    return (
+      <li key={server.id} className="relative">
+        {depth > 0 && <TreeTick />}
+        <Button variant="bare"
+          type="button"
+          // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
+          {...(server.isLocal
+            ? {}
+            : handlersFor({ kind: "server", id: server.id, label: server.name }))}
+          onClick={() => handleConnect(server)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setNewSessionMenu({ x: e.clientX, y: e.clientY, server });
+          }}
+          className={`flex w-full min-w-0 select-none items-center justify-between gap-2 border-b border-border py-1 narrow:py-1.5 pr-3 text-left min-h-[30px] narrow:min-h-[52px] narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-ring-inset aria-disabled:opacity-60 ${depth > 0 ? "pl-5" : "pl-3"}`}
+        >
+          <div className="flex min-w-0 items-start gap-2">
+            <Icon name={server.isLocal ? "local" : "server"} className="mt-0.5 text-fg-muted" />
+            <div className="min-w-0">
+             <div className="flex min-w-0 items-baseline gap-3 narrow:block">
+              <p className="flex items-center gap-2">
+                <span className="break-words font-mono text-sm text-fg">{server.name}</span>
+              </p>
+              {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
+               * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
+               * `server.port` wäre hier immer `0` (s. `local_server::
+               * synthetic_server`), das würde einen nicht existierenden Port
+               * suggerieren statt ihn einfach auszublenden. Issue #1367: the
+               * port shows only when it is not 22; the local pseudo-server
+               * says "this device". */}
+              <p className="font-mono text-[11.5px] text-fg-faint narrow:break-all">
+                {server.isLocal
+                  ? t("mainScreen.thisDevice")
+                  : server.port === 22
+                    ? `${server.username}@${server.host}`
+                    : `${server.username}@${server.host}:${server.port}`}
+              </p>
+             </div>
+              {/* Spec 0076, B-4: erkennbar, dass die Anmeldung an einer Datei
+               * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
+               * er abgeschnitten wird. */}
+              {server.identityFilePath && (
+                <p className="truncate font-mono text-[11.5px] text-fg-faint" title={server.identityFilePath}>
+                  {/* The icon is decorative (aria-hidden); the visible path is
+                   * the row's actual content. */}
+                  <Icon name="key" className="inline align-text-bottom" /> {server.identityFilePath}
+                </p>
+              )}
+              {server.identityFilePath && <KeyFileMissingNote path={server.identityFilePath} />}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 narrow:flex-wrap">
+            {server.isLocal && <Badge tone="local">{t("mainScreen.localBadge")}</Badge>}
+            {marker && (
+              <>
+                <StatusSquare tone={MARKER_TONE[marker]} />
+                <span className="sr-only">{t(MARKER_TEXT[marker])}</span>
+              </>
+            )}
+            {server.tags.map((tag) => (
+              <span key={tag} className="border border-border px-1.5 font-mono text-[11px] text-fg-soft">
+                {tag}
+              </span>
+            ))}
+            {server.isCopy && <CopyBadge />}
+            {connectingServerIds.has(server.id) && (
+              <span className="text-xs text-accent-fg-soft">{t("mainScreen.connecting")}</span>
+            )}
+          </div>
+        </Button>
+      </li>
+    );
+  };
 
   /** Issue #100: ein nicht nutzbarer Server — bewusst kein Button: kein
    * Verbinden, kein Ziehen. Begründung sichtbar, Löschen unter „Verwalten". */
   const renderUnusableServerRow = (server: UnusableServerDto, depth: number) => (
-    <li key={server.id} data-testid="unusable-server-row">
+    <li key={server.id} data-testid="unusable-server-row" className="relative">
+      {depth > 0 && <TreeTick />}
       <div
-        style={{ paddingLeft: `${indent(depth)}px` }}
-        className="flex w-full select-none items-center justify-between gap-2 py-3 pr-4 text-left opacity-70 narrow:flex-wrap narrow:pr-2"
+        className={`flex w-full select-none items-center justify-between gap-2 border-b border-border py-1.5 pr-3 text-left opacity-70 min-h-[30px] narrow:min-h-[52px] narrow:flex-wrap narrow:pr-2 ${depth > 0 ? "pl-5" : "pl-3"}`}
       >
         <div className="min-w-0 break-words">
-          <p className="font-medium text-slate-300">
-            <span aria-hidden="true">⚠️</span> {server.name}
+          <p className="font-medium text-fg-muted">
+            <Icon name="warn" className="inline align-text-bottom" /> {server.name}
           </p>
-          <p className="text-sm text-slate-400">{server.host}</p>
-          <p className="text-xs text-amber-300">{unusableReasonText(t, server.reason)}</p>
-          <p className="text-xs text-slate-400">
+          <p className="font-mono text-[11.5px] text-fg-faint">{server.host}</p>
+          <p className="text-xs text-warning-fg-soft">{unusableReasonText(t, server.reason)}</p>
+          <p className="text-xs text-fg-subtle">
             {t("unusableServer.listHint", { manage: t("nav.manage") })}
           </p>
         </div>
-        <span className="rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
-          {t("unusableServer.badge")}
-        </span>
+        <Badge tone="warning">{t("unusableServer.badge")}</Badge>
       </div>
     </li>
   );
@@ -527,15 +634,16 @@ export function ServerList({
       <li
         key={node.group.id}
         data-drop-target={groupDropTargetValue(node.group.id)}
-        className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
+        className={`relative ${highlightFor({ kind: "group", id: node.group.id })}`}
       >
-        {/* Issue #49: Auf-/Zuklappen und „+" (neuer Server in dieser
-         * Gruppe) als Geschwister — ein Button im Button wäre ungültig. */}
-        <div className="flex items-center hover:bg-slate-800">
-          <button
+        {depth > 0 && <TreeTick />}
+        {/* Issue #49: Auf-/Zuklappen (Issue #978: kein „+" und kein „⋯" mehr im Connect-Baum). */}
+        <div className="flex items-center border-b border-border bg-surface-sunken hover:bg-surface-raised">
+          <Button variant="bare"
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
+            aria-expanded={!collapsed}
             title={node.group.name}
             onContextMenu={
               node.group.isCopy
@@ -545,30 +653,23 @@ export function ServerList({
                   }
                 : undefined
             }
-            style={{ paddingLeft: `${indent(depth)}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+            className={`flex min-w-0 flex-1 select-none items-center gap-2 py-1 pr-3 min-h-[30px] narrow:min-h-[52px] narrow:pr-2 text-left text-sm font-semibold text-fg-soft focus-ring-inset pl-3`}
           >
-            <span className="w-3 text-slate-400">{collapsed ? "▸" : "▾"}</span>
+            <span data-testid="group-chevron" className="inline-flex shrink-0 text-fg-soft">
+              <Icon name={collapsed ? "chev-r" : "chev-d"} size={chevronPx} />
+            </span>
+            <Icon name={collapsed ? "folder" : "folder-open"} className="text-fg-muted" />
             <span className="truncate" title={node.group.name}>
-              📁 {node.group.name}
+              {node.group.name}
+            </span>
+            <span data-testid="group-count" className="ml-auto shrink-0 font-mono text-xs font-normal text-fg-faint">
+              {groupItemCount(node)}
             </span>
             {node.group.isCopy && <CopyBadge />}
-          </button>
-          <Button variant="ghost" size="sm"
-            onClick={() => onCreateServerInGroup(node.group.id)}
-            title={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            aria-label={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            className="mr-3 narrow:mr-1 narrow:min-h-11 narrow:min-w-11"
-          >
-            +
           </Button>
-          {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
         </div>
-        {!collapsed &&
-          (node.children.length > 0 ||
-            node.servers.length > 0 ||
-            node.unusableServers.length > 0) && (
-          <ul className="divide-y divide-slate-800">
+        {!collapsed && groupItemCount(node) > 0 && (
+          <ul data-testid="tree-children" className={CHILDREN_CLASS}>
             {node.children.map((child) => renderGroupSection(child, depth + 1))}
             {node.servers.map((s) => renderServerRow(s, depth + 1))}
             {node.unusableServers.map((s) => renderUnusableServerRow(s, depth + 1))}
@@ -579,10 +680,12 @@ export function ServerList({
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-400">{t("mainScreen.loadingServers")}</p>;
+    return <p className="text-sm text-fg-subtle">{t("mainScreen.loadingServers")}</p>;
   }
 
-  const localServer = servers.find((s) => s.isLocal);
+  const localServer = platformCapabilities(detectFallbackPlatform()).localServer
+    ? servers.find((s) => s.isLocal)
+    : undefined;
   const tree = buildGroupTree(groups, servers, unusableServers);
   // Spec 0069, Teil C1 (BL-0082): "leer" für den Einstiegs-Block heißt
   // ausschließlich "keine echten Server" — der lokale Pseudo-Server zählt
@@ -603,7 +706,7 @@ export function ServerList({
 
   return (
     <>
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-danger-fg">{error}</p>}
       {error && connectFailure && connectFailure.message === error && (
         <div className="mb-2">
           <ConnectStepLog steps={connectFailure.steps} />
@@ -614,7 +717,7 @@ export function ServerList({
        * Gruppen-Bereiche, visuell durch die eigene Box + den Abstand zur
        * Gruppen-Liste klar abgesetzt — nie innerhalb eines Ordners. */}
       {localServer && (
-        <ul className="mb-4 divide-y divide-slate-700 rounded-md border border-slate-700">
+        <ul className="mb-4 border-t border-border">
           {renderServerRow(localServer, 0)}
         </ul>
       )}
@@ -624,23 +727,23 @@ export function ServerList({
        * Gruppen, wird der Gruppenbaum unten ZUSÄTZLICH gezeigt (nicht
        * ausschließend) — s. `hasGroupTreeContent`. */}
       {!hasRealServers && !error && (
-        <div className="mb-4 rounded-md border border-slate-700 bg-slate-900/40 p-4">
-          <p className="text-sm font-medium text-slate-100">
+        <div className="mb-4 border border-border bg-surface/40 p-4">
+          <p className="text-sm font-medium text-fg">
             {t("mainScreen.emptyStateTitle")}
           </p>
-          <p className="mt-1 text-sm text-slate-400">{t("mainScreen.emptyStateHint")}</p>
+          <p className="mt-1 text-sm text-fg-subtle">{t("mainScreen.emptyStateHint")}</p>
           <Button variant="primary"
             onClick={onCreateFirstServer}
             className="mt-3"
           >
             {t("mainScreen.emptyStateCreateFirstServer")}
           </Button>
-          <p className="mt-3 text-xs text-slate-400">{t("mainScreen.emptyStateTryLocalhost")}</p>
+          <p className="mt-3 text-xs text-fg-subtle">{t("mainScreen.emptyStateTryLocalhost")}</p>
         </div>
       )}
 
       {hasGroupTreeContent && (
-        <ul className="divide-y divide-slate-700 rounded-md border border-slate-700">
+        <ul className="border-t border-border">
           {tree.roots.map((node) => renderGroupSection(node, 0))}
           {/* Issue #48: "Ohne Gruppe" ist zugleich das Ablageziel für die
            * Wurzelebene — beim Ziehen auch dann sichtbar, wenn noch kein
@@ -650,34 +753,24 @@ export function ServerList({
             drag) && (
             <li
               data-drop-target="root"
-              className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "root" })}`}
+              className={highlightFor({ kind: "root" })}
             >
-              <div className="px-4 py-2 text-sm font-medium text-slate-200">
+              <div className="flex min-h-[30px] items-center border-b border-border bg-surface-sunken px-3 text-sm font-semibold text-fg-soft narrow:min-h-[52px]">
                 {t("mainScreen.ungrouped")}
               </div>
               {tree.ungroupedServers.length > 0 || tree.ungroupedUnusableServers.length > 0 ? (
-                <ul className="divide-y divide-slate-800">
+                <ul className={CHILDREN_CLASS}>
                   {tree.ungroupedServers.map((s) => renderServerRow(s, 1))}
                   {tree.ungroupedUnusableServers.map((s) => renderUnusableServerRow(s, 1))}
                 </ul>
               ) : (
-                <p className="mx-4 mb-2 rounded border border-dashed border-slate-600 px-3 py-2 text-xs text-slate-400">
+                <p className="mx-4 mb-2 rounded border border-dashed border-border-strong px-3 py-2 text-xs text-fg-subtle">
                   {t("treeDrag.rootDropZone")}
                 </p>
               )}
             </li>
           )}
         </ul>
-      )}
-
-      {moveItem && (
-        <MoveToDialog
-          item={moveItem}
-          groups={groups}
-          servers={servers}
-          onMove={(item, target) => void handleDrop(item, target)}
-          onClose={() => setMoveItem(null)}
-        />
       )}
 
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
@@ -733,8 +826,8 @@ export function ServerList({
             </>
           }
         >
-          <p className="break-words text-sm text-slate-200">📁 {keepGroup.group.name}</p>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="break-words text-sm text-fg-soft"><Icon name="folder" className="inline align-text-bottom" /> {keepGroup.group.name}</p>
+          <p className="mt-2 text-sm text-fg-muted">
             {t("copyMarker.groupConfirmBody", {
               groups: keepGroup.scope.groups,
               servers: keepGroup.scope.servers,

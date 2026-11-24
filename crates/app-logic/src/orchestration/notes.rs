@@ -33,16 +33,22 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, push_history_scoped, reapply_redaction_and_seal_for_send,
-    wait_for_ai_request_slot, wait_for_rate_limit_budget, write_ledger_entry,
-    PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    emit_activity, push_history, seal_session_for_send, wait_for_ai_request_slot,
+    wait_for_rate_limit_budget, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
+use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests;
+
+#[cfg(test)]
+mod tests_note_result;
+
+mod note_result;
+use note_result::record_note_update_for_model;
 
 /// Spec 0016, Abschnitt 6: löst den von der KI gewählten
 /// [`NoteTargetSelector`] in die tatsächliche `ServerId`/`GroupId` auf — nie
@@ -176,7 +182,7 @@ pub(crate) fn redact_note_proposal(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub(crate) async fn execute_note_update(
     session: &Session,
     session_id: SessionId,
@@ -207,10 +213,10 @@ pub(crate) async fn execute_note_update(
     match persist_note_revision(
         profile_store,
         target,
-        new_content,
+        new_content.clone(),
         NoteEditor::Ai {
-            provider: session.ai_provider_label.clone(),
-            model: session.ai_model.clone(),
+            provider: session.ai.label.clone(),
+            model: session.ai.model.clone(),
         },
     )
     .await
@@ -224,15 +230,8 @@ pub(crate) async fn execute_note_update(
                     summary: summary.clone(),
                 },
             );
-            push_history_scoped(
-                session,
-                ChatMessage {
-                    role: Role::ActionResult,
-                    content: MessageContent::Text(summary),
-                },
-                persist,
-            )
-            .await;
+            record_note_update_for_model(session, target, &new_content, profile_store, persist)
+                .await;
             true
         }
         Err(err) => {
@@ -240,7 +239,7 @@ pub(crate) async fn execute_note_update(
                 session,
                 emitter,
                 session_id,
-                format!("Notiz konnte nicht aktualisiert werden: {err}"),
+                format!("Notiz konnte nicht aktualisiert werden: {}", err.message),
                 None,
                 persist,
             )
@@ -270,13 +269,13 @@ async fn persist_note_revision(
     target: NoteTarget,
     new_content: String,
     editor: NoteEditor,
-) -> Result<String, String> {
+) -> Result<String, crate::error::CommandError> {
     let revision = ssh_manager_core::profiles::record_revision(target, new_content, editor);
     profile_store
         .record_note_revision(&revision)
         .await
         .map(|()| note_update_summary(target))
-        .map_err(|err| err.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 /// Spec 0012, Abschnitt 2/3: `GenerateDocument` erzeugt reinen lokalen
@@ -306,7 +305,7 @@ pub(crate) async fn handle_document_generated(
     // Gleichsetzung mit normalem Chat-Text wie unten bei `push_history`—
     // gilt genauso für den Ledger-Eintrag, s. `flush_text_buffer`s
     // identischer Kommentar.
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage {
@@ -370,7 +369,7 @@ pub(crate) async fn handle_question_asked(
         options.iter().map(QuestionOptionDto::from).collect(),
         multi_select,
     );
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage {
@@ -452,21 +451,6 @@ impl TitleFailure {
     }
 }
 
-/// Issue #551: chat sessions whose first-answer title attempt was already
-/// started in this process — the request runs at most once per session.
-static TITLE_ATTEMPTED: std::sync::Mutex<Vec<uuid::Uuid>> = std::sync::Mutex::new(Vec::new());
-
-fn claim_title_attempt(id: uuid::Uuid) -> bool {
-    let mut attempted = TITLE_ATTEMPTED
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if attempted.contains(&id) {
-        return false;
-    }
-    attempted.push(id);
-    true
-}
-
 /// Issue #551: title generation right after the first finished AI answer of
 /// a persisted session (Spec 0034, section 7). One attempt per session;
 /// no-op if the session already has a title. Runs inside the chat turn
@@ -478,10 +462,12 @@ pub async fn generate_session_title_after_first_answer(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) {
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
-    if session.chat_session_store.is_none() || !claim_title_attempt(chat_session_id) {
+    if session.persistence.chat_session_store.is_none()
+        || !session.persistence.title_attempts.claim(chat_session_id)
+    {
         return;
     }
     ensure_session_title(session, session_id, emitter).await;
@@ -503,19 +489,20 @@ pub async fn generate_session_title_on_disconnect(
 
 /// "AI title, else fallback from the first user message" — see Issue #551.
 /// Every write goes through `set_title_if_absent`, so a manual title wins.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 async fn ensure_session_title(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) {
-    let Some(store) = &session.chat_session_store else {
+    let Some(store) = &session.persistence.chat_session_store else {
         return;
     };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
 
-    let first_in_memory = first_user_text(&session.context.lock().await.history);
+    let first_in_memory = first_user_text(&session.ai.context.lock().await.history);
     let first_stored = match store.first_user_message_text(chat_session_id).await {
         Ok(text) => text,
         Err(err) => {
@@ -594,31 +581,21 @@ async fn request_ai_title(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
 ) -> Result<String, TitleFailure> {
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // s. identischer Kommentar in `run_one_round` — geklont, um den
     // `MutexGuard` nicht über den potenziell langen `compact_for_send`-
     // Aufruf hinweg zu halten.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     request_context = crate::compaction::compact_for_send(
         session,
         session_id,
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
-    // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
-    // `run_one_round`.
-    // Issue #562: same redaction-and-sealing entry point as chat turns and
-    // compaction; a sealing failure means no title request at all.
-    request_context.history = reapply_redaction_and_seal_for_send(
-        request_context.history,
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    )
-    .map_err(|_| TitleFailure::SealFailed)?;
+    // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in `run_one_round`.
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
@@ -630,51 +607,31 @@ async fn request_ai_title(
     // ausdrücklich überschrieben, sonst würde die Anfrage den vollen
     // Haupt-Chat-Default erben.
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
+    // Issue #562/#833: seal last; a sealing failure means no title request.
+    let request_context = seal_session_for_send(session, session_id, request_context)
+        .await
+        .map_err(|_| TitleFailure::SealFailed)?;
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
-        &session.ai_provider_budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        &session.ai.provider_budget,
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
     .await;
-    let mut stream = session.ai_provider.send(request_context);
-    let mut text_buffer = String::new();
-    let mut failure = None;
-    while let Some(event) = stream.next().await {
-        match event {
-            AiEvent::TextDelta(delta) => text_buffer.push_str(&delta),
-            // Kein `ActionProposed` erwartet (keine Schemas angeboten),
-            // aber defensiv: ignorieren statt eine Aktion auszuführen.
-            AiEvent::ActionProposed(_) => {}
-            // Issue #610: reported as title usage (passive).
-            AiEvent::RequestUsage(usage) => {
-                session
-                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::SessionTitle, usage)
-                    .await;
-            }
-            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv ignoriert.
-            AiEvent::WebActivity(_)
-            | AiEvent::WebContentIngested
-            | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. }
-            | AiEvent::InvalidToolCall { .. } => {}
-            AiEvent::Done => break,
-            AiEvent::Error(_) | AiEvent::Refused => {
-                failure = Some(TitleFailure::Error);
-                break;
-            }
-            // Spec 0065, Teil 2: ein abgeschnittener Titel gilt als
-            // fehlgeschlagen.
-            AiEvent::TextTruncated => {
-                failure = Some(TitleFailure::Truncated);
-                break;
-            }
-        }
-    }
-    if let Some(failure) = failure {
-        return Err(failure);
+    // Issue #610: usage is reported as title usage (passive).
+    let (text_buffer, end) =
+        collect_side_call_text(session.ai.provider.send(request_context), |u| {
+            session.report_ai_usage(crate::ai_usage::AiUsagePurpose::SessionTitle, u)
+        })
+        .await;
+    // Refused/error and a truncated title (Spec 0065, Teil 2) count as failed;
+    // a plain stream end is a success.
+    match end {
+        SideCallEnd::Done | SideCallEnd::StreamEnded => {}
+        SideCallEnd::Error(_) | SideCallEnd::Refused => return Err(TitleFailure::Error),
+        SideCallEnd::Truncated => return Err(TitleFailure::Truncated),
     }
     let redacted = session.redactor.redact_text(&text_buffer);
     let trimmed = redacted.trim().trim_matches('"').trim();
@@ -810,10 +767,10 @@ pub async fn suggest_note_update_on_disconnect(
     // stehen (s. `execute_suggested_command`). Auch ein *fehlgeschlagenes*
     // Kommando (Exit-Code ≠ 0) ist potenziell notizwürdig ("Pfad X
     // existiert nicht, Y verwenden"); nur eine Sitzung ganz ohne
-    // Ausführungsversuch hat garantiert nichts beizutragen — das deckt sich
-    // mit der in der Spec genannten Begründung ("ein Vorschlag, der ohnehin
-    // nichts liefern würde").
+    // Ausführungsversuch hat garantiert nichts beizutragen — so die Spec ("ein
+    // Vorschlag, der ohnehin nichts liefern würde").
     let has_executed_command = session
+        .ai
         .context
         .lock()
         .await
@@ -824,11 +781,11 @@ pub async fn suggest_note_update_on_disconnect(
         return false;
     }
 
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // s. identischer Kommentar in `run_one_round` — geklont statt den
     // `MutexGuard` über den potenziell langen `compact_for_send`-Aufruf
     // hinweg zu halten.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     let uncompacted_system_context = request_context.system_context.clone();
     // Spec 0057, §3 / Spec 0040, Abschnitt 5: "vor jedem
     // `AiProvider::send()`-Aufruf" — s. Kommentar an der anderen
@@ -839,7 +796,7 @@ pub async fn suggest_note_update_on_disconnect(
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     // spec-reviewer-Fund (Review dieses Schritts): Kompaktierung kann die
@@ -863,20 +820,6 @@ pub async fn suggest_note_update_on_disconnect(
     // Issue #564: same redaction-and-sealing entry point as chat turns,
     // compaction and the title request; a sealing failure means no request
     // and no proposal.
-    match reapply_redaction_and_seal_for_send(
-        request_context.history,
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
-        Ok(history) => request_context.history = history,
-        Err(_) => {
-            tracing::info!(
-                "skipping note-update suggestion on disconnect: sealing the request failed"
-            );
-            return false;
-        }
-    }
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(disconnect_completion_instruction(
@@ -893,16 +836,22 @@ pub async fn suggest_note_update_on_disconnect(
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
+    // Issue #564/#833: seal last; a sealing failure means no request.
+    let Ok(request_context) = seal_session_for_send(session, session_id, request_context).await
+    else {
+        tracing::info!("skipping note-update suggestion on disconnect: sealing failed");
+        return false;
+    };
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
-        &session.ai_provider_budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        &session.ai.provider_budget,
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
     .await;
-    let mut stream = session.ai_provider.send(request_context);
+    let mut stream = session.ai.provider.send(request_context);
     let mut proposed: Option<AiAction> = None;
     while let Some(event) = stream.next().await {
         match event {
@@ -1042,7 +991,7 @@ pub async fn suggest_note_update_on_disconnect(
     // trotzdem ein, wird der Vorschlag unverändert übernommen — exakt wie
     // dort.
     match user_decision {
-        ActionUserDecision::Deny => {}
+        ActionUserDecision::Deny | ActionUserDecision::DenyReconnect => {}
         ActionUserDecision::Approve | ActionUserDecision::EditThenApprove { .. } => {
             execute_note_update(
                 session,
@@ -1214,7 +1163,7 @@ fn note_shrink_instruction(language: PromptLanguage) -> String {
 /// zuvor angenommenen Notiz-Vorschlag eingeschleuste Instruktion (die
 /// ursprünglich aus einer Kommandoausgabe eines Remote-Hosts stammte) hier
 /// als gleichrangiger Prompt-Text statt als Daten gelesen werden.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn summarize_note_for_shrink(
     ai_provider: &dyn AiProvider,
     budget: &ai_providers::ProviderBudgetGuard,
@@ -1251,6 +1200,13 @@ async fn summarize_note_for_shrink(
         // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
         max_tokens_hint: Some(SIDE_CALL_MAX_TOKENS),
     };
+    // Issue #833: no session, no extension content: `NoExtensionSealer` cannot fail.
+    let Ok(request_context) = ssh_manager_core::ai::RedactedContext::seal(
+        request_context,
+        redactor,
+        &ssh_manager_core::ai::NoExtensionSealer,
+    )
+    .await;
 
     // Spec 0061, Abschnitt 3: dieser Aufruf läuft session-unabhängig (s.
     // Doc-Kommentar an `execute_note_shrink_request` weiter unten) — kein
@@ -1261,43 +1217,29 @@ async fn summarize_note_for_shrink(
     // Session teilen (Spec 0061 Abschnitt 2).
     wait_for_rate_limit_budget(
         budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
     .await;
 
-    let call = async {
-        let mut stream = ai_provider.send(request_context);
-        let mut text = String::new();
-        while let Some(event) = stream.next().await {
-            match event {
-                AiEvent::TextDelta(delta) => text.push_str(&delta),
-                // Kein Tool-Schema angeboten, aber defensiv wie an den
-                // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
-                AiEvent::ActionProposed(_) => {}
-                // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
-                // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_)
-                | AiEvent::WebContentIngested
-                | AiEvent::Usage { .. }
-                | AiEvent::RequestUsage(_)
-                | AiEvent::Retrying { .. }
-                | AiEvent::InvalidToolCall { .. } => {}
-                AiEvent::Done => return Some((text, false)),
-                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
-                // Nebenaufruf — die gekürzte Notiz gilt trotzdem als
-                // Ergebnis (besser eine unvollständig gekürzte Notiz
-                // zurückgeben als gar keine). Issue #94 / Spec 0057 §4.2:
-                // aber als unvollständig markiert, damit der Diff-Dialog
-                // eine abgeschnittene Kürzung nicht wie eine absichtliche
-                // aussehen lässt.
-                AiEvent::TextTruncated => return Some((text, true)),
-                // Issue #647: a refused summary is no summary.
-                AiEvent::Refused => return None,
-                AiEvent::Error(err) => {
-                    // Spec 0094, A1.7: s. `compaction::generate_rolling_summary`
-                    // — ab `warn` nur der Code, der Text auf `debug`.
+    let call =
+        async {
+            let (text, end) = collect_side_call_text(ai_provider.send(request_context), |_| {
+                std::future::ready(())
+            })
+            .await;
+            match end {
+                SideCallEnd::Done => Some((text, false)),
+                // Spec 0065, Teil 2 / Issue #94 / Spec 0057 §4.2: a truncated
+                // shrink is still the result, but marked incomplete.
+                SideCallEnd::Truncated => Some((text, true)),
+                // Issue #647: a refused summary is no summary. A stream end
+                // without `Done`/`Error` is treated like an error.
+                SideCallEnd::Refused | SideCallEnd::StreamEnded => None,
+                SideCallEnd::Error(err) => {
+                    // Spec 0094, A1.7: s. `compaction::generate_rolling_summary` —
+                    // from `warn` on only the code, the text goes to `debug`.
                     tracing::warn!(code = err.code(), "note shrink summarization failed");
                     tracing::debug!(
                         code = err.code(),
@@ -1305,15 +1247,10 @@ async fn summarize_note_for_shrink(
                             .redact_text(&err.to_string()),
                         "note shrink summarization failed (error text)"
                     );
-                    return None;
+                    None
                 }
             }
-        }
-        // Stream endete ohne `Done`/`Error` — genauso wie ein Fehler
-        // behandeln, nicht stillschweigend als Erfolg werten (dieselbe
-        // Begründung wie in `compaction::generate_rolling_summary`).
-        None
-    };
+        };
 
     let (text, incomplete) = match tokio::time::timeout(NOTE_SHRINK_CALL_TIMEOUT, call).await {
         Ok(result) => result,
@@ -1416,7 +1353,7 @@ impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
             },
         )
         .await
-        .map(|_summary| ())
+        .map_or_else(|err| Err(err.message), |_summary| Ok(()))
     }
 }
 
@@ -1440,7 +1377,7 @@ impl NoteShrinkTarget for ProfileStoreNoteShrinkTarget<'_> {
 // 8 Parameter, alle unabhängige Kollaborateure ohne natürliche Gruppierung
 // (kein `Session` verfügbar, s. Doc-Kommentar oben) — ein Bündel-Struct nur
 // für diesen einen Aufrufer wäre reine Indirektion ohne Mehrwert.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn execute_note_shrink_request(
     session_id: SessionId,
     server_id: ServerId,

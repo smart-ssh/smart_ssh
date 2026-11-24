@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Mobile – Files</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--warning-fg:#ffc266;--warning-border:#5a3e0e;--success:#3dd68c;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.mono{font-family:"JetBrains Mono",monospace}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;height:44px;padding:0 12px;border:1px solid var(--border-strong);background:transparent;color:var(--fg-soft);display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;flex:none}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.sq{width:8px;height:8px;display:inline-block;flex:none}
+.pt{flex:1;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;border-right:1px solid var(--border);border-bottom:2px solid transparent;color:var(--fg-muted);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase}
+.pt.on{color:var(--fg-strong);border-bottom-color:var(--accent);background:var(--surface-raised)}
+.fr{min-height:56px;display:flex;align-items:center;gap:12px;padding:0 4px 0 14px;border-bottom:1px solid var(--border)}
+.meta{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--fg-faint)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 390px; height: 844px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <button type="button" aria-label="Open navigation menu" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-soft); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16 M4 12h16 M4 18h16"></path></svg></button>
+    <span class="sq" style="background: var(--success)"></span>
+    <span class="mono" style="font-size: 15px; font-weight: 500; color: var(--fg-strong)">web-01</span>
+  </header>
+  <div role="tablist" aria-label="Session panes" style="display: flex; border-bottom: 1px solid var(--border); flex: none">
+    <button class="pt" type="button" role="tab">AI</button>
+    <button class="pt" type="button" role="tab">Terminal</button>
+    <button class="pt on" type="button" role="tab" aria-selected="true" style="border-right: 0">Files</button>
+  </div>
+  <div style="display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); flex: none">
+    <button class="btn" type="button" aria-label="Parent directory" style="width: 44px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V4 M5 11l7-7 7 7"></path></svg></button>
+    <div class="mono" style="flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; padding: 0 10px; border: 1px solid var(--border-strong); background: var(--surface-sunken); font-size: 12.5px; color: var(--fg-subtle); overflow: hidden; white-space: nowrap">/var/www/shop/<span style="color: var(--fg-strong)">current</span></div>
+    <button class="btn" type="button" aria-label="Directory actions" style="width: 44px; padding: 0"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+  </div>
+  <div style="flex: 1; overflow: hidden">
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">app</div>
+          <div class="meta">drwxr-xr-x · www-data · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">config</div>
+          <div class="meta">drwxr-xr-x · www-data · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">public</div>
+          <div class="meta">drwxr-xr-x · www-data · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M8 17v-3h7 M13 12l2 2-2 2"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">storage<span class="mono" style="font-size: 11.5px; color: var(--fg-faint)"> → ../../shared/storage</span></div>
+          <div class="meta">lrwxrwxrwx · www-data</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--accent-fg)" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">vendor</div>
+          <div class="meta">drwxr-xr-x · www-data · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M8 18v-4h6 M12 12l2 2-2 2"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">.env<span class="mono" style="font-size: 11.5px; color: var(--fg-faint)"> → ../../shared/.env</span></div>
+          <div class="meta">lrwxrwxrwx · 32 B</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M10 12l-2 2.5 2 2.5 M14 12l2 2.5-2 2.5"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">artisan</div>
+          <div class="meta">-rwxr-xr-x · 1.7 KiB · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M10 12l-2 2.5 2 2.5 M14 12l2 2.5-2 2.5"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">composer.json</div>
+          <div class="meta">-rw-r--r-- · 3.1 KiB · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M8 12h8 M8 16h8"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">composer.lock</div>
+          <div class="meta">-rw-r--r-- · 412 KiB · 2026-11-18</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+      <div class="fr">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 20px; height: 20px; color: var(--fg-muted)" aria-hidden="true"><path d="M5 2h9l5 5v15H5z M14 2v5h5 M8 12h8 M8 16h8"></path></svg>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">README.md</div>
+          <div class="meta">-rw-r--r-- · 4.0 KiB · 2026-09-30</div>
+        </div>
+        <button type="button" aria-label="File actions" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-faint); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h1 M11.5 12h1 M18 12h1"></path></svg></button>
+      </div>
+    
+  </div>
+  <div style="display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); flex: none">
+    <button class="btn" type="button" style="flex: 1">+ Folder</button>
+    <button class="btn" type="button" style="flex: 1; background: var(--accent); border-color: var(--accent); color: var(--on-accent)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4 M6 10l6-6 6 6 M4 20h16"></path></svg>Upload</button>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# cargo-nextest settings (issue #901). CI runs `--profile ci`; local runs may
+# keep using `cargo test`.
+[profile.ci]
+# A test that fails and then passes on a retry is reported as flaky in the
+# JUnit file; `scripts/check-nextest-flaky.mjs` turns that into a failed job.
+retries = 2
+fail-fast = false
+# A hanging test is terminated after 3 x 120 s and fails with its name.
+slow-timeout = { period = "120s", terminate-after = 3 }
+
+[profile.ci.junit]
+# Written to target/nextest/ci/junit.xml
+path = "junit.xml"
+
+# The app-shell tests that open the Tauri settings store share one on-disk
+# `settings.json` and serialise on a process-local mutex (`STORE_TEST_LOCK`).
+# nextest runs every test in its own process, so that mutex no longer helps;
+# a test group of one thread gives the same mutual exclusion.
+[test-groups]
+app-shell-settings-store = { max-threads = 1 }
+
+[[profile.ci.overrides]]
+filter = "package(app-shell)"
+test-group = "app-shell-settings-store"

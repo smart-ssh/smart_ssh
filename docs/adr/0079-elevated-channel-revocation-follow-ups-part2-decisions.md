@@ -1,6 +1,9 @@
 # ADR 0079 — Entscheidungen bei A4/A5/A6 (Spec 0085, Teil 2)
 
-Status: angenommen · 2026-09-28 · Spec: `docs/specs/0085-elevated-channel-revocation-follow-ups.md`
+## Status
+
+Accepted · 2026-09-28 · Spec: `docs/specs/0085-elevated-channel-revocation-follow-ups.md`
+
 Betrifft: `crates/app-logic/` (Doc-Kommentare), `crates/app-shell/src/commands/elevation.rs`,
 `changelog.d/`
 

@@ -1,7 +1,7 @@
 # 0043-version-build-display-scope-choices
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

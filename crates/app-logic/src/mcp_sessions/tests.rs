@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![expect(clippy::expect_used, reason = "test code")]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -137,7 +137,7 @@ fn test_disconnected_mcp_session_is_not_reused_but_stays_marked() {
     let id = Uuid::new_v4();
     registry.register(&key, id).unwrap();
     let session = session_on(server, MockSshTransport::default());
-    *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
     sessions.insert(id, Arc::new(session));
 
     assert_eq!(registry.reusable_session(&key, &sessions), None);
@@ -204,7 +204,7 @@ fn test_end_session_ignores_non_mcp_sessions() {
     let session = session_on(ServerId::new(), MockSshTransport::default());
     let action_id: ActionId = Uuid::new_v4();
     let _rx = confirmations.register(action_id);
-    *session.pending_action.lock().unwrap() = Some(action_id);
+    *session.conn.pending_action.lock().unwrap() = Some(action_id);
 
     assert!(!registry.end_session(Uuid::new_v4(), Some(&session), &confirmations));
     assert!(confirmations.contains(&action_id));
@@ -226,10 +226,16 @@ async fn test_mcp_action_runs_only_in_the_mcp_session_and_stays_confirm() {
         let user_transport = MockSshTransport::default();
         let user_executed = user_transport.executed_handle();
         let user_session = Arc::new(session_on(server, user_transport));
-        user_session.context.lock().await.history.push(ChatMessage {
-            role: Role::User,
-            content: MessageContent::Text("geheimer Nutzer-Kontext".to_string()),
-        });
+        user_session
+            .ai
+            .context
+            .lock()
+            .await
+            .history
+            .push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("geheimer Nutzer-Kontext".to_string()),
+            });
         let user_session_id = Uuid::new_v4();
         sessions.insert(user_session_id, Arc::clone(&user_session));
 
@@ -282,14 +288,14 @@ async fn test_mcp_action_runs_only_in_the_mcp_session_and_stays_confirm() {
         assert_eq!(*mcp_executed.lock().unwrap(), vec!["ls -la".to_string()]);
         assert!(user_executed.lock().unwrap().is_empty());
 
-        let user_history = user_session.context.lock().await.history.clone();
+        let user_history = user_session.ai.context.lock().await.history.clone();
         assert_eq!(
             user_history.len(),
             1,
             "MCP-Ausgabe im Nutzer-Verlauf: {user_history:?}"
         );
 
-        let mcp_history = mcp_session.context.lock().await.history.clone();
+        let mcp_history = mcp_session.ai.context.lock().await.history.clone();
         assert!(
             mcp_history
                 .iter()
@@ -328,7 +334,7 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
         let confirmations = ConfirmationRegistry::new();
 
         let close = async {
-            while session.pending_action.lock().unwrap().is_none() {
+            while session.conn.pending_action.lock().unwrap().is_none() {
                 tokio::task::yield_now().await;
             }
             // Wie `app_shell::commands::disconnect`: erst aus dem
@@ -353,8 +359,8 @@ async fn test_closing_the_mcp_session_rejects_its_pending_confirmation() {
             executed.lock().unwrap().is_empty(),
             "Aktion lief trotz Schließen"
         );
-        assert!(session.pending_action.lock().unwrap().is_none());
-        let history = session.context.lock().await.history.clone();
+        assert!(session.conn.pending_action.lock().unwrap().is_none());
+        let history = session.ai.context.lock().await.history.clone();
         assert!(
             history
                 .iter()
@@ -393,7 +399,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
         let confirmations = ConfirmationRegistry::new();
 
         let close = async {
-            while session.pending_action.lock().unwrap().is_none() {
+            while session.conn.pending_action.lock().unwrap().is_none() {
                 tokio::task::yield_now().await;
             }
             let removed = sessions.remove(session_id).expect("Sitzung fehlt");
@@ -427,7 +433,7 @@ async fn test_generic_close_keeps_the_mcp_session_behaviour() {
             executed.lock().unwrap().is_empty(),
             "Aktion lief trotz Schließen"
         );
-        let history = session.context.lock().await.history.clone();
+        let history = session.ai.context.lock().await.history.clone();
         assert!(
             history
                 .iter()
@@ -598,7 +604,7 @@ fn test_disconnected_open_mcp_session_still_counts_towards_the_cap() {
     let registry = McpSessionRegistry::new();
     let filled = fill_server(&registry, &sessions, server, MCP_MAX_SESSIONS_PER_SERVER);
     let (key, id) = &filled[0];
-    *sessions.get(*id).unwrap().status.lock().unwrap() = ConnectionStatus::Disconnected;
+    *sessions.get(*id).unwrap().conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
 
     // Derselbe Client bekommt keine neue Sitzung, solange der alte Tab offen
     // ist und die Höchstzahl erreicht ist.
@@ -971,4 +977,82 @@ async fn test_ensure_mcp_session_concurrent_calls_connect_once() {
     assert_eq!(first_id, second_id);
     assert_eq!(connector.calls(), vec![first_id]);
     assert_eq!(tab_requested_events(&emitter), 1);
+}
+
+/// Issue #881 (Spec 0028 §7 unchanged): the MCP tool call timing out only
+/// drops the result receiver — the action task in the session scope keeps
+/// waiting and its card stays pending. Closing the session rejects the
+/// confirmation and the task has ended afterwards; nothing was executed.
+#[tokio::test]
+async fn test_mcp_action_task_outlives_the_timeout_and_ends_with_the_session() {
+    tokio::time::timeout(TEST_TIMEOUT, async {
+        let server = ServerId::new();
+        let sessions = SessionManager::new();
+        let registry = McpSessionRegistry::new();
+        let key = McpSessionKey::new(server, Some("Claude Code"));
+        let supervisor = crate::tasks::TaskSupervisor::new();
+
+        let transport = MockSshTransport::default().with_response("ls -la", output("total 0"));
+        let executed = transport.executed_handle();
+        let session = Arc::new(session_on(server, transport));
+        let session_id = Uuid::new_v4();
+        registry.register(&key, session_id).unwrap();
+        sessions.insert(session_id, Arc::clone(&session));
+
+        let confirmations = Arc::new(ConfirmationRegistry::new());
+        let (outcome_tx, outcome_rx) = tokio::sync::oneshot::channel::<()>();
+        let task_session = Arc::clone(&session);
+        let task_confirmations = Arc::clone(&confirmations);
+        assert!(supervisor
+            .session_scope(session_id)
+            .spawn("mcp-propose-action", async move {
+                let emitter = TestEmitter::default();
+                let profile_store = InMemoryProfileStore::default();
+                handle_mcp_action_proposed(
+                    &task_session,
+                    session_id,
+                    ls_action(),
+                    &emitter,
+                    &profile_store,
+                    &task_confirmations,
+                    Some("Claude Code".to_string()),
+                )
+                .await;
+                let _ = outcome_tx.send(());
+            }));
+        while session.conn.pending_action.lock().unwrap().is_none() {
+            tokio::task::yield_now().await;
+        }
+
+        // The tool call times out: its receiver is dropped, nothing else.
+        drop(outcome_rx);
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        let action_id = session.conn.pending_action.lock().unwrap().unwrap();
+        assert!(confirmations.contains(&action_id), "the card stays open");
+        assert_eq!(supervisor.running_in(session_id), 1);
+
+        // Close, in the order of the close path: reject, then the scope.
+        let removed = sessions.remove(session_id).expect("session");
+        crate::session::reject_pending_confirmation_on_close(
+            session_id,
+            Some(&removed),
+            &registry,
+            &confirmations,
+        );
+        let report = supervisor
+            .close_session_scope(session_id, Duration::from_secs(2))
+            .await;
+
+        assert!(!report.timed_out);
+        assert_eq!(supervisor.running_in(session_id), 0);
+        assert!(!confirmations.contains(&action_id));
+        assert!(
+            executed.lock().unwrap().is_empty(),
+            "closing must never execute the action"
+        );
+    })
+    .await
+    .expect("Test hing");
 }

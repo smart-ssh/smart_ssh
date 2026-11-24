@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import {
@@ -7,7 +6,7 @@ import {
   listSettingsSectionsForCategory,
   subscribeSettingsSections,
 } from "../extensions/registry";
-import { resolveSectionLabel } from "../resolveSectionLabel";
+import { resolveSectionLabel } from "../lib/resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
 import { BackupSettings } from "./BackupSettings";
@@ -17,8 +16,8 @@ import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { ModalBackdrop } from "./ModalBackdrop";
-import { Button } from "./ui";
+import { SettingsActionSlotContext } from "./SettingsSectionAction";
+import { Button, DialogFrame, ErrorBoundary, Icon, type IconName } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -38,12 +37,22 @@ const DATA_BACKUP_CATEGORY_ID = "data-backup";
 const VOICE_INPUT_CATEGORY_ID = "voice-input";
 const ABOUT_CATEGORY_ID = "about";
 
-// A variable, not a literal: `<dialog>` has no modal semantics without `showModal()`, which the shared backdrop does not use (same as `DialogFrame`).
-const DIALOG_ROLE: "dialog" = "dialog";
+/** Narrow list icons (docs/design/angular/icons); unknown/registered categories fall back to `sliders`. */
+const CATEGORY_ICONS: Record<string, IconName> = {
+  [AI_PROVIDER_CATEGORY_ID]: "spark",
+  [DISPLAY_LANGUAGE_CATEGORY_ID]: "globe",
+  [DIAGNOSTICS_CATEGORY_ID]: "activity",
+  [FILE_TYPES_CATEGORY_ID]: "folder",
+  [MASTER_PASSWORD_CATEGORY_ID]: "lock",
+  [DATA_BACKUP_CATEGORY_ID]: "download",
+  [VOICE_INPUT_CATEGORY_ID]: "mic",
+  [ABOUT_CATEGORY_ID]: "info",
+};
 
 interface NavCategory {
   id: string;
   label: string;
+  icon?: IconName;
 }
 
 /**
@@ -108,11 +117,29 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
     subscribeSettingsSections,
     listSettingsSections,
   );
+  // Issue #1311: a section whose `category` matches no built-in category is
+  // not lost; it falls back to its own top-level entry (and a warning).
+  const builtinIds = new Set(builtinCategories.map((c) => c.id));
+  const isTopLevel = (s: { category?: string }) => !s.category || !builtinIds.has(s.category);
+  const unknownCategories = registeredSections
+    .filter((s) => s.category && isTopLevel(s))
+    .map((s) => ({ id: s.id, category: s.category as string }));
+  // Stable dependency: warn once per change of the set, not per render.
+  const unknownCategoryKey = JSON.stringify(unknownCategories.map((u) => [u.id, u.category]));
+  useEffect(() => {
+    const pairs = JSON.parse(unknownCategoryKey) as [string, string][];
+    for (const [id, category] of pairs) {
+      console.warn(
+        `Settings section "${id}" names unknown category "${category}"; showing it as a top-level entry.`,
+      );
+    }
+  }, [unknownCategoryKey]);
   const registeredCategories: NavCategory[] = registeredSections
-    .filter((s) => !s.category)
-    .map(({ id, label }) => ({
+    .filter(isTopLevel)
+    .map(({ id, label, icon }) => ({
     id,
     label: resolveSectionLabel(label, id, i18n, t),
+    icon,
   }));
 
   const categories = [...builtinCategories, ...registeredCategories];
@@ -137,139 +164,110 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
     (narrowView === "detail" ? backRef.current : activeNavRef.current)?.focus();
   }, [narrow, narrowView]);
 
-  // Issue #385 (docs/ui-guidelines.md, "Keyboard"): Escape closes, Tab stays
-  // inside, focus starts on the active category and returns to the trigger.
-  // Not `useDialogFocusTrap`: that hook pulls focus back from every element
-  // outside its container, which would fight the dialogs opened from inside
-  // the settings (licenses, master password), which portal to `document.body`.
-  // Keyboard events of such a nested dialog also bubble through the React
-  // tree to this handler, so they are told apart by their DOM target.
+  // Issue #385 (docs/ui-guidelines.md, "Keyboard"): `DialogFrame` handles Escape,
+  // Tab wrap and focus return; focus starts on the active category. It yields to
+  // the dialogs opened from inside the settings (licenses, master password).
   const titleId = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const activeNavRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const previous =
-      returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    activeNavRef.current?.focus();
-    return () => {
-      if (previous && document.contains(previous)) previous.focus();
-    };
-    // Mount-only: the return target is captured when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const container = containerRef.current;
-    if (!container || !(event.target instanceof Node) || !container.contains(event.target)) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    );
-    if (focusable.length === 0) return;
-    const index = focusable.indexOf(document.activeElement as HTMLElement);
-    const atEdge = event.shiftKey ? index <= 0 : index === focusable.length - 1;
-    if (atEdge) {
-      event.preventDefault();
-      focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
-    }
-  };
 
-  // Safari/WebKit on macOS does not focus a button on click, so after a click
-  // inside the dialog `document.activeElement` is `<body>` and Escape would
-  // never reach `handleKeyDown`. Move focus into the dialog ourselves, but
-  // only for clicks whose DOM target is inside it (not a portaled nested dialog).
-  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    const container = containerRef.current;
-    if (!container || !(event.target instanceof Element) || !container.contains(event.target)) return;
-    if (container.contains(document.activeElement)) return;
-    const button = event.target.closest("button");
-    (button && container.contains(button) ? button : container).focus();
-  };
+  const indexOf = (id: string) => String(categories.findIndex((c) => c.id === id) + 1).padStart(2, "0");
+  const closeButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="min-h-11 min-w-11 shrink-0"
+      onClick={onClose}
+      aria-label={t("common.close")}
+    >
+      <Icon name="x" />
+    </Button>
+  );
 
+  // Issue #1376: the settings are a full window below the title bar (no modal
+  // frame, no backdrop): header bar, numbered category list left, section right.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
-      {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div
-        ref={containerRef}
-        role={DIALOG_ROLE}
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={handleKeyDown}
-        onClick={handleClick}
-        tabIndex={-1}
-        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl outline-none narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
-      >
+    <DialogFrame
+      layer="app"
+      layout="page"
+      bare
+      yieldToNested
+      labelledBy={titleId}
+      onClose={onClose}
+      returnFocusTo={returnFocusTo}
+      initialFocusRef={activeNavRef}
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-surface"
+    >
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4 narrow:flex-row-reverse narrow:justify-end narrow:px-1">
+        <h1 id={titleId} className="text-title min-w-0 flex-1 truncate text-fg-strong narrow:px-2">
+          {t("settings.title")}
+        </h1>
+        {closeButton}
+      </header>
+      <div className="flex min-h-0 flex-1">
         {showList && (
-        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-          <div className="flex items-center justify-between">
-            <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
-              {t("settings.title")}
-            </h2>
-            {narrow && (
-              <Button variant="ghost" size="sm" className="mr-2 min-h-11 min-w-11" onClick={onClose} aria-label={t("common.close")}>
-                ✕
-              </Button>
-            )}
-          </div>
+        <nav className="flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
           <ul className="flex-1">
-            {categories.map((category) => (
-              <li key={category.id}>
-                <button
+            {categories.map((category) => {
+              const isActive = category.id === active?.id;
+              return (
+              <li key={category.id} className="narrow:border-b narrow:border-border">
+                <Button variant="bare"
                   type="button"
-                  ref={category.id === active?.id ? activeNavRef : undefined}
+                  ref={isActive ? activeNavRef : undefined}
                   onClick={() => {
                     setActiveId(category.id);
                     setNarrowView("detail");
                   }}
-                  aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                    category.id === active?.id
-                      ? "bg-indigo-600 text-slate-950"
-                      : "text-slate-300 hover:bg-slate-800"
+                  aria-current={isActive ? "page" : undefined}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+                    e.preventDefault();
+                    const li = e.currentTarget.closest("li");
+                    const sibling = e.key === "ArrowDown" ? li?.nextElementSibling : li?.previousElementSibling;
+                    sibling?.querySelector("button")?.focus();
+                  }}
+                  className={`flex h-[38px] w-full items-center gap-3 border-l-2 px-4 text-left text-sm narrow:h-[54px] focus-ring-inset ${
+                    isActive
+                      ? "border-accent bg-surface-raised text-fg-strong"
+                      : "border-transparent text-fg-muted hover:bg-surface-raised"
                   }`}
                 >
-                  {category.label}
-                </button>
+                  <span aria-hidden="true" className={`font-mono text-xs ${isActive ? "text-accent-fg" : "text-fg-faint"}`}>{indexOf(category.id)}</span>
+                  <Icon name={category.icon ?? CATEGORY_ICONS[category.id] ?? "sliders"} className="hidden shrink-0 narrow:inline" />
+                  <span className="min-w-0 flex-1 truncate">{category.label}</span>
+                  <Icon name="chev-r" className="hidden shrink-0 text-fg-faint narrow:inline" />
+                </Button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </nav>
         )}
 
         {showDetail && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-700 px-6 py-4 narrow:px-2 narrow:py-2">
+          <div className="flex items-center gap-3 border-b border-border px-6 py-4 narrow:px-2 narrow:py-2">
             {narrow && (
-              <>
-                <h2 id={titleId} className="sr-only">
-                  {t("settings.title")}
-                </h2>
-                <Button
-                  ref={backRef}
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-11 shrink-0"
-                  onClick={() => setNarrowView("list")}
-                >
-                  ← {t("settings.backToList")}
-                </Button>
-              </>
+              <Button
+                ref={backRef}
+                variant="ghost"
+                size="sm"
+                className="min-h-11 min-w-11 shrink-0"
+                onClick={() => setNarrowView("list")}
+                aria-label={t("settings.backToList")}
+              >
+                <Icon name="chev-r" className="rotate-180" />
+              </Button>
             )}
-            <h3 className="font-heading min-w-0 flex-1 truncate text-base font-semibold tracking-wide text-slate-100 narrow:text-center">
+            <span aria-hidden="true" className="font-mono text-sm text-fg-faint">{active ? indexOf(active.id) : ""}</span>
+            <h2 className="text-display min-w-0 flex-1 truncate text-fg-strong narrow:text-title">
               {active?.label}
-            </h3>
-            <Button variant="ghost" size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={onClose} aria-label={t("common.close")}>
-              ✕
-            </Button>
+            </h2>
+            {/* Action slot: a section renders `SettingsSectionAction`. */}
+            <div ref={setActionSlot} data-testid="settings-section-actions" className="flex shrink-0 items-center gap-2" />
           </div>
+          <SettingsActionSlotContext.Provider value={actionSlot}>
           <div className="min-w-0 flex-1 overflow-y-auto p-6 narrow:p-3">
             {active?.id === AI_PROVIDER_CATEGORY_ID && (
               <AiProviderSettings onProvidersChanged={onProvidersChanged} />
@@ -278,28 +276,30 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
             {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
             {active?.id === MASTER_PASSWORD_CATEGORY_ID && <MasterPasswordSettings />}
-            {active?.id === DATA_BACKUP_CATEGORY_ID && (
-              <>
-                <BackupSettings />
-                {listSettingsSectionsForCategory(DATA_BACKUP_CATEGORY_ID).map(
-                  ({ id, component: Section }) => (
-                    <div key={id} className="mt-6 min-w-0">
-                      <Section />
-                    </div>
-                  ),
-                )}
-              </>
-            )}
+            {active?.id === DATA_BACKUP_CATEGORY_ID && <BackupSettings />}
             {active?.id === VOICE_INPUT_CATEGORY_ID && <VoiceInputSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
+            {active && builtinIds.has(active.id) &&
+              listSettingsSectionsForCategory(active.id).map(({ id, component: Section }) => (
+                <div key={id} className="mt-6 min-w-0">
+                  <ErrorBoundary id={`settings-section:${id}`}>
+                    <Section />
+                  </ErrorBoundary>
+                </div>
+              ))}
             {registeredSections.map(
               ({ id, category, component: Section }) =>
-                !category && active?.id === id && <Section key={id} />,
+                isTopLevel({ category }) && active?.id === id && (
+                  <ErrorBoundary key={id} id={`settings-section:${id}`}>
+                    <Section />
+                  </ErrorBoundary>
+                ),
             )}
           </div>
+          </SettingsActionSlotContext.Provider>
         </div>
         )}
       </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

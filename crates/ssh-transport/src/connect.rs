@@ -6,11 +6,12 @@ use async_trait::async_trait;
 use russh::client;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
-    ConnectLog, ConnectStep, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore, KeyFileReader,
-    SshError, SshTransport,
+    AuthPrompter, ConnectLog, ConnectStep, ConnectionTarget, Hop, HostKeyDecision, HostKeyStore,
+    KeyFileReader, SshError, SshTransport,
 };
 
-use crate::auth::{authenticate, AuthSteps};
+use crate::auth::{authenticate, AuthPrompting, AuthSteps};
+use crate::auth_pause::{timeout_unless_paused, AuthPause};
 use crate::error::{map_io_error, map_russh_error, map_transport_error, TransportError};
 use crate::handler::{ClientHandler, HopSteps};
 use crate::transport::RusshTransport;
@@ -75,12 +76,14 @@ pub async fn connect(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
 ) -> Result<ConnectOutcome, SshError> {
     connect_with_log(
         target,
         credentials,
         key_files,
         host_keys,
+        prompter,
         &ConnectLog::new(),
     )
     .await
@@ -154,6 +157,7 @@ pub async fn connect_with_log(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
 ) -> Result<ConnectOutcome, SshError> {
     connect_with_limits(
@@ -161,6 +165,7 @@ pub async fn connect_with_log(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         ConnectLimits::DEFAULT,
     )
@@ -181,6 +186,7 @@ pub async fn connect_with_limits(
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
 ) -> Result<ConnectOutcome, SshError> {
@@ -189,6 +195,7 @@ pub async fn connect_with_limits(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         client_config(),
@@ -200,12 +207,13 @@ pub async fn connect_with_limits(
 /// #353). Production code uses the fixed 15 s / 3 of [`client_config`];
 /// this exists so tests can exercise the real keepalive chain in seconds.
 #[doc(hidden)]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 pub async fn connect_with_keepalive(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     keepalive_interval: Duration,
@@ -221,6 +229,7 @@ pub async fn connect_with_keepalive(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         config,
@@ -228,11 +237,13 @@ pub async fn connect_with_keepalive(
     .await
 }
 
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn connect_with_config(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     config: client::Config,
@@ -242,6 +253,7 @@ async fn connect_with_config(
         credentials,
         key_files,
         host_keys,
+        prompter,
         log,
         limits,
         config,
@@ -268,15 +280,19 @@ pub(crate) fn client_config() -> client::Config {
         nodelay: true,
         keepalive_interval: Some(KEEPALIVE_INTERVAL),
         keepalive_max: KEEPALIVE_MAX,
+        // Issue #1173: defaults first, legacy algorithms after them.
+        preferred: crate::algorithms::preferred(),
         ..Default::default()
     }
 }
 
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
 async fn connect_inner(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
     key_files: &(dyn KeyFileReader + Send + Sync),
     host_keys: Arc<dyn HostKeyStore>,
+    prompter: &dyn AuthPrompter,
     log: &ConnectLog,
     limits: ConnectLimits,
     config: client::Config,
@@ -290,14 +306,15 @@ async fn connect_inner(
     let config = Arc::new(config);
     let (loss_tx, loss_rx) = tokio::sync::watch::channel(None);
 
-    let mut hops = RusshHops {
+    let mut hops = RusshHops::new(
         config,
-        loss: Arc::new(loss_tx),
+        Arc::new(loss_tx),
         host_keys,
         credentials,
         key_files,
+        prompter,
         log,
-    };
+    );
     let mut sessions = match drive_chain(&mut hops, &target.hops, limits).await? {
         Chain::Ready(sessions) => sessions,
         Chain::HostKeyPending(outcome) => return Ok(outcome),
@@ -319,6 +336,7 @@ async fn connect_inner(
         _intermediate_hops: sessions,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
         loss: loss_rx,
+        spawner: None,
     })))
 }
 
@@ -357,6 +375,8 @@ trait HopConnector: Send {
     async fn open_next(
         &mut self,
         via: &mut Self::Session,
+        via_index: usize,
+        via_hop: &Hop,
         hop_index: usize,
         hop: &Hop,
     ) -> Result<Opened<Self::Session>, SshError>;
@@ -368,6 +388,12 @@ trait HopConnector: Send {
         hop_index: usize,
         hop: &Hop,
     ) -> Result<(), SshError>;
+
+    /// Issue #1184: the pause that stops the authentication limit while the
+    /// user is asked. Connectors that never ask keep the default.
+    fn auth_pause(&self) -> Arc<AuthPause> {
+        Arc::new(AuthPause::new())
+    }
 }
 
 /// Spec 0069, A3 (Issue #97): baut die Kette Hop für Hop auf; jede Phase
@@ -389,17 +415,20 @@ async fn drive_chain<C: HopConnector>(
             Opened::Ready(session) => session,
             Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
         };
-    connect_with_timeout(
+    let pause = connector.auth_pause();
+    timeout_unless_paused(
         connector.authenticate(&mut current, 0, first_hop),
         limits.authentication,
+        &pause,
     )
     .await?;
 
     let mut sessions = Vec::with_capacity(hops.len());
     for (offset, hop) in remaining_hops.iter().enumerate() {
         let hop_index = offset + 1;
+        let via_hop = &hops[offset];
         let next = match connect_with_timeout(
-            connector.open_next(&mut current, hop_index, hop),
+            connector.open_next(&mut current, offset, via_hop, hop_index, hop),
             limits.handshake,
         )
         .await?
@@ -408,9 +437,10 @@ async fn drive_chain<C: HopConnector>(
             Opened::HostKeyPending(outcome) => return Ok(Chain::HostKeyPending(outcome)),
         };
         sessions.push(std::mem::replace(&mut current, next));
-        connect_with_timeout(
+        timeout_unless_paused(
             connector.authenticate(&mut current, hop_index, hop),
             limits.authentication,
+            &pause,
         )
         .await?;
     }
@@ -425,12 +455,44 @@ struct RusshHops<'a> {
     host_keys: Arc<dyn HostKeyStore>,
     credentials: &'a (dyn CredentialStore + Send + Sync),
     key_files: &'a (dyn KeyFileReader + Send + Sync),
+    prompter: &'a dyn AuthPrompter,
+    /// Issue #1184: stops the authentication limit while the user is asked.
+    /// Issue #1187: always the attempt log's pause, so the app's outer
+    /// connect limit stands still too.
+    pause: Arc<AuthPause>,
     log: &'a ConnectLog,
+}
+
+impl<'a> RusshHops<'a> {
+    fn new(
+        config: Arc<client::Config>,
+        loss: Arc<tokio::sync::watch::Sender<Option<ssh_manager_core::ssh::ConnectionLoss>>>,
+        host_keys: Arc<dyn HostKeyStore>,
+        credentials: &'a (dyn CredentialStore + Send + Sync),
+        key_files: &'a (dyn KeyFileReader + Send + Sync),
+        prompter: &'a dyn AuthPrompter,
+        log: &'a ConnectLog,
+    ) -> Self {
+        Self {
+            config,
+            loss,
+            host_keys,
+            credentials,
+            key_files,
+            prompter,
+            pause: log.prompt_pause(),
+            log,
+        }
+    }
 }
 
 #[async_trait]
 impl HopConnector for RusshHops<'_> {
     type Session = client::Handle<ClientHandler>;
+
+    fn auth_pause(&self) -> Arc<AuthPause> {
+        self.pause.clone()
+    }
 
     async fn open_first(&mut self, hop: &Hop) -> Result<Opened<Self::Session>, SshError> {
         let label = hop_label(hop);
@@ -451,7 +513,7 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), socket, handler).await;
-        match resolve_or_pending(connect_result, &hop.host, hop.port) {
+        match resolve_or_pending(connect_result, hop) {
             Ok(Ok(handle)) => Ok(Opened::Ready(handle)),
             Ok(Err(outcome)) => Ok(Opened::HostKeyPending(outcome)),
             Err(err) => Err(diagnose_connection_failed_dns(err, &hop.host, hop.port).await),
@@ -461,6 +523,8 @@ impl HopConnector for RusshHops<'_> {
     async fn open_next(
         &mut self,
         via: &mut Self::Session,
+        via_index: usize,
+        via_hop: &Hop,
         hop_index: usize,
         hop: &Hop,
     ) -> Result<Opened<Self::Session>, SshError> {
@@ -481,7 +545,25 @@ impl HopConnector for RusshHops<'_> {
                 0,
             )
             .await
-            .map_err(map_russh_error)?;
+            .map_err(|err| {
+                // Issue #1220: a refusal comes from `via`, not from the target.
+                if matches!(
+                    err,
+                    russh::Error::ChannelOpenFailure(
+                        russh::ChannelOpenFailure::AdministrativelyProhibited
+                    )
+                ) {
+                    let via_label = hop_label(via_hop);
+                    let refused = SshError::ChannelError(format!(
+                        "{via_label} refused to forward the connection to {label} ({err})"
+                    ));
+                    self.log
+                        .fail_at_hop(tunnel_step, via_index, &via_label, refused.code());
+                    refused
+                } else {
+                    map_russh_error(err)
+                }
+            })?;
         self.log.succeed(tunnel_step);
         let stream = tunnel_channel.into_stream();
 
@@ -493,12 +575,10 @@ impl HopConnector for RusshHops<'_> {
             loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), stream, handler).await;
-        Ok(
-            match resolve_or_pending(connect_result, &hop.host, hop.port)? {
-                Ok(handle) => Opened::Ready(handle),
-                Err(outcome) => Opened::HostKeyPending(outcome),
-            },
-        )
+        Ok(match resolve_or_pending(connect_result, hop)? {
+            Ok(handle) => Opened::Ready(handle),
+            Err(outcome) => Opened::HostKeyPending(outcome),
+        })
     }
 
     async fn authenticate(
@@ -513,6 +593,10 @@ impl HopConnector for RusshHops<'_> {
             self.credentials,
             self.key_files,
             &AuthSteps::new(self.log, hop_index, &hop_label(hop)),
+            &AuthPrompting {
+                prompter: self.prompter,
+                pause: &self.pause,
+            },
         )
         .await
     }
@@ -619,12 +703,12 @@ fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
 /// `Ok` bleibt `Ok`, ein Host-Key-Fehler wird zu
 /// `Err(ConnectOutcome::PendingHostKeyConfirmation)`, jeder andere Fehler zu
 /// `Err(SshError)` (äußeres `Result`, propagiert per `?`).
-#[allow(clippy::type_complexity)]
 fn resolve_or_pending<H>(
     result: Result<H, TransportError>,
-    host: &str,
-    port: u16,
+    hop: &Hop,
 ) -> Result<Result<H, ConnectOutcome>, SshError> {
+    let (host, port) = (hop.host.as_str(), hop.port);
+    let result = crate::algorithms::typed_no_common_algorithm(result, hop)?;
     match result {
         Ok(handle) => Ok(Ok(handle)),
         Err(TransportError::HostKey { raw_key, decision }) => {
@@ -778,319 +862,8 @@ mod connect_with_timeout_tests {
 }
 
 #[cfg(test)]
-mod phase_limit_tests {
-    //! Issue #97 (Spec 0069, A3): je Hop eigene Grenzen für Handshake und
-    //! Anmeldung. Netzwerkfrei über einen [`HopConnector`]-Fake mit
-    //! pausierter Tokio-Uhr — die Verzögerungen sind virtuell, kein Test
-    //! wartet wirklich. Jeder Test ist zusätzlich mit einem äußeren
-    //! `tokio::time::timeout` abgesichert, damit ein Regressionsfehler
-    //! (fehlende Grenze → nie fertig) als Fehlschlag auffällt statt den
-    //! Testlauf zu blockieren.
-    use super::*;
-    use ssh_manager_core::profiles::{AuthMethod, CredentialRef};
-    use tokio::time::Instant;
-
-    /// Dauer einer Phase: `None` = wird nie fertig.
-    #[derive(Clone, Copy)]
-    struct HopTiming {
-        handshake: Option<Duration>,
-        authentication: Option<Duration>,
-        unknown_host_key: bool,
-    }
-
-    fn timing(handshake_secs: u64, authentication_secs: u64) -> HopTiming {
-        HopTiming {
-            handshake: Some(Duration::from_secs(handshake_secs)),
-            authentication: Some(Duration::from_secs(authentication_secs)),
-            unknown_host_key: false,
-        }
-    }
-
-    struct FakeHops {
-        timings: Vec<HopTiming>,
-        calls: Vec<String>,
-    }
-
-    impl FakeHops {
-        fn new(timings: Vec<HopTiming>) -> Self {
-            Self {
-                timings,
-                calls: Vec::new(),
-            }
-        }
-
-        async fn open(&mut self, hop_index: usize) -> Result<Opened<usize>, SshError> {
-            self.calls.push(format!("open:{hop_index}"));
-            let t = self.timings[hop_index];
-            wait(t.handshake).await;
-            if t.unknown_host_key {
-                return Ok(Opened::HostKeyPending(
-                    ConnectOutcome::PendingHostKeyConfirmation {
-                        host: format!("hop{hop_index}.invalid"),
-                        port: 22,
-                        raw_key: b"raw-key".to_vec(),
-                        decision: HostKeyDecision::Unknown {
-                            fingerprint: "SHA256:fake".to_string(),
-                        },
-                    },
-                ));
-            }
-            Ok(Opened::Ready(hop_index))
-        }
-    }
-
-    async fn wait(duration: Option<Duration>) {
-        match duration {
-            Some(d) => tokio::time::sleep(d).await,
-            None => std::future::pending::<()>().await,
-        }
-    }
-
-    #[async_trait]
-    impl HopConnector for FakeHops {
-        type Session = usize;
-
-        async fn open_first(&mut self, _hop: &Hop) -> Result<Opened<usize>, SshError> {
-            self.open(0).await
-        }
-
-        async fn open_next(
-            &mut self,
-            via: &mut usize,
-            hop_index: usize,
-            _hop: &Hop,
-        ) -> Result<Opened<usize>, SshError> {
-            assert_eq!(*via + 1, hop_index, "Tunnel muss über den Vorgänger laufen");
-            self.open(hop_index).await
-        }
-
-        async fn authenticate(
-            &mut self,
-            session: &mut usize,
-            hop_index: usize,
-            _hop: &Hop,
-        ) -> Result<(), SshError> {
-            assert_eq!(*session, hop_index);
-            self.calls.push(format!("auth:{hop_index}"));
-            wait(self.timings[hop_index].authentication).await;
-            Ok(())
-        }
-    }
-
-    fn hops(count: usize) -> Vec<Hop> {
-        (0..count)
-            .map(|i| Hop {
-                host: format!("hop{i}.invalid"),
-                port: 22,
-                username: "deploy".to_string(),
-                auth: AuthMethod::Password {
-                    credential_ref: CredentialRef::new("test:password"),
-                },
-            })
-            .collect()
-    }
-
-    /// Ergebnis und verstrichene (virtuelle) Zeit eines Aufbaus mit den
-    /// Grenzen aus der Spec.
-    async fn run(fake: &mut FakeHops) -> (Result<Chain<usize>, SshError>, Duration) {
-        let hop_list = hops(fake.timings.len());
-        let start = Instant::now();
-        let result = tokio::time::timeout(
-            Duration::from_secs(24 * 3600),
-            drive_chain(fake, &hop_list, ConnectLimits::DEFAULT),
-        )
-        .await
-        .expect("drive_chain darf mit Phasengrenzen nie hängen");
-        (result, start.elapsed())
-    }
-
-    fn ready_sessions(result: Result<Chain<usize>, SshError>) -> Vec<usize> {
-        match result {
-            Ok(Chain::Ready(sessions)) => sessions,
-            Ok(Chain::HostKeyPending(_)) => panic!("erwartet Ready, bekam HostKeyPending"),
-            Err(err) => panic!("erwartet Ready, bekam {err:?}"),
-        }
-    }
-
-    fn assert_timeout(result: Result<Chain<usize>, SshError>) {
-        match result {
-            Err(SshError::Timeout) => {}
-            Err(other) => panic!("erwartet SshError::Timeout, bekam {other:?}"),
-            Ok(Chain::Ready(_)) => panic!("ein Timeout darf nie als verbunden gelten"),
-            Ok(Chain::HostKeyPending(_)) => {
-                panic!("ein Timeout darf nie in eine Host-Key-Rückfrage münden")
-            }
-        }
-    }
-
-    #[test]
-    fn test_default_limits_are_the_spec_values() {
-        assert_eq!(ConnectLimits::DEFAULT.handshake, Duration::from_secs(10));
-        assert_eq!(
-            ConnectLimits::DEFAULT.authentication,
-            Duration::from_secs(60)
-        );
-        assert_eq!(ConnectLimits::default(), ConnectLimits::DEFAULT);
-    }
-
-    /// Das Sicherheitsnetz wächst mit der Hop-Zahl und liegt über der Summe
-    /// aller Phasengrenzen — es kann im normalen Ablauf nicht vor einer
-    /// Phasengrenze greifen.
-    #[test]
-    fn test_overall_limit_exceeds_the_sum_of_all_phase_limits() {
-        let limits = ConnectLimits::DEFAULT;
-        assert_eq!(limits.overall(1), Duration::from_secs(80));
-        assert_eq!(limits.overall(3), Duration::from_secs(220));
-        for hop_count in 1..=8u32 {
-            let sum = (limits.handshake + limits.authentication) * hop_count;
-            assert!(limits.overall(hop_count as usize) > sum);
-        }
-        // Ohne Hops scheitert der Aufbau sofort; die Grenze bleibt sinnvoll.
-        assert_eq!(limits.overall(0), limits.overall(1));
-    }
-
-    /// AC 1 (netzwerkfrei; der echte hängende Server steht in
-    /// `tests/integration.rs`): ein Handshake, der nie fertig wird, endet
-    /// nach genau der Handshake-Grenze mit `SSH_TIMEOUT`, ohne dass die
-    /// Anmeldung beginnt.
-    #[tokio::test(start_paused = true)]
-    async fn test_hanging_handshake_fails_after_the_handshake_limit() {
-        let mut fake = FakeHops::new(vec![HopTiming {
-            handshake: None,
-            ..timing(0, 0)
-        }]);
-        let (result, elapsed) = run(&mut fake).await;
-        assert_timeout(result);
-        assert_eq!(elapsed, ConnectLimits::DEFAULT.handshake);
-        assert_eq!(fake.calls, ["open:0"]);
-    }
-
-    /// AC 2: eine Anmeldung, die länger dauert als die Handshake-Grenze,
-    /// aber kürzer als die Anmeldegrenze (Touch-Schlüssel, Agent mit
-    /// Bestätigung), bricht nicht ab.
-    ///
-    /// *Gegenbeweis:* mit einer gemeinsamen 10-s-Grenze über alles (Stand
-    /// vor Issue #97) oder der Handshake-Grenze für die Anmeldung scheitert
-    /// dieser Test mit `SSH_TIMEOUT`.
-    #[tokio::test(start_paused = true)]
-    async fn test_slow_authentication_within_its_limit_connects() {
-        let mut fake = FakeHops::new(vec![timing(2, 30)]);
-        let (result, elapsed) = run(&mut fake).await;
-        assert_eq!(ready_sessions(result), [0]);
-        assert_eq!(elapsed, Duration::from_secs(32));
-        assert_eq!(fake.calls, ["open:0", "auth:0"]);
-    }
-
-    /// AC 3: eine Anmeldung über der Anmeldegrenze endet mit `SSH_TIMEOUT`.
-    ///
-    /// *Gegenbeweis:* ohne Grenze um die Anmeldung wird dieser Test nie
-    /// fertig und scheitert am äußeren Timeout.
-    #[tokio::test(start_paused = true)]
-    async fn test_authentication_beyond_its_limit_fails_with_timeout() {
-        let mut fake = FakeHops::new(vec![timing(2, 61)]);
-        let (result, elapsed) = run(&mut fake).await;
-        assert_timeout(result);
-        assert_eq!(
-            elapsed,
-            Duration::from_secs(2) + ConnectLimits::DEFAULT.authentication
-        );
-
-        let mut never = FakeHops::new(vec![HopTiming {
-            authentication: None,
-            ..timing(2, 0)
-        }]);
-        let (result, _) = run(&mut never).await;
-        assert_timeout(result);
-    }
-
-    /// AC 4: in einer Kette aus zwei Hops bekommt jeder Hop eigene Grenzen.
-    /// Jeder Hop braucht hier knapp unter seinen Grenzen (9 s + 59 s); die
-    /// Gesamtzeit von 136 s liegt weit über den Grenzen eines einzelnen
-    /// Hops (70 s) — die Kette verbindet trotzdem.
-    #[tokio::test(start_paused = true)]
-    async fn test_two_hop_chain_gets_limits_per_hop() {
-        let mut fake = FakeHops::new(vec![timing(9, 59), timing(9, 59)]);
-        let (result, elapsed) = run(&mut fake).await;
-        assert_eq!(ready_sessions(result), [0, 1]);
-        assert_eq!(elapsed, Duration::from_secs(136));
-        let single_hop = ConnectLimits::DEFAULT.handshake + ConnectLimits::DEFAULT.authentication;
-        assert!(elapsed > single_hop);
-        assert_eq!(fake.calls, ["open:0", "auth:0", "open:1", "auth:1"]);
-    }
-
-    /// Die Grenzen gelten auch am zweiten Hop: ein hängender Tunnel bzw.
-    /// Handshake dort endet nach der Handshake-Grenze, eine zu lange
-    /// Anmeldung dort nach der Anmeldegrenze — jeweils `SSH_TIMEOUT`, und es
-    /// beginnt keine weitere Phase.
-    #[tokio::test(start_paused = true)]
-    async fn test_second_hop_phases_are_limited_too() {
-        let mut hanging_tunnel = FakeHops::new(vec![
-            timing(1, 1),
-            HopTiming {
-                handshake: None,
-                ..timing(0, 0)
-            },
-        ]);
-        let (result, elapsed) = run(&mut hanging_tunnel).await;
-        assert_timeout(result);
-        assert_eq!(elapsed, Duration::from_secs(12));
-        assert_eq!(hanging_tunnel.calls, ["open:0", "auth:0", "open:1"]);
-
-        let mut slow_auth = FakeHops::new(vec![timing(1, 1), timing(1, 61)]);
-        let (result, elapsed) = run(&mut slow_auth).await;
-        assert_timeout(result);
-        assert_eq!(elapsed, Duration::from_secs(63));
-    }
-
-    /// Ein Timeout am ersten Hop beendet die Kette: kein Tunnel, keine
-    /// weitere Anmeldung.
-    #[tokio::test(start_paused = true)]
-    async fn test_timeout_stops_the_chain() {
-        let mut fake = FakeHops::new(vec![
-            HopTiming {
-                authentication: None,
-                ..timing(1, 0)
-            },
-            timing(1, 1),
-        ]);
-        let (result, _) = run(&mut fake).await;
-        assert_timeout(result);
-        assert_eq!(fake.calls, ["open:0", "auth:0"]);
-    }
-
-    /// Eine unbekannte Host-Key am zweiten Hop beendet den Aufbau mit der
-    /// Rückfrage — nach dieser Rückgabe läuft keine Grenze weiter, auch wenn
-    /// der Nutzer danach lange überlegt.
-    #[tokio::test(start_paused = true)]
-    async fn test_host_key_question_ends_the_attempt_outside_every_limit() {
-        let mut fake = FakeHops::new(vec![
-            timing(1, 1),
-            HopTiming {
-                unknown_host_key: true,
-                ..timing(1, 0)
-            },
-        ]);
-        let (result, _) = run(&mut fake).await;
-        assert!(matches!(
-            result,
-            Ok(Chain::HostKeyPending(
-                ConnectOutcome::PendingHostKeyConfirmation { .. }
-            ))
-        ));
-        assert_eq!(fake.calls, ["open:0", "auth:0", "open:1"]);
-        // Simuliert die Bedenkzeit des Nutzers nach der Rückgabe.
-        tokio::time::advance(Duration::from_secs(3601)).await;
-    }
-
-    /// Ohne Hops: sofortiger Fehler, wie vor Issue #97.
-    #[tokio::test]
-    async fn test_empty_chain_fails_immediately() {
-        let mut fake = FakeHops::new(Vec::new());
-        let result = drive_chain(&mut fake, &[], ConnectLimits::DEFAULT).await;
-        assert!(matches!(result, Err(SshError::ConnectionFailed(_))));
-        assert!(fake.calls.is_empty());
-    }
-}
+#[path = "connect/tests_phase_limit.rs"]
+mod phase_limit_tests;
 
 #[cfg(test)]
 mod keepalive_tests {
@@ -1124,3 +897,7 @@ mod ip_literal_tests {
         assert!(parse_ip_literal("").is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "connect/tests_prompt_pause.rs"]
+mod prompt_pause_wiring_tests;

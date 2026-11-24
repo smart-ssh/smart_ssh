@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { ErrorBoundary } from "../components/ui";
 import {
   listGroupFormSections,
   listManageViews,
@@ -25,7 +26,9 @@ export function ServerFormSections({
     <>
       {sections.map(({ id, component: Section }) => (
         <div key={id} data-extension-section={id}>
-          <Section serverId={serverId} dirty={dirty} />
+          <ErrorBoundary id={`server-form-section:${id}`} resetKeys={[serverId]}>
+            <Section serverId={serverId} dirty={dirty} />
+          </ErrorBoundary>
         </div>
       ))}
     </>
@@ -69,7 +72,9 @@ export function GroupFormSections({ groupId, dirty }: { groupId: string; dirty: 
     <>
       {sections.map(({ id, component: Section }) => (
         <div key={id} data-extension-section={id}>
-          <Section groupId={groupId} dirty={dirty} />
+          <ErrorBoundary id={`group-form-section:${id}`} resetKeys={[groupId]}>
+            <Section groupId={groupId} dirty={dirty} />
+          </ErrorBoundary>
         </div>
       ))}
     </>

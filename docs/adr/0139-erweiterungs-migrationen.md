@@ -1,6 +1,8 @@
 # ADR 0139 — Erweiterungseigene Datenbankmigrationen
 
-Status: angenommen · Issue: #462 · Spec 0038 §2a
+## Status
+
+Accepted · Issue: #462 · Spec 0038 §2a
 
 ## Kontext
 

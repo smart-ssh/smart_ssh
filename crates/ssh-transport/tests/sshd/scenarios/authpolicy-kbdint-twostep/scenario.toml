@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "authpolicy-kbdint-twostep"
+networks = ["authpolicy-net"]
+publish = true

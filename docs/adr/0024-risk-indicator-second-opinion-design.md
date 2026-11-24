@@ -1,7 +1,7 @@
 # 0024-risk-indicator-second-opinion-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

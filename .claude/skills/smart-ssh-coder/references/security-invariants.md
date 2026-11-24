@@ -1,5 +1,7 @@
 # Sicherheitsinvarianten (Stand der bisherigen Specs/ADRs)
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Jede Regel mit Herkunft. Vor Änderungen am jeweiligen Bereich die genannte
 Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
@@ -8,9 +10,20 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 1. **Jede KI-Aktion läuft durch Filter-Engine + Bestätigung.** Kein Pfad
    von einem KI-Vorschlag zur Ausführung ohne `handle_action_proposed` →
    `evaluate_action` (`crates/app-logic/src/orchestration/action_exec.rs`).
+   The command reaches the transport only as an `ApprovedCommand`
+   (`crates/app-logic/src/orchestration/approval.rs`), which only the
+   approval path can create (auto-run after `escalate`, user approval).
+   The guard test `exec_call_sites_are_allowlisted_and_not_stale`
+   (`crates/app-logic/src/orchestration/tests_exec_guard.rs`) fails on any
+   transport exec call (`.start_exec(`, `.execute_streaming(`, …) in a
+   production file that is not in its reasoned allowlist.
 2. **Eskalation nur in eine Richtung.** Regelbasiertes `Deny`/Risiko-`Red`
    wird nie durch KI-Meinung oder neuen Code aufgeweicht
-   (ADR 0024, AGENTS.md).
+   (ADR 0024, AGENTS.md). Enforced in one place: the post-engine chain is the pure
+   `escalate` (`crates/app-logic/src/orchestration/escalation.rs`), which
+   combines decisions only via `Decision::stricter`
+   (`crates/core/src/filter/types.rs`); a new step goes there, not into
+   `handle_action_proposed`.
 3. **MCP-Aktionen verlangen immer Bestätigung** (AutoExec → Confirm,
    `FILTER_MCP_ORIGIN_REQUIRES_CONFIRM`). Tests mit MCP-Herkunft brauchen
    deshalb einen Responder, der den Dialog auflöst.
@@ -50,8 +63,15 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
 ## Redaction und Geheimnisse
 
-11. **Redaction vor Versand/Log**: `reapply_redaction_for_send` vor jedem
-    `AiProvider::send()`; Kommando-Ausgaben werden beim Erzeugen redigiert.
+11. **Redaction vor Versand/Log**: `AiProvider::send()` nimmt nur einen
+    `RedactedContext` (`crates/core/src/ai/redacted_context.rs`, private
+    Felder, kein `Deserialize`/`Default`). Er entsteht nur über
+    `RedactedContext::seal` (versiegelt Extension-Teile, dann
+    `reapply_redaction_for_send` über die ganze Historie; als letzter Schritt
+    vor `send`) oder über die eine benannte Ausnahme
+    `unredacted_command_for_second_opinion` (Risiko-Zweitmeinung, nur
+    `crates/app-logic/src/second_opinion.rs`, THREAT-MODEL.md §1). `for_tests` nur hinter
+    `test-support`, nie in `[dependencies]`. Kommando-Ausgaben werden beim Erzeugen redigiert.
     Nutzertext wird verschlüsselt gespeichert (Spec 0036) und beim Versand
     redigiert. Test-Muster: Geheimnis einpflanzen (`AKIAABCDEFGHIJKLMNOP`
     wird erkannt), prüfen, dass es nie im Klartext im Request steht.
@@ -60,6 +80,10 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
     (Spec 0066 §3, `build_session_system_context`).
 13. **Probe-/sudo-stderr nie in Chat/KI-Kontext** — nur in die Meldung
     des Dateibrowsers (Spec 0067).
+14. **Typen mit Geheimnissen haben ein redigierendes `Debug`** (Eingabe-DTOs
+    mit Klartext-Secrets, `SharedToken`): Secret-Felder erscheinen als
+    `[REDACTED]`; Test mit Testgeheimnis (Issue #848). Neue Typen dieser Art
+    bekommen kein abgeleitetes `Debug`.
 
 ## Manuelle Aktionen (Dateibrowser, Terminal)
 
@@ -69,8 +93,8 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
     Quelle "manuell" (ADR 0045).
 15. **Erhöhter Dateibrowser (Spec 0067)**:
     - eigener Kanal `Session::elevated_sftp`, erreichbar nur mit
-      `commands::BrowserAccess` (privater Konstruktor in `commands.rs`) —
-      KI (`orchestration.rs`) und MCP (`mcp_backend.rs`) können ihn nicht
+      `commands::BrowserAccess` (privater Konstruktor in `crates/app-shell/src/commands.rs`) —
+      KI (`crates/app-logic/src/orchestration.rs`) und MCP (`crates/app-shell/src/mcp_backend.rs`) können ihn nicht
       einmal kompilierbar ansprechen. Regressionstest:
       `test_ai_and_mcp_file_actions_never_use_the_elevated_channel`.
     - nie Default, nie persistiert, beim Öffnen des Browsers und bei
@@ -82,7 +106,7 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
       (landen ungequotet im Kommando), nie hängen (Timeouts).
     - Temp-Dateien des Bearbeiten-Flows 0600 ab Erzeugung, Ordner 0700.
 
-## Architektur-Invarianten
+## Strukturelle Invarianten
 
 16. **`core` ohne Tauri/UI**; neue externe Abhängigkeit → erst Trait.
 17. **Kein Sonderfall für den lokalen Pseudo-Server in Sicherheitslogik** —

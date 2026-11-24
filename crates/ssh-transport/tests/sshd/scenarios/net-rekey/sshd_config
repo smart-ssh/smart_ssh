@@ -1,0 +1,5 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+Subsystem sftp internal-sftp
+RekeyLimit 1M

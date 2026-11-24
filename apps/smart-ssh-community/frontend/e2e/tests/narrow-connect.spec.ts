@@ -3,15 +3,11 @@
 import { expect, test } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, group, populated, server } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
-
 test.describe("narrow Connect area @phone", () => {
-  test("nested server tree has no horizontal scroll; every row has a tappable ⋯ and rows are 44 px high", async ({ app }) => {
+  test("nested server tree has no horizontal scroll; no row actions, rows are at least 52 px high", async ({ app }) => {
     await app.launch({
       ...populated(),
       groups: [
@@ -24,34 +20,35 @@ test.describe("narrow Connect area @phone", () => {
       ],
     });
     const page = app.page;
-    await noHorizontalScroll(page);
-    const more = page.getByRole("button", { name: /^Move “.*” to…$/ });
-    await expect(more).toHaveCount(4 + 1 + 4); // 5 servers (not the local one) + 4 folders
-    for (const handle of await more.all()) await expectUsable(handle);
+    await expectNoHorizontalPageScroll(page);
+    await expect(page.getByRole("button", { name: /^Move “.*” to…$/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^New server in/ })).toHaveCount(0);
     for (const row of await page.getByRole("button", { name: /^(db-primary|web-1|lab-box|standalone|an-extremely)/ }).all()) {
-      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(52);
     }
     await expectNoSeriousA11yViolations(page, "narrow server tree");
     await captureScreen(page, "connect-narrow-tree");
   });
 
-  test("Move to… moves a server and a folder with the same backend calls as drag and drop", async ({ app }) => {
+  test("the connector rule runs under the folder chevron at three levels", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
-    await page.getByRole("button", { name: "Move “standalone” to…" }).click();
-    const dialog = page.getByRole("dialog");
-    await expectFullyInViewport(dialog);
-    await captureScreen(page, "connect-narrow-move-to");
-    await dialog.getByRole("button", { name: /Lab/ }).click();
-    await expect.poll(() => app.calls("move_server_to_group")).toEqual([
-      { cmd: "move_server_to_group", args: { id: "s-loose", groupId: "g-lab" } },
-    ]);
-    await page.getByRole("button", { name: "Move “Lab” to…" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /Production/ }).click();
-    await expect.poll(() => app.calls("move_group")).toEqual([
-      { cmd: "move_group", args: { id: "g-lab", parentId: "g-prod" } },
-    ]);
-    await noHorizontalScroll(page);
+    const prod = page.getByRole("button", { name: /^Production/ });
+    const web = page.getByRole("button", { name: /^Web/ });
+    const web1 = page.getByRole("button", { name: /^web-1\b/ });
+    await expect(web1).toBeVisible();
+    expect((await prod.locator("svg").first().boundingBox())!.width).toBe(20);
+    // A group's children container has a 1 px left rule at the parent's chevron centre.
+    for (const group of [prod, web]) {
+      const chevron = (await group.locator("svg").first().boundingBox())!;
+      const box = (await group.locator("xpath=ancestor::li[1]/ul").boundingBox())!;
+      expect(Math.abs(box.x - (chevron.x + chevron.width / 2))).toBeLessThanOrEqual(1.5);
+    }
+    // Each level sits to the right of its parent.
+    const x = async (l: import("@playwright/test").Locator) => (await l.boundingBox())!.x;
+    expect(await x(web)).toBeGreaterThan(await x(prod));
+    expect(await x(web1)).toBeGreaterThan(await x(web));
+    await expectNoHorizontalPageScroll(page);
   });
 
   test("session picker: New conversation and the list are usable; selecting resumes", async ({ app }) => {
@@ -73,10 +70,10 @@ test.describe("narrow Connect area @phone", () => {
     await page.getByRole("button", { name: /^alpha\b/ }).click();
     const dialog = page.getByRole("dialog");
     await expectFullyInViewport(dialog);
-    await expectUsable(dialog.getByRole("button", { name: "New conversation" }));
+    await expectUsable(dialog.getByRole("button", { name: "New conversation", exact: true }));
     await expectUsable(dialog.getByRole("button", { name: "Cancel", exact: true }));
-    await expectUsable(dialog.getByRole("button", { name: "Rename" }).first());
-    await noHorizontalScroll(page);
+    await expectUsable(dialog.getByRole("button", { name: "Rename", exact: true }).first());
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow session picker");
     await captureScreen(page, "connect-narrow-session-picker");
     await dialog.getByRole("button", { name: /Session 1\b/ }).click();
@@ -91,7 +88,7 @@ test.describe("narrow Connect area @phone", () => {
     await expectFullyInViewport(dialog);
     await expectUsable(dialog.getByRole("checkbox"));
     await expectUsable(dialog.getByRole("button", { name: "Continue", exact: true }));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await captureScreen(page, "connect-narrow-first-run");
   });
 });

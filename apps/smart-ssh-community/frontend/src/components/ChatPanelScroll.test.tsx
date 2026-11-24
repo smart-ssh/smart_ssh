@@ -1,83 +1,34 @@
 // Issue #540: the chat follows streamed text only while the user is at the
 // bottom; a jump-to-latest button returns there.
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { I18nextProvider } from "react-i18next";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { onChatTextDelta } from "../events";
-import { sendChatMessage } from "../api";
-import { testI18n } from "../testI18n";
-import { ChatPanel } from "./ChatPanel";
+import { onChatTextDelta } from "../api/events";
+import { sendChatMessage } from "../api/api";
+import { renderChatPanel } from "../test/renderChatPanel";
 
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
+import "../test/scrollTo";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  acceptAndCreateRule: vi.fn(),
-  cancelRunningCommand: vi.fn(),
-  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
-  exportDocument: vi.fn(),
-  getChatHistory: vi.fn(() => Promise.resolve([])),
-  listAiProviders: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "p1",
-        providerType: "anthropic",
-        displayName: "Claude",
-        baseUrl: null,
-        model: "claude",
-        supportsNativeToolCalling: true,
-        isActive: true,
-        extraHeaders: [],
-        attestationUrl: null,
-      },
-    ]),
+vi.mock("../api/api", async () => {
+  const { anthropicProvider } = await import("../test/fixtures");
+  const { createApiMock } = await import("../test/apiMock");
+  return createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([anthropicProvider()])),
+  });
+});
+
+vi.mock("../api/events", async () =>
+  (await import("../test/eventsMock")).createEventsMock(),
+);
+
+vi.mock("../settings/riskSettings", () => ({
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
   ),
-  listPromptHistory: vi.fn(() => Promise.resolve([])),
-  respondToAction: vi.fn(() => Promise.resolve()),
-  sendChatMessage: vi.fn(() => Promise.resolve()),
-  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
-  stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
-  takeChatContentIntoNote: vi.fn(),
 }));
-
-vi.mock("../events", () => ({
-  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
-  onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
-  onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
-  onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
-  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
-  onChatError: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
-  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
-  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
-  onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextUsage: () => Promise.resolve(() => {}),
-  onChatContextCompacted: () => Promise.resolve(() => {}),
-  onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
-  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
-  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
-  onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
-}));
-
-vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
-}));
-
 
 function handlerOf<T>(listener: unknown): (event: T) => void {
-  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock.calls;
+  const calls = vi.mocked(listener as (h: (event: T) => void) => unknown).mock
+    .calls;
   return calls[calls.length - 1][0];
 }
 
@@ -86,8 +37,14 @@ const CLIENT = 100;
 /** jsdom has no layout: give the scroller fake, controllable metrics. */
 function fakeMetrics(el: HTMLElement) {
   const m = { scrollHeight: 1000, scrollTop: 900 };
-  Object.defineProperty(el, "scrollHeight", { get: () => m.scrollHeight, configurable: true });
-  Object.defineProperty(el, "clientHeight", { get: () => CLIENT, configurable: true });
+  Object.defineProperty(el, "scrollHeight", {
+    get: () => m.scrollHeight,
+    configurable: true,
+  });
+  Object.defineProperty(el, "clientHeight", {
+    get: () => CLIENT,
+    configurable: true,
+  });
   Object.defineProperty(el, "scrollTop", {
     get: () => m.scrollTop,
     set: (v: number) => {
@@ -99,13 +56,13 @@ function fakeMetrics(el: HTMLElement) {
 }
 
 async function setup() {
-  render(
-    <I18nextProvider i18n={testI18n}>
-      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
-    </I18nextProvider>,
-  );
+  renderChatPanel();
   await waitFor(() => expect(onChatTextDelta).toHaveBeenCalled());
-  const scroller = document.querySelector(".overflow-y-auto") as HTMLElement;
+  const scroller = await waitFor(() => {
+    const el = document.querySelector(".overflow-y-auto");
+    expect(el).not.toBeNull();
+    return el as HTMLElement;
+  });
   const m = fakeMetrics(scroller);
   let text = "";
   const delta = (d: string) => {
@@ -125,7 +82,8 @@ async function setup() {
   return { m, delta, scrollTo, text: () => text };
 }
 
-const jumpButton = () => screen.queryByRole("button", { name: "Zur neuesten Nachricht" });
+const jumpButton = () =>
+  screen.queryByRole("button", { name: "Zur neuesten Nachricht" });
 
 describe("ChatPanel scroll following (issue #540)", () => {
   beforeEach(() => vi.clearAllMocks());

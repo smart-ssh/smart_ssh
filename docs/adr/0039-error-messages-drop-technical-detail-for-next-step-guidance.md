@@ -1,7 +1,7 @@
 # 0039-error-messages-drop-technical-detail-for-next-step-guidance
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

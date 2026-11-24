@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
@@ -8,33 +8,37 @@ import { NoteShrinkSuggestionToast } from "./components/NoteShrinkSuggestionToas
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
 import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
+import { AuthPromptHost } from "./components/AuthPromptHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
-import { ServerList } from "./components/ServerList";
+import { ServerList, serverSessionMarkers, type ServerMarker } from "./components/ServerList";
+import { NarrowSlotProvider } from "./lib/narrowSlot";
 import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
-import { commandErrorMessage, listAiProviders } from "./api";
+import { QuitConfirmDialog } from "./components/activities/QuitConfirmDialog";
+import { commandErrorMessage, listAiProviders } from "./api/api";
 import {
   subscribeRequestResumeChatSession,
   subscribeRequestOpenFilterRule,
   subscribeRequestServerNoteEdit,
   type ResumeChatSessionRequest,
-} from "./navigationBus";
+} from "./buses/navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
-import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
-import { useSessionTabs } from "./useSessionTabs";
+import { type MainTab } from "./lib/navEntries";
+import { useSessionTabs } from "./hooks/useSessionTabs";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
 
 type Tab = MainTab;
 
 function App() {
   const [tab, setTab] = useState<Tab>("connect");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Issue #1461: title-bar slot for the narrow session actions.
+  const [narrowSlot, setNarrowSlot] = useState<HTMLElement | null>(null);
+  const narrowSlotValue = useMemo(() => ({ slot: narrowSlot, setSlot: setNarrowSlot }), [narrowSlot]);
   // WebKit on macOS does not focus a clicked button, so the opener is taken
   // from the click and handed to the dialog as the focus-return target.
   const [settingsOpener, setSettingsOpener] = useState<HTMLElement | null>(null);
@@ -128,9 +132,7 @@ function App() {
    * `server`. Kein `switchTo(null)` nötig: `ServerList` ist ohnehin nur
    * sichtbar, wenn kein Session-Tab aktiv ist (s. `activeSessionId === null`-
    * Zweig unten).
-   *
-   * Issue #49: dasselbe für „+" an einer Gruppenzeile der Server-Liste,
-   * nur mit dieser Gruppe als Vorgabe. */
+   * (Issue #978: das „+" an Gruppenzeilen gibt es nicht mehr.) */
   const handleCreateServerInGroup = (groupId: string | null) => {
     setTab("manage");
     setPendingNoteEditSelection({ kind: "newServer", groupId });
@@ -189,6 +191,8 @@ function App() {
     sessionTabs.filter((t) => t.phase === "connecting").map((t) => t.serverId),
   );
 
+  const serverMarkers = serverSessionMarkers(sessionTabs);
+
   return (
     // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
     // noch ankommen, wenn der Nutzer den Session-Screen bereits verlassen
@@ -203,8 +207,18 @@ function App() {
     // Notizbereich unmarkierbar gemacht. `AppHeader` trägt bereits sein
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
-    <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden">
-      <AppHeader>
+    <NarrowSlotProvider value={narrowSlotValue}>
+    <div className="flex h-[var(--app-vh,100vh)] flex-col bg-surface text-fg overflow-hidden">
+      <AppHeader
+        mainNav={{
+          active: activeSessionId === null ? tab : null,
+          onSelect: (next) => {
+            switchTo(null);
+            setTab(next);
+          },
+        }}
+        onOpenSettings={openSettingsFrom}
+      >
         {narrow ? (
           <NarrowHeaderNav
             tabs={sessionTabs}
@@ -224,6 +238,10 @@ function App() {
             activeSessionId={activeSessionId}
             onSwitch={switchTo}
             onRequestClose={requestCloseTab}
+            onOpenConnect={() => {
+              switchTo(null);
+              setTab("connect");
+            }}
             onNewSession={startConnect}
           />
         )}
@@ -235,6 +253,7 @@ function App() {
        * Backend ausgelöste Verbindungen (z. B. MCP) — daher hier, stets
        * gemountet, statt in `ServerList`, das nur im "Verbinden"-Tab lebt. */}
       <HostKeyPromptHost />
+      <AuthPromptHost />
 
       {/* Spec 0017, Abschnitt 4: jede offene Session bleibt gemountet
        * (eigener Chat-Verlauf, eigene xterm.js-Instanz samt Scrollback,
@@ -274,18 +293,13 @@ function App() {
       <div className={activeSessionId === null ? "flex flex-1 min-h-0 flex-col" : "hidden"}>
         <MainScreen
           tab={tab}
-          setTab={setTab}
-          narrow={narrow}
-          settingsOpen={settingsOpen}
-          settingsOpener={settingsOpener}
-          setSettingsOpen={setSettingsOpen}
           openSettingsFrom={openSettingsFrom}
           hasActiveProvider={hasActiveProvider}
-          refreshProviderStatus={refreshProviderStatus}
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
+          serverMarkers={serverMarkers}
           resumeRequest={resumeRequest}
           onResumeRequestConsumed={() => setResumeRequest(null)}
           connectRequest={connectRequest}
@@ -296,20 +310,23 @@ function App() {
           pendingRuleSelection={pendingRuleSelection}
           onRuleSelectionConsumed={() => setPendingRuleSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
-          onCreateServerInGroup={handleCreateServerInGroup}
         />
       </div>
+
+      {settingsOpen && (
+        <SettingsScreen
+          returnFocusTo={settingsOpener}
+          onClose={() => setSettingsOpen(false)}
+          onProvidersChanged={refreshProviderStatus}
+        />
+      )}
     </div>
+    </NarrowSlotProvider>
   );
 }
 
 interface MainScreenProps {
   tab: Tab;
-  setTab: (tab: Tab) => void;
-  narrow: boolean;
-  settingsOpen: boolean;
-  settingsOpener: HTMLElement | null;
-  setSettingsOpen: (open: boolean) => void;
   openSettingsFrom: (opener: HTMLElement) => void;
   hasActiveProvider: boolean | null;
   /** Spec 0057, §4.2 (Etappe 4) — s. `App`s Doc-Kommentar zum
@@ -326,30 +343,24 @@ interface MainScreenProps {
   connectRequest: { serverId: string } | null;
   onConnectRequestConsumed: () => void;
   onRequestConnect: (serverId: string) => void;
-  refreshProviderStatus: () => void;
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
   connectingServerIds: ReadonlySet<string>;
+  /** Issue #1367: status marker per server with an open session. */
+  serverMarkers: ReadonlyMap<string, ServerMarker>;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
   onCreateFirstServer: () => void;
-  /** Issue #49. */
-  onCreateServerInGroup: (groupId: string) => void;
 }
 
 function MainScreen({
   tab,
-  setTab,
-  narrow,
-  settingsOpen,
-  settingsOpener,
-  setSettingsOpen: setSettingsOpenRaw,
   openSettingsFrom: openSettingsRaw,
   hasActiveProvider,
-  refreshProviderStatus,
   onStartConnect,
   connectingServerIds,
+  serverMarkers,
   findExistingSessionId,
   onSwitchToExistingTab,
   pendingNoteEditSelection,
@@ -362,7 +373,6 @@ function MainScreen({
   onConnectRequestConsumed,
   onRequestConnect,
   onCreateFirstServer,
-  onCreateServerInGroup,
 }: MainScreenProps) {
   const { t } = useTranslation();
   const openSettingsFrom = (event: { currentTarget: HTMLElement }) => openSettingsRaw(event.currentTarget);
@@ -383,56 +393,31 @@ function MainScreen({
     });
   };
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-      {!narrow && (
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-        <div className="flex items-center gap-6">
-          <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
-          <nav className="flex gap-1">
-            {MAIN_TAB_ENTRIES.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setTab(entry.id)}
-                aria-current={tab === entry.id ? "page" : undefined}
-                className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
-                  tab === entry.id
-                    ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-                    : "border-transparent text-slate-400 hover:bg-slate-800"
-                }`}
-              >
-                {t(entry.labelKey)}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <Button onClick={openSettingsFrom}>{t("settings.title")}</Button>
-      </header>
-      )}
-
+    <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
       {tab === "connect" ? (
         <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
           {hasActiveProvider === false && (
-            <p className="rounded border border-amber-800 bg-amber-950 px-4 py-3 text-sm text-amber-200">
+            <p className="rounded border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-fg-softer">
               {t("mainScreen.noActiveProvider")}{" "}
-              <button
+              <Button variant="bare"
                 type="button"
                 onClick={openSettingsFrom}
-                className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fg-soft"
               >
                 {t("mainScreen.setupProviderNow")}
-              </button>
+              </Button>
               .
             </p>
           )}
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-fg-subtle">
               {t("mainScreen.serversHeading")}
             </h2>
             <ServerList
               onStartConnect={onStartConnect}
               connectingServerIds={connectingServerIds}
+              serverMarkers={serverMarkers}
               findExistingSessionId={findExistingSessionId}
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
@@ -442,7 +427,6 @@ function MainScreen({
               connectRequest={connectRequest}
               onConnectRequestConsumed={onConnectRequestConsumed}
               onCreateFirstServer={onCreateFirstServer}
-              onCreateServerInGroup={onCreateServerInGroup}
             />
           </section>
         </main>
@@ -451,6 +435,8 @@ function MainScreen({
           initialSelection={pendingNoteEditSelection}
           onInitialSelectionConsumed={onNoteEditSelectionConsumed}
           onConnect={onRequestConnect}
+          collapsedGroupIds={collapsedGroupIds}
+          onToggleGroup={toggleGroup}
         />
       ) : (
         <FilterRulesView
@@ -459,15 +445,8 @@ function MainScreen({
         />
       )}
 
-      {settingsOpen && (
-        <SettingsScreen
-          returnFocusTo={settingsOpener}
-          onClose={() => setSettingsOpenRaw(false)}
-          onProvidersChanged={refreshProviderStatus}
-        />
-      )}
-
       <FeatureLockedDialog />
+      <QuitConfirmDialog />
     </div>
   );
 }

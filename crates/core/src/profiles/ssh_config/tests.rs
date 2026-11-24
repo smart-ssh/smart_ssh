@@ -1,6 +1,7 @@
 //! Tests zu Spec 0075, Schritt 1 (§6.1, §6.4.3, §6.4.4, §6.4.4a, §6.4.6,
 //! §6.4.7) und zu den Messbefunden aus ADR 0074.
 
+use crate::testing::ServerBuilder;
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -8,9 +9,7 @@ use super::parser::{parse_source, FileParse, SkippedKind};
 use super::pattern::matches_pattern;
 use super::plan::*;
 use crate::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
-use crate::profiles::types::{
-    AuthMethod, Group, GroupId, PostIngestPolicy, Server, UnusableReason, UnusableServer,
-};
+use crate::profiles::types::{Group, GroupId, Server, UnusableReason, UnusableServer};
 use crate::shared::ServerId;
 
 // ---------------------------------------------------------------- Hilfen
@@ -52,27 +51,6 @@ fn inv<'a>(servers: &'a [Server], groups: &'a [Group], rules: &'a [Rule]) -> Inv
 
 fn empty_plan(text: &str) -> ImportPlan {
     build_plan(&[source("/tmp/config", text)], inv(&[], &[], &[]))
-}
-
-fn server(name: &str, host: &str, port: u16, user: &str) -> Server {
-    Server {
-        id: ServerId::new(),
-        name: name.to_string(),
-        host: host.to_string(),
-        port,
-        username: user.to_string(),
-        group_id: None,
-        tags: vec![],
-        auth: AuthMethod::Agent,
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    }
 }
 
 fn entry<'a>(plan: &'a ImportPlan, name: &str) -> &'a PlannedEntry {
@@ -554,8 +532,18 @@ fn t_5_2a_schlagwort_ohne_regel_wird_nicht_gekennzeichnet() {
 #[test]
 fn t_3_1_8_konflikt_ueber_namen_und_ueber_adresse() {
     let existing = vec![
-        server("web1", "10.0.0.1", 22, "max"),
-        server("anders-benannt", "10.0.0.9", 2222, "root"),
+        ServerBuilder::new()
+            .name("web1")
+            .host("10.0.0.1")
+            .port(22)
+            .username("max")
+            .build(),
+        ServerBuilder::new()
+            .name("anders-benannt")
+            .host("10.0.0.9")
+            .port(2222)
+            .username("root")
+            .build(),
     ];
     let plan = build_plan(
         &[source(
@@ -592,7 +580,12 @@ fn t_3_1_6_einzelner_hop_auf_eintrag_im_import() {
 
 #[test]
 fn t_3_1_6_einzelner_hop_auf_bestand() {
-    let existing = vec![server("bastion", "1.1.1.1", 22, "max")];
+    let existing = vec![ServerBuilder::new()
+        .name("bastion")
+        .host("1.1.1.1")
+        .port(22)
+        .username("max")
+        .build()];
     let id = existing[0].id;
     let plan = build_plan(
         &[source("/tmp/config", "Host x\n  ProxyJump bastion\n")],
@@ -643,7 +636,12 @@ fn t_6_4_4a_a_mehr_hop_kette_richtige_richtung() {
 
 #[test]
 fn t_6_4_4a_b_zwischenstation_im_bestand_kette_faellt_aus() {
-    let existing = vec![server("b", "9.9.9.9", 22, "root")];
+    let existing = vec![ServerBuilder::new()
+        .name("b")
+        .host("9.9.9.9")
+        .port(22)
+        .username("root")
+        .build()];
     let before = existing[0].clone();
     let plan = build_plan(
         &[source("/tmp/config", "Host x\n  ProxyJump a,b\nHost a\n")],
@@ -719,7 +717,12 @@ fn t_6_4_4_schleife_ueber_zwei_dateien() {
 
 #[test]
 fn t_6_4_8_lokaler_pseudo_server_als_jump_host() {
-    let mut local = server("lokal", "127.0.0.1", 22, "max");
+    let mut local = ServerBuilder::new()
+        .name("lokal")
+        .host("127.0.0.1")
+        .port(22)
+        .username("max")
+        .build();
     local.id = LOCAL;
     let existing = vec![local];
     let plan = build_plan(

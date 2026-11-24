@@ -3,10 +3,11 @@
 // erscheinen (3.1.4) — und eine schon gespeicherte Regel mit einem solchen
 // Muster muss in der Regelliste als wirkungslos erkennbar sein (3.2.3).
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { EvaluationTraceDto, RuleDto } from "../types";
+import type { EvaluationTraceDto, RuleDto } from "../api/types";
 import { FilterRulesView } from "./FilterRulesView";
 
 /** Gekürzte Fassung dessen, was `regex` für `^systemctl stop (.*` liefert —
@@ -26,25 +27,19 @@ const evaluateExplainedMock = vi.fn<(...args: unknown[]) => Promise<EvaluationTr
   () => Promise.resolve(null),
 );
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  createRule: (...args: unknown[]) => createRuleMock(...args),
-  deleteRule: vi.fn(() => Promise.resolve()),
-  evaluateExplained: (...args: unknown[]) => evaluateExplainedMock(...args),
-  swapRulePriorities: (...args: unknown[]) => swapRulePrioritiesMock(...args),
-  listHardBlacklist: vi.fn(() => Promise.resolve([])),
-  listKnownTags: vi.fn(() => Promise.resolve([])),
-  listRules: () => listRulesMock(),
-  listServers: vi.fn(() => Promise.resolve([])),
-  updateRule: (...args: unknown[]) => updateRuleMock(...args),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    createRule: (...args: unknown[]) => createRuleMock(...args),
+    deleteRule: vi.fn(() => Promise.resolve()),
+    evaluateExplained: (...args: unknown[]) => evaluateExplainedMock(...args) as Promise<EvaluationTraceDto>,
+    swapRulePriorities: (...args: unknown[]) => swapRulePrioritiesMock(...args),
+    listHardBlacklist: vi.fn(() => Promise.resolve([])),
+    listKnownTags: vi.fn(() => Promise.resolve([])),
+    listRules: () => listRulesMock(),
+    listServers: vi.fn(() => Promise.resolve([])),
+    updateRule: (...args: unknown[]) => updateRuleMock(...args),
+  }),
+);
 
 function validRule(): RuleDto {
   return {
@@ -110,10 +105,42 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
 
-    await waitFor(() => expect(createRuleMock).toHaveBeenCalled());
-
     expect(await screen.findByText(invalidPatternText())).toBeInTheDocument();
     expect(screen.getByText(LIBRARY_ERROR)).toBeInTheDocument();
+    expect(createRuleMock).toHaveBeenCalled();
+
+    const input = screen.getByPlaceholderText("ls *");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby")!;
+    const errorEl = document.getElementById(describedBy.split(" ").pop()!)!;
+    expect(errorEl).toHaveTextContent(invalidPatternText());
+    expect(errorEl).toHaveTextContent(LIBRARY_ERROR);
+  });
+
+  // A later scope-validation failure must not leave the old pattern error
+  // on the pattern field. Fails if the early return skips the clearing.
+  it("clears the old pattern error when a later submit fails on the scope", async () => {
+    listRulesMock.mockResolvedValue([]);
+    createRuleMock.mockRejectedValue({
+      message: LIBRARY_ERROR,
+      code: "FILTER_RULE_PATTERN_INVALID",
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: /\+ Regel|\+ Rule/ }));
+    fireEvent.change(screen.getByPlaceholderText("ls *"), {
+      target: { value: "^systemctl stop (.*" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
+    expect(await screen.findByText(LIBRARY_ERROR)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Tag" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
+
+    expect(await screen.findByText("Bitte ein Tag angeben.")).toBeInTheDocument();
+    expect(screen.queryByText(LIBRARY_ERROR)).not.toBeInTheDocument();
+    expect(screen.queryByText(invalidPatternText())).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("ls *")).not.toHaveAttribute("aria-invalid", "true");
   });
 
   // Gegenprobe: Ein anderer Fehler behält das bisherige Verhalten (roher
@@ -129,6 +156,7 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
 
     expect(await screen.findByText("Datenbankfehler: disk full")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("ls *")).not.toHaveAttribute("aria-invalid");
   });
 });
 
@@ -197,7 +225,7 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     renderView();
 
     await screen.findByText(/rule-broken-pattern/);
-    const brokenRow = screen.getByText(/rule-broken-pattern/).closest("li")!;
+    const brokenRow = screen.getByText(/rule-broken-pattern/).closest("tr")!;
     const up = within(brokenRow).getByRole("button", { name: /Priorität erhöhen|Increase priority/ });
     const down = within(brokenRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
@@ -207,8 +235,8 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     expect(down).toBeDisabled();
     expect(up).toHaveAttribute("title", expect.stringMatching(/./));
 
-    fireEvent.click(up);
-    fireEvent.click(down);
+    clickDisabled(up);
+    clickDisabled(down);
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
@@ -222,22 +250,22 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
 
     await screen.findByText(/rule-top-pattern/);
     const neighbourReason = testI18n.getFixedT("de")("filterRules.priorityDisabledNeighbourPatternError");
-    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topRow = screen.getByText(/rule-top-pattern/).closest("tr")!;
     const topDown = within(topRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
     });
     expect(topDown).toBeDisabled();
     expect(topDown).toHaveAttribute("title", neighbourReason);
 
-    const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("li")!;
+    const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("tr")!;
     const bottomUp = within(bottomRow).getByRole("button", {
       name: /Priorität erhöhen|Increase priority/,
     });
     expect(bottomUp).toBeDisabled();
     expect(bottomUp).toHaveAttribute("title", neighbourReason);
 
-    fireEvent.click(topDown);
-    fireEvent.click(bottomUp);
+    clickDisabled(topDown);
+    clickDisabled(bottomUp);
     expect(swapRulePrioritiesMock).not.toHaveBeenCalled();
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
@@ -254,7 +282,7 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     renderView();
 
     await screen.findByText(/rule-top-pattern/);
-    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topRow = screen.getByText(/rule-top-pattern/).closest("tr")!;
     const topDown = within(topRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
     });

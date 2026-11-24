@@ -62,6 +62,15 @@ In **beiden** Bäumen — der Verbinden-Liste und der Verwalten-Sidebar:
   das Gruppen-Feld. Das Verschieben eines anderen Elements und das
   anschließende Neuladen der Listen lassen das geöffnete Formular
   unverändert.
+- **Dialog „Verschieben nach …".** Als Alternative ohne Ziehen (Menü der
+  Verwalten-Ansicht, auch auf schmalen Bildschirmen) zeigt der Dialog die
+  Gruppen als umrandeten Baum mit Ordner-Symbolen und Verbindungslinien. Die
+  erste Zeile „→ oberste Ebene (ohne Gruppe)" verschiebt auf die oberste Ebene.
+  Der jetzige Ort (bei einem Server seine Gruppe bzw. die oberste Ebene, bei
+  einer Gruppe ihre übergeordnete) ist mit „aktuell" markiert und deaktiviert;
+  eine Gruppe selbst und ihre Untergruppen sind als Ziel ebenfalls deaktiviert.
+  Ein Klick auf eine andere Zeile verschiebt sofort, es gibt keinen
+  zusätzlichen Bestätigungsknopf.
 - **Reihenfolge** bleibt alphabetisch.
 
 ## 3. Was ein Verschieben ändert
@@ -92,6 +101,11 @@ verschoben hat (Spec 0109, I4), tragen die Markierung „Kopie".
   Markierung sofort. Bei der Gruppe fragt die App zuerst nach und nennt, wie
   viele Gruppen und Server betroffen sind; nach der Bestätigung verlieren die
   Gruppe, alle Untergruppen und alle Server darin die Markierung.
+- Im schmalen Layout gibt es kein Kontextmenü. Dort steht dieselbe Aktion im
+  „⋯"-Dialog der Verwalten-Ansicht eines markierten Servers oder einer
+  markierten Gruppe (neben „Verschieben nach…"); Zeilen ohne Markierung
+  bieten sie nicht an. In der Verbinden-Ansicht bekommen die Zeilen kein
+  zusätzliches Bedienelement.
 - Nichts außer dem Backup-Import setzt die Markierung. Sie hat keinen
   Einfluss auf Verbinden, Filterregeln, Risikoeinstufung oder Notizen und
   bleibt beim Verschieben und Bearbeiten erhalten.

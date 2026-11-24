@@ -1,6 +1,8 @@
 //! Issue #464 (Spec 0038): the outgoing transform runs on the final approved
 //! text, right before the transport call, and nowhere else.
 
+use ssh_manager_core::filter::PolicyRules;
+use ssh_manager_core::testing::ServerBuilder;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -147,8 +149,9 @@ fn all_event_text(emitter: &TestEmitter) -> String {
 async fn test_transform_changes_what_the_server_receives_but_sinks_keep_the_original() {
     let transport = MockSshTransport::default().with_response("echo Y", output("done"));
     let executed = transport.executed_handle();
-    let (mut session, _chat_store, chat_session_id, _tmp, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(propose("echo X"), transport).await;
+    let (session, _chat_store, _chat_session_id, _tmp) =
+        session_with_real_chat_persistence(propose("echo X"), transport).await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_outgoing_transform_for_tests(Some(ReplaceX::new()));
     let emitter = TestEmitter::default();
 
@@ -158,15 +161,12 @@ async fn test_transform_changes_what_the_server_receives_but_sinks_keep_the_orig
     let events = all_event_text(&emitter);
     assert!(events.contains("echo X"), "{events}");
     assert!(!events.contains("echo Y"), "{events}");
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(history.contains("echo X"), "{history}");
     assert!(!history.contains("echo Y"), "{history}");
-    let ledger = format!(
-        "{:?}",
-        ledger_store.load_entries(chat_session_id).await.unwrap()
-    );
-    assert!(ledger.contains("echo X"), "{ledger}");
-    assert!(!ledger.contains("echo Y"), "{ledger}");
+    let reported = format!("{:?}", probe.kinds());
+    assert!(reported.contains("echo X"), "{reported}");
+    assert!(!reported.contains("echo Y"), "{reported}");
 }
 
 #[test]
@@ -194,15 +194,15 @@ async fn test_filter_sees_the_original_text_not_the_prepared_one() {
     struct DenyY;
     #[async_trait]
     impl PolicyStore for DenyY {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-y".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*Y*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
     let transport = MockSshTransport::default().with_response("echo Y", output("done"));
@@ -327,7 +327,7 @@ async fn test_rejection_sends_nothing_and_tells_the_ai() {
     run_approved_turn(&session, &emitter).await;
 
     assert!(executed.lock().unwrap().is_empty());
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(
         history.contains("no value available for this server"),
         "{history}"
@@ -374,7 +374,7 @@ async fn test_inserted_secret_is_masked_in_the_output_of_its_own_command() {
     let events = all_event_text(&emitter);
     assert!(!events.contains("hunter-two-secret"), "{events}");
     assert!(events.contains("[REDACTED]"), "{events}");
-    let history = format!("{:?}", session.context.lock().await.history);
+    let history = format!("{:?}", session.ai.context.lock().await.history);
     assert!(!history.contains("hunter-two-secret"), "{history}");
 }
 
@@ -417,7 +417,7 @@ async fn test_prepared_command_on_the_hard_blacklist_is_rejected_without_quoting
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(shown.contains("hard blacklist"), "{shown}");
     assert!(!shown.contains("rm -rf"), "{shown}");
@@ -468,7 +468,7 @@ async fn test_confirmed_blacklisted_original_turned_into_other_blacklisted_is_se
     let shown = format!(
         "{} {:?}",
         all_event_text(&emitter),
-        session.context.lock().await.history
+        session.ai.context.lock().await.history
     );
     assert!(!shown.contains(r#"rm -rf /""#), "{shown}");
     assert!(!shown.contains("rm -rf / "), "{shown}");
@@ -490,7 +490,7 @@ async fn test_without_a_transform_the_text_is_sent_unchanged() {
 
 mod group_chain_scope {
     use chrono::Utc;
-    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::profiles::{Group, GroupId};
     use ssh_manager_core::shared::ServerId;
 
     use super::*;
@@ -527,28 +527,6 @@ mod group_chain_scope {
         }
     }
 
-    fn server(group_id: Option<GroupId>) -> Server {
-        let now = Utc::now();
-        Server {
-            id: ServerId::new(),
-            name: "web".to_string(),
-            host: "example.invalid".to_string(),
-            port: 22,
-            username: "deploy".to_string(),
-            group_id,
-            tags: vec!["prod".to_string()],
-            auth: AuthMethod::Agent,
-            notes: String::new(),
-            jump_host: None,
-            post_ingest_policy: PostIngestPolicy::default(),
-            ai_injection_check_enabled: false,
-            sftp_server_path: None,
-            start_directory: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
     fn session_for(server_id: ServerId, recorder: Arc<ScopeRecorder>) -> Session {
         let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
         session.set_server_id_for_tests(server_id);
@@ -561,7 +539,11 @@ mod group_chain_scope {
         let root = group(None);
         let mid = group(Some(root.id));
         let leaf = group(Some(mid.id));
-        let srv = server(Some(leaf.id));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(leaf.id))
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new()
             .with_group(root.clone())
             .with_group(mid.clone())
@@ -584,7 +566,11 @@ mod group_chain_scope {
 
     #[tokio::test]
     async fn test_server_without_group_has_empty_chain() {
-        let srv = server(None);
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(None)
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new().with_server(srv.clone());
         let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
         let session = session_for(srv.id, recorder.clone());
@@ -615,7 +601,11 @@ mod group_chain_scope {
     /// is empty and the text is still prepared.
     #[tokio::test]
     async fn test_failing_group_lookup_gives_empty_chain_and_text_is_prepared() {
-        let srv = server(Some(GroupId::new()));
+        let srv = ServerBuilder::new()
+            .name("web")
+            .group_id(Some(GroupId::new()))
+            .tags(vec!["prod".to_string()])
+            .build();
         let store = InMemoryProfileStore::new().with_server(srv.clone());
         let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
         let session = session_for(srv.id, recorder.clone());
@@ -638,7 +628,11 @@ mod group_chain_scope {
             .build()
             .unwrap();
         runtime.block_on(async {
-            let srv = server(Some(GroupId::new()));
+            let srv = ServerBuilder::new()
+                .name("web")
+                .group_id(Some(GroupId::new()))
+                .tags(vec!["prod".to_string()])
+                .build();
             let store = InMemoryProfileStore::new().with_server(srv.clone());
             let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
             session.set_server_id_for_tests(srv.id);
@@ -650,4 +644,290 @@ mod group_chain_scope {
         let log = log_capture::recorded_text();
         assert!(!log.contains("group_chain failed"), "{log}");
     }
+}
+
+// --- Issue #815: confirmation query and structural re-check ---
+
+/// Marks every text as changed (`marks`) and rewrites `X` to `to`.
+struct Marking {
+    marks: bool,
+    to: &'static str,
+}
+
+#[async_trait]
+impl OutgoingTransform for Marking {
+    async fn prepare_outgoing(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        Ok(Prepared::new(text.replace('X', self.to), Vec::new()))
+    }
+
+    fn requires_confirmation(&self, _: &ServerScope, _: OutgoingKind, _: &str) -> bool {
+        self.marks
+    }
+}
+
+/// Runs a turn until the first `chat-action-proposed` and returns its payload.
+async fn first_proposal(session: &Session, emitter: &TestEmitter) -> serde_json::Value {
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+    let turn = run_chat_turn(
+        session,
+        Uuid::new_v4(),
+        emitter,
+        &profile_store,
+        &confirmations,
+    );
+    tokio::pin!(turn);
+    let watcher = async {
+        loop {
+            let found = emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|(n, _)| n == "chat-action-proposed")
+                .map(|(_, p)| p.clone());
+            if let Some(p) = found {
+                return p;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+    tokio::select! {
+        p = watcher => p,
+        _ = &mut turn => panic!("turn ended without a proposal"),
+    }
+}
+
+const INSERTED: &str = "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM";
+
+#[tokio::test]
+async fn test_marked_command_under_allow_rule_needs_confirmation() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"]["Confirm"]["code"], INSERTED, "{p}");
+}
+
+#[tokio::test]
+async fn test_unmarked_command_stays_auto_exec() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: false,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"], "AutoExec", "{p}");
+}
+
+#[tokio::test]
+async fn test_no_transform_stays_auto_exec() {
+    let session = test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"], "AutoExec", "{p}");
+}
+
+#[tokio::test]
+async fn test_marking_never_weakens_an_existing_confirm() {
+    // Hard-blacklisted command: the engine already answers Confirm.
+    let mut session =
+        test_session_allowing_everything(propose("rm -rf /tmp/x"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert!(p["decision"]["Confirm"].is_object(), "{p}");
+    assert_ne!(p["decision"]["Confirm"]["code"], INSERTED, "{p}");
+}
+
+#[tokio::test]
+async fn test_mcp_style_default_trait_method_returns_false() {
+    // The default implementation keeps existing transforms unchanged.
+    let scope = ServerScope {
+        server_id: ssh_manager_core::filter::ServerId(Uuid::new_v4()),
+        group_chain: Vec::new(),
+        tags: Vec::new(),
+    };
+    assert!(!Identity.requires_confirmation(&scope, OutgoingKind::Command, "echo X"));
+}
+
+#[tokio::test]
+async fn test_state_independent_escalation_code_follows_the_transform() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    let scope = ServerScope {
+        server_id: session.server_id,
+        group_chain: Vec::new(),
+        tags: Vec::new(),
+    };
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    assert_eq!(
+        state_independent_escalation_code(&session, "echo X", Some(&scope)),
+        Some(INSERTED)
+    );
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: false,
+        to: "Y",
+    })));
+    assert_eq!(
+        state_independent_escalation_code(&session, "echo X", Some(&scope)),
+        None
+    );
+}
+
+async fn sent_with(to: &'static str, original: &str) -> (Vec<String>, String) {
+    let transport = MockSshTransport::default().with_response(original, output("done"));
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose(original), transport);
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking { marks: false, to })));
+    let emitter = TestEmitter::default();
+    run_approved_turn(&session, &emitter).await;
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.ai.context.lock().await.history
+    );
+    let sent = executed.lock().unwrap().clone();
+    (sent, shown)
+}
+
+#[tokio::test]
+async fn test_prepared_command_with_more_segments_is_rejected_without_quoting_it() {
+    let (sent, shown) = sent_with("a; touch /tmp/pwned", "echo X").await;
+    assert!(sent.is_empty(), "{sent:?}");
+    assert!(shown.contains("structure"), "{shown}");
+    assert!(!shown.contains("pwned"), "{shown}");
+}
+
+#[tokio::test]
+async fn test_prepared_command_with_quoted_word_keeps_structure_and_is_sent() {
+    let (sent, _) = sent_with("'a; b && c'", "echo X").await;
+    assert_eq!(sent, vec!["echo 'a; b && c'".to_string()]);
+}
+
+#[tokio::test]
+async fn test_prepared_command_the_parser_cannot_split_is_rejected() {
+    let (sent, _) = sent_with("'unterminated", "echo X").await;
+    assert!(sent.is_empty(), "{sent:?}");
+}
+
+#[test]
+fn test_same_segment_structure_helper() {
+    use crate::orchestration::outgoing::same_segment_structure;
+    assert!(same_segment_structure("echo X", "echo X"));
+    assert!(same_segment_structure("echo X", "echo 'a;b'"));
+    assert!(!same_segment_structure("echo X", "echo a; id"));
+    assert!(!same_segment_structure("echo X", "echo 'oops"));
+    assert!(same_segment_structure("echo 'oops", "echo 'oops"));
+    assert!(!same_segment_structure("echo 'oops", "echo a"));
+}
+
+/// Replaces `from` by `to` and reports `to` as an inserted secret if asked.
+struct Sub {
+    from: &'static str,
+    to: &'static str,
+    secret: bool,
+}
+
+#[async_trait]
+impl OutgoingTransform for Sub {
+    async fn prepare_outgoing(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        let secrets = if self.secret {
+            vec![SecretString::from(self.to.to_string())]
+        } else {
+            Vec::new()
+        };
+        Ok(Prepared::new(text.replace(self.from, self.to), secrets))
+    }
+}
+
+fn two_step_chain(a: Sub, b: Sub) -> Arc<dyn OutgoingTransform> {
+    Arc::new(ssh_manager_core::outgoing::CompositeOutgoingTransform::new(
+        vec![Arc::new(a), Arc::new(b)],
+    ))
+}
+
+// Issue #893: the secrets of both transforms are masked in the output of the
+// very command that carried them.
+#[tokio::test]
+async fn test_chain_secrets_of_both_transforms_are_masked_in_the_command_output() {
+    let transport = MockSshTransport::default().with_response(
+        "echo alpha-secret beta-secret",
+        output("got alpha-secret and beta-secret\n"),
+    );
+    let mut session = test_session_allowing_everything(propose("echo X Z"), transport);
+    session.set_outgoing_transform_for_tests(Some(two_step_chain(
+        Sub {
+            from: "X",
+            to: "alpha-secret",
+            secret: true,
+        },
+        Sub {
+            from: "Z",
+            to: "beta-secret",
+            secret: true,
+        },
+    )));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.ai.context.lock().await.history
+    );
+    assert!(!shown.contains("alpha-secret"), "{shown}");
+    assert!(!shown.contains("beta-secret"), "{shown}");
+    assert!(shown.contains("[REDACTED]"), "{shown}");
+}
+
+// Issue #893: the hard-blacklist re-check applies to the final text of the chain.
+#[tokio::test]
+async fn test_chain_whose_final_text_is_blacklisted_is_rejected() {
+    let transport = MockSshTransport::default();
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose("X Z"), transport);
+    session.set_outgoing_transform_for_tests(Some(two_step_chain(
+        Sub {
+            from: "X",
+            to: "rm -rf",
+            secret: false,
+        },
+        Sub {
+            from: "Z",
+            to: "/",
+            secret: false,
+        },
+    )));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    assert!(executed.lock().unwrap().is_empty());
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.ai.context.lock().await.history
+    );
+    assert!(shown.contains("hard blacklist"), "{shown}");
+    assert!(!shown.contains("rm -rf"), "{shown}");
 }

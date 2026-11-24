@@ -1,6 +1,8 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode } from "../api";
+import { commandErrorCode } from "../api/api";
+import { useActivities } from "../hooks/useActivities";
 import {
   cancelSpeechModelDownload,
   deleteSpeechModel,
@@ -8,21 +10,22 @@ import {
   getSpeechLanguage,
   getSpeechModelStatus,
   onSpeechModelStatus,
-  SPEECH_MODEL_SIZE_MIB,
-  SPEECH_MODEL_SOURCE,
-  SPEECH_MODELS,
+  listSpeechModels,
+  SPEECH_MODEL_PARAKEET,
+  speechModelSizeMib,
   setSelectedSpeechModel,
   setSpeechLanguage,
   startSpeechModelDownload,
   type SpeechModelId,
+  type SpeechModelInfo,
   type SpeechModelStatus,
-} from "../voiceApi";
+} from "../api/voiceApi";
 import {
   loadVoiceInputEnabled,
   saveVoiceInputEnabled,
   voiceErrorKey,
-} from "../voiceInputSettings";
-import { Button } from "./ui";
+} from "../settings/voiceInputSettings";
+import { Button, StatusSquare } from "./ui";
 
 /** ISO codes offered for a fixed recognition language (all supported by Whisper). */
 const LANGUAGE_CODES = [
@@ -30,14 +33,24 @@ const LANGUAGE_CODES = [
   "da", "sv", "no", "fi", "id", "vi", "hi", "ja", "ko", "zh",
 ] as const;
 
+/** Kind of the activity of a speech model download; its key is the model id. */
+const SPEECH_MODEL_ACTIVITY_KIND = "speech-model";
+
 /** Spec 0108 §2, §5.3, §5.4: on/off, model, recognition language. */
 export function VoiceInputSettings() {
   const { t, i18n } = useTranslation();
   const [enabled, setEnabled] = useState(true);
   const [model, setModel] = useState<SpeechModelId>("base");
+  const [models, setModels] = useState<SpeechModelInfo[]>([]);
   const [statuses, setStatuses] = useState<Partial<Record<SpeechModelId, SpeechModelStatus>>>({});
   const [language, setLanguage] = useState("auto");
-  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+
+  // Issue #1326: a running download is also an activity; a reopened dialog
+  // shows it (even before the status call answers) and never starts a second.
+  const runningDownloads = useActivities().filter(
+    (a) => a.kind === SPEECH_MODEL_ACTIVITY_KIND && a.state === "running",
+  );
 
   const fail = (err: unknown) => setErrorKey(voiceErrorKey(commandErrorCode(err)));
 
@@ -50,7 +63,12 @@ export function VoiceInputSettings() {
     loadVoiceInputEnabled().then(setEnabled).catch(() => {});
     getSelectedSpeechModel().then(setModel).catch(fail);
     getSpeechLanguage().then(setLanguage).catch(fail);
-    for (const id of SPEECH_MODELS) refresh(id).catch(fail);
+    listSpeechModels()
+      .then((list) => {
+        setModels(list);
+        for (const m of list) refresh(m.id).catch(fail);
+      })
+      .catch(fail);
     let unlisten: (() => void) | undefined;
     let disposed = false;
     onSpeechModelStatus((ev) => setStatuses((prev) => ({ ...prev, [ev.model]: ev })))
@@ -93,15 +111,15 @@ export function VoiceInputSettings() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-300">
-        {t("voice.settings.description", { source: SPEECH_MODEL_SOURCE })}
+      <p className="text-sm text-fg-muted">
+        {t("voice.settings.description", { source: models[0]?.source_host ?? "huggingface.co" })}
       </p>
       {errorKey && (
-        <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">
+        <p role="alert" className="border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
           {t(errorKey)}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-fg-muted">
         <input
           type="checkbox"
           checked={enabled}
@@ -118,15 +136,21 @@ export function VoiceInputSettings() {
       </label>
 
       <fieldset className="space-y-3">
-        <legend className="mb-2 text-sm font-semibold text-slate-200">
+        <legend className="mb-2 text-sm font-semibold text-fg-soft">
           {t("voice.settings.model")}
         </legend>
-        {SPEECH_MODELS.map((id) => {
-          const status = statuses[id];
+        {models.map((info) => {
+          const id = info.id;
+          const activity = runningDownloads.find((a) => a.key === id);
+          // The activity wins over a not-yet-loaded status (reopened dialog).
+          const status: SpeechModelStatus | undefined =
+            activity && statuses[id]?.state !== "downloading"
+              ? { state: "downloading", done: activity.done, total: activity.total ?? 0 }
+              : statuses[id];
           const downloading = status?.state === "downloading";
           const ready = status?.state === "ready";
           return (
-            <div key={id} className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+            <div key={id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm text-fg-muted">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -137,11 +161,17 @@ export function VoiceInputSettings() {
                     run(() => setSelectedSpeechModel(id));
                   }}
                 />
-                {t(`voice.settings.models.${id}`, { size: SPEECH_MODEL_SIZE_MIB[id] })}
+                {t(`voice.settings.models.${id}` as TranslationKey, { size: speechModelSizeMib(info) })}
               </label>
-              <span aria-live="polite" className="text-slate-400">
+              <span aria-live="polite" className="inline-flex items-center gap-1.5 text-fg-subtle">
+                <StatusSquare tone={ready ? "success" : downloading ? "accent" : status?.state === "error" ? "danger" : "neutral"} />
                 {statusText(status)}
               </span>
+              {downloading && status.total > 0 && (
+                <span aria-hidden="true" className="block h-1 w-24 bg-border">
+                  <span className="block h-full bg-accent" style={{ width: `${Math.min(100, Math.floor((status.done / status.total) * 100))}%` }} />
+                </span>
+              )}
               {downloading ? (
                 <Button size="sm" onClick={() => run(() => cancelSpeechModelDownload(id))}>
                   {t("voice.consent.cancel")}
@@ -171,7 +201,7 @@ export function VoiceInputSettings() {
         })}
       </fieldset>
 
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-fg-muted">
         {t("voice.settings.language")}
         <select
           value={language}
@@ -183,7 +213,7 @@ export function VoiceInputSettings() {
               throw err;
             }));
           }}
-          className="rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100"
+          className="border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg"
         >
           <option value="auto">{t("voice.settings.languageAuto")}</option>
           {LANGUAGE_CODES.map((code) => (
@@ -193,6 +223,9 @@ export function VoiceInputSettings() {
           ))}
         </select>
       </label>
+      {model === SPEECH_MODEL_PARAKEET && models.some((m) => m.id === SPEECH_MODEL_PARAKEET) && (
+        <p className="text-xs text-fg-subtle">{t("voice.settings.languageParakeetHint")}</p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 # ADR 0074 — Entscheidungen beim `ssh_config`-Import (Spec 0075, Schritte 0–3)
 
-Status: angenommen · 2026-09-25 · Spec: `docs/specs/0075-ssh-config-import-export.md`
+## Status
+
+Accepted · 2026-09-25 · Spec: `docs/specs/0075-ssh-config-import-export.md`
+
 Betrifft: `crates/core/src/profiles/ssh_config/`,
 `crates/app-shell/src/ssh_config_import.rs`,
 `crates/app-shell/src/ssh_config_apply.rs`

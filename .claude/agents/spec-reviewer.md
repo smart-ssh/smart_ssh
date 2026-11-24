@@ -21,6 +21,8 @@ hooks:
           command: "$CLAUDE_PROJECT_DIR/.claude/hooks/readonly-guard.sh"
 ---
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Du machst hier ausschließlich ein Review, keine Implementierung. Du hast
 keinen Schreibzugriff auf Dateien — technisch durchgesetzt, auch über die
 Shell: `.claude/hooks/readonly-guard.sh` lässt in Bash nur lesende Befehle

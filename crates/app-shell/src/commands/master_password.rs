@@ -34,7 +34,7 @@ use crate::startup_gate::StartupGate;
 use crate::window_prompt::{StartupPromptAnswer, WindowStartupPrompt};
 
 /// Das Ereignis, mit dem das Fenster erfährt, dass der Zustand jetzt steht.
-pub const UNLOCKED_EVENT: &str = "startup:unlocked";
+pub const UNLOCKED_EVENT: &str = app_logic::event_names::STARTUP_UNLOCKED;
 
 /// Fehlercodes dieser Etappe (A20).
 pub const WRONG_MASTER_PASSWORD_CODE: &str = "WRONG_MASTER_PASSWORD";
@@ -73,9 +73,8 @@ pub const KEYCHAIN_HOLDS_ANOTHER_KEY_CODE: &str = "KEYCHAIN_HOLDS_ANOTHER_KEY";
 /// Existenz einer Verpackungsdatei, nur etwas über den Schlüsselbund, dessen
 /// Modus die Oberfläche ohnehin anzeigt (A18).
 pub const KEYCHAIN_KEY_MISMATCH_CODE: &str = "KEYCHAIN_KEY_MISMATCH";
-/// Derselbe Grund: Der Vorgang passt nicht zum aktiven Modus (A18) —
-/// einrichten, obwohl schon ein Passwort gilt, oder wechseln, obwohl keines
-/// gilt. Das ist kein Dateifehler und soll nicht als einer gemeldet werden.
+/// Derselbe Grund: Der Vorgang passt nicht zum aktiven Modus (A18) — einrichten,
+/// obwohl schon ein Passwort gilt, oder wechseln, obwohl keines gilt. Kein Dateifehler.
 pub const MASTER_PASSWORD_MODE_MISMATCH_CODE: &str = "MASTER_PASSWORD_MODE_MISMATCH";
 /// Klarstellung 12 (A13/E10): Die Warnung ist nicht ausdrücklich bestätigt.
 ///
@@ -221,7 +220,7 @@ impl PendingStartup {
     }
 
     fn prompt_for(&self, app: &tauri::AppHandle) -> Arc<WindowStartupPrompt> {
-        let mut slot = self.prompt.lock().expect("Prompt-Sperre");
+        let mut slot = ssh_manager_core::sync::lock_tolerating_poison(&self.prompt);
         if let Some(prompt) = slot.as_ref() {
             return prompt.clone();
         }
@@ -325,7 +324,9 @@ fn decide_startup_screen(
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
-        // (§2 Frage 3).
+        // (§2 Frage 3) — oder, auf Android (Issue #944), dass der ganze
+        // Start im Fenster läuft: Die Maske setzt ihn dann fort, und jede
+        // Wahl kommt vom Nutzer.
         H::Absent => StartupScreenDecision {
             screen: StartupScreen::SetUpMasterPassword,
             offers_start_over: false,
@@ -479,7 +480,7 @@ pub async fn unlock_with_master_password(
     // Frage 3) gibt es noch keine Verpackung — dort fährt der Ablauf mit
     // `Keychain` weiter und läuft erneut in D1, diesmal mit der Maske im
     // Fenster.
-    let keyring = credentials_keyring::KeyringCredentialStore::new();
+    let keyring = crate::keychain::process_keyring_store();
     let access = match mode {
         KeyMode::Password => {
             let key = match master_password::unlock(&db_path, &password) {
@@ -850,7 +851,7 @@ pub fn set_up_master_password(
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
     let db_path = persistence_sqlite::default_db_path();
-    let keyring = credentials_keyring::KeyringCredentialStore::new();
+    let keyring = crate::keychain::process_keyring_store();
     let (warning, root_key) =
         check_set_up_preconditions(warning_confirmed, &state.root_key_fingerprint, || {
             ssh_manager_core::crypto::read_root_key(&keyring)
@@ -904,7 +905,7 @@ pub fn switch_to_os_keychain(
     master_password::switch_to_keychain(
         &persistence_sqlite::default_db_path(),
         &SecretString::from(current),
-        &credentials_keyring::KeyringCredentialStore::new(),
+        &crate::keychain::process_keyring_store(),
         if replace_another_key {
             master_password::KeychainOverwrite::ConfirmedByTheUser
         } else {
@@ -1009,6 +1010,25 @@ mod tests {
     /// erreichbar* war im DTO nicht abbildbar und führte zum Passwortfeld —
     /// der Nutzer tippte ein Passwort für eine Datei, die gar nicht gelesen
     /// werden konnte. Die Zeile `Unreachable` unten ist genau das.
+    /// Issue #944: on Android the placement puts the keychain-mode startup in
+    /// the window, and the state is then missing with no wrapping file. The
+    /// screen for that case must continue the startup (no unlock field, no
+    /// start-over offer chosen by the app) — if the placement were bypassed
+    /// or this screen changed, the window would never run the startup.
+    #[test]
+    fn test_issue_944_the_window_startup_screen_continues_the_startup() {
+        use crate::startup_prompt::{startup_prompt_placement, StartupPromptPlacement};
+        use master_password::WrappingHealth as H;
+
+        assert_eq!(
+            startup_prompt_placement("android"),
+            StartupPromptPlacement::Window
+        );
+        let decision = decide_startup_screen(Some(H::Absent), 0);
+        assert_eq!(decision.screen, StartupScreen::SetUpMasterPassword);
+        assert!(!decision.offers_start_over);
+    }
+
     #[test]
     fn test_the_startup_screen_follows_the_state_of_the_wrapping_file() {
         // Entsperrt: über die Datei ist nichts zu sagen.
@@ -1046,8 +1066,7 @@ mod tests {
         );
     }
 
-    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten
-    /// gescheiterten Versuch** — und bei einer nicht erreichbaren Datei nie.
+    /// Klarstellung 11: **Der Ausweg erscheint erst nach dem dritten gescheiterten Versuch** — bei einer nicht erreichbaren Datei nie.
     #[test]
     fn test_starting_over_is_offered_only_after_three_failed_attempts() {
         for attempts in 0..ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED {
@@ -1152,6 +1171,8 @@ mod tests {
                 keychain: credentials_keyring::KeychainAvailability::Available,
                 outgoing_transform: None,
                 ai_usage_observers: Default::default(),
+                activity: Default::default(),
+                ai_provider_decorators: Default::default(),
             },
             Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),

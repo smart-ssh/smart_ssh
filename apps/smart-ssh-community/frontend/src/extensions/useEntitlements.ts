@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 
 import type { Entitlements } from "./entitlements";
+import { EVENT } from "../api/eventNames";
+import { listenTyped } from "../api/listenTyped";
 
 export interface UseEntitlementsResult {
   entitlements: Entitlements | null;
@@ -32,8 +33,8 @@ export function useEntitlements(): UseEntitlementsResult {
         if (!cancelled) setLoading(false);
       });
 
-    const unlistenPromise = listen<Entitlements>("entitlements:changed", (event) => {
-      if (!cancelled) setEntitlements(event.payload);
+    const unlistenPromise = listenTyped(EVENT.ENTITLEMENTS_CHANGED, (payload) => {
+      if (!cancelled) setEntitlements(payload);
     });
 
     return () => {

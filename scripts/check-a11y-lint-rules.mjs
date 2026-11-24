@@ -44,6 +44,13 @@ const PRINTED_PREFIX = "jsx_a11y/";
 /** Präfixe, unter denen `.oxlintrc.json` die Regeln nennen darf. */
 const CONFIG_PREFIXES = ["jsx-a11y/", "jsx_a11y/"];
 
+/**
+ * Issue #912: Regeln außerhalb von jsx-a11y, die in `.oxlintrc.json` ausdrücklich
+ * `error` sein müssen (oxlint meldet `exhaustive-deps` standardmäßig nur als
+ * Warnung, und eine Warnung lässt CI nicht scheitern).
+ */
+export const REQUIRED_ERROR_RULES = ["react/rules-of-hooks", "react/exhaustive-deps"];
+
 /** Strukturfehler: eine Eingabe ist nicht eindeutig lesbar. */
 export class ParseError extends Error {}
 
@@ -150,6 +157,21 @@ export function findA11yRuleProblems({ enabled, configured }) {
   return problems;
 }
 
+/**
+ * Prüft, dass jede Regel aus REQUIRED_ERROR_RULES in der Konfiguration mit
+ * `error` steht. Liefert die Namen der Regeln, bei denen das nicht stimmt.
+ */
+export function findRequiredRuleProblems(configText, required = REQUIRED_ERROR_RULES) {
+  const config = parseJsonObject(configText, CONFIG_FILE);
+  const rules = config.rules ?? {};
+  if (rules === null || typeof rules !== "object" || Array.isArray(rules)) {
+    fail(`\`rules\` in ${CONFIG_FILE} ist kein Objekt`);
+  }
+  return required
+    .filter((name) => severityOf(rules[name]) !== "error")
+    .map((name) => ({ name, severity: severityOf(rules[name]) }));
+}
+
 /** Ruft das installierte oxlint mit `--print-config` auf und liefert stdout. */
 export function runOxlintPrintConfig(frontendDir = FRONTEND_DIR) {
   const bin = path.join(frontendDir, "node_modules/oxlint/bin/oxlint");
@@ -172,8 +194,13 @@ export function runOxlintPrintConfig(frontendDir = FRONTEND_DIR) {
  */
 export function checkA11yRules({ frontendDir = FRONTEND_DIR, printConfig = runOxlintPrintConfig } = {}) {
   const enabled = parseEnabledA11yRules(printConfig(frontendDir));
-  const configured = parseConfiguredA11yRules(fs.readFileSync(path.join(frontendDir, CONFIG_FILE), "utf8"));
-  return { problems: findA11yRuleProblems({ enabled, configured }), enabledCount: enabled.length };
+  const configText = fs.readFileSync(path.join(frontendDir, CONFIG_FILE), "utf8");
+  const configured = parseConfiguredA11yRules(configText);
+  return {
+    problems: findA11yRuleProblems({ enabled, configured }),
+    requiredProblems: findRequiredRuleProblems(configText),
+    enabledCount: enabled.length,
+  };
 }
 
 /** Meldungszeile für einen Fund, mit Regelname und Abhilfe. */
@@ -188,7 +215,16 @@ export function describeProblem(p) {
 
 function main() {
   try {
-    const { problems, enabledCount } = checkA11yRules();
+    const { problems, requiredProblems, enabledCount } = checkA11yRules();
+    if (requiredProblems.length > 0) {
+      console.error(`Pflichtregeln müssen Fehler sein (Issue #912); ${requiredProblems.length} Abweichung(en):`);
+      for (const p of requiredProblems) {
+        console.error(
+          `  - ${p.name} steht in ${CONFIG_FILE} mit Schweregrad ${JSON.stringify(p.severity)} statt "error" — als "${p.name}": "error" eintragen`,
+        );
+      }
+      process.exitCode = 1;
+    }
     if (problems.length > 0) {
       console.error(
         `jsx-a11y-Regeln müssen Fehler sein (Spec 0100 A6.1, ADR 0116); ${problems.length} Abweichung(en):`,
@@ -197,6 +233,7 @@ function main() {
       process.exitCode = 1;
       return;
     }
+    if (requiredProblems.length > 0) return;
     console.log(`jsx-a11y-Regeln ok: alle ${enabledCount} aktiven Regeln stehen mit "error" in ${CONFIG_FILE}.`);
   } catch (err) {
     const message = err instanceof ParseError ? err.message : `${err.stack ?? err}`;

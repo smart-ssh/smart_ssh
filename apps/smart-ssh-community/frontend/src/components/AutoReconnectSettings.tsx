@@ -1,14 +1,16 @@
+import type { TranslationKey } from "../i18nTypes";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { StatusSquare } from "./ui";
 import {
   AUTO_RECONNECT_SECONDS,
   type AutoReconnectSeconds,
   DEFAULT_AUTO_RECONNECT_SECONDS,
   loadAutoReconnectSeconds,
   saveAutoReconnectSeconds,
-} from "../autoReconnectSettings";
+} from "../settings/autoReconnectSettings";
 
-const LABEL_KEY: Record<AutoReconnectSeconds, string> = {
+const LABEL_KEY: Record<AutoReconnectSeconds, TranslationKey> = {
   0: "autoReconnect.off",
   30: "autoReconnect.seconds30",
   60: "autoReconnect.seconds60",
@@ -41,20 +43,21 @@ export function AutoReconnectSettings() {
   };
 
   return (
-    <div className="mt-6">
+    <fieldset className="mt-6 border-t border-border pt-3">
+      <legend className="text-label pr-2">{t("autoReconnect.label")}</legend>
       {error && (
-        <p role="alert" className="mb-2 rounded bg-red-950 px-3 py-2 text-sm text-red-300">
-          {error}
+        <p role="alert" className="mb-2 flex items-center gap-2 border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
+          <StatusSquare tone="danger" />{error}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-slate-300">
-        {t("autoReconnect.label")}
+      <div className="flex items-center gap-2 text-sm text-fg-muted">
         <select
+          aria-label={t("autoReconnect.label")}
           value={seconds}
           onChange={(e) => handleChange(Number(e.target.value) as AutoReconnectSeconds)}
           // Same look as `FIELD_CONTROL_CLASS`, but the native focus outline stays: WebKit
           // shows no ring-based focus style on a `<select>`.
-          className="rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100"
+          className="border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg narrow:min-h-11"
         >
           {AUTO_RECONNECT_SECONDS.map((value) => (
             <option key={value} value={value}>
@@ -62,7 +65,7 @@ export function AutoReconnectSettings() {
             </option>
           ))}
         </select>
-      </label>
-    </div>
+      </div>
+    </fieldset>
   );
 }

@@ -21,6 +21,7 @@
 //! das Ablehnen offener Bestätigungen beim Schließen ohne `AppHandle`
 //! getestet sind.
 
+use crate::error::CommandError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -30,9 +31,9 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::ActionUserDecision;
 use crate::error::CommandResult;
 use crate::events::{emit_mcp_action_tab_requested, ConnectionStatus, EventEmitter};
-use crate::poison::lock_tolerating_poison;
 use crate::session::{Session, SessionManager};
 use crate::state::{ActionId, SessionId};
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Meldung an das Frontend, wenn ein Nutzer-Kommando (Chat, Terminal) eine
 /// MCP-Sitzung trifft. Die MCP-Sitzung hat keinen Nutzer-Chat und kein
@@ -260,7 +261,7 @@ impl McpSessionRegistry {
         let session_id = *inner.current.get(key)?;
         match sessions.get(session_id) {
             Some(session)
-                if *lock_tolerating_poison(&session.status) == ConnectionStatus::Connected =>
+                if *lock_tolerating_poison(&session.conn.status) == ConnectionStatus::Connected =>
             {
                 Some(session_id)
             }
@@ -363,7 +364,10 @@ impl McpSessionRegistry {
     /// MCP-Sitzung nimmt keine Nutzer-Eingaben an.
     pub fn ensure_user_session(&self, session_id: SessionId) -> CommandResult<()> {
         if self.is_mcp_session(session_id) {
-            return Err(MCP_SESSION_NOT_INTERACTIVE_MESSAGE.into());
+            return Err(CommandError::with_code(
+                MCP_SESSION_NOT_INTERACTIVE_MESSAGE,
+                "MCP_SESSION_NOT_INTERACTIVE",
+            ));
         }
         Ok(())
     }

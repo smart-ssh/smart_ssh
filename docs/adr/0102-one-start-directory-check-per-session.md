@@ -1,6 +1,9 @@
 # ADR 0102 — Eine Startverzeichnis-Prüfung und ein Hinweis pro Sitzung
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0102 (§4), Issue #9
 
 ## Problem

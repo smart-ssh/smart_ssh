@@ -21,16 +21,50 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-use ssh_manager_core::ssh::SftpSession;
+use ssh_manager_core::{ssh::SftpSession, sync::lock_tolerating_poison};
 
 use crate::commands::BrowserAccess;
 use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::SessionId;
 
+/// How sudo authenticated when the elevated channel was opened (audit only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SudoAuth {
+    #[default]
+    Nopasswd,
+    Password,
+}
+
+#[cfg(test)]
+impl ElevatedSftp {
+    /// Channel opened with a passwordless sudo rule.
+    pub fn new(target_user: String, sftp: Box<dyn SftpSession>) -> Self {
+        Self {
+            target_user,
+            sudo_auth: SudoAuth::Nopasswd,
+            server_logging: false,
+            sftp,
+        }
+    }
+}
+
+impl SudoAuth {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Nopasswd => "nopasswd",
+            Self::Password => "password",
+        }
+    }
+}
+
 pub struct ElevatedSftp {
     /// Ziel-Nutzer der Rechteerhöhung (Default `root`).
     pub target_user: String,
+    /// How sudo authenticated for this channel (audit line of each change).
+    pub sudo_auth: SudoAuth,
+    /// Issue #1192: `sftp-server` was started with `-l INFO -f AUTHPRIV`.
+    pub server_logging: bool,
     pub sftp: Box<dyn SftpSession>,
 }
 
@@ -49,6 +83,10 @@ pub struct ElevatedSftp {
 #[derive(Clone, Default)]
 pub struct ElevatedSftpSlot {
     channel: Arc<AsyncMutex<Option<ElevatedSftp>>>,
+    /// Copy of the channel's `sudo_auth`, readable without the channel lock.
+    sudo_auth: SudoAuth,
+    /// Copy of the channel's `server_logging` (Issue #1192).
+    server_logging: bool,
     /// Spec 0084, §9 (Klarstellung 2026-09-28): der **sofort** wirksame
     /// Teil des Widerrufs.
     ///
@@ -62,6 +100,10 @@ pub struct ElevatedSftpSlot {
     /// Zugriff prüft ihn — damit endet die Nutzbarkeit im selben Moment, in
     /// dem der Nutzer ausschaltet, umschaltet oder trennt.
     revoked: Arc<std::sync::atomic::AtomicBool>,
+    /// Issue #1193: time of the last elevated activity (idle timer).
+    activity: idle::Activity,
+    /// Issue #1193: wakes the idle timer task when the channel is revoked.
+    revoked_wake: Arc<tokio::sync::Notify>,
     /// Nur für Tests (Spec 0085, §6): ein Haltepunkt **hinter** dem
     /// Schnellabbruch einer Operation und **vor** dem Anfordern der
     /// Kanal-Sperre — s. `commands::elevation::elevated_operation`.
@@ -90,8 +132,12 @@ type BeforeOperationHook = Box<dyn Fn() + Send>;
 impl ElevatedSftpSlot {
     fn with_channel(channel: ElevatedSftp) -> Self {
         Self {
+            sudo_auth: channel.sudo_auth,
+            server_logging: channel.server_logging,
             channel: Arc::new(AsyncMutex::new(Some(channel))),
             revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            activity: idle::Activity::default(),
+            revoked_wake: Arc::new(tokio::sync::Notify::new()),
             #[cfg(test)]
             before_operation_hook: Arc::new(StdMutex::new(None)),
         }
@@ -103,7 +149,7 @@ impl ElevatedSftpSlot {
     /// Befehl gerade festhält.
     #[cfg(test)]
     pub(crate) fn set_before_operation_hook(&self, hook: BeforeOperationHook) {
-        *self.before_operation_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.before_operation_hook) = Some(hook);
     }
 
     /// Ruft den Haltepunkt aus [`Self::before_operation_hook`], falls einer
@@ -111,7 +157,7 @@ impl ElevatedSftpSlot {
     pub(crate) fn run_before_operation_hook(&self) {
         #[cfg(test)]
         {
-            let hook = self.before_operation_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.before_operation_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
@@ -129,6 +175,14 @@ impl ElevatedSftpSlot {
     /// `commands::elevation::BrowserSftpGuard::sftp`) — auch dann, wenn der
     /// Kanalwert selbst noch dasteht, weil ein Halter die Sperre gerade
     /// belegt.
+    pub(crate) fn sudo_auth(&self) -> SudoAuth {
+        self.sudo_auth
+    }
+
+    pub(crate) fn server_logging(&self) -> bool {
+        self.server_logging
+    }
+
     pub(crate) fn is_revoked(&self) -> bool {
         self.revoked.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -147,6 +201,28 @@ impl ElevatedSftpSlot {
     fn mark_revoked(&self) {
         self.revoked
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.revoked_wake.notify_one();
+    }
+
+    /// Issue #1193: records elevated activity for the idle timer.
+    pub(crate) fn touch(&self) {
+        self.activity.touch();
+    }
+
+    pub(crate) fn activity_handle(&self) -> idle::Activity {
+        self.activity.clone()
+    }
+
+    fn activity(&self) -> &idle::Activity {
+        &self.activity
+    }
+
+    fn revoked_wake(&self) -> &tokio::sync::Notify {
+        &self.revoked_wake
+    }
+
+    fn same_channel(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.channel, &other.channel)
     }
 
     /// Widerruft (sofort, s. [`Self::mark_revoked`]) und nimmt den Kanal
@@ -192,7 +268,9 @@ impl ElevatedSftpSlot {
 /// `test_t8b_activation_between_the_two_removal_steps_leaves_no_entry`.
 #[derive(Default)]
 pub struct ElevatedSftpRegistry {
-    slots: StdMutex<HashMap<SessionId, ElevatedSftpSlot>>,
+    slots: Arc<StdMutex<HashMap<SessionId, ElevatedSftpSlot>>>,
+    /// Issue #1193: idle timeout setting and switch-off notification.
+    idle: Arc<idle::IdleShared>,
     /// Issue #622: laufende Datei-Operationen aller Sitzungen. Jede Stelle
     /// unten, die einen Kanal widerruft, stoppt auch dessen Operationen.
     ops: Arc<FileOps>,
@@ -214,13 +292,46 @@ impl ElevatedSftpRegistry {
         &self.ops
     }
 
+    pub(crate) fn idle(&self) -> &Arc<idle::IdleShared> {
+        &self.idle
+    }
+
+    /// Issue #1193: one timer task per channel; it ends when the channel is
+    /// revoked (any path) or replaced.
+    fn start_idle_timer(&self, session_id: SessionId, slot: ElevatedSftpSlot) {
+        let timer = idle::IdleTimer {
+            slots: self.slots.clone(),
+            ops: self.ops.clone(),
+            shared: self.idle.clone(),
+            session_id,
+            slot,
+        };
+        match self.idle.spawner() {
+            Some(spawn) => spawn(session_id, Box::pin(timer.run())),
+            None => tracing::error!("no task scope for the elevated idle timer"),
+        }
+    }
+
+    /// Only for tests of the idle timer: starts the timer of an inserted channel.
+    #[cfg(test)]
+    pub(crate) fn start_idle_timer_for_tests(&self, session_id: SessionId) {
+        let slot = lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned();
+        if let Some(slot) = slot {
+            self.start_idle_timer(session_id, slot);
+        }
+    }
+
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
     pub(crate) fn slot(
         &self,
         session_id: SessionId,
         _access: &BrowserAccess,
     ) -> Option<ElevatedSftpSlot> {
-        self.slots.lock().unwrap().get(&session_id).cloned()
+        lock_tolerating_poison(&self.slots)
+            .get(&session_id)
+            .cloned()
     }
 
     /// Spec 0084, A2.2: trägt `channel` **nur** ein, wenn `session_id` zu
@@ -241,11 +352,13 @@ impl ElevatedSftpRegistry {
         channel: ElevatedSftp,
         _access: &BrowserAccess,
     ) -> Result<Option<ElevatedSftpSlot>, ()> {
-        let mut slots = self.slots.lock().unwrap();
+        let mut slots = lock_tolerating_poison(&self.slots);
         if sessions.get(session_id).is_none() {
             return Err(());
         }
-        let previous = slots.insert(session_id, ElevatedSftpSlot::with_channel(channel));
+        let new_slot = ElevatedSftpSlot::with_channel(channel);
+        let previous = slots.insert(session_id, new_slot.clone());
+        self.start_idle_timer(session_id, new_slot);
         // Sofort, noch unter der Zuordnungs-Sperre: ab hier kann kein
         // Befehl den alten Kanal mehr benutzen — auch keiner, der schon auf
         // dessen Sperre wartet.
@@ -262,7 +375,7 @@ impl ElevatedSftpRegistry {
     /// laufenden Vorgang und darf deshalb nicht unter der
     /// Zuordnungs-Sperre laufen.
     fn take(&self, session_id: SessionId, _access: &BrowserAccess) -> Option<ElevatedSftpSlot> {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = &slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -298,12 +411,12 @@ impl ElevatedSftpRegistry {
         let session = sessions.remove(session_id);
         #[cfg(test)]
         {
-            let hook = self.interleave_hook.lock().unwrap().take();
+            let hook = lock_tolerating_poison(&self.interleave_hook).take();
             if let Some(hook) = hook {
                 hook();
             }
         }
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
@@ -314,11 +427,16 @@ impl ElevatedSftpRegistry {
     /// Issue #355: a reconnect keeps the session but never its elevated
     /// channel (it belonged to the dead connection). The channel is revoked
     /// like on disconnect; the user elevates again.
-    pub(crate) fn revoke_session(&self, session_id: SessionId) {
-        let slot = self.slots.lock().unwrap().remove(&session_id);
+    ///
+    /// Returns whether an active channel was revoked.
+    pub(crate) fn revoke_session(&self, session_id: SessionId) -> bool {
+        let slot = lock_tolerating_poison(&self.slots).remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
             self.ops.stop_elevated(session_id, StopReason::Revoked);
+            true
+        } else {
+            false
         }
     }
 
@@ -328,9 +446,7 @@ impl ElevatedSftpRegistry {
     /// separat geprüft (T8/T8b).
     #[cfg(test)]
     pub(crate) fn insert_for_tests(&self, session_id: SessionId, channel: ElevatedSftp) {
-        self.slots
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.slots)
             .insert(session_id, ElevatedSftpSlot::with_channel(channel));
     }
 
@@ -338,22 +454,28 @@ impl ElevatedSftpRegistry {
     /// ersten Durchlauf verbraucht.
     #[cfg(test)]
     fn set_interleave_hook(&self, hook: InterleaveHook) {
-        *self.interleave_hook.lock().unwrap() = Some(hook);
+        *lock_tolerating_poison(&self.interleave_hook) = Some(hook);
     }
 }
 
+pub(crate) mod idle;
+pub(crate) use idle::install as install_idle_timer;
+pub(crate) use idle::Activity as IdleActivity;
+mod probe;
+pub(crate) use probe::run_probe;
 use ssh_manager_core::ssh::elevated::{
-    classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
-    is_valid_target_user, parse_sftp_server_probe, parse_sftp_server_safety_probe,
-    sftp_server_probe_command, sftp_server_safety_probe_command, sudo_check_command, sudoers_line,
-    SftpServerSafety, SudoCheck, DEFAULT_ELEVATION_USER,
+    classify_sudo_check, elevated_sftp_command, elevated_sftp_password_command,
+    is_plausible_sftp_server_path, is_valid_target_user, new_sudo_prompt_marker,
+    parse_sftp_server_probe, parse_sftp_server_safety_probe, sftp_server_probe_command,
+    sftp_server_safety_probe_command, sudo_check_command, sudoers_line, SftpServerSafety,
+    SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
 use app_logic::dto::{
     ElevationDisableDto, ElevationFailureDto, ElevationFailureKind, ElevationResultDto,
     ElevationWarningDto, ElevationWarningKind,
 };
-use app_logic::error::{CommandError, CommandResult};
+use app_logic::error::CommandResult;
 
 /// Spec 0084, A1/A2: alles, was das Einschalten des erhöhten Kanals über die
 /// Sitzungsgrenze hinweg braucht — gebündelt, weil `enable` sonst über die
@@ -364,10 +486,6 @@ pub(crate) struct ElevationContext<'a> {
     pub session_id: SessionId,
     pub session: &'a Session,
 }
-
-/// Obergrenze je Probe-Kommando (Pfad-Erkennung, `sudo -n -l`) — `-n` lässt
-/// sudo nie auf ein Passwort warten, das hier ist nur das Sicherheitsnetz.
-const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// Liefert bewusst `Ok`: ein gescheiterter Aktivierungsversuch ist ein
 /// strukturiertes Ergebnis für die Oberfläche (Spec 0067, A1–A3), kein
@@ -391,31 +509,74 @@ fn failure(
         }),
         warning: None,
         running_operations: Vec::new(),
+        server_logging: false,
+        sudo_auth: None,
     })
 }
 
-async fn run_probe(
-    session: &Session,
-    command: &str,
-) -> Result<ssh_manager_core::ssh::CommandOutput, String> {
-    let mut transport = session.transport.lock().await;
-    match tokio::time::timeout(PROBE_TIMEOUT, transport.execute(command)).await {
-        Ok(Ok(output)) => Ok(output),
-        Ok(Err(err)) => Err(err.to_string()),
-        Err(_) => Err("Zeitüberschreitung".to_string()),
-    }
+/// Issue #1194, Spec 0067 A5: the server profile no longer allows elevated
+/// rights. Revokes the elevated channel of every session to `server_id`
+/// (the same revoke as on disconnect/reconnect) and returns the sessions
+/// whose channel was active.
+pub(crate) fn revoke_for_server(
+    sessions: &SessionManager,
+    registry: &ElevatedSftpRegistry,
+    server_id: ssh_manager_core::shared::ServerId,
+) -> Vec<SessionId> {
+    sessions
+        .snapshot()
+        .into_iter()
+        .filter(|entry| entry.server_id == server_id)
+        .filter(|entry| registry.revoke_session(entry.session_id))
+        .map(|entry| entry.session_id)
+        .collect()
 }
 
-/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein. Nie
-/// ein Passwort (`sudo -n`), nie hängen (Timeouts), bei jedem Fehler eine
+/// Issue #1194: [`enable`] for a stored server. Refuses with
+/// `DisabledForServer` — before any probe reaches the transport — when the
+/// profile does not allow elevated rights.
+pub(crate) async fn enable_for_server(
+    ctx: &ElevationContext<'_>,
+    server: &ssh_manager_core::profiles::Server,
+    requested_user: Option<&str>,
+    confirm_stop: bool,
+    access: &BrowserAccess,
+) -> CommandResult<ElevationResultDto> {
+    if !server.elevation_allowed {
+        let target_user = requested_user
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .unwrap_or(DEFAULT_ELEVATION_USER);
+        return failure(
+            target_user,
+            None,
+            ElevationFailureKind::DisabledForServer,
+            None,
+            None,
+        );
+    }
+    enable(
+        ctx,
+        &server.username,
+        server.sftp_server_path.as_deref(),
+        requested_user,
+        confirm_stop,
+        access,
+    )
+    .await
+}
+
+/// Spec 0067, A1–A3: schaltet den erhöhten Kanal für `ctx.session` ein.
+/// `sudo -n`, oder (Issue #1191) mit dem gespeicherten sudo-Passwort; nie hängen (Timeouts), bei jedem Fehler eine
 /// strukturierte Meldung statt eines kryptischen Fehlers. Die Probe-Ausgaben
 /// (inkl. sudo-stderr) gehen nur in diese Meldung, nie in Chat/KI-Kontext.
 ///
 /// Spec 0084, A2.2: Der geöffnete Kanal wird nur eingetragen, solange die
-/// Sitzung noch steht — sonst `Err("Session nicht gefunden")` und der Kanal
+/// Sitzung noch steht — sonst `Err("session not found")` und der Kanal
 /// wird verworfen.
 ///
-/// **Sperr-Reihenfolge:** Der Widerruf des verdrängten Vorgängers steht
+/// **Sperr-Reihenfolge** (docs/architecture.md, "Lock hierarchy of a
+/// session"): Der Widerruf des verdrängten Vorgängers steht
 /// bewusst außerhalb des Blocks, der `session.transport` sperrt. Läge er
 /// darin, entstünde mit `commands::disconnect` (das die Kanal-Sperre
 /// freigibt und dann den Transport nimmt) ein Sperrzyklus
@@ -446,6 +607,8 @@ pub(crate) async fn enable(
                 failure: None,
                 warning: None,
                 running_operations: running,
+                server_logging: false,
+                sudo_auth: None,
             });
         }
         stop_running_and_wait(ctx.registry, ctx.session_id).await;
@@ -456,6 +619,7 @@ pub(crate) async fn enable(
 /// [`enable`] ohne die Prüfung auf laufende Operationen (Issue #622). Der
 /// bisherige Kanal wird ohne Rücksicht auf sie widerrufen — die Widerrufs-
 /// Tests (Spec 0084/0085) prüfen damit den Mechanismus selbst.
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub(crate) async fn enable_after_confirmation(
     ctx: &ElevationContext<'_>,
     login: &str,
@@ -530,15 +694,35 @@ pub(crate) async fn enable_after_confirmation(
         SftpServerSafety::Unsafe { path } => Some(path),
     };
 
-    let check_cmd =
-        sudo_check_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let check = match run_probe(session, &check_cmd).await {
+    // Issue #1192: first the variant with the logging arguments; only when
+    // it is not allowed passwordless, the plain command (existing rules).
+    let logging_cmd = sudo_check_command(&path, &target_user, true)
+        .expect("Pfad und Nutzer wurden oben validiert");
+    let logging_check = match run_probe(session, &logging_cmd).await {
         Ok(output) => classify_sudo_check(&output),
         Err(detail) => SudoCheck::Failed(detail),
     };
+    let nopasswd_logging = logging_check == SudoCheck::Allowed;
+    let check = if nopasswd_logging {
+        SudoCheck::Allowed
+    } else {
+        let check_cmd = sudo_check_command(&path, &target_user, false)
+            .expect("Pfad und Nutzer wurden oben validiert");
+        match run_probe(session, &check_cmd).await {
+            Ok(output) => classify_sudo_check(&output),
+            Err(detail) => SudoCheck::Failed(detail),
+        }
+    };
     let sudoers = || sudoers_line(login, &path, &target_user);
+    // Issue #1191: password path — only when `sudo -n -l` says a password is
+    // needed and one is stored for the server. Nothing else switches to it.
+    let stored_password = session.safety.sudo_password.get();
+    let mut use_password = false;
     match check {
         SudoCheck::Allowed => {}
+        SudoCheck::PasswordRequired if stored_password.is_some() => {
+            use_password = true;
+        }
         SudoCheck::PasswordRequired | SudoCheck::NotAllowed if unsafe_path.is_some() => {
             // Keine sudoers-Zeile für ein Binary, das ein anderer Nutzer
             // austauschen könnte.
@@ -597,14 +781,20 @@ pub(crate) async fn enable_after_confirmation(
         }
     }
 
-    let command =
-        elevated_sftp_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
-    let opened = {
+    let opened = if use_password {
+        open_with_password(session, &path, &target_user, stored_password.as_deref()).await
+    } else {
+        let command = elevated_sftp_command(&path, &target_user, nopasswd_logging)
+            .expect("Pfad und Nutzer wurden oben validiert");
         let mut transport = session.transport.lock().await;
-        transport.open_sftp_via_exec(&command).await
+        transport
+            .open_sftp_via_exec(&command)
+            .await
+            .map(|sftp| (sftp, nopasswd_logging))
+            .map_err(OpenFailure::Other)
     };
     match opened {
-        Ok(sftp) => {
+        Ok((sftp, server_logging)) => {
             // Spec 0084, A2.2: Zwischen den Proben oben und diesem Eintrag
             // liegen mehrere `.await`-Punkte — die Sitzung kann inzwischen
             // getrennt worden sein. Dann wird der eben geöffnete Kanal hier
@@ -612,12 +802,18 @@ pub(crate) async fn enable_after_confirmation(
             // Sitzung stehen zu bleiben.
             let channel = ElevatedSftp {
                 target_user: target_user.clone(),
+                sudo_auth: if use_password {
+                    SudoAuth::Password
+                } else {
+                    SudoAuth::Nopasswd
+                },
+                server_logging,
                 sftp,
             };
             let previous = ctx
                 .registry
                 .insert_if_session_alive(ctx.sessions, ctx.session_id, channel, access)
-                .map_err(|()| CommandError::from("Session nicht gefunden"))?;
+                .map_err(|()| app_logic::session::session_not_found())?;
             // Spec 0084, §9 (Klarstellung 2026-09-28): Wer den bisherigen
             // Kanal noch aus einem laufenden Befehl hält, darf ihn über das
             // Neu-Aktivieren hinaus nicht weiter benutzen — sonst liefe ein
@@ -630,6 +826,8 @@ pub(crate) async fn enable_after_confirmation(
                 target_user = %target_user,
                 sftp_server_path = %path,
                 source = "manual",
+                sudo_auth = if use_password { "password" } else { "nopasswd" },
+                server_logging,
                 "file browser elevated rights enabled"
             );
             Ok(ElevationResultDto {
@@ -642,15 +840,80 @@ pub(crate) async fn enable_after_confirmation(
                     path,
                 }),
                 running_operations: Vec::new(),
+                server_logging,
+                sudo_auth: Some(if use_password { "password" } else { "nopasswd" }),
             })
         }
-        Err(err) => failure(
+        Err(OpenFailure::WrongPassword) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::WrongSudoPassword,
+            None,
+            None,
+        ),
+        Err(OpenFailure::NotAllowed(line)) => failure(
+            &target_user,
+            path_for_dto,
+            ElevationFailureKind::NotAllowed,
+            sudoers(),
+            Some(line),
+        ),
+        Err(OpenFailure::Other(err)) => failure(
             &target_user,
             path_for_dto,
             ElevationFailureKind::StartFailed,
             None,
             Some(err.to_string()),
         ),
+    }
+}
+
+/// Why opening the elevated channel failed (Issue #1191).
+enum OpenFailure {
+    WrongPassword,
+    NotAllowed(String),
+    Other(ssh_manager_core::ssh::SshError),
+}
+
+/// Issue #1191: opens the channel with `sudo -S -k -p '<marker>'` and the
+/// stored sudo password. The transport writes the password only after the
+/// marker appeared on stderr; the password is not part of any text here.
+/// Issue #1192: first with the logging arguments; when sudo says that command
+/// is not allowed, one retry without arguments (fresh marker). Returns the
+/// channel and whether it logs on the server.
+async fn open_with_password(
+    session: &Session,
+    path: &str,
+    target_user: &str,
+    password: Option<&secrecy::SecretString>,
+) -> Result<(Box<dyn ssh_manager_core::ssh::SftpSession>, bool), OpenFailure> {
+    use ssh_manager_core::ssh::{SshError, SudoPromptError};
+    let Some(password) = password else {
+        return Err(OpenFailure::Other(SshError::ChannelError(
+            "no sudo password stored".to_string(),
+        )));
+    };
+    let mut transport = session.transport.lock().await;
+    let mut logging = true;
+    loop {
+        let marker = new_sudo_prompt_marker();
+        let command = elevated_sftp_password_command(path, target_user, &marker, logging)
+            .expect("Pfad, Nutzer und Marker sind gültig");
+        match transport
+            .open_sftp_via_exec_with_sudo_password(&command, &marker, password)
+            .await
+        {
+            Ok(sftp) => return Ok((sftp, logging)),
+            Err(SudoPromptError::NotAllowed(_)) if logging => logging = false,
+            Err(SudoPromptError::NotAllowed(line)) => return Err(OpenFailure::NotAllowed(line)),
+            Err(SudoPromptError::NoPrompt) => {
+                return Err(OpenFailure::Other(SshError::ChannelError(
+                    "sudo did not ask for the password".to_string(),
+                )))
+            }
+            Err(SudoPromptError::WrongPassword) => return Err(OpenFailure::WrongPassword),
+            Err(SudoPromptError::Failed(err)) => return Err(OpenFailure::Other(err)),
+        }
     }
 }
 
@@ -662,7 +925,7 @@ pub(crate) async fn enable_after_confirmation(
 ///   festhält, scheitert danach beim Zugriff, statt weiter erhöht zu
 ///   arbeiten.
 /// * Eine **unbekannte** Sitzungskennung liefert wie bisher
-///   `Err("Session nicht gefunden")`; „nicht aktiv“ (also `Ok`, ohne dass
+///   `Err("session not found")`; „nicht aktiv“ (also `Ok`, ohne dass
 ///   etwas passiert) gilt nur für eine bekannte Sitzung ohne Kanal (T9).
 ///
 /// Issue #622: Laufen noch erhöhte Operationen, passiert ohne `confirm_stop`
@@ -677,9 +940,7 @@ pub(crate) async fn disable(
     confirm_stop: bool,
     access: &BrowserAccess,
 ) -> CommandResult<ElevationDisableDto> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     let running = registry.ops().running_elevated(session_id);
     if !running.is_empty() {
         if !confirm_stop {
@@ -692,7 +953,11 @@ pub(crate) async fn disable(
     }
     if let Some(slot) = registry.take(session_id, access) {
         if slot.revoke().await {
-            tracing::info!(source = "manual", "file browser elevated rights disabled");
+            tracing::info!(
+                source = "manual",
+                reason = "manual",
+                "file browser elevated rights disabled"
+            );
         }
     }
     Ok(ElevationDisableDto {
@@ -713,9 +978,7 @@ pub(crate) async fn disable_now(
     session_id: SessionId,
     access: &BrowserAccess,
 ) -> CommandResult<()> {
-    if sessions.get(session_id).is_none() {
-        return Err(CommandError::from("Session nicht gefunden"));
-    }
+    app_logic::session::require_session(sessions, session_id)?;
     if let Some(slot) = registry.take(session_id, access) {
         slot.revoke().await;
     }
@@ -738,618 +1001,4 @@ async fn stop_running_and_wait(registry: &ElevatedSftpRegistry, session_id: Sess
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-    use crate::test_support::elevation::{
-        access, fixture, output, transport, working_probes, PATH,
-    };
-    // Issue #149: Die Verschränkungstests T8/T8b warten auf Ereignisse, nicht
-    // auf ein festes Zeitbudget. `HANG_GUARD` greift nur, wenn das Ereignis
-    // nie kommt, und die Meldung nennt dann, worauf der Test wartete.
-    use crate::test_support::waiting::{expect_within, HANG_GUARD};
-
-    #[tokio::test]
-    async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
-        let (probe, check) = working_probes();
-        let (t, log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-
-        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .expect("Sitzung steht, das Aktivieren darf nicht mit Err enden");
-
-        assert!(result.active, "{result:?}");
-        assert_eq!(result.target_user, "root");
-        assert_eq!(result.sftp_server_path.as_deref(), Some(PATH));
-        let log = log.lock().unwrap().clone();
-        assert_eq!(log.last().unwrap(), &format!("sftp-exec:sudo -n {PATH}"));
-        assert!(log
-            .iter()
-            .any(|c| c == &format!("exec:env LC_ALL=C sudo -n -l {PATH}")));
-        assert!(f.is_active().await);
-    }
-
-    #[tokio::test]
-    async fn test_password_required_yields_tailored_sudoers_line_and_no_channel() {
-        let (t, log) = transport(
-            output(0, "/usr/lib/openssh/sftp-server\n", ""),
-            output(1, "", "sudo: a password is required\n"),
-        );
-        let f = fixture(Box::new(t));
-
-        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
-
-        assert!(!result.active);
-        let failure = result.failure.unwrap();
-        assert_eq!(failure.kind, ElevationFailureKind::PasswordRequired);
-        assert_eq!(
-            failure.sudoers_line.as_deref(),
-            Some("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server \"\"")
-        );
-        assert!(!log
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|c| c.starts_with("sftp-exec:")));
-        assert!(!f.is_active().await);
-    }
-
-    fn unsafe_outputs() -> Vec<ssh_manager_core::ssh::CommandOutput> {
-        vec![
-            output(0, &format!("UNSAFE {PATH}\n"), ""),
-            output(0, "garbage", ""),
-            output(4, "", "find: no such file"),
-        ]
-    }
-
-    #[tokio::test]
-    async fn test_unsafe_binary_with_password_required_withholds_sudoers_line() {
-        for safety in unsafe_outputs() {
-            let (mut t, log) = transport(
-                output(0, "/usr/lib/openssh/sftp-server\n", ""),
-                output(1, "", "sudo: a password is required\n"),
-            );
-            t.safety = safety;
-            let f = fixture(Box::new(t));
-
-            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-                .await
-                .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
-
-            assert!(!result.active);
-            let failure = result.failure.unwrap();
-            assert_eq!(failure.kind, ElevationFailureKind::SftpServerUnsafe);
-            assert_eq!(failure.sudoers_line, None);
-            assert_eq!(failure.detail.as_deref(), Some(PATH));
-            assert!(!log
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|c| c.starts_with("sftp-exec:")));
-            assert!(!f.is_active().await);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_unsafe_binary_with_sudo_not_allowed_withholds_sudoers_line() {
-        let (mut t, _log) = transport(
-            output(0, "/usr/lib/openssh/sftp-server\n", ""),
-            output(1, "", "Sorry, user deploy is not allowed to execute it.\n"),
-        );
-        t.safety = output(0, "UNSAFE /usr/lib/openssh\n", "");
-        let f = fixture(Box::new(t));
-        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .unwrap();
-        let failure = result.failure.unwrap();
-        assert_eq!(failure.kind, ElevationFailureKind::SftpServerUnsafe);
-        assert_eq!(failure.sudoers_line, None);
-        assert_eq!(failure.detail.as_deref(), Some("/usr/lib/openssh"));
-    }
-
-    #[tokio::test]
-    async fn test_unsafe_binary_with_sudo_allowed_starts_channel_with_warning() {
-        for safety in unsafe_outputs() {
-            let (probe, check) = working_probes();
-            let (mut t, log) = transport(probe, check);
-            t.safety = safety;
-            let f = fixture(Box::new(t));
-
-            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-                .await
-                .unwrap();
-
-            assert!(result.active, "{result:?}");
-            let warning = result.warning.expect("Warnung bei unsicherem Binary");
-            assert_eq!(warning.kind, ElevationWarningKind::SftpServerUnsafe);
-            assert_eq!(warning.path, PATH);
-            assert!(log
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|c| c.starts_with("sftp-exec:")));
-            assert!(f.is_active().await);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_safe_binary_has_no_warning_and_probe_runs_before_sudo_check() {
-        let (probe, check) = working_probes();
-        let (t, log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .unwrap();
-        assert!(result.active && result.warning.is_none(), "{result:?}");
-        let log = log.lock().unwrap().clone();
-        let pos = |needle: &str| log.iter().position(|c| c.contains(needle)).unwrap();
-        assert!(pos("-prune") < pos("sudo -n -l"));
-        // Der Safety-Probe läuft nie mit sudo.
-        assert!(!log[pos("-prune")].contains("sudo"));
-    }
-
-    #[tokio::test]
-    async fn test_each_prerequisite_failure_is_named() {
-        for (probe, check, expected) in [
-            (
-                output(3, "", ""),
-                output(0, "", ""),
-                ElevationFailureKind::SftpServerNotFound,
-            ),
-            (
-                output(0, "/usr/lib/openssh/sftp-server\n", ""),
-                output(1, "", "sudo: sorry, you must have a tty to run sudo\n"),
-                ElevationFailureKind::RequireTty,
-            ),
-            (
-                output(0, "/usr/lib/openssh/sftp-server\n", ""),
-                output(127, "", "sh: 1: sudo: not found\n"),
-                ElevationFailureKind::SudoMissing,
-            ),
-        ] {
-            let (t, _log) = transport(probe, check);
-            let f = fixture(Box::new(t));
-            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-                .await
-                .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
-            assert_eq!(result.failure.map(|f| f.kind), Some(expected));
-        }
-    }
-
-    #[tokio::test]
-    async fn test_override_path_skips_probe_and_invalid_override_runs_nothing() {
-        let (t, log) = transport(output(3, "", ""), output(0, "", ""));
-        let f = fixture(Box::new(t));
-        let result = enable(
-            &f.ctx(),
-            "deploy",
-            Some("/opt/ssh/sftp-server"),
-            Some("www-data"),
-            false,
-            &access(),
-        )
-        .await
-        .expect("Sitzung steht, das Aktivieren darf nicht mit Err enden");
-        assert!(result.active, "{result:?}");
-        let log = log.lock().unwrap().clone();
-        assert!(
-            !log.iter().any(|c| c.contains("sshd_config")),
-            "keine Probe bei Override"
-        );
-        assert_eq!(
-            log.last().unwrap(),
-            "sftp-exec:sudo -n -u www-data /opt/ssh/sftp-server"
-        );
-
-        let (t, log) = transport(output(0, "", ""), output(0, "", ""));
-        let f = fixture(Box::new(t));
-        let result = enable(
-            &f.ctx(),
-            "deploy",
-            Some("/opt/x; reboot"),
-            None,
-            false,
-            &access(),
-        )
-        .await
-        .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
-        assert_eq!(
-            result.failure.map(|f| f.kind),
-            Some(ElevationFailureKind::InvalidPath)
-        );
-        assert!(
-            log.lock().unwrap().is_empty(),
-            "nichts darf ausgeführt werden"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_start_failure_is_reported_and_leaves_no_channel() {
-        let (probe, check) = working_probes();
-        let (mut t, _log) = transport(probe, check);
-        t.start_fails = true;
-        let f = fixture(Box::new(t));
-
-        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
-
-        assert_eq!(
-            result.failure.map(|f| f.kind),
-            Some(ElevationFailureKind::StartFailed)
-        );
-        assert!(!f.is_active().await);
-    }
-
-    // --- Spec 0084, A2: kein erhöhter Kanal überlebt seine Sitzung ---------
-
-    /// Spec 0084, T6: Ist ein Kanal aktiv und wird die Sitzung über die eine
-    /// Funktion aus A2.1 entfernt, bleibt kein Eintrag in der Zuordnung
-    /// zurück. Scheitert, wenn diese Funktion den Eintrag nicht löscht.
-    #[tokio::test]
-    async fn test_t6_removing_a_session_also_removes_its_elevated_channel() {
-        let (probe, check) = working_probes();
-        let (t, _log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-        enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .expect("Vorbedingung: Aktivieren gelingt");
-        assert!(f.is_active().await, "Vorbedingung: Kanal ist aktiv");
-
-        let removed = f.registry.remove_session(&f.sessions, f.session_id);
-
-        assert!(removed.is_some(), "die Sitzung selbst muss entfernt sein");
-        assert!(
-            f.registry.slot(f.session_id, &access()).is_none(),
-            "A2.1: der erhöhte Kanal darf seine Sitzung nicht überleben"
-        );
-    }
-
-    /// Issue #657: Several sessions to one server are independent — an active
-    /// elevated channel belongs to its session only, and revoking another
-    /// session leaves it alone.
-    #[tokio::test]
-    async fn test_elevated_channel_of_one_session_is_invisible_to_another() {
-        let (probe, check) = working_probes();
-        let (t, _log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-        enable(&f.ctx(), "deploy", None, None, false, &access())
-            .await
-            .expect("precondition: enabling succeeds");
-        let other = SessionId::new_v4();
-
-        assert!(f.registry.slot(other, &access()).is_none());
-        f.registry.revoke_session(other);
-        assert!(
-            f.registry.slot(f.session_id, &access()).is_some(),
-            "revoking another session must not touch this session's channel"
-        );
-    }
-
-    /// Spec 0084, T8: Das Aktivieren steht nach den Proben, unmittelbar vor
-    /// dem Eintrag, still; in diesem Moment wird die Sitzung über A2.1
-    /// entfernt. Danach läuft das Aktivieren weiter und muss mit dem
-    /// bestehenden Fehler enden, ohne einen Eintrag zu hinterlassen.
-    /// Scheitert, wenn die Prüfung aus A2.2 fehlt.
-    #[tokio::test]
-    async fn test_t8_activation_finishing_after_the_session_was_removed_is_rejected() {
-        let reached = Arc::new(tokio::sync::Notify::new());
-        let gate = Arc::new(tokio::sync::Notify::new());
-        let (probe, check) = working_probes();
-        let (mut t, _log) = transport(probe, check);
-        t.open_reached = Some(reached.clone());
-        t.open_gate = Some(gate.clone());
-        let f = Arc::new(fixture(Box::new(t)));
-
-        let f_for_enable = f.clone();
-        let activation = tokio::spawn(async move {
-            enable(&f_for_enable.ctx(), "deploy", None, None, false, &access()).await
-        });
-
-        // Warten, bis das Aktivieren wirklich vor dem Eintrag steht — sonst
-        // prüfte der Test eine andere Verschränkung als gemeint.
-        expect_within(
-            "das Aktivieren erreicht den Öffnen-Schritt",
-            || format!("Aktivierungs-Task beendet: {}", activation.is_finished()),
-            reached.notified(),
-        )
-        .await;
-
-        f.registry.remove_session(&f.sessions, f.session_id);
-        gate.notify_one();
-
-        let result = expect_within(
-            "das Aktivieren endet nach dem Entfernen der Sitzung",
-            || "Aktivierung hängt nach der Freigabe am Öffnen-Schritt".to_string(),
-            activation,
-        )
-        .await
-        .expect("der Aktivierungs-Task darf nicht panisch enden");
-
-        let err = result.expect_err("A2.2: ohne Sitzung darf nicht aktiviert werden");
-        assert_eq!(err.message, "Session nicht gefunden");
-        assert!(
-            f.registry.slot(f.session_id, &access()).is_none(),
-            "A2.2: kein Eintrag für eine bereits entfernte Sitzung"
-        );
-    }
-
-    /// Spec 0084, T8b: dieselbe Verschränkung, aber das Aktivieren läuft
-    /// vollständig durch, während A2.1 zwischen `SessionManager::remove` und
-    /// dem Löschen des Zuordnungs-Eintrags steht (Haltepunkt
-    /// `interleave_hook`). Scheitert bei falscher Reihenfolge in A2.1:
-    /// löschte A2.1 erst den Eintrag und entfernte danach die Sitzung, sähe
-    /// das Aktivieren die Sitzung noch, trüge den Kanal ein — und der
-    /// Eintrag überlebte die Sitzung.
-    #[tokio::test]
-    async fn test_t8b_activation_between_the_two_removal_steps_leaves_no_entry() {
-        let reached = Arc::new(tokio::sync::Notify::new());
-        let gate = Arc::new(tokio::sync::Notify::new());
-        let (probe, check) = working_probes();
-        let (mut t, _log) = transport(probe, check);
-        t.open_reached = Some(reached.clone());
-        t.open_gate = Some(gate.clone());
-        let f = Arc::new(fixture(Box::new(t)));
-
-        let f_for_enable = f.clone();
-        let activation = tokio::spawn(async move {
-            enable(&f_for_enable.ctx(), "deploy", None, None, false, &access()).await
-        });
-        expect_within(
-            "das Aktivieren erreicht den Öffnen-Schritt",
-            || format!("Aktivierungs-Task beendet: {}", activation.is_finished()),
-            reached.notified(),
-        )
-        .await;
-
-        // Der Haltepunkt läuft mitten in A2.1: er gibt das Aktivieren frei
-        // und wartet, bis es ganz durch ist, bevor A2.1 seinen zweiten
-        // Schritt macht.
-        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
-        let gate_for_hook = gate.clone();
-        f.registry.set_interleave_hook(Box::new(move || {
-            gate_for_hook.notify_one();
-            // Synchroner Haltepunkt: `expect_within` ist hier nicht nutzbar,
-            // daher dieselbe Obergrenze direkt.
-            if let Err(err) = done_rx.recv_timeout(HANG_GUARD) {
-                panic!(
-                    "Haltepunkt in A2.1: Warten auf erwartetes Ereignis \
-                     „das Aktivieren endet innerhalb des Haltepunkts“ \
-                     erfolglos nach {} s ({err})",
-                    HANG_GUARD.as_secs()
-                );
-            }
-        }));
-
-        // `spawn_blocking`: Der Haltepunkt blockiert seinen Thread, bis das
-        // Aktivieren durch ist — auf einem Scheduler-Thread käme das
-        // Aktivieren dann nie zum Zug.
-        let f_for_removal = f.clone();
-        let removal = tokio::task::spawn_blocking(move || {
-            f_for_removal
-                .registry
-                .remove_session(&f_for_removal.sessions, f_for_removal.session_id)
-        });
-
-        let result = expect_within(
-            "das Aktivieren endet, während A2.1 im Haltepunkt steht",
-            || format!("Entfernen-Task beendet: {}", removal.is_finished()),
-            activation,
-        )
-        .await
-        .expect("der Aktivierungs-Task darf nicht panisch enden");
-        let _ = done_tx.send(());
-        expect_within(
-            "das Entfernen der Sitzung (A2.1) endet",
-            || "A2.1 hat den Haltepunkt nicht verlassen".to_string(),
-            removal,
-        )
-        .await
-        .expect("der Entfernen-Task darf nicht panisch enden");
-
-        assert!(
-            result.is_err(),
-            "A2.1 entfernt die Sitzung zuerst — danach darf nicht mehr aktiviert werden"
-        );
-        assert!(
-            f.registry.slot(f.session_id, &access()).is_none(),
-            "A2.1/A2.2: kein Eintrag darf die Sitzung überleben"
-        );
-    }
-
-    // --- Spec 0085, A2.2: Ausschalten verwirft den Kanal wirklich ----------
-
-    /// Meldet sein eigenes Verworfenwerden. Alle Trait-Methoden sind
-    /// `unreachable!` — T15 benutzt den Kanal nie, ein versehentlicher
-    /// Zugriff soll sofort auffallen statt still zu gelingen.
-    struct DropReportingSftp(Arc<std::sync::atomic::AtomicBool>);
-
-    impl Drop for DropReportingSftp {
-        fn drop(&mut self) {
-            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl SftpSession for DropReportingSftp {
-        async fn list_dir(
-            &mut self,
-            _path: &str,
-        ) -> Result<Vec<ssh_manager_core::ssh::RemoteEntry>, ssh_manager_core::ssh::SshError>
-        {
-            unreachable!("T15 benutzt den Kanal nie")
-        }
-        async fn read_file(
-            &mut self,
-            _path: &str,
-        ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn read_file_capped(
-            &mut self,
-            _path: &str,
-            _max_bytes: u64,
-            _progress: &mut (dyn FnMut(u64) + Send),
-        ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn write_file(
-            &mut self,
-            _path: &str,
-            _content: &[u8],
-        ) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn read_file_chunked(
-            &mut self,
-            _path: &str,
-            _chunk_size: usize,
-            _on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl
-                      + Send),
-        ) -> Result<ssh_manager_core::ssh::TransferEnd, ssh_manager_core::ssh::SshError> {
-            unreachable!("dieser Test lädt nichts herunter")
-        }
-
-        async fn write_file_chunked(
-            &mut self,
-            _path: &str,
-            _chunk_size: usize,
-            _next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
-                      + Send),
-        ) -> Result<ssh_manager_core::ssh::TransferEnd, ssh_manager_core::ssh::SshError> {
-            unreachable!("dieser Test lädt nichts hoch")
-        }
-
-        async fn stat(
-            &mut self,
-            _path: &str,
-        ) -> Result<ssh_manager_core::ssh::RemoteEntry, ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn lstat(
-            &mut self,
-            _path: &str,
-        ) -> Result<ssh_manager_core::ssh::RemoteEntry, ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn remove(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn rename(
-            &mut self,
-            _from: &str,
-            _to: &str,
-        ) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn posix_rename(
-            &mut self,
-            _from: &str,
-            _to: &str,
-        ) -> Result<bool, ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn create_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn create_file_exclusive(
-            &mut self,
-            _path: &str,
-        ) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn remove_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-        async fn set_permissions(
-            &mut self,
-            _path: &str,
-            _mode: u32,
-        ) -> Result<(), ssh_manager_core::ssh::SshError> {
-            unreachable!()
-        }
-    }
-
-    /// Spec 0085, T15 (A2.2): Nach dem Ausschalten hält **kein** Zustand den
-    /// Kanalwert mehr — auch dann nicht, wenn noch eine Kopie des Slots lebt,
-    /// wie sie ein wartender Browser-Befehl mitführt
-    /// (`BrowserChannel::from_request` klont den Slot).
-    ///
-    /// Der Merker allein genügt dafür nicht: Solange der Kanalwert irgendwo
-    /// weiterlebt, bleibt auf dem Server `sudo -n <sftp-server>` am Leben
-    /// (T14 zeigt, dass erst das Verwerfen ihn beendet). „Ausgeschaltet" wäre
-    /// dann nur eine Behauptung der App.
-    ///
-    /// Gegenbeweis (belegt): Verwirft `revoke` den Kanalwert nicht, sondern
-    /// setzt nur den Merker, scheitert dieser Test.
-    #[tokio::test]
-    async fn test_t15_disabling_drops_the_channel_even_while_a_command_holds_the_slot() {
-        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (probe, check) = working_probes();
-        let (t, _log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-        f.registry.insert_for_tests(
-            f.session_id,
-            ElevatedSftp {
-                target_user: "root".to_string(),
-                sftp: Box::new(DropReportingSftp(dropped.clone())),
-            },
-        );
-
-        // Die Kopie, die ein laufender oder wartender Befehl festhält.
-        let held = f
-            .registry
-            .slot(f.session_id, &access())
-            .expect("Vorbedingung: Kanal aktiv");
-
-        disable(&f.sessions, &f.registry, f.session_id, false, &access())
-            .await
-            .expect("Ausschalten gelingt");
-
-        assert!(
-            dropped.load(std::sync::atomic::Ordering::SeqCst),
-            "A2.2: der Kanalwert muss beim Ausschalten verworfen werden, nicht nur als \
-             widerrufen markiert — sonst lebt der sudo-Prozess auf dem Server weiter"
-        );
-        assert!(
-            held.is_revoked(),
-            "und die festgehaltene Kopie ist widerrufen"
-        );
-        assert!(
-            held.lock_owned(&access()).await.is_none(),
-            "der Slot ist leer, obwohl diese Kopie noch lebt"
-        );
-    }
-
-    /// Spec 0084, T9 (mit der Klarstellung vom 2026-09-28): Ausschalten ohne
-    /// aktiven Kanal ist ein harmloses `Ok`; für eine **unbekannte**
-    /// Sitzungskennung bleibt es wie bisher bei `Err("Session nicht
-    /// gefunden")`. In keinem Fall ein Absturz.
-    #[tokio::test]
-    async fn test_t9_disabling_an_inactive_or_unknown_session_channel_is_harmless() {
-        let (probe, check) = working_probes();
-        let (t, _log) = transport(probe, check);
-        let f = fixture(Box::new(t));
-
-        disable(&f.sessions, &f.registry, f.session_id, false, &access())
-            .await
-            .expect("bekannte Sitzung ohne Kanal: „nicht aktiv“ ist kein Fehler");
-        assert!(!f.is_active().await);
-
-        let err = disable(
-            &f.sessions,
-            &f.registry,
-            SessionId::new_v4(),
-            false,
-            &access(),
-        )
-        .await
-        .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
-        assert_eq!(err.message, "Session nicht gefunden");
-        assert!(!f.is_active().await);
-    }
-}
+mod tests;

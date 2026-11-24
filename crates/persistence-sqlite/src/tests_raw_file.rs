@@ -2,7 +2,7 @@
 //!
 //! Die bestehenden Store-Tests
 //! (`test_direct_sql_access_to_content_column_never_reveals_plaintext` in
-//! `chat_session_store`, `ledger_store`, `prompt_history_store`) prüfen je
+//! `chat_session_store`, `prompt_history_store`) prüfen je
 //! **eine Spalte** per `SELECT` — sie sehen die Datenbank also durch dieselbe
 //! SQLite-Brille, die auch beim Schreiben im Spiel war. Was sie nicht sehen
 //! können: Seiten, die SQLite zusätzlich in der `-wal`-Datei hält, und alles,
@@ -12,8 +12,8 @@
 //! echten Stores, schließt den Pool und durchsucht danach **jede Datei** des
 //! Datenbank-Verzeichnisses byteweise — ohne SQLite, ohne SQL.
 //!
-//! **Seit Issue #113** schreiben die Stores die vier Spalten (Chat,
-//! Zusammenfassung, Ledger, Historie) als Klartext; geschützt sind sie
+//! **Seit Issue #113** schreiben die Stores die drei Spalten (Chat,
+//! Zusammenfassung, Historie) als Klartext; geschützt sind sie
 //! allein durch die Verschlüsselung der ganzen Datei (Spec 0101). Der
 //! Nachweis schreibt deshalb in eine **mit Schlüssel geöffnete** Datenbank
 //! (T3) und als Gegenprobe in eine Klartext-Datenbank (T4) — dort muss die
@@ -26,11 +26,11 @@
 //! entsteht (die Stores schreiben `&str`, `serde_json` schreibt UTF-8) — für
 //! neue Schreibpfade gilt das nicht automatisch.
 
+use ssh_manager_core::testing::ServerBuilder;
 use std::path::Path;
 
-use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::crypto::DatabaseKey;
-use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, ProfileStore, Server};
+use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -51,31 +51,6 @@ enum FileEncryption {
     /// in einer der Dateien stünde; ohne sie wäre T3 ein Test, der auch
     /// dann grün bliebe, wenn die Suche gar nichts liest.
     Plaintext,
-}
-
-fn test_server(server_id: ServerId) -> Server {
-    let now = chrono::Utc::now();
-    Server {
-        id: server_id,
-        name: "Test-Server".to_string(),
-        host: "example.invalid".to_string(),
-        port: 22,
-        username: "deploy".to_string(),
-        group_id: None,
-        tags: Vec::new(),
-        auth: AuthMethod::Agent,
-        // Ausdrücklich ohne Geheimnis: `servers.notes` ist Klartext (Spec
-        // 0096 §1) und laut §3 auch ein Nicht-Ziel — stünde das Geheimnis
-        // hier, würde der Nachweis aus dem falschen Grund rot.
-        notes: String::new(),
-        jump_host: None,
-        post_ingest_policy: PostIngestPolicy::default(),
-        ai_injection_check_enabled: false,
-        sftp_server_path: None,
-        start_directory: None,
-        created_at: now,
-        updated_at: now,
-    }
 }
 
 /// Schreibt über die **echten** Stores je einen Eintrag mit dem Geheimnis in
@@ -103,7 +78,12 @@ async fn write_secret_through_all_stores(
 
     let server_id = ServerId::new();
     profile_store
-        .create_server(&test_server(server_id))
+        .create_server(
+            &ServerBuilder::new()
+                .id(server_id)
+                .name("Test-Server")
+                .build(),
+        )
         .await
         .expect("servers-Zeile ist FK-Voraussetzung fuer chat_sessions/prompt_history");
 
@@ -161,27 +141,7 @@ async fn write_secret_through_all_stores(
         .await
         .expect("Zusammenfassung schreiben");
 
-    // 4. Ausführungsprotokoll.
-    profile_store
-        .ledger_store()
-        .append_entry(
-            session_id,
-            LedgerSource::User,
-            &LedgerEntryContent::CommandExecuted {
-                command: format!("mysql --password={SECRET}"),
-                output: CommandOutput {
-                    stdout: format!("ok, password={SECRET}").into_bytes(),
-                    stderr: Vec::new(),
-                    exit_code: Some(0),
-                    truncated: false,
-                },
-                cancelled: false,
-            },
-        )
-        .await
-        .expect("Ledger-Eintrag schreiben");
-
-    // 5. Eingabe-Historie.
+    // 4. Eingabe-Historie.
     profile_store
         .prompt_history_store()
         .record(&server_id, &format!("mysql --password={SECRET}"))

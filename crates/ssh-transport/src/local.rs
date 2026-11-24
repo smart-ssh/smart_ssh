@@ -119,6 +119,17 @@ impl ChildPipes {
     }
 }
 
+/// Sends `signal` to the process group `pgid`.
+#[cfg(unix)]
+#[expect(unsafe_code, reason = "libc::killpg")]
+fn killpg_group(pgid: libc::pid_t, signal: libc::c_int) {
+    // SAFETY: `killpg` has no memory preconditions; `pgid` is the group of
+    // our own child process, which has not been reaped yet (see callers).
+    unsafe {
+        libc::killpg(pgid, signal);
+    }
+}
+
 /// Issue #324 (Spec 0027): beendet ein abgebrochenes lokales Kommando samt
 /// allen Prozessen, die es gestartet hat, und sammelt bis dahin noch
 /// geschriebene Ausgabe ein (unter demselben Cap, Spec 0044).
@@ -146,11 +157,7 @@ async fn terminate_tree(
         .filter(|p| *p > 0);
     #[cfg(unix)]
     if let Some(pgid) = group {
-        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
-        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
-        unsafe {
-            libc::killpg(pgid, libc::SIGINT);
-        }
+        killpg_group(pgid, libc::SIGINT);
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
@@ -166,10 +173,7 @@ async fn terminate_tree(
 
     #[cfg(unix)]
     if let Some(pgid) = group {
-        // SAFETY: wie oben; der Kindprozess ist weiterhin nicht eingesammelt.
-        unsafe {
-            libc::killpg(pgid, libc::SIGKILL);
-        }
+        killpg_group(pgid, libc::SIGKILL);
     }
     // Rückfallebene (keine Gruppe/kein `taskkill`): zumindest den direkten
     // Kindprozess beenden. Für einen schon beendeten Prozess wirkungslos.
@@ -205,11 +209,7 @@ async fn kill_tree_now(child: &mut Child, pid: Option<u32>) {
         .and_then(|p| libc::pid_t::try_from(p).ok())
         .filter(|p| *p > 0)
     {
-        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
-        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
-        unsafe {
-            libc::killpg(pgid, libc::SIGKILL);
-        }
+        killpg_group(pgid, libc::SIGKILL);
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
@@ -452,9 +452,7 @@ impl RunningExec for RunningLocalExec {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        self.transport
-            .run(&self.command, Some(cancel), Some(sink))
-            .await
+        Box::pin(self.transport.run(&self.command, Some(cancel), Some(sink))).await
     }
 }
 
@@ -476,7 +474,7 @@ impl SshTransport for LocalTransport {
     /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
     /// markiert.
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        Ok(self.run(command, None, None).await?.output)
+        Ok(Box::pin(self.run(command, None, None)).await?.output)
     }
 
     /// Issue #325: same process handling as `execute_cancellable`, every kept
@@ -489,7 +487,7 @@ impl SshTransport for LocalTransport {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), Some(sink)).await
+        Box::pin(self.run(command, Some(cancel), Some(sink))).await
     }
 
     /// Issue #328: nothing is held between start and run, so the running
@@ -529,7 +527,7 @@ impl SshTransport for LocalTransport {
         command: &str,
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), None).await
+        Box::pin(self.run(command, Some(cancel), None)).await
     }
 
     /// Wie [`execute_cancellable`](Self::execute_cancellable); `stdin` wird
@@ -540,7 +538,7 @@ impl SshTransport for LocalTransport {
         _stdin: &[u8],
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel), None).await
+        Box::pin(self.run(command, Some(cancel), None)).await
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
@@ -618,7 +616,7 @@ impl InteractiveShell for LocalShell {
         let writer = self.writer.clone();
         let data = data.to_vec();
         tokio::task::spawn_blocking(move || {
-            let mut guard = writer.lock().expect("PTY-Writer-Mutex vergiftet");
+            let mut guard = ssh_manager_core::sync::lock_tolerating_poison(&writer);
             guard.write_all(&data).and_then(|()| guard.flush())
         })
         .await
@@ -635,7 +633,7 @@ impl InteractiveShell for LocalShell {
         let reader = self.reader.clone();
         tokio::task::spawn_blocking(move || {
             let mut buf = [0u8; 8192];
-            let mut guard = reader.lock().expect("PTY-Reader-Mutex vergiftet");
+            let mut guard = ssh_manager_core::sync::lock_tolerating_poison(&reader);
             match guard.read(&mut buf) {
                 Ok(0) => Ok(Vec::new()),
                 Ok(n) => Ok(buf[..n].to_vec()),
@@ -1034,25 +1032,32 @@ mod tests {
         let mut transport = LocalTransport::new();
         transport.set_max_output_bytes(4096);
 
-        let output = tokio::time::timeout(
-            NO_HANG_TIMEOUT,
-            transport.execute(
-                "echo $$; sh -c 'echo $$ >&2; exec yes AAAAAAAAAAAAAAAA' | \\\n                 sh -c 'echo $$ >&2; exec cat'",
-            ),
-        )
-        .await
-        .expect("execute() must not hang")
-        .unwrap();
+        // The PIDs travel through files, not stdout/stderr: both share the
+        // output cap, which may legitimately drop whatever is not yet read.
+        // The flooding member (last in the pipeline) starts only after the
+        // other member has written its PID file, so all three files exist when
+        // the cap is hit. The first member is a long `sleep` that neither
+        // reads nor writes the pipe, so only the process-group kill (not
+        // SIGPIPE/EOF) can end it.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().display();
+        let command = format!(
+            "export DIR='{d}'; echo $$ > \"$DIR/outer\"; \
+             sh -c 'echo $$ > \"$DIR/a\"; exec sleep 600' | \
+             sh -c 'while [ ! -s \"$DIR/a\" ]; do sleep 0.01; done; echo $$ > \"$DIR/b\"; exec yes AAAAAAAAAAAAAAAA'"
+        );
+
+        let output = tokio::time::timeout(NO_HANG_TIMEOUT, transport.execute(&command))
+            .await
+            .expect("execute() must not hang")
+            .unwrap();
 
         assert!(output.truncated);
-        // stdout starts with the outer shell's pid; stderr holds the pids of
-        // the two pipeline members.
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let mut pids: Vec<&str> = stdout.lines().take(1).collect();
-        pids.extend(stderr.split_whitespace());
-        assert_eq!(pids.len(), 3, "expected 3 pids, got {pids:?}");
-        for pid in pids {
+        for name in ["outer", "a", "b"] {
+            let pid = std::fs::read_to_string(dir.path().join(name))
+                .unwrap_or_else(|e| panic!("pid file {name} missing: {e}"));
+            let pid = pid.trim();
+            assert!(pid.parse::<u32>().is_ok(), "{name}: not a pid: {pid:?}");
             wait_until_gone(pid).await;
         }
     }
@@ -1291,7 +1296,7 @@ mod tests {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         let mut transport = LocalTransport::new();
-        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
         let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
         let finished = Arc::new(AtomicBool::new(false));
         let finished_in_exec = finished.clone();
@@ -1360,7 +1365,7 @@ mod tests {
         let command = "yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         #[cfg(windows)]
         let command = "for /L %i in (1,0,2) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (sink, mut chunks) = ssh_manager_core::ssh::exec_output_channel();
         let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
 
         let outcome = tokio::time::timeout(

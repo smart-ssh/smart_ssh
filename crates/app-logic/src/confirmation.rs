@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use tokio::sync::oneshot;
 
-use crate::poison::lock_tolerating_poison;
+use ssh_manager_core::sync::lock_tolerating_poison;
 
 /// Spec 0068, Teil 5b: Identität EINER Registrierung. Derselbe Schlüssel
 /// kann neu registriert werden (Host-Key: `connect()`-Retry unter derselben
@@ -148,7 +148,9 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// den Eintrag selbst aus der Map). Spec 0084, A5: auch von
     /// `app-shell`s Tests gebraucht (`commands::connect`), deshalb hinter
     /// `test-support` statt reinem `#[cfg(test)]`.
-    #[cfg(any(test, feature = "test-support"))]
+    ///
+    /// Issue #1020: also used by production code (`get_chat_resync`), so no
+    /// longer test-only.
     pub fn contains(&self, key: &K) -> bool {
         lock_tolerating_poison(&self.pending).contains_key(key)
     }
@@ -213,7 +215,7 @@ mod tests {
     #[tokio::test]
     async fn test_a_poisoned_registry_lock_makes_no_method_panic() {
         let registry: ConfirmationRegistry<u32, &'static str> = ConfirmationRegistry::new();
-        crate::poison::poison_for_test(&registry.pending);
+        ssh_manager_core::sync::poison_for_test(&registry.pending);
 
         // register: liefert weiterhin einen benutzbaren Empfänger.
         let (generation, rx) = registry.register_tracked(1);

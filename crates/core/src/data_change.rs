@@ -6,6 +6,7 @@
 //! union of the affected [`DataKind`]s. The notification never carries entity
 //! content, IDs or names: subscribers re-read what they care about.
 
+use crate::sync::lock_tolerating_poison;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -18,6 +19,7 @@ pub const COALESCE_WINDOW: Duration = Duration::from_millis(500);
 /// The kinds of user data a notification can refer to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum DataKind {
     Servers,
     Groups,
@@ -122,7 +124,7 @@ impl DataChangeNotifier {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        lock_tolerating_poison(&self.inner)
     }
 }
 

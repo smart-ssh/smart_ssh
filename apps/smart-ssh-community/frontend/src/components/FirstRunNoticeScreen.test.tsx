@@ -1,12 +1,14 @@
 // Spec 0031, Abschnitt 4/6: "Weiter"-Button bleibt deaktiviert, bis die
 // Checkbox aktiv ist — kein Wegklicken ohne bewusste Bestätigung.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   registerFirstRunNoticeExtension,
   resetRegistryForTests,
+  unregisterFirstRunNoticeExtension,
   type FirstRunNoticeExtensionContext,
 } from "../extensions/registry";
 import { testI18n } from "../testI18n";
@@ -24,6 +26,12 @@ function renderScreen(
 }
 
 describe("first-run notice screen (Spec 0031)", () => {
+  it("draws the accent corner ticks (#1383)", () => {
+    renderScreen();
+    const ticks = screen.getByTestId("dialog-ticks");
+    expect(ticks.querySelectorAll("[data-corner-tick]")).toHaveLength(2);
+  });
+
   it("keeps the continue button disabled until the checkbox is checked", () => {
     renderScreen();
     const continueButton = screen.getByRole("button", { name: "Weiter" });
@@ -43,7 +51,7 @@ describe("first-run notice screen (Spec 0031)", () => {
     // Ein deaktivierter Button feuert in jsdom (wie im echten Browser)
     // keinen Klick-Handler aus — trotzdem hier explizit geprüft, dass ohne
     // vorherige Checkbox-Aktivierung nichts passiert.
-    fireEvent.click(continueButton);
+    clickDisabled(continueButton);
     expect(onAcknowledge).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("checkbox"));
@@ -238,7 +246,7 @@ describe("first-run notice extensions that fail to render (Spec 0031, section 6)
 
   const ourLogsFor = (spy: ReturnType<typeof vi.spyOn>, id: string) =>
     spy.mock.calls.filter(
-      ([message]) => typeof message === "string" && message.includes(`"${id}"`),
+      ([message]: unknown[]) => typeof message === "string" && message.includes(`"${id}"`),
     );
 
   it("keeps the notice usable and hides only the failing extension's area", () => {
@@ -328,5 +336,40 @@ describe("first-run notice extensions that fail to render (Spec 0031, section 6)
     expect(onAcknowledge).toHaveBeenCalledTimes(1);
     expect(lateHandler).not.toHaveBeenCalled();
     expect(workingHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("first-run notice extensions are reactive (#884)", () => {
+  afterEach(() => {
+    resetRegistryForTests();
+  });
+
+  const ext = (label: string) => () => <span>{label}</span>;
+
+  it("shows an extension registered after the first render, ordered by order then id, and removes it", () => {
+    renderScreen();
+    expect(screen.queryByTestId(/^first-run-notice-extension-/)).toBeNull();
+
+    act(() => {
+      registerFirstRunNoticeExtension({ id: "z", order: 1, Component: ext("Z") });
+      registerFirstRunNoticeExtension({ id: "b", order: 2, Component: ext("B") });
+      registerFirstRunNoticeExtension({ id: "a", order: 2, Component: ext("A") });
+    });
+    expect(
+      screen.getAllByTestId(/^first-run-notice-extension-/).map((e) => e.textContent),
+    ).toEqual(["Z", "A", "B"]);
+
+    act(() => unregisterFirstRunNoticeExtension("a"));
+    expect(screen.queryByTestId("first-run-notice-extension-a")).toBeNull();
+    expect(screen.getByTestId("first-run-notice-extension-b")).toBeInTheDocument();
+  });
+
+  it("updates the rendered extension when replaced under the same id", () => {
+    registerFirstRunNoticeExtension({ id: "x", order: 1, Component: ext("Old") });
+    renderScreen();
+    expect(screen.getByTestId("first-run-notice-extension-x")).toHaveTextContent("Old");
+
+    act(() => registerFirstRunNoticeExtension({ id: "x", order: 1, Component: ext("New") }));
+    expect(screen.getByTestId("first-run-notice-extension-x")).toHaveTextContent("New");
   });
 });

@@ -24,7 +24,7 @@ redigiert.
 
 ## 3. Grenzen
 
-- Nur die Logdatei. Datenbank-Inhalte (Ausführungsprotokoll, Chatverlauf,
+- Nur die Logdatei. Datenbank-Inhalte (Chatverlauf,
   Eingabe-Historie) sind nicht Gegenstand dieser Spec.
 - Bestehende Logdateien älterer Versionen bleiben unberührt und werden nach
   14 Tagen gelöscht.
@@ -103,7 +103,7 @@ Geheimnis sein (`PGPASSWORD=… psql`).
   die Regel „Redaction vor jeder Datensenke".
 - Die Filter-Entscheidung ändert sich nicht, nur ihre Log-Zeile.
 - Transparenz gegenüber Nutzer, KI und MCP-Client (Ereignis, Chat,
-  Ausführungsprotokoll, Werkzeug-Ergebnis) bleibt unverändert; nur die
+  Werkzeug-Ergebnis) bleibt unverändert; nur die
   Log-Zeile ändert sich.
 - Das Diagnosepaket (Spec 0063) bleibt eine Positivliste harmloser Zeilen und
   wird zusätzlich redigiert.

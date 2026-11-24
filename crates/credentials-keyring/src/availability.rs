@@ -62,6 +62,9 @@ pub enum KeychainUnavailableReason {
     NoSecretServiceProvider,
     /// Anbieter vorhanden, aber gesperrt / Entsperr-Prompt abgewiesen.
     Locked,
+    /// Android: the Android Keystore store could not be initialised
+    /// (Spec 0101, Spec 0114). No key can be reachable then.
+    NoKeystore,
     /// Alles andere, inklusive macOS und Windows (Spec 0071, A1-Tabelle).
     Unknown,
 }
@@ -137,6 +140,13 @@ pub fn classify_store_failure(
         return KeychainAvailability::Available;
     };
 
+    // Android: every initialisation failure of the Keystore store means the
+    // same thing for the user — there is no usable key store; the app
+    // offers the master password instead (Spec 0101).
+    if target_os == "android" {
+        return KeychainAvailability::Unavailable(KeychainUnavailableReason::NoKeystore);
+    }
+
     // A1-Tabelle: `Unknown` deckt "alles andere, inklusive macOS/Windows"
     // ab (T5). Die drei Linux-Gründe beschreiben ausschließlich Lagen, die
     // es nur auf einem Secret-Service-System gibt; sie auf macOS/Windows zu
@@ -182,7 +192,7 @@ pub fn classify_store_failure(
 /// steht absichtlich nicht in `diagnostics::SAFE_LOG_MESSAGES` und fliegt
 /// damit aus dem exportierbaren Diagnosepaket (Spec 0063).
 pub fn store_status_cause_chain_for_log() -> Option<String> {
-    let err = keyring::Entry::store_status().as_ref().err()?;
+    let err = crate::backend::Entry::store_status().as_ref().err()?;
     let mut chain = err.to_string();
     let mut source = std::error::Error::source(err);
     while let Some(cause) = source {
@@ -203,7 +213,7 @@ pub fn probe_keychain_availability(
     target_os: &str,
     session_bus_present: bool,
 ) -> KeychainAvailability {
-    let failure = store_failure_of(keyring::Entry::store_status());
+    let failure = store_failure_of(crate::backend::Entry::store_status());
     classify_store_failure(failure, target_os, session_bus_present)
 }
 
@@ -248,6 +258,29 @@ mod tests {
                 "Indiz {indicator} darf einen gesperrten Schlüsselbund nicht umdeuten"
             );
         }
+    }
+
+    /// Spec 0101 / 0114: on Android every store failure is `NoKeystore`,
+    /// independent of the failure kind and the bus hint; success stays
+    /// available; no Linux reason leaks to Android.
+    #[test]
+    fn test_android_failures_are_no_keystore() {
+        for failure in [
+            StoreFailure::PlatformUnreachable,
+            StoreFailure::AccessDenied,
+            StoreFailure::Other,
+        ] {
+            for indicator in [true, false] {
+                assert_eq!(
+                    classify_store_failure(Some(failure), "android", indicator),
+                    KeychainAvailability::Unavailable(KeychainUnavailableReason::NoKeystore),
+                );
+            }
+        }
+        assert_eq!(
+            classify_store_failure(None, "android", false),
+            KeychainAvailability::Available
+        );
     }
 
     /// Spec 0071, T4: erfolgreicher `store_status()` → gar keine Meldung.

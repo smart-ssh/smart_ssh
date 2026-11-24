@@ -30,7 +30,7 @@ When you chat in a session, the active AI provider receives:
   apply to this server, and the server and group notes. Hostname, user name
   and tags of the profile are not part of the prompt.
   ([`crates/app-logic/src/system_prompt.rs`](crates/app-logic/src/system_prompt.rs),
-  [`crates/app-shell/src/commands/connect.rs`](crates/app-shell/src/commands/connect.rs),
+  [`crates/app-shell/src/commands/connect/mod.rs`](crates/app-shell/src/commands/connect/mod.rs),
   [`crates/app-logic/src/compaction.rs`](crates/app-logic/src/compaction.rs))
 - **The remote OS banner** (`uname -a`) read at connect time, as fenced
   untrusted content.
@@ -40,6 +40,14 @@ When you chat in a session, the active AI provider receives:
   files the AI asked to read** — both redacted, then fenced as untrusted
   content.
 - **The commands themselves** that the AI proposed or that you approved.
+
+Structurally, a provider only accepts a `RedactedContext`
+([`crates/core/src/ai/redacted_context.rs`](crates/core/src/ai/redacted_context.rs)):
+it has private fields and can only be built by `RedactedContext::seal` (seals
+extension content, then redacts the whole history again, as the last step
+before sending) or by one named exception, the risk second opinion, which
+sends the command or path text as is (see above). A new request path cannot
+skip redaction without failing to compile.
 
 Content that comes from the server is treated as untrusted data, never as
 instructions: it is wrapped in tagged fences with `<`, `>` and `&` escaped,
@@ -79,6 +87,28 @@ the proposed command or path text as is**, without redaction
   knows the password as an extra pattern, so if the server echoes it, it is
   masked ([`crates/app-logic/src/orchestration/action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs),
   [`crates/app-logic/src/server_redaction.rs`](crates/app-logic/src/server_redaction.rs)).
+  The elevated file browser ([Spec 0067](docs/specs/0067-sftp-elevated-and-toasts.md))
+  uses it too, but only when `sudo -n -l` says a password is required: the
+  channel runs `sudo -S -k -p '<random marker>' …`, and the password is
+  written once, and only after the marker was read from stderr. If the
+  marker does not appear, the channel is closed with nothing written, so the
+  password cannot reach `sftp-server`. The password is not in the command,
+  log, audit line or any error; the audit line records only `sudo_auth` and
+  `server_logging`. The elevated `sftp-server` runs with the fixed arguments
+  `-l INFO -f AUTHPRIV` (the suggested sudoers rule allows exactly these, or
+  none for older rules), so the server's own auth log records every file
+  request; the arguments are a constant, never user input.
+  Elevated rights end on their own as well: a per-channel idle timer
+  (default 15 minutes, `elevatedIdleTimeoutMinutes` ∈ 5/15/30/60/0 = never,
+  a security setting only changeable through its own validated command)
+  revokes the channel exactly like the manual switch-off. An invalid or
+  missing stored value falls back to 15 minutes, never to "never"; a running
+  elevated operation postpones the switch-off. The webview is told by an
+  event and shows a toast; the audit line records `reason = "inactivity"`.
+  A per-server switch (`elevation_allowed`, default on, issue #1194) can
+  forbid the mode altogether: enabling is refused before any probe or sudo
+  call, an unreadable profile counts as forbidden, and turning the switch off
+  revokes a running channel at once. It only restricts; it never lifts a check.
 
 ### What the AI can still see
 
@@ -99,7 +129,7 @@ into the chat, minus what the redactor recognises (section 2). Examples:
 Before content leaves the app towards an AI provider, it passes through the
 output redactor
 ([`crates/core/src/ai/redactor.rs`](crates/core/src/ai/redactor.rs)).
-Redaction also runs before ledger entries and note suggestions are stored,
+Redaction also runs before note suggestions are stored and before an activity event reaches an observer (the core keeps no activity record of its own, [ADR 0161](docs/adr/0161-no-activity-record-in-the-core.md)); MCP-driven actions reach observers with source `mcp-agent` and the same redaction; the MCP client name from the handshake is only a label in the session-start event, shortened to 64 characters, and is never used as an instruction or put into a prompt,
 and before server notes are returned to an MCP client
 ([ADR 0103](docs/adr/0103-mcp-server-notes-redact-and-fence.md)).
 
@@ -128,6 +158,31 @@ New patterns were added in
 [Spec 0068](docs/specs/0068-security-hardening-prelaunch.md),
 [Spec 0078](docs/specs/0078-redactor-at-in-url-password.md) and
 [Spec 0095](docs/specs/0095-redactor-command-line-passwords-and-tokens.md).
+
+### When the secrets to mask cannot be fully loaded
+
+If the profile store fails while the app determines which extension secrets
+apply to a server (server or group lookup), or the stored sudo password
+cannot be read, or a secret cannot be compiled into a pattern, the session
+keeps masking what it already knew (a rebuild extends the set instead of
+replacing it), masks at least the server-level secrets, and shows one chat
+notice `REDACTION_INCOMPLETE`. The sessionless note summary uses the same
+lookup and shows the same notice once (via the note-shrink failure toast). If
+the profile store fails while the server
+tags are read for rule evaluation, the rules run on the tags from connect
+time and an action that would run automatically asks for confirmation
+(`FILTER_SERVER_TAGS_UNAVAILABLE`) — never the other way
+([`crates/app-logic/src/session_extension.rs`](crates/app-logic/src/session_extension.rs),
+[`crates/app-logic/src/orchestration/escalation.rs`](crates/app-logic/src/orchestration/escalation.rs)).
+
+A registered session extension can also refuse a connection before any
+transport, host-key prompt or credential read (`SessionExtension::check_connect`).
+The same check runs before the reconnect of an existing session (manual and
+automatic), so a refusal cannot be bypassed by connecting first and
+reconnecting later; a refused automatic attempt is not retried.
+It only restricts: it runs outside the filter engine, cannot change a filter,
+risk or confirmation result, and fails closed (an unresolved or incomplete
+server scope refuses the connect or reconnect). Without an extension nothing changes.
 
 ### The explicit limit
 
@@ -167,10 +222,17 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
 - **Commands** are shown, stored and sent as they are, so you always see
   exactly what runs. A secret the AI writes into a proposed command is
   visible to you in the confirmation dialog.
-- **Filter decisions** in the ledger contain only text generated by the
+- **Filter decisions** in activity events contain only text generated by the
   filter engine. The free-text reason of the AI second opinion is never
   stored for that reason
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §3).
+- **File reads and writes by the AI** appear in activity events as path, size, SHA-256
+  and (for writes) backup path only — never the file content or a diff. Paths
+  are redacted like command text. A SHA-256 of very short or low-entropy
+  content (a PIN file, a single-token line) can be recovered by brute force,
+  so the hash is not a secrecy boundary: the protection is the extension
+  that stores the event, not the hash
+  ([ADR 0161](docs/adr/0161-no-activity-record-in-the-core.md)).
 - **Your own chat messages** are stored as you typed them (inside the
   encrypted database, section 3) and redacted only when they are sent.
 
@@ -180,11 +242,15 @@ provider (e.g. Ollama on `127.0.0.1`): then nothing leaves your machine
 
 The exact paths per platform are listed in
 [docs/datenpfade.md](docs/datenpfade.md); the running app shows them under
-**Settings → Diagnostics → Data paths**.
+**Settings → Diagnostics → Data paths**. A second instance can be pointed at its own
+directory with `--data-dir`, `SMART_SSH_DATA_DIR` or a pointer file next to the
+app (Spec 0115); then every file of that instance lives there, and an unusable
+directory stops the start instead of falling back to the default one. The
+pointer file only names a path and holds no secret. An instance with such an override keeps its keychain entries under its own service `Smart SSH (<id>)` (id = first 12 hex characters of the SHA-256 of the canonical data-directory path, Spec 0101 A25), so it cannot read, replace or delete the secrets of the default instance.
 
 | Data | Location | Protection |
 |---|---|---|
-| Server profiles, groups, notes, rules, chat sessions, ledger, AI provider settings | Database `smart-ssh.db` | Whole file encrypted with SQLCipher |
+| Server profiles, groups, notes, rules, chat sessions, AI provider settings | Database `smart-ssh.db` | Whole file encrypted with SQLCipher |
 | Secrets: SSH passwords, private keys, passphrases, certificates, sudo passwords, AI API keys, MCP token | Database `smart-ssh.db`, table `secrets` | Whole file encrypted with SQLCipher |
 | Database key (root key) | OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — **or**, if you set a master password, a key file `smart-ssh.db.master-key` next to the database | Keychain: protected by the OS. Key file: root key wrapped with ChaCha20-Poly1305 under a key derived from your master password with Argon2id |
 | Known host keys | `host_keys.json` next to the database | Plaintext (public keys and fingerprints) |
@@ -229,6 +295,45 @@ data directory (backup, stolen disk) without access to your unlocked OS
 account or your master password. It does not protect against malware
 running as your user while the app is unlocked.
 
+### Activity events and who receives them
+
+**What the core stores.** Nothing: since issue #1506 the core keeps no
+activity record. Earlier versions held a ledger and recorded sessions in the
+database; migration 0030 drops them, so old command output no longer stays on
+disk.
+
+**Who receives events.** Extensions of an edition that register an observer.
+An observer is trusted code inside the process (see section 5); it is not a
+sandbox. What it stores, and for how long, is its own responsibility.
+
+**Residual redaction risk.** An event holds what the redactor knew when it was
+built. A secret that became known later cannot be removed from what an observer
+already stored, and events marked "redaction incomplete" were built while a
+secret lookup had failed. The generic patterns are heuristics (see the explicit
+limit in section 2).
+
+**Rule for anything that leaves the device.** Text that goes to a third party
+(export, sync, upload, an AI provider) must be redacted again with
+`redact_for_server`, which uses the server's current redactor including the
+secrets session extensions contribute. For a deleted server only the generic
+patterns apply, and the result says so ("generic only"); callers must treat
+such text as less protected. A failed secret lookup is reported as "incomplete"
+instead of being hidden.
+
+**Activity observers.** An edition can register observers that receive each
+event of a session as it happens (commands, decisions, AI messages, file reads
+and writes, failed file writes, connection changes, session start and end,
+and a content-free "user was active" tick at most once a minute per session).
+Terminal input is never read for this: a keystroke only sets a flag, nothing of
+what is typed is stored, counted or put into an event; connection events carry
+no error text. The core builds these events from redacted
+content; file events carry path, size and hashes, never content. Delivery runs on its own worker behind a bounded queue
+and never blocks a command: a slow observer makes events drop (counted), a
+panicking observer is caught. With no observer registered no event is built.
+What an observer does with an event is outside the core; it is trusted code
+inside the process, and the rule for anything that leaves the device above
+applies to it.
+
 ---
 
 ## 4. Network connections
@@ -253,7 +358,10 @@ In short:
   settings open and no Ollama provider exists.
 - **The MCP server** is off by default; when enabled, it listens on
   `127.0.0.1` only and requires a bearer token
-  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)).
+  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)). The token is held
+  as a secret type and compared in constant time; input types that carry
+  secrets have a redacting `Debug`, so they cannot leak through a `?value`
+  log field.
 
 This is enforced by tests: the webview's Content Security Policy allows only
 `connect-src 'self' ipc:`, and only an allowlisted crate may depend on an
@@ -269,6 +377,51 @@ host key is a hard stop with a strong warning
 ---
 
 ## 5. Trust boundaries that require your confirmation
+
+### Who is trusted inside the app
+
+The webview that renders Smart SSH's own user interface is part of the
+trusted base. Code running in it acts with your authority: it can type into
+terminals, answer pending confirmations, regenerate the MCP token and change
+settings, including safety settings such as "Always confirm on red risk".
+This is by design: the interface is your hand. Two facts make it so. The
+app's own Tauri commands are not restricted per command; the main window's
+capability file grants no per-command limits and also allows reading the
+key-value store that holds `settings.json`
+([`capabilities/default.json`](apps/smart-ssh-community/capabilities/default.json)).
+The capability grants read access to that store only: the webview can read
+`settings.json` but not write it. Every settings change goes through a backend
+command. Security settings (red-risk confirmation, the AI risk second opinion,
+the MCP settings) have their own commands
+([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)); plain
+UI preferences go through one command that accepts only registered keys and
+value shapes and never a security key
+([`ui_preferences.rs`](crates/app-shell/src/ui_preferences.rs)).
+
+The confirmation boundaries below protect you against the AI and against
+external tools, not against code running in the webview.
+
+What keeps foreign code out of the webview:
+
+- **Content Security Policy.** `default-src 'self'; script-src 'self'`: only
+  scripts bundled with the app run; no inline or remote scripts
+  ([`tauri.conf.json`](apps/smart-ssh-community/tauri.conf.json)). A test
+  fails if any directive or source in the policy changes
+  ([`network_boundary.rs`](apps/smart-ssh-community/tests/network_boundary.rs)).
+- **No remote content.** No scripts, fonts or other resources are loaded from
+  the internet, and `connect-src` allows only the app itself and the Tauri
+  IPC (section 4,
+  [docs/netzwerkverbindungen.md](docs/netzwerkverbindungen.md)).
+- **Server and AI content is not inserted as HTML.** At the time of writing
+  the frontend sources contain no `dangerouslySetInnerHTML`, `innerHTML`,
+  `outerHTML` or `insertAdjacentHTML` outside tests
+  ([`frontend/src`](apps/smart-ssh-community/frontend/src)); the one place
+  that renders longer external text, the third-party licenses dialog, shows
+  it in a plain-text element
+  ([`ThirdPartyLicensesDialog.tsx`](apps/smart-ssh-community/frontend/src/components/ThirdPartyLicensesDialog.tsx)).
+  This is a property of the current code, not enforced by a test.
+
+### Confirmation boundaries
 
 Every action the AI proposes passes the filter engine first. Its decision is
 `AutoExec`, `Confirm` or `Deny`. Without a matching allow rule the decision
@@ -292,12 +445,17 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Reading typical secret paths** (SSH keys, `.env`, …) | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Starting `sftp-server`** (elevated file browser) from an AI proposal | Always | [ADR 0058](docs/adr/0058-sftp-elevated-and-toasts-decisions.md), §8 |
 | **Commands that use a stored sudo password** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
+| **Commands into which stored secret values are inserted** right before sending (by an outgoing transform of the edition) | Always | [Spec 0038](docs/specs/0038-repository-app-shell-ci.md) |
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
+| **Filter rules that cannot be loaded** (unreadable rule store or failing rule source): all allow rules are ignored | Always | [Spec 0002](docs/specs/0002-filter-engine-spec.md), §3.4 |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
 | **Red risk**: the risk indicator rates the proposal red on the server or the data axis — also when only the AI second opinion raises it to red | Setting "Always confirm on red risk", **on by default** | [Spec 0092](docs/specs/0092-red-risk-requires-confirm.md), [ADR 0084](docs/adr/0084-red-risk-requires-confirm.md) |
+
+A command prepared for sending must keep the structure of the approved one:
+if it splits into a different number of top-level segments, nothing is sent.
 
 **About red risk.** The setting is on by default, and a missing or
 unreadable value counts as on. With it on, a red-rated proposal never runs
@@ -314,11 +472,39 @@ again, but not the red-risk check
 
 Risks we know about and accept, with the reason.
 
+- **Outdated SSH algorithms are negotiable
+  ([Spec 0005](docs/specs/0005-ssh-module.md), issue #1173).** After all
+  current algorithms the client also offers legacy ones (SHA-1 key
+  exchange and MAC, CBC ciphers, `ssh-rsa`) so old servers stay reachable.
+  A downgrade needs a server that offers nothing better: current algorithms
+  are listed first, and the key exchange hash covers both algorithm lists, so
+  a man in the middle cannot strip modern ones unnoticed. Every negotiated
+  legacy algorithm, and a missing strict key exchange (Terrapin), is shown
+  to the user as a warning; the connection is not refused. Accepted so
+  that legacy devices work; mitigation: update the server.
 - **Redaction is pattern-based.** Unknown secret formats reach the AI
   provider (section 2). Accepted because a generic entropy fallback would
   break the copilot's usefulness without closing the gap
   ([Spec 0068](docs/specs/0068-security-hardening-prelaunch.md)).
   Mitigation: use a local AI provider for sensitive servers.
+- **Keyboard-interactive and multi-step SSH login (issue #1184).** The
+  server can send arbitrary prompt texts and ask for several rounds of
+  answers. The prompt texts are untrusted input: they are only ever displayed
+  as plain text and never interpreted. A stored password is sent at most once,
+  and only to a single prompt that does not echo its input, when the server
+  does not offer `password` at all; it is never sent to a visible or
+  multi-field prompt. Answers are not logged, not put in the connect step log
+  and not in error messages. Rounds (10 per method) and partial-success steps
+  (3 per hop) are capped so a hostile server cannot keep a login going forever;
+  the login time limit pauses only while the user is asked and a 5-minute
+  answer limit applies.
+  The login dialog (issue #1185) shows those texts as plain text only. The
+  answers are secrets: they travel from the dialog to the backend only in the
+  one `answer_auth_prompt` command (never in an event, a log line or the
+  connect step log), are read from uncontrolled fields that are cleared on
+  submit, and are dropped by the transport right after sending. Answers whose
+  count does not match the questions are not sent. Automatic reconnects and
+  the connection test cannot be asked and fail instead of prompting.
 - **RSA timing side channel (RUSTSEC-2023-0071, "Marvin attack").** The
   `rsa` crate, pulled in by the SSH library, has a known timing side channel
   with no fixed release. Accepted because Smart SSH is a local client: RSA
@@ -332,6 +518,16 @@ Risks we know about and accept, with the reason.
   no pattern is not rated red and, with an allow rule, runs automatically.
   The filter engine's deny rules and hard blacklist are unaffected
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §4).
+- **The webview is trusted.** A script-injection flaw in the app's own user
+  interface would equal full control over connected sessions and the safety
+  settings (section 5, "Who is trusted inside the app"). Accepted because
+  the interface is your own and the protections listed there keep foreign
+  code out. Hardened: the webview can read but not write the settings
+  store. Security settings ("Always confirm on red risk", the AI risk second
+  opinion) change only through backend commands that validate the value, and
+  UI preferences only through a command with a registry of allowed keys. A
+  script in the webview can still call those commands, so it can change the
+  safety settings; it cannot write the store file directly.
 - **Allow rules are your decision.** An allow rule lets matching proposals
   run without asking (except for the boundaries in section 5). A rule that
   is broader than intended widens what the AI can do on its own.

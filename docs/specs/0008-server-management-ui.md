@@ -65,10 +65,24 @@ vier Reiter verteilt: **Allgemein**, **Verbindung**, **Sicherheit** und
 
 - *Allgemein*: Name, Gruppe, Tags, danach die Abschnitte von Erweiterungen und
   am Ende „Server löschen" samt Auswirkungs-Vorschau.
-- *Verbindung*: Host, Port, Benutzername, Jump-Host, Anmeldung (alle Arten,
-  Schlüsselprüfung, Übernahme in den Schlüsselbund), Sudo-Passwort,
-  Startverzeichnis, „Erweitert" (SFTP-Server-Pfad) sowie „Verbindung testen"
-  mit Ergebnis und Schritt-Protokoll.
+- *Verbindung*: Auf breitem Fenster zwei Spalten, auf schmalem eine Spalte in
+  derselben Reihenfolge (erst links, dann rechts). Links: Host und Port
+  (schmal, in einer Zeile), Benutzername, Jump-Host, Anmeldung, „Verbindung
+  testen" mit Ergebnis und Schritt-Protokoll. Die Anmeldeart ist eine
+  segmentierte Auswahl (Radiogruppe, Pfeiltasten) mit denselben Arten wie
+  zuvor; „Schlüsseldatei" erscheint unter denselben Bedingungen (Spec 0076).
+  Beim Pfad der Schlüsseldatei steht „Datei wählen …" neben dem Feld; die
+  Schlüsselprüfung zeigt jeden Befund mit Symbol (Haken, Warnung, Info), danach
+  Passphrase und ggf. die Übernahme in den Schlüsselbund. Rechts: der Abschnitt
+  „Sudo-Passwort" (Hinweis, Feld, „Sudo-Passwort entfernen" als Gefahr-Knopf)
+  und der immer geöffnete Abschnitt „Erweitert" (Startverzeichnis mit Hinweis,
+  Erhöhte-Rechte-Option mit Hinweis, SFTP-Server-Pfad). Technische Werte
+  (Host, Port, Benutzer, Pfade) stehen in Festbreitenschrift. Das Testergebnis
+  ist eine umrandete Marke mit Statusquadrat: „OK · 142 ms" (Summe der
+  Schrittdauern, Einheit „ms" klein geschrieben wie die gemischt geschriebenen
+  Fehlertexte) bei Erfolg; wurde bei keinem Schritt eine Dauer gemessen, zeigt
+  die Marke stattdessen den schlichten Erfolgstext ohne Zeit. Bei einem
+  Fehler steht die bisherige Fehlermeldung.
 - *Sicherheit*: Bestätigung nach Serverzugriff (Spec 0039), KI-Prüfung auf
   Prompt-Injection und die gespeicherten Host-Keys.
 - *Notizen*: Notizen und Kontext-Vorschau. Die Notizen haben wie bisher ihren
@@ -86,10 +100,13 @@ nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
 *Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
 (Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
 
-**Verbinden aus den Einstellungen:** Neben „Speichern" zeigt das Formular eines
-gespeicherten Servers (nicht beim Anlegen) den Knopf „Verbinden". Solange das
-Formular ungespeicherte Änderungen hat, ist er deaktiviert und zeigt den Hinweis
-„Zuerst Änderungen speichern"; nach dem Speichern ist er wieder aktiv. Ein Klick
+**Verbinden aus den Einstellungen:** Das Formular eines gespeicherten Servers
+(nicht beim Anlegen) zeigt den Knopf „Verbinden" mit Stecker-Symbol: auf breiten
+Bildschirmen in der Titelzeile rechts neben dem Servernamen, auf schmalen neben
+„Speichern". Solange das Formular ungespeicherte Änderungen hat, ist er
+deaktiviert; der Hinweis „Zuerst Änderungen speichern" bleibt dabei sichtbar
+(auf schmalen Bildschirmen als Zeile unter den Knöpfen); nach dem Speichern ist
+er wieder aktiv. Ein Klick
 wechselt zum Tab dieses Servers, falls einer offen ist (auch ein gerade
 verbindender), sonst läuft derselbe Ablauf wie beim Klick auf den Server in der
 Serverliste (Erststart-Hinweis, Sitzungsauswahl, Verbindungs-Tab); es gibt keinen
@@ -121,6 +138,23 @@ Auswirkungen, dann das bestätigte Löschen.
   eine Gruppe oder einen Server öffnet das Bearbeiten-Formular im Hauptbereich,
   nicht in einem eigenen Dialog, damit sich beim Einrichten mehrerer Server
   bequem hin- und herwechseln lässt.
+  - **Kopfzeile:** Beschriftung „Server“ mit den Schaltflächen „+ Gruppe“ und
+    „+ Server“. **Fußzeile:** „Import …“ und „Export …“ mit Symbol. Die
+    Funktionen sind unverändert.
+  - **Zeilen:** Gruppen mit Pfeil, Ordnersymbol, fettem Namen und der Anzahl
+    ihrer Einträge (Server und Untergruppen); Server mit Symbol und Namen in
+    Festbreitenschrift, der lokale Server mit dem Abzeichen „Lokal“. Der
+    ausgewählte Eintrag ist flach hervorgehoben (Akzentfläche, 1 px Rahmen);
+    Untergruppen und Server hängen mit Verbindungslinien an ihrer Gruppe.
+  - **Gruppen auf- und zuklappen:** per Klick auf den Pfeil, mit Pfeiltaste
+    rechts (aufklappen; ist sie offen, zum ersten Eintrag) und links (zuklappen;
+    ist sie zu, zur übergeordneten Gruppe). Die Zeile trägt `aria-expanded`.
+    Der Zustand gilt für die laufende Sitzung und ist derselbe wie in der
+    Verbinden-Ansicht. Wird ein Eintrag in einer zugeklappten Gruppe neu
+    ausgewählt (auch eine neu angelegte Gruppe oder ein neuer Server darin),
+    klappt die Gruppe auf.
+  - **Ziehen:** Der Zeiger trägt einen flachen Block mit Symbol und Namen; die
+    Meldung „→ in diese Gruppe verschieben“ erscheint mit dem Symbol „Verschieben“.
 - **Gruppen-Formular:** Name, übergeordnete Gruppe (Auswahlliste, die die
   Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
   dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit

@@ -2,6 +2,7 @@
 //! sees `AudioSource`; the cpal device lives at the edge. Audio stays in
 //! memory and is never written to disk or logged.
 
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -33,16 +34,6 @@ pub trait AudioCapture: Send {
 
     /// The audio captured so far as 16 kHz mono, without stopping.
     fn snapshot(&self) -> Vec<f32>;
-}
-
-/// Mixes interleaved frames down to mono and resamples to 16 kHz.
-pub fn to_mono_16k(interleaved: &[f32], channels: usize, rate: u32) -> Vec<f32> {
-    let channels = channels.max(1);
-    let mono: Vec<f32> = interleaved
-        .chunks_exact(channels)
-        .map(|f| f.iter().sum::<f32>() / channels as f32)
-        .collect();
-    resample_mono(&mono, rate)
 }
 
 /// Resamples mono audio to 16 kHz (box average when downsampling, linear
@@ -198,7 +189,7 @@ impl AudioCapture for CpalCapture {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
-        let samples = std::mem::take(&mut *self.buf.lock().expect("audio buffer lock"));
+        let samples = std::mem::take(&mut *lock_tolerating_poison(&self.buf));
         resample_mono(&samples, self.rate)
     }
 }

@@ -6,8 +6,8 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent, OutputRedactor,
-    RejectionReason, Role, WebActivity, WebSource,
+    redact_web_activity, AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent,
+    OutputRedactor, RedactedContext, RejectionReason, Role, SessionContext, WebActivity,
 };
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
@@ -23,53 +23,60 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
+pub(super) use self::activity_funnel::emit_activity_event;
 use super::action_exec::handle_action_proposed;
 use super::notes::handle_document_generated;
 
+mod activity_funnel;
+mod activity_redaction;
+
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod test_events;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_compaction;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_continuation;
+#[cfg(test)]
+#[expect(clippy::expect_used, reason = "test code")]
+mod tests_user_decision_reset;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_rounds;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_extension_content;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_question;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_invalid_tool_call;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_web;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web_research_rejected;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_request_deadline;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::expect_used, reason = "test code")]
 mod tests_usage;
+// Issue #833: every request is redacted by `RedactedContext::seal`.
+#[cfg(test)]
+mod tests_redacted_send;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -169,22 +176,23 @@ pub(crate) async fn push_history_scoped(session: &Session, message: ChatMessage,
         // `!persist` ist exakt dieselbe Bedingung, die auch den
         // `chat_messages`-Persistenz-Ausschluss steuert (Spec 0034 §10) —
         // dieselbe Quelle der Wahrheit, kein zweiter Mechanismus.
-        let mut ctx = session.context.lock().await;
+        let mut ctx = session.ai.context.lock().await;
         ctx.history.push(message.clone());
         // Spec 0088, A4.1: vergiftungstolerant — ein Panic hier liesse
         // `history` und `mcp_origin_flags` dauerhaft verschieden lang
         // zurück, und die Kompaktierung müsste jede Nachricht defensiv als
         // MCP-originiert behandeln (s. `group_mcp_flags_by_round`).
-        crate::poison::lock_tolerating_poison(&session.mcp_origin_flags).push(!persist);
+        ssh_manager_core::sync::lock_tolerating_poison(&session.safety.mcp_origin_flags)
+            .push(!persist);
     }
     if !persist {
         return;
     }
 
-    let Some(store) = &session.chat_session_store else {
+    let Some(store) = &session.persistence.chat_session_store else {
         return;
     };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
         return;
     };
     if let Err(err) = store.append_message(chat_session_id, &message).await {
@@ -207,64 +215,31 @@ pub(crate) fn ledger_source_for_origin(origin: &ActionOrigin) -> LedgerSource {
     }
 }
 
-/// Redigiert alle Inhalts-tragenden Varianten eines [`LedgerEntryContent`]
-/// (Spec 0057, §1.2 "PFLICHT") — zentral hier statt an jeder Aufrufstelle
-/// von [`write_ledger_entry`] einzeln, damit ein vergessener Aufrufer
-/// keinen unredigierten Eintrag durchlassen kann. `Decision` trägt keine
-/// Ausgabedaten (nur `reason`/`code`, von der Filter-Engine selbst
-/// erzeugte Texte, kein Serverinhalt) und bleibt deshalb unverändert.
-fn redact_ledger_entry_content(
-    redactor: &dyn OutputRedactor,
-    content: LedgerEntryContent,
-) -> LedgerEntryContent {
-    match content {
-        LedgerEntryContent::CommandProposed { command } => LedgerEntryContent::CommandProposed {
-            command: redactor.redact_text(&command),
-        },
-        LedgerEntryContent::CommandExecuted {
-            command,
-            output,
-            cancelled,
-        } => LedgerEntryContent::CommandExecuted {
-            command: redactor.redact_text(&command),
-            output: redactor.redact(&output),
-            cancelled,
-        },
-        LedgerEntryContent::AiMessage { text } => LedgerEntryContent::AiMessage {
-            text: redactor.redact_text(&text),
-        },
-        decision @ LedgerEntryContent::Decision { .. } => decision,
-    }
-}
-
-/// Zentrale Schreibstelle für das Session-Ledger (Spec 0057, §1) — analog
-/// zu [`push_history`]/[`push_history_scoped`] oben, aber bewusst NICHT
-/// über deren `persist`-Flag/-Gate laufend: jenes Flag schließt MCP-
-/// Herkunft absichtlich aus der wiederaufnehmbaren Chat-Historie aus (Spec
-/// 0034, Abschnitt 10), das Ledger soll MCP-Aktivität aber gerade erfassen
-/// (Spec 0057, §1.1: Quelle `mcp-agent`) — deshalb ein eigenes, von
-/// `persist` unabhängiges Gate: nur `session.ledger_store`/
-/// `session.chat_session_id` müssen gesetzt sein.
+/// Central emit point for activity events (Spec 0057, issue #1506): the core
+/// keeps no record; observers get the event. Deliberately independent of the
+/// `persist` flag of [`push_history_scoped`] (which excludes MCP origin from
+/// the resumable chat history): MCP activity is announced, source
+/// `mcp-agent`.
 ///
-/// Redigiert `content` selbst (s. [`redact_ledger_entry_content`]) —
-/// Aufrufer übergeben unredigierte Daten. Ein Persistenzfehler bricht den
-/// Chat-Turn nicht ab (nur geloggt), aus demselben Grund wie bei
-/// `push_history_scoped`.
-pub(crate) async fn write_ledger_entry(
+/// Redacts `content` itself (see [`redact_activity_content`]) — callers pass
+/// unredacted data.
+pub(crate) async fn emit_activity(
     session: &Session,
     source: LedgerSource,
     content: LedgerEntryContent,
 ) {
-    let Some(store) = &session.ledger_store else {
-        return;
-    };
-    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
-        return;
-    };
-    let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
-    if let Err(err) = store.append_entry(chat_session_id, source, &redacted).await {
-        tracing::warn!(error = %err, "ledger entry persistence failed");
-    }
+    emit_activity_for_action(session, source, content, None).await;
+}
+
+/// Like [`emit_activity`], but the event carries the id of the action it
+/// belongs to (`action_id`, Spec 0057).
+pub(crate) async fn emit_activity_for_action(
+    session: &Session,
+    source: LedgerSource,
+    content: LedgerEntryContent,
+    action_id: Option<ActionId>,
+) {
+    emit_activity_event(session, source, content, action_id).await;
 }
 
 /// Spec 0051, Teil 2: Mindestabstand zwischen zwei `AiProvider::send()`-
@@ -291,7 +266,7 @@ const MIN_AI_REQUEST_SPACING: std::time::Duration = std::time::Duration::from_mi
 /// dieser Sitzung, nicht danach — sonst würde die Wartezeit die ohnehin
 /// schon laufende Anfrage nicht mehr entzerren.
 pub(crate) async fn wait_for_ai_request_slot(session: &Session) {
-    let mut paced_at = session.ai_request_paced_at.lock().await;
+    let mut paced_at = session.ai.request_paced_at.lock().await;
     if let Some(previous) = *paced_at {
         let elapsed = previous.elapsed();
         if elapsed < MIN_AI_REQUEST_SPACING {
@@ -356,7 +331,7 @@ async fn wait_before_main_send(
         () = async {
             wait_for_ai_request_slot(session).await;
             wait_for_rate_limit_budget(
-                &session.ai_provider_budget,
+                &session.ai.provider_budget,
                 estimated_tokens,
                 emitter,
                 session_id,
@@ -398,13 +373,23 @@ pub async fn run_chat_turn(
     // mehreren DB-Zugriffen, verschluckte einen früh gedrückten Stopp).
     // Issue #604: consecutive responses with only invalid tool calls.
     let mut invalid_only_streak = 0u32;
-    for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
+    // Issue #1296 / Spec 0021, Abschnitt 4: rounds since the last user
+    // involvement (turn start, confirmation decision, injected queued message).
+    let mut rounds_since_user = 0usize;
+    session
+        .conn
+        .user_decided_in_turn
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let mut round = 0usize;
+    loop {
+        round += 1;
         let mut injected_queued_messages = false;
         if round > 1 {
             // Stopp zwischen zwei Runden: keine weitere Runde. Eingereihte
             // Nachrichten bleiben dann in der Warteschlange und werden vom
             // Aufrufer als neuer Turn gesendet (Spec 0066, §1).
             if session
+                .conn
                 .auto_continue_stop
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
@@ -423,6 +408,7 @@ pub async fn run_chat_turn(
             let queued = session.take_queued_user_messages();
             if !queued.is_empty() {
                 injected_queued_messages = true;
+                rounds_since_user = 0;
                 for text in queued {
                     push_history(
                         session,
@@ -437,6 +423,7 @@ pub async fn run_chat_turn(
             }
             emit_chat_auto_continuation_started(emitter, session_id, round);
         }
+        rounds_since_user += 1;
 
         // Spec 0080, A2, Klarstellung Q-BL-0259-01 (2026-09-24,
         // Variante b): "leere Runde" gilt nur für eine Runde, die eine
@@ -483,6 +470,7 @@ pub async fn run_chat_turn(
                 // Issue #551: title after the first finished answer (one
                 // attempt per session; no-op once a title exists).
                 if !session
+                    .conn
                     .auto_continue_stop
                     .load(std::sync::atomic::Ordering::SeqCst)
                 {
@@ -497,10 +485,22 @@ pub async fn run_chat_turn(
             // Aufrufer muss sie mit einem Folge-Turn beantworten lassen.
             RoundOutcome::StoppedBeforeSend => return injected_queued_messages,
         }
+        if session
+            .conn
+            .user_decided_in_turn
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            rounds_since_user = 0;
+        }
+        if rounds_since_user >= MAX_AUTO_FOLLOWUP_ROUNDS {
+            emit_chat_auto_continuation_limit_reached(
+                emitter,
+                session_id,
+                MAX_AUTO_FOLLOWUP_ROUNDS,
+            );
+            return false;
+        }
     }
-
-    emit_chat_auto_continuation_limit_reached(emitter, session_id, MAX_AUTO_FOLLOWUP_ROUNDS);
-    false
 }
 
 /// Issue #604: after this many consecutive responses with only invalid tool
@@ -536,236 +536,20 @@ enum RoundOutcome {
     StoppedBeforeSend,
 }
 
-/// Spec 0040, Abschnitt 5: wird auf die (bereits kompaktierte, s.
-/// `compaction::compact_for_send`) Kopie der Historie angewendet, die
-/// tatsächlich an [`ssh_manager_core::ai::AiProvider::send`] geht —
-/// unmittelbar vor jedem `send()`-Aufruf, an allen drei Aufrufstellen in
-/// diesem Modul.
-///
-/// **Kritisch — nur additiv:** wendet denselben [`OutputRedactor`] erneut
-/// auf jede Nachricht an, der auch beim ursprünglichen Erzeugen bereits
-/// lief (Spec 0006, Abschnitt 5, für `CommandResult`; hier neu auch für
-/// freien `Text`-Inhalt über [`OutputRedactor::redact_text`]). Das ist
-/// strukturell garantiert additiv: `redact`/`redact_text` ersetzen
-/// ausschließlich neu erkannte Muster durch den `[REDACTED]`-Platzhalter,
-/// nie umgekehrt — ein bereits vorhandener Platzhalter matcht selbst keines
-/// der Muster erneut, bleibt also unverändert stehen, und kein Aufruf hier
-/// kann jemals Text sichtbar machen, der vorher (in `session.context`/der
-/// DB) redigiert war. Nur diese eine Kopie wird verändert — `session.
-/// context`/die persistierte Historie bleiben unangetastet, exakt wie bei
-/// der Kürzung nebenan.
-///
-/// `command`-Felder (bei `CommandResult`/`ActionRejected`) bleiben bewusst
-/// unangetastet — Spec 0018, Abschnitt 5: das ausgeführte Kommando selbst
-/// ist "bewusst voll transparent", nur seine Ausgabe läuft durch den
-/// Redactor (s. `execute_suggested_command`).
-///
-/// **Fencing-Sicherheit (Nachtrag, unabhängiger Review-Pass zu Spec
-/// 0040):** `MessageContent::Text` kann bereits gefencten Inhalt tragen
-/// (z. B. `execute_read_remote_file`s `<remote_file>...</remote_file>`,
-/// Spec 0039) — anders als `CommandResult` (dessen `output` erst *nach*
-/// dieser Funktion, beim eigentlichen Request-Aufbau in `ai-providers`,
-/// gefenced wird, Redaction dort also bereits strukturell vor dem
-/// Fencing läuft). Ein einfacher `redact_text(&text)` über die GESAMTE,
-/// bereits gefencte Zeichenkette würde ein gieriges Redaction-
-/// Fallback-Muster (z. B. das Private-Key-Rückfallmuster für einen
-/// abgeschnittenen Key-Block ohne `END`-Marker, s.
-/// `ssh_manager_core::ai::redactor`) erlauben, über die Fence-Grenze
-/// hinweg bis zum schließenden Tag zu matchen und diesen mit zu
-/// verschlucken — die Fencing-Garantie aus Spec 0039 (nicht
-/// vertrauenswürdiger Inhalt bleibt sicher eingerahmt) wäre damit
-/// verletzt, obwohl die Redaction-Richtung selbst sicher bleibt (nichts
-/// wird sichtbar, nur zusätzlich gelöscht).
-///
-/// Ein reines Vorziehen des Fencings vor die Redaction (der eigentlich
-/// bevorzugte Fix) ist für `RemoteFile`-Inhalt hier nicht sauber möglich:
-/// der gefencte Text IST die persistierte Repräsentation (`session.
-/// context`/die DB speichern bereits das fertig gefencte `MessageContent::
-/// Text`, s. `execute_read_remote_file`) — ein wiederaufgenommener Chat
-/// redigiert beim nächsten Versand also zwangsläufig bereits gefencten
-/// Text erneut. Stattdessen behandelt `redact_text_preserving_fence_
-/// markers` unten die bekannten, festen Fence-Marker-Strings
-/// (`ssh_manager_core::ai::fence_markers`) als Segment-Grenzen: der Text
-/// wird an jedem Marker aufgetrennt, jedes Segment *zwischen* zwei
-/// Markern unabhängig redigiert (ein gieriges Muster kann dadurch nie
-/// über einen Marker hinausmatchen — die Marker selbst durchlaufen den
-/// Redactor gar nicht erst), die Marker unverändert wieder eingefügt. Das
-/// ist sicher, weil `fence_untrusted`s Escaping (`escape_for_prompt_fence`)
-/// garantiert, dass ein literales `<`/`>` in bereits gefenctem Text NIE
-/// aus dem ursprünglichen Inhalt stammt, sondern ausschließlich von den
-/// Fence-Tags selbst — für tatsächlich gefencten Inhalt kann die
-/// Marker-Liste also nichts fälschlich "beschützen", das eigentlich
-/// redigiert werden müsste.
-///
-/// **Bekannte, bewusst nicht geschlossene Restlücke** (unabhängiger
-/// Review-Pass zu diesem Fix selbst, dokumentiert statt stillschweigend
-/// verschwiegen): `MessageContent::Text` trägt auch gewöhnlichen, nie
-/// escapten Chat-Text (Nutzer-Eingabe, KI-Antworttext über
-/// `flush_text_buffer`) — enthält so ein Text zufällig eine Marker-artige
-/// Teilzeichenkette (z. B. ein zitiertes `</stdout>` ohne jeden echten
-/// Fence-Bezug) MITTEN in einem unterminierten Fail-safe-Treffer (etwa
-/// einem von der KI ausgegebenen, abgeschnittenen Private-Key-Block ohne
-/// `END`-Marker), trennt das Segmentieren unten die Fail-safe-Reichweite
-/// an dieser Stelle künstlich ab — der Teil hinter dem Marker enthält
-/// dann keinen `BEGIN`-Header mehr, matcht kein Muster mehr und bleibt
-/// unredigiert. Das ist eine echte, aber eng begrenzte Abschwächung
-/// gegenüber dem Verhalten vor diesem Fix (der bis dahin den gesamten
-/// Text ungeteilt redigierte). Bewusst nicht mitgelöst: aus reinem
-/// String-Inhalt lässt sich nicht zuverlässig unterscheiden, ob ein
-/// Marker-Vorkommen aus einem echten Fence stammt oder zufällig in nie
-/// gefenctem Text auftaucht (das wäre nur mit einer strukturellen
-/// Kennzeichnung "dieser Text ist gefenct" lösbar, die über die
-/// Persistenz hinweg erhalten bliebe — ein größerer Umbau, nicht Teil
-/// dieses Fixes) — und die beiden Fehlerrichtungen widersprechen sich:
-/// bevorzugt man "immer volle Fail-safe-Reichweite", bricht das
-/// wiederum genau den hier eigentlich zu behebenden Fence-Bruch bei
-/// echtem gefenctem Inhalt. Die Redaction-Richtung bleibt in diesem
-/// Rand-Rand-Fall weiterhin sicher (nichts wird sichtbar gemacht, was
-/// vorher nicht sichtbar war) — nur die Reichweite ist geringer als im
-/// theoretischen Idealfall.
-pub(crate) fn reapply_redaction_for_send(
-    history: Vec<ChatMessage>,
-    redactor: &dyn OutputRedactor,
-) -> Vec<ChatMessage> {
-    history
-        .into_iter()
-        .map(|message| ChatMessage {
-            role: message.role,
-            content: match message.content {
-                MessageContent::Text(text) => {
-                    MessageContent::Text(redact_text_preserving_fence_markers(&text, redactor))
-                }
-                MessageContent::CommandResult {
-                    command,
-                    output,
-                    cancelled,
-                    waiting_for_input,
-                } => MessageContent::CommandResult {
-                    command,
-                    output: redactor.redact(&output),
-                    cancelled,
-                    waiting_for_input,
-                },
-                other @ MessageContent::ActionRejected { .. } => other,
-                // Issue #162: nur-additiv wie oben; der Webinhalt wird erst
-                // beim Request-Aufbau gefencet (`WebActivity::to_model_
-                // text`), hier also noch ungefencet redigiert.
-                MessageContent::WebActivity(activity) => {
-                    MessageContent::WebActivity(redact_web_activity(activity, redactor))
-                }
-                // Issue #504: the label goes into the fence, so it is
-                // redacted again on every send. The core never stores
-                // content here; the placeholder is built by the provider.
-                MessageContent::Extension(mut part) => {
-                    part.label = redactor.redact_text(&part.label);
-                    MessageContent::Extension(part)
-                }
-                // Issue #505: already sealed by the core.
-                sealed @ MessageContent::Sealed(_) => sealed,
-                // Issue #545: redacted again on every send (invariant 11).
-                MessageContent::Question {
-                    question_id,
-                    question,
-                    options,
-                    multi_select,
-                } => MessageContent::Question {
-                    question_id,
-                    question: redact_text_preserving_fence_markers(&question, redactor),
-                    options: options
-                        .into_iter()
-                        .map(|o| ssh_manager_core::profiles::AskUserOption {
-                            label: redact_text_preserving_fence_markers(&o.label, redactor),
-                            description: o
-                                .description
-                                .map(|d| redact_text_preserving_fence_markers(&d, redactor)),
-                        })
-                        .collect(),
-                    multi_select,
-                },
-            },
-        })
-        .collect()
-}
-
-/// [`reapply_redaction_for_send`] plus the sealing of extension parts (Issue
-/// #505, ADR 0141, decision 3). The one entry point every provider request
-/// (chat turn and compaction) goes through.
-pub(crate) fn reapply_redaction_and_seal_for_send(
-    history: Vec<ChatMessage>,
-    redactor: &dyn OutputRedactor,
-    registry: &crate::chat_content_extension::ChatContentRegistry,
+/// The one entry point every provider request of a session goes through
+/// (chat turn, compaction, title, notes): seals extension parts (Issue #505),
+/// then re-applies redaction (Spec 0040, Abschnitt 5; invariant 11). Call it
+/// as the last step before `AiProvider::send` (issue #833).
+pub(crate) async fn seal_session_for_send(
+    session: &Session,
     session_id: SessionId,
-) -> Result<Vec<ChatMessage>, crate::chat_content_extension::SealError> {
-    crate::chat_content_extension::seal_extension_parts(
-        reapply_redaction_for_send(history, redactor),
-        registry,
-        session_id,
-        redactor,
-    )
-}
-
-/// Issue #162: redigiert jedes Textfeld einer Web-Recherche — Anfrage und
-/// URLs können von der KI eingesetzte Geheimnisse tragen, Titel und
-/// Seitentext stammen aus dem offenen Web. Läuft vor dem Speichern und
-/// erneut vor jedem Versand (s. `reapply_redaction_for_send`).
-pub(crate) fn redact_web_activity(
-    activity: WebActivity,
-    redactor: &dyn OutputRedactor,
-) -> WebActivity {
-    let redact_sources = |sources: Vec<WebSource>| {
-        sources
-            .into_iter()
-            .map(|source| WebSource {
-                title: redactor.redact_text(&source.title),
-                url: redactor.redact_text(&source.url),
-            })
-            .collect()
+    context: SessionContext,
+) -> Result<RedactedContext, crate::chat_content_extension::SealError> {
+    let sealer = crate::chat_content_extension::RegistrySealer {
+        registry: &session.persistence.chat_content,
+        session_id: session.extension_content_key(session_id).await,
     };
-    WebActivity {
-        kind: activity.kind,
-        input: redactor.redact_text(&activity.input),
-        results: redact_sources(activity.results),
-        cited: redact_sources(activity.cited),
-        content: activity.content.map(|c| redactor.redact_text(&c)),
-        content_truncated: activity.content_truncated,
-        error_code: activity.error_code,
-    }
-}
-
-/// s. `reapply_redaction_for_send`-Doc-Kommentar ("Fencing-Sicherheit").
-/// Trennt `text` an jedem bekannten Fence-Marker (`ssh_manager_core::ai::
-/// fence_markers`) auf, redigiert nur die Segmente dazwischen und fügt die
-/// Marker unverändert wieder ein — ein Redaction-Muster kann dadurch nie
-/// über eine Fence-Grenze hinausmatchen, unabhängig davon, wie gierig es
-/// ist. Findet `text` keinen Marker (der Normalfall für gewöhnlichen
-/// Chat-Text), verhält sich das identisch zu einem einzelnen
-/// `redactor.redact_text(text)`-Aufruf.
-fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedactor) -> String {
-    let markers = ssh_manager_core::ai::fence_markers();
-    let mut result = String::new();
-    let mut remaining = text;
-
-    loop {
-        let earliest = markers
-            .iter()
-            .filter_map(|marker| remaining.find(marker.as_str()).map(|idx| (idx, marker)))
-            .min_by_key(|(idx, _)| *idx);
-
-        match earliest {
-            Some((idx, marker)) => {
-                let (before, after) = remaining.split_at(idx);
-                result.push_str(&redactor.redact_text(before));
-                result.push_str(marker);
-                remaining = &after[marker.len()..];
-            }
-            None => {
-                result.push_str(&redactor.redact_text(remaining));
-                break;
-            }
-        }
-    }
-
-    result
+    RedactedContext::seal(context, session.redactor.as_ref(), &sealer).await
 }
 
 /// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
@@ -776,6 +560,8 @@ fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedacto
 /// jede Runde, in die gerade eingereihte Nutzer-Nachrichten eingespeist
 /// wurden, `false` für jede automatische Folgerunde nach einer
 /// ausgeführten/geblockten Aktion.
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 async fn run_one_round(
     session: &Session,
     session_id: SessionId,
@@ -784,7 +570,7 @@ async fn run_one_round(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     check_for_empty_response: bool,
 ) -> RoundOutcome {
-    let mut request_context = session.context.lock().await.clone();
+    let mut request_context = session.ai.context.lock().await.clone();
     // spec-reviewer-Fund (Review dieses Schritts, Etappe 3): geklont statt
     // den `MutexGuard` über den (jetzt potenziell lange laufenden,
     // Zusammenfassungs-KI-Aufruf enthaltenden) `compact_for_send`-Aufruf
@@ -794,7 +580,7 @@ async fn run_one_round(
     // gleichzeitigen Lese-/Schreibzugriff (z. B. `send_chat_message_impl`
     // bei einer neuen Nutzer-Nachricht in einem anderen Tab derselben
     // Sitzung) bis zu `SUMMARY_CALL_TIMEOUT` blockieren.
-    let system_context_parts = session.system_context_parts.lock().await.clone();
+    let system_context_parts = session.ai.system_context_parts.lock().await.clone();
     // Spec 0057, §3: "vor jedem `AiProvider::send()`-Aufruf" — kompaktiert
     // nur die an den Provider gesendete Kopie, die gespeicherte Historie in
     // `session.context`/der DB bleibt unangetastet (s.
@@ -805,26 +591,22 @@ async fn run_one_round(
         emitter,
         request_context,
         &system_context_parts,
-        session.model_context_window_tokens,
+        session.ai.model_context_window_tokens,
     )
     .await;
     // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     // Issue #505: extension parts are sealed here (limits, redaction,
     // fencing); a failure sends nothing.
-    request_context.history = match reapply_redaction_and_seal_for_send(
-        request_context.history,
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
-        Ok(history) => history,
+    let request_context = match seal_session_for_send(session, session_id, request_context).await {
+        Ok(context) => context,
         Err(err) => {
             emit_chat_error(emitter, session_id, err.message, Some(err.code));
             return RoundOutcome::Finished;
         }
     };
-    let estimated_tokens = crate::compaction::estimate_request_tokens(&request_context);
+    let estimated_tokens =
+        crate::compaction::estimate_request_tokens(request_context.as_session_context());
     if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
         emit_chat_response_cancelled(emitter, session_id);
         return RoundOutcome::StoppedBeforeSend;
@@ -832,8 +614,8 @@ async fn run_one_round(
     // Issue #169: geklont, weil ein abgelehnter Request mit Web-Werkzeugen
     // genau einmal mit demselben (bereits kompaktierten und geschwärzten)
     // Kontext wiederholt wird, s. `AiError::WebResearchRejected` unten.
-    let mut stream = session.ai_provider.send(request_context.clone());
-    crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai_provider_label);
+    let mut stream = session.ai.provider.send(request_context.clone());
+    crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai.label);
     let mut trace = RequestTrace::new();
     // Issue #169: höchstens ein Wiederholversuch ohne Web-Werkzeuge je
     // Anfrage, nie eine Schleife.
@@ -856,7 +638,7 @@ async fn run_one_round(
     let mut invalid_calls = 0u32;
     let mut valid_call_seen = false;
     let available_tool_names: Vec<String> = request_context
-        .available_actions
+        .available_actions()
         .iter()
         .map(|a| a.name.clone())
         .collect();
@@ -1033,16 +815,13 @@ async fn run_one_round(
             AiEvent::Usage { input_tokens } => {
                 // Issue #601: feed the real size back into compaction and
                 // show it in the chat (numbers only).
-                session
-                    .context_usage
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                ssh_manager_core::sync::lock_tolerating_poison(&session.ai.context_usage)
                     .record(input_tokens, estimated_tokens);
                 crate::events::emit_chat_context_usage(
                     emitter,
                     session_id,
                     input_tokens,
-                    session.model_context_window_tokens as u64,
+                    session.ai.model_context_window_tokens as u64,
                 );
             }
             // Issue #610: passive report to the registered observers; the
@@ -1071,6 +850,7 @@ async fn run_one_round(
                 // davon, wie diese Antwort endet. Kein Inhalt, keine
                 // Anzeige, kein `round_had_content`.
                 session
+                    .safety
                     .untrusted_content_ingested
                     .store(true, std::sync::atomic::Ordering::SeqCst);
             }
@@ -1133,18 +913,14 @@ async fn run_one_round(
                 trace.log_finished(session, "error");
                 drop(stream);
                 flush_text_buffer(session, &mut text_buffer).await;
-                session.ai_provider.disable_web_research();
+                session.ai.provider.disable_web_research();
                 emit_chat_web_research_unavailable(emitter, session_id);
                 if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
                     emit_chat_response_cancelled(emitter, session_id);
                     return RoundOutcome::StoppedBeforeSend;
                 }
-                stream = session.ai_provider.send(request_context.clone());
-                crate::events::emit_chat_ai_request_started(
-                    emitter,
-                    session_id,
-                    &session.ai_provider_label,
-                );
+                stream = session.ai.provider.send(request_context.clone());
+                crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai.label);
                 trace = RequestTrace::new();
             }
             AiEvent::Error(err) => {
@@ -1162,7 +938,7 @@ async fn run_one_round(
                 // message text (the provider line already carries it).
                 tracing::warn!(
                     session_id = %session_id,
-                    request_id = ?session.ai_provider.last_request_id(),
+                    request_id = ?session.ai.provider.last_request_id(),
                     code = err.code(),
                     "AI turn ended with an error",
                 );
@@ -1171,7 +947,7 @@ async fn run_one_round(
                     session_id,
                     describe_ai_error(&err),
                     Some(err.code()),
-                    ai_error_details(&err, &session.ai_provider_label, session.redactor.as_ref()),
+                    ai_error_details(&err, &session.ai.label, session.redactor.as_ref()),
                 );
                 break;
             }
@@ -1229,6 +1005,7 @@ async fn handle_web_activity(
     )
     .await;
     session
+        .safety
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
     if !check_text.trim().is_empty() {
@@ -1345,7 +1122,7 @@ impl RequestTrace {
         }
         self.first_content_logged = true;
         tracing::info!(
-            request_id = ?session.ai_provider.last_request_id(),
+            request_id = ?session.ai.provider.last_request_id(),
             time_to_first_content_ms = self.started.elapsed().as_millis() as u64,
             "AI request: first content received",
         );
@@ -1353,7 +1130,7 @@ impl RequestTrace {
 
     fn log_finished(&self, session: &Session, outcome: &'static str) {
         tracing::info!(
-            request_id = ?session.ai_provider.last_request_id(),
+            request_id = ?session.ai.provider.last_request_id(),
             duration_ms = self.started.elapsed().as_millis() as u64,
             outcome,
             "AI request finished",
@@ -1375,7 +1152,7 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     // `AiProvider` gestreamte Antwort, unabhängig davon, ob die auslösende
     // Aktion über den internen Chat oder MCP kam (Letzteres läuft ohnehin
     // nie über `run_one_round`, s. `app_shell::mcp_backend`).
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage { text: text.clone() },

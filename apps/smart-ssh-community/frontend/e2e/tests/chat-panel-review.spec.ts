@@ -21,6 +21,7 @@ const SIZES = [
 async function tabStops(page: Page, count: number) {
   const stops: { name: string; top: number; left: number; ring: boolean }[] = [];
   for (let i = 0; i < count; i++) {
+    await waitForScrollHandled(page);
     await page.keyboard.press("Tab");
     const lost = await page.evaluate(() => document.activeElement === document.body);
     expect(lost, `focus was lost after Tab ${i + 1}`).toBe(false);
@@ -52,6 +53,63 @@ async function tabStops(page: Page, count: number) {
   return stops;
 }
 
+/** Waits until the effect of the previous focus change on the chat column is
+ * over: the column's scroll position is unchanged for 5 frames and the jump
+ * button's Tab-order state (aria-hidden / tabindex) matches that position.
+ * Focusing a stop scrolls it into view; the scroll event that flips the jump
+ * button between tabbable and hidden arrives later. A Tab pressed in between
+ * can land on the button just before it is hidden, which drops focus to
+ * <body> (the failure of issue #1268). Wait for the end state (ADR 0122). */
+async function waitForScrollHandled(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
+        const jump = document.querySelector('[data-testid="chat-jump-to-latest"]') as HTMLElement;
+        let frames = 0;
+        let last = NaN;
+        let stable = 0;
+        const step = () => {
+          const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
+          const jumpOutOfOrder = jump.getAttribute("tabindex") === "-1";
+          stable = el.scrollTop === last && jumpOutOfOrder === near ? stable + 1 : 0;
+          last = el.scrollTop;
+          if (stable >= 5) resolve();
+          else if (++frames > 600) reject(new Error("chat column scroll state did not settle within 600 frames"));
+          else requestAnimationFrame(step);
+        };
+        step();
+      }),
+  );
+}
+
+/** Waits until the chat column is pinned to the bottom and its content height
+ * has not changed for 10 consecutive animation frames. A late layout change
+ * (font load, markdown/link layout) moves the stops of later Tab presses
+ * relative to earlier ones; ADR 0122 requires waiting for the end state. */
+async function waitForSettledColumn(page: Page) {
+  await page.evaluate(
+    async () => {
+      await document.fonts.ready;
+      return new Promise<void>((resolve, reject) => {
+        let frames = 0;
+        const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
+        let last = -1;
+        let stable = 0;
+        const step = () => {
+          const pinned = el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
+          stable = pinned && el.scrollHeight === last ? stable + 1 : 0;
+          last = el.scrollHeight;
+          if (stable >= 10) resolve();
+          else if (++frames > 600) reject(new Error("chat column did not settle within 600 frames"));
+          else requestAnimationFrame(step);
+        };
+        step();
+      });
+    },
+  );
+}
+
 function expectVisualOrder(stops: { name: string; top: number; left: number }[]) {
   // Reading order: a stop never lies clearly above the previous one; within a
   // row it moves right.
@@ -70,11 +128,34 @@ test.describe("chat panel review", () => {
     await captureScreen(app.page, "chat-messages");
   });
 
-  test("screenshot of the command confirmation and its quick-rule popup", async ({ app }) => {
+  // Issue #1371: the transcript is flat — no rounded corners, no shadows on any
+  // item (shared button and tooltip primitives are restyled in their own issues).
+  for (const [name, open] of [
+    ["messages", openChatWithMessages],
+    ["confirmation", openChatWithConfirmation],
+  ] as const) {
+    test(`transcript items have square corners and no shadows (${name})`, async ({ app }) => {
+      await open(app);
+      const transcript = app.page.getByTestId("chat-transcript");
+      await expect(transcript).toBeVisible();
+      const offenders = await transcript.evaluate((root) =>
+        Array.from(root.querySelectorAll("*"))
+          .filter((el) => !el.closest("button, [role=tooltip]"))
+          .filter((el) => {
+            const cs = getComputedStyle(el);
+            return cs.borderTopLeftRadius !== "0px" || cs.boxShadow !== "none";
+          })
+          .map((el) => el.tagName + "." + el.className),
+      );
+      expect(offenders).toEqual([]);
+    });
+  }
+
+  test("screenshot of the command confirmation and its expanded rule row", async ({ app }) => {
     await openChatWithConfirmation(app);
     await captureScreen(app.page, "chat-confirmation");
-    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
+    await app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ }).click();
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
     await captureScreen(app.page, "chat-quick-rule");
   });
 
@@ -90,33 +171,22 @@ test.describe("chat panel review", () => {
     for (const s of stops) expect(s.ring, `no focus indicator on "${s.name}"`).toBe(true);
   });
 
-  test("composer: one-line text, prompt and buttons share a vertical centre; multi-line keeps bottom/top alignment", async ({ app }) => {
+  test("composer: labelled box, toolbar row below the input, voice and Send share a vertical centre", async ({ app }) => {
     await openChatWithMessages(app);
     const input = chatInput(app.page);
     const form = app.page.locator("form:has(textarea)").locator("visible=true");
-    const prompt = form.locator("span", { hasText: ">" }).first();
     const send = form.getByRole("button", { name: "Send", exact: true });
     const voice = form.getByRole("button", { name: "Start voice input" });
-    // Empty (placeholder) and one line of text.
-    // In the narrow layout the placeholder itself wraps onto two lines; that
-    // is a multi-line state and is covered below, so only check it when the
-    // placeholder fits on one line.
-    if ((await input.boundingBox())!.height < 36) {
-      await expectVerticallyCentredWith(input, send);
-      await expectVerticallyCentredWith(prompt, send);
-      await expectVerticallyCentredWith(input, voice);
-    }
+    await expect(app.page.getByLabel("Message", { exact: true }).locator("visible=true")).toBeVisible();
+    await expect(form.locator("span", { hasText: /^>$/ })).toHaveCount(0);
     await input.fill("one line");
-    await expectVerticallyCentredWith(input, voice);
-    await expectVerticallyCentredWith(input, send);
-    await expectVerticallyCentredWith(prompt, send);
-    // Five lines: send stays on the bottom line, prompt on the first.
+    await expectVerticallyCentredWith(voice, send);
+    // The toolbar sits below the input and keeps its place when the input grows.
     await input.fill("1\n2\n3\n4\n5");
     await expect(async () => {
-      const [i, p, s] = await Promise.all([input.boundingBox(), prompt.boundingBox(), send.boundingBox()]);
+      const [i, s] = await Promise.all([input.boundingBox(), send.boundingBox()]);
       expect(i!.height).toBeGreaterThan(80);
-      expect(Math.abs(s!.y + s!.height - (i!.y + i!.height))).toBeLessThanOrEqual(2);
-      expect(Math.abs(p!.y - i!.y)).toBeLessThanOrEqual(2);
+      expect(s!.y).toBeGreaterThanOrEqual(i!.y + i!.height - 2);
     }).toPass({ timeout: 5_000 });
   });
 
@@ -124,14 +194,7 @@ test.describe("chat panel review", () => {
     await openChatWithMessages(app);
     // Settled state: column at the bottom, jump button hidden.
     await expect(app.page.getByTestId("chat-jump-to-latest")).toBeHidden();
-    await expect
-      .poll(() =>
-        app.page.evaluate(() => {
-          const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
-          return el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
-        }),
-      )
-      .toBe(true);
+    await waitForSettledColumn(app.page);
     await app.page.getByRole("button", { name: "New chat" }).focus();
     const stops = await tabStops(app.page, 6);
     expectVisualOrder(stops);
@@ -145,14 +208,14 @@ test.describe("chat panel review", () => {
     expect(ring, "the chat input shows no focus indicator").toBe(true);
   });
 
-  test("the quick-rule popup closes with Escape and focus returns to its trigger", async ({ app }) => {
+  test("the rule row toggle expands inline and keeps focus on itself", async ({ app }) => {
     await openChatWithConfirmation(app);
-    const trigger = app.page.getByRole("button", { name: "Show rule suggestions" });
-    await trigger.click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
-    await app.page.keyboard.press("Escape");
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+    const toggle = app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ });
+    await toggle.focus();
+    await app.page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
+    await expect(toggle).toBeFocused();
   });
 
   for (const size of SIZES) {

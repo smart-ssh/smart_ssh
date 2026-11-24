@@ -1,6 +1,9 @@
 # ADR 0114 — Bearbeitungskopien je Datenverzeichnis, Aufräumen beim Start
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0054 (Teil 4, Punkt 6), ADR 0032, Issue #19, Issue #93
 
 ## Problem

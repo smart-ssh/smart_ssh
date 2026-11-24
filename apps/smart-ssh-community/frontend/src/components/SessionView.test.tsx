@@ -1,10 +1,10 @@
 // Spec 0053, Teil 2 ("Testbarkeit"): "Bereichs-Splitter ziehen -> Aufteilung
 // ändert sich, Mindestgrößen greifen, Wert überlebt Neustart" und "Kleines
 // Fenster -> Layout bleibt bedienbar (Mindestgrößen)."
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
+import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../settings/layoutSettings";
 import { testI18n } from "../testI18n";
 import { registerSessionHeaderItem, resetRegistryForTests } from "../extensions/registry";
 import { SessionView } from "./SessionView";
@@ -17,12 +17,29 @@ vi.mock("./ChatPanel", () => ({
 vi.mock("./TerminalView", () => ({ TerminalView: () => <div>terminal-stub</div> }));
 vi.mock("./FileBrowserPanel", () => ({ FileBrowserPanel: () => <div>file-browser-stub</div> }));
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
+  onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
+  onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../layoutSettings", () => ({
+const apiMocks = vi.hoisted(() => ({
+  getServer: vi.fn(),
+  listGroups: vi.fn(),
+  reconnectSession: vi.fn(() => Promise.resolve()),
+  stopAutoReconnect: vi.fn(() => Promise.resolve()),
+}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getServer: (...a: unknown[]) => apiMocks.getServer(...a) as never,
+    listGroups: () => apiMocks.listGroups() as never,
+    reconnectSession: (...a: unknown[]) => apiMocks.reconnectSession(...(a as [])) as never,
+    stopAutoReconnect: (...a: unknown[]) => apiMocks.stopAutoReconnect(...(a as [])) as never,
+  }),
+);
+
+vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
 }));
@@ -83,13 +100,97 @@ function renderSessionView() {
   );
 }
 
-/** Findet den rechten (SSH-/SFTP-)Bereich über seinen einzigen "Terminal"-
- * Umschalter-Text, dann dessen Container mit der `style`-gesetzten Breite. */
+/** Finds the right (SSH/SFTP) pane via the terminal stub: its wrapper div,
+ * then the container with the width set by `style`. */
 function getRightPanel(): HTMLElement {
-  const terminalToggle = screen.getByText("Terminal");
-  // header (h-8 Umschalter-Leiste) -> rechter Bereich-Container
-  return terminalToggle.closest("div")!.parentElement as HTMLElement;
+  return screen.getByText("terminal-stub").closest("div")!.parentElement!.parentElement as HTMLElement;
 }
+
+const SERVER = {
+  id: "server-1",
+  name: "srv1",
+  host: "10.0.4.21",
+  port: 22,
+  username: "deploy",
+  groupId: null as string | null,
+  isLocal: false,
+};
+
+describe("SessionView header (Issue #1366)", () => {
+  beforeEach(() => {
+    apiMocks.getServer.mockReset();
+    apiMocks.listGroups.mockReset();
+    apiMocks.listGroups.mockResolvedValue([{ id: "g1", name: "Production" }]);
+  });
+
+  it("shows user@host:port and the group badge", async () => {
+    apiMocks.getServer.mockResolvedValue({ ...SERVER, groupId: "g1" });
+    renderSessionView();
+    expect(await screen.findByText("deploy@10.0.4.21:22")).toBeTruthy();
+    expect(await screen.findByText("Production")).toBeTruthy();
+  });
+
+  it("shows no badge for a server without a group", async () => {
+    apiMocks.getServer.mockResolvedValue(SERVER);
+    renderSessionView();
+    expect(await screen.findByText("deploy@10.0.4.21:22")).toBeTruthy();
+    expect(apiMocks.listGroups).not.toHaveBeenCalled();
+    expect(screen.queryByText("Production")).toBeNull();
+  });
+
+  it("shows the user and 'this device' for the local pseudo-server", async () => {
+    apiMocks.getServer.mockResolvedValue({ ...SERVER, host: "localhost", isLocal: true });
+    renderSessionView();
+    expect(await screen.findByText("deploy · dieses Gerät")).toBeTruthy();
+    expect(document.querySelector('[data-status-square="local"]')).toBeTruthy();
+  });
+
+  it("keeps the header working when the server cannot be loaded", async () => {
+    apiMocks.getServer.mockRejectedValue(new Error("boom"));
+    renderSessionView();
+    expect(await screen.findByRole("button", { name: "Weitere Aktionen" })).toBeTruthy();
+    await waitFor(() => expect(apiMocks.getServer).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText(/@/)).toBeNull();
+  });
+
+  it("switches Terminal/Files from the header segments; the AI chat stays visible", async () => {
+    apiMocks.getServer.mockResolvedValue(SERVER);
+    renderSessionView();
+    const group = screen.getByRole("group", { name: "Bereichsumschalter" });
+    const terminal = within(group).getByRole("button", { name: "Terminal" });
+    const files = within(group).getByRole("button", { name: "Dateien" });
+    expect(terminal.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(files);
+    expect(files.getAttribute("aria-pressed")).toBe("true");
+    expect(terminal.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("chat-panel-stub")).toBeTruthy();
+    await screen.findByText("deploy@10.0.4.21:22");
+  });
+
+  it("offers Reconnect in the More actions menu after a disconnect on wide screens", async () => {
+    apiMocks.getServer.mockResolvedValue(SERVER);
+    const events = await import("../api/events");
+    renderSessionView();
+    await screen.findByText("deploy@10.0.4.21:22");
+    const handler = vi.mocked(events.onConnectionStatusChanged).mock.calls.at(-1)![0];
+    act(() => handler({ sessionId: "session-1", status: "disconnected", reason: "network down" } as never));
+    fireEvent.click(await screen.findByRole("button", { name: "Weitere Aktionen" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Neu verbinden" }));
+    await waitFor(() => expect(apiMocks.reconnectSession).toHaveBeenCalledWith("session-1"));
+  });
+
+  it("has Disconnect but no Reconnect entry while connected", async () => {
+    apiMocks.getServer.mockResolvedValue(SERVER);
+    renderSessionView();
+    fireEvent.click(screen.getByRole("button", { name: "Weitere Aktionen" }));
+    await screen.findByRole("menu");
+    expect(screen.getByRole("menuitem", { name: "Trennen" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Neu verbinden" })).toBeNull();
+  });
+});
 
 describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
   beforeEach(() => {

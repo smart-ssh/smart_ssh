@@ -1,0 +1,4 @@
+image = "dropbear"
+hostname = "smoke-dropbear"
+networks = ["smoke-net"]
+publish = true

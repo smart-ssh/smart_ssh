@@ -1,6 +1,9 @@
 # ADR 0066: Nachlauf zu Spec 0073 — Pfad-Override und Passphrase im Verbindungstest
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0073-shared-credential-trim.md (§9 Klarstellungen),
 ADR 0064, Commits `2956e57` (Pfad-Override), `cb07f0c` (Passphrase im
 Verbindungstest)

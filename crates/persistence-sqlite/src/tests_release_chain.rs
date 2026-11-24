@@ -18,7 +18,6 @@
 //! `tests/fixtures/releases/README.md`.
 
 use ssh_manager_core::ai::{MessageContent, Role};
-use ssh_manager_core::audit::LedgerEntryContent;
 use ssh_manager_core::crypto::DatabaseKey;
 use ssh_manager_core::filter::{Pattern, RuleAction, Scope};
 use ssh_manager_core::profiles::{AuthMethod, NoteTarget, PostIngestPolicy, ProfileStore};
@@ -51,7 +50,6 @@ mod marker {
     pub const CHAT_SUMMARY: &str = "summary-r052";
     pub const PROMPT_1: &str = "prompt-r052-1";
     pub const PROMPT_2: &str = "prompt-r052-2";
-    pub const LEDGER_COMMAND: &str = "uptime-r052";
 }
 
 fn fixture_key() -> DatabaseKey {
@@ -121,6 +119,7 @@ async fn test_every_release_fixture_upgrades_step_by_step_without_losing_data() 
     }
 }
 
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     let release = fixture.release;
     let dir = tempfile::tempdir().expect("temp dir");
@@ -219,10 +218,6 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     );
     assert!(report.chat_messages.decrypted >= 2, "{release}: {report:?}");
     assert!(
-        report.ledger_entries.decrypted >= 2,
-        "{release}: {report:?}"
-    );
-    assert!(
         report.prompt_history.decrypted >= 2,
         "{release}: {report:?}"
     );
@@ -231,7 +226,7 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
     store.close().await;
 
     let after_decryption = snapshot_database(&path, Some(&key)).await;
-    // Umgeschrieben werden genau die vier Spalten und der Zustand.
+    // Umgeschrieben werden genau die drei Spalten und der Zustand.
     let mut changed = FIELD_ENCRYPTED_COLUMNS.to_vec();
     changed.push(("field_content_decryption_state", "state"));
     previous.assert_preserved_in_except(
@@ -283,6 +278,19 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
 /// auf jedem Zwischenschema, auf dem die Stores dieses Builds noch nicht
 /// lesen können.
 fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot, step: &str) {
+    // Issue #1506: migration 0030 drops the ledger; before it the fixture's
+    // rows must still be there.
+    if snapshot.tables.contains_key("ledger_entries") {
+        assert!(
+            snapshot.row_count("ledger_entries") >= 2,
+            "{step}: ledger_entries lost rows before migration 0030"
+        );
+    } else {
+        assert!(
+            !snapshot.tables.contains_key("activity_sessions"),
+            "{step}: activity_sessions must go together with ledger_entries"
+        );
+    }
     for (table, at_least) in [
         ("groups", 2),
         ("servers", 2),
@@ -293,7 +301,6 @@ fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot,
         ("chat_sessions", 1),
         ("chat_messages", 2),
         ("prompt_history", 2),
-        ("ledger_entries", 2),
     ] {
         assert!(
             snapshot.row_count(table) >= at_least,
@@ -315,8 +322,10 @@ fn assert_release_rows_present(snapshot: &crate::test_support::DatabaseSnapshot,
 }
 
 /// Die Daten des Release, gelesen über die Stores dieses Builds — Feld für
-/// Feld, auch der früher feldweise verschlüsselte Chat, Prompt-Historie,
-/// Ledger und Zusammenfassung (nach der Umstellung, Issue #113).
+/// Feld, auch der früher feldweise verschlüsselte Chat, Prompt-Historie
+/// und Zusammenfassung (nach der Umstellung, Issue #113).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "test over 150 lines; not split")]
 async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str) {
     let groups = store.list_groups().await.expect("groups readable");
     let parent = groups
@@ -477,15 +486,4 @@ async fn assert_release_data_readable(store: &SqliteProfileStore, release: &str)
         history_sorted,
         vec![marker::PROMPT_1.to_string(), marker::PROMPT_2.to_string()]
     );
-
-    let ledger = store
-        .ledger_store()
-        .load_entries(sessions[0].id)
-        .await
-        .expect("ledger readable");
-    assert_eq!(ledger.len(), 2);
-    assert!(ledger.iter().any(|e| matches!(
-        &e.content,
-        LedgerEntryContent::CommandProposed { command } if command == marker::LEDGER_COMMAND
-    )));
 }

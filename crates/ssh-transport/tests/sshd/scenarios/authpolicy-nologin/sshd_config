@@ -1,0 +1,3 @@
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no

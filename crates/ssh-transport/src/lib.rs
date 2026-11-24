@@ -2,7 +2,9 @@
 //! 0005). Konkrete, austauschbare SSH-Bibliotheks-Anbindung — `core` selbst
 //! kennt nur die Traits (`SshTransport`, `HostKeyStore`, ...).
 
+mod algorithms;
 mod auth;
+mod auth_pause;
 mod connect;
 mod error;
 mod exec;
@@ -13,6 +15,7 @@ mod local_sftp;
 mod sftp;
 mod sftp_tap;
 mod shell;
+mod sudo_prompt;
 #[cfg(feature = "test-support")]
 pub mod test_keys;
 mod transport;
@@ -21,6 +24,7 @@ mod transport;
 mod tests;
 
 pub use auth::{classify_openssh_key, KeyClassification};
+pub use auth_pause::timeout_unless_paused;
 pub use connect::{
     connect, connect_with_keepalive, connect_with_limits, connect_with_log, connect_with_timeout,
     ConnectLimits, ConnectOutcome,

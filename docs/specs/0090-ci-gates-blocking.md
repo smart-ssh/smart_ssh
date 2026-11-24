@@ -21,9 +21,14 @@ Diese Spec fasst die früheren Specs 0035, 0089, 0091 (CI-Teil), 0093 und
   dringende Korrektur der veröffentlichten Version). Ein Commit eines
   Pull-Request-Branches läuft einmal, nicht doppelt unter denselben
   Prüfnamen.
+- Zusätzlich läuft die CI jede Nacht um 02:30 UTC auf `develop` und lässt
+  sich von Hand starten. Beide Läufe führen jede Prüfung aus, die auch ein
+  Push auf `develop` ausführt, damit eine Prüfung, die ohne neuen Commit rot
+  wird (z. B. durch eine neue Sicherheitsmeldung), innerhalb eines Tages
+  auffällt.
 - Ein neuer Push auf denselben Pull Request bricht dessen noch laufenden
-  Lauf ab. Push-Läufe auf den langlebigen Branches brechen sich gegenseitig
-  nicht ab.
+  Lauf ab. Push-Läufe auf den langlebigen Branches sowie nächtliche und von Hand
+  gestartete Läufe brechen sich gegenseitig und andere Läufe nicht ab.
 - Die CI baut aus einem frischen Klon ohne Secrets. Scheitert ein Schritt,
   weil etwas außerhalb dieses Repositorys fehlt, ist das ein Fehler.
 
@@ -36,9 +41,25 @@ anderen nicht ab, jedes meldet sein eigenes Ergebnis.
   Formatprüfung (`cargo fmt --all --check`), Clippy über alle Ziele mit
   Warnungen als Fehler, alle Tests des Workspace, Build des Workspace ohne
   Test-Features. Der Testschritt läuft bis zum Ende weiter, auch wenn ein
-  Test-Binary scheitert, damit ein Lauf alle scheiternden Ziele zeigt. Der
+  Test-Binary scheitert, damit ein Lauf alle scheiternden Ziele zeigt. Die
+  Tests laufen mit `cargo nextest` (Profil `ci`: bis zu zwei Wiederholungen,
+  ein hängender Test wird nach 3 × 120 s abgebrochen und scheitert mit
+  seinem Namen); Doctests laufen in einem eigenen Schritt. Der Lauf schreibt
+  einen JUnit-Bericht, der je Betriebssystem als Artefakt hochgeladen wird,
+  auch bei Fehlern. Ein Test, der erst bei einer Wiederholung besteht,
+  lässt den Job scheitern, und seine Namen werden ausgegeben. Der
   Build ohne Test-Features fängt Produktivcode, der einen nur für Tests
   gedachten Zugang aufruft.
+  `cargo-nextest` wird in der angepassten Version als fertiges Programm
+  installiert, nicht aus dem Quelltext gebaut. Unterstützt die eingesetzte
+  Installationsaktion die Version nicht selbst, lädt sie das Programm über
+  `cargo-binstall`; die Aktion prüft dann keine eigene Prüfsumme.
+  Build-Zwischenstände (Rust-Cache, Gradle-Cache) werden nur bei Läufen auf
+  einem Branch geschrieben, nicht bei Pull Requests: ein Pull Request liest
+  den Cache seines Basis-Branches, legt aber keinen eigenen an. So verdrängen
+  Pull Requests die Caches des Basis-Branches nicht, und ein Lauf findet
+  seinen Cache auch ohne vorherigen Lauf desselben Pull Requests. Ein Pull
+  Request, der `Cargo.lock` ändert, baut ohne passenden Cache von Grund auf.
 - **A10 — Grenzprüfung.** Die Tauri-freie Anwendungslogik (Spec 0084) hat
   in ihrem gesamten Abhängigkeitsbaum — direkt oder transitiv, normale,
   Build- und Dev-Abhängigkeiten, unter allen Features — weder Tauri noch
@@ -104,6 +125,9 @@ Betriebssystem ab).
   verlangt eine bewusste Entscheidung. MPL-2.0 ist erst nach einer
   Einzelprüfung auf die Liste gekommen, BSL-1.0 (Boost) nach einer
   Maintainer-Entscheidung (permissive, nur Windows-Zwischenabhängigkeiten).
+  Die Lizenzen `blessing` und WTFPL sind nur für die gebündelte
+  SQLCipher-Quelle (`sqlcipher-src`) als Einzel-Ausnahme erlaubt, nicht
+  allgemein.
   Die Liste gilt für
   Drittabhängigkeiten, nicht für die eigenen, unveröffentlichten Crates des
   Workspace. Dieselbe Liste gilt auch für die Drittlizenzen des Frontends

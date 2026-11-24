@@ -13,7 +13,7 @@
 use proptest::prelude::*;
 
 use super::classifier::RuleBasedRiskClassifier;
-use super::types::{RiskAssessment, RiskClassifier, RiskLevel};
+use super::types::{RiskAssessment, RiskLevel};
 use crate::filter::DEFAULT_MAX_COMMAND_LENGTH;
 
 fn classify(command: &str) -> RiskAssessment {
@@ -211,5 +211,78 @@ proptest! {
         ] {
             assert_red_on_axis(&classify(&wrapped), axis, &wrapped)?;
         }
+    }
+}
+
+proptest! {
+    /// Issue #1208: any sequence of sudo options (with quoted or attached
+    /// arguments) before `sftp-server` stays red and detected.
+    #[test]
+    fn sftp_server_behind_random_sudo_options_is_red(
+        program in proptest::sample::select(vec!["sudo", "doas"]),
+        options in proptest::collection::vec(
+            proptest::sample::select(vec![
+                "-n", "-S", "-k", "-H", "-E", "--", "-u root", "-uroot", "-p 'a b:]'",
+                "-p \"[sudo] pw: \"", "-p'x y'", "--user=root", "--user root",
+                "--prompt='x y'", "--prompt 'x'", "-Sk", "-nu root",
+            ]),
+            0..6,
+        ),
+    ) {
+        let mut command = String::from(program);
+        let mut ends = false;
+        for option in &options {
+            // `--` ends the options; nothing after it is an option.
+            if ends { break; }
+            // doas knows only -C/-u; keep the sudo-only forms for sudo.
+            if program == "doas" && !matches!(*option, "-n" | "-u root" | "-uroot" | "--") {
+                continue;
+            }
+            command.push(' ');
+            command.push_str(option);
+            ends = *option == "--";
+        }
+        command.push_str(" /usr/lib/openssh/sftp-server");
+        prop_assert_eq!(classify(&command).server_risk, RiskLevel::Red, "{}", command);
+        prop_assert!(
+            matches!(
+                super::sftp_server_invocation_reason(&command),
+                Some(super::CommandCheckFinding::Match(_))
+            ),
+            "{}", command
+        );
+    }
+}
+
+proptest! {
+    /// Issue #1230: wrapper chains with arguments (durations, signals, user
+    /// names) and quoted parts before `sftp-server` stay red and detected.
+    #[test]
+    fn sftp_server_behind_wrapper_chains_with_quotes_is_detected(
+        wrappers in proptest::collection::vec(
+            proptest::sample::select(vec![
+                "timeout 5m", "timeout 1h", "timeout -s KILL 30s", "timeout -k 10s 2m",
+                "timeout --signal=TERM 5", "nice -n 10", "nice", "env -u HOME",
+                "env FOO=1", "stdbuf -oL", "stdbuf -o L", "ionice -c 2", "ionice -c 2 -n 7",
+                "runuser -u root --", "nohup", "env -u 'HOME'",
+            ]),
+            1..4,
+        ),
+        target in proptest::sample::select(vec![
+            "/usr/lib/openssh/sftp-server -l 'INFO'",
+            "sftp-server -f \"AUTHPRIV\"",
+            "\"/usr/lib/openssh/sftp-server\"",
+            "'sftp-server'",
+        ]),
+    ) {
+        let command = format!("{} {}", wrappers.join(" "), target);
+        prop_assert_eq!(classify(&command).server_risk, RiskLevel::Red, "{}", command);
+        prop_assert!(
+            matches!(
+                super::sftp_server_invocation_reason(&command),
+                Some(super::CommandCheckFinding::Match(_))
+            ),
+            "{}", command
+        );
     }
 }

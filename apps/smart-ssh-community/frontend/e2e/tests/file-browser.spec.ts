@@ -2,12 +2,12 @@
 // focus, dialogs close with Escape and give focus back, axe scans, and no
 // clipped text with long names at both window sizes.
 import type { Locator, Page } from "@playwright/test";
-import type { RemoteEntryDto } from "../../src/types";
+import type { RemoteEntryDto } from "../../src/api/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
-import { captureScreen } from "../support/screenshots";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
+import { captureCurrent, captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
 const LONG_NAME = `${"very-long-directory-name-".repeat(6)}end.log`;
@@ -24,7 +24,7 @@ function entry(name: string, isDir = false): RemoteEntryDto {
     uid: 1000,
     gid: 1000,
     owner: "deploy",
-    group: "deploy",
+    group: "deploy", isSymlink: false, linkTarget: null, linkKind: null,
   };
 }
 
@@ -57,25 +57,35 @@ test.describe("file browser", () => {
 
     await rowMenu(page, "notes.txt").click();
     await expectNoSeriousA11yViolations(page, "file browser: entry menu");
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     await expectNoSeriousA11yViolations(page, "file browser: properties");
     await page.keyboard.press("Escape");
 
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: /^Edit permissions/ }).click();
+    await page.getByRole("menuitem", { name: /^Edit permissions/ }).click();
     await expectNoSeriousA11yViolations(page, "file browser: permissions");
     await page.keyboard.press("Escape");
 
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await expectNoSeriousA11yViolations(page, "file browser: delete");
   });
 
   test("Tab follows the visual order and every stop shows a focus indicator", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
-    // Focus is on the "Files" tab after opening it; every further stop is
-    // reached with the keyboard, so :focus-visible applies.
+    // Focus is on the "Files" segment of the session header after opening it;
+    // every further stop is reached with the keyboard, so :focus-visible
+    // applies. The header and the AI chat come first in the DOM (issue
+    // #1366): skip to the first stop inside the file pane, then check it.
+    const sep = (await page.getByRole("separator").boundingBox())!;
+    for (let skipped = 0; ; skipped++) {
+      expect(skipped, "never reached the file pane").toBeLessThan(40);
+      await page.keyboard.press("Tab");
+      const box = (await page.locator(":focus").boundingBox())!;
+      if (box.x > sep.x && box.y > 50) break;
+    }
+    await page.keyboard.press("Shift+Tab");
     const seen: { x: number; y: number }[] = [];
     for (let i = 0; i < 9; i++) {
       await page.keyboard.press("Tab");
@@ -104,7 +114,7 @@ test.describe("file browser", () => {
       const trigger = rowMenu(page, "notes.txt");
       await trigger.focus();
       await page.keyboard.press("Enter");
-      await page.getByRole("button", { name: c.item, exact: true }).click();
+      await page.getByRole("menuitem", { name: c.item, exact: true }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await page.keyboard.press("Escape");
@@ -125,9 +135,9 @@ test.describe("file browser", () => {
     const page = app.page;
     const trigger = rowMenu(page, "notes.txt");
     await trigger.click();
-    await expect(page.getByRole("button", { name: "Properties", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Properties", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Properties", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "Properties", exact: true })).toBeHidden();
     await expect(trigger).toBeFocused();
   });
 
@@ -139,16 +149,16 @@ test.describe("file browser", () => {
     const open = () => scroller.click({ button: "right", position: { x: box.width - 4, y: box.height - 4 } });
 
     await open();
-    await expect(page.getByRole("button", { name: "New folder", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New folder", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeVisible();
     await expectNoSeriousA11yViolations(page, "file browser: empty-space menu");
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeHidden();
 
     await open();
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeVisible();
     await page.mouse.click(2, 2);
-    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+    await expect(page.getByRole("menuitem", { name: "New file", exact: true })).toBeHidden();
   });
 
   test("elevation menu: labelled target user field, keyboard operable, axe clean (issue #544)", async ({ app }) => {
@@ -191,7 +201,8 @@ test.describe("file browser", () => {
     await openFileBrowser(app);
     const page = app.page;
     const name = page.getByText(LONG_NAME, { exact: false }).first();
-    await expect(name).toHaveAttribute("title", LONG_NAME);
+    // The tooltip sits on the row/button (`name -> target` for symlinks), not on the inner span.
+    await expect(name.locator("xpath=ancestor::*[@title][1]")).toHaveAttribute("title", LONG_NAME);
     const clipped = await name.evaluate((el) => el.scrollWidth > el.clientWidth);
     expect(clipped, "long name is cut with an ellipsis").toBe(true);
     const overflow = await page.evaluate(
@@ -203,9 +214,10 @@ test.describe("file browser", () => {
   test("screenshots for the review", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
+    if (process.env.SCREENSHOT_SCHEME === "dark") await page.emulateMedia({ colorScheme: "dark" });
     await captureScreen(page, "file-browser-list");
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await captureScreen(page, "file-browser-delete");
   });
 });
@@ -217,57 +229,58 @@ test.describe("file browser, narrow layout @phone", () => {
     await openSession(app, "db-primary");
     await app.page.getByRole("tab", { name: "Files", exact: true }).click();
     await expect(app.page.getByText("notes.txt")).toBeVisible();
+    if (process.env.SCREENSHOT_SCHEME === "dark") await app.page.emulateMedia({ colorScheme: "dark" });
   }
-  const noPageScroll = (page: Page) =>
-    page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-
   test("two-line rows, no horizontal scroll, toolbar actions behind the overflow menu", async ({ app }) => {
     await openNarrow(app);
     const page = app.page;
-    expect(await noPageScroll(page)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
     await expect(page.locator("table")).toHaveCount(0);
     const row = page.getByRole("listitem").filter({ hasText: "notes.txt" });
     await expect(row).toContainText("2.0 KB");
-    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+    await expect(row.getByTestId("narrow-entry-meta")).toContainText(/^\S+ · 2\.0 KB · \d{4}-\d{2}-\d{2}$/);
+    const bar = page.getByTestId("narrow-action-bar");
+    await expectUsable(bar.getByRole("button", { name: "+ Folder", exact: true }));
+    await expectUsable(bar.getByRole("button", { name: "Upload", exact: true }));
     await expectUsable(rowMenu(page, "notes.txt"));
     await captureScreen(page, "file-browser-narrow-list");
 
-    const more = page.getByRole("button", { name: "File actions", exact: true });
+    const more = page.getByRole("button", { name: "Directory actions", exact: true });
     await expectUsable(more);
     await more.click();
-    for (const name of ["+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
+    for (const name of ["Go to start directory", "+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
       const item = page.getByRole("menuitem", { name });
       await expect(item.first()).toBeVisible();
       await expectFullyInViewport(item.first());
     }
     await expectNoSeriousA11yViolations(page, "file browser narrow: overflow menu");
-    await captureScreen(page, "file-browser-narrow-overflow");
-    // The screenshot helper resizes through wide sizes, which drops the menu.
-    await more.click();
+    await captureCurrent(page, "file-browser-narrow-overflow");
+    // captureCurrent does not resize, so the menu is still open.
     await page.getByRole("menuitem", { name: /As another user/ }).click();
     const field = page.getByLabel("Target user");
     await expectFullyInViewport(field);
     await expect(page.getByRole("button", { name: "Elevate", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(field).toBeHidden();
-    await expect(page.getByRole("button", { name: "File actions", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Directory actions", exact: true })).toBeFocused();
   });
 
   test("row menu opens inside the viewport, Properties shows owner, group and permissions", async ({ app }) => {
     await openNarrow(app);
     const page = app.page;
     await rowMenu(page, "notes.txt").click();
-    const del = page.getByRole("button", { name: "Delete", exact: true });
+    const del = page.getByRole("menuitem", { name: "Delete", exact: true });
     await expectFullyInViewport(del);
     await expectNoSeriousA11yViolations(page, "file browser narrow: entry menu");
-    await captureScreen(page, "file-browser-narrow-menu");
+    await captureCurrent(page, "file-browser-narrow-menu");
     await expect(del).toBeVisible();
-    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Properties", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("deploy");
     await expect(dialog).toContainText("644");
     await expect(dialog).toContainText("rw-r--r--");
-    expect(await noPageScroll(page)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
   });
 
   test("resizing to wide restores the table with the default column widths", async ({ app }) => {
@@ -276,6 +289,6 @@ test.describe("file browser, narrow layout @phone", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator("table")).toBeVisible();
     const widths = await page.locator("col").evaluateAll((cols) => cols.map((c) => (c as HTMLElement).style.width));
-    expect(widths).toEqual(["", "90px", "90px", "150px", "36px"]);
+    expect(widths).toEqual(["", "110px", "130px", "170px", "150px", "44px"]);
   });
 });

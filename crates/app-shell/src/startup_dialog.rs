@@ -31,7 +31,63 @@
 //! `crate::run`, dieser Dialog ist die zusätzliche, sichtbare Ergänzung,
 //! nicht der Ersatz.
 
+#[cfg(not(target_os = "android"))]
 use rfd::{MessageButtons, MessageDialog, MessageLevel};
+
+// Android (Spec 0114): `rfd` has no Android backend. Fatal errors are logged
+// (the log names the cause) and the process exits; warnings and notices are
+// logged only. Choice dialogs are shown in the window instead (Issue #944).
+#[cfg(target_os = "android")]
+pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
+    tracing::error!(
+        title,
+        message,
+        "fatal startup error (no native dialog on Android)"
+    );
+    std::process::exit(1);
+}
+
+#[cfg(target_os = "android")]
+#[expect(
+    dead_code,
+    reason = "no caller yet; kept for non-fatal startup notices (see doc comment)"
+)]
+pub fn show_warning(title: &str, message: &str) {
+    tracing::warn!(
+        title,
+        message,
+        "startup warning (no native dialog on Android)"
+    );
+}
+
+/// Not reached on Android: the keychain-mode startup runs in the window there
+/// (`startup_prompt::startup_prompt_placement`, Issue #944), where the user
+/// answers every choice. If it is ever called, the answer is "cancel" — the
+/// "touch nothing" outcome, never a destructive or setup choice.
+#[cfg(target_os = "android")]
+pub fn ask(
+    title: &str,
+    message: &str,
+    _confirm: &str,
+    _cancel: &str,
+    _extra: Option<&str>,
+) -> DialogAnswer {
+    tracing::error!(
+        title,
+        message,
+        "a native startup choice was requested on Android; declining without a change"
+    );
+    DialogAnswer::Cancel
+}
+
+#[cfg(target_os = "android")]
+pub fn show_info(title: &str, message: &str) {
+    tracing::info!(
+        title,
+        message,
+        "startup notice (no native dialog on Android)"
+    );
+}
 
 /// Zeigt einen fatalen Fehlerdialog und beendet den Prozess danach sauber
 /// — nie ein Zurückkehren in einen halb aufgebauten/kaputten Zustand (Spec
@@ -43,6 +99,7 @@ use rfd::{MessageButtons, MessageDialog, MessageLevel};
 /// undiagnostizierbare, technische "Aufblitzen", das dieser Mechanismus
 /// gerade ersetzen soll. Exit-Code `1`: dieselbe Konvention wie ein
 /// fehlgeschlagener `.run(context).expect(...)` am Ende von `crate::run`.
+#[cfg(not(target_os = "android"))]
 pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
     tracing::error!(title, message, "showing fatal startup error dialog");
     MessageDialog::new()
@@ -85,7 +142,11 @@ pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
 /// Die Funktion bleibt stehen, weil Etappe 3 (A11.1, A17) wieder
 /// nicht-fatale Hinweise beim Start braucht — und ein zweites Mal denselben
 /// `rfd`-Aufruf zu schreiben wäre die schlechtere Lösung als ein `allow`.
-#[allow(dead_code)]
+#[cfg(not(target_os = "android"))]
+#[expect(
+    dead_code,
+    reason = "no caller yet; kept for non-fatal startup notices (see doc comment)"
+)]
 pub fn show_warning(title: &str, message: &str) {
     tracing::warn!(title, message, "showing non-fatal startup warning dialog");
     MessageDialog::new()
@@ -105,6 +166,8 @@ pub enum DialogAnswer {
     /// Der Knopf, der nichts tut — **und jeder andere Ausgang**, s. [`ask`].
     Cancel,
     /// Der dritte Knopf, falls der Dialog einen hatte.
+    #[cfg_attr(target_os = "android", allow(dead_code))]
+    // the rfd dialogs that produce it are not compiled on Android
     Extra,
 }
 
@@ -119,6 +182,7 @@ pub enum DialogAnswer {
 /// Richtung: `Cancel` heißt an jeder Aufrufstelle „nichts anfassen". Ein
 /// Rückfall auf `Confirm` würde eine Datei umbenennen oder einen Schlüssel
 /// ersetzen, ohne dass jemand zugestimmt hat.
+#[cfg(not(target_os = "android"))]
 pub fn ask(
     title: &str,
     message: &str,
@@ -155,6 +219,7 @@ pub fn ask(
 /// Spec 0101, A5: meldet nach dem Umbenennen den neuen Dateinamen. Reine
 /// Mitteilung, kein Fehler — deshalb `MessageLevel::Info` statt des
 /// Warn-Stils von [`show_warning`].
+#[cfg(not(target_os = "android"))]
 pub fn show_info(title: &str, message: &str) {
     tracing::info!(title, message, "showing startup info dialog");
     MessageDialog::new()
@@ -163,4 +228,44 @@ pub fn show_info(title: &str, message: &str) {
         .set_level(MessageLevel::Info)
         .set_buttons(MessageButtons::Ok)
         .show();
+}
+
+/// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
+/// Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
+/// Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
+/// `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
+/// selbst bestimmen, zeigte ein englischsprachiges System bei einem
+/// DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
+///
+/// Eigene Funktion seit Issue #19: Der Dialog „läuft bereits" erscheint vor
+/// `startup_inputs` und braucht dieselbe Sprache.
+pub(crate) fn startup_language() -> app_logic::startup_error_messages::Language {
+    let lc_all = std::env::var("LC_ALL").ok();
+    let lc_messages = std::env::var("LC_MESSAGES").ok();
+    let lang = std::env::var("LANG").ok();
+    app_logic::startup_error_messages::startup_language(
+        app_logic::startup_error_messages::preferred_locale_value(
+            lc_all.as_deref(),
+            lc_messages.as_deref(),
+            lang.as_deref(),
+        ),
+    )
+}
+
+/// Issue #1313: decides the data directory from the command line, the
+/// environment or the pointer file. An unusable choice shows the startup
+/// error window and ends the process; the default directory is never used
+/// as a fallback.
+pub(crate) fn resolve_data_dir_or_exit(
+    language: app_logic::startup_error_messages::Language,
+) -> &'static persistence_sqlite::ResolvedDataDir {
+    match persistence_sqlite::init_data_dir(
+        std::env::args_os().map(|a| a.to_string_lossy().into_owned()),
+    ) {
+        Ok(resolved) => resolved,
+        Err(err) => {
+            let text = app_logic::data_dir_error_messages::data_dir_failure_text(&err, language);
+            show_fatal_error_and_exit(&text.title, &text.message)
+        }
+    }
 }

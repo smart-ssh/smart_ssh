@@ -1,6 +1,8 @@
 # ADR 0146 — Spracheingabe: Live-Text während der Aufnahme
 
-Status: angenommen · Issue: #595 · Spec 0108 · ändert ADR 0135, Entscheidungen 3 und 4
+## Status
+
+Accepted · Issue: #595 · Spec 0108 · ändert ADR 0135, Entscheidungen 3 und 4
 
 ## Kontext
 

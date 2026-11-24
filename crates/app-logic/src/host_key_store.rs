@@ -24,6 +24,7 @@
 //! (z. B. dem Server-Betreiber) abgleichen können.
 
 use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
+use ssh_manager_core::sync::lock_tolerating_poison;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -256,7 +257,7 @@ impl HostKeyStore for FileHostKeyStore {
     /// nicht fälschlich `Mismatch` — vorher wurde jeder für diesen Host
     /// gespeicherte Key gemeinsam betrachtet, unabhängig vom Algorithmus.
     fn check(&self, host: &str, port: u16, key: &[u8]) -> HostKeyDecision {
-        let known = self.known.lock().unwrap();
+        let known = lock_tolerating_poison(&self.known);
         let algo = algorithm_key(key);
         match known.get(&(host.to_string(), port, algo)) {
             None => HostKeyDecision::Unknown {
@@ -282,7 +283,7 @@ impl HostKeyStore for FileHostKeyStore {
     /// einfach zusätzlich gespeichert (Koexistenz mehrerer Algorithmen
     /// bleibt erhalten, s. `key_algorithm`-Doc-Kommentar).
     fn trust(&self, host: &str, port: u16, key: &[u8]) -> Result<(), SshError> {
-        let mut known = self.known.lock().unwrap();
+        let mut known = lock_tolerating_poison(&self.known);
         let algo = algorithm_key(key);
         known.insert((host.to_string(), port, algo), key.to_vec());
         self.persist(&known)?;
@@ -296,7 +297,7 @@ impl HostKeyStore for FileHostKeyStore {
     /// sorted by algorithm. Takes no write path and does not influence
     /// [`HostKeyStore::check`].
     fn stored_keys(&self, host: &str, port: u16) -> Vec<StoredHostKeyInfo> {
-        let known = self.known.lock().unwrap();
+        let known = lock_tolerating_poison(&self.known);
         let mut out: Vec<StoredHostKeyInfo> = known
             .iter()
             .filter(|((h, p, _), _)| h == host && *p == port)

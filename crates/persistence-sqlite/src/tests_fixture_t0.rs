@@ -110,6 +110,7 @@ async fn generate_fixture_once() {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: now,
             updated_at: now,

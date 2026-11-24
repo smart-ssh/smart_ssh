@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Főnavigáció",
     "connect": "Csatlakozás",
     "manage": "Kezelés",
     "rules": "Szűrőszabályok"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Még nincs hozzáadott szerver",
     "emptyStateHint": "Adja hozzá az első szervert az SSH-csatlakozáshoz.",
     "emptyStateCreateFirstServer": "Első szerver hozzáadása",
-    "newServerInGroup": "Új szerver a(z) \"{{name}}\" csoportban",
-    "emptyStateTryLocalhost": "Kipróbálható szerver nélkül is: a fenti \"Localhost\" munkamenetet nyit ezen a gépen – ugyanazokkal a megerősítésekkel, mint egy valódi szerveren."
+    "emptyStateTryLocalhost": "Kipróbálható szerver nélkül is: a fenti \"Localhost\" munkamenetet nyit ezen a gépen – ugyanazokkal a megerősítésekkel, mint egy valódi szerveren.",
+    "localBadge": "Helyi",
+    "thisDevice": "ez az eszköz",
+    "sessionOpen": "Munkamenet nyitva",
+    "sessionPending": "Megerősítésre vár",
+    "sessionDisconnected": "Munkamenet megszakadt",
+    "sessionReconnecting": "Újracsatlakozás"
   },
   "settings": {
     "title": "Beállítások",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Adatok és biztonsági mentés"
     }
   },
+  "appearance": {
+    "heading": "Megjelenés",
+    "language": "Nyelv",
+    "system": "Rendszer követése",
+    "light": "Világos",
+    "dark": "Sötét"
+  },
   "about": {
     "version": "Verzió",
     "copyHint": "Másolás a vágólapra",
@@ -57,6 +70,7 @@
     "copyFailed": "A másolás sikertelen – a szöveg kijelölhető.",
     "loadFailed": "A verzió-/buildinformációk nem tölthetők be.",
     "buildDev": "Fejlesztői build",
+    "dataDirMarker": "Adatok: {{path}}",
     "buildRelease": "Kiadási build",
     "thirdPartyLicenses": {
       "openButton": "Harmadik féltől származó licencek",
@@ -79,6 +93,7 @@
       "no_session_bus": "nem elérhető – nincs elérhető D-Bus munkamenet-busz. Teendő: `sudo apt install dbus-user-session`, majd jelentkezzen be újra.",
       "no_secret_service_provider": "nem elérhető – nem fut Secret Service szolgáltató. Teendő: `sudo apt install gnome-keyring`, majd jelentkezzen be újra – ez KDE-n is működik. Ha már használ KWalletet (`kwallet6`) vagy KeePassXC-t: a Secret Service integrációjuknak futnia kell vagy be kell kapcsolni; a telepítés önmagában nem elég.",
       "locked": "nem elérhető – létezik, de zárolt. Teendő: oldja fel, és indítsa újra a Smart SSH-t. Nem hiányzik csomag.",
+      "no_keystore": "nem elérhető – az Android Keystore nem érhető el. Teendő: használjon helyette mesterjelszót; a titkai a titkosított adatbázisban maradnak.",
       "unknown": "nem elérhető – az ok ismeretlen. Teendő: ellenőrizze, fut-e és fel van-e oldva egy Secret Service szolgáltató (gnome-keyring, vagy KWallet illetve KeePassXC bekapcsolt Secret Service integrációval), majd indítsa újra a Smart SSH-t."
     },
     "keychainBlocked": "Ez nem érinti a titkait – az API-kulcsok, szerverjelszavak, jelmondatok és sudo-jelszavak a titkosított adatbázisban vannak, nem a kulcstartóban.",
@@ -91,8 +106,10 @@
       "hostKeys": "Gazdakulcsok",
       "wrappingFile": "Mesterjelszó-kulcsfájl",
       "mcpSettings": "MCP-beállítások",
+      "speechModels": "Beszédmodellek",
       "sessions": "Munkamenetek",
       "sessionsInDatabase": "az adatbázisban tárolva",
+      "keychainService": "Kulcstartó szolgáltatás",
       "copy": "Másolás",
       "copied": "Útvonal másolva",
       "copyFailed": "A másolás sikertelen:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importálás …",
     "importSshConfigHint": "Szerverek importálása OpenSSH ssh_config fájlból",
     "exportSshConfig": "Exportálás …",
-    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba"
+    "exportSshConfigHint": "Szerverek exportálása OpenSSH ssh_config formátumba",
+    "title": "Szerverek",
+    "collapseGroup": "„{{name}}” csoport összecsukása",
+    "expandGroup": "„{{name}}” csoport kibontása"
   },
   "treeDrag": {
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
     "hintRoot": "→ legfelső szint (csoport nélkül)",
+    "current": "jelenlegi",
     "hintGroup": "→ áthelyezés ebbe a csoportba",
     "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
     "moveTo": "„{{name}}” áthelyezése ide…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Ez véglegesen törli a szerver csevegési előzményeit, jegyzeteit és címkéit is.",
     "confirmDeleteServer": "Végleges törlés",
     "testResult": {
-      "success": "✓ A kapcsolat sikeres",
-      "authFailed": "✗ A bejelentkezés elutasítva. Ellenőrizze a felhasználónevet és a jelszót vagy kulcsot.",
+      "success": "A kapcsolat sikeres",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "A bejelentkezés elutasítva. Ellenőrizze a felhasználónevet és a jelszót vagy kulcsot.",
       "hostKeyUnknown": "Ismeretlen gazdakulcs – megerősítés szükséges",
-      "hostKeyMismatch": "⚠ A gazdakulcs megváltozott",
-      "networkError": "✗ Hálózati hiba: {{message}}",
-      "timeout": "✗ A szerver nem válaszol. Ellenőrizze a címet, a portot és a tűzfalat."
+      "hostKeyMismatch": "A gazdakulcs megváltozott",
+      "networkError": "Hálózati hiba: {{message}}",
+      "timeout": "A szerver nem válaszol. Ellenőrizze a címet, a portot és a tűzfalat."
     },
     "largeNoteHint": "Ez a jegyzet nagyon nagy, ezért hosszú munkamenetek során lerövidülhet az AI-kontextusban. A tárolt jegyzet teljes egészében megmarad.",
     "summarizeNow": "Összefoglalás most",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "A sftp-server útvonala (emelt jogú fájlhozzáférés)",
     "sftpServerPathPlaceholder": "Automatikus",
     "sftpServerPathHint": "Csak akkor szükséges, ha az automatikus felismerés nem sikerül az emelt jogú fájlböngészőnél, pl. /usr/lib/openssh/sftp-server. Üres = automatikus.",
+    "elevationAllowedLabel": "Emelt jogosultságok engedélyezése a fájlböngészőben",
+    "elevationAllowedHint": "Kikapcsolva a fájlböngésző nem kínál emelt jogosultságokat ehhez a szerverhez.",
     "startDirectoryLabel": "Kezdőkönyvtár (terminál és fájlböngésző)",
     "startDirectoryPlaceholder": "Saját könyvtár",
     "startDirectoryHint": "Abszolút útvonal (/…) vagy ~/-lel kezdődő útvonal. A terminál látható cd-vel vált oda, a fájlböngésző ott nyílik meg. Az AI-parancsok mindig a saját könyvtárban futnak. Üres = saját könyvtár.",
@@ -294,6 +318,13 @@
       "connection": "Kapcsolat",
       "security": "Biztonság",
       "invalid": "Hibákat tartalmaz"
+    },
+    "importKey": {
+      "title": "Importálja a kulcsot a Smart SSH-ba?",
+      "import": "Kulcs importálása",
+      "keep": "Fájlútvonal megtartása",
+      "importHint": "A kulcs titkosítva tárolódik a Smart SSH-ban, és a biztonsági mentésekkel együtt eljut a többi eszközére.",
+      "keepHint": "Csak a fájl útvonala tárolódik és kerül át a többi eszközre. A fájlnak minden eszközön ugyanazon az útvonalon kell lennie."
     }
   },
   "filterRules": {
@@ -337,10 +368,14 @@
     "matchedRuleLabel": "Szabály:",
     "segmentLabel": "{{index}}. szakasz",
     "checksLabel": "Ellenőrzések:",
-    "hardBlacklistLabel": "Szigorú feketelista:"
+    "hardBlacklistLabel": "Szigorú feketelista:",
+    "invalidPattern": "Érvénytelen minta",
+    "rowActions": "Sor műveletei",
+    "ruleCount_one": "{{count}} szabály",
+    "ruleCount_other": "{{count}} szabály"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után szünetel – a folytatáshoz küldjön üzenetet.",
+    "autoContinuationLimitReached": "Az automatikus folytatás {{limit}} lépés után a jóváhagyása nélkül szünetel – a folytatáshoz küldjön üzenetet.",
     "aiBudgetWaiting": "Várakozás az AI-keretre – következő próbálkozás {{seconds}} mp múlva…",
     "suggestCommand": "Parancs javaslata",
     "generateDocument": "Dokumentum létrehozása: {{title}}",
@@ -354,8 +389,12 @@
     "blocked": "blokkolva",
     "rejected": "elutasítva",
     "rejectedByUser": "A felhasználó elutasította.",
-    "usesStoredSudoPassword": "🔑 A tárolt sudo-jelszóval fut.",
-    "writeMayUseStoredSudoPassword": "🔑 Ha hiányzik az írási jogosultság, az alkalmazás a tárolt sudo-jelszóval ír (sudo).",
+    "expired": "lejárt",
+    "discardedAfterReconnect": "A kapcsolat újraépítése után elvetve. Semmi nem futott le.",
+    "expiredTimeout": "Időben nem érkezett válasz, elvetve. Semmi nem futott le.",
+    "expiredUnknown": "Ez a kérés már nem függőben van. Semmi nem futott le.",
+    "usesStoredSudoPassword": "A tárolt sudo-jelszóval fut.",
+    "writeMayUseStoredSudoPassword": "Ha hiányzik az írási jogosultság, az alkalmazás a tárolt sudo-jelszóval ír (sudo).",
     "takeIntoNote": "Felvétel a jegyzetbe",
     "takeIntoNoteFailed": "Sikertelen – próbálja újra",
     "riskServerLabel": "Szerver",
@@ -365,12 +404,13 @@
     "riskSecondOpinionUnavailableHint": "Az AI második vélemény nem szerezhető be. A megjelenített kockázat a szabályalapú.",
     "riskHint": "Ismert mintákon alapuló értékelés – nem garancia.",
     "runningSince": "{{seconds}} mp-e fut…",
+    "exitCode": "kilépési kód: {{code}}",
     "cancelCommand": "A parancs megszakítása",
     "cancellingCommand": "Megszakítás…",
-    "commandCancelledNotice": "⚠ Kézzel megszakítva – a kimenet hiányos lehet, nincs szabályos kilépési kód.",
-    "commandTruncatedNotice": "⚠ A kimenet a méretkorlátnál megszakadt – hiányos lehet.",
+    "commandCancelledNotice": "Kézzel megszakítva – a kimenet hiányos lehet, nincs szabályos kilépési kód.",
+    "commandTruncatedNotice": "A kimenet a méretkorlátnál megszakadt – hiányos lehet.",
     "liveOutputLabel": "Élő kimenet",
-    "liveOutputTruncatedNotice": "⚠ Méretkorlát elérve – a további kimenet már nem látható.",
+    "liveOutputTruncatedNotice": "Méretkorlát elérve – a további kimenet már nem látható.",
     "autoRanLead": "Automatikusan lefutott",
     "autoRanRule": "szabály",
     "autoRanScopeGlobal": "globális",
@@ -386,17 +426,15 @@
     "editableCommand": "Parancs – szerkeszthető",
     "execute": "Végrehajtás",
     "deny": "Tiltás",
-    "quickRule": "Elfogadás + szabály",
-    "quickRuleDropdownAria": "Szabályjavaslatok megjelenítése",
-    "newRulePatternHeading": "Az új engedélyező szabály mintája",
     "scopeThisServer": "Ez a szerver",
     "scopeGlobal": "Globális",
     "scopeTag": "Címke",
     "tagNamePlaceholder": "Címke neve",
     "loadingSuggestions": "Javaslatok betöltése…",
     "noSuggestions": "Nincs javaslat.",
-    "binaryFileHint": "⚠ Bináris fájl – szöveges összehasonlítás nem lehetséges. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
-    "diffTooLargeHint": "⚠ A tartalom túl nagy a soronkénti összehasonlításhoz. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
+    "binaryFileHint": "Bináris fájl – szöveges összehasonlítás nem lehetséges. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
+    "fileTooLargeHint": "A fájl nagyobb, mint {{limit}}, nincs szöveges összehasonlítás. Új méret: {{newSize}}.",
+    "diffTooLargeHint": "A tartalom túl nagy a soronkénti összehasonlításhoz. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
     "noContentChange": "(nincs tartalmi változás)",
     "quickRuleLabel": {
       "exact": "Pontos: {{patterns}}",
@@ -414,10 +452,25 @@
       "blocked": "a szabályoktól függetlenül mindig rákérdez: {{reasons}}",
       "verdictAuto": "legközelebb automatikusan lefut",
       "verdictAsk": "továbbra is rákérdez: {{reasons}}",
-      "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
       "reasonOther": "másik biztonsági ellenőrzés",
-      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
+      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni",
+      "summaryHeading": "Már engedélyezett",
+      "toDecideHeading": "Még döntésre vár",
+      "expandAria": "Szabályjavaslatok ehhez: {{segment}}",
+      "stagedBadge": "még nincs mentve",
+      "removeStaged": "Eltávolítás",
+      "saveRules": "Szabályok mentése ({{count}})",
+      "saveFailed": "A szabályokat nem sikerült menteni: {{message}}",
+      "unsavedHint": "Nem mentett szabályok: {{count}}",
+      "segmentCovered": "lefedi ezt a részt; a parancs ennek ellenére rákérdez: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Bejelentkezés: {{hop}}",
+    "password": "Jelszó",
+    "submit": "Bejelentkezés",
+    "notStored": "A szerver ezeket az adatokat kéri a bejelentkezéshez. Nem kerülnek mentésre.",
+    "expired": "A bejelentkezési kérés lejárt. A kapcsolat nem jött létre."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Biztonsági figyelmeztetés · A gazdakulcs megváltozott",
@@ -426,6 +479,7 @@
     "mismatchBodyAfterHost": " szerver az utoljára tároltól eltérő kulcsot mutat. Ez közbeékelődéses (man-in-the-middle) támadásra utalhat. Csak akkor folytassa, ha biztos benne, hogy a szerverkulcs jogosan változott (pl. a szerver újratelepítése miatt).",
     "known": "Ismert",
     "offeredNow": "Most kínált",
+    "offered": "Kínált",
     "keyType": "Kulcstípus",
     "cancelConnection": "Kapcsolat megszakítása",
     "trustAnyway": "Mégis megbízom benne",
@@ -438,13 +492,17 @@
   },
   "sessionTabs": {
     "newSession": "Új munkamenet",
-    "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
     "menu": {
       "open": "Navigációs menü megnyitása",
       "title": "Navigációs menü",
-      "sessions": "Megnyitott munkamenetek"
+      "sessions": "Megnyitott munkamenetek",
+      "close": "Navigációs menü bezárása",
+      "needsConfirmation": "Megerősítés szükséges",
+      "activities": "Tevékenységek",
+      "activitiesRunning_one": "{{count}} fut",
+      "activitiesRunning_other": "{{count}} fut"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +511,11 @@
       "pendingBadge": "Megerősítés szükséges",
       "readOnlyHint": "Ez a munkamenet egy külső eszközé (MCP). Csak az eszköz megerősítendő vagy elutasítandó műveleteit és azok eredményét mutatja; nincs itt csevegőbevitel vagy terminál. Bezárása befejezi az MCP-munkamenetet, és elutasítja a függő megerősítéseket."
     },
-    "confirmClosePending": "A(z) \"{{name}}\" megerősítése még függőben van. Mégis bezárja a lapot? A függő művelet ekkor elutasítottnak minősül."
+    "confirmClosePending": "A(z) \"{{name}}\" megerősítése még függőben van. Mégis bezárja a lapot? A függő művelet ekkor elutasítottnak minősül.",
+    "pendingBadge": "Függőben",
+    "newConnection": "Új kapcsolat"
   },
   "aiProvider": {
-    "title": "AI-szolgáltató",
     "openLogs": "Diagnosztikai naplók megnyitása a fájlkezelőben",
     "noProviders": "Még nincs beállított szolgáltató.",
     "configuredProvidersTitle": "Beállított szolgáltatók",
@@ -476,16 +535,16 @@
     "apiKeyFormatHint": "Nem tűnik {{providerLabel}}-kulcsnak – a várt előtag pl. \"{{expectedPrefix}}\". Mentheti így is; a szolgáltatók időnként módosítják a formátumot.",
     "testCredentials": "Hitelesítő adatok tesztelése",
     "testingCredentials": "Tesztelés…",
-    "testResultValid": "✓ A hitelesítő adatok érvényesek",
-    "testResultAuthFailed": "✗ A hitelesítés sikertelen – ellenőrizze az API-kulcsot",
-    "testResultUnreachable": "✗ A szolgáltató nem érhető el: {{message}}",
+    "testResultValid": "A hitelesítő adatok érvényesek",
+    "testResultAuthFailed": "A hitelesítés sikertelen – ellenőrizze az API-kulcsot",
+    "testResultUnreachable": "A szolgáltató nem érhető el: {{message}}",
     "testResultRateLimited": "A hitelesítő adatok érvényesnek tűnnek, de a szolgáltató jelenleg korlátozza a kéréseket. Próbálja újra egy perc múlva.",
     "nativeToolCalling": "Támogatja a natív eszközhívást",
     "discoverModels": "Modellek betöltése",
     "discoveringModels": "Modellek betöltése…",
     "modelDiscoveryFailedHint": "A modellek nem tölthetők be automatikusan – adja meg kézzel a modell nevét.",
     "modelDiscoveryEmptyHint": "A szolgáltató nem adott vissza modellt. Adja meg kézzel a modell nevét.",
-    "modelDiscoveryAuthFailed": "✗ A szolgáltató elutasította a hitelesítő adatokat – ellenőrizze az API-kulcsot",
+    "modelDiscoveryAuthFailed": "A szolgáltató elutasította a hitelesítő adatokat – ellenőrizze az API-kulcsot",
     "advanced": "Speciális",
     "extraHeadersLabel": "További fejlécek",
     "extraHeadersHint": "Minden, a szolgáltatónak küldött kéréshez csatolva (pl. az OpenRouter HTTP-Referer/X-Title fejlécei).",
@@ -528,6 +587,7 @@
     "ollamaProbeRetry": "Keresés újra",
     "ollamaProbeNotFoundHeading": "Nem található helyi Ollama (alapértelmezett port: 11434).",
     "ollamaProbeNotFoundInstructions": "Telepítse az Ollamát az ollama.com oldalról, indítsa el, töltsön be egy modellt (pl. `ollama pull llama3`), majd keressen újra.",
+    "typeLabel": "Típus",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +652,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Utasítások szervertartalomon keresztüli beinjektálásának lehetséges kísérlete észlelve – megerősítés szükséges",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP-n keresztül kérve – mindig megerősítés szükséges",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "A tárolt sudo-jelszót használja – mindig megerősítés szükséges",
+    "FILTER_RULES_UNAVAILABLE": "A szűrőszabályokat nem sikerült betölteni – semmi sem fut automatikusan, megerősítés szükséges",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Küldés előtt egy tárolt titkos értéket szúr be – mindig megerősítés szükséges",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Hitelesítő adatokat tartalmazó fájlt olvas (pl. SSH-kulcs, .env, /etc/shadow) – mindig megerősítés szükséges",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "A válasz egy korábbi műveletét elutasították – megerősítés szükséges",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Elindítja az sftp-servert (sudóval: fájlhozzáférés root jogokkal) – mindig megerősítés szükséges",
@@ -601,6 +663,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "A beinjektált utasítások ellenőrzése nem futtatható (AI-szolgáltatói probléma). A következő javasolt művelet megerősítést igényel.",
     "AI_INJECTION_CHECK_INACTIVE": "A beinjektált utasítások ellenőrzése be van kapcsolva ehhez a szerverhez, de ebben a munkamenetben nem aktív (az AI második vélemény ki van kapcsolva, vagy nem állítható be). Kapcsolja be a második véleményt a beállításokban, és csatlakozzon újra.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Az AI második vélemény be van kapcsolva, de ehhez a munkamenethez nem állítható be (a szolgáltató el lett távolítva, vagy a hitelesítő adat nem található). A parancsokat nem ellenőrzi – javítsa a beállítást, és csatlakozzon újra.",
+    "REDACTION_INCOMPLETE": "A kiszolgáló néhány titkos értékét nem sikerült betölteni; előfordulhat, hogy az AI-nak küldött tartalomban nem lesznek maszkolva.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "A kiszolgáló aktuális címkéit nem sikerült beolvasni – megerősítést igényel",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "A kockázat piros, vagy nem értékelhető megbízhatóan (pl. túl hosszú) – mindig megerősítés szükséges",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "A jegyzetfrissítések mindig megerősítést igényelnek",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "A fájlírások mindig megerősítést igényelnek",
@@ -638,7 +702,13 @@
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
     "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
-    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "A kiválasztott AI-szolgáltató nincs beállítva. Válasszon egy beállított szolgáltatót.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "A kockázati második vélemény bekapcsolása előtt válasszon AI-szolgáltatót.",
+    "CHAT_SESSION_NOT_FOUND": "Ez a mentett csevegés már nem létezik. Válassza az Újra lehetőséget a szokásos csatlakozáshoz a folytatás nélkül.",
+    "SESSION_NOT_FOUND": "Ez a munkamenet már nincs megnyitva. Nyisd meg újra a szerverlistából.",
+    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön",
+    "SSH_NO_COMMON_ALGORITHM": "Nincs közös SSH-algoritmus a szerverrel. Az SSH-szoftvere túl régi vagy túl szigorú. Frissítse, vagy engedélyezzen modern algoritmusokat."
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -721,13 +791,17 @@
     "openedLocally": "A(z) „{{name}}” helyben megnyitva – a módosítások feltöltésre lesznek felkínálva",
     "openLocallyFailed": "A(z) „{{name}}” nem nyitható meg helyben: {{reason}}",
     "editUploaded": "A(z) „{{name}}” módosítása feltöltve",
-    "editUploadFailed": "A(z) „{{name}}” módosítása nem tölthető fel: {{reason}}",
     "uploadedFolder": "A(z) „{{name}}” mappa feltöltve – {{count}} fájl",
     "uploadFolderFailed": "A(z) „{{name}}” mappa feltöltése sikertelen: {{reason}}",
     "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}",
     "nothingToPaste": "Nincs mit beilleszteni: a vágólapon nincsenek fájlok",
     "createFileDone": "A(z) „{{name}}” fájl létrehozva",
-    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}"
+    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}",
+    "chownDone": "A(z) „{{name}}” tulajdonosa módosítva",
+    "chownRecursive": "Tulajdonos módosítva — {{count}} elem a(z) „{{name}}” mappában",
+    "chownFailed": "A(z) „{{name}}” tulajdonosát nem sikerült módosítani: {{reason}}",
+    "chownUnknownUser": "A(z) „{{name}}” tulajdonosa nem változott: ismeretlen felhasználó",
+    "chownUnknownGroup": "A(z) „{{name}}” tulajdonosa nem változott: ismeretlen csoport"
   },
   "fileElevation": {
     "toggle": "Emelt jogok",
@@ -741,6 +815,17 @@
     "opDelete": "Törlés",
     "opChmod": "Jogosultságok módosítása",
     "banner": "Emelt jogok aktívak: a böngésző minden fájlművelete {{user}} néven fut.",
+    "bannerLogged": "A kiszolgálón naplózva.",
+    "notice": {
+      "title": "A megemelt jogosultságokról",
+      "intro": "Mostantól {{user}} felhasználóként olvasol és írsz fájlokat. A módosítások azonnal érvénybe lépnek, és az alkalmazás nem tudja visszavonni őket.",
+      "loggedApp": "Minden módosítás bekerül az alkalmazás naplójába.",
+      "loggedAppAndServer": "Minden módosítás bekerül az alkalmazás naplójába és a kiszolgáló hitelesítési naplójába.",
+      "passwordless": "Az sftp-server sudo-szabálya jelszó nélküli hozzáférést ad {{user}} számára mindenhez, ami ezen a bejelentkezésen fut, nem csak ehhez az alkalmazáshoz.",
+      "alternative": "Ha rendszeresen rootként kezeled ezt a kiszolgálót, egy külön, kulcsos root-bejelentkezés (PermitRootLogin prohibit-password) egyértelművé teszi ezt a hozzáférést.",
+      "gotIt": "Értem",
+      "dontShowAgain": "Ne jelenjen meg többé ennél a kiszolgálónál"
+    },
     "deleteFileTitle": "Fájl törlése {{user}} néven?",
     "deleteDirTitle": "Mappa törlése {{user}} néven?",
     "overwriteTitle": "Fájl felülírása {{user}} néven?",
@@ -762,7 +847,8 @@
     "close": "Bezárás",
     "detail": "Részletek: {{detail}}",
     "failure": {
-      "passwordRequired": "A sudo jelszót kér az sftp-serverhez ezen a szerveren. Az alkalmazás soha nem kér sudo-jelszót.",
+      "passwordRequired": "A sudo ezen a szerveren jelszót kér az sftp-serverhez. Adja hozzá az alábbi sudoers-sort, vagy mentsen sudo-jelszót a szerverprofilba a magasabb jogosultságok használatához.",
+      "wrongSudoPassword": "A sudo elutasította a mentett sudo-jelszót. Ellenőrizze a sudo-jelszót a szerverprofilban.",
       "notAllowed": "Ez az SSH-bejelentkezés jelszó nélkül nem indíthatja el az sftp-servert sudón keresztül.",
       "requireTty": "A sudo terminál nélkül nem hajlandó futni (a sudoersben „requiretty”). Tiltsa le a requiretty-t ehhez a bejelentkezéshez, pl. „Defaults:<login> !requiretty” sorral.",
       "sftpServerNotFound": "Az sftp-server nem található a szerveren. Adja meg az útvonalát a szerverprofil „Speciális” részében.",
@@ -772,7 +858,8 @@
       "invalidUser": "Érvénytelen célfelhasználó.",
       "unsupported": "A helyi szervernek nincs emelt módja.",
       "checkFailed": "A sudo-jogosultságok ellenőrzése sikertelen.",
-      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
+      "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben).",
+      "disabledForServer": "Az emelt jogosultságok ki vannak kapcsolva ennél a szervernél a szerverprofilban."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
     "group": "Emelt jogosultságok",
@@ -780,7 +867,11 @@
     "otherUser": "Másik felhasználóként…",
     "targetUser": "Cél felhasználó",
     "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
-    "confirm": "Emelés"
+    "confirm": "Emelés",
+    "opChown": "Tulajdonos módosítása",
+    "chownNote": "A tulajdonos {{user}} néven lesz módosítva.",
+    "idleSwitchedOff": "Az emelt jogok kikapcsolva {{minutes}} perc tevékenység nélkül",
+    "revokedByProfile": "Az emelt jogosultságok megszűntek — a szerverprofil már nem engedélyezi őket."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -794,6 +885,8 @@
     "groupsHeading": "Létrejövő mappaszerkezet",
     "entriesHeading": "{{count}} szerver",
     "field": {
+      "name": "Név",
+      "include": "Felvétel",
       "host": "Cím",
       "port": "Port",
       "username": "Felhasználó",
@@ -869,6 +962,8 @@
       "proxyJumpLocalPseudoServer": "a helyi áltszerverre mutat"
     },
     "confirm": "Importálás",
+    "confirmCount_one": "{{count}} szerver importálása",
+    "confirmCount_other": "{{count}} szerver importálása",
     "applying": "Importálás …",
     "result": {
       "success": "{{created}} szerver létrehozva, {{groups}} mappa, {{skipped}} ütközés kihagyva.",
@@ -969,14 +1064,17 @@
       "hostKeyCheck": "Gazdakulcs ellenőrzése",
       "authentication": "Hitelesítés",
       "sessionReady": "Munkamenet létrejött",
-      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra"
+      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra",
+      "outdatedAlgorithms": "Elavult algoritmusok",
+      "banner": "Szerverbanner"
     },
     "status": {
       "ok": "OK",
       "running": "folyamatban",
       "failed": "sikertelen ({{code}})",
       "skipped": "kihagyva",
-      "failedReason": "sikertelen: {{reason}}"
+      "failedReason": "sikertelen: {{reason}}",
+      "warning": "figyelmeztetés"
     },
     "hostKeyResult": {
       "known": "ismert",
@@ -989,7 +1087,8 @@
       "privateKey": "Privát kulcs",
       "agent": "SSH-ügynök",
       "certificate": "Tanúsítvány",
-      "identityFile": "Kulcsfájl"
+      "identityFile": "Kulcsfájl",
+      "keyboardInteractive": "Billentyűzet-interaktív"
     },
     "detail": {
       "addresses": "Címek: {{addresses}}",
@@ -998,7 +1097,9 @@
       "cipher": "Titkosító: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "részben elfogadva, további hitelesítés szükséges",
-      "remainingMethods": "A szerver ezeket is kínálja: {{methods}} (nem próbálva)"
+      "remainingMethods": "A szerver ezeket is kínálja: {{methods}} (nem próbálva)",
+      "round": "{{round}}. kör",
+      "prompts": "A szerver kérdései: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "A TCP-kapcsolat időtúllépés miatt megszakadt",
@@ -1016,6 +1117,7 @@
     "parentDirectory": "Szülőkönyvtár",
     "newFolderButton": "+ Mappa",
     "fileActionsGroup": "Fájlműveletek",
+    "directoryActions": "Könyvtárműveletek",
     "upload": "Feltöltés",
     "uploadDialogTitle": "Fájl(ok) feltöltése",
     "uploadFolder": "Mappa feltöltése",
@@ -1050,8 +1152,10 @@
       "name": "Név",
       "size": "Méret",
       "permissions": "Jogosultságok",
-      "modified": "Módosítva"
+      "modified": "Módosítva",
+      "owner": "Tulajdonos"
     },
+    "columnsMenu": "Oszlopok megjelenítése vagy elrejtése",
     "localEdit": {
       "uploading": "„{{name}}” feltöltése…",
       "changed": "A(z) „{{name}}” helyben módosult. Feltölti a szerverre?",
@@ -1059,8 +1163,7 @@
       "editing": "„{{name}}” szerkesztése helyben…",
       "end": "Szerkesztés befejezése",
       "uploadTitle": "Feltölti a helyi módosításokat?",
-      "remoteChanged": "A távoli fájl a letöltés óta módosult – a feltöltés felülírná azt a másik módosítást.",
-      "noDiff": "Szöveges összehasonlítás nem lehetséges (bináris fájl vagy túl nagy). Új méret: {{size}}."
+      "remoteChanged": "A távoli fájl a letöltés óta módosult – a feltöltés felülírná azt a másik módosítást."
     },
     "deleteDialog": {
       "fileTitle": "Törli a fájlt?",
@@ -1082,7 +1185,6 @@
       "conflictTitle": "Felülírja a mappában lévő fájlokat?",
       "conflictBody": "A(z) „{{name}}” feltöltése felülírná ezt a(z) {{count}} fájlt a szerveren. Megerősítés nélkül semmi nem íródik felül.",
       "summaryTitle": "Mappafeltöltés: „{{name}}”",
-      "summary": "{{uploaded}} fájl feltöltve, {{skipped}} kihagyva, {{failed}} sikertelen.",
       "notAttempted": "{{count}} fájl fel sem lett próbálva, mert a mappájuk nem hozható létre.",
       "skipped": "Kihagyva",
       "failed": "Sikertelen",
@@ -1093,12 +1195,14 @@
         "unsupported": "nem szabályos fájl vagy mappa",
         "notGranted": "a kijelölése nem fedi le",
         "overwriteNotConfirmed": "létezik a szerveren, a felülírás nincs megerősítve"
-      }
+      },
+      "uploaded": "Feltöltve"
     },
     "uploadConflict": {
       "title": "Felülírja a fájlt?",
       "body": "már létezik a szerveren.",
-      "noDiff": "Szöveges összehasonlítás nem lehetséges (bináris fájl vagy túl nagy). Jelenlegi méret: {{remoteSize}}, új méret: {{localSize}}."
+      "currentSize": "Jelenlegi méret",
+      "newSize": "Új méret"
     },
     "menu": {
       "download": "Letöltés",
@@ -1114,8 +1218,10 @@
       "cut": "Kivágás",
       "delete": "Törlés",
       "newFolder": "Új mappa",
-      "newFile": "Új fájl"
+      "newFile": "Új fájl",
+      "chown": "Tulajdonos módosítása…"
     },
+    "linkMarker": "szimbolikus hivatkozás",
     "properties": {
       "title": "Tulajdonságok",
       "name": "Név",
@@ -1123,6 +1229,10 @@
       "type": "Típus",
       "typeFolder": "Mappa",
       "typeFile": "Fájl",
+      "typeLinkFolder": "Szimbolikus hivatkozás egy mappára",
+      "typeLinkFile": "Szimbolikus hivatkozás egy fájlra",
+      "typeLinkBroken": "Törött szimbolikus hivatkozás",
+      "linkTarget": "Hivatkozás célja",
       "size": "Méret",
       "permissionsSymbolic": "Jogosultságok (szimbolikus)",
       "permissionsNumeric": "Jogosultságok (numerikus)",
@@ -1172,10 +1282,24 @@
       "notText": "Szövegkülönbség nem készíthető: a fájl bináris (nem érvényes UTF-8 szöveg).",
       "permission": "Szövegkülönbség nem készíthető: a jelenlegi jogokkal nincs olvasási jogosultságod ehhez a fájlhoz.",
       "other": "Szövegkülönbség nem készíthető: a fájl nem olvasható ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Tulajdonos módosítása",
+      "owner": "Felhasználó",
+      "group": "Csoport",
+      "hint": "Adjon meg nevet vagy számot. Az érintetlenül hagyott oldal nem változik. A módosítás engedélyezéséről a kiszolgáló dönt (általában csak a root módosíthatja a tulajdonost).",
+      "recursive": "Alkalmazás a tartalomra",
+      "recursiveWarning": "— a mappa ÖSSZES fájljának és almappájának tulajdonosát módosítja. A szimbolikus hivatkozásokat nem követi. Nem vonható vissza."
+    },
+    "transferChown": "{{name}} tulajdonosának módosítása",
+    "stopProgress": "Előrehaladás",
+    "noTextDiff": "Szöveges különbség nem lehetséges (bináris vagy túl nagy fájl)."
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",
+    "copyCode": "Kód másolása",
+    "codeCopied": "Kód átmásolva",
+    "codeCopyFailed": "A másolás sikertelen",
     "composerMore": "További beviteli műveletek",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",
@@ -1199,12 +1323,17 @@
     "queued": "A következő kéréssel lesz elküldve",
     "responseCancelled": "A válasz megszakítva.",
     "contextCompactedNotice": "A csevegés régebbi részeit összefoglaltuk, hogy beleférjenek a modell kontextusába.",
-    "contextUsage": "Kontextus {{used}} / {{window}}",
     "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
+    "messageLabel": "Üzenet",
+    "headerProviderTooltip": "Szolgáltató: {{provider}}",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
     "refusedResponse": "A modell elutasította a kérést. Fogalmazza át, vagy kezdjen új csevegést.",
     "outputTruncated": "(csonkolva)",
+    "outputMoreLines_one": "… még {{count}} sor",
+    "outputMoreLines_other": "… még {{count}} sor",
+    "outputShowAll": "Összes megjelenítése",
+    "outputShowLess": "Kevesebb megjelenítése",
     "fileWritten": "A(z) '{{path}}' fájl megírva.",
     "writtenWithSudoPassword": "A tárolt sudo-jelszóval megírva.",
     "documentGenerated": "Dokumentum létrehozva",
@@ -1278,7 +1407,18 @@
     "aiTab": "MI",
     "paneTabs": "Munkamenet-panelek",
     "moreActions": "További műveletek",
+    "thisDevice": "ez az eszköz",
+    "paneSwitch": "Panelváltó",
     "terminalOpenFailed": "A terminál nem nyitható meg: {{error}}",
+    "extraKeys": {
+      "group": "Extra billentyűk",
+      "up": "Felfelé nyíl",
+      "down": "Lefelé nyíl",
+      "left": "Balra nyíl",
+      "right": "Jobbra nyíl",
+      "pageUp": "Oldal fel",
+      "pageDown": "Oldal le"
+    },
     "connectionLostPressR": "A kapcsolat megszakadt. Nyomja meg az R gombot az újracsatlakozáshoz.",
     "reconnect": "Újracsatlakozás",
     "reconnectedSeparator": "— újracsatlakozva —",
@@ -1315,7 +1455,8 @@
       "body": "Egy beszédmodell ({{model}}, kb. {{size}} MiB) egyszer letöltődik innen: {{source}}. Utána a beszédfelismerés teljesen ezen a számítógépen fut; a hang és a szöveg soha nem hagyja el.",
       "download": "Letöltés",
       "cancel": "Mégse",
-      "progress": "Letöltés előrehaladása"
+      "progress": "Letöltés előrehaladása",
+      "parakeetLicense": "Licenc: {{license}}"
     },
     "errors": {
       "noDevice": "Nem található mikrofon. Csatlakoztass mikrofont, és ellenőrizd a bemeneti eszközt a rendszerbeállításokban.",
@@ -1331,7 +1472,8 @@
       "model": "Beszédmodell",
       "models": {
         "base": "Base (kb. {{size}} MiB, alapértelmezett)",
-        "small": "Small (kb. {{size}} MiB, pontosabb, lassabb)"
+        "small": "Small (kb. {{size}} MiB, pontosabb, lassabb)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (kb. {{size}} MiB, többnyelvű, gyors; automatikusan felismeri a nyelvet)"
       },
       "statusReady": "Letöltve",
       "statusNotDownloaded": "Nincs letöltve",
@@ -1339,7 +1481,8 @@
       "download": "Letöltés",
       "delete": "Modell törlése",
       "language": "Felismerés nyelve",
-      "languageAuto": "Automatikus"
+      "languageAuto": "Automatikus",
+      "languageParakeetHint": "A Parakeet automatikusan felismeri a nyelvet; ez a beállítás a Whisper-modellekre vonatkozik."
     }
   },
   "connectTab": {
@@ -1399,6 +1542,8 @@
     "import": {
       "title": "Visszaállítás mentésből",
       "pickTitle": "Válassz mentésfájlt",
+      "pickFailed": "A fájl nem nyitható meg a kiválasztott helyről.",
+      "chooseAgain": "Fájl újraválasztása",
       "file": "Fájl: {{name}}",
       "kind": "Mivel nyitható meg ez a mentés",
       "useCode": "Helyreállítási kód",
@@ -1415,6 +1560,9 @@
       "file": "Mentés",
       "sessions": "Bezárásra kerülő nyitott munkamenetek: {{count}}",
       "safety": "A jelenlegi adatok előbb ide kerülnek: {{dir}}. A szerverek egy új, “Previous data” nevű, mai dátumú mappába kerülnek.",
+      "pickDirTitle": "Mappa kiválasztása a biztonsági mentéshez",
+      "changeSafetyDir": "Módosítás…",
+      "changeSafetyDirFailed": "A mappát nem sikerült kiválasztani. Az alapértelmezett mappa marad.",
       "replace": "Adatok felülírása"
     },
     "counts": {
@@ -1439,5 +1587,58 @@
       "newerVersion": "Ezt a mentést a Smart SSH újabb verziója készítette. Frissítsd az alkalmazást, és próbáld újra.",
       "failed": "A művelet sikertelen. Semmi sem változott."
     }
+  },
+  "errorBoundary": {
+    "title": "Valami elromlott",
+    "body": "A Smart SSH váratlan hibába ütközött a felületen. A folytatáshoz töltse újra. Ha ismét előfordul, az újratöltés után hozzon létre diagnosztikai csomagot a Beállítások → Diagnosztika alatt.",
+    "reload": "Újratöltés"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Ez a szerver elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse a szerver SSH-szoftverét.",
+    "outdatedAlgorithmsHop": "{{hop}} elavult SSH-algoritmusokat használ ({{algorithms}}). A kapcsolat kevésbé biztonságos. Ha tudja, frissítse az SSH-szoftverét."
+  },
+  "elevatedIdle": {
+    "label": "Emelt jogok kikapcsolása inaktivitás után",
+    "minutes5": "5 perc",
+    "minutes15": "15 perc",
+    "minutes30": "30 perc",
+    "minutes60": "60 perc",
+    "never": "Soha",
+    "hint": "A fájlböngésző ennyi emelt tevékenység nélküli idő után magától kilép az emelt módból. A folyamatban lévő művelet tevékenységnek számít."
+  },
+  "activities": {
+    "title": "Tevékenységek",
+    "buttonRunning": "Tevékenységek: {{running}} folyamatban",
+    "buttonFailed": "Tevékenységek: egy tevékenység sikertelen",
+    "buttonDone": "Tevékenységek: befejezve",
+    "cancel": "Mégse",
+    "cancelNamed": "{{title}} megszakítása",
+    "dismiss": "Elvetés",
+    "dismissNamed": "{{title}} elvetése",
+    "succeeded": "Kész",
+    "cancelled": "Megszakítva",
+    "failed": "Sikertelen",
+    "inProgress": "Folyamatban",
+    "verifying": "Ellenőrzés",
+    "speechModelTitle": "Beszédmodell: {{name}}",
+    "buttonInterrupted": "Tevékenységek: néhány megszakadt",
+    "interrupted": "Megszakadt",
+    "resume": "Folytatás",
+    "resumeNamed": "{{title}} folytatása",
+    "discard": "Elvetés",
+    "discardNamed": "{{title}} elvetése",
+    "resumeFailed": "A folytatás nem sikerült.",
+    "quitTitle": "Kilép, miközben tevékenységek futnak?",
+    "quitBody": "Ezek a tevékenységek még futnak, és le fognak állni:",
+    "quitResumeHint": "A megszakadt letöltések az alkalmazás következő indításakor folytathatók.",
+    "quitAnyway": "Kilépés mégis",
+    "keepRunning": "Futás folytatása",
+    "summaryRunning_one": "{{count}} fut",
+    "summaryRunning_other": "{{count}} fut",
+    "summaryInterrupted_one": "{{count}} megszakadt",
+    "summaryInterrupted_other": "{{count}} megszakadt",
+    "summaryFailed_one": "{{count}} sikertelen",
+    "summaryFailed_other": "{{count}} sikertelen",
+    "remaining": "{{time}} van hátra"
   }
 }

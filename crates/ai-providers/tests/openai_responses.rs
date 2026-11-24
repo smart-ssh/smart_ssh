@@ -1,10 +1,9 @@
 //! Wiremock tests for `OpenAiResponsesProvider` (ADR 0124): request body
 //! shape and stream parsing from recorded Responses API events.
 
-use std::sync::Arc;
-
-use ai_providers::{OpenAiResponsesProvider, ProviderBudgetGuard};
+use ai_providers::OpenAiResponsesProvider;
 use futures::StreamExt;
+use ssh_manager_core::ai::RedactedContext;
 use ssh_manager_core::ai::{
     default_action_schemas, AiError, AiEvent, AiProvider, ChatMessage, MessageContent, Role,
     SessionContext,
@@ -14,15 +13,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn provider(server: &MockServer, native: bool) -> OpenAiResponsesProvider {
-    OpenAiResponsesProvider::new(
-        server.uri(),
-        "gpt-test",
-        "key",
-        native,
-        Vec::new(),
-        Arc::new(ProviderBudgetGuard::new()),
-        None,
-    )
+    OpenAiResponsesProvider::new(server.uri(), "gpt-test", "key", native, Vec::new(), None)
 }
 
 fn context() -> SessionContext {
@@ -67,7 +58,9 @@ async fn serve(body: String) -> MockServer {
 async fn collect(provider: &OpenAiResponsesProvider) -> Vec<AiEvent> {
     tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        provider.send(context()).collect::<Vec<_>>(),
+        provider
+            .send(RedactedContext::for_tests(context()))
+            .collect::<Vec<_>>(),
     )
     .await
     .expect("stream must finish")
@@ -77,9 +70,9 @@ async fn sent_bodies(server: &MockServer) -> Vec<serde_json::Value> {
     server
         .received_requests()
         .await
-        .unwrap()
+        .expect("request recording is enabled")
         .iter()
-        .map(|r| serde_json::from_slice(&r.body).unwrap())
+        .map(|r| serde_json::from_slice(&r.body).expect("request body is JSON"))
         .collect()
 }
 
@@ -307,7 +300,7 @@ async fn side_calls_never_get_the_web_tool() {
     let mut ctx = context();
     ctx.max_tokens_hint = Some(300);
     let _ = web_provider(&server, true)
-        .send(ctx)
+        .send(RedactedContext::for_tests(ctx))
         .collect::<Vec<_>>()
         .await;
     let body = &sent_bodies(&server).await[0];
@@ -545,7 +538,10 @@ async fn test_issue_609_completed_event_reports_usage() {
         ),
     ]))
     .await;
-    let events: Vec<AiEvent> = provider(&server, true).send(context()).collect().await;
+    let events: Vec<AiEvent> = provider(&server, true)
+        .send(RedactedContext::for_tests(context()))
+        .collect()
+        .await;
     assert_eq!(
         events,
         vec![
@@ -573,6 +569,9 @@ async fn test_issue_609_completed_without_usage_has_no_usage_event() {
         r#"{"type":"response.completed","response":{"model":"gpt-5-x"}}"#,
     )]))
     .await;
-    let events: Vec<AiEvent> = provider(&server, true).send(context()).collect().await;
+    let events: Vec<AiEvent> = provider(&server, true)
+        .send(RedactedContext::for_tests(context()))
+        .collect()
+        .await;
     assert_eq!(events, vec![AiEvent::Done]);
 }

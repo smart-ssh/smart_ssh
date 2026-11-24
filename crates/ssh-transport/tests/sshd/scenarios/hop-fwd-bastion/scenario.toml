@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-fwd-bastion"
+networks = ["hop-fwd-net"]
+publish = true

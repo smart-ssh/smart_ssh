@@ -65,11 +65,12 @@ async fn test_live_output_precedes_an_unchanged_final_result() {
         &session,
         Uuid::new_v4(),
         action_id,
-        "count".to_string(),
+        ApprovedCommand::new("count".to_string()),
         &emitter,
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     )
     .await;
     assert!(executed);
@@ -94,7 +95,7 @@ async fn test_live_output_precedes_an_unchanged_final_result() {
         events[result_at].1["result"]["stdout"],
         serde_json::json!("1\n2\n3\n")
     );
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     assert_eq!(history.len(), 1);
     let MessageContent::CommandResult {
         output, cancelled, ..
@@ -126,11 +127,12 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
         &session,
         Uuid::new_v4(),
         action_id,
-        "journalctl -f".to_string(),
+        ApprovedCommand::new("journalctl -f".to_string()),
         &emitter,
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     );
     let cancel_future = async {
         // Cancel only once live output was shown.
@@ -138,6 +140,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         session
+            .conn
             .running_command_cancellations
             .resolve(&action_id, ())
             .expect("a waiting cancel registration");
@@ -152,7 +155,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
         .find(|(name, _)| name == "chat-action-result")
         .expect("chat-action-result");
     assert_eq!(result["result"]["cancelled"], serde_json::json!(true));
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let MessageContent::CommandResult {
         cancelled, output, ..
     } = &history[0].content
@@ -195,21 +198,23 @@ async fn test_two_sessions_stream_only_their_own_output() {
             &session_a,
             session_id_a,
             action_a,
-            "run".to_string(),
+            ApprovedCommand::new("run".to_string()),
             &emitter,
             empty_store(),
             true,
             LedgerSource::Ai,
+            false,
         ),
         execute_suggested_command(
             &session_b,
             session_id_b,
             action_b,
-            "run".to_string(),
+            ApprovedCommand::new("run".to_string()),
             &emitter,
             empty_store(),
             true,
             LedgerSource::Ai,
+            false,
         ),
     );
 
@@ -254,11 +259,12 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
         &session,
         Uuid::new_v4(),
         action_id,
-        command.to_string(),
+        ApprovedCommand::new(command.to_string()),
         &emitter,
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     );
     let cancel_future = async {
         if wait_for_hint {
@@ -274,13 +280,14 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
         session
+            .conn
             .running_command_cancellations
             .resolve(&action_id, ())
             .expect("a waiting cancel registration");
     };
     let (executed, ()) = tokio::join!(exec_future, cancel_future);
     assert!(executed);
-    let history = session.context.lock().await.history.clone();
+    let history = session.ai.context.lock().await.history.clone();
     let MessageContent::CommandResult {
         cancelled,
         waiting_for_input,

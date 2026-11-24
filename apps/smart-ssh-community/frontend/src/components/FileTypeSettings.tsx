@@ -6,9 +6,9 @@ import {
   normalizeExtension,
   saveFileTypeApps,
   type FileTypeAppSettings,
-} from "../fileTypeSettings";
-import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "./ui";
+} from "../settings/fileTypeSettings";
+import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
+import { Button, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface Row {
   /** Stabiler React-`key`, unabhängig vom (während der Bearbeitung
@@ -59,7 +59,7 @@ export function FileTypeSettings() {
         console.warn("Konnte Dateityp-Zuordnungen nicht laden:", err);
         setLoadError(t("fileTypes.loadFailed"));
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
 
   const updateRow = (id: string, patch: Partial<Pick<Row, "extension" | "appPath">>) => {
@@ -108,15 +108,15 @@ export function FileTypeSettings() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-slate-400">{t("fileTypes.description")}</p>
+      <p className="mb-4 text-sm text-fg-subtle">{t("fileTypes.description")}</p>
 
       {loadError && (
-        <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
+        <p role="alert" className="mb-4 border-l-2 border-danger bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
       )}
 
-      <div className="mb-3 space-y-2">
+      <div className="mb-3 divide-y divide-border border-y border-border">
         {rows.map((row) => (
-          <div key={row.id} className="flex items-center gap-2">
+          <div key={row.id} className="flex items-center gap-2 py-2">
             <input
               {...TECHNICAL_INPUT_PROPS}
               value={row.extension}
@@ -139,12 +139,13 @@ export function FileTypeSettings() {
             </Button>
             <Button
               variant="ghost"
+              iconOnly
               onClick={() => removeRow(row.id)}
               title={t("fileTypes.remove")}
               aria-label={t("fileTypes.remove")}
               className="shrink-0"
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
         ))}
@@ -156,10 +157,10 @@ export function FileTypeSettings() {
           {t("fileTypes.save")}
         </Button>
         {saveState === "saved" && (
-          <span className="text-xs text-emerald-400">{t("fileTypes.saved")}</span>
+          <span className="text-xs text-success-fg">{t("fileTypes.saved")}</span>
         )}
         {saveState === "failed" && (
-          <span className="text-xs text-red-300">{t("fileTypes.saveFailed")}</span>
+          <span className="text-xs text-danger-fg-soft">{t("fileTypes.saveFailed")}</span>
         )}
       </div>
     </div>

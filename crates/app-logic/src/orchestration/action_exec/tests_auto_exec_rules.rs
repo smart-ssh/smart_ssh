@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use ssh_manager_core::ai::AiEvent;
+use ssh_manager_core::filter::PolicyRules;
 use ssh_manager_core::filter::{
     EffectiveScope, FilterEngine, Pattern, PolicyStore, Rule, RuleAction, Scope,
 };
@@ -15,8 +16,8 @@ use super::*;
 struct Rules(Vec<Rule>);
 #[async_trait]
 impl PolicyStore for Rules {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        self.0.clone()
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(self.0.clone())
     }
 }
 

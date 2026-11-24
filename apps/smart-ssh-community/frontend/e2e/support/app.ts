@@ -100,3 +100,21 @@ export const test = base.extend<{ app: AppDriver }>({
 });
 
 export { expect };
+
+/**
+ * Opens the Settings dialog (via the navigation menu when the layout has one,
+ * i.e. on phone widths) and, with `category`, selects that category.
+ */
+export async function openSettings(page: Page, category?: string) {
+  const menu = page.getByRole("button", { name: "Open navigation menu" });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await page.getByRole("dialog", { name: "Navigation menu" }).getByRole("button", { name: "Settings", exact: true }).click();
+  } else {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+  }
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(dialog).toBeVisible();
+  if (category) await dialog.getByRole("button", { name: category, exact: true }).click();
+  return dialog;
+}

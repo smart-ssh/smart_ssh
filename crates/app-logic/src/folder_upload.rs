@@ -110,6 +110,15 @@ pub fn join_remote(base: &str, rel: &str) -> String {
     }
 }
 
+const FOLDER_UPLOAD_NAME_INVALID: &str = "FOLDER_UPLOAD_NAME_INVALID";
+const FOLDER_UPLOAD_NOT_A_FOLDER: &str = "FOLDER_UPLOAD_NOT_A_FOLDER";
+const FOLDER_UPLOAD_TOO_MANY_ENTRIES: &str = "FOLDER_UPLOAD_TOO_MANY_ENTRIES";
+const FOLDER_UPLOAD_IO_FAILED: &str = "FOLDER_UPLOAD_IO_FAILED";
+
+fn io_failed(err: std::io::Error) -> CommandError {
+    CommandError::with_code(err.to_string(), FOLDER_UPLOAD_IO_FAILED)
+}
+
 pub fn plan_folder(
     root: &GrantedLocalPath,
     grants: &GrantSnapshot,
@@ -119,12 +128,18 @@ pub fn plan_folder(
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|n| !n.is_empty())
-        .ok_or_else(|| CommandError::from("Der lokale Ordner hat keinen verwendbaren Namen."))?
+        .ok_or_else(|| {
+            CommandError::with_code(
+                "Der lokale Ordner hat keinen verwendbaren Namen.",
+                FOLDER_UPLOAD_NAME_INVALID,
+            )
+        })?
         .to_string();
-    let meta = std::fs::symlink_metadata(root_path)?;
+    let meta = std::fs::symlink_metadata(root_path).map_err(io_failed)?;
     if !meta.is_dir() {
-        return Err(CommandError::from(
+        return Err(CommandError::with_code(
             "Der gewählte lokale Pfad ist kein Ordner.",
+            FOLDER_UPLOAD_NOT_A_FOLDER,
         ));
     }
 
@@ -140,10 +155,10 @@ pub fn plan_folder(
         vec![(root_path.to_path_buf(), String::new(), 0)];
     while let Some((dir, rel_dir, depth)) = stack.pop() {
         let mut children: Vec<(String, PathBuf, std::fs::FileType)> = Vec::new();
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
+        for entry in std::fs::read_dir(&dir).map_err(io_failed)? {
+            let entry = entry.map_err(io_failed)?;
             let rel_name = entry.file_name();
-            let file_type = entry.file_type()?;
+            let file_type = entry.file_type().map_err(io_failed)?;
             match rel_name.to_str() {
                 Some(name) => children.push((name.to_string(), entry.path(), file_type)),
                 None => plan.skipped.push(SkippedEntry {
@@ -159,9 +174,12 @@ pub fn plan_folder(
             let rel = join_relative(&rel_dir, &name);
             entries_seen += 1;
             if entries_seen > MAX_ENTRIES {
-                return Err(CommandError::from(format!(
-                    "Der Ordner enthält mehr als {MAX_ENTRIES} Einträge und wird nicht hochgeladen."
-                )));
+                return Err(CommandError::with_code(
+                    format!(
+                        "Der Ordner enthält mehr als {MAX_ENTRIES} Einträge und wird nicht hochgeladen."
+                    ),
+                    FOLDER_UPLOAD_TOO_MANY_ENTRIES,
+                ));
             }
             if file_type.is_symlink() {
                 plan.skipped.push(SkippedEntry {

@@ -1,7 +1,7 @@
 # 0033-app-store-connect-api-key-notarization
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

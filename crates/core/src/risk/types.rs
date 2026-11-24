@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// ohne eigene Vergleichslogik.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub enum RiskLevel {
     None,
     Yellow,
@@ -31,6 +32,7 @@ pub enum RiskLevel {
 /// `docs/adr/0084-red-risk-requires-confirm.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS))]
 pub struct RiskAssessment {
     pub server_risk: RiskLevel,
     /// `None`, solange `server_risk == RiskLevel::None` — welches Muster
@@ -46,14 +48,4 @@ pub struct RiskAssessment {
     /// abgefragt" von "abgefragt, aber ergebnislos" für die UI (Abschnitt 4:
     /// Lade-Indikator, solange eine aktivierte Zweitmeinung noch aussteht).
     pub ai_reviewed: bool,
-}
-
-/// Klassifiziert ein Kommando (bzw. den auf ein Pseudokommando gemappten
-/// Dateipfad, s. Modul-Doc) in eine [`RiskAssessment`] (Spec 0026,
-/// Abschnitt 2). Synchron — die regelbasierte Prüfung ist rein lokal
-/// (Pattern-Matching gegen fest codierte Listen) und schnell genug, um das
-/// `chat-action-proposed`-Event nicht zu verzögern (Abschnitt 2, Punkt 5
-/// der Aufgabenstellung).
-pub trait RiskClassifier: Send + Sync {
-    fn classify(&self, command: &str) -> RiskAssessment;
 }

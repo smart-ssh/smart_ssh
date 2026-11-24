@@ -3,6 +3,8 @@
 Rules for all UI translations (Spec 0024). Translation issues fill in the
 per-language table.
 
+Project and domain terms are in [`glossary.md`](glossary.md).
+
 ## Stay untranslated
 
 SSH, SFTP, sudo, MCP, Smart SSH, Ollama, and other product, protocol and

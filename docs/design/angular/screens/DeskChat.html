@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Desktop – Chat with confirmation card</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--surface-hover:#1e252f;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-strong:#5ad4ee;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--danger:#f04848;--danger-fg:#ff8a85;--danger-subtle:#2a0d0e;--danger-border:#5c1c1d;--warning:#f5a524;--warning-fg:#ffc266;--warning-subtle:#2a1d06;--warning-border:#5a3e0e;--success:#3dd68c;--success-fg:#7be5ae;--success-subtle:#0a2418;--success-border:#175536;--local:#d86cf0;--local-fg:#e9a6f7;--local-border:#5a2366;--term-bg:#07090c;--term-fg:#d8dee6;font-family:Barlow,system-ui,sans-serif;font-size:14px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint)}
+.mono{font-family:"JetBrains Mono",monospace}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;height:32px;padding:0 12px;border:1px solid var(--border-strong);background:transparent;color:var(--fg-soft);display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.dng{border-color:var(--danger-border);color:var(--danger-fg)}
+.btn.ghost{border-color:transparent;color:var(--fg-muted)}
+.btn.ib{width:32px;padding:0;justify-content:center}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 6px;border:1px solid var(--border-strong);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-muted);white-space:nowrap}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.sq{width:8px;height:8px;display:inline-block;flex:none}
+.tab{height:44px;padding:0 14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.06em;color:var(--fg-subtle);background:transparent;border-top:2px solid transparent;border-left:0;border-bottom:0;cursor:pointer}
+.tab.on{background:var(--surface);color:var(--fg-strong);border-top-color:var(--accent)}
+.tr{height:30px;display:flex;align-items:center;gap:7px;padding:0 10px;color:var(--fg-soft);font-size:13.5px;position:relative}
+.tr.sel{background:var(--accent-subtle);color:var(--fg-strong);box-shadow:inset 0 0 0 1px var(--accent-border)}
+.kids{margin-left:17px;border-left:1px solid var(--border-strong)}
+.kids .tr::before{content:"";position:absolute;left:0;top:15px;width:8px;height:1px;background:var(--border-strong)}
+.kids .tr{padding-left:14px}
+.drow{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:0 12px;background:transparent;border:0;border-top:1px solid var(--border);color:var(--fg);text-align:left;cursor:pointer;font:inherit}
+.drow.open{background:var(--surface-raised)}
+.seg{display:flex;border:1px solid var(--border-strong)}
+.seg button{height:28px;padding:0 12px;background:transparent;border:0;border-left:1px solid var(--border-strong);color:var(--fg-muted);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--accent);color:var(--on-accent)}
+.opt{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--fg-soft);text-align:left;cursor:pointer;font:inherit}
+.opt.on{border-color:var(--accent-border);background:var(--accent-subtle);color:var(--fg-strong)}
+.rb{width:14px;height:14px;border:1px solid var(--border-strong);flex:none;display:flex;align-items:center;justify-content:center}
+.opt.on .rb{border-color:var(--accent)}
+.opt.on .rb::after{content:"";width:6px;height:6px;background:var(--accent)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 100%; height: 900px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 44px; display: flex; align-items: stretch; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 0 16px; border-right: 1px solid var(--border)">
+      <svg viewBox="0 0 64 64" style="width: 20px; height: 20px" aria-hidden="true"><path d="M48 14H16v18h32v18H16" style="fill: none; stroke: #e3e7ed; stroke-width: 7; stroke-linecap: square; stroke-linejoin: miter"></path><rect x="42" y="8" width="12" height="12" style="fill: #2cc6e8"></rect><rect x="10" y="44" width="12" height="12" style="fill: #2cc6e8"></rect></svg>
+      <span class="h" style="font-size: 15px; font-weight: 700; letter-spacing: .1em; color: var(--fg-strong)">Smart SSH</span>
+    </div>
+    <nav aria-label="Main" style="display: flex">
+      <button class="tab on" type="button">Connect</button>
+      <button class="tab" type="button">Manage</button>
+      <button class="tab" type="button">Filter Rules</button>
+    </nav>
+    <div role="tablist" aria-label="Open sessions" style="display: flex; margin-left: 12px; border-left: 1px solid var(--border)">
+      <button class="tab" type="button" role="tab"><span class="sq" style="background: var(--success)"></span><span class="mono" style="font-size: 12.5px; letter-spacing: 0">web-01</span></button>
+      <button class="tab on" type="button" role="tab" aria-selected="true"><span class="sq" style="background: var(--warning)"></span><span class="mono" style="font-size: 12.5px; letter-spacing: 0">db-prod</span><span class="badge" style="height: 18px; border-color: var(--warning-border); color: var(--warning-fg)">Waiting for confirmation</span></button>
+      <button class="tab" type="button" aria-label="New session" style="padding: 0 12px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14 M5 12h14"></path></svg></button>
+    </div>
+    <div style="flex: 1"></div>
+    <button class="tab" type="button" aria-label="Activities" style="border-left: 1px solid var(--border)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h5l3-8 4 16 3-8h5"></path></svg></button>
+    <button class="tab" type="button" aria-label="Settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9 M17 6h3 M15 3v6 M4 12h3 M11 12h9 M9 9v6 M4 18h11 M19 18h1 M17 15v6"></path></svg></button>
+  </header>
+
+  <div style="flex: 1; display: flex; min-height: 0">
+    <aside style="width: 248px; flex: none; background: var(--surface-sunken); border-right: 1px solid var(--border); padding: 10px 6px">
+      <div class="lbl" style="padding: 0 6px 8px">Servers</div>
+      <div class="tr" style="color: var(--local-fg)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20v13H2z M8 21h8 M12 17v4 M6 8l3 2.5L6 13 M11 13h4"></path></svg>Localhost</div>
+      <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V5h6l2 2h8v3 M3 20l3-10h16l-3 10z"></path></svg><b>production</b></div>
+      <div class="kids">
+        <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">web-01</span><span class="sq" style="margin-left: auto; background: var(--success)"></span></div>
+        <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">web-02</span></div>
+        <div class="tr sel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">db-prod</span><span class="sq" style="margin-left: auto; background: var(--warning)"></span></div>
+      </div>
+      <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg><b>staging</b></div>
+    </aside>
+
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border)">
+        <span class="sq" style="background: var(--warning)"></span>
+        <span class="h" style="font-size: 17px; color: var(--fg-strong)">db-prod</span>
+        <span class="mono" style="font-size: 12px; color: var(--fg-subtle)">admin@10.0.6.12:22</span>
+        <span class="badge">production</span><span class="badge">postgres</span>
+        <div style="flex: 1"></div>
+        <div role="group" aria-label="Session panes" style="display: flex; border: 1px solid var(--border-strong)">
+          <button class="btn" type="button" style="border: 0; height: 28px; background: var(--accent-subtle); color: var(--accent-fg)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"></path></svg>AI</button>
+          <button class="btn" type="button" style="border: 0; border-left: 1px solid var(--border-strong); height: 28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3z M7 9l3 3-3 3 M12 15h5"></path></svg>Terminal</button>
+          <button class="btn" type="button" style="border: 0; border-left: 1px solid var(--border-strong); height: 28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg>Files</button>
+        </div>
+        <button class="btn dng" type="button" style="height: 30px">Disconnect</button>
+      </div>
+
+      <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; justify-content: center; padding: 18px 24px 0">
+        <div style="width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 14px">
+          <div style="align-self: flex-end; max-width: 80%; background: var(--surface-raised); border: 1px solid var(--border-strong); padding: 9px 12px">php-fpm keeps dying on db-prod's app pool too. Find out why.</div>
+          <p style="margin: 0; color: var(--fg-soft)">I'll check the unit state and pull the recent errors from its journal in one go.</p>
+
+          <article aria-label="Confirmation needed" style="border: 1px solid var(--warning-border); background: var(--surface-sunken); position: relative">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--warning-subtle)">
+              <svg class="ico" viewBox="0 0 24 24" style="color: var(--warning)" aria-hidden="true"><path d="M12 2l8 3v8l-8 9-8-9V5z M8.5 12l2.5 2.5 4.5-4.5"></path></svg>
+              <span class="lbl" style="color: var(--warning-fg)">Suggest command · confirmation needed</span>
+              <div style="flex: 1"></div>
+              <span class="badge"><span class="sq" style="background: var(--fg-faint)"></span>Server · none</span>
+              <span class="badge" style="border-color: var(--warning-border); color: var(--warning-fg)"><span class="sq" style="background: var(--warning)"></span>Data · yellow</span>
+            </div>
+            <div style="padding: 10px 12px 12px">
+              <label for="cmdedit" class="lbl" style="display: block; margin-bottom: 5px">Command — editable</label>
+              <textarea id="cmdedit" rows="2" class="mono" style="display: block; width: 100%; resize: none; border: 1px solid var(--border-strong); background: var(--term-bg); color: var(--term-fg); padding: 8px 10px; font-size: 12.5px; line-height: 1.5">systemctl status php8.3-fpm --no-pager &amp;&amp; journalctl -u php8.3-fpm -n 200 --no-pager | grep -iE 'error|fatal' | tail -n 20</textarea>
+            </div>
+
+            <div style="padding: 0 12px 4px; display: flex; align-items: baseline; gap: 10px"><span class="lbl">Parts of this command</span><span style="font-size: 12px; color: var(--fg-faint)">2 covered · 2 to decide</span></div>
+            <ul style="list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 2px">
+              <li style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-subtle)"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--success)" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg><span class="mono" style="font-size: 12px; color: var(--fg-muted)">systemctl status php8.3-fpm --no-pager</span><span style="margin-left: auto">covered by rule <span class="mono" style="font-size: 11.5px; color: var(--fg-muted)">systemctl status *</span></span></li>
+              <li style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-subtle)"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--success)" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg><span class="mono" style="font-size: 12px; color: var(--fg-muted)">tail -n 20</span><span style="margin-left: auto">covered by rule <span class="mono" style="font-size: 11.5px; color: var(--fg-muted)">tail -n *</span></span></li>
+            </ul>
+
+            <div style="display: flex; align-items: center; gap: 10px; padding: 0 12px 6px"><span class="lbl" style="color: var(--fg-muted)">To decide</span><div style="flex: 1; height: 1px; background: var(--border)"></div></div>
+            <div style="border-bottom: 1px solid var(--border)">
+              
+                <div>
+                  <button class="drow open" type="button" aria-expanded="true">
+                    <svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+                    <span class="mono" style="font-size: 12.5px">journalctl -u php8.3-fpm -n 200 --no-pager</span>
+                    <span style="margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg-soft)">
+                      <svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--success)" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg><span class="mono" style="font-size: 11.5px; color: var(--fg)">journalctl *</span><span style="color: var(--fg-faint)">· This Server</span>
+                      
+                    </span>
+                  </button>
+                  
+                    <div style="background: var(--surface-raised); padding: 4px 12px 12px 34px; display: flex; flex-direction: column; gap: 10px">
+                      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                        <span class="lbl" style="width: 70px">Scope</span>
+                        <div class="seg" role="group" aria-label="Scope">
+                          <button class="on" type="button">This Server</button><button class="" type="button">Global</button><button class="" type="button">Tag</button>
+                        </div>
+                        
+                      </div>
+                      <div style="display: flex; gap: 12px; align-items: flex-start">
+                        <span class="lbl" style="width: 70px; padding-top: 8px">Rule</span>
+                        <div role="radiogroup" aria-label="Rule level" style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+                          
+                            <button class="opt" type="button" role="radio" aria-checked="false">
+                              <span class="rb"></span>
+                              <span style="width: 150px; font-size: 13px">Exact</span>
+                              <span class="mono" style="font-size: 12px; color: var(--fg)">journalctl -u php8.3-fpm -n 200 --no-pager</span>
+                              
+                            </button>
+                          
+                            <button class="opt on" type="button" role="radio" aria-checked="true">
+                              <span class="rb"></span>
+                              <span style="width: 150px; font-size: 13px">All `journalctl` calls</span>
+                              <span class="mono" style="font-size: 12px; color: var(--fg)">journalctl *</span>
+                              <span class="badge" style="margin-left: auto; height: 18px; border-color: var(--accent-border); color: var(--accent-fg)">Suggested</span>
+                            </button>
+                          
+                        </div>
+                      </div>
+                      <div style="padding-left: 82px; font-size: 12.5px; color: var(--success-fg); display: flex; align-items: center; gap: 6px"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px" aria-hidden="true"><path d="M13 2L4 14h7l-2 8 9-12h-7z"></path></svg>With this rule the whole command runs automatically next time.</div>
+                    </div>
+                  
+                </div>
+              
+                <div>
+                  <button class="drow " type="button" aria-expanded="false">
+                    <svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+                    <span class="mono" style="font-size: 12.5px">grep -iE 'error|fatal'</span>
+                    <span style="margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg-soft)">
+                      <svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--success)" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg><span class="mono" style="font-size: 11.5px; color: var(--fg)">grep *</span><span style="color: var(--fg-faint)">· Global</span>
+                      
+                    </span>
+                  </button>
+                  
+                </div>
+              
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px">
+              <button class="btn" type="button" style="border-color: var(--accent-border); color: var(--accent-fg)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v8l-8 9-8-9V5z M8.5 12l2.5 2.5 4.5-4.5"></path></svg>Save rules (2)</button>
+              <span style="font-size: 12px; color: var(--fg-faint)">Assessment based on known patterns — no guarantee.</span>
+              <div style="flex: 1"></div>
+              <button class="btn dng" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18"></path></svg>Deny</button>
+              <button class="btn pri" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"></path></svg>Execute</button>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--border); padding: 12px 24px 14px; display: flex; justify-content: center">
+        <div style="width: 100%; max-width: 900px; display: flex; border: 1px solid var(--border-strong); background: var(--surface-sunken)">
+          <label for="cmp2" style="position: absolute; left: -9999px">Message</label>
+          <input id="cmp2" disabled placeholder="Answer the confirmation first …" style="flex: 1; height: 44px; border: 0; background: transparent; color: var(--fg); padding: 0 12px; font: inherit">
+          <button class="btn ib ghost" type="button" aria-label="Start voice input" style="height: 44px; width: 44px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v10H9z M5 10v3l3 4h8l3-4v-3 M12 17v4 M8 21h8"></path></svg></button>
+          <button class="btn pri" type="button" style="height: 44px" disabled>Send</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

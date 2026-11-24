@@ -9,16 +9,17 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applySshConfigImport, previewSshConfigImport } from "../api";
+import { applySshConfigImport, previewSshConfigImport } from "../api/api";
 import { testI18n } from "../testI18n";
-import type { SshConfigImportPreviewDto } from "../types";
+import type { SshConfigImportPreviewDto } from "../api/types";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  previewSshConfigImport: vi.fn(),
-  applySshConfigImport: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    previewSshConfigImport: vi.fn(),
+    applySshConfigImport: vi.fn(),
+  }),
+);
 
 // Ohne dieses Zurücksetzen liest ein späterer Test `mock.calls[0]` eines
 // früheren Tests mit — genau der Fehler, den Spec-Reviewer-Funde in anderen
@@ -147,9 +148,9 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     // Das buchstäbliche Schlagwort ist deutlicher markiert als das
     // Muster-Schlagwort (§5.2a) — hier: das Warnsymbol.
     const literalTagLabel = screen.getByText("prod").closest("label");
-    expect(literalTagLabel?.textContent).toContain("⚠");
+    expect(literalTagLabel?.querySelector('[data-icon="warn"]')).not.toBeNull();
     const patternTagLabel = screen.getByText("*.prod.de").closest("label");
-    expect(patternTagLabel?.textContent).not.toContain("⚠");
+    expect(patternTagLabel?.querySelector('[data-icon="warn"]')).toBeNull();
   });
 
   // spec-reviewer-Fund, Runde 2: die Action einer getroffenen Regel
@@ -171,7 +172,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   it("recomputes the 'will open' file list when the identity mode changes — not a static list", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     // Vorgabe (a): nichts wird geöffnet — die Warnbox mit der "würde
     // gelesen"-Liste erscheint nicht (der Pfad selbst steht ohnehin am
@@ -198,9 +199,9 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       identityEncrypted: [],
     });
     const { onImported } = renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
-    fireEvent.click(screen.getByText("Importieren"));
+    fireEvent.click(screen.getByRole("button", { name: /Server importieren/ }));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
@@ -224,7 +225,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   it("issue #636: literal tags hitting Allow or Deny rules both start selected", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(previewWithDenyOnlyLiteralTag());
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     const allowHitCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
     const denyOnlyHitCheckbox = screen.getByText("onlydeny").closest("label")?.querySelector("input");
@@ -247,7 +248,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       identityEncrypted: [],
     });
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     const patternLabel = screen.getByText("*.prod.de").closest("label");
     expect(patternLabel?.querySelector("input")).toBeChecked();
@@ -259,7 +260,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(literalLabel?.textContent).toContain("Deny");
     expect(literalLabel?.textContent).not.toContain("automatisch abgewählt");
 
-    fireEvent.click(screen.getByText("Importieren"));
+    fireEvent.click(screen.getByRole("button", { name: /Server importieren/ }));
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual([]);
   });
@@ -274,11 +275,11 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       identityEncrypted: [],
     });
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     fireEvent.click(screen.getByText("*.prod.de").closest("label")?.querySelector("input") as HTMLInputElement);
     fireEvent.click(screen.getByText("prod").closest("label")?.querySelector("input") as HTMLInputElement);
-    fireEvent.click(screen.getByText("Importieren"));
+    fireEvent.click(screen.getByRole("button", { name: /Server importieren/ }));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags.sort()).toEqual(["*.prod.de", "prod"]);
@@ -294,7 +295,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       identityEncrypted: [],
     });
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     const literalTagCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
     expect(literalTagCheckbox).toBeTruthy();
@@ -302,7 +303,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     fireEvent.click(literalTagCheckbox as HTMLInputElement);
     fireEvent.click(literalTagCheckbox as HTMLInputElement);
 
-    fireEvent.click(screen.getByText("Importieren"));
+    fireEvent.click(screen.getByRole("button", { name: /Server importieren/ }));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
@@ -327,7 +328,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       identityEncrypted: [],
     });
     renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     const patternTagCheckbox = screen.getByText("*.prod.de").closest("label")?.querySelector("input");
     expect(patternTagCheckbox).toBeTruthy();
@@ -335,7 +336,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     fireEvent.click(patternTagCheckbox as HTMLInputElement);
     expect(patternTagCheckbox).not.toBeChecked();
 
-    fireEvent.click(screen.getByText("Importieren"));
+    fireEvent.click(screen.getByRole("button", { name: /Server importieren/ }));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
@@ -345,7 +346,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   it("cancel closes the dialog without applying anything", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     const { onClose } = renderDialog();
-    await screen.findByText("web1");
+    await screen.findByTestId("entry-0-name");
 
     fireEvent.click(screen.getByText("Abbrechen"));
 
@@ -358,5 +359,81 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     const { onClose } = renderDialog();
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("lays out files, folder structure (with servers) and a server table; the import button counts the selection (#1385)", async () => {
+    vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("columnheader").length).toBe(6);
+    expect(within(table).getAllByRole("checkbox")).toHaveLength(2);
+    // The folder tree lists the group and its servers.
+    const tree = screen.getByText("config").closest("section") as HTMLElement;
+    expect(within(tree).getByText("web1")).toBeInTheDocument();
+    expect(within(tree).getByText("bastion")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "2 Server importieren" })).toBeInTheDocument();
+    fireEvent.click(within(table).getByRole("checkbox", { name: "bastion" }));
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeInTheDocument();
+  });
+
+  it("still shows the jump host of a conflicting entry in the details list (#1385)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    dto.entries[1].jumpHost = { name: "gateway-x", existing: true } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    const jump = screen.getByTestId("entry-1-jump");
+    expect(jump.textContent).toContain("gateway-x");
+    expect(jump.closest("table")).toBeNull();
+  });
+
+  it("shows a conflict row in the table with the rename input below it (#1385)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+
+    const row = screen.getByTestId("entry-1-name").closest("tr") as HTMLElement;
+    expect(row.className).toContain("bg-warning-subtle");
+    const rename = screen.getByPlaceholderText("neuer Name");
+    expect(rename.closest("table")).toBeNull();
+    fireEvent.change(rename, { target: { value: "bastion-ext" } });
+    vi.mocked(applySshConfigImport).mockResolvedValue({
+      createdServers: 2, createdGroups: 1, skippedConflicts: 0, identityFallbacks: [], identityEncrypted: [],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "2 Server importieren" }));
+    await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
+    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][1].renameTo).toBe("bastion-ext");
+  });
+  it("counts only entries that will be created: conflicts need a non-blank new name (#1460)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+    const rename = screen.getByPlaceholderText("neuer Name");
+    fireEvent.change(rename, { target: { value: "bastion-ext" } });
+    expect(screen.getByRole("button", { name: "2 Server importieren" })).toBeEnabled();
+    fireEvent.change(rename, { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+    fireEvent.change(rename, { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "1 Server importieren" })).toBeEnabled();
+  });
+
+  it("disables the button when only conflicting entries without a new name are selected (#1460)", async () => {
+    const dto = preview();
+    dto.entries[1].conflict = { kind: "name", existingName: "bastion" } as never;
+    vi.mocked(previewSshConfigImport).mockResolvedValue(dto);
+    renderDialog();
+    await screen.findByTestId("entry-0-name");
+    const table = screen.getByTestId("entry-0-name").closest("table") as HTMLElement;
+    fireEvent.click(within(table).getByRole("checkbox", { name: "web1" }));
+    expect(screen.getByRole("button", { name: "0 Server importieren" })).toBeDisabled();
   });
 });

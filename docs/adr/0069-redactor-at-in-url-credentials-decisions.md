@@ -1,6 +1,9 @@
 # ADR 0069: `@` in den Zugangsdaten einer URL — Entscheidungen bei der Umsetzung
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0078-redactor-at-in-url-password.md (§2–§6), Spec 0068
 (strenges URL-Muster, Reihenfolge der Muster mit Header-Namen), Spec 0006
 §5 (Redaction vor Persistenz und vor jedem Provider-Aufruf),

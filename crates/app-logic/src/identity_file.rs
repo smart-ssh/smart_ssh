@@ -237,6 +237,7 @@ mod tests {
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: now,
             updated_at: now,
@@ -259,6 +260,29 @@ mod tests {
 
     fn stored(store: &InMemoryCredentialStore, r: &CredentialRef) -> Option<String> {
         store.get(r).ok().map(|s| s.expose_secret().to_string())
+    }
+
+    /// Issue #667: Der Schlüsselinhalt taucht nach dem Import weder im
+    /// serialisierten `ServerDto` (Frontend-Zustand) noch in dessen
+    /// Debug-/Log-Ausgabe auf.
+    #[tokio::test]
+    async fn test_import_never_leaks_key_material_into_dto_or_debug_output() {
+        let id = ServerId::new();
+        let profile_store = InMemoryProfileStore::new().with_server(identity_server(id, None));
+        let credential_store = InMemoryCredentialStore::new();
+        let key_files = MockKeyFileReader::new().with_key(PATH, "SECRET-KEY-MATERIAL-667");
+
+        let dto =
+            convert_identity_file_to_keychain(&profile_store, &credential_store, &key_files, id)
+                .await
+                .unwrap();
+
+        let json = serde_json::to_string(&dto).unwrap();
+        let debug = format!("{dto:?}");
+        let server_debug = format!("{:?}", profile_store.get_server(&id).await.unwrap());
+        for out in [json, debug, server_debug] {
+            assert!(!out.contains("SECRET-KEY-MATERIAL-667"), "{out}");
+        }
     }
 
     /// **§6.3.3: Überführung eines unverschlüsselten Schlüssels.** Danach

@@ -26,3 +26,5 @@ export function localPackagePredicate(
   npmLsTree: NpmLsNode,
 ): (name: string, info: NpmLsNode) => boolean;
 export function collectNpmProdPackages(frontendDir: string, allowList: string[]): NpmPackageNotice[];
+
+export function renderSpeechModelSection(): string;

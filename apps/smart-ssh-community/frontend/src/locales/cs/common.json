@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hlavní navigace",
     "connect": "Připojit",
     "manage": "Správa",
     "rules": "Pravidla filtru"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Zatím nebyl přidán žádný server",
     "emptyStateHint": "Přidejte svůj první server a připojte se přes SSH.",
     "emptyStateCreateFirstServer": "Přidat první server",
-    "newServerInGroup": "Nový server ve skupině „{{name}}“",
-    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru."
+    "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru.",
+    "localBadge": "Místní",
+    "thisDevice": "toto zařízení",
+    "sessionOpen": "Relace otevřena",
+    "sessionPending": "Čeká na potvrzení",
+    "sessionDisconnected": "Relace odpojena",
+    "sessionReconnecting": "Připojuji znovu"
   },
   "settings": {
     "title": "Nastavení",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Data a záloha"
     }
   },
+  "appearance": {
+    "heading": "Vzhled",
+    "language": "Jazyk",
+    "system": "Podle systému",
+    "light": "Světlý",
+    "dark": "Tmavý"
+  },
   "about": {
     "version": "Verze",
     "copyHint": "Kopírovat do schránky",
@@ -57,6 +70,7 @@
     "copyFailed": "Kopírování selhalo — text lze místo toho označit.",
     "loadFailed": "Informace o verzi a sestavení se nepodařilo načíst.",
     "buildDev": "Vývojové sestavení",
+    "dataDirMarker": "Adresář dat: {{path}}",
     "buildRelease": "Vydané sestavení",
     "thirdPartyLicenses": {
       "openButton": "Licence třetích stran",
@@ -79,6 +93,7 @@
       "no_session_bus": "nedostupná — není dosažitelná relační sběrnice D-Bus. Další krok: `sudo apt install dbus-user-session`, poté se znovu přihlaste.",
       "no_secret_service_provider": "nedostupná — neběží žádný poskytovatel Secret Service. Další krok: `sudo apt install gnome-keyring`, poté se znovu přihlaste — funguje to i v KDE. Pokud již používáte KWallet (`kwallet6`) nebo KeePassXC: jejich integrace Secret Service musí běžet nebo být zapnutá; samotná instalace nestačí.",
       "locked": "nedostupná — existuje, ale je zamčená. Další krok: odemkněte ji a restartujte Smart SSH. Žádný balíček nechybí.",
+      "no_keystore": "nedostupná — Android Keystore není k dispozici. Další krok: použijte místo něj hlavní heslo; vaše tajné údaje zůstávají v šifrované databázi.",
       "unknown": "nedostupná — příčina neznámá. Další krok: zkontrolujte, zda běží a je odemčen poskytovatel Secret Service (gnome-keyring, nebo KWallet či KeePassXC se zapnutou integrací Secret Service), poté restartujte Smart SSH."
     },
     "keychainBlocked": "Vaše tajné údaje to neovlivní — klíče API, hesla serverů, přístupové fráze a hesla sudo jsou uloženy v šifrované databázi, ne v klíčence.",
@@ -91,8 +106,10 @@
       "hostKeys": "Klíče hostitelů",
       "wrappingFile": "Soubor klíče hlavního hesla",
       "mcpSettings": "Nastavení MCP",
+      "speechModels": "Řečové modely",
       "sessions": "Relace",
       "sessionsInDatabase": "uloženo v databázi",
+      "keychainService": "Služba klíčenky",
       "copy": "Kopírovat",
       "copied": "Cesta zkopírována",
       "copyFailed": "Kopírování selhalo:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Importovat …",
     "importSshConfigHint": "Importovat servery ze souboru ssh_config OpenSSH",
     "exportSshConfig": "Exportovat …",
-    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH"
+    "exportSshConfigHint": "Exportovat servery do ssh_config OpenSSH",
+    "title": "Servery",
+    "collapseGroup": "Sbalit skupinu „{{name}}“",
+    "expandGroup": "Rozbalit skupinu „{{name}}“"
   },
   "treeDrag": {
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
+    "current": "aktuální",
     "hintGroup": "→ přesunout do této skupiny",
     "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
     "moveTo": "Přesunout „{{name}}“ do…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Tím se také trvale smaže historie chatu, poznámky a štítky tohoto serveru.",
     "confirmDeleteServer": "Smazat trvale",
     "testResult": {
-      "success": "✓ Připojení úspěšné",
-      "authFailed": "✗ Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
+      "success": "Připojení úspěšné",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Přihlášení odmítnuto. Zkontrolujte uživatelské jméno a heslo nebo klíč.",
       "hostKeyUnknown": "Klíč hostitele neznámý — vyžadováno potvrzení",
-      "hostKeyMismatch": "⚠ Klíč hostitele se změnil",
-      "networkError": "✗ Chyba sítě: {{message}}",
-      "timeout": "✗ Server neodpovídá. Zkontrolujte adresu, port a firewall."
+      "hostKeyMismatch": "Klíč hostitele se změnil",
+      "networkError": "Chyba sítě: {{message}}",
+      "timeout": "Server neodpovídá. Zkontrolujte adresu, port a firewall."
     },
     "largeNoteHint": "Tato poznámka je velmi rozsáhlá a může být při dlouhých relacích zkrácena v kontextu AI. Uložená poznámka zůstane zcela nedotčena.",
     "summarizeNow": "Shrnout nyní",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Cesta k sftp-server (zvýšený přístup k souborům)",
     "sftpServerPathPlaceholder": "Automaticky",
     "sftpServerPathHint": "Potřeba pouze tehdy, když automatické zjištění pro prohlížeč souborů se zvýšenými právy selže, např. /usr/lib/openssh/sftp-server. Prázdné = automaticky.",
+    "elevationAllowedLabel": "Povolit zvýšená oprávnění v prohlížeči souborů",
+    "elevationAllowedHint": "Když je vypnuto, prohlížeč souborů pro tento server nenabízí zvýšená oprávnění.",
     "startDirectoryLabel": "Úvodní adresář (terminál a prohlížeč souborů)",
     "startDirectoryPlaceholder": "Domovský adresář",
     "startDirectoryHint": "Absolutní cesta (/…) nebo cesta začínající ~/. Terminál se tam přepne viditelným cd, prohlížeč souborů se tam otevře. Příkazy AI se vždy spouštějí v domovském adresáři. Prázdné = domovský adresář.",
@@ -294,6 +318,13 @@
       "connection": "Připojení",
       "security": "Zabezpečení",
       "invalid": "Obsahuje chyby"
+    },
+    "importKey": {
+      "title": "Importovat klíč do Smart SSH?",
+      "import": "Importovat klíč",
+      "keep": "Ponechat cestu k souboru",
+      "importHint": "Klíč se uloží šifrovaně v Smart SSH a s zálohami putuje na vaše další zařízení.",
+      "keepHint": "Ukládá se a na další zařízení putuje jen cesta k souboru. Soubor musí na každém zařízení existovat na stejné cestě."
     }
   },
   "filterRules": {
@@ -337,10 +368,16 @@
     "matchedRuleLabel": "Pravidlo:",
     "segmentLabel": "Část {{index}}",
     "checksLabel": "Kontroly:",
-    "hardBlacklistLabel": "Pevná černá listina:"
+    "hardBlacklistLabel": "Pevná černá listina:",
+    "invalidPattern": "Neplatný vzor",
+    "rowActions": "Akce řádku",
+    "ruleCount_one": "{{count}} pravidlo",
+    "ruleCount_few": "{{count}} pravidla",
+    "ruleCount_many": "{{count}} pravidla",
+    "ruleCount_other": "{{count}} pravidel"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích — pokračujte odesláním zprávy.",
+    "autoContinuationLimitReached": "Automatické pokračování pozastaveno po {{limit}} krocích bez vašeho potvrzení — pokračujte odesláním zprávy.",
     "aiBudgetWaiting": "Čekání na rozpočet AI — další pokus za {{seconds}} s…",
     "suggestCommand": "Navrhnout příkaz",
     "generateDocument": "Vytvořit dokument: {{title}}",
@@ -354,8 +391,12 @@
     "blocked": "zablokováno",
     "rejected": "zamítnuto",
     "rejectedByUser": "Zamítnuto uživatelem.",
-    "usesStoredSudoPassword": "🔑 Běží s použitím uloženého hesla sudo.",
-    "writeMayUseStoredSudoPassword": "🔑 Chybí-li oprávnění k zápisu, aplikace zapíše s použitím uloženého hesla sudo (sudo).",
+    "expired": "vypršelo",
+    "discardedAfterReconnect": "Zahozeno po obnovení spojení. Nic se nespustilo.",
+    "expiredTimeout": "Včas nepotvrzeno a zahozeno. Nic se nespustilo.",
+    "expiredUnknown": "Tento požadavek už nečeká na rozhodnutí. Nic se nespustilo.",
+    "usesStoredSudoPassword": "Běží s použitím uloženého hesla sudo.",
+    "writeMayUseStoredSudoPassword": "Chybí-li oprávnění k zápisu, aplikace zapíše s použitím uloženého hesla sudo (sudo).",
     "takeIntoNote": "Převzít do poznámky",
     "takeIntoNoteFailed": "Selhalo — zkuste to znovu",
     "riskServerLabel": "Server",
@@ -365,13 +406,14 @@
     "riskSecondOpinionUnavailableHint": "Druhý názor AI se nepodařilo získat. Zobrazené riziko vychází z pravidel.",
     "riskHint": "Posouzení na základě známých vzorů — bez záruky.",
     "runningSince": "běží {{seconds}} s…",
+    "exitCode": "návratový kód: {{code}}",
     "waitingForInputHint": "Tento příkaz pravděpodobně čeká na vstup. Zastavte ho a AI navrhne neinteraktivní variantu.",
     "cancelCommand": "Odpojit tento příkaz",
     "cancellingCommand": "Odpojování…",
-    "commandCancelledNotice": "⚠ Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",
-    "commandTruncatedNotice": "⚠ Výstup byl oříznut na limitu velikosti — může být neúplný.",
+    "commandCancelledNotice": "Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",
+    "commandTruncatedNotice": "Výstup byl oříznut na limitu velikosti — může být neúplný.",
     "liveOutputLabel": "Živý výstup",
-    "liveOutputTruncatedNotice": "⚠ Dosažen limit velikosti — další výstup se již nezobrazuje.",
+    "liveOutputTruncatedNotice": "Dosažen limit velikosti — další výstup se již nezobrazuje.",
     "autoRanLead": "Spuštěno automaticky",
     "autoRanRule": "pravidlo",
     "autoRanScopeGlobal": "globální",
@@ -386,17 +428,15 @@
     "editableCommand": "Příkaz — lze upravit",
     "execute": "Provést",
     "deny": "Zamítnout",
-    "quickRule": "Přijmout + pravidlo",
-    "quickRuleDropdownAria": "Zobrazit návrhy pravidel",
-    "newRulePatternHeading": "Vzor pro nové povolující pravidlo",
     "scopeThisServer": "Tento server",
     "scopeGlobal": "Globální",
     "scopeTag": "Štítek",
     "tagNamePlaceholder": "Název štítku",
     "loadingSuggestions": "Načítání návrhů…",
     "noSuggestions": "Žádné návrhy.",
-    "binaryFileHint": "⚠ Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
+    "binaryFileHint": "Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
+    "fileTooLargeHint": "Soubor je větší než {{limit}}, bez textového porovnání. Nová velikost: {{newSize}}.",
+    "diffTooLargeHint": "Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
     "noContentChange": "(žádná změna obsahu)",
     "quickRuleLabel": {
       "exact": "Přesně: {{patterns}}",
@@ -414,10 +454,25 @@
       "blocked": "vždy se ptá, ať jsou pravidla jakákoli: {{reasons}}",
       "verdictAuto": "příště se spustí automaticky",
       "verdictAsk": "bude se stále ptát: {{reasons}}",
-      "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
       "reasonOther": "jiná bezpečnostní kontrola",
-      "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
+      "loadFailed": "Pokrytí pravidly se nepodařilo načíst",
+      "summaryHeading": "Již povoleno",
+      "toDecideHeading": "Zbývá rozhodnout",
+      "expandAria": "Návrhy pravidel pro {{segment}}",
+      "stagedBadge": "zatím neuloženo",
+      "removeStaged": "Odebrat",
+      "saveRules": "Uložit pravidla ({{count}})",
+      "saveFailed": "Pravidla se nepodařilo uložit: {{message}}",
+      "unsavedHint": "Neuložená pravidla: {{count}}",
+      "segmentCovered": "pokrývá tuto část; příkaz se přesto zeptá: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Přihlášení k {{hop}}",
+    "password": "Heslo",
+    "submit": "Přihlásit",
+    "notStored": "Server žádá tyto údaje pro přihlášení. Neukládají se.",
+    "expired": "Požadavek na přihlášení vypršel. Spojení nebylo navázáno."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",
@@ -426,6 +481,7 @@
     "mismatchBodyAfterHost": " předkládá jiný klíč, než který byl uložen naposledy. To může naznačovat útok typu man-in-the-middle. Pokračujte, pouze pokud jste si jisti, že se klíč serveru změnil oprávněně (např. přeinstalací serveru).",
     "known": "Známý",
     "offeredNow": "Nyní nabídnutý",
+    "offered": "Nabídnutý",
     "keyType": "Typ klíče",
     "cancelConnection": "Zrušit připojení",
     "trustAnyway": "Přesto důvěřovat",
@@ -438,13 +494,19 @@
   },
   "sessionTabs": {
     "newSession": "Nová relace",
-    "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
     "menu": {
       "open": "Otevřít navigační nabídku",
       "title": "Navigační nabídka",
-      "sessions": "Otevřené relace"
+      "sessions": "Otevřené relace",
+      "close": "Zavřít navigační menu",
+      "needsConfirmation": "Čeká na potvrzení",
+      "activities": "Aktivity",
+      "activitiesRunning_one": "běží: {{count}}",
+      "activitiesRunning_few": "běží: {{count}}",
+      "activitiesRunning_many": "běží: {{count}}",
+      "activitiesRunning_other": "běží: {{count}}"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +515,11 @@
       "pendingBadge": "Vyžaduje potvrzení",
       "readOnlyHint": "Tato relace patří externímu nástroji (MCP). Zobrazuje pouze akce nástroje k potvrzení či zamítnutí a jejich výsledky; není zde vstup chatu ani terminál. Zavřením se relace MCP ukončí a čekající potvrzení se zamítnou."
     },
-    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou."
+    "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou.",
+    "pendingBadge": "Čeká",
+    "newConnection": "Nové připojení"
   },
   "aiProvider": {
-    "title": "Poskytovatel AI",
     "openLogs": "Otevřít diagnostické logy ve správci souborů",
     "noProviders": "Zatím není nastaven žádný poskytovatel.",
     "configuredProvidersTitle": "Nastavení poskytovatelé",
@@ -476,16 +539,16 @@
     "apiKeyFormatHint": "Nevypadá to jako klíč {{providerLabel}} – očekává se předpona jako „{{expectedPrefix}}“. Přesto jej můžete uložit; poskytovatelé občas mění formáty.",
     "testCredentials": "Otestovat přihlašovací údaje",
     "testingCredentials": "Testování…",
-    "testResultValid": "✓ Přihlašovací údaje jsou platné",
-    "testResultAuthFailed": "✗ Ověření selhalo – zkontrolujte klíč API",
-    "testResultUnreachable": "✗ Poskytovatel není dosažitelný: {{message}}",
+    "testResultValid": "Přihlašovací údaje jsou platné",
+    "testResultAuthFailed": "Ověření selhalo – zkontrolujte klíč API",
+    "testResultUnreachable": "Poskytovatel není dosažitelný: {{message}}",
     "testResultRateLimited": "Přihlašovací údaje vypadají platně, ale poskytovatel právě omezuje počet požadavků. Zkuste test znovu za minutu.",
     "nativeToolCalling": "Podporuje nativní volání nástrojů",
     "discoverModels": "Načíst modely",
     "discoveringModels": "Načítání modelů…",
     "modelDiscoveryFailedHint": "Modely se nepodařilo načíst automaticky — zadejte název modelu ručně.",
     "modelDiscoveryEmptyHint": "Poskytovatel nevrátil žádné modely. Zadejte název modelu ručně.",
-    "modelDiscoveryAuthFailed": "✗ Poskytovatel tyto přihlašovací údaje odmítl – zkontrolujte klíč API",
+    "modelDiscoveryAuthFailed": "Poskytovatel tyto přihlašovací údaje odmítl – zkontrolujte klíč API",
     "advanced": "Pokročilé",
     "extraHeadersLabel": "Další hlavičky",
     "extraHeadersHint": "Připojí se ke každému požadavku na tohoto poskytovatele (např. HTTP-Referer/X-Title u OpenRouter).",
@@ -528,6 +591,7 @@
     "ollamaProbeRetry": "Hledat znovu",
     "ollamaProbeNotFoundHeading": "Lokální Ollama nenalezena (výchozí port 11434).",
     "ollamaProbeNotFoundInstructions": "Nainstalujte Ollamu z ollama.com, spusťte ji a načtěte model (např. `ollama pull llama3`), poté hledejte znovu.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +656,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Zjištěn možný pokus o vložení pokynů přes obsah serveru – vyžaduje potvrzení",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Vyžádáno přes MCP – vždy vyžaduje potvrzení",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Používá uložené heslo sudo – vždy vyžaduje potvrzení",
+    "FILTER_RULES_UNAVAILABLE": "Pravidla filtru se nepodařilo načíst – nic se nespouští automaticky, je nutné potvrzení",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Před odesláním vloží uloženou tajnou hodnotu – vždy vyžaduje potvrzení",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Čte soubor s přihlašovacími údaji (např. klíč SSH, .env, /etc/shadow) – vždy vyžaduje potvrzení",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Dřívější akce v této odpovědi byla zamítnuta – vyžaduje potvrzení",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Spouští sftp-server (se sudo: přístup k souborům s právy roota) – vždy vyžaduje potvrzení",
@@ -601,6 +667,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Kontrolu vložených pokynů se nepodařilo provést (problém poskytovatele AI). Další navržená akce vyžaduje potvrzení.",
     "AI_INJECTION_CHECK_INACTIVE": "Kontrola vložených pokynů je pro tento server zapnuta, ale v této relaci není aktivní (druhý názor AI je vypnutý nebo jej nebylo možné nastavit). Zapněte druhý názor v nastavení a připojte se znovu.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Druhý názor AI je zapnutý, ale pro tuto relaci jej nebylo možné nastavit (poskytovatel odebrán nebo přihlašovací údaj nenalezen). Příkazy jím nejsou kontrolovány – opravte nastavení a připojte se znovu.",
+    "REDACTION_INCOMPLETE": "Některé tajné hodnoty tohoto serveru se nepodařilo načíst; v tom, co se posílá AI, nemusí být zamaskovány.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Aktuální značky serveru se nepodařilo přečíst – vyžaduje potvrzení",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Riziko vyhodnoceno jako červené, nebo je nelze spolehlivě posoudit (např. příliš dlouhé) – vždy vyžaduje potvrzení",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Aktualizace poznámek vždy vyžadují potvrzení",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Zápisy souborů vždy vyžadují potvrzení",
@@ -638,7 +706,13 @@
     "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
     "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky.",
     "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
-    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Vybraný poskytovatel AI není nastaven. Vyberte nastaveného poskytovatele.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
+    "CHAT_SESSION_NOT_FOUND": "Tento uložený chat už neexistuje. Zvolte Zkusit znovu a připojte se normálně bez jeho obnovení.",
+    "SESSION_NOT_FOUND": "Tato relace už není otevřená. Otevřete ji znovu ze seznamu serverů.",
+    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen",
+    "SSH_NO_COMMON_ALGORITHM": "Se serverem nemáte žádný společný algoritmus SSH. Jeho software SSH je příliš starý nebo příliš přísný. Aktualizujte jej nebo povolte moderní algoritmy."
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -731,13 +805,17 @@
     "openedLocally": "„{{name}}“ otevřeno lokálně — změny budou nabídnuty k nahrání",
     "openLocallyFailed": "„{{name}}“ se nepodařilo otevřít lokálně: {{reason}}",
     "editUploaded": "Změna v „{{name}}“ nahrána",
-    "editUploadFailed": "Změnu v „{{name}}“ se nepodařilo nahrát: {{reason}}",
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
     "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
     "nothingToPaste": "Není co vložit: schránka neobsahuje žádné soubory",
     "createFileDone": "Soubor „{{name}}“ vytvořen",
-    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
+    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}",
+    "chownDone": "Vlastník „{{name}}“ změněn",
+    "chownRecursive": "Vlastník změněn — {{count}} položek v „{{name}}“",
+    "chownFailed": "Vlastníka „{{name}}“ se nepodařilo změnit: {{reason}}",
+    "chownUnknownUser": "Vlastník „{{name}}“ nezměněn: neznámý uživatel",
+    "chownUnknownGroup": "Vlastník „{{name}}“ nezměněn: neznámá skupina"
   },
   "fileElevation": {
     "toggle": "Zvýšená práva",
@@ -751,6 +829,17 @@
     "opDelete": "Mazání",
     "opChmod": "Změna oprávnění",
     "banner": "Zvýšená práva aktivní: všechny akce se soubory v tomto prohlížeči běží jako {{user}}.",
+    "bannerLogged": "Zaznamenáno na serveru.",
+    "notice": {
+      "title": "O zvýšených právech",
+      "intro": "Soubory nyní čtete a zapisujete jako {{user}}. Změny se projeví okamžitě a aplikace je nemůže vrátit zpět.",
+      "loggedApp": "Každá změna se zaznamená do protokolu aplikace.",
+      "loggedAppAndServer": "Každá změna se zaznamená do protokolu aplikace a do autentizačního protokolu serveru.",
+      "passwordless": "Pravidlo sudo pro sftp-server dává {{user}} přístup bez hesla ke všemu, co běží pod tímto přihlášením, nejen k této aplikaci.",
+      "alternative": "Pokud tento server pravidelně spravujete jako root, samostatné přihlášení root s klíčem (PermitRootLogin prohibit-password) tento přístup vyjádří výslovně.",
+      "gotIt": "Rozumím",
+      "dontShowAgain": "Pro tento server již nezobrazovat"
+    },
     "deleteFileTitle": "Smazat soubor jako {{user}}?",
     "deleteDirTitle": "Smazat složku jako {{user}}?",
     "overwriteTitle": "Přepsat soubor jako {{user}}?",
@@ -772,7 +861,8 @@
     "close": "Zavřít",
     "detail": "Podrobnosti: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Aplikace se na heslo sudo nikdy neptá.",
+      "passwordRequired": "sudo na tomto serveru vyžaduje pro sftp-server heslo. Přidejte níže uvedené pravidlo sudoers nebo uložte heslo sudo do profilu serveru, aby šla zapnout zvýšená oprávnění.",
+      "wrongSudoPassword": "sudo odmítlo uložené heslo sudo. Zkontrolujte heslo sudo v profilu serveru.",
       "notAllowed": "Toto přihlášení SSH nesmí spouštět sftp-server přes sudo bez hesla.",
       "requireTty": "sudo odmítá běžet bez terminálu („requiretty“ v sudoers). Pro toto přihlášení requiretty vypněte, např. pomocí „Defaults:<login> !requiretty“.",
       "sftpServerNotFound": "sftp-server nebyl na serveru nalezen. Zadejte jeho cestu v profilu serveru v části „Pokročilé“.",
@@ -782,7 +872,8 @@
       "invalidUser": "Neplatný cílový uživatel.",
       "unsupported": "Lokální server nemá zvýšený režim.",
       "checkFailed": "Kontrola práv sudo selhala.",
-      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers)."
+      "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers).",
+      "disabledForServer": "Zvýšená oprávnění jsou pro tento server v profilu serveru vypnutá."
     },
     "channelLost": "Zvýšená práva skončila — zvýšený kanál již není aktivní.",
     "group": "Zvýšená oprávnění",
@@ -790,7 +881,11 @@
     "otherUser": "Jako jiný uživatel…",
     "targetUser": "Cílový uživatel",
     "targetUserHelp": "Spustí správce souborů jako tento uživatel přes sudo. Výchozí: root.",
-    "confirm": "Zvýšit"
+    "confirm": "Zvýšit",
+    "opChown": "Změna vlastníka",
+    "chownNote": "Vlastník bude změněn jako {{user}}.",
+    "idleSwitchedOff": "Zvýšená oprávnění vypnuta po {{minutes}} min nečinnosti",
+    "revokedByProfile": "Zvýšená oprávnění skončila — profil serveru je již nepovoluje."
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",
@@ -804,6 +899,8 @@
     "groupsHeading": "Výsledná struktura složek",
     "entriesHeading": "Počet serverů: {{count}}",
     "field": {
+      "name": "Název",
+      "include": "Zahrnout",
       "host": "Adresa",
       "port": "Port",
       "username": "Uživatel",
@@ -879,6 +976,10 @@
       "proxyJumpLocalPseudoServer": "odkazuje na lokální pseudoserver"
     },
     "confirm": "Importovat",
+    "confirmCount_one": "Importovat {{count}} server",
+    "confirmCount_few": "Importovat {{count}} servery",
+    "confirmCount_many": "Importovat {{count}} serveru",
+    "confirmCount_other": "Importovat {{count}} serverů",
     "applying": "Importování …",
     "result": {
       "success": "Vytvořeno serverů: {{created}}, složek: {{groups}}, přeskočených konfliktů: {{skipped}}.",
@@ -979,14 +1080,17 @@
       "hostKeyCheck": "Kontrola klíče hostitele",
       "authentication": "Ověření",
       "sessionReady": "Relace navázána",
-      "dnsSkipped": "IP adresa – překlad není potřeba"
+      "dnsSkipped": "IP adresa – překlad není potřeba",
+      "outdatedAlgorithms": "Zastaralé algoritmy",
+      "banner": "Banner serveru"
     },
     "status": {
       "ok": "OK",
       "running": "probíhá",
       "failed": "selhalo ({{code}})",
       "skipped": "přeskočeno",
-      "failedReason": "selhalo: {{reason}}"
+      "failedReason": "selhalo: {{reason}}",
+      "warning": "varování"
     },
     "hostKeyResult": {
       "known": "známý",
@@ -999,7 +1103,8 @@
       "privateKey": "Soukromý klíč",
       "agent": "Agent SSH",
       "certificate": "Certifikát",
-      "identityFile": "Soubor klíče"
+      "identityFile": "Soubor klíče",
+      "keyboardInteractive": "Interaktivní z klávesnice"
     },
     "detail": {
       "addresses": "Adresy: {{addresses}}",
@@ -1008,7 +1113,9 @@
       "cipher": "Šifra: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "částečně přijato, vyžadováno další ověření",
-      "remainingMethods": "Server nabízí také: {{methods}} (nevyzkoušeno)"
+      "remainingMethods": "Server nabízí také: {{methods}} (nevyzkoušeno)",
+      "round": "Kolo {{round}}",
+      "prompts": "Výzvy serveru: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Časový limit připojení TCP vypršel",
@@ -1026,6 +1133,7 @@
     "parentDirectory": "Nadřazený adresář",
     "newFolderButton": "+ Složka",
     "fileActionsGroup": "Akce se soubory",
+    "directoryActions": "Akce adresáře",
     "upload": "Nahrát",
     "uploadDialogTitle": "Nahrát soubory",
     "uploadFolder": "Nahrát složku",
@@ -1060,8 +1168,10 @@
       "name": "Název",
       "size": "Velikost",
       "permissions": "Oprávnění",
-      "modified": "Změněno"
+      "modified": "Změněno",
+      "owner": "Vlastník"
     },
+    "columnsMenu": "Zobrazit nebo skrýt sloupce",
     "localEdit": {
       "uploading": "Nahrávání „{{name}}“…",
       "changed": "„{{name}}“ byl lokálně změněn. Nahrát jej na server?",
@@ -1069,8 +1179,7 @@
       "editing": "Lokální úprava „{{name}}“…",
       "end": "Ukončit úpravy",
       "uploadTitle": "Nahrát lokální změny?",
-      "remoteChanged": "Vzdálený soubor byl od stažení změněn — nahráním by se tato jiná změna přepsala.",
-      "noDiff": "Textový rozdíl není možný (binární soubor nebo příliš velký). Nová velikost: {{size}}."
+      "remoteChanged": "Vzdálený soubor byl od stažení změněn — nahráním by se tato jiná změna přepsala."
     },
     "deleteDialog": {
       "fileTitle": "Smazat soubor?",
@@ -1096,7 +1205,6 @@
       "conflictTitle": "Přepsat soubory ve složce?",
       "conflictBody": "Nahráním „{{name}}“ by se na serveru přepsaly tyto soubory (počet: {{count}}). Nic se nepřepíše, dokud to nepotvrdíte.",
       "summaryTitle": "Nahrání složky: „{{name}}“",
-      "summary": "Nahráno souborů: {{uploaded}}, přeskočeno: {{skipped}}, selhalo: {{failed}}.",
       "notAttempted": "Souborů, které se ani nezkoušely, protože se nepodařilo vytvořit jejich složku: {{count}}.",
       "skipped": "Přeskočeno",
       "failed": "Selhalo",
@@ -1107,12 +1215,14 @@
         "unsupported": "není běžný soubor ani složka",
         "notGranted": "není zahrnuto ve vašem výběru",
         "overwriteNotConfirmed": "existuje na serveru, přepsání nepotvrzeno"
-      }
+      },
+      "uploaded": "Nahráno"
     },
     "uploadConflict": {
       "title": "Přepsat soubor?",
       "body": "již na serveru existuje.",
-      "noDiff": "Textový rozdíl není možný (binární soubor nebo příliš velký). Aktuální velikost: {{remoteSize}}, nová velikost: {{localSize}}."
+      "currentSize": "Aktuální velikost",
+      "newSize": "Nová velikost"
     },
     "menu": {
       "download": "Stáhnout",
@@ -1128,8 +1238,10 @@
       "cut": "Vyjmout",
       "delete": "Smazat",
       "newFolder": "Nová složka",
-      "newFile": "Nový soubor"
+      "newFile": "Nový soubor",
+      "chown": "Změnit vlastníka…"
     },
+    "linkMarker": "symbolický odkaz",
     "properties": {
       "title": "Vlastnosti",
       "name": "Název",
@@ -1137,6 +1249,10 @@
       "type": "Typ",
       "typeFolder": "Složka",
       "typeFile": "Soubor",
+      "typeLinkFolder": "Symbolický odkaz na složku",
+      "typeLinkFile": "Symbolický odkaz na soubor",
+      "typeLinkBroken": "Porušený symbolický odkaz",
+      "linkTarget": "Cíl odkazu",
       "size": "Velikost",
       "permissionsSymbolic": "Oprávnění (symbolicky)",
       "permissionsNumeric": "Oprávnění (číselně)",
@@ -1186,10 +1302,24 @@
       "notText": "Textový diff není možný: soubor je binární (neplatný text UTF-8).",
       "permission": "Textový diff není možný: s aktuálními právy nemáte oprávnění číst tento soubor.",
       "other": "Textový diff není možný: soubor se nepodařilo přečíst ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Změna vlastníka",
+      "owner": "Uživatel",
+      "group": "Skupina",
+      "hint": "Zadejte jméno nebo číslo. Strana, kterou ponecháte beze změny, zůstane nezměněna. O povolení změny rozhoduje server (obvykle smí vlastníka měnit jen root).",
+      "recursive": "Použít na obsah",
+      "recursiveWarning": "— změní vlastníka VŠECH souborů a podsložek v této složce. Symbolické odkazy se nenásledují. Nelze vrátit zpět."
+    },
+    "transferChown": "Změna vlastníka {{name}}",
+    "stopProgress": "Průběh",
+    "noTextDiff": "Textový rozdíl nelze zobrazit (binární soubor nebo příliš velký)."
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
+    "copyCode": "Kopírovat kód",
+    "codeCopied": "Kód zkopírován",
+    "codeCopyFailed": "Kopírování selhalo",
     "composerMore": "Další akce zadávání",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",
@@ -1213,12 +1343,19 @@
     "queued": "Bude odesláno s dalším požadavkem",
     "responseCancelled": "Odpověď zrušena.",
     "contextCompactedNotice": "Starší části tohoto chatu byly shrnuty, aby se vešly do kontextu modelu.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
+    "messageLabel": "Zpráva",
+    "headerProviderTooltip": "Poskytovatel: {{provider}}",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
     "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
     "outputTruncated": "(zkráceno)",
+    "outputMoreLines_one": "… {{count}} další řádek",
+    "outputMoreLines_few": "… {{count}} další řádky",
+    "outputMoreLines_many": "… {{count}} dalších řádků",
+    "outputMoreLines_other": "… {{count}} dalších řádků",
+    "outputShowAll": "Zobrazit vše",
+    "outputShowLess": "Zobrazit méně",
     "fileWritten": "Soubor '{{path}}' zapsán.",
     "writtenWithSudoPassword": "Zapsáno s použitím uloženého hesla sudo.",
     "documentGenerated": "Dokument vytvořen",
@@ -1298,7 +1435,18 @@
     "aiTab": "AI",
     "paneTabs": "Části relace",
     "moreActions": "Další akce",
+    "thisDevice": "toto zařízení",
+    "paneSwitch": "Přepínač panelů",
     "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
+    "extraKeys": {
+      "group": "Další klávesy",
+      "up": "Šipka nahoru",
+      "down": "Šipka dolů",
+      "left": "Šipka vlevo",
+      "right": "Šipka vpravo",
+      "pageUp": "Stránka nahoru",
+      "pageDown": "Stránka dolů"
+    },
     "reconnectingAuto": "Znovu se připojuji… (pokus {{attempt}})",
     "stopReconnect": "Zastavit",
     "reconnectGaveUp": "Připojení se nepodařilo obnovit."
@@ -1331,7 +1479,8 @@
       "body": "Jazykový model ({{model}}, asi {{size}} MiB) se jednorázově stáhne z {{source}}. Poté rozpoznávání řeči běží celé na tomto počítači; zvuk ani text jej nikdy neopustí.",
       "download": "Stáhnout",
       "cancel": "Zrušit",
-      "progress": "Průběh stahování"
+      "progress": "Průběh stahování",
+      "parakeetLicense": "Licence: {{license}}"
     },
     "errors": {
       "noDevice": "Nebyl nalezen žádný mikrofon. Připojte mikrofon a zkontrolujte vstupní zařízení v nastavení systému.",
@@ -1347,7 +1496,8 @@
       "model": "Jazykový model",
       "models": {
         "base": "Base (asi {{size}} MiB, výchozí)",
-        "small": "Small (asi {{size}} MiB, přesnější, pomalejší)"
+        "small": "Small (asi {{size}} MiB, přesnější, pomalejší)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (asi {{size}} MiB, vícejazyčný, rychlý; jazyk rozpozná automaticky)"
       },
       "statusReady": "Staženo",
       "statusNotDownloaded": "Nestaženo",
@@ -1355,7 +1505,8 @@
       "download": "Stáhnout",
       "delete": "Smazat model",
       "language": "Jazyk rozpoznávání",
-      "languageAuto": "Automaticky"
+      "languageAuto": "Automaticky",
+      "languageParakeetHint": "Parakeet rozpozná jazyk automaticky; toto nastavení platí pro modely Whisper."
     }
   },
   "connectTab": {
@@ -1415,6 +1566,8 @@
     "import": {
       "title": "Obnovit ze zálohy",
       "pickTitle": "Vyberte soubor zálohy",
+      "pickFailed": "Soubor se nepodařilo otevřít z vybraného umístění.",
+      "chooseAgain": "Vybrat soubor znovu",
       "file": "Soubor: {{name}}",
       "kind": "Čím se záloha otevře",
       "useCode": "Kód pro obnovení",
@@ -1431,6 +1584,9 @@
       "file": "Záloha",
       "sessions": "Otevřené relace, které budou zavřeny: {{count}}",
       "safety": "Aktuální data se nejprve uloží do {{dir}}. Vaše servery se přesunou do nové složky “Previous data” s dnešním datem.",
+      "pickDirTitle": "Vyberte složku pro záložní kopii",
+      "changeSafetyDir": "Změnit…",
+      "changeSafetyDirFailed": "Složku se nepodařilo vybrat. Zůstává výchozí složka.",
       "replace": "Nahradit data"
     },
     "counts": {
@@ -1455,5 +1611,64 @@
       "newerVersion": "Tuto zálohu vytvořila novější verze Smart SSH. Aktualizujte aplikaci a zkuste to znovu.",
       "failed": "Operace selhala. Nic se nezměnilo."
     }
+  },
+  "errorBoundary": {
+    "title": "Něco se pokazilo",
+    "body": "Smart SSH narazil v rozhraní na neočekávanou chybu. Pro pokračování načtěte aplikaci znovu. Pokud se to bude opakovat, vytvořte po načtení balíček diagnostiky v Nastavení → Diagnostika.",
+    "reload": "Načíst znovu"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Tento server používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte software SSH serveru.",
+    "outdatedAlgorithmsHop": "{{hop}} používá zastaralé algoritmy SSH ({{algorithms}}). Spojení je méně bezpečné. Pokud můžete, aktualizujte jeho software SSH."
+  },
+  "elevatedIdle": {
+    "label": "Vypnout zvýšená oprávnění po nečinnosti",
+    "minutes5": "5 minut",
+    "minutes15": "15 minut",
+    "minutes30": "30 minut",
+    "minutes60": "60 minut",
+    "never": "Nikdy",
+    "hint": "Prohlížeč souborů sám opustí zvýšený režim po této době bez zvýšené aktivity. Probíhající operace se počítá jako aktivita."
+  },
+  "activities": {
+    "title": "Aktivity",
+    "buttonRunning": "Aktivity: probíhá {{running}}",
+    "buttonFailed": "Aktivity: jedna aktivita selhala",
+    "buttonDone": "Aktivity: dokončeno",
+    "cancel": "Zrušit",
+    "cancelNamed": "Zrušit {{title}}",
+    "dismiss": "Skrýt",
+    "dismissNamed": "Skrýt {{title}}",
+    "succeeded": "Hotovo",
+    "cancelled": "Zrušeno",
+    "failed": "Selhalo",
+    "inProgress": "Probíhá",
+    "verifying": "Ověřování",
+    "speechModelTitle": "Hlasový model {{name}}",
+    "buttonInterrupted": "Aktivity: některé byly přerušeny",
+    "interrupted": "Přerušeno",
+    "resume": "Pokračovat",
+    "resumeNamed": "Pokračovat: {{title}}",
+    "discard": "Zahodit",
+    "discardNamed": "Zahodit: {{title}}",
+    "resumeFailed": "Pokračování se nezdařilo.",
+    "quitTitle": "Ukončit, i když běží aktivity?",
+    "quitBody": "Tyto aktivity stále běží a budou zastaveny:",
+    "quitResumeHint": "Přerušená stahování lze obnovit při příštím spuštění aplikace.",
+    "quitAnyway": "Přesto ukončit",
+    "keepRunning": "Nechat běžet",
+    "summaryRunning_one": "běží: {{count}}",
+    "summaryRunning_few": "běží: {{count}}",
+    "summaryRunning_many": "běží: {{count}}",
+    "summaryRunning_other": "běží: {{count}}",
+    "summaryInterrupted_one": "přerušeno: {{count}}",
+    "summaryInterrupted_few": "přerušeno: {{count}}",
+    "summaryInterrupted_many": "přerušeno: {{count}}",
+    "summaryInterrupted_other": "přerušeno: {{count}}",
+    "summaryFailed_one": "selhalo: {{count}}",
+    "summaryFailed_few": "selhalo: {{count}}",
+    "summaryFailed_many": "selhalo: {{count}}",
+    "summaryFailed_other": "selhalo: {{count}}",
+    "remaining": "zbývá {{time}}"
   }
 }

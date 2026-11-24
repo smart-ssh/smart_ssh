@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "algo-current-rsa-sha2"
+networks = ["algo-net"]
+publish = true

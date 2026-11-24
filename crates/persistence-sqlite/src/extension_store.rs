@@ -112,6 +112,14 @@ impl std::fmt::Debug for NamespacedStore {
 }
 
 impl NamespacedStore {
+    /// Handle for an already validated extension prefix (issue #785).
+    pub(crate) fn for_validated_prefix(pool: SqlitePool, prefix: &str) -> Self {
+        Self {
+            pool,
+            ns: prefix.to_owned(),
+        }
+    }
+
     /// Plain value; `None` for a missing key and for a secret key.
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, ExtensionStoreError> {
         self.fetch(key, false).await

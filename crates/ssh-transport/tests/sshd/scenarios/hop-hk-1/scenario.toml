@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-hk-1"
+networks = ["hop-hk-a"]
+publish = true

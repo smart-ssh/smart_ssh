@@ -37,8 +37,17 @@ eigene Verzweigung auslösen.
 
 ### Sitzungs-Erweiterung
 
-Die Verdrahtung kann **eine** Sitzungs-Erweiterung enthalten; die Community
-Edition hat keine. Sie liefert dem Kern je Server (Server-Kennung inklusive
+Die Verdrahtung kann **beliebig viele** Sitzungs-Erweiterungen enthalten; die
+Community Edition hat keine. Der Kern kombiniert sie in Registrierungs-
+reihenfolge: Die Kontext-Abschnitte aller Erweiterungen werden nacheinander
+erfragt, leere oder nur aus Leerraum bestehende Antworten entfallen, der Rest
+wird durch eine Leerzeile getrennt zu **einem** Abschnitt (eine Überschrift,
+ein Fence); bleibt nichts übrig, gibt es keinen Abschnitt. Die bekannten
+Secrets sind die Vereinigung aller Erweiterungen (Reihenfolge erhalten,
+identische Werte nur einmal). Die Meldungen über gelöschte Server und Gruppen
+erhalten alle Erweiterungen, in Registrierungsreihenfolge. Das ältere Einzelfeld
+`session_extension` gilt weiter und zählt als erster Eintrag der Liste. Mit
+genau einer Erweiterung verhält sich alles wie zuvor. Sie liefert dem Kern je Server (Server-Kennung inklusive
 des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
 
 - **Kontext-Abschnitt:** Text, den der Kern dem KI-Kontext der Sitzung nach
@@ -61,6 +70,21 @@ des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
   offener Sitzungen eines Servers neu aufbauen lassen (etwa nach geänderten
   Werten); schon gesendeter Verlauf wird beim nächsten Senden erneut
   redigiert. Redaction wird dadurch nur erweitert, nie abgeschwächt.
+  **Lässt sich der Bereich eines Servers nicht vollständig bestimmen** (der
+  Profilspeicher schlägt beim Lesen des Servers oder seiner Gruppenkette
+  fehl), maskiert die Sitzung mindestens die Secrets auf Server-Ebene; beim
+  Neuaufbau bleiben die bereits bekannten Secrets zusätzlich maskiert, statt
+  ersetzt zu werden. Dasselbe gilt, wenn das gespeicherte Sudo-Passwort nicht
+  gelesen oder ein Wert nicht als Muster übersetzt werden kann. In allen
+  diesen Fällen zeigt die Sitzung einmalig den Chat-Hinweis
+  `REDACTION_INCOMPLETE` („Einige geheime Werte dieses Servers konnten nicht
+  geladen werden; sie werden in dem, was an die KI geht, möglicherweise nicht
+  maskiert.“). „Server nicht gespeichert“ (etwa der lokale Pseudo-Server) ist
+  kein Fehler und löst den Hinweis nicht aus. Dieselbe Regel gilt für die
+  Notiz-Zusammenfassung („Jetzt zusammenfassen“), die ohne Sitzung läuft:
+  Ist der Bereich oder das Sudo-Passwort nicht lesbar, bleiben die
+  Server-Secrets maskiert, und der Nutzer sieht einmalig dieselbe Meldung
+  als Hinweis im Notiz-Kürzungs-Toast (der Ablauf läuft weiter).
 - **Entfernen:** Nach dem Löschen eines Servers (auch eines nicht nutzbaren)
   und nach dem Löschen einer Gruppe, einschließlich jeder mitgelöschten
   Untergruppe, wird die Erweiterung benachrichtigt, damit sie ihre eigenen
@@ -86,6 +110,21 @@ die Ermittlung fehl, ist die Kette leer (mit Warnung im Log), und der Text
 wird trotzdem vorbereitet. Ohne registrierte Umwandlung (Community) wird der
 Text unverändert gesendet, ohne dass die Gruppenkette ermittelt wird.
 
+**Mehrere Umwandlungen.** Die Verdrahtung kann eine **Liste** von
+Umwandlungen enthalten. Der Kern führt sie in der Reihenfolge der Registrierung
+aus; die ältere Einzel-Umwandlung (überholt, wird in einem späteren Release
+entfernt) läuft, wenn gesetzt, zuerst. Jede Umwandlung erhält den Text, den die
+vorige geliefert hat (gleicher Server, gleiche Art). Die eingesetzten Geheimnisse
+aller Umwandlungen werden zusammengeführt (Reihenfolge bleibt). Die erste
+Ablehnung beendet die Kette: nichts vom Zwischenergebnis wird zurückgegeben
+oder protokolliert, die späteren Umwandlungen werden nicht aufgerufen. Die
+Rückfrage vor der Bestätigung ist „ja“, sobald **irgendeine** Umwandlung „ja“
+antwortet (im Zweifel fragen). Struktur-Prüfung, Hard-Blacklist-Prüfung,
+Aufnahme der Geheimnisse in den Redactor und Maskierung der Ablehnungsmeldung
+gelten genau einmal, für den **endgültigen** Text der Kette. Ohne Umwandlung
+bleibt es beim unveränderten Text; mit genau einer wird sie unverändert
+verwendet.
+
 **Wann sie läuft.** Genau auf diesen Wegen: von der KI vorgeschlagene
 Kommandos, von der KI vorgeschlagener Inhalt einer `WriteRemoteFile`-Aktion
 und über MCP vorgeschlagene Kommandos. Nie bei Eingaben im Terminal. Sie läuft
@@ -95,16 +134,37 @@ bearbeiteten Text), und unmittelbar vor dem Senden. Die Einsetzung des
 gespeicherten Sudo-Passworts (Spec 0018) kommt danach: Sie wirkt auf das
 umgewandelte Kommando.
 
+**Rückfrage vor der Bestätigung.** Die Umwandlung kann zusätzlich gefragt
+werden, ob sie einen Text ändern wird (reine Abfrage mit Server-Angaben, Art und
+ursprünglichem Text; ohne Nebenwirkung, sie sieht und liefert keine Geheimnisse).
+Standardantwort: nein. Antwortet sie ja, wird aus einem `AutoExec` für diese
+Aktion (Kommando oder `WriteRemoteFile`-Inhalt) ein `Confirm` mit dem Code
+`FILTER_INSERTED_SECRET_REQUIRES_CONFIRM` – wie beim gespeicherten
+Sudo-Passwort (Spec 0018), auch bei MCP-Herkunft. Der Schritt eskaliert nur: ein
+`Confirm` oder `Deny` bleibt unverändert. Er steht in der Eskalationskette
+unmittelbar nach dem Sudo-Passwort-Schritt; die Erklärung zur Bestätigung
+(Regelvorschlag) nennt denselben Code. Ohne registrierte Umwandlung ändert sich
+nichts.
+
+**Struktur-Prüfung.** Ein umgewandeltes Kommando muss, wenn es vom
+freigegebenen abweicht, in dieselbe Anzahl Top-Level-Teilkommandos zerfallen
+(`|`, `&&`, `||`, `;`, mit dem Parser der Filter-Engine, ohne Zählung von
+Command-Substitutionen). Eine andere Anzahl, oder ein umgewandelter Text, den der
+Parser nicht zerlegen kann, während der Originaltext zerlegbar war, lehnt ab: es
+wird nichts gesendet, die KI erhält eine allgemeine Meldung ohne den
+umgewandelten Text. Lässt sich schon das Original nicht zerlegen, wird der
+umgewandelte Text nur gesendet, wenn er dem Original gleicht.
+
 **Wer was sieht.** Filter, Risiko-Einstufung, Zweitmeinung, Bestätigungsdialog,
-Ledger, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
+Aktivitäts-Ereignisse, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
 ursprünglichen Text. Der umgewandelte Text existiert nur im Aufruf an den
-Transport und steht in keiner Anzeige, keinem Verlauf, keinem Ledger und
+Transport und steht in keiner Anzeige, keinem Verlauf, keinem Aktivitäts-Ereignis und
 keiner Log-Zeile; auch die Debug-Ausgabe des Ergebnisses der Umwandlung zeigt
 ihn nicht.
 
 **Geheimnisse.** Die gemeldeten eingesetzten Werte werden dem Redactor der
 Sitzung hinzugefügt, bevor das Kommando startet. Bereits die Ausgabe genau
-dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Ledger, Verlauf,
+dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Aktivitäts-Ereignis, Verlauf,
 Logs).
 
 **Ablehnung.** Lehnt die Umwandlung ab, wird nichts gesendet und nichts
@@ -127,7 +187,18 @@ Die Umwandlung kann keine Prüfung umgehen oder abschwächen. Für Dateiinhalt
 gibt es keine Hard-Blacklist-Prüfung, weil die Blacklist Kommandos beschreibt.
 
 **Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
-dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
+dem Entsperren** registrieren, sonst wären sie vorher aufrufbar. Dafür gibt
+es in der Verdrahtung eine eigene Liste, `plugins_after_unlock` (Community:
+leer; Issue #894): Ihre Plugins werden im Passwort-Modus erst nach dem
+Entsperren registriert (nach den eigenen Plugins des Kerns, in der Reihenfolge
+der Liste), im Schlüsselbund-Modus beim Start. Jedes höchstens einmal je
+Prozess; ein Plugin, dessen Registrierung scheitert, steht im Log und hält
+weder die übrigen noch das Entsperren auf. Die Hooks in `plugins` laufen vor
+dem Entsperren — Plugins mit Befehlen, die eine entsperrte App brauchen,
+gehören in `plugins_after_unlock`. Die Liste nimmt jedes Tauri-Plugin
+aus, auch eines mit eigenem Konfigurationstyp; seine Konfiguration aus
+`tauri.conf.json` (`plugins.<name>`) wird wie bei einem Plugin am Builder
+angewendet (Issue #1049).
 
 ### 2a. Erweiterungseigene Datenbanktabellen
 
@@ -168,6 +239,29 @@ Regeln:
 - Der Kern liefert weder eine Erweiterungstabelle noch ein Datenmodell. Ohne
   registrierte Erweiterung ist die Datenbank identisch zu vorher.
 - Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
+
+### Verbindungsprüfung durch Erweiterungen
+
+Eine registrierte Sitzungs-Erweiterung kann einen Verbindungsaufbau zu einem
+Server ablehnen (Issue #1281). Regeln:
+
+- Die Prüfung läuft genau einmal je Verbindungsversuch, nachdem der Server
+  geladen ist und bevor Transport, Host-Key-Abfrage oder Zugangsdaten-Zugriff
+  stattfinden. Sie gilt für jeden Aufrufer, auch den automatischen
+  Verbindungsaufbau für MCP.
+- Die Prüfung gilt ebenso für das erneute Verbinden einer bestehenden Sitzung
+  (manuell und automatisch), vor Transport, Host-Key-Abfrage oder
+  Zugangsdaten-Zugriff. Eine Ablehnung endet mit `CONNECT_REFUSED`, die
+  Sitzung bleibt getrennt (ein späteres erneutes Verbinden ist möglich), und
+  der automatische Wiederverbindungsversuch wiederholt sie nicht.
+- Mehrere Erweiterungen werden in Registrierungsreihenfolge gefragt; die erste
+  Ablehnung gilt, die übrigen werden nicht mehr gefragt. Die Verbindung scheitert
+  mit der Meldung der Erweiterung und dem Fehlercode `CONNECT_REFUSED`.
+- Fail-closed: Lässt sich der Geltungsbereich des Servers nicht (vollständig)
+  bestimmen, wird die Verbindung abgelehnt.
+- Die Prüfung kann nur einschränken; sie ändert kein Filter-, Risiko- oder
+  Bestätigungsergebnis. Ohne Erweiterung oder mit der Standardimplementierung
+  bleibt der Verbindungsaufbau unverändert.
 
 ### Chat-Inhalte von Erweiterungen
 
@@ -216,6 +310,93 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
   Stroms beendet war, entsteht keine Meldung; der Kern wartet nie darauf.
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
+
+### Beobachter der Aktivität
+
+Eine Edition kann über die Verdrahtung beliebig viele Beobachter für die
+Aktivität einer Sitzung registrieren (Befehlsvorschläge, Entscheidungen,
+Ausführungen). Regeln:
+
+- Jedes Ereignis wird jedem Beobachter gemeldet. Der Text darin stammt aus
+  demselben zentralen Schwärzungsschritt wie Protokoll und Ereignis; ein
+  Beobachter sieht nur geschwärzten Text.
+- Die Beobachter sind rein passiv: Sie geben nichts zurück und beeinflussen
+  weder Filter noch Bestätigung noch Ausführung. Die Zustellung läuft über
+  eine begrenzte Warteschlange außerhalb des Sitzungspfads. Ist sie voll,
+  wird das Ereignis verworfen und gezählt (`dropped_activity_events`); ein
+  langsamer oder abstürzender Beobachter stört den Ablauf nicht.
+- Der Kern führt keine eigene Aktivitätsaufzeichnung. Ohne registrierten
+  Beobachter wird kein Ereignis gebaut. Community registriert keinen
+  Beobachter; dann ändert sich nichts.
+
+### Umhüllung der KI-Anbieter
+
+Eine Edition kann über die Verdrahtung beliebig viele Umhüller für KI-Anbieter
+registrieren. Regeln:
+
+- Jeder KI-Anbieter, den die App baut, läuft durch alle registrierten
+  Umhüller in der Reihenfolge der Registrierung: beim Verbinden einer
+  Chat-Sitzung, bei der Notiz-Kürzung, bei der Risiko-Zweitmeinung und beim
+  Test der Zugangsdaten. Die Budget-Verwaltung des Anbieters bleibt unverändert.
+- Ein Umhüller bekommt Anbieter-Typ, die wirksame Endpunkt-Adresse und das
+  Modell. Er bekommt nie den API-Key und nie die zusätzlichen Header
+  (Spec 0022, Abschnitt 3).
+- Eine Anfrage erreicht den Umhüller nur als bereits geschwärzter Kontext; es
+  kommt kein ungeschwärzter Inhalt dazu. Ein Umhüller muss das Abschalten der
+  Web-Recherche und die Anfrage-Kennung an den umhüllten Anbieter
+  weiterreichen, sonst greifen beide nicht mehr.
+- Ein Anbieter schlägt weiterhin nur Aktionen vor; jeder Vorschlag durchläuft
+  unverändert die Filter-Engine. Community registriert keinen Umhüller; dann
+  ändert sich nichts.
+
+### Erweiterungs-API (`app_logic::ext`)
+
+Erweiterungs-Crates, die über `Wiring` einhängen, nutzen genau ein Modul von
+`app-logic`: `app_logic::ext`. Es ist die unterstützte Oberfläche; Einträge
+darin ändern sich nur zusammen mit einem Changelog-Eintrag und dieser Spec.
+Alles außerhalb (die übrigen Module von `app-logic`, die öffentlichen Felder
+von `AppState`) darf sich ohne Ankündigung ändern. Das Modul führt bestehende
+Einträge nur wieder aus (Re-Exports); kein bisheriger Pfad entfällt.
+
+Nach Themen:
+
+- **Zustand:** `AppState` als Typ (für `app.try_state::<AppState>()`); seine
+  Felder gehören nicht zur Oberfläche.
+- **Sitzungs-Erweiterung:** `SessionExtension`, `ConnectRefusal`, `ServerScope`, `scope_for_id`,
+  `PromptLanguage`, `rebuild_server_redactors`, `rebuild_redactors_for_sessions`.
+- **Chat-Inhalte:** `ChatContentExtension`, `PendingContent`, `ResolvedBlock`,
+  `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,
+  `seal_extension_parts`, `accept_extension_content`.
+- **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
+- **Aktivität:** `ActivityObserver`, `ActivityEvent`, `ActivityEventKind`,
+  `ActivityDecisionOutcome`, `ActivitySessionKind`, `ActivitySource`,
+  `ConnectionChange`, `DisconnectReason`, `ConnectFailureStep`,
+  `RuleSnapshot`, `ServerSnapshot`, `SessionEndReason`, `SessionRef`,
+  `dropped_activity_events`.
+- **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
+  `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
+  `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,
+  `ImportPreview`, `ImportStart`, `ImportSummary`, `PendingImport`,
+  `SnapshotCounts`, `open_backup`, `FileHostKeyStore`.
+- **Hintergrundaufgaben:** `TaskSupervisor`, `TaskScope`, `ScopeKey`,
+  `ShutdownReport`. Eine Erweiterung holt den App-Scope mit
+  `app_shell::app_scope(&AppHandle)` und startet ihre Aufgaben dort; sie
+  werden beim Beenden der App abgebrochen und abgewartet, wie die der Hülle.
+- **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
+  `emit_connection_status_changed`.
+- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`. Der Command-Fehlertyp `CommandError` (`{ message, code, feature_locked, connect_log }`) liegt in `ssh_manager_core::ipc_error` und ist der Typ, den Erweiterungs-Plugins zurückgeben; seine JSON-Form ist durch eine gemeinsame Fixture für Rust und Frontend festgelegt.
+- **Zugriffsfunktionen** (statt Feldzugriff auf `AppState`): `profile_store`,
+  `backup_store`, `file_host_keys`, `open_session_server_ids` (jeder Server
+  mit offener Sitzung einmal, sortiert) und
+  `rebuild_redactors_for_open_sessions` (baut den Redactor jedes Servers mit
+  offener Sitzung neu, keines anderen; bekannte Geheimnisse erweitern den
+  Redactor nur).
+- **Testhilfen:** `ext::test_support` (nur mit `test-support`); sie nennt auch
+  `SessionManager` und `Session`, damit Tests einer Erweiterung die Menge
+  offener Sitzungen aufbauen können.
+
+Sitzungen schließt eine Erweiterung ausschließlich über den öffentlichen
+Schließweg von `app-shell` (Issue #816), nicht über `ext`.
 
 ## 3. Ein Binary je Edition
 
@@ -282,6 +463,20 @@ Berechtigungen; die Registry kennt sie nicht. Ohne Registrierungen sehen
 Formulare, Seitenleiste und Chat-Eingabefeld aus und verhalten sich wie
 zuvor.
 
+**Startpunkt für einbettende Apps:** Die Startfolge des Frontends (Plattform-
+Attribut, Darstellung, Startzustand, Sprache, Unterdrückung des
+WebView-Menüs im Release-Build, Wurzel-Fehlergrenze, Startschutz) steckt in
+einer exportierten Funktion `bootstrap()`. Eine App mit eigenem
+Einstiegspunkt ruft sie auf, statt die Schritte zu kopieren; spätere
+Startschritte kommen so automatisch dazu. Optionen: `beforeRender` (läuft
+nach der Sprachwahl und vor dem ersten Rendern, darf asynchron sein; ein
+Fehler wird protokolliert und die App startet trotzdem), `extensions`
+(Komponenten ohne eigene Oberfläche, die einmal neben der App innerhalb des
+Startschutzes gerendert werden – also erst nach dem Entsperren –, jede in
+einer eigenen Fehlergrenze; eine fehlerhafte beeinträchtigt die App nicht)
+und `wrap` (Hülle um die App innerhalb des Startschutzes). Der Startschutz
+entscheidet weiterhin allein, wann die App eingehängt wird.
+
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
 spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
 Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Sitzungs-Kopf-Einträgen, Verwalten-Ansichten und
@@ -296,6 +491,26 @@ Community Edition nie, die Infrastruktur steht trotzdem).
 zentral abgefangen und als Hinweis-Dialog gezeigt. Der Dialog ist über allen
 Ansichten sichtbar, auch bei aktivem Sitzungs-Tab. Ein vollständiger
 Upgrade-Ablauf gehört nicht zu diesem Stand.
+
+**Einziger unterstützter Einstiegspunkt:** Erweiterungen und einbettende
+Apps importieren ausschließlich über `smart-ssh/public-api` (und in Tests
+über `smart-ssh/test-support`); beide Pfade löst die `exports`-Tabelle des
+Frontend-Pakets auf. Alles, was eine Erweiterung nutzen darf, ist dort
+exportiert: die Registrierungsfunktionen und Typen, Berechtigungs-Typen,
+`bootstrap`, die UI-Bausteine samt `ErrorBoundary`, der zentrale
+Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
+die Fehler-Helfer, `listServers`, `listGroups`, `listAiProviders`,
+`listChatSessions`, `getStartupState`, einige Hilfen
+(`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
+`pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`, `setUiPreference`), `showToast` (zeigt die regulären Erfolgs-, Fehler- und Info-Hinweise) und
+DTO-Typen (u. a. `GroupDto`) sowie die Typen `ComposerContext` und
+`ComposerAction` sowie `ToastInput`. `smart-ssh/test-support` bietet die Medienabfrage-Hilfen
+(`installMatchMediaMock`, `setWide`, `setNarrow`) und die Hilfen der
+Composer-Registrierung (`listComposerActions`, `listComposerDropHandlers`,
+`resetComposerRegistryForTests`), `resetTiersForTests` und `ToastHost` (nur für Tests, um erzeugte Hinweise zu prüfen). Relative Importe interner Dateien sind nicht unterstützt und
+können bei jeder Umbenennung brechen. Exporte ändern sich nur zusammen mit
+einem Changelog-Eintrag und einer Anpassung dieser Spec; ein Test hält die
+Liste fest.
 
 ## 5. Abhängigkeitsprüfung
 

@@ -285,7 +285,7 @@ fn suggestion_covers(suggestion: &PatternSuggestionDto, segments: &[String]) -> 
     let patterns: Vec<_> = suggestion
         .patterns
         .iter()
-        .map(|p| crate::dto::pattern_from_parts(p.pattern_type, p.pattern_value.clone()))
+        .map(|p| crate::filter_rules::pattern_from_parts(p.pattern_type, p.pattern_value.clone()))
         .collect();
     patterns.iter().all(|p| p.validate().is_ok())
         && segments.iter().all(|segment| {
@@ -450,6 +450,68 @@ pub fn suggest_rule_patterns_excluding(
     suggestions
 }
 
+/// Issue #1356: suggestions for ONE segment (specific to broad, at most
+/// [`MAX_SUGGESTIONS`]), built from [`analyze_segment`]. Every pattern is
+/// derived from this segment only; each suggestion is checked against the
+/// engine's matching of that segment, like in
+/// [`suggest_rule_patterns_excluding`].
+pub fn suggest_segment_patterns(segment: &str) -> Vec<PatternSuggestionDto> {
+    let segment = segment.trim();
+    if segment.is_empty() {
+        return Vec::new();
+    }
+    let a = analyze_segment(segment);
+    let mut candidates = vec![PatternSuggestionDto {
+        kind: SuggestionKind::Exact,
+        names: Vec::new(),
+        patterns: vec![a.exact.clone()],
+    }];
+    if !a.path_scoped.is_empty() {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::PathScoped,
+            names: Vec::new(),
+            patterns: a.path_scoped.clone(),
+        });
+    }
+    if let Some(p) = &a.last_arg_open {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::LastArgOpen,
+            names: Vec::new(),
+            patterns: vec![p.clone()],
+        });
+    }
+    if let Some((name, pats)) = &a.sub {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Subcommand,
+            names: vec![name.clone()],
+            patterns: pats.clone(),
+        });
+    }
+    if let Some((name, pat)) = &a.tool {
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Tool,
+            names: vec![name.clone()],
+            patterns: vec![pat.clone()],
+        });
+    }
+    let segments = [segment.to_string()];
+    let mut out: Vec<PatternSuggestionDto> = Vec::new();
+    for candidate in candidates {
+        if !suggestion_covers(&candidate, &segments) {
+            continue;
+        }
+        let same_set = |o: &PatternSuggestionDto| {
+            o.patterns.len() == candidate.patterns.len()
+                && o.patterns.iter().all(|p| candidate.patterns.contains(p))
+        };
+        if !out.iter().any(same_set) {
+            out.push(candidate);
+        }
+    }
+    out.truncate(MAX_SUGGESTIONS);
+    out
+}
+
 /// Spec 0011, Abschnitt 2: höchstens sechs Vorschläge.
 pub const MAX_SUGGESTIONS: usize = 6;
 
@@ -538,7 +600,8 @@ mod tests {
         let result = labels_and_patterns("ls [abc def");
 
         for (pattern_type, pattern_value) in &result {
-            let pattern = crate::dto::pattern_from_parts(*pattern_type, pattern_value.clone());
+            let pattern =
+                crate::filter_rules::pattern_from_parts(*pattern_type, pattern_value.clone());
             assert!(
                 pattern.validate().is_ok(),
                 "unbrauchbarer Vorschlag angeboten: {pattern_value:?}"
@@ -1062,5 +1125,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    // --- Issue #1356: batch save and per-segment suggestions ---------------
+
+    #[test]
+    fn segment_suggestions_derive_only_from_the_segment() {
+        let s = suggest_segment_patterns("ls -la /tmp");
+        assert!(s.iter().any(|x| x.kind == SuggestionKind::Exact));
+        assert!(s.iter().any(|x| x.kind == SuggestionKind::Tool));
+        assert!(s.len() <= MAX_SUGGESTIONS);
+        assert!(suggest_segment_patterns("  ").is_empty());
+        // Non-plain tool: exact only.
+        let s = suggest_segment_patterns("FOO=1 ls");
+        assert!(s.iter().all(|x| x.kind == SuggestionKind::Exact));
     }
 }

@@ -17,6 +17,7 @@
 //! verifizieren, *ob* (und mit welchem Inhalt) eine Methode aufgerufen
 //! wurde, nachdem der eigentliche Aufruf längst gelaufen ist.
 
+use crate::sync::lock_tolerating_poison;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -44,6 +45,8 @@ struct Inner {
     /// Methode überhaupt erreicht wurde, z. B. "wurde vor der Bestätigung
     /// nichts geschrieben" (Spec 0020, Abschnitt 4.2, Punkt 2).
     calls: Vec<String>,
+    /// `max_bytes` of every `read_file_capped` call, in order.
+    capped_limits: Vec<u64>,
     /// Pfade, bei denen `write_file` mit
     /// [`SshError::SftpPermissionDenied`] scheitern soll — simuliert Spec
     /// 0020, Abschnitt 4.3, ohne einen echten privilegierten Zielpfad zu
@@ -55,6 +58,8 @@ struct Inner {
     rename_fails_for: HashSet<String>,
     /// Issue #625: Pfade, die `stat` als Ordner meldet.
     dirs: HashSet<String>,
+    /// Issue #1291: symbolic link path -> target string for `read_link`.
+    links: std::collections::HashMap<String, String>,
 }
 
 #[derive(Default, Clone)]
@@ -68,7 +73,7 @@ impl MockSftpSession {
     }
 
     pub fn with_file(self, path: impl Into<String>, content: impl Into<Vec<u8>>) -> Self {
-        self.inner.lock().unwrap().files.insert(
+        lock_tolerating_poison(&self.inner).files.insert(
             path.into(),
             MockFile {
                 content: content.into(),
@@ -80,9 +85,7 @@ impl MockSftpSession {
     }
 
     pub fn with_permission_denied(self, path: impl Into<String>) -> Self {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .permission_denied_paths
             .insert(path.into());
         self
@@ -90,15 +93,13 @@ impl MockSftpSession {
 
     /// Issue #625: der simulierte Server bietet `posix-rename@openssh.com` an.
     pub fn with_posix_rename(self) -> Self {
-        self.inner.lock().unwrap().posix_rename = true;
+        lock_tolerating_poison(&self.inner).posix_rename = true;
         self
     }
 
     /// Issue #625: `rename` mit diesem Quellpfad scheitert.
     pub fn with_rename_failure(self, from: impl Into<String>) -> Self {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .rename_fails_for
             .insert(from.into());
         self
@@ -106,23 +107,34 @@ impl MockSftpSession {
 
     /// Issue #625: `stat` meldet diesen Pfad als Ordner.
     pub fn with_dir(self, path: impl Into<String>) -> Self {
-        self.inner.lock().unwrap().dirs.insert(path.into());
+        lock_tolerating_poison(&self.inner).dirs.insert(path.into());
+        self
+    }
+
+    /// Issue #1291: `read_link` returns `target` for the link at `path`.
+    pub fn with_link(self, path: impl Into<String>, target: impl Into<String>) -> Self {
+        lock_tolerating_poison(&self.inner)
+            .links
+            .insert(path.into(), target.into());
         self
     }
 
     /// Aufrufe in Reihenfolge, seit Erzeugung dieses (ggf. geklonten)
     /// Handles — s. Modul-Doc-Kommentar zum `Arc`-Zustand.
     pub fn calls(&self) -> Vec<String> {
-        self.inner.lock().unwrap().calls.clone()
+        lock_tolerating_poison(&self.inner).calls.clone()
+    }
+
+    /// The `max_bytes` passed to each `read_file_capped` call, in order.
+    pub fn capped_read_limits(&self) -> Vec<u64> {
+        lock_tolerating_poison(&self.inner).capped_limits.clone()
     }
 
     /// Aktueller Inhalt eines Pfads, falls (noch) vorhanden — für Tests, die
     /// nach einem `write_file`/`remove`/`rename` den resultierenden Zustand
     /// direkt prüfen wollen, ohne selbst wieder über den Trait zu lesen.
     pub fn file_content(&self, path: &str) -> Option<Vec<u8>> {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .files
             .get(path)
             .map(|f| f.content.clone())
@@ -136,7 +148,7 @@ impl MockSftpSession {
 #[async_trait]
 impl SftpSession for MockSftpSession {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("list_dir {path}"));
         let prefix = if path.ends_with('/') {
             path.to_string()
@@ -162,13 +174,14 @@ impl SftpSession for MockSftpSession {
                     gid: None,
                     owner: None,
                     group: None,
+                    is_symlink: false,
                 })
             })
             .collect())
     }
 
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("read_file {path}"));
         inner
             .files
@@ -183,8 +196,9 @@ impl SftpSession for MockSftpSession {
         max_bytes: u64,
         progress: &mut (dyn FnMut(u64) + Send),
     ) -> Result<Vec<u8>, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("read_file_capped {path}"));
+        inner.capped_limits.push(max_bytes);
         let content = inner
             .files
             .get(path)
@@ -198,7 +212,7 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("write_file {path}"));
         if inner.permission_denied_paths.contains(path) {
             return Err(SshError::SftpPermissionDenied(format!(
@@ -223,7 +237,7 @@ impl SftpSession for MockSftpSession {
         on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
     ) -> Result<TransferEnd, SshError> {
         let content = {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock_tolerating_poison(&self.inner);
             inner.calls.push(format!("read_file_chunked {path}"));
             inner
                 .files
@@ -246,7 +260,7 @@ impl SftpSession for MockSftpSession {
         next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
     ) -> Result<TransferEnd, SshError> {
         {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock_tolerating_poison(&self.inner);
             inner.calls.push(format!("write_file_chunked {path}"));
             if inner.permission_denied_paths.contains(path) {
                 return Err(SshError::SftpPermissionDenied(format!(
@@ -263,7 +277,7 @@ impl SftpSession for MockSftpSession {
                 ChunkSource::Stop => break TransferEnd::Stopped,
             }
         };
-        self.inner.lock().unwrap().files.insert(
+        lock_tolerating_poison(&self.inner).files.insert(
             path.to_string(),
             MockFile {
                 content,
@@ -274,8 +288,79 @@ impl SftpSession for MockSftpSession {
         Ok(end)
     }
 
+    async fn read_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("read_range {path}"));
+        let content = &inner
+            .files
+            .get(path)
+            .ok_or_else(|| Self::not_found(path))?
+            .content;
+        let start = usize::try_from(offset)
+            .unwrap_or(usize::MAX)
+            .min(content.len());
+        let end = start.saturating_add(len).min(content.len());
+        Ok(content[start..end].to_vec())
+    }
+
+    async fn write_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<(), SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("write_range {path}"));
+        if inner.permission_denied_paths.contains(path) {
+            return Err(SshError::SftpPermissionDenied(format!(
+                "keine Schreibrechte für {path}"
+            )));
+        }
+        if truncate {
+            inner.files.insert(
+                path.to_string(),
+                MockFile {
+                    content: Vec::new(),
+                    permissions: 0o644,
+                    modified: Some(Utc::now()),
+                },
+            );
+        }
+        let file = inner
+            .files
+            .get_mut(path)
+            .ok_or_else(|| Self::not_found(path))?;
+        let start = usize::try_from(offset).unwrap_or(usize::MAX);
+        if file.content.len() < start {
+            file.content.resize(start, 0);
+        }
+        let end = start + data.len();
+        if file.content.len() < end {
+            file.content.resize(end, 0);
+        }
+        file.content[start..end].copy_from_slice(data);
+        file.modified = Some(Utc::now());
+        Ok(())
+    }
+
+    async fn read_link(&mut self, path: &str) -> Result<String, SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("read_link {path}"));
+        inner
+            .links
+            .get(path)
+            .cloned()
+            .ok_or_else(|| SshError::ChannelError(format!("not a link: {path}")))
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("stat {path}"));
         if inner.dirs.contains(path) {
             return Ok(RemoteEntry {
@@ -289,6 +374,7 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             });
         }
         inner
@@ -305,6 +391,7 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             })
             .ok_or_else(|| Self::not_found(path))
     }
@@ -314,7 +401,7 @@ impl SftpSession for MockSftpSession {
     /// damit ein Test verifizieren kann, DASS `lstat` (statt `stat`)
     /// aufgerufen wurde, falls das für Spec 0054, Teil 3 relevant wird.
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("lstat {path}"));
         inner
             .files
@@ -330,12 +417,13 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             })
             .ok_or_else(|| Self::not_found(path))
     }
 
     async fn remove(&mut self, path: &str) -> Result<(), SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("remove {path}"));
         inner
             .files
@@ -345,7 +433,7 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("rename {from} -> {to}"));
         if inner.rename_fails_for.contains(from) {
             return Err(SshError::ChannelError(format!("rename {from} failed")));
@@ -359,7 +447,7 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         if !inner.posix_rename {
             return Ok(false);
         }
@@ -373,9 +461,7 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .calls
             .push(format!("create_dir {path}"));
         Ok(())
@@ -389,7 +475,7 @@ impl SftpSession for MockSftpSession {
     /// 0054, Teil 3 wird gegen den echten lokalen Pseudo-Server getestet
     /// (`ssh-transport`s Integrationstests).
     async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("create_file_exclusive {path}"));
         if inner.permission_denied_paths.contains(path) {
             return Err(SshError::SftpPermissionDenied(format!(
@@ -411,16 +497,20 @@ impl SftpSession for MockSftpSession {
     }
 
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .calls
             .push(format!("remove_dir {path}"));
         Ok(())
     }
 
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        let mut inner = lock_tolerating_poison(&self.inner);
+        inner.calls.push(format!("set_owner {path} {uid} {gid}"));
+        Ok(())
+    }
+
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("set_permissions {path} {mode:o}"));
         if let Some(file) = inner.files.get_mut(path) {
             file.permissions = mode;
@@ -498,9 +588,7 @@ impl MockKeyFileReader {
     }
 
     pub fn with_file(self, path: &str, file: MockKeyFile) -> Self {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .files
             .insert(path.to_string(), Ok(file));
         self
@@ -509,9 +597,7 @@ impl MockKeyFileReader {
     /// Stellt genau einen der Fehlerfälle aus A-6 her, ohne eine echte
     /// Datei zu brauchen.
     pub fn with_error(self, path: &str, error: KeyFileError) -> Self {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .files
             .insert(path.to_string(), Err(error));
         self
@@ -519,7 +605,7 @@ impl MockKeyFileReader {
 
     /// Alle Aufrufe in Reihenfolge, z. B. `"read /x true"`, `"inspect /x"`.
     pub fn calls(&self) -> Vec<String> {
-        self.inner.lock().unwrap().calls.clone()
+        lock_tolerating_poison(&self.inner).calls.clone()
     }
 
     pub fn read_calls(&self) -> usize {
@@ -529,8 +615,17 @@ impl MockKeyFileReader {
             .count()
     }
 
+    /// Paths passed to [`KeyFileReader::read`], in call order.
+    pub fn read_paths(&self) -> Vec<String> {
+        self.calls()
+            .iter()
+            .filter_map(|c| c.strip_prefix("read "))
+            .filter_map(|c| c.rsplit_once(' ').map(|(p, _)| p.to_string()))
+            .collect()
+    }
+
     fn lookup(&self, path: &str) -> Result<MockKeyFile, KeyFileError> {
-        match self.inner.lock().unwrap().files.get(path) {
+        match lock_tolerating_poison(&self.inner).files.get(path) {
             Some(Ok(file)) => Ok(file.clone()),
             Some(Err(err)) => Err(err.clone()),
             None => Err(KeyFileError::NotFound {
@@ -542,9 +637,7 @@ impl MockKeyFileReader {
 
 impl KeyFileReader for MockKeyFileReader {
     fn read(&self, path: &str, enforce_permissions: bool) -> Result<KeyFileContent, KeyFileError> {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .calls
             .push(format!("read {path} {enforce_permissions}"));
         let file = self.lookup(path)?;
@@ -565,9 +658,7 @@ impl KeyFileReader for MockKeyFileReader {
     }
 
     fn inspect(&self, path: &str) -> KeyFileFacts {
-        self.inner
-            .lock()
-            .unwrap()
+        lock_tolerating_poison(&self.inner)
             .calls
             .push(format!("inspect {path}"));
         match self.lookup(path) {

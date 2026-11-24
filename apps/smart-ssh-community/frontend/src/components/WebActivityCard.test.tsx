@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
 import { testI18n } from "../testI18n";
-import type { WebActivityDto } from "../types";
+import type { WebActivityDto } from "../api/types";
 import { WebActivityCard } from "./WebActivityCard";
 
 function activity(overrides: Partial<WebActivityDto> = {}): WebActivityDto {

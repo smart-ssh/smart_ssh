@@ -1,8 +1,7 @@
 // Issue #386: UI review of the AI provider settings, the MCP settings and the
 // filter rule management. Tab order with visible focus, Escape and focus
 // return, and long content at both window sizes (docs/ui-guidelines.md).
-import type { Page } from "@playwright/test";
-import { expect, test } from "../support/app";
+import { expect, openSettings, test } from "../support/app";
 import { aiProvider, populated, server } from "../support/data";
 import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
@@ -44,14 +43,6 @@ const longContent = () => ({
     },
   },
 });
-
-async function openSettings(page: Page, category: string) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: category, exact: true }).click();
-  return dialog;
-}
 
 for (const category of ["AI Provider", "MCP Server"]) {
   test(`settings: ${category} has a Tab order that follows the visual order, with visible focus`, async ({ app }) => {
@@ -105,7 +96,10 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
   const heading = page.getByRole("heading", { name: "Rules", level: 2 });
   await expect(heading).toBeVisible();
   const view = page.locator("div.overflow-y-auto", { has: heading }).last();
-  await expectTabOrderFollowsVisualOrder(page, view);
+  // Issue #1375: the tester is a side panel on wide windows, so the two
+  // columns are each checked on their own (the list first, then the tester).
+  await expectTabOrderFollowsVisualOrder(page, page.getByTestId("filter-rules-list"));
+  await expectTabOrderFollowsVisualOrder(page, page.getByTestId("filter-rules-tester"));
   await expectNoClippedText(view);
   await captureScreen(page, "filter-rules");
 
@@ -115,4 +109,134 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
   await expectTabOrderFollowsVisualOrder(page, ruleDialog);
   await expectNoClippedText(ruleDialog);
   await captureScreen(page, "filter-rules-edit");
+});
+
+// Issue #1377: both risk switches have accessible names, sit in the Tab order
+// after the provider list and toggle with the keyboard.
+test("settings: AI Provider risk switches are labelled, in Tab order and toggle", async ({ app }) => {
+  const base = longContent();
+  // Known non-default initial values: second opinion on (default off), red-risk confirm off (default on).
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true, redRiskAlwaysConfirm: false },
+    commands: {
+      ...base.commands,
+      set_risk_second_opinion_settings: { result: null },
+      set_red_risk_always_confirm: { result: null },
+    },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
+  // Wait for the loaded (non-default) state before interacting.
+  await expect(second).toBeChecked();
+  await expect(red).not.toBeChecked();
+  await second.focus();
+  await expect(second).toBeFocused();
+  // Tab order: second-opinion switch, its provider select (shown while on), red-risk switch.
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("combobox", { name: /provider/i }).first()).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(red).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  // The switch keeps focus while the save runs and afterwards (no `disabled`).
+  await expect(red).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+});
+
+// Issue #1526: the red-risk switch keeps keyboard focus during a slow save,
+// ignores a second toggle meanwhile and reverts (keeping focus) on failure.
+test("settings: red-risk switch keeps focus while saving, ignores repeats, reverts on failure", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, redRiskAlwaysConfirm: false },
+    commands: { ...base.commands, set_red_risk_always_confirm: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const red = dialog.getByRole("checkbox", { name: "Always confirm on red risk" });
+  await expect(red).not.toBeChecked();
+  await red.focus();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(red).toBeChecked();
+  await expect(red).toBeFocused();
+  await app.release("set_red_risk_always_confirm", { error: { code: "E2E", message: "save failed" } });
+  await expect(red).not.toBeChecked();
+  await expect(red).not.toHaveAttribute("aria-disabled", "true");
+  await expect(red).toBeFocused();
+  expect((await app.calls("set_red_risk_always_confirm")).length).toBe(1);
+});
+
+// Issue #1526 (review): the second-opinion switch shows the busy state too
+// while its own save is held, and ignores further toggles.
+test("settings: second-opinion switch is aria-disabled while saving and ignores repeats", async ({ app }) => {
+  const base = longContent();
+  // Start from a loaded, non-default state so the test never races the load.
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true },
+    commands: { ...base.commands, set_risk_second_opinion_settings: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  await expect(second).toBeChecked();
+  await second.focus();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await expect(second).toHaveAttribute("aria-disabled", "true");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await expect(second).toBeFocused();
+  await app.release("set_risk_second_opinion_settings", { result: null });
+  await expect(second).not.toHaveAttribute("aria-disabled", "true");
+  await expect(second).not.toBeChecked();
+  expect((await app.calls("set_risk_second_opinion_settings")).length).toBe(1);
+});
+
+// Issue #1536: a failed save restores the previous switch and provider values.
+test("settings: failed second-opinion save reverts switch and provider select and keeps focus", async ({ app }) => {
+  const base = longContent();
+  await app.launch({
+    ...base,
+    settings: { ...base.settings, riskClassifierEnabled: true, riskClassifierProviderId: "p1" },
+    commands: { ...base.commands, set_risk_second_opinion_settings: { hold: true } },
+  });
+  const page = app.page;
+  const dialog = await openSettings(page, "AI Provider");
+  const second = dialog.getByRole("checkbox", { name: "Enable AI second opinion" });
+  const select = dialog.getByRole("combobox", { name: "Provider for the second opinion" });
+  await expect(second).toBeChecked();
+  await expect(select).toHaveValue("p1");
+
+  // Provider change fails: select goes back to p1.
+  await select.focus();
+  await select.selectOption("p2");
+  await expect(select).toHaveValue("p2");
+  await app.release("set_risk_second_opinion_settings", { error: { code: "E2E", message: "save failed" } });
+  await expect(select).toHaveValue("p1");
+  await expect(select).toBeFocused();
+  await expect(dialog.getByText("save failed")).toBeVisible();
+
+  // Switch toggle fails: switch is on again.
+  await second.focus();
+  await page.keyboard.press("Space");
+  await expect(second).not.toBeChecked();
+  await app.release("set_risk_second_opinion_settings", { error: { code: "E2E", message: "save failed" } });
+  await expect(second).toBeChecked();
+  await expect(second).not.toHaveAttribute("aria-disabled", "true");
+  await expect(second).toBeFocused();
+  await expect(select).toHaveValue("p1");
 });

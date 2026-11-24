@@ -143,11 +143,15 @@ impl StartupPrompt for ScriptedPrompt {
     }
 }
 
+/// **Field order is drop order.** The stores (and with them the SQLite pool)
+/// are declared before `_dir`, so the database files are removed only after
+/// the connection is gone. With `_dir` first, the directory was deleted under
+/// a still-open connection, which behaves differently per platform.
 struct Fixture {
-    _dir: tempfile::TempDir,
-    store: SqliteProfileStore,
     database: SqliteCredentialStore,
+    store: SqliteProfileStore,
     servers: Vec<ServerId>,
+    _dir: tempfile::TempDir,
 }
 
 /// Zwei Server mit `PrivateKey`-Anmeldung, alle Slots belegt bis auf einen
@@ -192,6 +196,7 @@ async fn fixture() -> Fixture {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                elevation_allowed: true,
                 start_directory: None,
                 created_at: now,
                 updated_at: now,
@@ -201,10 +206,10 @@ async fn fixture() -> Fixture {
     }
 
     Fixture {
-        _dir: dir,
-        store,
         database,
+        store,
         servers,
+        _dir: dir,
     }
 }
 
@@ -310,6 +315,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
                 post_ingest_policy: PostIngestPolicy::default(),
                 ai_injection_check_enabled: false,
                 sftp_server_path: None,
+                elevation_allowed: true,
                 start_directory: None,
                 created_at: now,
                 updated_at: now,
@@ -966,6 +972,7 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
             post_ingest_policy: PostIngestPolicy::default(),
             ai_injection_check_enabled: false,
             sftp_server_path: None,
+            elevation_allowed: true,
             start_directory: None,
             created_at: now,
             updated_at: now,

@@ -10,6 +10,20 @@ use ssh_manager_core::filter::{FilterEngine, PatternError, RuleId, Scope};
 
 use crate::dto::{EvalContextInput, EvaluationTraceDto, RuleDto, RuleInput};
 
+/// `pub(crate)`: Spec 0077, 3.1.5 — `rule_suggestions` baut damit dasselbe
+/// [`Pattern`] wie das Anlegen, um einen Vorschlag zu prüfen, statt die
+/// Zuordnung Typ → Variante ein zweites Mal nachzubilden.
+pub(crate) fn pattern_from_parts(
+    pattern_type: crate::dto::PatternType,
+    pattern_value: String,
+) -> ssh_manager_core::filter::Pattern {
+    match pattern_type {
+        crate::dto::PatternType::Glob => ssh_manager_core::filter::Pattern::Glob(pattern_value),
+        crate::dto::PatternType::Regex => ssh_manager_core::filter::Pattern::Regex(pattern_value),
+        crate::dto::PatternType::Exact => ssh_manager_core::filter::Pattern::Exact(pattern_value),
+    }
+}
+
 /// Spec 0077, 3.1.3: Fehler beim Schreiben einer Filterregel.
 ///
 /// Eigener Typ statt [`PolicyStoreError`], weil das Anlegen und Ändern
@@ -19,8 +33,8 @@ use crate::dto::{EvalContextInput, EvaluationTraceDto, RuleDto, RuleInput};
 /// Speichers (trägt wie bisher keinen Code). `PolicyStoreError` selbst
 /// kann keinen Code tragen.
 ///
-/// **Bewusst weder `Display` noch `Error`:** Der blanket
-/// `impl<E: Display> From<E> for CommandError` würde den Typ sonst ohne
+/// **Bewusst weder `Display` noch `Error`:** Die generische
+/// `From<E: Display>`-Umwandlung würde den Typ sonst ohne
 /// Code umwandeln (`?` verlöre ihn still). Ohne `Display` gilt allein
 /// `From<RuleWriteError> for CommandError` in `crate::error`, das den Code
 /// setzt (Issue #260, ADR 0068 §7). Ein Aufrufer, der den Text braucht,

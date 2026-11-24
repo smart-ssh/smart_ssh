@@ -14,9 +14,15 @@ pub mod data_change;
 pub mod entitlements;
 pub mod filter;
 pub mod fs_hardening;
+pub mod ipc_error;
+#[cfg(test)]
+mod log_capture;
 pub mod outgoing;
 pub mod profiles;
 pub mod risk;
 pub mod session;
 pub mod shared;
 pub mod ssh;
+pub mod sync;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;

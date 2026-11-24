@@ -101,6 +101,21 @@ Nicht-Ziele:
 - A4.3 Wo die Absicherung nur per Kommentar möglich ist, steht die Invariante
   am Typ bzw. Feld, nicht am Aufrufer.
 
+**A5 — Eine Regel für alle Sperren**
+
+- A5.1 Die Regel aus A2.1 gilt für jede `std::sync`-Sperre (`Mutex`, `RwLock`,
+  lesend wie schreibend) im Produktivcode aller Crates, nicht nur für die oben
+  genannten: Ein Panic mit gehaltener Sperre macht eine Sitzung oder die App
+  nicht dauerhaft unbenutzbar.
+- A5.2 Kann ein vergifteter Wert halb aktualisiert sein und wäre Weiterarbeiten
+  falsch, setzt die Stelle den Wert nach dem Wiederaufnehmen auf einen sicheren
+  Standard zurück und panickt nicht. Eine Vergiftung überspringt nie einen
+  Widerruf und macht nie aus einer offenen Entscheidung eine Genehmigung.
+- A5.3 Ein Prüftest durchsucht den Quelltext und lehnt `lock()`/`read()`/
+  `write()` mit direkt folgendem `unwrap`/`expect` im Produktivcode ab
+  (Testmodule, `tests/`, `*_tests.rs`, `tests_*.rs`, `test_support*` sind
+  ausgenommen).
+
 ## 4. Verhaltensdetails
 
 - Das Abräumen hängt an einem Wert, dessen Freigabe es erledigt, nicht an
@@ -151,6 +166,9 @@ blockieren.
 - **T7 (A4.1).** Die Sperre der Herkunfts-Kennzeichen vergiften, dann eine
   Nachricht pushen und kompaktieren. Kein Panic, Verlauf und Kennzeichen bleiben
   gleich lang, der Verlauf ist nach der Kompaktierung nicht leer.
+- **T11 (A5.1, A5.3).** Vergiftete `Mutex`- und `RwLock`-Sperren (lesend und
+  schreibend) liefern ihren Wert weiter; der Quelltext-Prüftest findet keinen
+  `lock().unwrap()`-Rest im Produktivcode.
 - **T8 (A1.5).** Die bestehenden Tests zu Ablehnung, Zeitüberschreitung und
   Folgerunde bleiben grün.
 - **T9 (A1.5, MCP).** Der bestehende Test, dass ein Tool-Timeout die Bestätigung

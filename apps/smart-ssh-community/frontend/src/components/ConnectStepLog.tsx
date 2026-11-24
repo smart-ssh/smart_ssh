@@ -9,12 +9,13 @@ import {
   formatStepLogText,
   groupByHop,
   recordDetails,
+  statusIconName,
   statusMarker,
   stepLabel,
   stepStatusText,
-} from "../connectStepLog";
-import type { ConnectStepRecord } from "../types";
-import { Button } from "./ui";
+} from "../lib/connectStepLog";
+import type { ConnectStepRecord } from "../api/types";
+import { Button, Icon } from "./ui";
 
 export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
   const { t } = useTranslation();
@@ -36,15 +37,15 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
   };
 
   return (
-    <details className="mt-2 w-full text-xs text-slate-300" data-testid="connect-step-log">
-      <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
+    <details className="mt-2 w-full text-xs text-fg-muted" data-testid="connect-step-log">
+      <summary className="text-label cursor-pointer select-none text-fg-subtle hover:text-fg-soft">
         {t("connectLog.title")}
       </summary>
-      <div className="mt-2 space-y-2 break-words rounded border border-slate-700 bg-slate-900/60 p-2">
+      <div className="mt-2 space-y-2 break-words rounded border border-border-strong bg-surface-sunken p-3">
         {groups.map((group) => (
           <div key={group.hopIndex}>
             {multiHop && (
-              <div className="mb-1 font-medium text-slate-200">
+              <div className="text-label mb-1 text-fg-soft">
                 {t("connectLog.hop", { index: group.hopIndex + 1, hop: group.hop })}
               </div>
             )}
@@ -58,19 +59,22 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                     data-failed={failed ? "true" : undefined}
                     className={
                       failed
-                        ? "rounded border border-red-700 bg-red-950/40 px-1 py-0.5 text-red-300"
-                        : "px-1 py-0.5"
+                        ? "border-l-2 border-danger-border-strong bg-danger-subtle/40 px-2 py-1 text-danger-fg-soft"
+                        : "border-l-2 border-transparent px-2 py-1"
                     }
                   >
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span aria-hidden="true">
-                        {statusMarker(record.status.state)}
+                        {(() => {
+                          const icon = statusIconName(record.status.state);
+                          return icon ? <Icon name={icon} className="inline align-text-bottom" /> : statusMarker(record.status.state);
+                        })()}
                       </span>
                       <span className="min-w-0 font-medium">{stepLabel(t, record.step, record.status.state)}</span>
                       <span>{stepStatusText(t, record)}</span>
-                      <span className="text-slate-400">{formatDuration(record.durationMs)}</span>
+                      <span className="ml-auto font-mono text-fg-subtle">{formatDuration(record.durationMs)}</span>
                     </div>
-                    {details && <div className="ml-5 break-all text-slate-400">{details}</div>}
+                    {details && <div className="ml-5 break-all font-mono text-fg-subtle">{details}</div>}
                   </li>
                 );
               })}
@@ -83,8 +87,8 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
           >
             {t("connectLog.copy")}
           </Button>
-          {copied === "ok" && <span className="text-emerald-400">{t("connectLog.copied")}</span>}
-          {copied === "failed" && <span className="text-red-400">{t("connectLog.copyFailed")}</span>}
+          {copied === "ok" && <span className="text-success-fg">{t("connectLog.copied")}</span>}
+          {copied === "failed" && <span className="text-danger-fg">{t("connectLog.copyFailed")}</span>}
         </div>
       </div>
     </details>

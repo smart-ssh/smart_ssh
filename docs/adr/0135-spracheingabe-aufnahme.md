@@ -1,6 +1,8 @@
 # ADR 0135 — Spracheingabe: Aufnahme und lokale Erkennung
 
-Status: angenommen · Issue: #417 · Spec 0108
+## Status
+
+Accepted · Issue: #417 · Spec 0108
 
 ## Kontext
 

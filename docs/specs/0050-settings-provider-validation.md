@@ -10,13 +10,29 @@ Bezüge: Spec 0038 (Erweiterungs-Registry), Spec 0006/0007/0025
 
 ## Teil 1: Zweispaltige Struktur
 
-Die Einstellungen zeigen links eine Navigation mit Kategorien, rechts den
-Inhalt der gewählten Kategorie.
+Die Einstellungen öffnen sich als eigene Ansicht über das ganze Fenster unter
+der Titelleiste (kein Dialograhmen, kein abgedunkelter Hintergrund). Eine
+Kopfleiste (44 px) zeigt den Titel „Einstellungen“ und eine Schaltfläche
+„Schließen“; Escape und „Schließen“ führen zur vorigen Ansicht zurück, der
+Fokus kehrt dorthin zurück, wo er vorher stand. Links steht eine 260 px breite
+Liste der Kategorien: jede Zeile trägt eine nach Position gezählte Nummer
+(„01“, „02“ …) und den übersetzten Namen; die aktive Zeile ist hervorgehoben
+und hat links eine 2 px breite Akzentlinie; ihre Nummer erscheint in der
+Akzentfarbe (in beiden Themen kontrastsicher). Rechts steht der Inhalt der
+gewählten Kategorie unter einer Bereichskopfzeile mit Nummer, Titel (die
+einzige Überschrift des Bereichs) und rechts einem Platz für eine Aktion,
+die der Bereich selbst vorgibt.
+
+In der Kategorienliste bewegen Pfeil-nach-oben und Pfeil-nach-unten den Fokus
+zur vorigen bzw. nächsten Kategorie, Enter öffnet die fokussierte Kategorie;
+am ersten und am letzten Eintrag bleibt der Fokus stehen.
 
 ### 1.1 Kategorien
 
 Eingebaut sind (in dieser Reihenfolge): KI-Provider, Anzeige & Sprache,
-Diagnose, Dateien, Master-Passwort und Über. Eine Edition-Erweiterung kann
+Diagnose, Dateien, Master-Passwort, Daten und Backup, Spracheingabe und Über.
+Die Bereiche „Sitzungen & Daten“ und „MCP-Server“ sind registrierte
+Bereiche (siehe 1.2). Eine Edition-Erweiterung kann
 weitere Kategorien hinzufügen (siehe 1.2); sie stehen nach den eingebauten.
 
 ### 1.2 Registrierte Sektionen

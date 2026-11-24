@@ -1,9 +1,17 @@
 [package]
 name = "smart-ssh-community"
 version.workspace = true
+rust-version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[lib]
+# Spec 0114, ADR 0148: Tauri-Mobile lädt die App als Bibliothek
+# (`cdylib` für Android, `staticlib` für iOS); `rlib` bleibt für das
+# Desktop-Binary und die Tests.
+name = "smart_ssh_community_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
 # Sichtbarer Binary-Name im .app-Bundle (Contents/MacOS/smart-ssh) — bewusst
@@ -16,8 +24,8 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-app-shell = { version = "0.7.0", path = "../../crates/app-shell" }
-tauri = { version = "2", features = [] }
+app-shell = { workspace = true }
+tauri = { workspace = true }
 # `tauri-build`'s ACL-/Capability-Auflösung (in `build.rs`, läuft für dieses
 # Binary-Crate) scannt nur die eigenen, direkten Abhängigkeiten dieser
 # Crate nach Plugin-Berechtigungen — eine rein transitive Abhängigkeit über
@@ -25,14 +33,32 @@ tauri = { version = "2", features = [] }
 # "Permission ... not found" beim Build). Deshalb müssen dieselben
 # Tauri-Plugins, die `app-shell::run` tatsächlich registriert, hier
 # zusätzlich direkt gelistet sein.
-tauri-plugin-decoration = "3.0"
-tauri-plugin-dialog = "2.7.2"
-tauri-plugin-notification = "2"
-tauri-plugin-opener = "2.5.5"
-tauri-plugin-os = "2"
-tauri-plugin-store = "2"
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-notification = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-os = { workspace = true }
+tauri-plugin-store = { workspace = true }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tauri-plugin-decoration = { workspace = true }
+
+# Issue #795: `app-shell` registers `tauri-plugin-fs` on Android (#679). The
+# Tauri CLI only bundles the Android project (`com.plugin.fs.FsPlugin`) of
+# the app crate's *direct* dependencies into `gen/android`, so a transitive
+# dependency via `app-shell` leaves the Kotlin class out of the APK and the
+# app aborts at launch.
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-fs = { workspace = true }
+# Issue #888: the foreground session service and the microphone permission
+# plugin (Kotlin) ship with this crate as an Android library module; same
+# direct-dependency rule as above.
+tauri-plugin-android-host = { workspace = true }
 
 [dev-dependencies]
 # Issue #14: `tests/network_boundary.rs` liest die CSP aus `tauri.conf.json`.
 # Dieselbe Fassung, die `app-shell` ohnehin nutzt, keine neue Crate im Baum.
-serde_json = "1.0.151"
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true

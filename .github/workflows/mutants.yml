@@ -1,10 +1,22 @@
 name: Mutants
 
-# Manually triggered mutation test run over the security-critical modules
-# (filter engine, risk classifier). Too heavy for developer machines and
-# for every PR, so it only runs on demand. Surviving mutants do not fail
-# the job; they are published in the `mutants-out` artifact so weak or
-# tautological tests become visible.
+# Mutation test run over the security-critical modules: filter engine, risk
+# classifier, output redactor and the post-engine escalation chain. Too
+# heavy for developer machines and for every PR, so it runs weekly (Sunday
+# night, UTC) and on demand. A scheduled run uses the default shard size.
+# Surviving mutants do not fail the job; they are published in the
+# `mutants-out` artifact so weak or tautological tests become visible.
+#
+# Expected size of a run (issue #853): about 1,040 mutants, i.e. about 52
+# shards of 20 (limit: 256 matrix jobs). Each shard is budgeted at 45 min,
+# so the run takes about 25 runner-hours in total; the wall-clock time
+# depends on how many jobs the runner pool executes in parallel (roughly
+# 30 min with 52 free runners, a few hours with 20). The mutants of
+# `escalation.rs` run against the tests of the `app-logic` crate, all
+# others against the tests of `ssh-manager-core` (cargo-mutants tests each
+# mutant with the tests of the package that owns the mutated file). If the
+# first runs show `app-logic` shards hitting the budget, lower the default
+# of `mutants_per_shard`.
 #
 # Why many small shards: one mutant costs about 15 s build plus the whole
 # ssh-manager-core test suite (80-150 s alone on a hosted runner with the
@@ -18,9 +30,13 @@ name: Mutants
 # job always produces ONE artifact `mutants-out` with:
 #   missed.txt         union of the missed mutants of all shards
 #   timeout.txt        union of the timed-out mutants of all shards
+#   by-file.txt        missed / timeout / caught / unviable count per scope file
 #   shards.txt         one line per shard: complete / incomplete (reason)
 #   shard-<k>/         raw mutants.out of each shard (caught.txt, ...)
 on:
+  schedule:
+    # Sunday 22:00 UTC, outside working hours.
+    - cron: "0 22 * * 0"
   workflow_dispatch:
     inputs:
       mutants_per_shard:
@@ -43,8 +59,11 @@ env:
   # cargo-mutants as written.
   MUTANTS_SCOPE: >-
     -p ssh-manager-core
+    -p app-logic
     --file crates/core/src/filter/**
     --file crates/core/src/risk/**
+    --file crates/core/src/ai/redactor.rs
+    --file crates/app-logic/src/orchestration/escalation.rs
     --exclude **/*tests*.rs
 
 jobs:
@@ -57,17 +76,27 @@ jobs:
       count: ${{ steps.plan.outputs.count }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read pinned Rust toolchain
+        id: rust-toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
+
+      - name: Print Rust version
+        run: rustc --version
 
       # One shared cache for all jobs of this workflow. This job writes it
       # (dependencies built for the test profile plus the cargo-mutants
       # binary), the shards only restore it, so they neither build the
       # dependencies cold nor compile cargo-mutants each.
       - name: Cache cargo registry & build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: mutants
 
@@ -75,7 +104,7 @@ jobs:
         run: cargo install cargo-mutants --version 27.1.0 --locked
 
       - name: Build test dependencies
-        run: cargo test -p ssh-manager-core --no-run
+        run: cargo test --locked -p ssh-manager-core -p app-logic --no-run
 
       - name: Split mutants into shards
         id: plan
@@ -111,13 +140,23 @@ jobs:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read pinned Rust toolchain
+        id: rust-toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
+
+      - name: Print Rust version
+        run: rustc --version
 
       - name: Restore cargo registry & build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: mutants
           save-if: false
@@ -214,7 +253,7 @@ jobs:
 
       - name: Upload shard result
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutants-shard-${{ matrix.shard }}
           path: mutants.out/
@@ -229,7 +268,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download shard results
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true
         with:
           pattern: mutants-shard-*
@@ -263,6 +302,20 @@ jobs:
             find mutants-out -mindepth 2 -name "${kind}.txt" -exec cat {} + \
               | sort -u > "mutants-out/${kind}.txt"
           done
+          # Per scope file: one line per file that has any mutant, with the
+          # number of missed / timed-out / caught / unviable mutants.
+          # Mutant lines look like `crates/core/src/ai/redactor.rs:12:5: replace ...`.
+          for kind in missed timeout caught unviable; do
+            sed -n 's/^\([^:]*\.rs\):[0-9].*/\1/p' "mutants-out/${kind}.txt" \
+              | sort | uniq -c | awk -v k="$kind" '{print $2, k, $1}'
+          done | awk '
+            { files[$1] = 1; n[$1 SUBSEP $2] = $3 }
+            END {
+              for (f in files)
+                printf "%s missed=%d timeout=%d caught=%d unviable=%d\n", f,
+                  n[f SUBSEP "missed"], n[f SUBSEP "timeout"],
+                  n[f SUBSEP "caught"], n[f SUBSEP "unviable"]
+            }' | sort > mutants-out/by-file.txt
           {
             echo "## cargo-mutants"
             echo
@@ -272,13 +325,17 @@ jobs:
             echo "|---|---|---|---|"
             echo "| $(wc -l < mutants-out/missed.txt) | $(wc -l < mutants-out/timeout.txt) | $(wc -l < mutants-out/caught.txt) | $(wc -l < mutants-out/unviable.txt) |"
             echo
+            echo "| file | missed | timeout | caught | unviable |"
+            echo "|---|---|---|---|---|"
+            awk '{ printf "| %s |", $1; for (i = 2; i <= NF; i++) { split($i, kv, "="); printf " %s |", kv[2] } print "" }' mutants-out/by-file.txt
+            echo
             grep -v ': complete' mutants-out/shards.txt | sed 's/^/- /' || true
           } >> "$GITHUB_STEP_SUMMARY"
           cat mutants-out/shards.txt
 
       - name: Upload mutants-out
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutants-out
           path: mutants-out/

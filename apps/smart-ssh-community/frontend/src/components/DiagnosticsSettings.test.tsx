@@ -10,22 +10,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   generateDiagnosticsBundle,
   getDataPaths,
+  getKeychainService,
   getKeychainStatus,
   openLogDirectory,
   saveDiagnosticsBundle,
-} from "../api";
+} from "../api/api";
 import { testI18n } from "../testI18n";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  openLogDirectory: vi.fn(),
-  generateDiagnosticsBundle: vi.fn(),
-  saveDiagnosticsBundle: vi.fn(),
-  getKeychainStatus: vi.fn(),
-  getDataPaths: vi.fn(),
-  openDataPathFolder: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    // Assertions match the `Error: <msg>` form of `String(err)`, not the bare message.
+    commandErrorMessage: (err: unknown) => String(err),
+    openLogDirectory: vi.fn(),
+    generateDiagnosticsBundle: vi.fn(),
+    saveDiagnosticsBundle: vi.fn(),
+    getKeychainStatus: vi.fn(),
+    getDataPaths: vi.fn(),
+    getKeychainService: vi.fn(),
+    openDataPathFolder: vi.fn(),
+  }),
+);
 
 // spec-reviewer-Fund: Die Voreinstellung hing zuvor an der Aufrufhistorie
 // des Mocks (`mock.results.length === 0`) und damit an der Reihenfolge der
@@ -36,6 +41,7 @@ vi.mock("../api", () => ({
 beforeEach(() => {
   vi.mocked(getKeychainStatus).mockResolvedValue({ available: true, reason: null });
   vi.mocked(getDataPaths).mockResolvedValue([]);
+  vi.mocked(getKeychainService).mockResolvedValue("Smart SSH");
 });
 
 function renderDiagnostics() {
@@ -151,6 +157,18 @@ describe("DiagnosticsSettings — Schlüsselbund-Zustand (Spec 0071, A15)", () =
     const rowText = (row.textContent ?? "").toLowerCase();
     expect(rowText).not.toContain("install kwallet");
     expect(rowText).not.toContain("install keepassxc");
+  });
+
+  it("zeigt für Android ohne Keystore den eigenen Text ohne Secret Service", async () => {
+    vi.mocked(getKeychainStatus).mockResolvedValue({ available: false, reason: "no_keystore" });
+
+    renderDiagnostics();
+
+    const row = await screen.findByTestId("keychain-status");
+    await waitFor(() => expect(row).toHaveTextContent("Keystore"));
+    expect(row).toHaveTextContent("Master-Passwort");
+    expect(row).not.toHaveTextContent("Secret Service");
+    expect(row).not.toHaveTextContent("apt install");
   });
 
   // X3: ein gesperrter Schlüsselbund ist kein fehlendes Paket — auch hier

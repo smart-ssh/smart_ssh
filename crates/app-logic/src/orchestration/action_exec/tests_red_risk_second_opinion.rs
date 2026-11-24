@@ -10,14 +10,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use ssh_manager_core::ai::{AiEvent, AiProvider, SessionContext};
-use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent};
+use ssh_manager_core::ai::{AiEvent, AiProvider, RedactedContext};
 use ssh_manager_core::filter::FilterEngine;
 
 use crate::events::TestEmitter;
 
 use super::super::test_support::*;
 use super::*;
+use crate::activity::{ActivityDecisionOutcome, ActivityEventKind};
 
 /// Regelbasiert nur **Gelb** (Server-Achse), Daten-Achse `None` — die
 /// Zweitmeinung ist damit die einzige Quelle für ein Rot.
@@ -79,7 +79,7 @@ struct VerdictProvider(&'static str);
 impl AiProvider for VerdictProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![
             AiEvent::TextDelta(self.0.to_string()),
@@ -96,12 +96,12 @@ impl AiProvider for VerdictProvider {
 /// neuen Code.
 #[tokio::test]
 async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
-        )
-        .await;
+    let (session, _chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done],
+        MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(
         &mut session,
@@ -179,15 +179,15 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
         "genau eine Ausführung nach dem Bestätigen: {events:?}"
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    let decision = entries
+    let kinds = probe.kinds();
+    let decision = kinds
         .iter()
-        .find_map(|entry| match &entry.content {
-            LedgerEntryContent::Decision { outcome, code, .. } => Some((outcome, code)),
+        .find_map(|kind| match kind {
+            ActivityEventKind::Decision { outcome, code, .. } => Some((outcome, code)),
             _ => None,
         })
-        .expect("ein Decision-Eintrag muss geschrieben werden");
-    assert!(matches!(decision.0, LedgerDecisionOutcome::Confirmed));
+        .expect("a Decision event must be reported");
+    assert!(matches!(decision.0, ActivityDecisionOutcome::Confirmed));
     assert_eq!(
         decision.1.as_deref(),
         Some("FILTER_RED_RISK_REQUIRES_CONFIRM"),
@@ -198,7 +198,7 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
 /// **Regressionstest zum spec-reviewer-Fund (Runde 1).** Die Zweitmeinung
 /// zitiert in ihrer Begründung ein Passwort aus dem Kommando. Landet ihr
 /// Wortlaut im `Decision.reason`, steht das Passwort danach **im Klartext**
-/// in der SQLite-Datei: `redact_ledger_entry_content` lässt
+/// in der SQLite-Datei: `redact_activity_content` lässt
 /// `LedgerEntryContent::Decision` bewusst unredigiert durch (Doc-Kommentar
 /// dort: „nur von der Filter-Engine selbst erzeugte Texte"), und der
 /// Redactor würde ein Ad-hoc-Passwort ohnehin nicht als Muster erkennen.
@@ -207,19 +207,19 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
 /// `Decision`-Eintrag — damit der Test auch greift, wenn der Text künftig an
 /// einer anderen Stelle einsickert.
 #[tokio::test]
-async fn test_second_opinion_wording_never_reaches_the_persisted_ledger() {
+async fn test_second_opinion_wording_never_reaches_the_activity_events() {
     const SECRET: &str = "S3cretPassw0rd";
     // Das Kommando selbst enthält den Wert **nicht** — so kann ein Treffer im
     // Ledger nur aus dem Urteilstext stammen. (Stünde er auch im Kommando,
     // prüfte der Test zusätzlich den Redactor auf dem `CommandProposed`-
     // Eintrag, und ein Ad-hoc-Passwort ist kein Muster, das er kennt.)
     let command = "mysql -e 'select 1'".to_string();
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response(&command, output("ok")),
-        )
-        .await;
+    let (session, _chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done],
+        MockSshTransport::default().with_response(&command, output("ok")),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(
         &mut session,
@@ -254,15 +254,15 @@ async fn test_second_opinion_wording_never_reaches_the_persisted_ledger() {
     // nichts.
     assert!(escalated_event(&emitter.events.lock().unwrap().clone()).is_some());
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
+    let entries = probe.events();
     assert!(
         !entries.is_empty(),
-        "Vorbedingung: das Ledger hat tatsächlich geschrieben"
+        "precondition: the observer received events"
     );
     let dump = format!("{entries:?}");
     assert!(
         !dump.contains(SECRET),
-        "das von der Zweitmeinung zitierte Passwort darf nirgends im Ledger stehen: {dump}"
+        "das von der Zweitmeinung zitierte Passwort darf in keinem Activity-Event stehen: {dump}"
     );
 }
 
@@ -272,12 +272,12 @@ async fn test_second_opinion_wording_never_reaches_the_persisted_ledger() {
 /// `earlier_rejection` und schreibt `Rejected` mit dem neuen Code.
 #[tokio::test]
 async fn test_t11_rejecting_the_escalated_action_blocks_it_and_marks_the_rejection() {
-    let (mut session, _chat_store, chat_session_id, _tmp_dir, ledger_store) =
-        session_with_real_chat_and_ledger_persistence(
-            vec![AiEvent::Done],
-            MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
-        )
-        .await;
+    let (session, _chat_store, _chat_session_id, _tmp_dir) = session_with_real_chat_persistence(
+        vec![AiEvent::Done],
+        MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
+    )
+    .await;
+    let (mut session, probe) = with_activity_probe(session);
     session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(&mut session, VerdictProvider("red: heikel"));
 
@@ -313,15 +313,15 @@ async fn test_t11_rejecting_the_escalated_action_blocks_it_and_marks_the_rejecti
         "eine Ablehnung hier zählt wie jede andere für die Nachbar-Aktionen"
     );
 
-    let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
-    let decision = entries
+    let kinds = probe.kinds();
+    let decision = kinds
         .iter()
-        .find_map(|entry| match &entry.content {
-            LedgerEntryContent::Decision { outcome, code, .. } => Some((outcome, code)),
+        .find_map(|kind| match kind {
+            ActivityEventKind::Decision { outcome, code, .. } => Some((outcome, code)),
             _ => None,
         })
-        .expect("ein Decision-Eintrag muss geschrieben werden");
-    assert!(matches!(decision.0, LedgerDecisionOutcome::Rejected));
+        .expect("a Decision event must be reported");
+    assert!(matches!(decision.0, ActivityDecisionOutcome::Rejected));
     assert_eq!(
         decision.1.as_deref(),
         Some("FILTER_RED_RISK_REQUIRES_CONFIRM")
@@ -430,7 +430,7 @@ struct GatedVerdictProvider {
 impl AiProvider for GatedVerdictProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         let entered = self.entered.clone();
         let release = self.release.clone();
@@ -495,7 +495,7 @@ async fn test_t14_a_stop_during_the_second_opinion_wins_over_the_escalation() {
         "eine gestoppte Aktion bekommt keinen Dialog: {events:?}"
     );
     assert!(
-        session.pending_action.lock().unwrap().is_none(),
+        session.conn.pending_action.lock().unwrap().is_none(),
         "kein Tab-Indikator für eine übersprungene Aktion"
     );
     // Spec 0066: übersprungen wird als abgebrochenes Kommando gemeldet.
@@ -600,7 +600,7 @@ async fn test_t15_an_escalated_confirmation_still_times_out_without_executing() 
     // einfach; die Zusicherungen unten scheitern dann sauber.
     let advancer = async {
         for _ in 0..10_000 {
-            if session.pending_action.lock().unwrap().is_some() {
+            if session.conn.pending_action.lock().unwrap().is_some() {
                 tokio::time::advance(
                     PENDING_ACTION_CONFIRM_TIMEOUT + std::time::Duration::from_secs(1),
                 )
@@ -623,7 +623,7 @@ async fn test_t15_an_escalated_confirmation_still_times_out_without_executing() 
         "ein ausgebliebener Klick darf nie als Freigabe gelten: {events:?}"
     );
     assert!(
-        session.pending_action.lock().unwrap().is_none(),
+        session.conn.pending_action.lock().unwrap().is_none(),
         "der Tab-Indikator muss nach der Zeitgrenze wieder fallen"
     );
 }

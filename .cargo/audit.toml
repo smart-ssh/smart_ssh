@@ -18,15 +18,11 @@
 # Vulnerabilities als auch auf informational Warnings (unmaintained/
 # unsound), da beide über dieselbe Advisory-ID gefiltert werden.
 #
-# Der `wnaf`-Yanked-Fund (s. u.) hat KEINE RUSTSEC-ID (Yanked-Prüfung läuft
-# separat gegen den crates.io-Index, nicht gegen die Advisory-Datenbank)
-# und kann deshalb strukturell NICHT einzeln in dieser Liste unterdrückt
-# werden — die einzige Stellschraube dafür wäre `[yanked] enabled = false`,
-# was die Yanked-Prüfung *komplett* abschalten würde (auch für künftige,
-# tatsächlich relevante Funde). Bewusst NICHT gemacht — der `wnaf`-Hinweis
-# bleibt daher als sichtbare, nicht blockierende Warnung in jedem Lauf
-# bestehen — cargo-audit behandelt Yanked-Funde unabhängig vom Blockier-
-# Status (Spec 0090, A2) als nicht blockierende Warnung.
+# Yanked findings have no RUSTSEC id (the yanked check runs against the
+# crates.io index, not the advisory database) and cannot be suppressed
+# individually in this list; they are resolved by updating the lockfile.
+# `[yanked] enabled = false` would disable the check completely and is
+# deliberately not used.
 
 [advisories]
 # Spec 0090, A3/A4: jede Ausnahme unten nennt das betroffene Crate, die
@@ -89,21 +85,6 @@ ignore = [
     # aktualisiert) oder die GTK3-Kette entfällt.
     "RUSTSEC-2024-0370",
 
-    # --- unic-char-*-Kette: transitive Tauri-Abhängigkeit ---------------
-    #
-    # Cross-Plattform (nicht Linux-only, verifiziert via
-    # `cargo tree --target all`), transitiv über `urlpattern` →
-    # `tauri-utils` → `tauri`. Kein Fix verfügbar.
-    #
-    # Entschieden gegen: je 0.9.0 (Cargo.lock, s. Version je Zeile unten).
-    # Überholt, wenn `cargo audit` eine dieser IDs nicht mehr meldet (Crate
-    # ersetzt/aktualisiert) oder `tauri` `urlpattern` nicht mehr zieht.
-    "RUSTSEC-2025-0081", # unic-char-property 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0075", # unic-char-range 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0080", # unic-common 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0100", # unic-ucd-ident 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0098", # unic-ucd-version 0.9.0 — s. Begründung oben
-
     # --- RUSTSEC-2024-0429: bewusst ANDERS behandelt als "unmaintained" -
     #
     # Unsoundness in `glib::VariantStrIter`s `Iterator`/
@@ -121,44 +102,31 @@ ignore = [
     # Begründung oben.
     "RUSTSEC-2024-0429", # glib::VariantStrIter 0.18.5 — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
 
-    # --- RUSTSEC-2026-0459: dokumentiertes Risk-Acceptance (2026-11-09) ---
+    # --- RUSTSEC-2026-0495: documented risk acceptance (2026-11-14) ---
     #
-    # SQLite vor 3.54.0 liefert uninitialisierten Page-Cache-Speicher, wenn
-    # ein Prozess eine Datenbank zusammen mit einer präparierten `-wal`-Datei
-    # anderer Seitengröße öffnet (CVE-2026-119375, lokal, das Opfer muss die
-    # Dateien öffnen). Vom Maintainer entschieden, s. Issue #1243.
+    # russh < 0.65.0: the agent server (`russh::keys::agent::server`) signs
+    # with confirm-constrained keys without calling `Agent::confirm`.
+    # Decided by the maintainer, see issue #1310.
     #
-    # Nicht behebbar: `sqlx-sqlite` 0.9.0 verlangt `libsqlite3-sys` < 0.38,
-    # der Fix ist >= 0.39; und laut Advisory bündelt selbst dessen
-    # SQLCipher-Build (unser Build, Spec 0101) noch SQLite 3.53.4.
+    # Acceptable: the application does not use the russh agent server; outside
+    # `vendor/russh` nothing references `keys::agent::server`. It only acts as
+    # an SSH client (and talks to the user's agent as a client).
     #
-    # Warum vertretbar: Die App öffnet nur ihre eigene Datenbank im
-    # Datenverzeichnis. Backups sind ein eigenes verschlüsseltes Dateiformat
-    # und werden als typisierte Snapshots importiert, nicht als Datenbank
-    # geöffnet. Wer dort eine `-wal` ablegen kann, hat bereits Schreibzugriff
-    # auf die Daten des Nutzers.
+    # Note: on `develop` russh comes from `vendor/russh` (path crate, 0.63.2),
+    # which cargo-audit does not check, so the advisory only shows up where
+    # russh comes from crates.io; the affected code is still present.
     #
-    # Überholt, wenn: ein `sqlx`-Release eine `libsqlite3-sys` erlaubt, deren
-    # SQLCipher auf SQLite >= 3.54 beruht; spätestens 2027-01-31 erneut prüfen.
-    "RUSTSEC-2026-0459",
-
-    # --- RUSTSEC-2026-0495: dokumentiertes Risk-Acceptance (2026-11-14) ---
+    # Activation: while russh is the `[patch.crates-io]` path crate the A4
+    # stale-exemption check (Spec 0090) would flag an active entry. Once russh
+    # comes from crates.io again (no path patch) and is still < 0.65.0,
+    # add the ID to `ignore` (quoted, as above; keep it unquoted while commented).
     #
-    # russh < 0.65.0: Der Agent-Server (`russh::keys::agent::server`) signiert
-    # mit Schlüsseln, die eine Bestätigung verlangen, ohne `Agent::confirm`
-    # aufzurufen. Vom Maintainer entschieden, s. Issue #1310.
-    #
-    # Warum vertretbar: Die App nutzt den Agent-Server von russh nicht; sie ist
-    # nur SSH-Client (und spricht mit dem Agent des Nutzers als Client).
-    #
-    # Überholt, wenn: russh >= 0.65.0 im Lockfile steht.
-    "RUSTSEC-2026-0495",
+    # Obsolete when: russh >= 0.65.0 is used, including an upgrade of
+    # `vendor/russh`.
+    # RUSTSEC-2026-0495 goes here once activated.
 ]
 
-# `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
-# yanked — kein Sicherheitsproblem, aber strukturell nicht in `ignore`
-# oben unterdrückbar (s. Hinweis am Dateianfang: keine RUSTSEC-ID, kein
-# Pro-Crate-Mechanismus in dieser cargo-audit-Version). Bleibt als
-# sichtbare, nicht blockierende Warnung bestehen; `[yanked] enabled` bleibt
-# bewusst auf dem Default `true`, damit künftige, tatsächlich relevante
-# Yanked-Funde weiterhin auffallen.
+# Yanked crates have no RUSTSEC id (the yanked check runs against the crates.io
+# index), so they cannot be listed in `ignore` above; the fix is to update the
+# lockfile. `[yanked] enabled` stays at the default `true` so that future
+# yanked findings stay visible.

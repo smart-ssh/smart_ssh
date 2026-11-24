@@ -14,12 +14,19 @@ import { SettingsScreen } from "./SettingsScreen";
 vi.mock("./BackupSettings", () => ({
   BackupSettings: () => <p>builtin-backup</p>,
 }));
-vi.mock("../api", () => ({
-  listAiProviders: vi.fn(() => Promise.resolve([])),
-  discoverModels: vi.fn(),
-  commandErrorMessage: (err: unknown) => String(err),
-  commandErrorCode: () => null,
-}));
+vi.mock("./AboutSettings", () => ({ AboutSettings: () => <p>builtin-AboutSettings</p> }));
+vi.mock("./AiProviderSettings", () => ({ AiProviderSettings: () => <p>builtin-AiProviderSettings</p> }));
+vi.mock("./DiagnosticsSettings", () => ({ DiagnosticsSettings: () => <p>builtin-DiagnosticsSettings</p> }));
+vi.mock("./FileTypeSettings", () => ({ FileTypeSettings: () => <p>builtin-FileTypeSettings</p> }));
+vi.mock("./LanguageSettings", () => ({ LanguageSettings: () => <p>builtin-LanguageSettings</p> }));
+vi.mock("./MasterPasswordSettings", () => ({ MasterPasswordSettings: () => <p>builtin-MasterPasswordSettings</p> }));
+vi.mock("./VoiceInputSettings", () => ({ VoiceInputSettings: () => <p>builtin-VoiceInputSettings</p> }));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    listAiProviders: vi.fn(() => Promise.resolve([])),
+    discoverModels: vi.fn(),
+  }),
+);
 
 const mk = (text: string) => () => <p>{text}</p>;
 
@@ -81,5 +88,123 @@ describe("SettingsScreen data-backup slot (#674)", () => {
     renderScreen();
     await screen.findAllByText("KI-Provider");
     expect(screen.queryByText("sec-x")).not.toBeInTheDocument();
+  });
+});
+
+describe("SettingsScreen category slots for every built-in category (#1311)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  const cats: [string, string][] = [
+    ["ai-provider", "KI-Provider"],
+    ["display-language", "Anzeigesprache"],
+    ["diagnostics", "Diagnose"],
+    ["file-types", "Dateien"],
+    ["master-password", "Master-Passwort"],
+    ["data-backup", "Daten und Backup"],
+    ["voice-input", "Spracheingabe"],
+    ["about", "Über"],
+  ];
+
+  for (const [id] of cats) {
+    it(`renders sections of ${id} in order, only inside that category`, async () => {
+      registerSettingsSection({ id: "b", category: id, order: 5, component: mk("sec-b") });
+      registerSettingsSection({ id: "a", category: id, order: 5, component: mk("sec-a") });
+      registerSettingsSection({ id: "c", category: id, order: 1, component: mk("sec-c") });
+      renderScreen();
+      const navs = await screen.findAllByRole("button", { name: /./ });
+      const idx = cats.findIndex(([c]) => c === id);
+      const nav = navs.filter((b) => b.closest("li"))[idx];
+      fireEvent.click(nav);
+      await screen.findByText("sec-c");
+      const [c, b, a] = order(["sec-c", "sec-b", "sec-a"]);
+      expect(c).toBeLessThan(b);
+      expect(b).toBeLessThan(a);
+      // Not in another category.
+      const other = navs.filter((x) => x.closest("li"))[(idx + 1) % cats.length];
+      fireEvent.click(other);
+      await waitFor(() => expect(screen.queryByText("sec-c")).not.toBeInTheDocument());
+    });
+  }
+
+  it("shows a section with an unknown category as top-level entry and warns", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    registerSettingsSection({ id: "odd", label: "Odd entry", category: "nope", component: mk("sec-odd") });
+    renderScreen();
+    fireEvent.click(await screen.findByText("Odd entry"));
+    await screen.findByText("sec-odd");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"nope"'));
+    warn.mockRestore();
+  });
+
+  it("warns with the exact id and category when they contain colons, once per set", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    registerSettingsSection({ id: "a:b", label: "Colon entry", category: "x:y:z", component: mk("sec-colon") });
+    const { rerender } = renderScreen();
+    fireEvent.click(await screen.findByText("Colon entry"));
+    await screen.findByText("sec-colon");
+    const msg =
+      'Settings section "a:b" names unknown category "x:y:z"; showing it as a top-level entry.';
+    expect(warn).toHaveBeenCalledWith(msg);
+    rerender(
+      <I18nextProvider i18n={testI18n}>
+        <SettingsScreen onClose={vi.fn()} onProvidersChanged={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(warn.mock.calls.filter((c) => c[0] === msg)).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it("a throwing section only breaks its own boundary", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Boom = () => {
+      throw new Error("boom");
+    };
+    registerSettingsSection({ id: "boom", category: "data-backup", order: 1, component: Boom });
+    registerSettingsSection({ id: "ok", category: "data-backup", order: 2, component: mk("sec-ok") });
+    renderScreen();
+    fireEvent.click((await screen.findAllByText("Daten und Backup")).at(0)!);
+    await screen.findByText("builtin-backup");
+    await screen.findByText("sec-ok");
+    err.mockRestore();
+  });
+});
+
+describe("SettingsScreen numbered list (#1376)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("shows a registered category with its translated name and next index", async () => {
+    registerSettingsSection({ id: "chat-retention", label: "settings.categories.chatRetention", component: mk("sec-ret") });
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    const row = rows.find((b) => b.textContent?.includes("Sitzungen & Daten"));
+    expect(row).toBeDefined();
+    const idx = rows.indexOf(row!) + 1;
+    expect(row!.textContent).toContain(String(idx).padStart(2, "0"));
+    fireEvent.click(row!);
+    await screen.findByText("sec-ret");
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
+  });
+
+  it("moves focus with ArrowDown and ArrowUp", async () => {
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: "ArrowDown" });
+    expect(rows[1]).toHaveFocus();
+    fireEvent.keyDown(rows[1], { key: "ArrowUp" });
+    expect(rows[0]).toHaveFocus();
+  });
+
+  it("shows a registered section's icon and falls back to sliders (#1428)", async () => {
+    registerSettingsSection({ id: "with-icon", label: "With icon", icon: "plug", component: mk("x") });
+    registerSettingsSection({ id: "no-icon", label: "No icon", component: mk("y") });
+    renderScreen();
+    const rows = (await screen.findAllByRole("button", { name: /./ })).filter((b) => b.closest("li"));
+    const iconOf = (text: string) =>
+      rows.find((b) => b.textContent?.includes(text))!.querySelector("svg[data-icon]")!.getAttribute("data-icon");
+    expect(iconOf("With icon")).toBe("plug");
+    expect(iconOf("No icon")).toBe("sliders");
   });
 });

@@ -40,11 +40,8 @@ pub(crate) fn overload_delay(
         return None;
     }
     let delay = retry_after.unwrap_or_else(|| {
-        let jitter_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| u64::from(d.subsec_millis()) % 500)
-            .unwrap_or(0);
-        Duration::from_secs(BACKOFF_SECS[(attempt - 1) as usize]) + Duration::from_millis(jitter_ms)
+        Duration::from_secs(BACKOFF_SECS[(attempt - 1) as usize])
+            + Duration::from_millis(crate::retry::jitter_ms(500))
     });
     (already_waited.saturating_add(delay) <= MAX_TOTAL_WAIT).then_some(delay)
 }

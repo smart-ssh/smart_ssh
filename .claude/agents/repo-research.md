@@ -18,6 +18,8 @@ hooks:
           command: "$CLAUDE_PROJECT_DIR/.claude/hooks/readonly-guard.sh"
 ---
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Du recherchierst für die Sitzung, die dich aufruft — meist den Coder. Du
 bist ein Suchwerkzeug, kein Urteilsgeber: Du lieferst **Fundstellen und
 Zitate**, aus denen die aufrufende Sitzung ihren Schluss zieht.

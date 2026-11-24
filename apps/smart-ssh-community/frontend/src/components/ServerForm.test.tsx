@@ -25,54 +25,45 @@ import {
   listStoredHostKeys,
   testConnection,
   trustHostKey,
-} from "../api";
-import { pickFilePath } from "../fileDialog";
+  updateServer,
+} from "../api/api";
+import { pickFilePath } from "../api/fileDialog";
 import { testI18n } from "../testI18n";
-import type { KeyFileFactsDto, ServerDto, TestConnectionResult } from "../types";
+import type { KeyFileFactsDto, ServerDto, TestConnectionReport } from "../api/types";
 import { ServerForm } from "./ServerForm";
 
-vi.mock("../api", () => ({
-  // Spec 0069, Teil B (echte `code`-Extraktion für `runOllamaProbe`,
-  // s. `ServerList.test.tsx`) und Spec 0071 (echte `.message`-Extraktion
-  // für `KEYCHAIN_UNAVAILABLE`-artige Fehlerobjekte) — echte
-  // Implementierungen statt einer vereinfachten Attrappe.
-  commandErrorMessage: (err: unknown) =>
-    typeof err === "object" && err !== null && "message" in err
-      ? String((err as { message: unknown }).message)
-      : String(err),
-  commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err
-      ? ((err as { code: string | null }).code ?? null)
-      : null,
-  cancelConnect: vi.fn(() => Promise.resolve()),
-  clearServerSudoPassword: vi.fn(),
-  convertIdentityFileToKeychain: vi.fn(),
-  createServer: vi.fn(),
-  deleteServer: vi.fn(),
-  getServer: vi.fn(),
-  inspectKeyFile: vi.fn(),
-  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
-  largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
-  previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
-  requestNoteShrink: vi.fn(),
-  testConnection: vi.fn(),
-  trustHostKey: vi.fn(),
-  updateLocalServerNotes: vi.fn(),
-  updateLocalServerTags: vi.fn(),
-  updateServer: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    cancelConnect: vi.fn(() => Promise.resolve()),
+    clearServerSudoPassword: vi.fn(),
+    convertIdentityFileToKeychain: vi.fn(),
+    createServer: vi.fn(),
+    deleteServer: vi.fn(),
+    getServer: vi.fn(),
+    inspectKeyFile: vi.fn(),
+    listStoredHostKeys: vi.fn(() => Promise.resolve([])),
+    largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
+    previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
+    requestNoteShrink: vi.fn(),
+    testConnection: vi.fn(),
+    trustHostKey: vi.fn(),
+    updateLocalServerNotes: vi.fn(),
+    updateLocalServerTags: vi.fn(),
+    updateServer: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("../fileDialog", () => ({
+vi.mock("../api/fileDialog", () => ({
   pickAndReadTextFile: vi.fn(() => Promise.resolve(null)),
   pickFilePath: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("../riskSettings", () => ({
+vi.mock("../settings/riskSettings", () => ({
   loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
 }));
 
@@ -97,6 +88,9 @@ function serverDto(overrides: Partial<ServerDto> = {}): ServerDto {
     postIngestPolicy: "balanced",
     aiInjectionCheckEnabled: false,
     sftpServerPath: null,
+    elevationAllowed: true,
+    isCopy: false,
+    startDirectory: null,
     ...overrides,
   };
 }
@@ -138,12 +132,13 @@ function openTab(name: string) {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
-function authKindSelect(): HTMLSelectElement {
-  const select = screen
-    .getAllByRole("combobox")
-    .find((el) => within(el).queryByText("Private Key") !== null);
-  if (!select) throw new Error("Anmeldeart-Auswahl nicht gefunden");
-  return select as HTMLSelectElement;
+// The authentication choice is a segmented radio group (issue #1380).
+function selectAuthKind(kind: string) {
+  const radio = screen
+    .getAllByRole("radio")
+    .find((el) => (el as HTMLInputElement).value === kind);
+  if (!radio) throw new Error(`Anmeldeart-Option ${kind} nicht gefunden`);
+  fireEvent.click(radio);
 }
 
 const ED25519_HINT =
@@ -171,7 +166,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
+    selectAuthKind("privateKey");
 
     expect(screen.getByText(ED25519_HINT)).toBeInTheDocument();
   });
@@ -180,10 +175,10 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
+    selectAuthKind("privateKey");
     expect(screen.getByText(ED25519_HINT)).toBeInTheDocument();
 
-    fireEvent.change(authKindSelect(), { target: { value: "agent" } });
+    selectAuthKind("agent");
     expect(screen.queryByText(ED25519_HINT)).not.toBeInTheDocument();
   });
 
@@ -191,7 +186,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "certificate" } });
+    selectAuthKind("certificate");
 
     expect(screen.queryByText(ED25519_HINT)).not.toBeInTheDocument();
   });
@@ -269,6 +264,7 @@ describe("ServerForm — Löschen mit Rückständen (Spec 0071, A17)", () => {
     fireEvent.click(await screen.findByText("Server löschen"));
     fireEvent.click(await screen.findByText("Endgültig löschen"));
 
+    // wait-ok: the form calls onDeleted only in the branch without left-behind secrets, so the notice cannot appear later
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
     expect(screen.queryByTestId("secrets-left-behind")).not.toBeInTheDocument();
   });
@@ -306,7 +302,7 @@ describe("ServerForm — Verbindungstest ohne Schlüsseldatei-Pfad (issue #254)"
     });
 
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
@@ -334,7 +330,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     renderNewServerForm();
     openTab("Verbindung");
 
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
 
     expect(screen.getByPlaceholderText("~/.ssh/id_ed25519")).toBeInTheDocument();
     expect(screen.getByText("Datei wählen…")).toBeInTheDocument();
@@ -344,7 +340,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     vi.mocked(pickFilePath).mockResolvedValue(IDENTITY_PATH);
     renderNewServerForm();
     openTab("Verbindung");
-    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    selectAuthKind("identityFile");
 
     fireEvent.click(screen.getByText("Datei wählen…"));
 
@@ -369,7 +365,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: "/tmp/nope" },
       });
@@ -381,8 +377,10 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       // Der übersetzte, generische Text — NICHT der deutsche Backend-Fallback
       // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
       // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
+      // Issue #667: a missing file is shown as "not found on this device",
+      // with the path.
       expect(
-        screen.getByText("Schlüsseldatei auf diesem Gerät nicht gefunden."),
+        screen.getByText("Schlüsseldatei auf diesem Gerät nicht gefunden: /tmp/nope"),
       ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
@@ -403,7 +401,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -436,7 +434,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -482,7 +480,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -524,7 +522,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       });
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
       });
@@ -554,7 +552,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
       renderNewServerForm();
       openTab("Verbindung");
-      fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+      selectAuthKind("identityFile");
       const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
       fireEvent.change(input, { target: { value: IDENTITY_PATH } });
 
@@ -729,9 +727,10 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
 // ausblendet (hier per Inline-Style nachgebildet, `jsdom` kennt die
 // Tailwind-Klasse `hidden` nicht).
 describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () => {
-  const results: TestConnectionResult[] = [
+  const results: TestConnectionReport[] = [
     {
       kind: "hostKeyUnknown",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -740,6 +739,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
     {
       kind: "hostKeyMismatch",
+      steps: [],
       host: "example.invalid",
       port: 22,
       rawKey: [1, 2, 3],
@@ -749,7 +749,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     },
   ];
 
-  function dialogFor(result: TestConnectionResult) {
+  function dialogFor(result: TestConnectionReport) {
     const isMismatch = result.kind === "hostKeyMismatch";
     return {
       dialog: screen.getByRole(isMismatch ? "alertdialog" : "dialog"),
@@ -782,7 +782,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
   it.each(results)("$kind: Dialog bei offenem Formular sichtbar, fokussiert und außerhalb des Formulars", async (result) => {
     vi.mocked(testConnection).mockResolvedValue(result);
     renderInTabs(true);
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
@@ -813,14 +813,14 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
   });
 
   it.each(results)("$kind: Dialog bleibt sichtbar und fokussiert, wenn während des Tests ein anderer Tab aktiv wurde", async (result) => {
-    let resolveTest: (r: TestConnectionResult) => void = () => {};
+    let resolveTest: (r: TestConnectionReport) => void = () => {};
     vi.mocked(testConnection).mockImplementation(
-      () => new Promise<TestConnectionResult>((resolve) => {
+      () => new Promise<TestConnectionReport>((resolve) => {
         resolveTest = resolve;
       }),
     );
     const { switchTab } = renderInTabs(true);
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
     await waitFor(() => expect(testConnection).toHaveBeenCalled());
@@ -875,7 +875,7 @@ describe("ServerForm — step log of a test connection (issue #51)", () => {
         />
       </I18nextProvider>,
     );
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
@@ -915,8 +915,162 @@ describe("ServerForm — gespeicherte Host-Keys (Spec 0008)", () => {
   it("shows no host key area in the create form", async () => {
     renderNewServerForm();
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument();
     expect(screen.queryByText("Host-Keys")).not.toBeInTheDocument();
     expect(listStoredHostKeys).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #667: ask once whether to import a key file or keep the path.
+describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)", () => {
+  const NEW_PATH = "/home/deploy/.ssh/new_key";
+
+  async function renderEditWithNewPath(onSaved = vi.fn()) {
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    vi.mocked(convertIdentityFileToKeychain).mockResolvedValue(serverDto());
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    openTab("Verbindung");
+    selectAuthKind("identityFile");
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    return onSaved;
+  }
+
+  it("asks on save and imports the key when 'Schlüssel importieren' is chosen", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    expect(updateServer).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).toHaveBeenCalledWith(SERVER_ID);
+  });
+
+  it("saves exactly as before when 'Dateipfad behalten' is chosen", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Dateipfad behalten" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+  });
+
+  it("returns to the form without saving on cancel", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(updateServer).not.toHaveBeenCalled();
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("traps focus, closes on Escape like Cancel and returns focus to the save button", async () => {
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    const onSaved = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    openTab("Verbindung");
+    selectAuthKind("identityFile");
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
+    const saveButton = screen.getByRole("button", { name: "Speichern" });
+    saveButton.focus();
+    fireEvent.click(saveButton);
+
+    const dialog = await screen.findByRole("dialog");
+    const importButton = within(dialog).getByRole("button", { name: "Schlüssel importieren" });
+    await waitFor(() => expect(importButton).toHaveFocus());
+    const buttons = within(dialog).getAllByRole("button");
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    expect(last).toBe(importButton);
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(updateServer).not.toHaveBeenCalled();
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText("~/.ssh/id_ed25519")).toHaveValue(NEW_PATH);
+    await waitFor(() => expect(saveButton).toHaveFocus());
+  });
+
+  it("does not ask when the key-file path is unchanged", async () => {
+    vi.mocked(getServer).mockResolvedValue(
+      serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    const onSaved = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "web-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open and does not save twice when the import fails", async () => {
+    const onSaved = await renderEditWithNewPath();
+    vi.mocked(convertIdentityFileToKeychain).mockRejectedValueOnce({
+      code: "KEY_FILE_INVALID_KEY",
+      message: "x",
+    });
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).toHaveBeenCalledTimes(2);
   });
 });

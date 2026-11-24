@@ -43,6 +43,16 @@ Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
 - A1.4 Der Schalter steht im Einstellungsbereich des Risiko-Klassifizierers und
   lässt sich unabhängig davon bedienen, ob die Zweitmeinung an ist. Die Texte
   gibt es auf Deutsch und Englisch.
+- A1.5 Der Wert wird ausschließlich vom Backend geschrieben, nicht von der
+  Oberfläche direkt in die Einstellungsdatei. Das Lesen ändert sich nicht
+  (A1.2 gilt unverändert).
+- A1.6 Während der Schalter speichert, behält er den Fokus und ignoriert
+  weitere Umschaltungen (er ist als nicht bedienbar gekennzeichnet und
+  abgedunkelt). Schlägt das Speichern fehl, zeigt er wieder den bisherigen
+  Wert, und eine Fehlermeldung erscheint. Dasselbe gilt für den
+  Zweitmeinungs-Schalter und seine Anbieter-Auswahl: Schlägt das Speichern
+  fehl, zeigen beide wieder den bisherigen Wert (Schalter und Anbieter), der
+  Fokus bleibt auf dem Bedienelement, und eine Fehlermeldung erscheint.
 
 **A2 — Eskalation bei regelbasiertem Rot**
 
@@ -67,7 +77,7 @@ Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
   wird die Aktion **nicht** automatisch ausgeführt, sondern wie ein `Confirm`
   mit `FILTER_RED_RISK_REQUIRES_CONFIRM` behandelt: gleiche Wartezeit, gleiche
   Abbruchlogik, gleicher Hinweis am Hintergrund-Tab und gleiche
-  Ledger-Einträge (bestätigt/abgelehnt, mit Code) wie bei jedem anderen
+  Aktivitäts-Ereignisse (bestätigt/abgelehnt, mit Code) wie bei jedem anderen
   `Confirm`.
 - A3.2 Die Oberfläche erfährt die geänderte Entscheidung über ein eigenes
   Ereignis, das nach der Aktualisierung der Einstufung gesendet wird. Die
@@ -99,9 +109,9 @@ Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
   wird nur gelesen (A2.3).
 - **Anzeige des Grunds:** Der Dialog zeigt wie bei allen bekannten Codes den
   festen übersetzten Text zum Code. Die rote Achse samt Musterbegründung steht
-  im Grund für Ledger und KI-Kontext; im Dialog sieht der Nutzer sie am Badge.
+  im Grund für Aktivitäts-Ereignisse und KI-Kontext; im Dialog sieht der Nutzer sie am Badge.
 - **Grund im Fall A3:** Er nennt nur die rote Achse, nicht die Begründung der
-  KI-Zweitmeinung. Der Grund wird unredigiert im Ledger gespeichert, und der
+  KI-Zweitmeinung. Der Grund geht unredigiert an die Beobachter, und der
   Modelltext kann Teile des Kommandos zitieren, etwa ein Passwort. Der Text
   der Zweitmeinung (`risk-assessment-updated`) wird nur angezeigt, nicht
   gespeichert und nicht als HTML gerendert.
@@ -157,8 +167,8 @@ Hard-Blacklist noch an Secret-Pfad oder `sftp-server` hängen.
 | T8 | MCP, rot | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
 | T8b | `sudo <rotes Kommando>`, Allow-Regel auf die Form ohne `sudo`, kein gespeichertes Passwort | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
 | T9 | Datei lesen auf einen rot eingestuften Pfad, der kein Secret-Pfad ist | Code `FILTER_RED_RISK_REQUIRES_CONFIRM` |
-| T10 | Zweitmeinung (Mock) hebt Gelb auf Rot, an | keine Ausführung; Ereignis nach der Aktualisierung der Einstufung; Bestätigen führt genau einmal aus; Ledger „bestätigt" mit Code |
-| T11 | wie T10, Ablehnen | keine Ausführung, „frühere Ablehnung" gesetzt, Ledger „abgelehnt" |
+| T10 | Zweitmeinung (Mock) hebt Gelb auf Rot, an | keine Ausführung; Ereignis nach der Aktualisierung der Einstufung; Bestätigen führt genau einmal aus; Ereignis „bestätigt" mit Code |
+| T11 | wie T10, Ablehnen | keine Ausführung, „frühere Ablehnung" gesetzt, Ereignis „abgelehnt" |
 | T12 | wie T10, Einstellung aus | Ausführung wie sonst, kein neues Ereignis |
 | T13 | Zweitmeinung hebt nur auf Gelb, an | Ausführung, kein neues Ereignis |
 | T14 | wie T10, Stopp während der Zweitmeinung | übersprungen, kein Dialog |
@@ -168,4 +178,5 @@ Hard-Blacklist noch an Secret-Pfad oder `sftp-server` hängen.
 | U1 | Oberfläche: Karte erhält das Ereignis | zeigt Dialog mit übersetztem Text; Klick sendet die Antwort |
 | U2 | Oberfläche: Hintergrund-Tab erhält das Ereignis | Hinweis auf wartende Aktion; Tab schließen lehnt genau diese Aktion ab |
 | U3 | Oberfläche: Schalter — Wert fehlt / `false` / kein boolescher Wert | an / aus / an, wie im Backend (A1.2) |
+| U3a | Oberfläche: Schalter während des Speicherns / Speichern schlägt fehl | Fokus bleibt, weitere Umschaltung ignoriert; bei Fehler bisheriger Wert und Fehlermeldung (auch Zweitmeinungs-Schalter und Anbieter-Auswahl) |
 | U4 | Sprachdateien de/en enthalten den neuen Code | Parität |

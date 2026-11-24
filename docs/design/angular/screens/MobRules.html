@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Mobile – Filter rules</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--on-accent:#041015;--danger:#f04848;--danger-fg:#ff8a85;--danger-subtle:#2a0d0e;--danger-border:#5c1c1d;--warning-fg:#ffc266;--warning-border:#5a3e0e;--success-fg:#7be5ae;--success-border:#175536;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.mono{font-family:"JetBrains Mono",monospace}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border:1px solid var(--border-strong);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.rc{display:flex;align-items:stretch;border-bottom:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 390px; height: 844px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <button type="button" aria-label="Open navigation menu" style="width: 44px; height: 44px; background: transparent; border: 0; color: var(--fg-soft); display: flex; align-items: center; justify-content: center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16 M4 12h16 M4 18h16"></path></svg></button>
+    <span class="h" style="font-size: 16px; color: var(--fg-strong)">Filter Rules</span>
+  </header>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+    <h1 class="h" style="margin: 0; font-size: 22px; font-weight: 700; color: var(--fg-strong); flex: 1">Rules</h1>
+    <button type="button" style="height: 40px; padding: 0 12px; border: 1px solid var(--border-strong); background: transparent; color: var(--fg-soft); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase">Test Rules</button>
+    <button type="button" style="height: 40px; padding: 0 12px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase">+ Rule</button>
+  </div>
+  <div style="flex: 1; overflow: hidden; border-top: 1px solid var(--border)">
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">20</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">systemctl restart *</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--warning-border); color: var(--warning-fg)"><span style="width: 7px; height: 7px; background: var(--warning-fg)"></span>Confirm</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Server: web-01</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">glob</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">10</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">psql -c *DROP*</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--danger-border); color: var(--danger-fg)"><span style="width: 7px; height: 7px; background: var(--danger-fg)"></span>Deny</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Tag: production</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">glob</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">5</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">^kubectl (get|describe) </div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success-fg)"></span>Allow</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Tag: k8s</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">regex</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">0</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">systemctl status *</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success-fg)"></span>Allow</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Global</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">glob</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">0</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">tail -n * /var/log/*</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success-fg)"></span>Allow</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Global</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">glob</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">0</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">df *</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success-fg)"></span>Allow</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Global</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">glob</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+      <div class="rc">
+        <div style="width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-sunken)">
+          <span class="mono" style="font-size: 13px; color: var(--fg-soft)">0</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint)">prio</span>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div class="mono" style="font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">docker ps</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span style="width: 7px; height: 7px; background: var(--success-fg)"></span>Allow</span>
+            <span style="font-size: 13px; color: var(--fg-subtle)">Server: web-02</span>
+            <span class="mono" style="margin-left: auto; font-size: 11px; color: var(--fg-faint)">exact</span>
+          </div>
+        </div>
+        <button type="button" aria-label="Edit rule" style="width: 44px; flex: none; background: transparent; border: 0; border-left: 1px solid var(--border); color: var(--fg-faint)"><svg class="ico" viewBox="0 0 24 24" style="width: 16px; height: 16px" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+      </div>
+    
+    <div style="margin: 14px 12px; border: 1px solid var(--danger-border); background: var(--danger-subtle); padding: 12px">
+      <div style="display: flex; align-items: center; gap: 8px"><svg class="ico" viewBox="0 0 24 24" style="color: var(--danger)" aria-hidden="true"><path d="M5 11h14v10H5z M8 11V6l2-3h4l2 3v5 M12 15v2"></path></svg><span class="h" style="font-size: 15px; color: var(--danger-fg)">Hard Blacklist</span><span style="margin-left: auto; font-size: 12px; color: var(--fg-muted)">8 entries</span></div>
+      <div style="font-size: 13px; color: var(--fg-muted); margin-top: 4px">Always applies, regardless of user rules.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

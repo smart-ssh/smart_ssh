@@ -61,8 +61,8 @@ smart_ssh/
 │   └── smart-ssh-community/   # Dünnes Tauri-v2-Binary: app_shell::run(Wiring::community())
 │       └── frontend/          # React 19, TypeScript, Tailwind CSS, xterm.js
 ├── docs/
-│   ├── adr/                   # Architecture Decision Records (0001–0019)
-│   └── specs/                 # Feature-Spezifikationen (0001–0014)
+│   ├── adr/                   # Architecture Decision Records
+│   └── specs/                 # Feature-Spezifikationen
 └── .github/workflows/         # CI
 ```
 
@@ -137,8 +137,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 - [Threat Model](THREAT-MODEL.md) – Was die KI sieht und nie sieht, Grenzen der Redaction, Datenablage und Verschlüsselung, Netzwerkverbindungen, Bestätigungsgrenzen und bekannte Restrisiken
 - [Datenpfade](docs/datenpfade.md) – Wo Smart SSH Datenbank, Logs, Host-Keys und Einstellungen je Plattform ablegt
 - [Entwickler- & Release-Guide](README_DEV.md) – Versionsverwaltung, Release-Workflow und GitHub Secrets
-- [Feature-Spezifikationen](docs/specs/README.md) – Detaillierte Spezifikationen (Specs 0001–0014)
-- [Architecture Decision Records (ADRs)](docs/adr/README.md) – Dokumentation aller Architekturentscheidungen (ADR 0001–0019)
+- [Feature-Spezifikationen](docs/specs/INDEX.md) – Übersicht aller Specs mit Status und Zweck
+- [Architecture Decision Records (ADRs)](docs/adr/INDEX.md) – Übersicht aller Architekturentscheidungen
 
 ---
 

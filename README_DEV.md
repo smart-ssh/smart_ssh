@@ -54,7 +54,7 @@ git push origin main --tags
 
 ## 3. Continuous Integration
 
-This repository's CI only runs the checks (`community.yml`, below). It does
+This repository's CI only runs the checks (`.github/workflows/community.yml`, below). It does
 not build or publish release artifacts. Version bump, changelog and tagging
 stay as described in section 2.
 
@@ -144,7 +144,7 @@ documented Tauri fix) only affects `tauri build`'s bundler signing step,
 not `tauri dev`, which never invokes the bundler on macOS at all — see
 [`docs/adr/0022-stable-dev-code-signature.md`](docs/adr/0022-stable-dev-code-signature.md)
 for the full investigation and empirical verification. On Windows/Linux,
-`tauri-dev.sh` just runs plain `cargo tauri dev` (this problem is
+`scripts/tauri-dev.sh` just runs plain `cargo tauri dev` (this problem is
 macOS-specific).
 
 **How to verify it's working**: run `./scripts/tauri-dev.sh`, make a
@@ -165,7 +165,7 @@ Release builds distributed as the Official Edition are signed with a
 Developer ID Application certificate and notarized by Apple — separate
 from, and unrelated to, the dev-signing setup in section 5 above (that
 one only stabilizes `cargo tauri dev`'s ad-hoc signature; it never
-touches `bundle.macOS` in `tauri.conf.json`, so the two coexist without
+touches `bundle.macOS` in `apps/smart-ssh-community/tauri.conf.json`, so the two coexist without
 interference, see
 [`docs/adr/0022-stable-dev-code-signature.md`](docs/adr/0022-stable-dev-code-signature.md)).
 
@@ -173,7 +173,7 @@ interference, see
 their own Apple Developer account credentials — a plain `cargo tauri
 build` from a fresh clone, with none of the environment variables below
 set, still produces an unsigned Community-Edition-equivalent bundle. The
-checked-in `tauri.conf.json` deliberately does not hardcode a
+checked-in `apps/smart-ssh-community/tauri.conf.json` deliberately does not hardcode a
 `signingIdentity` (that value is specific to one developer's
 certificate) — it comes exclusively from the `APPLE_SIGNING_IDENTITY`
 environment variable below, which `tauri-cli` always prefers over any
@@ -201,14 +201,14 @@ cargo tauri build
 ```
 
 (`cargo tauri build` must run from `apps/smart-ssh-community` — that's where
-`tauri.conf.json` and the `Cargo.toml` `tauri` dependency live, same as
+`apps/smart-ssh-community/tauri.conf.json` and the `Cargo.toml` `tauri` dependency live, same as
 `./scripts/tauri-dev.sh`/`cargo tauri dev` in section 5.)
 
 `cargo tauri build` builds the frontend, compiles the release binary,
 bundles the `.app`/`.dmg`, signs it with the Developer ID identity from
 `APPLE_SIGNING_IDENTITY` (entitlements from
 [`apps/smart-ssh-community/entitlements.plist`](./apps/smart-ssh-community/entitlements.plist),
-Hardened Runtime enabled — both configured in `tauri.conf.json`'s
+Hardened Runtime enabled — both configured in `apps/smart-ssh-community/tauri.conf.json`'s
 `bundle.macOS`), then submits it to Apple's notarization service using
 the App Store Connect API key credentials and staples the resulting
 ticket onto the bundle.

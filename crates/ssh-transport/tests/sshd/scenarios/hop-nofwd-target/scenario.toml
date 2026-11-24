@@ -1,0 +1,4 @@
+image = "openssh-current"
+hostname = "hop-nofwd-target"
+networks = ["hop-nofwd-net"]
+publish = false

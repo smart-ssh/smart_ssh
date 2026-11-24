@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Navigasi utama",
     "connect": "Hubungkan",
     "manage": "Kelola",
     "rules": "Aturan Filter"
@@ -30,8 +31,13 @@
     "emptyStateTitle": "Belum ada server yang ditambahkan",
     "emptyStateHint": "Tambahkan server pertama Anda untuk terhubung melalui SSH.",
     "emptyStateCreateFirstServer": "Tambah server pertama",
-    "newServerInGroup": "Server baru di grup \"{{name}}\"",
-    "emptyStateTryLocalhost": "Coba tanpa server: \"Localhost\" di atas membuka sesi di komputer ini — dengan konfirmasi yang sama seperti pada server sungguhan."
+    "emptyStateTryLocalhost": "Coba tanpa server: \"Localhost\" di atas membuka sesi di komputer ini — dengan konfirmasi yang sama seperti pada server sungguhan.",
+    "localBadge": "Lokal",
+    "thisDevice": "perangkat ini",
+    "sessionOpen": "Sesi terbuka",
+    "sessionPending": "Menunggu konfirmasi",
+    "sessionDisconnected": "Sesi terputus",
+    "sessionReconnecting": "Menghubungkan ulang"
   },
   "settings": {
     "title": "Pengaturan",
@@ -49,6 +55,13 @@
       "dataAndBackup": "Data dan cadangan"
     }
   },
+  "appearance": {
+    "heading": "Tampilan",
+    "language": "Bahasa",
+    "system": "Ikuti sistem",
+    "light": "Terang",
+    "dark": "Gelap"
+  },
   "about": {
     "version": "Versi",
     "copyHint": "Salin ke papan klip",
@@ -57,6 +70,7 @@
     "copyFailed": "Gagal menyalin — teks dapat dipilih secara manual.",
     "loadFailed": "Tidak dapat memuat informasi versi/build.",
     "buildDev": "Build pengembangan",
+    "dataDirMarker": "Direktori data: {{path}}",
     "buildRelease": "Build rilis",
     "thirdPartyLicenses": {
       "openButton": "Lisensi pihak ketiga",
@@ -79,6 +93,7 @@
       "no_session_bus": "tidak tersedia — tidak ada D-Bus session bus yang dapat dijangkau. Langkah berikutnya: `sudo apt install dbus-user-session`, lalu masuk kembali.",
       "no_secret_service_provider": "tidak tersedia — tidak ada penyedia Secret Service yang berjalan. Langkah berikutnya: `sudo apt install gnome-keyring`, lalu masuk kembali — ini juga berlaku di KDE. Jika Anda sudah memakai KWallet (`kwallet6`) atau KeePassXC: integrasi Secret Service-nya harus berjalan atau diaktifkan; menginstalnya saja tidak cukup.",
       "locked": "tidak tersedia — ada tetapi terkunci. Langkah berikutnya: buka kuncinya dan mulai ulang Smart SSH. Tidak ada paket yang kurang.",
+      "no_keystore": "tidak tersedia — Android Keystore tidak tersedia. Langkah berikutnya: gunakan kata sandi utama; rahasia Anda tetap berada di basis data terenkripsi.",
       "unknown": "tidak tersedia — penyebab tidak diketahui. Langkah berikutnya: periksa apakah penyedia Secret Service berjalan dan tidak terkunci (gnome-keyring, atau KWallet atau KeePassXC dengan integrasi Secret Service diaktifkan), lalu mulai ulang Smart SSH."
     },
     "keychainBlocked": "Ini tidak memengaruhi rahasia Anda — kunci API, kata sandi server, frasa sandi, dan kata sandi sudo disimpan di basis data terenkripsi, bukan di keychain.",
@@ -91,8 +106,10 @@
       "hostKeys": "Kunci host",
       "wrappingFile": "Berkas kunci kata sandi utama",
       "mcpSettings": "Pengaturan MCP",
+      "speechModels": "Model suara",
       "sessions": "Sesi",
       "sessionsInDatabase": "disimpan di basis data",
+      "keychainService": "Layanan keychain",
       "copy": "Salin",
       "copied": "Jalur disalin",
       "copyFailed": "Penyalinan gagal:",
@@ -126,11 +143,15 @@
     "importSshConfig": "Impor …",
     "importSshConfigHint": "Impor server dari berkas ssh_config OpenSSH",
     "exportSshConfig": "Ekspor …",
-    "exportSshConfigHint": "Ekspor server ke ssh_config OpenSSH"
+    "exportSshConfigHint": "Ekspor server ke ssh_config OpenSSH",
+    "title": "Server",
+    "collapseGroup": "Ciutkan grup “{{name}}”",
+    "expandGroup": "Bentangkan grup “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Lepas di sini untuk memindahkan ke tingkat teratas (tanpa grup)",
     "hintRoot": "→ tingkat teratas (tanpa grup)",
+    "current": "saat ini",
     "hintGroup": "→ pindahkan ke grup ini",
     "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
     "moveTo": "Pindahkan “{{name}}” ke…"
@@ -267,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Ini juga menghapus permanen riwayat obrolan, catatan, dan tag server ini.",
     "confirmDeleteServer": "Hapus permanen",
     "testResult": {
-      "success": "✓ Koneksi berhasil",
-      "authFailed": "✗ Login ditolak. Periksa nama pengguna dan kata sandi atau kunci.",
+      "success": "Koneksi berhasil",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Login ditolak. Periksa nama pengguna dan kata sandi atau kunci.",
       "hostKeyUnknown": "Kunci host tidak dikenal — konfirmasi diperlukan",
-      "hostKeyMismatch": "⚠ Kunci host telah berubah",
-      "networkError": "✗ Kesalahan jaringan: {{message}}",
-      "timeout": "✗ Server tidak merespons. Periksa alamat, port, dan firewall."
+      "hostKeyMismatch": "Kunci host telah berubah",
+      "networkError": "Kesalahan jaringan: {{message}}",
+      "timeout": "Server tidak merespons. Periksa alamat, port, dan firewall."
     },
     "largeNoteHint": "Catatan ini sangat besar dan dapat dipersingkat untuk konteks AI selama sesi panjang. Catatan yang tersimpan tetap utuh.",
     "summarizeNow": "Ringkas sekarang",
@@ -281,6 +303,8 @@
     "sftpServerPathLabel": "Jalur ke sftp-server (akses berkas dengan hak tinggi)",
     "sftpServerPathPlaceholder": "Otomatis",
     "sftpServerPathHint": "Hanya diperlukan jika deteksi otomatis gagal untuk penjelajah berkas dengan hak tinggi, mis. /usr/lib/openssh/sftp-server. Kosong = otomatis.",
+    "elevationAllowedLabel": "Izinkan hak akses tinggi di penjelajah berkas",
+    "elevationAllowedHint": "Jika nonaktif, penjelajah berkas tidak menawarkan hak akses tinggi untuk server ini.",
     "startDirectoryLabel": "Direktori awal (terminal dan penjelajah berkas)",
     "startDirectoryPlaceholder": "Direktori home",
     "startDirectoryHint": "Jalur absolut (/…) atau jalur yang diawali ~/. Terminal berpindah ke sana dengan cd yang terlihat, penjelajah berkas terbuka di sana. Perintah AI selalu berjalan di direktori home. Kosong = direktori home.",
@@ -294,6 +318,13 @@
       "connection": "Koneksi",
       "security": "Keamanan",
       "invalid": "Berisi kesalahan"
+    },
+    "importKey": {
+      "title": "Impor kunci ke Smart SSH?",
+      "import": "Impor kunci",
+      "keep": "Pertahankan jalur berkas",
+      "importHint": "Kunci disimpan terenkripsi di Smart SSH dan ikut tersalin lewat cadangan ke perangkat Anda yang lain.",
+      "keepHint": "Hanya jalur berkas yang disimpan dan ikut ke perangkat lain. Berkas harus ada di jalur yang sama di setiap perangkat."
     }
   },
   "filterRules": {
@@ -337,10 +368,13 @@
     "matchedRuleLabel": "Aturan:",
     "segmentLabel": "Segmen {{index}}",
     "checksLabel": "Pemeriksaan:",
-    "hardBlacklistLabel": "Daftar hitam keras:"
+    "hardBlacklistLabel": "Daftar hitam keras:",
+    "invalidPattern": "Pola tidak valid",
+    "rowActions": "Tindakan baris",
+    "ruleCount_other": "{{count}} aturan"
   },
   "actionCard": {
-    "autoContinuationLimitReached": "Kelanjutan otomatis dijeda setelah {{limit}} langkah — kirim pesan untuk melanjutkan.",
+    "autoContinuationLimitReached": "Kelanjutan otomatis dijeda setelah {{limit}} langkah tanpa konfirmasi Anda — kirim pesan untuk melanjutkan.",
     "aiBudgetWaiting": "Menunggu anggaran AI — percobaan berikutnya dalam {{seconds}} dtk…",
     "suggestCommand": "Sarankan perintah",
     "generateDocument": "Buat dokumen: {{title}}",
@@ -354,8 +388,12 @@
     "blocked": "diblokir",
     "rejected": "ditolak",
     "rejectedByUser": "Ditolak oleh pengguna.",
-    "usesStoredSudoPassword": "🔑 Dijalankan dengan kata sandi sudo yang tersimpan.",
-    "writeMayUseStoredSudoPassword": "🔑 Jika izin tulis tidak ada, aplikasi menulis menggunakan kata sandi sudo yang tersimpan (sudo).",
+    "expired": "kedaluwarsa",
+    "discardedAfterReconnect": "Dibuang setelah koneksi dibuat ulang. Tidak ada yang dijalankan.",
+    "expiredTimeout": "Tidak dijawab tepat waktu dan dibuang. Tidak ada yang dijalankan.",
+    "expiredUnknown": "Permintaan ini tidak lagi tertunda. Tidak ada yang dijalankan.",
+    "usesStoredSudoPassword": "Dijalankan dengan kata sandi sudo yang tersimpan.",
+    "writeMayUseStoredSudoPassword": "Jika izin tulis tidak ada, aplikasi menulis menggunakan kata sandi sudo yang tersimpan (sudo).",
     "takeIntoNote": "Masukkan ke catatan",
     "takeIntoNoteFailed": "Gagal — coba lagi",
     "riskServerLabel": "Server",
@@ -365,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "Opini kedua AI tidak dapat diperoleh. Risiko yang ditampilkan berdasarkan aturan.",
     "riskHint": "Penilaian berdasarkan pola yang dikenal — tanpa jaminan.",
     "runningSince": "berjalan selama {{seconds}} dtk…",
+    "exitCode": "kode keluar: {{code}}",
     "waitingForInputHint": "Perintah ini kemungkinan menunggu input. Hentikan, lalu AI akan mengusulkan varian non-interaktif.",
     "cancelCommand": "Putuskan perintah ini",
     "cancellingCommand": "Memutuskan…",
-    "commandCancelledNotice": "⚠ Dibatalkan secara manual — keluaran mungkin tidak lengkap, tanpa kode keluar normal.",
-    "commandTruncatedNotice": "⚠ Keluaran dipotong pada batas ukuran — mungkin tidak lengkap.",
+    "commandCancelledNotice": "Dibatalkan secara manual — keluaran mungkin tidak lengkap, tanpa kode keluar normal.",
+    "commandTruncatedNotice": "Keluaran dipotong pada batas ukuran — mungkin tidak lengkap.",
     "liveOutputLabel": "Keluaran langsung",
-    "liveOutputTruncatedNotice": "⚠ Batas ukuran tercapai — keluaran selanjutnya tidak lagi ditampilkan.",
+    "liveOutputTruncatedNotice": "Batas ukuran tercapai — keluaran selanjutnya tidak lagi ditampilkan.",
     "autoRanLead": "Dijalankan otomatis",
     "autoRanRule": "aturan",
     "autoRanScopeGlobal": "global",
@@ -386,17 +425,15 @@
     "editableCommand": "Perintah — dapat diubah",
     "execute": "Jalankan",
     "deny": "Tolak",
-    "quickRule": "Terima + Aturan",
-    "quickRuleDropdownAria": "Tampilkan saran aturan",
-    "newRulePatternHeading": "Pola untuk aturan izin baru",
     "scopeThisServer": "Server Ini",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
     "tagNamePlaceholder": "Nama tag",
     "loadingSuggestions": "Memuat saran…",
     "noSuggestions": "Tidak ada saran.",
-    "binaryFileHint": "⚠ Berkas biner — perbandingan teks tidak memungkinkan. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Konten terlalu besar untuk diff per baris. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
+    "binaryFileHint": "Berkas biner — perbandingan teks tidak memungkinkan. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
+    "fileTooLargeHint": "Berkas lebih besar dari {{limit}}, tanpa perbandingan teks. Ukuran baru: {{newSize}}.",
+    "diffTooLargeHint": "Konten terlalu besar untuk diff per baris. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
     "noContentChange": "(tidak ada perubahan konten)",
     "quickRuleLabel": {
       "exact": "Persis: {{patterns}}",
@@ -414,10 +451,25 @@
       "blocked": "selalu bertanya, apa pun aturannya: {{reasons}}",
       "verdictAuto": "berjalan otomatis lain kali",
       "verdictAsk": "tetap akan bertanya: {{reasons}}",
-      "notice": "Aturan dibuat. Perintah ini tetap akan bertanya lain kali: {{reasons}}",
       "reasonOther": "pemeriksaan keamanan lain",
-      "loadFailed": "Cakupan aturan tidak dapat dimuat"
+      "loadFailed": "Cakupan aturan tidak dapat dimuat",
+      "summaryHeading": "Sudah diizinkan",
+      "toDecideHeading": "Masih perlu diputuskan",
+      "expandAria": "Saran aturan untuk {{segment}}",
+      "stagedBadge": "belum disimpan",
+      "removeStaged": "Hapus",
+      "saveRules": "Simpan aturan ({{count}})",
+      "saveFailed": "Aturan tidak dapat disimpan: {{message}}",
+      "unsavedHint": "Aturan belum disimpan: {{count}}",
+      "segmentCovered": "mencakup bagian ini; perintah tetap akan bertanya: {{reasons}}"
     }
+  },
+  "authPrompt": {
+    "title": "Login di {{hop}}",
+    "password": "Kata sandi",
+    "submit": "Masuk",
+    "notStored": "Server meminta informasi ini untuk login. Informasi tidak disimpan.",
+    "expired": "Permintaan login kedaluwarsa. Koneksi tidak dibuat."
   },
   "hostKeyDialog": {
     "mismatchLabel": "Peringatan Keamanan · Kunci Host Berubah",
@@ -426,6 +478,7 @@
     "mismatchBodyAfterHost": "  menyajikan kunci yang berbeda dari yang tersimpan sebelumnya. Ini dapat menandakan serangan man-in-the-middle. Lanjutkan hanya jika Anda yakin kunci server berubah secara sah (mis. instalasi ulang server).",
     "known": "Dikenal",
     "offeredNow": "Ditawarkan Sekarang",
+    "offered": "Ditawarkan",
     "keyType": "Jenis kunci",
     "cancelConnection": "Batalkan Koneksi",
     "trustAnyway": "Tetap Percayai",
@@ -438,13 +491,16 @@
   },
   "sessionTabs": {
     "newSession": "Sesi baru",
-    "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
     "menu": {
       "open": "Buka menu navigasi",
       "title": "Menu navigasi",
-      "sessions": "Sesi terbuka"
+      "sessions": "Sesi terbuka",
+      "close": "Tutup menu navigasi",
+      "needsConfirmation": "Perlu konfirmasi",
+      "activities": "Aktivitas",
+      "activitiesRunning_other": "{{count}} berjalan"
     },
     "mcp": {
       "badge": "MCP",
@@ -453,10 +509,11 @@
       "pendingBadge": "Perlu konfirmasi",
       "readOnlyHint": "Sesi ini milik alat eksternal (MCP). Sesi hanya menampilkan tindakan alat yang perlu dikonfirmasi atau ditolak beserta hasilnya; tidak ada input obrolan atau terminal di sini. Menutupnya mengakhiri sesi MCP dan menolak konfirmasi yang tertunda."
     },
-    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak."
+    "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak.",
+    "pendingBadge": "Tertunda",
+    "newConnection": "Koneksi baru"
   },
   "aiProvider": {
-    "title": "Penyedia AI",
     "openLogs": "Buka log diagnostik di pengelola berkas",
     "noProviders": "Belum ada penyedia yang dikonfigurasi.",
     "configuredProvidersTitle": "Penyedia yang dikonfigurasi",
@@ -476,16 +533,16 @@
     "apiKeyFormatHint": "Tidak tampak seperti kunci {{providerLabel}} – diharapkan awalan seperti \"{{expectedPrefix}}\". Anda tetap dapat menyimpannya; penyedia kadang mengubah format.",
     "testCredentials": "Uji kredensial",
     "testingCredentials": "Menguji…",
-    "testResultValid": "✓ Kredensial valid",
-    "testResultAuthFailed": "✗ Autentikasi gagal – periksa kunci API",
-    "testResultUnreachable": "✗ Penyedia tidak dapat dijangkau: {{message}}",
+    "testResultValid": "Kredensial valid",
+    "testResultAuthFailed": "Autentikasi gagal – periksa kunci API",
+    "testResultUnreachable": "Penyedia tidak dapat dijangkau: {{message}}",
     "testResultRateLimited": "Kredensial tampak valid, tetapi penyedia sedang membatasi laju saat ini. Uji lagi dalam semenit.",
     "nativeToolCalling": "Mendukung pemanggilan alat bawaan",
     "discoverModels": "Muat model",
     "discoveringModels": "Memuat model…",
     "modelDiscoveryFailedHint": "Tidak dapat memuat model secara otomatis — masukkan nama model secara manual.",
     "modelDiscoveryEmptyHint": "Penyedia tidak mengembalikan model. Masukkan nama model secara manual.",
-    "modelDiscoveryAuthFailed": "✗ Penyedia menolak kredensial ini – periksa kunci API",
+    "modelDiscoveryAuthFailed": "Penyedia menolak kredensial ini – periksa kunci API",
     "advanced": "Lanjutan",
     "extraHeadersLabel": "Header tambahan",
     "extraHeadersHint": "Dilampirkan pada setiap permintaan ke penyedia ini (mis. HTTP-Referer/X-Title dari OpenRouter).",
@@ -528,6 +585,7 @@
     "ollamaProbeRetry": "Cari lagi",
     "ollamaProbeNotFoundHeading": "Ollama lokal tidak ditemukan (port default 11434).",
     "ollamaProbeNotFoundInstructions": "Instal Ollama dari ollama.com, jalankan, dan muat model (mis. `ollama pull llama3`), lalu cari lagi.",
+    "typeLabel": "Jenis",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -592,6 +650,8 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Kemungkinan upaya menyisipkan instruksi melalui konten server terdeteksi – memerlukan konfirmasi",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Diminta melalui MCP – selalu memerlukan konfirmasi",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Menggunakan kata sandi sudo yang tersimpan – selalu memerlukan konfirmasi",
+    "FILTER_RULES_UNAVAILABLE": "Aturan filter tidak dapat dimuat – tidak ada yang dijalankan otomatis, perlu konfirmasi",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Menyisipkan nilai rahasia yang tersimpan sebelum dikirim – selalu memerlukan konfirmasi",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Membaca berkas berisi kredensial (mis. kunci SSH, .env, /etc/shadow) – selalu memerlukan konfirmasi",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Tindakan sebelumnya dalam respons ini ditolak – memerlukan konfirmasi",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Memulai sftp-server (dengan sudo: akses berkas dengan hak root) – selalu memerlukan konfirmasi",
@@ -601,6 +661,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Pemeriksaan instruksi yang disisipkan tidak dapat dijalankan (masalah penyedia AI). Tindakan berikutnya yang diusulkan memerlukan konfirmasi.",
     "AI_INJECTION_CHECK_INACTIVE": "Pemeriksaan instruksi yang disisipkan diaktifkan untuk server ini tetapi tidak aktif di sesi ini (opini kedua AI nonaktif atau tidak dapat disiapkan). Aktifkan opini kedua di pengaturan dan hubungkan ulang.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Opini kedua AI diaktifkan tetapi tidak dapat disiapkan untuk sesi ini (penyedia dihapus atau kredensial tidak ditemukan). Perintah tidak diperiksa olehnya – perbaiki pengaturan dan hubungkan ulang.",
+    "REDACTION_INCOMPLETE": "Beberapa nilai rahasia server ini tidak dapat dimuat; nilai tersebut mungkin tidak disamarkan dalam apa yang dikirim ke AI.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Tag server saat ini tidak dapat dibaca – memerlukan konfirmasi",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko dinilai merah, atau tidak dapat dinilai dengan andal (mis. terlalu panjang) – selalu memerlukan konfirmasi",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Pembaruan catatan selalu memerlukan konfirmasi",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Penulisan berkas selalu memerlukan konfirmasi",
@@ -638,7 +700,13 @@
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
     "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
     "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
-    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada"
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Penyedia AI yang dipilih belum dikonfigurasi. Pilih penyedia yang sudah dikonfigurasi.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Pilih penyedia AI sebelum mengaktifkan opini kedua tentang risiko.",
+    "CHAT_SESSION_NOT_FOUND": "Obrolan tersimpan ini sudah tidak ada. Pilih Coba lagi untuk terhubung secara normal tanpa melanjutkannya.",
+    "SESSION_NOT_FOUND": "Sesi ini tidak lagi terbuka. Buka lagi dari daftar server.",
+    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Berkas kunci tidak ditemukan di perangkat ini",
+    "SSH_NO_COMMON_ALGORITHM": "Tidak ada algoritma SSH yang sama dengan server. Perangkat lunak SSH-nya terlalu lama atau terlalu ketat. Perbarui atau aktifkan algoritma modern."
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",
@@ -716,13 +784,17 @@
     "openedLocally": "“{{name}}” dibuka secara lokal — perubahan akan ditawarkan untuk diunggah",
     "openLocallyFailed": "“{{name}}” tidak dapat dibuka secara lokal: {{reason}}",
     "editUploaded": "Perubahan pada “{{name}}” diunggah",
-    "editUploadFailed": "Perubahan pada “{{name}}” tidak dapat diunggah: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” diunggah — {{count}} berkas",
     "uploadFolderFailed": "Gagal mengunggah folder “{{name}}”: {{reason}}",
     "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",
     "nothingToPaste": "Tidak ada yang ditempel: papan klip tidak berisi berkas",
     "createFileDone": "File “{{name}}” dibuat",
-    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}"
+    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}",
+    "chownDone": "Pemilik “{{name}}” diubah",
+    "chownRecursive": "Pemilik diubah — {{count}} entri di “{{name}}”",
+    "chownFailed": "Pemilik “{{name}}” tidak dapat diubah: {{reason}}",
+    "chownUnknownUser": "Pemilik “{{name}}” tidak diubah: pengguna tidak dikenal",
+    "chownUnknownGroup": "Pemilik “{{name}}” tidak diubah: grup tidak dikenal"
   },
   "fileElevation": {
     "toggle": "Hak tinggi",
@@ -736,6 +808,17 @@
     "opDelete": "Penghapusan",
     "opChmod": "Perubahan izin",
     "banner": "Hak tinggi aktif: semua tindakan berkas di penjelajah ini dijalankan sebagai {{user}}.",
+    "bannerLogged": "Dicatat di server.",
+    "notice": {
+      "title": "Tentang hak akses tinggi",
+      "intro": "Sekarang Anda membaca dan menulis berkas sebagai {{user}}. Perubahan berlaku segera dan tidak dapat dibatalkan oleh aplikasi.",
+      "loggedApp": "Setiap perubahan dicatat di log aplikasi.",
+      "loggedAppAndServer": "Setiap perubahan dicatat di log aplikasi dan di log autentikasi server.",
+      "passwordless": "Aturan sudo untuk sftp-server memberi {{user}} akses tanpa kata sandi ke semua yang berjalan di bawah login ini, bukan hanya aplikasi ini.",
+      "alternative": "Jika Anda rutin mengelola server ini sebagai root, login root terpisah dengan kunci (PermitRootLogin prohibit-password) membuat akses itu eksplisit.",
+      "gotIt": "Mengerti",
+      "dontShowAgain": "Jangan tampilkan lagi untuk server ini"
+    },
     "deleteFileTitle": "Hapus berkas sebagai {{user}}?",
     "deleteDirTitle": "Hapus folder sebagai {{user}}?",
     "overwriteTitle": "Timpa berkas sebagai {{user}}?",
@@ -757,7 +840,8 @@
     "close": "Tutup",
     "detail": "Detail: {{detail}}",
     "failure": {
-      "passwordRequired": "sudo memerlukan kata sandi untuk sftp-server di server ini. Aplikasi tidak pernah meminta kata sandi sudo.",
+      "passwordRequired": "sudo meminta kata sandi untuk sftp-server di server ini. Tambahkan aturan sudoers di bawah, atau simpan kata sandi sudo di profil server untuk mengaktifkan hak akses tinggi.",
+      "wrongSudoPassword": "sudo menolak kata sandi sudo yang tersimpan. Periksa kata sandi sudo di profil server.",
       "notAllowed": "Login SSH ini tidak diizinkan memulai sftp-server melalui sudo tanpa kata sandi.",
       "requireTty": "sudo menolak berjalan tanpa terminal (“requiretty” di sudoers). Nonaktifkan requiretty untuk login ini, mis. dengan “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server tidak ditemukan di server. Silakan masukkan jalurnya di profil server di bawah “Lanjutan”.",
@@ -767,7 +851,8 @@
       "invalidUser": "Pengguna target tidak valid.",
       "unsupported": "Server lokal tidak memiliki mode hak tinggi.",
       "checkFailed": "Pemeriksaan hak sudo gagal.",
-      "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers)."
+      "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers).",
+      "disabledForServer": "Hak akses tinggi dinonaktifkan untuk server ini di profil server."
     },
     "channelLost": "Hak tinggi berakhir — kanal dengan hak tinggi tidak lagi aktif.",
     "group": "Hak istimewa tinggi",
@@ -775,7 +860,11 @@
     "otherUser": "Sebagai pengguna lain…",
     "targetUser": "Pengguna target",
     "targetUserHelp": "Menjalankan peramban berkas sebagai pengguna ini melalui sudo. Bawaan: root.",
-    "confirm": "Tingkatkan"
+    "confirm": "Tingkatkan",
+    "opChown": "Perubahan pemilik",
+    "chownNote": "Pemilik akan diubah sebagai {{user}}.",
+    "idleSwitchedOff": "Hak istimewa dimatikan setelah {{minutes}} menit tanpa aktivitas",
+    "revokedByProfile": "Hak akses tinggi berakhir — profil server tidak lagi mengizinkannya."
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",
@@ -789,6 +878,8 @@
     "groupsHeading": "Struktur folder yang dihasilkan",
     "entriesHeading": "{{count}} server",
     "field": {
+      "name": "Nama",
+      "include": "Sertakan",
       "host": "Alamat",
       "port": "Port",
       "username": "Pengguna",
@@ -864,6 +955,7 @@
       "proxyJumpLocalPseudoServer": "mengarah ke pseudo-server lokal"
     },
     "confirm": "Impor",
+    "confirmCount_other": "Impor {{count}} server",
     "applying": "Mengimpor …",
     "result": {
       "success": "{{created}} server dibuat, {{groups}} folder, {{skipped}} konflik dilewati.",
@@ -964,14 +1056,17 @@
       "hostKeyCheck": "Pemeriksaan kunci host",
       "authentication": "Autentikasi",
       "sessionReady": "Sesi terbentuk",
-      "dnsSkipped": "Alamat IP – tidak perlu pencarian"
+      "dnsSkipped": "Alamat IP – tidak perlu pencarian",
+      "outdatedAlgorithms": "Algoritma usang",
+      "banner": "Banner server"
     },
     "status": {
       "ok": "OK",
       "running": "sedang berlangsung",
       "failed": "gagal ({{code}})",
       "skipped": "dilewati",
-      "failedReason": "gagal: {{reason}}"
+      "failedReason": "gagal: {{reason}}",
+      "warning": "peringatan"
     },
     "hostKeyResult": {
       "known": "dikenal",
@@ -984,7 +1079,8 @@
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",
       "certificate": "Sertifikat",
-      "identityFile": "Berkas kunci"
+      "identityFile": "Berkas kunci",
+      "keyboardInteractive": "Interaktif papan ketik"
     },
     "detail": {
       "addresses": "Alamat: {{addresses}}",
@@ -993,7 +1089,9 @@
       "cipher": "Sandi enkripsi: {{value}}",
       "mac": "MAC: {{value}}",
       "partialSuccess": "diterima sebagian, autentikasi lebih lanjut diperlukan",
-      "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)"
+      "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)",
+      "round": "Putaran {{round}}",
+      "prompts": "Prompt server: {{prompts}}"
     },
     "reason": {
       "SSH_TCP_TIMEOUT": "Koneksi TCP habis waktu",
@@ -1011,6 +1109,7 @@
     "parentDirectory": "Direktori induk",
     "newFolderButton": "+ Folder baru",
     "fileActionsGroup": "Aksi berkas",
+    "directoryActions": "Tindakan direktori",
     "upload": "Unggah",
     "uploadDialogTitle": "Unggah berkas",
     "uploadFolder": "Unggah folder",
@@ -1045,8 +1144,10 @@
       "name": "Nama",
       "size": "Ukuran",
       "permissions": "Izin",
-      "modified": "Diubah"
+      "modified": "Diubah",
+      "owner": "Pemilik"
     },
+    "columnsMenu": "Tampilkan atau sembunyikan kolom",
     "localEdit": {
       "uploading": "Mengunggah “{{name}}”…",
       "changed": "“{{name}}” diubah secara lokal. Unggah ke server?",
@@ -1054,8 +1155,7 @@
       "editing": "Mengedit “{{name}}” secara lokal…",
       "end": "Berhenti mengedit",
       "uploadTitle": "Unggah perubahan lokal?",
-      "remoteChanged": "Berkas jarak jauh diubah sejak diunduh — mengunggah akan menimpa perubahan lain tersebut.",
-      "noDiff": "Diff teks tidak memungkinkan (berkas biner atau terlalu besar). Ukuran baru: {{size}}."
+      "remoteChanged": "Berkas jarak jauh diubah sejak diunduh — mengunggah akan menimpa perubahan lain tersebut."
     },
     "deleteDialog": {
       "fileTitle": "Hapus berkas?",
@@ -1075,7 +1175,6 @@
       "conflictTitle": "Timpa berkas di folder?",
       "conflictBody": "Mengunggah “{{name}}” akan menimpa {{count}} berkas ini di server. Tidak ada yang ditimpa kecuali Anda mengonfirmasi.",
       "summaryTitle": "Unggah folder: “{{name}}”",
-      "summary": "{{uploaded}} berkas diunggah, {{skipped}} dilewati, {{failed}} gagal.",
       "notAttempted": "{{count}} berkas tidak dicoba karena foldernya tidak dapat dibuat.",
       "skipped": "Dilewati",
       "failed": "Gagal",
@@ -1086,12 +1185,14 @@
         "unsupported": "bukan berkas biasa atau folder",
         "notGranted": "tidak tercakup dalam pilihan Anda",
         "overwriteNotConfirmed": "ada di server, penimpaan tidak dikonfirmasi"
-      }
+      },
+      "uploaded": "Terunggah"
     },
     "uploadConflict": {
       "title": "Timpa berkas?",
       "body": "sudah ada di server.",
-      "noDiff": "Diff teks tidak memungkinkan (berkas biner atau terlalu besar). Ukuran saat ini: {{remoteSize}}, ukuran baru: {{localSize}}."
+      "currentSize": "Ukuran saat ini",
+      "newSize": "Ukuran baru"
     },
     "menu": {
       "download": "Unduh",
@@ -1107,8 +1208,10 @@
       "cut": "Potong",
       "delete": "Hapus",
       "newFolder": "Folder baru",
-      "newFile": "File baru"
+      "newFile": "File baru",
+      "chown": "Ubah pemilik…"
     },
+    "linkMarker": "tautan simbolis",
     "properties": {
       "title": "Properti",
       "name": "Nama",
@@ -1116,6 +1219,10 @@
       "type": "Jenis",
       "typeFolder": "Folder berkas",
       "typeFile": "Berkas",
+      "typeLinkFolder": "Tautan simbolis ke folder",
+      "typeLinkFile": "Tautan simbolis ke berkas",
+      "typeLinkBroken": "Tautan simbolis rusak",
+      "linkTarget": "Target tautan",
       "size": "Ukuran",
       "permissionsSymbolic": "Izin (simbolis)",
       "permissionsNumeric": "Izin (numerik)",
@@ -1165,10 +1272,24 @@
       "notText": "Diff teks tidak mungkin: berkas bersifat biner (bukan teks UTF-8 yang valid).",
       "permission": "Diff teks tidak mungkin: dengan hak akses saat ini Anda tidak punya izin baca untuk berkas ini.",
       "other": "Diff teks tidak mungkin: berkas tidak dapat dibaca ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Ubah pemilik",
+      "owner": "Pengguna",
+      "group": "Grup",
+      "hint": "Masukkan nama atau angka. Sisi yang dibiarkan apa adanya tidak berubah. Server menentukan apakah perubahan diizinkan (biasanya hanya root yang boleh mengubah pemilik).",
+      "recursive": "Terapkan ke isi",
+      "recursiveWarning": "— mengubah pemilik SEMUA file dan subfolder di folder ini. Tautan simbolik tidak diikuti. Tidak dapat dibatalkan."
+    },
+    "transferChown": "Mengubah pemilik {{name}}",
+    "stopProgress": "Kemajuan",
+    "noTextDiff": "Diff teks tidak dapat ditampilkan (berkas biner atau terlalu besar)."
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
+    "copyCode": "Salin kode",
+    "codeCopied": "Kode disalin",
+    "codeCopyFailed": "Gagal menyalin",
     "composerMore": "Tindakan input lainnya",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",
@@ -1192,12 +1313,16 @@
     "queued": "Akan dikirim bersama permintaan berikutnya",
     "responseCancelled": "Respons dibatalkan.",
     "contextCompactedNotice": "Bagian lama obrolan ini diringkas agar muat dalam konteks model.",
-    "contextUsage": "Konteks {{used}} / {{window}}",
     "contextUsageTooltip": "Bagian lama obrolan diringkas secara otomatis saat konteks penuh.",
+    "messageLabel": "Pesan",
+    "headerProviderTooltip": "Penyedia: {{provider}}",
     "webResearchUnavailable": "Riset web tidak tersedia untuk akun penyedia ini (pencarian web dinonaktifkan di sana). Sesi ini menjawab tanpa riset web. Untuk mematikannya secara permanen: Pengaturan → Penyedia AI → “Riset web”.",
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",
     "outputTruncated": "(dipotong)",
+    "outputMoreLines_other": "… {{count}} baris lagi",
+    "outputShowAll": "Tampilkan semua",
+    "outputShowLess": "Tampilkan lebih sedikit",
     "fileWritten": "Berkas '{{path}}' ditulis.",
     "writtenWithSudoPassword": "Ditulis menggunakan kata sandi sudo yang tersimpan.",
     "documentGenerated": "Dokumen dibuat",
@@ -1274,7 +1399,18 @@
     "aiTab": "AI",
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
+    "thisDevice": "perangkat ini",
+    "paneSwitch": "Pengalih panel",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
+    "extraKeys": {
+      "group": "Tombol tambahan",
+      "up": "Panah atas",
+      "down": "Panah bawah",
+      "left": "Panah kiri",
+      "right": "Panah kanan",
+      "pageUp": "Halaman atas",
+      "pageDown": "Halaman bawah"
+    },
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",
     "reconnectGaveUp": "Koneksi tidak dapat dipulihkan."
@@ -1307,7 +1443,8 @@
       "body": "Model suara ({{model}}, sekitar {{size}} MiB) akan diunduh sekali dari {{source}}. Setelah itu, pengenalan suara berjalan sepenuhnya di komputer ini; audio dan teks tidak pernah keluar darinya.",
       "download": "Unduh",
       "cancel": "Batal",
-      "progress": "Progres unduhan"
+      "progress": "Progres unduhan",
+      "parakeetLicense": "Lisensi: {{license}}"
     },
     "errors": {
       "noDevice": "Mikrofon tidak ditemukan. Sambungkan mikrofon dan periksa perangkat input di pengaturan sistem.",
@@ -1323,7 +1460,8 @@
       "model": "Model suara",
       "models": {
         "base": "Base (sekitar {{size}} MiB, bawaan)",
-        "small": "Small (sekitar {{size}} MiB, lebih akurat, lebih lambat)"
+        "small": "Small (sekitar {{size}} MiB, lebih akurat, lebih lambat)",
+        "parakeet_v3": "Parakeet v3 (NVIDIA) (sekitar {{size}} MiB, multibahasa, cepat; mendeteksi bahasa secara otomatis)"
       },
       "statusReady": "Sudah diunduh",
       "statusNotDownloaded": "Belum diunduh",
@@ -1331,7 +1469,8 @@
       "download": "Unduh",
       "delete": "Hapus model",
       "language": "Bahasa pengenalan",
-      "languageAuto": "Otomatis"
+      "languageAuto": "Otomatis",
+      "languageParakeetHint": "Parakeet mendeteksi bahasa secara otomatis; pengaturan ini berlaku untuk model Whisper."
     }
   },
   "connectTab": {
@@ -1391,6 +1530,8 @@
     "import": {
       "title": "Pulihkan dari cadangan",
       "pickTitle": "Pilih file cadangan",
+      "pickFailed": "Berkas tidak dapat dibuka dari lokasi yang dipilih.",
+      "chooseAgain": "Pilih berkas lagi",
       "file": "Berkas: {{name}}",
       "kind": "Yang membuka cadangan ini",
       "useCode": "Kode pemulihan",
@@ -1407,6 +1548,9 @@
       "file": "Cadangan",
       "sessions": "Sesi terbuka yang akan ditutup: {{count}}",
       "safety": "Data Anda saat ini disimpan dulu ke {{dir}}. Server Anda dipindahkan ke folder baru bernama “Previous data” dengan tanggal hari ini.",
+      "pickDirTitle": "Pilih folder untuk cadangan pengaman",
+      "changeSafetyDir": "Ubah…",
+      "changeSafetyDirFailed": "Folder tidak dapat dipilih. Folder default tetap digunakan.",
       "replace": "Ganti data"
     },
     "counts": {
@@ -1431,5 +1575,55 @@
       "newerVersion": "Cadangan ini dibuat oleh Smart SSH versi lebih baru. Perbarui aplikasi dan coba lagi.",
       "failed": "Operasi gagal. Tidak ada yang diubah."
     }
+  },
+  "errorBoundary": {
+    "title": "Terjadi kesalahan",
+    "body": "Smart SSH mengalami kesalahan tak terduga pada antarmuka. Muat ulang untuk melanjutkan. Jika terjadi lagi, buat paket diagnostik di Pengaturan → Diagnostik setelah memuat ulang.",
+    "reload": "Muat ulang"
+  },
+  "connectWarnings": {
+    "outdatedAlgorithms": "Server ini memakai algoritma SSH usang ({{algorithms}}). Koneksi kurang aman. Perbarui perangkat lunak SSH server jika bisa.",
+    "outdatedAlgorithmsHop": "{{hop}} memakai algoritma SSH usang ({{algorithms}}). Koneksi kurang aman. Perbarui perangkat lunak SSH-nya jika bisa."
+  },
+  "elevatedIdle": {
+    "label": "Matikan hak istimewa setelah tidak aktif",
+    "minutes5": "5 menit",
+    "minutes15": "15 menit",
+    "minutes30": "30 menit",
+    "minutes60": "60 menit",
+    "never": "Tidak pernah",
+    "hint": "Peramban berkas keluar sendiri dari mode istimewa setelah selama ini tanpa aktivitas istimewa. Operasi yang sedang berjalan dihitung sebagai aktivitas."
+  },
+  "activities": {
+    "title": "Aktivitas",
+    "buttonRunning": "Aktivitas: {{running}} berjalan",
+    "buttonFailed": "Aktivitas: satu aktivitas gagal",
+    "buttonDone": "Aktivitas: selesai",
+    "cancel": "Batal",
+    "cancelNamed": "Batalkan {{title}}",
+    "dismiss": "Tutup",
+    "dismissNamed": "Tutup {{title}}",
+    "succeeded": "Selesai",
+    "cancelled": "Dibatalkan",
+    "failed": "Gagal",
+    "inProgress": "Sedang berjalan",
+    "verifying": "Memverifikasi",
+    "speechModelTitle": "Model ucapan {{name}}",
+    "buttonInterrupted": "Aktivitas: beberapa terhenti",
+    "interrupted": "Terhenti",
+    "resume": "Lanjutkan",
+    "resumeNamed": "Lanjutkan {{title}}",
+    "discard": "Buang",
+    "discardNamed": "Buang {{title}}",
+    "resumeFailed": "Tidak dapat melanjutkan.",
+    "quitTitle": "Keluar saat aktivitas masih berjalan?",
+    "quitBody": "Aktivitas ini masih berjalan dan akan dihentikan:",
+    "quitResumeHint": "Unduhan yang terhenti dapat dilanjutkan saat Anda memulai aplikasi lagi.",
+    "quitAnyway": "Tetap keluar",
+    "keepRunning": "Biarkan berjalan",
+    "summaryRunning_other": "{{count}} berjalan",
+    "summaryInterrupted_other": "{{count}} terhenti",
+    "summaryFailed_other": "{{count}} gagal",
+    "remaining": "sisa {{time}}"
   }
 }

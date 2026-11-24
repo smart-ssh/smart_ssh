@@ -1,0 +1,196 @@
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+
+const FOCUSABLE_SELECTOR =
+  'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => {
+    // A named radio group is one Tab stop (the checked radio); the arrow
+    // keys move within it, like the browser's native Tab order.
+    if (!(el instanceof HTMLInputElement) || el.type !== "radio" || el.checked || !el.name) return true;
+    return !container.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`);
+  });
+}
+
+interface UseDialogFocusTrapOptions {
+  /** Das Element, das den Fokus-Fang trägt (Rolle `dialog`/`alertdialog`). */
+  containerRef: RefObject<HTMLElement | null>;
+  /** Die Schaltfläche, die beim Öffnen und bei jedem `resetKey`-Wechsel den
+   * Fokus bekommt — bei Host-Key-Dialogen die ablehnende Schaltfläche. */
+  initialFocusRef: RefObject<HTMLElement | null>;
+  /** Wird bei Escape gerufen; der Aufrufer entscheidet, was das bedeutet
+   * (hier: ablehnen) und schützt selbst vor Mehrfachaufruf. */
+  onEscape: () => void;
+  /** Ändert sich dieser Wert (z. B. ein neues Ereignis oder ein Zweigwechsel
+   * unbekannt → geändert), wird der Anfangsfokus erneut gesetzt — ein
+   * Re-Render darf den Fokus nie auf der riskanten Schaltfläche oder dem
+   * Hintergrund belassen (Spec 0100, A2, Testfall "rerender"). */
+  resetKey: unknown;
+  /** Dialog that opens further dialogs from inside (they portal to
+   * `document.body`, outside `containerRef`): Escape that belongs to such a
+   * nested dialog is left alone, and focus is not pulled back on a
+   * `focusout` without target. (Focus inside a dialog stacked above is never pulled back.) */
+  yieldToNested?: boolean;
+  /** Element that gets the focus back on close. Default: the element focused
+   * when the dialog opened. */
+  returnFocusTo?: HTMLElement | null;
+}
+
+/**
+ * Spec 0100: Fokus-Fang, Anfangsfokus und Fokus-Rückgabe für einen per
+ * `createPortal` an `document.body` gehängten modalen Dialog. Tab und
+ * Shift+Tab werden vollständig selbst im `keydown` behandelt (nicht nur an
+ * den Rändern) — `jsdom` führt eine native Tab-Bewegung nicht aus, und ein
+ * selbst geführter Fokus-Fang ist auch im echten Browser der übliche Weg,
+ * um zuverlässig zu verhindern, dass der Fokus den Dialog verlässt.
+ *
+ * Reiner Hook ohne eigenes Markup — rendert nichts, portalt also auch
+ * nichts selbst; ein Aufrufer, der eine eigene Dialog-Hülle daraus baut,
+ * entscheidet selbst über deren Portal-Ziel (vgl. Spec 0100, Abschnitt 3,
+ * zum Verhältnis zu BL-0162).
+ */
+export function useDialogFocusTrap({
+  containerRef,
+  initialFocusRef,
+  onEscape,
+  resetKey,
+  yieldToNested = false,
+  returnFocusTo,
+}: UseDialogFocusTrapOptions) {
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  // Review-Fund Runde 2: Der `document`-Escape-Listener unten entsteht nur
+  // einmal (Effekt mit `[]`). Ohne diesen Ref schlösse er über das
+  // `onEscape` des ersten Renders — bleibt der Dialog gemountet und
+  // bekommt per `resetKey` ein neues Ereignis (zwei sich überlappende
+  // Host-Key-Abfragen), riefe Escape die Entscheidung für das alte statt
+  // das aktuell angezeigte Ereignis. Immer aktuell halten, pro Render.
+  // Die Zuweisung selbst steht in einem eigenen Effekt ohne
+  // Dependency-Array (Review-Fund Runde 3, Spec 0100): React 19 untersagt
+  // das Schreiben eines Refs während des Renders, und ein Effekt ohne
+  // Deps läuft nach jedem Commit, also genauso oft wie die vorherige
+  // Zuweisung im Render-Körper — nur synchron zu dem, was tatsächlich auf
+  // dem Schirm steht, statt dem Render voraus.
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+  });
+
+  // A3/A4/A7, alle in einem Effekt mit `[]`-Abhängigkeiten, bewusst nicht
+  // getrennt (Review-Fund, Spec 0100): Getrennte Effekte hätten keine
+  // erzwungene Reihenfolge zwischen „Fang abmelden" und „Fokus zurückgeben"
+  // — und der Fang (`onFocusIn` unten) würde einen Fokus, der durch A7s
+  // Rückgabe auf ein Element außerhalb des Containers wandert, grundsätzlich
+  // als Fokusverlust werten und sofort zurückholen. In einem Effekt ist die
+  // Reihenfolge erzwungen: zuerst die Listener abmelden, erst danach den
+  // Fokus zurückgeben, sodass der Fang die Rückgabe nicht mehr sehen kann.
+  //
+  // Muss außerdem **vor** dem A2-Effekt (Anfangsfokus, unten) deklariert
+  // sein: Effekte laufen beim Mount in Deklarationsreihenfolge, und die
+  // Erfassung von `previouslyFocusedRef` hier liest `document.activeElement`
+  // — liefe A2 schon vorher, wäre das bereits die eigene `reject`-
+  // Schaltfläche statt des Elements, das vor dem Öffnen den Fokus trug, und
+  // A7 gäbe am Ende den Fokus nicht an den richtigen Ort zurück (gemessen:
+  // mit vertauschter Reihenfolge scheitert T10 zuverlässig).
+  useEffect(() => {
+    previouslyFocusedRef.current =
+      returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+
+    // A dialog stacked above this one (opened from inside it, or a prompt such
+    // as the host-key dialog) lives in its own backdrop that comes later in the
+    // document and does not contain our container; its focus is not ours to pull back.
+    function inDialogAbove(target: EventTarget | null): boolean {
+      if (!(target instanceof Element)) return false;
+      const backdrop = target.closest("[data-modal-backdrop]");
+      const own = containerRef.current?.closest("[data-modal-backdrop]");
+      if (!backdrop || !own || backdrop === own) return false;
+      return (own.compareDocumentPosition(backdrop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    }
+
+    function isOutside(target: EventTarget | null): boolean {
+      const container = containerRef.current;
+      // `false` bei fehlendem Container (z. B. kurz vor dem eigenen
+      // Unmount) ist Absicht, nicht Nachlässigkeit: Andernfalls würde ein
+      // nach dem Entfernen des Containers noch eintreffendes Fokus-Ereignis
+      // fälschlich als „außerhalb" gelten und erneut `initialFocusRef`
+      // fokussieren — ein Fokus-Pingpong, der genau die A7-Rückgabe direkt
+      // darunter wieder zunichtemachen würde.
+      if (!container) return false;
+      return !(target instanceof Node) || !container.contains(target);
+    }
+    function onFocusOut(event: FocusEvent) {
+      if (yieldToNested) return; // Settings-style dialogs refocus themselves (click handler in DialogFrame)
+      if (event.relatedTarget) return; // folgt ein focusin, s. onFocusIn
+      initialFocusRef.current?.focus();
+    }
+    function onFocusIn(event: FocusEvent) {
+      if (isOutside(event.target) && !inDialogAbove(event.target)) {
+        initialFocusRef.current?.focus();
+      }
+    }
+    // A4: Escape auf `document` statt nur im Container-`onKeyDown` unten,
+    // damit es auch dann ablehnt und nicht durchgereicht wird, wenn der
+    // Fokus gerade *nicht* im Dialog liegt — etwa weil das fokussierte
+    // Element entfernt wurde und der Fokus (ohne eigenes Ereignis, je nach
+    // Engine) auf `document.body` zurückgefallen ist (Review-Fund, Spec
+    // 0100). Auf `document` registriert läuft dieser Handler vor jedem
+    // Listener auf `window` (z. B. die Kürzel in `App.tsx`), `document`
+    // liegt in der Bubble-Kette näher am Ursprung.
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (yieldToNested) {
+        const container = containerRef.current;
+        if (!container || !(event.target instanceof Node) || !container.contains(event.target)) return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onEscapeRef.current();
+    }
+    document.addEventListener("focusout", onFocusOut);
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => {
+      document.removeEventListener("focusout", onFocusOut);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("keydown", onDocumentKeyDown);
+      // A7: erst nachdem der Fang abgemeldet ist (s. Kommentar oben) —
+      // sonst holt er sich den Fokus sofort zurück.
+      const previous = previouslyFocusedRef.current;
+      if (previous && document.contains(previous)) {
+        previous.focus();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only trap; callbacks are read through refs
+  }, []);
+
+  // A2: Anfangsfokus beim Mount und bei jedem `resetKey`-Wechsel. Muss
+  // **nach** dem Effekt oben deklariert sein, s. dessen Kommentar.
+  useEffect(() => {
+    initialFocusRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus on mount and on resetKey only
+  }, [resetKey]);
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    // Keys of a dialog portaled out of this one still bubble through the React tree.
+    const owner = containerRef.current;
+    if (owner && event.target instanceof Node && !owner.contains(event.target)) return;
+    if (event.key === "Enter" && event.repeat) {
+      // A5: eine aus einem vorherigen Dialog gehaltene Enter-Taste darf die
+      // gerade erst fokussierte Schaltfläche nicht auslösen.
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Tab") {
+      const container = containerRef.current;
+      if (!container) return;
+      const focusable = getFocusableElements(container);
+      if (focusable.length === 0) return;
+      event.preventDefault();
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      const delta = event.shiftKey ? -1 : 1;
+      const nextIndex = (currentIndex + delta + focusable.length) % focusable.length;
+      focusable[nextIndex]?.focus();
+    }
+  }
+
+  return { onKeyDown };
+}

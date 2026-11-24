@@ -102,6 +102,22 @@ fn data_url(media_type: &str, base64: &str) -> String {
     format!("data:{media_type};base64,{base64}")
 }
 
+/// A single text part becomes a plain string, anything else a block array.
+pub(crate) fn text_or_blocks(parts: &[ContentPart], block: fn(&ContentPart) -> Value) -> Value {
+    match parts {
+        [ContentPart::Text(text)] => json!(text),
+        _ => Value::Array(parts.iter().map(block).collect()),
+    }
+}
+
+/// Always a block array, even for one text part. Anthropic history must be
+/// prefix-stable (Spec 0064 Part 7): a plain string that becomes an array when
+/// a later part is merged into the same role group would change the bytes of an
+/// earlier request.
+pub(crate) fn anthropic_content(parts: &[ContentPart]) -> Value {
+    Value::Array(parts.iter().map(anthropic_block).collect())
+}
+
 /// Anthropic Messages API content block.
 pub(crate) fn anthropic_block(part: &ContentPart) -> Value {
     match part {
@@ -683,6 +699,9 @@ pub(crate) mod test_fixtures {
         context: SessionContext,
     ) -> Vec<ssh_manager_core::ai::AiEvent> {
         use futures::StreamExt;
-        provider.send(context).collect().await
+        provider
+            .send(ssh_manager_core::ai::RedactedContext::for_tests(context))
+            .collect()
+            .await
     }
 }

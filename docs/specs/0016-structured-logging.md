@@ -17,6 +17,8 @@ Oberfläche.
 
 ## 3. Speicherort und Format
 
+- Mit einem Datenverzeichnis-Override (Spec 0115) liegen die Logs in `<Datenverzeichnis>/logs`.
+
 - Die Logdatei liegt in einem plattformspezifischen Ordner:
   - macOS: `~/Library/Logs/Smart SSH/`
   - Windows: `%APPDATA%\Smart SSH\logs\`
@@ -78,5 +80,5 @@ Ausgabe, Kontext, Rohantwort) erscheint nur auf `debug`, redigiert.
 
 - Dateien älterer Versionen können noch Inhalte enthalten; sie werden nach
   14 Tagen gelöscht.
-- Die Datenbank (Ausführungsprotokoll, Chatverlauf) ist nicht Gegenstand
+- Die Datenbank (Chatverlauf) ist nicht Gegenstand
   dieser Spec.

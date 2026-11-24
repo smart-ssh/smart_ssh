@@ -10,7 +10,11 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+mod android_debug_switch;
+#[cfg(target_os = "android")]
+mod android_service;
 mod auto_reconnect;
+mod background_tasks;
 /// Issue #462: extension-owned database tables.
 mod chat_content;
 mod chat_retention;
@@ -23,21 +27,29 @@ mod elevated_sftp;
 /// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
 mod event_emitter;
+mod extension_plugins;
 mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
+mod keychain;
+mod local_file;
+pub use local_file::{platform_opener, Access, LocalFileHandle, NoUriOpener, UriOpener};
+/// Issue #1325: the activity center (Spec 0116).
+pub mod activities;
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
+mod required_plugins;
 mod risk_second_opinion;
 /// Spec 0101, §2 Frage 2: die gemessene Annahme über Tauris
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
 mod services;
+/// Issue #816: the one public path to close a session completely.
+pub mod sessions;
 mod settings_store;
-/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
-/// nach vorn.
+/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz nach vorn.
 mod single_instance;
 mod speech_models;
 /// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige
@@ -51,6 +63,7 @@ mod startup_dialog;
 /// Spec 0101, A16: das Tor, das vor der Entsperrung jedes Kommando außer
 /// Entsperren, Beenden und Neu-anfangen abweist.
 mod startup_gate;
+use startup_gate::gated;
 /// Spec 0101, A16/T18: die Verdrahtung des Tors — dass es vor dem Verteiler
 /// sitzt und der MCP-Server vor der Entsperrung nicht startet.
 #[cfg(test)]
@@ -62,32 +75,19 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
+pub mod ui_preferences;
 mod voice_input;
-/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
-/// Passwort-Modus.
+/// Spec 0101, §2 Frage 3: Startdialoge im Fenster (Passwort-Modus).
 mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
-pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
-pub use wiring::{Edition, Wiring};
-
-/// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
-/// session on `server_id` — for a session extension whose secret values
-/// changed. History already in the sessions is re-redacted on the next send.
-pub async fn rebuild_server_redactors<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    server_id: ssh_manager_core::shared::ServerId,
-) {
-    use tauri::Manager;
-    if let Some(state) = app.try_state::<AppState>() {
-        app_logic::session_extension::rebuild_server_redactors(&state, server_id).await;
-    }
-}
-
+pub use extension_plugins::UnlockedPluginFactory;
+pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
+pub use services::{app_scope, BackgroundService, RunningService, ServiceContext, ServiceHost};
 use std::sync::Arc;
+pub use wiring::{Edition, UnlockedPlugin, Wiring};
 
-use credentials_keyring::KeyringCredentialStore;
 use persistence_sqlite::default_db_path;
 
 use app_logic::confirmation::ConfirmationRegistry;
@@ -117,28 +117,11 @@ pub(crate) struct StartupInputs {
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Issue #610: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
-}
-
-/// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
-/// Programmlaufs — hier, an der einzigen Stelle, die tatsächlich die
-/// Umgebung liest. Die Entscheidungslogik selbst ist rein und liegt in
-/// `startup_error_messages` (A11c). Würde jeder Dialog seine Sprache
-/// selbst bestimmen, zeigte ein englischsprachiges System bei einem
-/// DB-Fehler Deutsch und bei einem Schlüsselbund-Fehler Englisch.
-///
-/// Eigene Funktion seit Issue #19: Der Dialog „läuft bereits" erscheint vor
-/// [`startup_inputs`] und braucht dieselbe Sprache.
-fn startup_language() -> app_logic::startup_error_messages::Language {
-    let lc_all = std::env::var("LC_ALL").ok();
-    let lc_messages = std::env::var("LC_MESSAGES").ok();
-    let lang = std::env::var("LANG").ok();
-    app_logic::startup_error_messages::startup_language(
-        app_logic::startup_error_messages::preferred_locale_value(
-            lc_all.as_deref(),
-            lc_messages.as_deref(),
-            lang.as_deref(),
-        ),
-    )
+    /// Issue #1505: from `Wiring`, handed to the `AppState`.
+    pub(crate) activity: Arc<app_logic::activity::ActivityHub>,
+    /// Issue #1246: from `Wiring`, handed to the `AppState`.
+    pub(crate) ai_provider_decorators:
+        Arc<Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>>,
 }
 
 fn startup_inputs(
@@ -147,6 +130,10 @@ fn startup_inputs(
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    activity: Arc<app_logic::activity::ActivityHub>,
+    ai_provider_decorators: Arc<
+        Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
+    >,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -190,6 +177,8 @@ fn startup_inputs(
         keychain,
         outgoing_transform,
         ai_usage_observers,
+        activity,
+        ai_provider_decorators,
     }
 }
 
@@ -203,7 +192,8 @@ fn startup_inputs(
 /// [`run`] ruft sie außerhalb der Laufzeit über ein `block_on` auf.
 ///
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "one argument per input")]
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
@@ -221,7 +211,7 @@ pub(crate) async fn open_and_assemble(
     // Betriebssystems trägt ab Etappe 2 ausschließlich den Wurzelschlüssel.
     // Die Secrets selbst liegen in der verschlüsselten Datenbank, hinter
     // `AppState.credential_store` (s. unten).
-    let keyring_store = KeyringCredentialStore::new();
+    let keyring_store = crate::keychain::process_keyring_store();
 
     // Spec 0101, A3/A5/A6: Der Start entscheidet nach Dateizustand und
     // Schlüsselzustand, **bevor** eine Migration läuft — und fasst in keinem
@@ -309,10 +299,9 @@ pub(crate) async fn open_and_assemble(
     // Issue #504 (ADR 0141): removal callbacks and the one-time reconcile.
     chat_content::attach_chat_content(&profile_store, chat_content).await;
 
-    let (prompt_history_store, chat_session_store, ledger_store) = (
+    let (prompt_history_store, chat_session_store) = (
         profile_store.prompt_history_store(),
         profile_store.chat_session_store(),
-        profile_store.ledger_store(),
     );
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
@@ -369,9 +358,8 @@ pub(crate) async fn open_and_assemble(
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
-        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
-        // geöffnet wurde — damit das Einrichten aus den Einstellungen
-        // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
+        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank geöffnet wurde —
+        // damit das Einrichten aus den Einstellungen denselben Schlüssel prüfen kann (Fund 10).
         root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&root_key),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
@@ -389,22 +377,22 @@ pub(crate) async fn open_and_assemble(
         policy_store,
         prompt_history_store,
         chat_session_store,
-        ledger_store,
-        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen statt
-        // hier fest verdrahtet (s. `Wiring::community`-Doc-Kommentar zum
-        // Scope dieses Refactorings).
+        // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen.
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        pending_auth_prompts: Default::default(),
         connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: app_logic::state::McpState::default(),
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
-        // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
+        activity: inputs.activity.clone(),
+        ai_provider_decorators: inputs.ai_provider_decorators.clone(),
         chat_content: chat_content.clone(),
+        title_attempts: Default::default(),
     };
     Ok(app_state)
 }
@@ -419,6 +407,8 @@ pub(crate) async fn open_and_assemble(
 /// Icons/Frontend dieser Library-Crate zugeordnet sein, obwohl `app-shell`
 /// künftig mehrere Binaries (Community/Official) mit je eigener Config
 /// bedienen soll (Spec 0038, Abschnitt 3).
+#[expect(clippy::cognitive_complexity, reason = "split planned")]
+#[expect(clippy::too_many_lines, reason = "over 150 lines; split planned")]
 pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
@@ -426,7 +416,17 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // gesamte App-Laufzeit am Leben bleiben (s. `app_logic::logging::
     // init_logging`-Doc-Kommentar) — `run()` unten blockiert bis zum
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
+    //
+    // Issue #1313: the data directory is decided first, once, and without
+    // logging — the logger itself writes below it. An unusable directory
+    // ends in the startup error window; there is no fallback to the default.
+    let language = startup_dialog::startup_language();
+    let resolved_data_dir = startup_dialog::resolve_data_dir_or_exit(language);
     let _log_guard = app_logic::logging::init_logging();
+
+    // Issue #935: before any HTTPS client is built, so dependencies that
+    // construct their own rustls config find a process-level provider.
+    init_crypto_provider();
 
     // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): muss VOR dem
     // ersten Aufruf installiert sein, der selbst panicken kann —
@@ -472,20 +472,18 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
         data_path = %db_path.display(),
+        data_dir_source = resolved_data_dir.source.as_str(),
         "Smart SSH startet"
     );
 
-    // Spec 0052, Abschnitt 3.2: `Edition` (`Copy`) separat gesichert, bevor
-    // `wiring.plugins` unten per Wert herausgezogen wird (ein partieller
-    // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
-    // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
-    // wird nirgends als Tauri-`State` verwaltet.
-    let edition = wiring.edition;
+    // Spec 0052, 3.2: `Edition` is `Copy`; `get_app_info` reads it as `State`.
+    let (edition, session_extension) = (wiring.edition, wiring.combined_session_extension());
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
-    let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
+    let edition_data_paths =
+        commands::EditionDataPaths(std::mem::take(&mut wiring.extra_data_paths));
+    let ui_preference_registry = ui_preferences::startup_registry(&mut wiring);
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
-
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
@@ -510,7 +508,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // nichts angefasst — entweder übernimmt die laufende Instanz desselben
     // Builds (sie kommt nach vorn, dieser Prozess endet mit 0), oder es
     // erscheint der Startfehler „läuft bereits".
-    let language = startup_language();
     let data_dir_lock = match app_logic::database_startup::lock_data_directory(&db_path) {
         Ok(lock) => {
             tracing::info!("locked the data directory for this process (issue #19)");
@@ -537,21 +534,24 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         }
     };
 
-    // Issue #93: erst jetzt, mit gehaltener Sperre — kein anderer Prozess
-    // nutzt dieses Datenverzeichnis, und noch existiert keine Sitzung. Alles
-    // im Editier-Kopien-Ordner dieser Instanz ist also ein Überbleibsel
-    // eines abgestürzten oder beendeten Prozesses. Best effort, blockiert
-    // den Start nie.
+    // Issue #93: erst jetzt, mit gehaltener Sperre: alles im Editier-Kopien-
+    // Ordner ist ein Überbleibsel eines früheren Prozesses. Best effort.
     edit_copies::sweep_at_startup(data_dir_lock.dir());
+    android_debug_switch::apply(data_dir_lock.dir());
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
+    let activity = Arc::new(app_logic::activity::ActivityHub::new(std::mem::take(
+        &mut wiring.activity_observers,
+    )));
     let inputs = startup_inputs(
         db_path,
         data_dir_lock,
         language,
-        wiring.outgoing_transform.take(),
+        wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
+        activity.clone(),
+        Arc::new(std::mem::take(&mut wiring.ai_provider_decorators)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
@@ -562,8 +562,18 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     ));
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
+        // Issue #944: where no native dialog exists (Android), the keychain-mode
+        // startup runs in the window with `WindowStartupPrompt`; nothing is
+        // opened or changed before the user can answer.
+        app_logic::master_password::KeyMode::Keychain
+            if crate::startup_prompt::startup_prompt_placement(std::env::consts::OS)
+                == crate::startup_prompt::StartupPromptPlacement::Window =>
+        {
+            tracing::info!("the keychain-mode startup runs in the window (Issue #944)");
+            None
+        }
         app_logic::master_password::KeyMode::Keychain => {
-            let keyring = KeyringCredentialStore::new();
+            let keyring = crate::keychain::process_keyring_store();
             let prompt = crate::startup_prompt::NativeStartupPrompt {
                 db_path: inputs.db_path.clone(),
                 language: inputs.language,
@@ -573,7 +583,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             // jeder Laufzeit (s. `runtime_assumptions`).
             match tauri::async_runtime::block_on(open_and_assemble(
                 &wiring.entitlements,
-                wiring.session_extension.clone(),
+                session_extension.clone(),
                 &inputs,
                 app_logic::database_startup::RootKeyAccess::Keychain(&keyring),
                 &prompt,
@@ -628,9 +638,11 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
-            .with_session_extension(wiring.session_extension.clone())
+            .with_session_extension(session_extension)
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
+    let entitlement_catalogue =
+        crate::wiring::EntitlementCatalogue::new(std::mem::take(&mut wiring.entitlement_features));
     let plugins = wiring.plugins;
     let service_host = ServiceHost::new(std::mem::take(&mut wiring.services));
 
@@ -657,14 +669,18 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Kommando unerreichbar („plugin store not found") — selbst wenn die ACL
     // es erlaubt.
     let defer_plugins = app_state.is_none();
-    let builder = if defer_plugins {
+    let ext = std::mem::take(&mut wiring.plugins_after_unlock); // Issue #894
+    let (builder, deferred_extension_plugins) = if defer_plugins {
         tracing::info!(
             "the application starts locked; the plugins that touch files, settings or the \
              operating system are registered only after unlocking (Spec 0101, A16)"
         );
-        builder
+        (builder, ext)
     } else {
-        register_unlocked_plugins_on(builder)
+        (
+            extension_plugins::register_on(register_unlocked_plugins_on(builder), ext),
+            Vec::new(),
+        )
     };
 
     // Schlüsselbund-Modus: Der beim Start aufgebaute Zustand muss hier an
@@ -677,7 +693,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         None => builder,
     };
 
-    builder
+    // Android (Spec 0114): no window frame to restyle, the plugin is not
+    // compiled there.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
@@ -687,10 +706,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // keine Datei, keine Einstellung und keinen Zustand des
         // Betriebssystems — und die Entsperrmaske braucht denselben Rahmen
         // wie die App, sonst springt das Fenster beim Entsperren.
-        .plugin(tauri_plugin_decoration::init())
-        .setup(|app| {
+        .plugin(tauri_plugin_decoration::init());
+    builder
+        .setup(move |app| {
             use tauri::Manager;
-            use tauri_plugin_decoration::WebviewWindowExt;
 
             // Spec 0047, Fund B1: letzter Startschritt — steht dieser
             // Eintrag im Log, ist die App bis zum Fenster durchgestartet;
@@ -701,17 +720,18 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
-            if let Some(window) = app.get_webview_window("main") {
-                let window_clone = window.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = window_clone.activate_decoration().await;
-                    #[cfg(target_os = "macos")]
-                    {
-                        // Spec 0014 Abschnitt 3 & 6: macOS Ampel-Inset (Startwert 12.0, 16.0)
-                        let _ = window_clone.set_traffic_lights_inset(12.0, 16.0).await;
-                    }
-                });
-            }
+            crate::elevated_sftp::install_idle_timer(app.handle());
+
+            // Spec 0108: old whisper.cpp model files are obsolete.
+            speech_models::remove_legacy_files_at_start(app.handle());
+            speech_models::register_resume_handler(app.handle()); // #1327
+
+            // Issue #881: the one worker that delivers AI usage records.
+            app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
+            // Issue #1505: the one worker that delivers activity events.
+            activity.start_worker(&background_tasks::app_scope(app.handle()));
+
+            background_tasks::activate_window_decoration(app.handle());
 
             // Spec 0101, A16: **Nichts davon im gesperrten Zustand.** Alle
             // Aufgaben unten brauchen den `AppState`, und A16 verlangt
@@ -730,13 +750,15 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             Ok(())
         })
+        .manage(background_tasks::new_supervisor())
         .manage(gate.clone())
         .manage(pending)
         .manage(service_host)
         // Spec 0101, A16 / Klarstellung 9: Der Merkzettel ist **nur** da,
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
-        .manage(UnlockedPluginsPendingSlot(defer_plugins))
+        .manage(extension_plugins::UnlockedPluginsPendingSlot(defer_plugins))
+        .manage(extension_plugins::pending(deferred_extension_plugins))
         // Spec 0101, Klarstellung 9 (Fund 8): Ab hier gehört der
         // Flush-Wächter dem verwalteten Zustand, damit `quit_application`
         // den Puffer schreiben kann — `AppHandle::exit` führt keine
@@ -755,21 +777,14 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // dialog, native drop, own edit copy). The drop paths come from the
         // window's native drag-and-drop event below, never from the webview.
         .manage(app_logic::local_path_grants::LocalPathGrants::new())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
-            {
-                use tauri::Manager;
-                if let Some(grants) =
-                    window.try_state::<app_logic::local_path_grants::LocalPathGrants>()
-                {
-                    grants.record_drop(paths.clone());
-                }
-            }
-        })
+        .on_window_event(commands::sftp::record_drag_drop)
         .manage(crate::speech_models::SpeechModels::default())
+        .manage(crate::activities::Activities::default())
         .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
+        .manage(entitlement_catalogue)
         .manage(edition_data_paths)
+        .manage(ui_preference_registry)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
         // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
         // den fehlenden `AppState` zu verlassen, steht im Modulkommentar
@@ -788,6 +803,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::connect,
             commands::cancel_connect,
             commands::confirm_host_key,
+            commands::answer_auth_prompt, commands::cancel_auth_prompt,
             commands::open_terminal,
             commands::terminal_input,
             commands::terminal_resize,
@@ -800,6 +816,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::stop_auto_continuation,
             commands::stop_auto_reconnect,
             commands::start_new_chat,
+            commands::get_session_ai_provider,
             commands::disconnect,
             commands::reconnect_session,
             commands::list_chat_sessions,
@@ -808,8 +825,23 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::delete_chat_session,
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
+            risk_second_opinion::set_risk_second_opinion_settings,
+            risk_second_opinion::set_red_risk_always_confirm,
+            ui_preferences::set_ui_preference,
+            elevated_sftp::idle::get_elevated_idle_timeout,
+            elevated_sftp::idle::set_elevated_idle_timeout,
+            activities::activities_list,
+            activities::activity_cancel,
+            activities::activity_dismiss,
+            activities::activity_start,
+            activities::activity_update,
+            activities::activity_finish,
+            activities::quit_confirmed,
+            activities::activities_interrupted,
+            activities::activity_interrupted_resolve,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
+            speech_models::list_speech_models,
             speech_models::get_speech_model_status,
             speech_models::start_speech_model_download,
             speech_models::cancel_speech_model_download,
@@ -821,6 +853,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             voice_input::cancel_voice_recording,
             commands::list_sessions,
             commands::get_chat_history,
+            commands::get_chat_resync,
             commands::list_groups,
             commands::create_group,
             commands::update_group,
@@ -859,9 +892,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_hard_blacklist,
             commands::list_known_tags,
             commands::evaluate_explained,
-            commands::suggest_rule_patterns,
             commands::explain_confirmation,
-            commands::accept_and_create_rule,
+            commands::explain_segment_rules,
+            commands::create_quick_rules_batch,
             commands::export_document,
             commands::read_credential_file,
             // Spec 0075, §3.1.11: Vorschau und Ausführung des
@@ -884,13 +917,14 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::set_backup_passphrase,
             commands::new_backup_code,
             commands::export_encrypted_backup,
-            commands::pick_backup_import_file,
+            commands::pick_backup_import_file, commands::pick_backup_safety_dir,
             commands::start_backup_import,
             commands::confirm_backup_import,
             commands::cancel_backup_import,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::get_data_paths,
+            commands::get_keychain_service,
             commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,
@@ -907,6 +941,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::claim_dropped_paths,
             commands::clipboard_has_files,
             commands::clipboard_write_text,
+            commands::read_edit_copy_text,
+            commands::write_edit_copy_text,
             commands::claim_clipboard_files,
             commands::sftp_delete,
             commands::sftp_cancel_transfer,
@@ -921,9 +957,11 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,
+            commands::sftp_chown,
             commands::sftp_elevation_enable,
             commands::sftp_elevation_disable,
             commands::sftp_elevation_status,
+            commands::sftp_elevation_allowed,
             commands::read_local_text_preview,
             commands::sftp_open_for_editing,
             commands::local_file_mtime,
@@ -948,16 +986,11 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .build(context)
         .expect("Fehler beim Starten der Tauri-App")
         .run(|app, event| {
+            activities::on_run_event(app, &event);
             // Issue #358: staged "Copy file" files are removed at exit.
             if matches!(event, tauri::RunEvent::Exit) {
-                // Issue #669: stop background services; bounded by the
-                // per-service timeout, so a hanging one cannot block exit.
-                {
-                    use tauri::Manager;
-                    if let Some(host) = app.try_state::<ServiceHost>() {
-                        tauri::async_runtime::block_on(host.stop_all());
-                    }
-                }
+                // Issue #669 / #879: stop services, then the app-scope tasks.
+                background_tasks::shutdown_at_exit(app);
                 file_clipboard::cleanup_at_exit();
             }
         });
@@ -975,11 +1008,15 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     use tauri::Manager;
 
+    // Spec 0114 §4: keep sessions alive in the background on Android.
+    #[cfg(target_os = "android")]
+    android_service::start(app);
+
     // Issue #669: background services start here — only reached once the
     // state exists (after unlock in master-password mode), and after the
     // database extensions were started in `open_and_assemble`.
     let services_app = app.clone();
-    tauri::async_runtime::spawn(async move {
+    background_tasks::app_scope(app).spawn("service-host-start", async move {
         if let Some(host) = services_app.try_state::<ServiceHost>() {
             host.start_all(ServiceContext {
                 app: services_app.clone(),
@@ -992,7 +1029,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne manuelles
     // erneutes Anschalten.
     let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
+    background_tasks::app_scope(&handle).spawn("mcp-autostart", async move {
         crate::mcp_settings::autostart_if_enabled(&handle).await;
     });
 
@@ -1010,11 +1047,9 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     }
 
     let app = app.clone();
-    // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
-    // App-Start — No-op, solange keine Aufbewahrungsdauer
-    // konfiguriert ist (Default).
+    // Spec 0034, Abschnitt 5: Aufräum-Job beim App-Start.
     let handle_for_retention = app.clone();
-    tauri::async_runtime::spawn(async move {
+    background_tasks::app_scope(&app).spawn("chat-retention-cleanup", async move {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
@@ -1022,33 +1057,26 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
 
     // Issue #551: titles for old untitled sessions, once per start.
     let handle_for_titles = app.clone();
-    tauri::async_runtime::spawn(async move {
+    background_tasks::app_scope(&app).spawn("chat-title-backfill", async move {
         let state = handle_for_titles.state::<AppState>();
         app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
     });
 
-    // Spec 0038, Abschnitt 4: hält das Frontend über
-    // `entitlements:changed` aktuell, sobald `EntitlementProvider::
-    // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:
-    // bei `FixedEntitlements` (Community Edition) beendet sich
-    // dieser Task bereits beim Start — `FixedEntitlements::watch()`
-    // droppt ihren `Sender` sofort (s. dortiger Kommentar), also
-    // liefert bereits das erste `changed().await` hier ein `Err`,
-    // die `while`-Schleife läuft kein einziges Mal. Kein aktiver
-    // Leerlauf-Task für die gesamte App-Laufzeit, wie ein früherer
-    // Kommentar hier fälschlich behauptete — die Infrastruktur
-    // (Command + Event) steht trotzdem, s. Spec-Text; ein
-    // künftiger `EntitlementProvider`, der seinen `Sender` am Leben
-    // hält, würde diesen Task tatsächlich laufen lassen.
+    // Spec 0038, Abschnitt 4: hält das Frontend über `entitlements:changed`
+    // aktuell. Bei `FixedEntitlements` (Community) endet der Task sofort,
+    // weil `watch()` ihren `Sender` droppt (s. dortiger Kommentar).
     let handle_for_entitlements = app.clone();
-    tauri::async_runtime::spawn(async move {
+    background_tasks::app_scope(&app).spawn("entitlements-watch", async move {
         let mut receiver = {
             let state = handle_for_entitlements.state::<AppState>();
             state.entitlements.watch()
         };
         while receiver.changed().await.is_ok() {
             let current = receiver.borrow_and_update().clone();
-            tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current).ok();
+            let current = handle_for_entitlements
+                .state::<crate::wiring::EntitlementCatalogue>()
+                .filter(current);
+            commands::emit_entitlements_changed(&handle_for_entitlements, current);
         }
     });
 }
@@ -1062,6 +1090,11 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
 /// dieselbe Liste registrieren. Zwei Listen wären zwei Gelegenheiten, dass
 /// eine davon ein Plugin behält oder verliert.
 fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    // Issue #679: Android only — `tauri_plugin_fs` resolves the `content://`
+    // URIs of the system picker for `local_file`. No `fs:*` permission is
+    // granted to the webview, so it adds no frontend surface.
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_fs::init());
     builder
         // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
         // 0008, Abschnitt 6): der native Dialog läuft im Backend
@@ -1092,6 +1125,9 @@ fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::B
         // Entsperrung gibt es nichts zu melden — der MCP-Server läuft dort
         // ohnehin nicht (A16).
         .plugin(tauri_plugin_notification::init())
+        // Android (Spec 0108, 5.7): runtime request for RECORD_AUDIO; it has
+        // no command the webview may call, and only a recording start uses it.
+        .plugin(microphone_plugin())
 }
 
 /// Dasselbe wie [`register_unlocked_plugins_on`], nur nach `build()`
@@ -1107,16 +1143,19 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
     // Im Schlüsselbund-Modus stehen sie schon seit der Bauzeit. Ein
     // zweiter Versuch würde scheitern („plugin … already registered"),
     // deshalb wird nur im aufgeschobenen Fall registriert.
-    match app.try_state::<UnlockedPluginsPendingSlot>() {
+    match app.try_state::<extension_plugins::UnlockedPluginsPendingSlot>() {
         Some(slot) if slot.0 => {}
         _ => return,
     }
     let results: Vec<Result<(), tauri::Error>> = vec![
+        #[cfg(target_os = "android")]
+        app.plugin(tauri_plugin_fs::init()),
         app.plugin(tauri_plugin_dialog::init()),
         app.plugin(tauri_plugin_opener::init()),
         app.plugin(tauri_plugin_store::Builder::new().build()),
         app.plugin(tauri_plugin_os::init()),
         app.plugin(tauri_plugin_notification::init()),
+        app.plugin(microphone_plugin()),
     ];
     for result in results {
         if let Err(err) = result {
@@ -1127,50 +1166,24 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
             );
         }
     }
+    extension_plugins::register_pending(app); // Issue #894: after the core's own
+    elevated_sftp::idle::reload_stored(app); // Issue #1193: the store exists now
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"
     );
 }
 
-/// Merkzettel: Sind die Plugins aus [`register_unlocked_plugins_on`]
-/// aufgeschoben und nach dem Entsperren nachzuholen?
-///
-/// Ein eigener Typ statt eines `bool` im `PendingStartup`: So steht die
-/// Information dort, wo [`register_unlocked_plugins`] sie findet — ohne
-/// dass die Funktion den Startzustand kennen muss. **Immer** verwaltet,
-/// auch mit `false`: Ein nur manchmal vorhandener Zustand ist in Tauri eine
-/// Fehlerquelle (gemessen M1).
-pub(crate) struct UnlockedPluginsPendingSlot(pub bool);
-
-/// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
-/// Verteiler.
-///
-/// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
-/// nicht in einem Schließungsausdruck mitten in der Builder-Kette
-/// verschwindet: **erst** prüfen, **dann** weiterleiten.
-///
-/// Über die Laufzeit `R` abstrahiert, damit `startup_gate_wiring` die
-/// Verdrahtung mit der Test-Laufzeit **durch den echten IPC-Weg** prüfen
-/// kann (T18): In `run()` wird `R` zu `tauri::Wry`, am Aufruf ändert sich
-/// nichts.
-fn gated<R: tauri::Runtime, F>(
-    gate: std::sync::Arc<crate::startup_gate::StartupGate>,
-    inner: F,
-) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
-where
-    F: Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
-{
-    move |invoke| {
-        let command = invoke.message.command();
-        if !gate.allows(command) {
-            tracing::warn!(
-                command,
-                "a command was refused because the application is locked (Spec 0101, A16)"
-            );
-            invoke.resolver.reject(crate::startup_gate::APP_LOCKED_CODE);
-            return true;
-        }
-        inner(invoke)
-    }
+/// Android: the microphone permission plugin (shipped by `tauri-plugin-android-host`); elsewhere a plugin that does
+/// nothing (keeps both registration chains identical on every platform).
+fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri_plugin_android_host::microphone()
 }
+
+/// Installs `aws-lc-rs` as the process-level rustls provider (idempotent).
+pub(crate) fn init_crypto_provider() {
+    tls_config::install_default_crypto_provider();
+}
+
+#[cfg(test)]
+mod crypto_provider;

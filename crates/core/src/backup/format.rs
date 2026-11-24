@@ -90,16 +90,6 @@ impl SlotMaterial {
         Self::derive_with(&Argon2Deriver, secret, KdfParams::WRITE, None)
     }
 
-    /// Derives the material for an existing salt (e.g. to open a file whose
-    /// slot salt is known).
-    pub fn derive_with_salt(
-        secret: &BackupSecret,
-        salt: &[u8],
-        params: KdfParams,
-    ) -> Result<SlotMaterial, BackupError> {
-        Self::derive_with(&Argon2Deriver, secret, params, Some(salt))
-    }
-
     /// A fresh recovery code and its slot material (K2).
     pub fn generate_code() -> Result<(RecoveryCode, SlotMaterial), BackupError> {
         let code = RecoveryCode::generate()?;

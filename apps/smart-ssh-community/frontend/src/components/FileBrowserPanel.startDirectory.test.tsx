@@ -5,42 +5,46 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sftpList, sftpStartDirectory } from "../api";
+import { sftpList, sftpStartDirectory } from "../api/api";
 import { testI18n } from "../testI18n";
-import { showToast } from "../toastBus";
-import type { RemoteEntryDto } from "../types";
+import { showToast } from "../buses/toastBus";
+import type { RemoteEntryDto } from "../api/types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
-vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
-  sftpList: vi.fn(),
-  sftpStartDirectory: vi.fn(),
-  sessionIsRoot: vi.fn(() => Promise.resolve(false)),
-  sftpDelete: vi.fn(),
-  sftpDeletePreview: vi.fn(),
-  sftpDownload: vi.fn(),
-  sftpDownloadDefault: vi.fn(),
-  sftpDownloadDir: vi.fn(),
-  sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
-  sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
-  sftpElevationEnable: vi.fn(),
-  sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
-  sftpMkdir: vi.fn(),
-  sftpReadText: vi.fn(),
-  sftpRename: vi.fn(),
-  sftpUpload: vi.fn(),
-  sftpExists: vi.fn(),
-  sftpChmod: vi.fn(),
-  readLocalTextPreview: vi.fn(),
-  sftpStat: vi.fn(),
-  sftpOpenForEditing: vi.fn(),
-  localFileMtime: vi.fn(),
-  closeEditSession: vi.fn(),
-}));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    sftpList: vi.fn(),
+    sftpStartDirectory: vi.fn(),
+    sessionIsRoot: vi.fn(() => Promise.resolve(false)),
+    sftpDelete: vi.fn(),
+    sftpDeletePreview: vi.fn(),
+    sftpDownload: vi.fn(),
+    sftpDownloadDefault: vi.fn(),
+    sftpDownloadDir: vi.fn(),
+    sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
+    sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
+    sftpElevationEnable: vi.fn(),
+    sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
+    sftpMkdir: vi.fn(),
+    sftpReadText: vi.fn(),
+    sftpRename: vi.fn(),
+    sftpUpload: vi.fn(),
+    sftpExists: vi.fn(),
+    sftpChmod: vi.fn(),
+    sftpChown: vi.fn(),
+    readLocalTextPreview: vi.fn(),
+    sftpStat: vi.fn(),
+    sftpOpenForEditing: vi.fn(),
+    localFileMtime: vi.fn(),
+    closeEditSession: vi.fn(),
+  }),
+);
 
-vi.mock("../events", () => ({
+vi.mock("../api/events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
+  onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
+  onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -50,11 +54,11 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   revealItemInDir: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("../toastBus", () => ({
+vi.mock("../buses/toastBus", () => ({
   showToast: vi.fn(),
 }));
 
-vi.mock("../fileTypeSettings", () => ({
+vi.mock("../settings/fileTypeSettings", () => ({
   loadFileTypeApps: vi.fn(() => Promise.resolve({})),
   appForFileName: () => null,
 }));
@@ -69,9 +73,11 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
 }));
 
-vi.mock("../layoutSettings", () => ({
+vi.mock("../settings/layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
+  loadHiddenFileColumns: vi.fn(() => Promise.resolve([])),
+  saveHiddenFileColumns: vi.fn(() => Promise.resolve()),
   loadFileManagerSort: vi.fn(() => Promise.resolve(null)),
   saveFileManagerSort: vi.fn(() => Promise.resolve()),
 }));
@@ -88,7 +94,7 @@ function dirEntry(path: string): RemoteEntryDto {
     uid: 1000,
     gid: 1000,
     owner: null,
-    group: null,
+    group: null, isSymlink: false, linkTarget: null, linkKind: null,
   };
 }
 
@@ -116,14 +122,14 @@ describe("FileBrowserPanel start directory (Spec 0102)", () => {
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "/srv/app", null));
     expect(sftpList).not.toHaveBeenCalledWith("session-1", ".", null);
-    await screen.findByDisplayValue("/srv/app");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv/app"));
 
     fireEvent.click(screen.getByTitle("Übergeordnetes Verzeichnis"));
-    await screen.findByDisplayValue("/srv");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv"));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", "/srv", null);
 
     fireEvent.click(screen.getByTitle("Zum Startverzeichnis"));
-    await screen.findByDisplayValue("/srv/app");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "/srv/app"));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", "/srv/app", null);
     expect(showToast).not.toHaveBeenCalled();
   });
@@ -135,10 +141,10 @@ describe("FileBrowserPanel start directory (Spec 0102)", () => {
     });
 
     renderPanel();
-    await screen.findByDisplayValue("./projects");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "./projects"));
 
     fireEvent.click(screen.getByTitle("Übergeordnetes Verzeichnis"));
-    await screen.findByDisplayValue(".");
+    await waitFor(() => expect(screen.getByTestId("path-bar")).toHaveAttribute("title", "."));
     expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null);
   });
 
