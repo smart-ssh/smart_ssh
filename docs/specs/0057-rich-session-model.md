@@ -80,9 +80,12 @@ Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
   `transport`, `session_setup`), ohne Fehlertext und ohne Geheimnisse. Ein
   gescheiterter Versuch hat keine Sitzung: sein Ereignis trägt die Kennung des
   Versuchs und den Server, aber keine Chat-Sitzung. Abgebrochene Versuche und
-  der lokale Pseudo-Server melden kein `failed`; ein fehlgeschlagener
-  Wiederverbindungsversuch meldet nichts. Eine bereits verlorene Verbindung
-  meldet beim Schließen kein zweites `disconnected`.
+  der lokale Pseudo-Server melden kein `failed`. Scheitert dagegen ein
+  Wiederverbindungsversuch einer bestehenden Sitzung (manuell oder
+  automatisch), meldet er genau ein `failed` mit dem erreichten Schritt; das
+  Ereignis trägt die Kennung der bestehenden Sitzung und, sobald „Chat
+  begonnen" gemeldet wurde, deren Chat-Sitzung (davor keine). Eine bereits
+  verlorene Verbindung meldet beim Schließen kein zweites `disconnected`.
 - **Nutzeraktivität** — höchstens einmal pro Minute und Sitzung, wenn in dieser
   Minute eine Eingabe stattfand (Terminal-Taste, Chat-Nachricht, Bestätigung)
   oder ein vom Nutzer gestarteter Befehl lief. Ein Befehl, den ein MCP-Client

@@ -143,6 +143,104 @@ async fn test_reconnect_emits_reconnected_in_the_same_session() {
     reset(app.handle());
 }
 
+/// Connects a session, marks it lost and fails its reconnect with `err`.
+async fn failed_reconnect(
+    err: SshError,
+    break_server: bool,
+) -> (Arc<Recorder>, SessionId, String, uuid::Uuid) {
+    let app = acknowledged_app();
+    let old = Arc::new(AtomicBool::new(false));
+    let connector = ScriptedConnector::new(connected(&old));
+    let mut fx = fixture(connector.clone()).await;
+    let recorder = observed(&mut fx);
+    let session_id = uuid::Uuid::new_v4();
+    connect_session(
+        app.handle(),
+        &fx.state,
+        fx.server_id,
+        session_id,
+        None,
+        true,
+    )
+    .await
+    .unwrap();
+    let session = fx.state.sessions.get(session_id).unwrap();
+    *session.conn.status.lock().unwrap() = ConnectionStatus::Disconnected;
+    if break_server {
+        fx.state
+            .profile_store
+            .delete_server(&fx.server_id)
+            .await
+            .unwrap();
+    } else {
+        connector.push(Err(err));
+    }
+    let (elevated, grants) = registry_pair();
+    reconnect_session_inner(
+        app.handle(),
+        &fx.state,
+        &elevated,
+        &grants,
+        session_id,
+        true,
+    )
+    .await
+    .expect_err("must fail");
+    let server = fx.server_id.0.to_string();
+    let chat = session
+        .persistence
+        .chat_session_id
+        .lock()
+        .await
+        .expect("chat id");
+    reset(app.handle());
+    (recorder, session_id, server, chat)
+}
+
+#[tokio::test]
+async fn test_failed_reconnect_at_transport_emits_one_failed_without_error_text() {
+    let _guard = lock_async().await;
+    let (recorder, session_id, server, _chat) =
+        failed_reconnect(SshError::AuthenticationFailed, false).await;
+    let events = recorder.0.lock().unwrap().clone();
+    let failed: Vec<_> = events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e.kind,
+                ActivityEventKind::Connection {
+                    change: ConnectionChange::Failed(_)
+                }
+            )
+        })
+        .collect();
+    assert_eq!(failed.len(), 1, "{events:?}");
+    assert_eq!(
+        failed[0].kind,
+        connection(ConnectionChange::Failed(ConnectFailureStep::Transport))
+    );
+    assert_eq!(failed[0].session.runtime_session_id, session_id.to_string());
+    assert_eq!(failed[0].session.server_id, Some(server));
+    assert!(!events.iter().any(|e| matches!(
+        e.kind,
+        ActivityEventKind::Connection {
+            change: ConnectionChange::Reconnected
+        }
+    )));
+    assert!(!format!("{failed:?}").contains("uth"));
+}
+
+#[tokio::test]
+async fn test_failed_reconnect_in_preparation_reports_preparation() {
+    let _guard = lock_async().await;
+    let (recorder, ..) = failed_reconnect(SshError::AuthenticationFailed, true).await;
+    let last = recorder.kinds().pop().unwrap();
+    assert_eq!(
+        last,
+        connection(ConnectionChange::Failed(ConnectFailureStep::Preparation))
+    );
+}
+
 #[tokio::test]
 async fn test_connect_without_observer_constructs_no_event() {
     let _guard = lock_async().await;
