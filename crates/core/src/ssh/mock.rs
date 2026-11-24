@@ -45,6 +45,8 @@ struct Inner {
     /// Methode überhaupt erreicht wurde, z. B. "wurde vor der Bestätigung
     /// nichts geschrieben" (Spec 0020, Abschnitt 4.2, Punkt 2).
     calls: Vec<String>,
+    /// `max_bytes` of every `read_file_capped` call, in order.
+    capped_limits: Vec<u64>,
     /// Pfade, bei denen `write_file` mit
     /// [`SshError::SftpPermissionDenied`] scheitern soll — simuliert Spec
     /// 0020, Abschnitt 4.3, ohne einen echten privilegierten Zielpfad zu
@@ -123,6 +125,11 @@ impl MockSftpSession {
         lock_tolerating_poison(&self.inner).calls.clone()
     }
 
+    /// The `max_bytes` passed to each `read_file_capped` call, in order.
+    pub fn capped_read_limits(&self) -> Vec<u64> {
+        lock_tolerating_poison(&self.inner).capped_limits.clone()
+    }
+
     /// Aktueller Inhalt eines Pfads, falls (noch) vorhanden — für Tests, die
     /// nach einem `write_file`/`remove`/`rename` den resultierenden Zustand
     /// direkt prüfen wollen, ohne selbst wieder über den Trait zu lesen.
@@ -191,6 +198,7 @@ impl SftpSession for MockSftpSession {
     ) -> Result<Vec<u8>, SshError> {
         let mut inner = lock_tolerating_poison(&self.inner);
         inner.calls.push(format!("read_file_capped {path}"));
+        inner.capped_limits.push(max_bytes);
         let content = inner
             .files
             .get(path)
