@@ -85,7 +85,9 @@ Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
   meldet beim Schließen kein zweites `disconnected`.
 - **Nutzeraktivität** — höchstens einmal pro Minute und Sitzung, wenn in dieser
   Minute eine Eingabe stattfand (Terminal-Taste, Chat-Nachricht, Bestätigung)
-  oder ein Befehl lief. Ohne jeden Inhalt, auch ohne Anzahl; getippte Zeichen
+  oder ein vom Nutzer gestarteter Befehl lief. Ein Befehl, den ein MCP-Client
+  gestartet hat, zählt nicht als Nutzeraktivität; Eingaben des Nutzers
+  während eines solchen Befehls zählen weiterhin. Ohne jeden Inhalt, auch ohne Anzahl; getippte Zeichen
   werden nie gespeichert, ausgewertet oder in ein Ereignis gelegt. Die
   Berechnung läuft neben dem Eingabepfad (nur ein Merker), die Tastatur wird nie
   aufgehalten.

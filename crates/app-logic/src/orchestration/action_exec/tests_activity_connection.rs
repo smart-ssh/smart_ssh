@@ -192,6 +192,33 @@ async fn test_running_command_counts_as_activity_without_input() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn test_mcp_started_command_is_not_user_activity_but_input_is() {
+    let recorder = Arc::new(Recorder::default());
+    let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![recorder.clone()]));
+    let session = Arc::new(with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    ));
+    let _slot = session
+        .transport
+        .begin_command_from(Uuid::new_v4(), true)
+        .await
+        .unwrap();
+    let sup = crate::tasks::TaskSupervisor::new();
+    spawn_user_activity_tick(&session, &sup.session_scope(Uuid::new_v4()));
+    tokio::task::yield_now().await;
+    tokio::time::advance(USER_ACTIVITY_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(recorder.count_activity(), 0);
+    // User input during the MCP command still counts.
+    session.note_user_input();
+    tokio::time::advance(USER_ACTIVITY_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(recorder.count_activity(), 1);
+}
+
+#[tokio::test(start_paused = true)]
 async fn test_no_input_marker_reaches_any_event_and_nothing_is_built_without_observer() {
     // Without an observer no tick task runs, no flag is kept, nothing is built.
     crate::activity::CONSTRUCTED.with(|c| c.set(0));
