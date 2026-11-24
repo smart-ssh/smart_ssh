@@ -77,8 +77,8 @@ class MainActivity : TauriActivity() {
     val CHOICES = setOf("system", "light", "dark")
     val THEMES = setOf("light", "dark")
     // `--surface-sunken` of theme/dark.css and theme/light.css.
-    val COLOR_DARK_BACKGROUND = 0xFF090C14.toInt()
-    val COLOR_LIGHT_BACKGROUND = 0xFFF4F6FA.toInt()
+    val COLOR_DARK_BACKGROUND = 0xFF080A0D.toInt()
+    val COLOR_LIGHT_BACKGROUND = 0xFFF2F4F7.toInt()
   }
 
   /**

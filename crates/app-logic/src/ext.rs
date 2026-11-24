@@ -42,6 +42,18 @@ pub use crate::orchestration::accept_extension_content;
 // --- AI usage ------------------------------------------------------------
 pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 
+// --- Activity observers (issue #1505) --------------------------------------
+pub use crate::activity::{
+    ActivityDecisionOutcome, ActivityEvent, ActivityEventKind, ActivityObserver,
+    ActivitySessionKind, ActivitySource, RuleSnapshot, ServerSnapshot, SessionEndReason,
+    SessionRef,
+};
+
+/// Activity events dropped so far because the delivery queue was full.
+pub fn dropped_activity_events(state: &AppState) -> u64 {
+    state.activity.dropped_events()
+}
+
 // --- AI provider decorators ----------------------------------------------
 pub use crate::ai_provider_decorator::{apply_decorators, AiProviderDecorator, AiProviderInfo};
 pub use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, ProviderType, RedactedContext};
@@ -62,6 +74,9 @@ pub use crate::tasks::{ScopeKey, ShutdownReport, TaskScope, TaskSupervisor};
 
 // --- Events --------------------------------------------------------------
 pub use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
+
+// --- Redaction service ---------------------------------------------------
+pub use crate::redact_for_server::RedactedText;
 
 // --- Errors and helpers --------------------------------------------------
 pub use crate::dto::{is_local, DocumentFormat};
@@ -96,6 +111,21 @@ pub async fn rebuild_redactors_for_open_sessions(state: &AppState) {
     for server_id in open_session_server_ids(state) {
         rebuild_server_redactors(state, server_id).await;
     }
+}
+
+/// Redacts `text` with the **current** redactor of `server_id`, including
+/// the secrets session extensions contribute via `known_secrets`. For a
+/// deleted server only the generic patterns apply and
+/// [`RedactedText::generic_only`] is set.
+pub async fn redact_for_server(state: &AppState, server_id: ServerId, text: &str) -> RedactedText {
+    crate::redact_for_server::redact_for_server(
+        state.profile_store.as_ref(),
+        state.credential_store.clone(),
+        state.session_extension.as_deref(),
+        server_id,
+        text,
+    )
+    .await
 }
 
 pub(crate) fn server_ids_of(sessions: &crate::session::SessionManager) -> Vec<ServerId> {

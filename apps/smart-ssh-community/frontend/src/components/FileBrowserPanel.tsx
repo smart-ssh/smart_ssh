@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { Button, Icon } from "./ui";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sortEntries } from "../lib/fileSort";
 import { displayPath } from "../lib/remotePath";
@@ -195,6 +196,21 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
   });
 
 
+  const [pathEditing, setPathEditing] = useState(false);
+  // Ctrl/Cmd+L while the file browser has focus switches the breadcrumb to the input.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        setPathEditing(true);
+      }
+    };
+    panel.addEventListener("keydown", onKeyDown);
+    return () => panel.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleRefresh = () => {
     setOpenMenu(null);
     load(path);
@@ -269,6 +285,14 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
         pathInput={pathInput}
         setPathInput={setPathInput}
         load={load}
+        pathEditing={pathEditing}
+        setPathEditing={setPathEditing}
+        onRefresh={handleRefresh}
+        onShowColumns={(point) => {
+          setOpenMenu(null);
+          setDirMenu(null);
+          setColumnsMenu(point);
+        }}
         overflowRef={menus.overflowRef}
         overflowButtonRef={menus.overflowButtonRef}
         overflowOpen={menus.overflowOpen}
@@ -382,6 +406,21 @@ export function FileBrowserPanel({ sessionId, serverId, isVisible, onElevationCh
           </div>
         )}
       </div>
+
+      {narrow && (
+        <div
+          data-testid="narrow-action-bar"
+          className="flex shrink-0 gap-2 border-t border-border bg-surface-sunken px-3 py-2"
+        >
+          <Button className="flex-1" onClick={ops.openMkdir}>
+            {t("fileBrowser.newFolderButton")}
+          </Button>
+          <Button variant="primary" className="flex flex-1 items-center justify-center gap-1.5" onClick={xfer.handleUploadButton}>
+            <Icon name="upload" />
+            {t("fileBrowser.upload")}
+          </Button>
+        </div>
+      )}
 
       {/* Spec 0054, Teil 1: Kontextmenü (Rechtsklick) — dieselbe
           `FileEntryMenu`-Instanz wie das Drei-Punkte-Menü, nur `fixed` an

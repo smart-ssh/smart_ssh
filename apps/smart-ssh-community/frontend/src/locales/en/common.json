@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Main navigation",
     "connect": "Connect",
     "manage": "Manage",
     "rules": "Filter Rules"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "No server added yet",
     "emptyStateHint": "Add your first server to connect over SSH.",
     "emptyStateCreateFirstServer": "Add first server",
-    "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server."
+    "emptyStateTryLocalhost": "Try it without a server: \"Localhost\" above opens a session on this machine — with the same confirmations as on a real server.",
+    "localBadge": "Local",
+    "thisDevice": "this device",
+    "sessionOpen": "Session open",
+    "sessionPending": "Waiting for confirmation",
+    "sessionDisconnected": "Session disconnected",
+    "sessionReconnecting": "Session reconnecting"
   },
   "settings": {
     "title": "Settings",
@@ -136,11 +143,15 @@
     "importSshConfig": "Import …",
     "importSshConfigHint": "Import servers from an OpenSSH ssh_config file",
     "exportSshConfig": "Export …",
-    "exportSshConfigHint": "Export servers to OpenSSH ssh_config"
+    "exportSshConfigHint": "Export servers to OpenSSH ssh_config",
+    "title": "Servers",
+    "collapseGroup": "Collapse group “{{name}}”",
+    "expandGroup": "Expand group “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Drop here to move to the top level (no group)",
     "hintRoot": "→ top level (no group)",
+    "current": "current",
     "hintGroup": "→ move into this group",
     "hintCycle": "A group cannot be moved into its own subgroup",
     "moveTo": "Move “{{name}}” to…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "This also permanently deletes this server's chat history, notes, and tags.",
     "confirmDeleteServer": "Delete permanently",
     "testResult": {
-      "success": "✓ Connection successful",
-      "authFailed": "✗ Login rejected. Check the user name and password or key.",
+      "success": "Connection successful",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Login rejected. Check the user name and password or key.",
       "hostKeyUnknown": "Host key unknown — confirmation required",
-      "hostKeyMismatch": "⚠ Host key has changed",
-      "networkError": "✗ Network error: {{message}}",
-      "timeout": "✗ The server isn't responding. Check address, port and firewall."
+      "hostKeyMismatch": "Host key has changed",
+      "networkError": "Network error: {{message}}",
+      "timeout": "The server isn't responding. Check address, port and firewall."
     },
     "largeNoteHint": "This note is very large and may be shortened for the AI context during long sessions. The stored note stays fully intact.",
     "summarizeNow": "Summarize now",
@@ -356,7 +368,11 @@
     "matchedRuleLabel": "Rule:",
     "segmentLabel": "Segment {{index}}",
     "checksLabel": "Checks:",
-    "hardBlacklistLabel": "Hard blacklist:"
+    "hardBlacklistLabel": "Hard blacklist:",
+    "invalidPattern": "Invalid pattern",
+    "rowActions": "Row actions",
+    "ruleCount_one": "{{count}} rule",
+    "ruleCount_other": "{{count}} rules"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatic continuation paused after {{limit}} steps without your confirmation — send a message to continue.",
@@ -377,8 +393,8 @@
     "discardedAfterReconnect": "Discarded after the connection was re-established. Nothing was run.",
     "expiredTimeout": "Not answered in time and discarded. Nothing was run.",
     "expiredUnknown": "This request is no longer pending. Nothing was run.",
-    "usesStoredSudoPassword": "🔑 Runs using the stored sudo password.",
-    "writeMayUseStoredSudoPassword": "🔑 If write permission is missing, the app writes using the stored sudo password (sudo).",
+    "usesStoredSudoPassword": "Runs using the stored sudo password.",
+    "writeMayUseStoredSudoPassword": "If write permission is missing, the app writes using the stored sudo password (sudo).",
     "takeIntoNote": "Take into note",
     "takeIntoNoteFailed": "Failed — try again",
     "riskServerLabel": "Server",
@@ -388,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "The AI second opinion could not be obtained. The risk shown is the rule-based one.",
     "riskHint": "Assessment based on known patterns — no guarantee.",
     "runningSince": "running for {{seconds}}s…",
+    "exitCode": "exit code: {{code}}",
     "waitingForInputHint": "This command is probably waiting for input. Stop it, and the AI will propose a non-interactive variant.",
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
-    "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
-    "commandTruncatedNotice": "⚠ Output was cut off at the size limit — it may be incomplete.",
+    "commandCancelledNotice": "Manually cancelled — output may be incomplete, no regular exit code.",
+    "commandTruncatedNotice": "Output was cut off at the size limit — it may be incomplete.",
     "liveOutputLabel": "Live output",
-    "liveOutputTruncatedNotice": "⚠ Size limit reached — further output is no longer shown.",
+    "liveOutputTruncatedNotice": "Size limit reached — further output is no longer shown.",
     "autoRanLead": "Ran automatically",
     "autoRanRule": "rule",
     "autoRanScopeGlobal": "global",
@@ -409,17 +426,14 @@
     "editableCommand": "Command — editable",
     "execute": "Execute",
     "deny": "Deny",
-    "quickRule": "Accept + Rule",
-    "quickRuleDropdownAria": "Show rule suggestions",
-    "newRulePatternHeading": "Pattern for the new allow rule",
     "scopeThisServer": "This Server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
     "tagNamePlaceholder": "Tag name",
     "loadingSuggestions": "Loading suggestions…",
     "noSuggestions": "No suggestions.",
-    "binaryFileHint": "⚠ Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Content too large for a line diff. Previous size: {{oldSize}}, new size: {{newSize}}.",
+    "binaryFileHint": "Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}.",
+    "diffTooLargeHint": "Content too large for a line diff. Previous size: {{oldSize}}, new size: {{newSize}}.",
     "noContentChange": "(no content change)",
     "quickRuleLabel": {
       "exact": "Exact: {{patterns}}",
@@ -437,9 +451,17 @@
       "blocked": "always asks, whatever the rules: {{reasons}}",
       "verdictAuto": "runs automatically next time",
       "verdictAsk": "will still ask: {{reasons}}",
-      "notice": "Rule created. This command will still ask next time: {{reasons}}",
       "reasonOther": "another safety check",
-      "loadFailed": "Rule coverage could not be loaded"
+      "loadFailed": "Rule coverage could not be loaded",
+      "summaryHeading": "Already allowed",
+      "toDecideHeading": "Still to decide",
+      "expandAria": "Rule suggestions for {{segment}}",
+      "stagedBadge": "not saved yet",
+      "removeStaged": "Remove",
+      "saveRules": "Save rules ({{count}})",
+      "saveFailed": "Rules could not be saved: {{message}}",
+      "unsavedHint": "Rules not saved: {{count}}",
+      "segmentCovered": "covers this part; the command still asks: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +478,7 @@
     "mismatchBodyAfterHost": " is presenting a different key than the one stored last time. This can indicate a man-in-the-middle attack. Only continue if you are sure the server key changed legitimately (e.g. server reinstallation).",
     "known": "Known",
     "offeredNow": "Offered Now",
+    "offered": "Offered",
     "keyType": "Key type",
     "cancelConnection": "Cancel Connection",
     "trustAnyway": "Trust Anyway",
@@ -468,13 +491,17 @@
   },
   "sessionTabs": {
     "newSession": "New session",
-    "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
     "menu": {
       "open": "Open navigation menu",
       "title": "Navigation menu",
-      "sessions": "Open sessions"
+      "sessions": "Open sessions",
+      "close": "Close navigation menu",
+      "needsConfirmation": "Needs confirmation",
+      "activities": "Activities",
+      "activitiesRunning_one": "{{count}} running",
+      "activitiesRunning_other": "{{count}} running"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +510,9 @@
       "pendingBadge": "Needs confirmation",
       "readOnlyHint": "This session belongs to an external tool (MCP). It only shows the tool's actions to confirm or reject and their results; there is no chat input or terminal here. Closing it ends the MCP session and rejects pending confirmations."
     },
-    "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected."
+    "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected.",
+    "pendingBadge": "Pending",
+    "newConnection": "New connection"
   },
   "aiProvider": {
     "openLogs": "Open diagnostic logs in file manager",
@@ -505,16 +534,16 @@
     "apiKeyFormatHint": "Doesn't look like a {{providerLabel}} key – expected a prefix like \"{{expectedPrefix}}\". You can still save it; providers change formats occasionally.",
     "testCredentials": "Test credentials",
     "testingCredentials": "Testing…",
-    "testResultValid": "✓ Credentials valid",
-    "testResultAuthFailed": "✗ Authentication failed – check the API key",
-    "testResultUnreachable": "✗ Provider unreachable: {{message}}",
+    "testResultValid": "Credentials valid",
+    "testResultAuthFailed": "Authentication failed – check the API key",
+    "testResultUnreachable": "Provider unreachable: {{message}}",
     "testResultRateLimited": "Credentials look valid, but the provider is rate-limiting right now. Test again in a minute.",
     "nativeToolCalling": "Supports native tool calling",
     "discoverModels": "Load models",
     "discoveringModels": "Loading models…",
     "modelDiscoveryFailedHint": "Could not load models automatically — enter the model name manually.",
     "modelDiscoveryEmptyHint": "The provider returned no models. Enter the model name by hand.",
-    "modelDiscoveryAuthFailed": "✗ The provider rejected these credentials – check the API key",
+    "modelDiscoveryAuthFailed": "The provider rejected these credentials – check the API key",
     "advanced": "Advanced",
     "extraHeadersLabel": "Extra headers",
     "extraHeadersHint": "Attached to every request to this provider (e.g. OpenRouter's HTTP-Referer/X-Title).",
@@ -557,6 +586,7 @@
     "ollamaProbeRetry": "Search again",
     "ollamaProbeNotFoundHeading": "No local Ollama found (default port 11434).",
     "ollamaProbeNotFoundInstructions": "Install Ollama from ollama.com, start it and load a model (e.g. `ollama pull llama3`), then search again.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +703,7 @@
     "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "The selected AI provider is not configured. Choose a configured provider.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Choose an AI provider before turning on the risk second opinion.",
+    "CHAT_SESSION_NOT_FOUND": "This saved chat no longer exists. Select Retry to connect normally without resuming it.",
     "SESSION_NOT_FOUND": "This session is no longer open. Open it again from the server list.",
     "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device",
@@ -853,6 +884,8 @@
     "groupsHeading": "Resulting folder structure",
     "entriesHeading": "{{count}} servers",
     "field": {
+      "name": "Name",
+      "include": "Include",
       "host": "Address",
       "port": "Port",
       "username": "User",
@@ -928,6 +961,8 @@
       "proxyJumpLocalPseudoServer": "points to the local pseudo server"
     },
     "confirm": "Import",
+    "confirmCount_one": "Import {{count}} server",
+    "confirmCount_other": "Import {{count}} servers",
     "applying": "Importing …",
     "result": {
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
@@ -1081,6 +1116,7 @@
     "parentDirectory": "Parent directory",
     "newFolderButton": "+ Folder",
     "fileActionsGroup": "File actions",
+    "directoryActions": "Directory actions",
     "upload": "Upload",
     "uploadDialogTitle": "Upload file(s)",
     "uploadFolder": "Upload folder",
@@ -1126,8 +1162,7 @@
       "editing": "Editing “{{name}}” locally…",
       "end": "Stop editing",
       "uploadTitle": "Upload local changes?",
-      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change.",
-      "noDiff": "No text diff possible (binary file or too large). New size: {{size}}."
+      "remoteChanged": "The remote file was changed since the download — uploading would overwrite that other change."
     },
     "deleteDialog": {
       "fileTitle": "Delete file?",
@@ -1149,7 +1184,6 @@
       "conflictTitle": "Overwrite files in the folder?",
       "conflictBody": "Uploading “{{name}}” would overwrite these {{count}} files on the server. Nothing is overwritten unless you confirm.",
       "summaryTitle": "Folder upload: “{{name}}”",
-      "summary": "{{uploaded}} files uploaded, {{skipped}} skipped, {{failed}} failed.",
       "notAttempted": "{{count}} files were not attempted because their folder could not be created.",
       "skipped": "Skipped",
       "failed": "Failed",
@@ -1160,12 +1194,14 @@
         "unsupported": "not a regular file or folder",
         "notGranted": "not covered by your selection",
         "overwriteNotConfirmed": "exists on the server, overwrite not confirmed"
-      }
+      },
+      "uploaded": "Uploaded"
     },
     "uploadConflict": {
       "title": "Overwrite file?",
       "body": "already exists on the server.",
-      "noDiff": "No text diff possible (binary file or too large). Current size: {{remoteSize}}, new size: {{localSize}}."
+      "currentSize": "Current size",
+      "newSize": "New size"
     },
     "menu": {
       "download": "Download",
@@ -1254,7 +1290,9 @@
       "recursive": "Apply to contents",
       "recursiveWarning": "— changes the owner of ALL files and subfolders in this folder. Symbolic links are not followed. Cannot be undone."
     },
-    "transferChown": "Changing owner of {{name}}"
+    "transferChown": "Changing owner of {{name}}",
+    "stopProgress": "Progress",
+    "noTextDiff": "No text diff possible (binary file or too large)."
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
@@ -1284,12 +1322,17 @@
     "queued": "Will be sent with the next request",
     "responseCancelled": "Response cancelled.",
     "contextCompactedNotice": "Older parts of this chat were summarized to fit the model's context.",
-    "contextUsage": "Context {{used}} / {{window}}",
     "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
+    "messageLabel": "Message",
+    "headerProviderTooltip": "Provider: {{provider}}",
     "webResearchUnavailable": "Web research is not available for this provider account (web search is disabled there). This session answers without web research. To turn it off permanently: Settings → AI Provider → “Web research”.",
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
     "refusedResponse": "The model declined this request. Rephrase it or start a new chat.",
     "outputTruncated": "(truncated)",
+    "outputMoreLines_one": "… {{count}} more line",
+    "outputMoreLines_other": "… {{count}} more lines",
+    "outputShowAll": "Show all",
+    "outputShowLess": "Show less",
     "fileWritten": "File '{{path}}' written.",
     "writtenWithSudoPassword": "Written using the stored sudo password.",
     "documentGenerated": "Document generated",
@@ -1367,6 +1410,8 @@
     "aiTab": "AI",
     "paneTabs": "Session panes",
     "moreActions": "More actions",
+    "thisDevice": "this device",
+    "paneSwitch": "Pane switch",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "extraKeys": {
       "group": "Extra keys",
@@ -1586,6 +1631,13 @@
     "quitBody": "These activities are still running and will be stopped:",
     "quitResumeHint": "Interrupted downloads can be resumed the next time you start the app.",
     "quitAnyway": "Quit anyway",
-    "keepRunning": "Keep running"
+    "keepRunning": "Keep running",
+    "summaryRunning_one": "{{count}} running",
+    "summaryRunning_other": "{{count}} running",
+    "summaryInterrupted_one": "{{count}} interrupted",
+    "summaryInterrupted_other": "{{count}} interrupted",
+    "summaryFailed_one": "{{count}} failed",
+    "summaryFailed_other": "{{count}} failed",
+    "remaining": "{{time}} left"
   }
 }

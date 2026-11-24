@@ -26,6 +26,7 @@ openssl-sys = { version = "0.9", optional = true }
 libc = { workspace = true, optional = true }
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+iana-time-zone = { workspace = true }
 directories = { workspace = true }
 # Spec 0101, A1: SQLite wird mit SQLCipher gebaut, statt per `sqlx`s eigenem
 # `sqlite-bundled`-Feature (plain SQLite) zu laufen. `sqlx-sqlite` zieht
@@ -34,7 +35,7 @@ directories = { workspace = true }
 # (gemessen, s. Spec 0101 Abschnitt 1 „Messungen“: `bundled-sqlcipher-vendored-openssl` →
 # `bundled-sqlcipher` → `bundled`, deckungsgleich mit `sqlx-sqlite/bundled`)
 # statt eine zweite, konkurrierende SQLite-Kopie zu bauen.
-libsqlite3-sys = { version = "=0.37.0", features = ["bundled-sqlcipher-vendored-openssl"] }
+libsqlite3-sys = { version = "0.40.0", features = ["bundled-sqlcipher-vendored-openssl"] }
 # Spec 0101, A2: der `PRAGMA key`-Wert kommt als `SecretString` aus
 # `core::crypto::DatabaseKey` und wird erst beim Aufbau der Verbindung
 # ausgepackt. Schon im Abhängigkeitsbaum (direkte Abhängigkeit von `core`).

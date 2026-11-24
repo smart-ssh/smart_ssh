@@ -23,8 +23,12 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
+pub(super) use self::activity_funnel::emit_activity_event;
 use super::action_exec::handle_action_proposed;
 use super::notes::handle_document_generated;
+
+mod activity_funnel;
+mod activity_redaction;
 
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -211,64 +215,31 @@ pub(crate) fn ledger_source_for_origin(origin: &ActionOrigin) -> LedgerSource {
     }
 }
 
-/// Redigiert alle Inhalts-tragenden Varianten eines [`LedgerEntryContent`]
-/// (Spec 0057, §1.2 "PFLICHT") — zentral hier statt an jeder Aufrufstelle
-/// von [`write_ledger_entry`] einzeln, damit ein vergessener Aufrufer
-/// keinen unredigierten Eintrag durchlassen kann. `Decision` trägt keine
-/// Ausgabedaten (nur `reason`/`code`, von der Filter-Engine selbst
-/// erzeugte Texte, kein Serverinhalt) und bleibt deshalb unverändert.
-fn redact_ledger_entry_content(
-    redactor: &dyn OutputRedactor,
-    content: LedgerEntryContent,
-) -> LedgerEntryContent {
-    match content {
-        LedgerEntryContent::CommandProposed { command } => LedgerEntryContent::CommandProposed {
-            command: redactor.redact_text(&command),
-        },
-        LedgerEntryContent::CommandExecuted {
-            command,
-            output,
-            cancelled,
-        } => LedgerEntryContent::CommandExecuted {
-            command: redactor.redact_text(&command),
-            output: redactor.redact(&output),
-            cancelled,
-        },
-        LedgerEntryContent::AiMessage { text } => LedgerEntryContent::AiMessage {
-            text: redactor.redact_text(&text),
-        },
-        decision @ LedgerEntryContent::Decision { .. } => decision,
-    }
-}
-
-/// Zentrale Schreibstelle für das Session-Ledger (Spec 0057, §1) — analog
-/// zu [`push_history`]/[`push_history_scoped`] oben, aber bewusst NICHT
-/// über deren `persist`-Flag/-Gate laufend: jenes Flag schließt MCP-
-/// Herkunft absichtlich aus der wiederaufnehmbaren Chat-Historie aus (Spec
-/// 0034, Abschnitt 10), das Ledger soll MCP-Aktivität aber gerade erfassen
-/// (Spec 0057, §1.1: Quelle `mcp-agent`) — deshalb ein eigenes, von
-/// `persist` unabhängiges Gate: nur `session.ledger_store`/
-/// `session.chat_session_id` müssen gesetzt sein.
+/// Central emit point for activity events (Spec 0057, issue #1506): the core
+/// keeps no record; observers get the event. Deliberately independent of the
+/// `persist` flag of [`push_history_scoped`] (which excludes MCP origin from
+/// the resumable chat history): MCP activity is announced, source
+/// `mcp-agent`.
 ///
-/// Redigiert `content` selbst (s. [`redact_ledger_entry_content`]) —
-/// Aufrufer übergeben unredigierte Daten. Ein Persistenzfehler bricht den
-/// Chat-Turn nicht ab (nur geloggt), aus demselben Grund wie bei
-/// `push_history_scoped`.
-pub(crate) async fn write_ledger_entry(
+/// Redacts `content` itself (see [`redact_activity_content`]) — callers pass
+/// unredacted data.
+pub(crate) async fn emit_activity(
     session: &Session,
     source: LedgerSource,
     content: LedgerEntryContent,
 ) {
-    let Some(store) = &session.persistence.ledger_store else {
-        return;
-    };
-    let Some(chat_session_id) = *session.persistence.chat_session_id.lock().await else {
-        return;
-    };
-    let redacted = redact_ledger_entry_content(session.redactor.as_ref(), content);
-    if let Err(err) = store.append_entry(chat_session_id, source, &redacted).await {
-        tracing::warn!(error = %err, "ledger entry persistence failed");
-    }
+    emit_activity_for_action(session, source, content, None).await;
+}
+
+/// Like [`emit_activity`], but the event carries the id of the action it
+/// belongs to (`action_id`, Spec 0057).
+pub(crate) async fn emit_activity_for_action(
+    session: &Session,
+    source: LedgerSource,
+    content: LedgerEntryContent,
+    action_id: Option<ActionId>,
+) {
+    emit_activity_event(session, source, content, action_id).await;
 }
 
 /// Spec 0051, Teil 2: Mindestabstand zwischen zwei `AiProvider::send()`-
@@ -1181,7 +1152,7 @@ async fn flush_text_buffer(session: &Session, buffer: &mut String) {
     // `AiProvider` gestreamte Antwort, unabhängig davon, ob die auslösende
     // Aktion über den internen Chat oder MCP kam (Letzteres läuft ohnehin
     // nie über `run_one_round`, s. `app_shell::mcp_backend`).
-    write_ledger_entry(
+    emit_activity(
         session,
         LedgerSource::Ai,
         LedgerEntryContent::AiMessage { text: text.clone() },

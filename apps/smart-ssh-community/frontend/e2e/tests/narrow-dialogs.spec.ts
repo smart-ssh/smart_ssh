@@ -42,6 +42,20 @@ test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
   await expectNoHorizontalPageScroll(page);
 });
 
+test("start-up card is content-height outside the unlock state @phone", async ({ app }) => {
+  await app.launch({
+    commands: {
+      get_startup_state: {
+        result: { screen: "unusableWrapping", mode: "password", offersStartOver: true, failedUnlockAttempts: 0, language: "en" },
+      },
+    },
+  });
+  const card = app.page.getByTestId("startup-card");
+  await expect(card).toBeVisible();
+  const box = await card.boundingBox();
+  expect(box!.height).toBeLessThan(app.page.viewportSize()!.height * 0.8);
+});
+
 const UNLOCK_STATE = {
   screen: "unlock",
   mode: "password",
@@ -98,6 +112,9 @@ test("sm: file properties dialog is a full-screen sheet @phone", async ({ app })
   await openEntryMenuItem(app, "Properties");
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /Properties/, ["Close"]);
+  // Issue #1386 anatomy: header icon, label/value rows with the path in mono.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  await expect(dialog.getByText("/home/deploy/notes.txt")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: properties");
   await captureScreen(app.page, "narrow-properties");
 });
@@ -106,6 +123,12 @@ test("sm: chmod dialog is a full-screen sheet @phone", async ({ app }) => {
   await openEntryMenuItem(app, /^Edit permissions|^Permissions/);
   const dialog = app.page.getByRole("dialog");
   await expectSheet(app.page, dialog, /ermissions/, ["Cancel"]);
+  // Issue #1386 anatomy: header icon, path in its own mono paragraph, mono bit grid.
+  await expect(dialog.locator('span[aria-hidden="true"] svg').first()).toBeVisible();
+  const path = dialog.getByText("/home/deploy/notes.txt");
+  await expect(path).toHaveClass(/font-mono/);
+  expect(await path.evaluate((el) => el.tagName)).toBe("P");
+  await expect(dialog.getByTestId("chmod-grid")).toHaveClass(/font-mono/);
   await expectNoSeriousA11yViolations(app.page, "narrow: chmod");
   await captureScreen(app.page, "narrow-chmod");
 });
@@ -185,6 +208,12 @@ test("unlock screen passes axe and is captured @phone", async ({ app }) => {
   await expectUsable(app.page.getByRole("button", { name: "Unlock", exact: true }));
   await expectNoSeriousA11yViolations(app.page, "narrow: unlock");
   await captureScreen(app.page, "narrow-unlock");
+  // The way-out area sits at the bottom of the screen with a full-width Quit.
+  const quit = app.page.getByRole("button", { name: "Quit", exact: true });
+  const box = (await quit.boundingBox())!;
+  const viewport = app.page.viewportSize()!;
+  expect(box.y + box.height).toBeGreaterThan(viewport.height - 64);
+  expect(box.width).toBeGreaterThan(viewport.width - 80);
 });
 
 test("toasts stay inside the viewport and do not cover the composer @phone", async ({ app }) => {

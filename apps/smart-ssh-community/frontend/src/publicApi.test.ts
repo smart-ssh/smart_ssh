@@ -65,6 +65,12 @@ describe("public-api", () => {
     expect(typeof testSupport.ToastHost).toBe("function");
   });
 
+  it("no longer exports the activity record functions (issue #1506)", () => {
+    for (const name of ["listRecordedSessions", "listRecordEntries", "recordEntriesOfSession"]) {
+      expect(publicApi).not.toHaveProperty(name);
+    }
+  });
+
   it("setUiPreference calls set_ui_preference with key and value", async () => {
     invokeMock.mockReset();
     invokeMock.mockResolvedValue(undefined);

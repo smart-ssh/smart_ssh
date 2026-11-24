@@ -3,7 +3,8 @@ import { previewReadFailureHint } from "../../lib/previewReadFailure";
 import { formatBytes } from "../../lib/format";
 import type { UploadOffer } from "../../hooks/useLocalEditSession";
 import { NoteDiffPreview } from "../NoteDiffPreview";
-import { Button, DialogFrame } from "../ui";
+import { DialogRows } from "./DialogRows";
+import { Button, DialogFrame, Icon } from "../ui";
 
 interface EditUploadDialogProps {
   offer: UploadOffer;
@@ -27,6 +28,7 @@ export function EditUploadDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="upload" />}
       title={
         user ? t("fileElevation.editUploadTitle", { user }) : t("fileBrowser.localEdit.uploadTitle")
       }
@@ -48,14 +50,23 @@ export function EditUploadDialog({
       {offer.localText !== null && offer.remoteText !== null ? (
         <NoteDiffPreview previousContent={offer.remoteText} newContent={offer.localText} />
       ) : (
-        <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-          {offer.remoteReadFailure
-            ? t(
+        <>
+          {offer.remoteReadFailure ? (
+            <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+              {t(
                 previewReadFailureHint(offer.remoteReadFailure).key,
                 previewReadFailureHint(offer.remoteReadFailure).options,
-              )
-            : t("fileBrowser.localEdit.noDiff", { size: formatBytes(offer.localSize) })}
-        </p>
+              )}
+            </p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-fg-subtle">{t("fileBrowser.noTextDiff")}</p>
+              <DialogRows
+                rows={[{ label: t("fileBrowser.uploadConflict.newSize"), value: formatBytes(offer.localSize) }]}
+              />
+            </>
+          )}
+        </>
       )}
     </DialogFrame>
   );

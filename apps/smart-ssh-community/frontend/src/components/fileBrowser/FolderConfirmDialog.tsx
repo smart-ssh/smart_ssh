@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button, DialogFrame } from "../ui";
+import { Button, DialogFrame, Icon } from "../ui";
 import type { useSftpTransfers } from "./useSftpTransfers";
 
 type FolderConfirm = NonNullable<ReturnType<typeof useSftpTransfers>["folderConfirm"]>;
@@ -18,6 +18,7 @@ export function FolderConfirmDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="folder" />}
       title={t("fileBrowser.folderUpload.conflictTitle")}
       onClose={onCancel}
       actions={

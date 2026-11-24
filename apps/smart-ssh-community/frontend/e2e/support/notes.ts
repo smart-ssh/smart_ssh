@@ -21,7 +21,7 @@ export const NOTE_COMMANDS: Record<string, CannedResponse> = {
 export async function openNotes(app: AppDriver): Promise<void> {
   const page = app.page;
   await page.getByRole("button", { name: "Manage", exact: true }).click();
-  await page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
+  await page.getByRole("treeitem", { name: "db-primary", exact: true }).click();
   await page.getByRole("tab", { name: "Notes", exact: true }).click();
   await expect(page.getByLabel("Note", { exact: false }).first()).toBeVisible();
 }

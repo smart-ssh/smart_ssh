@@ -82,12 +82,24 @@ Bedienelemente sind nach WCAG ausgenommen. Die automatischen
 Barrierefreiheits-Scans der Browser-Tests prüfen das ohne Ausnahme für das
 Hauptfenster, jede Einstellungskategorie und die Befehlsbestätigung.
 
+Im erzwungenen Farbmodus des Systems (Windows-Kontrastdesign, „forced colors“)
+bleibt der Ein/Aus-Schalter lesbar: Ein, Aus und Deaktiviert erscheinen in
+Systemfarben (Spur und Knopf unterscheiden sich je Zustand), und der
+Fokusrahmen bleibt sichtbar.
+
 ## Farbgebung als austauschbares Theme
 
 Die Oberfläche bezieht jede Farbe aus benannten Rollen (Flächen, Text,
 Linien, Akzent, Gefahr, Warnung, Erfolg, Fokus, Terminal). Die Werte stehen
 an einer Stelle; ein weiteres Erscheinungsbild ersetzt nur diese Werte. Das
-dunkle Erscheinungsbild und seine Kontraste bleiben dabei unverändert.
+dunkle und das helle Erscheinungsbild folgen der Gestaltungsrichtung „Angular“
+(neutrales Graphit, Signal-Cyan als Akzent) und halten die Textkontraste
+(mindestens 4,5 : 1, Fokusring mindestens 3 : 1). Alle Elemente sind eckig,
+Tiefe entsteht durch 1-px-Linien statt durch Schatten; nur schwebende Ebenen
+(Menüs, Tooltips, Dialoge) haben einen harten Versatzschatten ohne Unschärfe.
+Der Tastaturfokus ist ein 2 px dicker Ring ohne Abstand. Statusmarkierungen
+sind Quadrate, Beschriftungen von Feldern und Dialogtiteln stehen in
+Großbuchstaben (außer in Sprachen ohne Groß-/Kleinschreibung).
 
 ## Grenzen
 

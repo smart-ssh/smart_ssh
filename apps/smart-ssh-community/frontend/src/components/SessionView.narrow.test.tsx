@@ -1,8 +1,10 @@
 import type { TranslationKey } from "../i18nTypes";
 // Issue #580, Spec 0113 §4: below 640 px the session view shows one pane at a
 // time behind an AI / Terminal / Files tab strip.
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
+import { useMemo, useState, type ReactNode } from "react";
+import { NarrowSlotProvider, useNarrowSlot } from "../lib/narrowSlot";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import { setNarrow, setWide } from "../test/matchMedia";
@@ -23,6 +25,14 @@ vi.mock("../api/events", () => ({
   onElevationAutoDisabled: vi.fn(() => Promise.resolve(() => {})),
   onElevationRevokedByProfile: vi.fn(() => Promise.resolve(() => {})),
 }));
+const reconnectSession = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("../api/api", async () =>
+  (await import("../test/apiMock")).createApiMock({
+    getServer: () => Promise.reject(new Error("no server")) as never,
+    listGroups: () => Promise.resolve([]) as never,
+    reconnectSession: (...a: unknown[]) => reconnectSession(...(a as [])) as never,
+  }),
+);
 vi.mock("../settings/layoutSettings", () => ({
   loadAiSshSplitWidthPx: vi.fn(() => Promise.resolve(null)),
   saveAiSshSplitWidthPx: vi.fn(() => Promise.resolve()),
@@ -38,18 +48,46 @@ vi.stubGlobal(
 
 const t = (key: TranslationKey) => testI18n.t(key);
 
-function renderView(props: { mcp?: { clientName: string } | null; onRequestClose?: () => void } = {}) {
+// Mirrors App.tsx: the title bar provides the slot element through context.
+function SlotHost({ children, late = false }: { children: ReactNode; late?: boolean }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const value = useMemo(() => ({ slot, setSlot }), [slot]);
+  return (
+    <NarrowSlotProvider value={value}>
+      {/* `late`: the slot span mounts only after a button press, i.e. in a later commit than the session view. */}
+      <SlotSpan late={late} />
+      {children}
+    </NarrowSlotProvider>
+  );
+}
+function SlotSpan({ late }: { late: boolean }) {
+  const { setSlot } = useNarrowSlot();
+  const [shown, setShown] = useState(!late);
+  return (
+    <>
+      {late && <button onClick={() => setShown(true)}>mount-slot</button>}
+      {shown && <div ref={setSlot} data-testid="narrow-session-actions" />}
+    </>
+  );
+}
+
+function renderView(
+  props: { mcp?: { clientName: string } | null; onRequestClose?: () => void; slot?: boolean; late?: boolean } = {},
+) {
+  const view = (
+    <SessionView
+      sessionId="s1"
+      serverName="srv"
+      serverId="id"
+      onRequestClose={props.onRequestClose ?? vi.fn()}
+      onActionSettled={vi.fn()}
+      isActiveTab={true}
+      mcp={props.mcp ?? null}
+    />
+  );
   return render(
     <I18nextProvider i18n={testI18n}>
-      <SessionView
-        sessionId="s1"
-        serverName="srv"
-        serverId="id"
-        onRequestClose={props.onRequestClose ?? vi.fn()}
-        onActionSettled={vi.fn()}
-        isActiveTab={true}
-        mcp={props.mcp ?? null}
-      />
+      {props.slot === false ? view : <SlotHost late={props.late}>{view}</SlotHost>}
     </I18nextProvider>,
   );
 }
@@ -59,7 +97,9 @@ describe("SessionView narrow layout (#580)", () => {
     setNarrow();
     fileBrowserVisible.mockClear();
   });
-  afterEach(() => setWide());
+  afterEach(() => {
+    setWide();
+  });
 
   it("shows the tab strip with AI active and no separator", () => {
     renderView();
@@ -102,6 +142,33 @@ describe("SessionView narrow layout (#580)", () => {
     fireEvent.click(screen.getByRole("button", { name: t("session.moreActions") }));
     fireEvent.click(screen.getByText(t("session.disconnect")));
     expect(close).toHaveBeenCalled();
+  });
+
+  it("renders the ⋯ button in the title bar slot and no second header row (#1387)", () => {
+    renderView();
+    const slot = document.querySelector('[data-testid="narrow-session-actions"]') as HTMLElement;
+    expect(slot).toContainElement(screen.getByRole("button", { name: t("session.moreActions") }));
+    expect(document.querySelector("header")).toBeNull();
+  });
+
+  it("finds the ⋯ button in a slot that mounts in a later commit than the session (#1461)", () => {
+    renderView({ late: true });
+    expect(screen.queryByRole("button", { name: t("session.moreActions") })).toBeNull();
+    fireEvent.click(screen.getByText("mount-slot"));
+    const slot = document.querySelector('[data-testid="narrow-session-actions"]') as HTMLElement;
+    expect(slot).toContainElement(screen.getByRole("button", { name: t("session.moreActions") }));
+  });
+
+  it("offers a Reconnect button in the status strip after a disconnect (#1387)", async () => {
+    const events = await import("../api/events");
+    renderView();
+    const handler = vi.mocked(events.onConnectionStatusChanged).mock.calls.at(-1)![0];
+    act(() => handler({ sessionId: "s1", status: "disconnected", reason: null } as never));
+    const strip = await screen.findByTestId("session-status-strip");
+    const button = within(strip).getByRole("button", { name: t("session.reconnect") });
+    fireEvent.click(button);
+    await waitFor(() => expect(reconnectSession).toHaveBeenCalledWith("s1"));
+    await waitFor(() => expect(screen.queryByTestId("session-status-strip")).toBeNull());
   });
 
   it("shows no tab strip for an MCP session", () => {

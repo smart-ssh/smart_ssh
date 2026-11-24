@@ -206,6 +206,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     list_unusable_servers: () => [],
     list_known_tags: () => [...new Set(model.servers.flatMap((s) => s.tags))].sort(),
     explain_confirmation: () => ({ segments: [], suggestions: [] }),
+    create_quick_rules_batch: () => [],
     move_server_to_group: ({ id, groupId }) => {
       findServer(id).groupId = (groupId as string | null) ?? null;
       persist();
@@ -214,6 +215,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     move_group: ({ id, parentId }) => {
       const group = model.groups.find((g) => g.id === id);
       if (!group) throw commandError(`group not found: ${String(id)}`);
+      // Like the real backend: a group cannot move into itself or a descendant.
+      for (let cur = (parentId as string | null) ?? null; cur; ) {
+        if (cur === group.id) throw commandError("group cycle", "GROUP_CYCLE_DETECTED");
+        cur = model.groups.find((g) => g.id === cur)?.parentId ?? null;
+      }
       group.parentId = (parentId as string | null) ?? null;
       persist();
       return null;
@@ -253,6 +259,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
     // --- Settings screens ------------------------------------------------
     list_ai_providers: () => model.aiProviders,
+    get_session_ai_provider: () => {
+      const active = model.aiProviders.find((p) => p.isActive);
+      if (!active) throw commandError("no active provider");
+      return { displayName: active.displayName, model: active.model };
+    },
     discover_models: () => [],
     get_data_paths: () => [
       { id: "database", label: null, path: "/data/smart-ssh/smart-ssh.db", isDirectory: false },
@@ -321,6 +332,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
     cancel_backup_import: () => null,
     get_chat_session_retention_days: () => null,
+    set_chat_session_retention_days: () => null,
     get_elevated_idle_timeout: () => 15,
     set_elevated_idle_timeout: () => null,
     get_mcp_server_settings: () => MCP_SETTINGS,
@@ -347,6 +359,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
           fingerprint: hostKey.fingerprint,
           expectedFingerprint: hostKey.expectedFingerprint ?? null,
           keyType: hostKey.keyType ?? null,
+          serverName: server.name,
         });
       });
       if (!trusted) throw commandError("Host key was rejected", null);

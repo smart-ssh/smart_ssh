@@ -24,10 +24,12 @@ import { registerSettingsSection } from "./registry";
 registerSettingsSection({
   id: "chat-retention",
   label: "settings.categories.chatRetention",
+  icon: "chat",
   component: ChatRetentionSettings,
 });
 registerSettingsSection({
   id: "mcp-server",
   label: "settings.categories.mcpServer",
+  icon: "plug",
   component: McpServerSettings,
 });

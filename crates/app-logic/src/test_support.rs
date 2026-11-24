@@ -141,12 +141,12 @@ fn session_with_ai_transport_and_server_id(
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(false),
         },
         persistence: crate::session::ChatPersistence {
             chat_content: Default::default(),
             title_attempts: Default::default(),
             chat_session_store: None,
-            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
         },
         conn: crate::session::TransportState {

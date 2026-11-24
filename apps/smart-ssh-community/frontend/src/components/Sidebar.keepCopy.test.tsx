@@ -105,7 +105,7 @@ describe("Sidebar: keep as regular entry (narrow)", () => {
   it("offers no keep action for non-copy rows", async () => {
     renderSidebar();
     fireEvent.click(more("plain-srv"));
-    await screen.findByRole("button", { name: testI18n.t("mainScreen.ungrouped") });
+    await screen.findByRole("button", { name: new RegExp(testI18n.t("treeDrag.hintRoot").replace(/[()]/g, "\\$&")) });
     expect(screen.queryByRole("button", { name: KEEP })).toBeNull();
   });
 });

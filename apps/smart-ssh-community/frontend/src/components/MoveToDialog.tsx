@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../lib/groupTree";
 import { classifyDrop, type DragItem, type DropTarget } from "../lib/treeDrag";
 import type { GroupDto, ServerDto } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 interface Props {
   item: DragItem;
@@ -37,11 +37,21 @@ export function MoveToDialog({ item, groups, servers, onMove, onKeepAsRegular, o
     onMove(item, target);
   };
   const optionClass =
-    "flex min-h-11 w-full items-center rounded px-3 py-2 text-left text-sm text-fg hover:bg-surface-raised focus-ring-flush disabled:opacity-40";
+    "flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg hover:bg-surface-raised focus-ring-flush disabled:opacity-40 disabled:hover:bg-transparent";
   const disabledFor = (target: DropTarget) => classifyDrop(item, target, groups, servers) !== "valid";
+  // The item's present location: its server's group, or a group's parent.
+  const currentParentId =
+    item.kind === "server"
+      ? (servers.find((s) => s.id === item.id)?.groupId ?? null)
+      : (groups.find((g) => g.id === item.id)?.parentId ?? null);
+  const currentMarker = (groupId: string | null) =>
+    groupId === currentParentId ? (
+      <span className="ml-auto shrink-0 font-mono text-xs text-fg-subtle">{t("treeDrag.current")}</span>
+    ) : null;
   return (
     <DialogFrame
       layer="app"
+      icon={<Icon name="move" />}
       title={<span className="break-words">{t("treeDrag.moveTo", { name: item.label })}</span>}
       onClose={onClose}
       actions={<Button onClick={onClose}>{t("common.cancel")}</Button>}
@@ -59,10 +69,12 @@ export function MoveToDialog({ item, groups, servers, onMove, onKeepAsRegular, o
           {t("copyMarker.keep")}
         </Button>
       )}
-      <ul className="divide-y divide-surface-raised rounded border border-border">
+      <ul className="divide-y divide-surface-raised rounded border border-border bg-surface-sunken">
         <li>
           <Button variant="bare" type="button" className={optionClass} disabled={disabledFor({ kind: "root" })} onClick={() => choose({ kind: "root" })}>
-            {t("mainScreen.ungrouped")}
+            <Icon name="root" className="shrink-0 text-fg-subtle" />
+            <span className="min-w-0 break-words">{t("treeDrag.hintRoot")}</span>
+            {currentMarker(null)}
           </Button>
         </li>
         {entries.map(({ group, depth }) => (
@@ -70,11 +82,22 @@ export function MoveToDialog({ item, groups, servers, onMove, onKeepAsRegular, o
             <Button variant="bare"
               type="button"
               className={optionClass}
-              style={{ paddingLeft: `${depth * 16 + 12}px` }}
+              style={{ paddingLeft: "12px" }}
               disabled={disabledFor({ kind: "group", id: group.id })}
               onClick={() => choose({ kind: "group", id: group.id })}
             >
-              <span className="min-w-0 break-words">📁 {group.name}</span>
+              {/* Tree connector lines: one guide per ancestor level, an elbow at the row's own level. */}
+              {Array.from({ length: depth }, (_, i) => (
+                <span
+                  key={i}
+                  aria-hidden="true"
+                  data-testid="move-connector"
+                  className={`-my-2 self-stretch w-4 shrink-0 border-l border-border-strong ${i === depth - 1 ? "relative after:absolute after:left-0 after:top-1/2 after:w-3 after:border-t after:border-border-strong" : ""}`}
+                />
+              ))}
+              <Icon name="folder" className="shrink-0" />
+              <span className="min-w-0 break-words">{group.name}</span>
+              {currentMarker(group.id)}
             </Button>
           </li>
         ))}

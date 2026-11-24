@@ -48,6 +48,7 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+mod activity_events;
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -218,6 +219,38 @@ impl NormalSftpGuard<'_> {
     }
 }
 
+/// Serialises "swap the redactor, then store the flag" across rebuilds, so
+/// the flag always mirrors the last applied swap (issue #1541). One lock for
+/// all sessions: it is held only around the swap and the store, never across
+/// an `.await`.
+pub(crate) static REDACTOR_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Swaps in a reconnect redactor and, if its lookup was incomplete, raises
+/// the "redaction incomplete" flag in the same locked step (issue #1543).
+/// Keeps the session's literal set and never lowers the flag: a reconnect
+/// keeps the literal set, so a complete lookup proves nothing. `between` runs
+/// after the swap, before the flag (a test hook). Never held across `.await`.
+pub(crate) fn apply_reconnect_redactor(
+    session: &Session,
+    redactor: Box<dyn OutputRedactor>,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    session.swap_redactor(redactor);
+    between();
+    if incomplete {
+        session
+            .safety
+            .redaction_incomplete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        session
+            .safety
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// Issue #355: proof that this caller owns the running reconnect of a
 /// session. Dropped without [`ReconnectClaim::succeed`], the session goes
 /// back to `Disconnected`, so the button stays usable after a failure.
@@ -232,10 +265,11 @@ impl ReconnectClaim<'_> {
         mut self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         self.session
-            .replace_connection(transport, redactor, sudo_password)
+            .replace_connection(transport, redactor, redaction_incomplete, sudo_password)
             .await;
         *ssh_manager_core::sync::lock_tolerating_poison(&self.session.conn.status) =
             ConnectionStatus::Connected;
@@ -550,6 +584,18 @@ pub struct Session {
     /// Issue #610: where completed AI requests are reported (observers an
     /// edition registered). `None` = nobody listens. Private: set at build.
     usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
+    /// Issue #1505: where activity events go (observers an edition
+    /// registered). `None` = nobody listens, nothing is built.
+    activity: Option<crate::activity::ActivityReporting>,
+    /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
+    /// event is only sent for sessions the observers know.
+    activity_started: std::sync::atomic::AtomicBool,
+    /// Issue #1539: `true` once `SessionEnded` was queued; later events of
+    /// this session are dropped so none follows its end.
+    activity_ended: std::sync::Mutex<bool>,
+    /// Issue #1545: set once the app exit began; `SessionStarted` is then
+    /// refused. Only written while holding the `activity_ended` lock.
+    activity_exiting: std::sync::atomic::AtomicBool,
 }
 
 impl std::ops::Deref for Session {
@@ -629,7 +675,25 @@ impl Session {
             is_root: None,
             id_names: tokio::sync::OnceCell::new(),
             usage_reporting: None,
+            activity: None,
+            activity_started: std::sync::atomic::AtomicBool::new(false),
+            activity_ended: std::sync::Mutex::new(false),
+            activity_exiting: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Issue #1505: sets up reporting of activity events to observers. Only
+    /// at construction.
+    pub fn with_activity_reporting(
+        mut self,
+        reporting: Option<crate::activity::ActivityReporting>,
+    ) -> Self {
+        self.activity = reporting;
+        self
+    }
+
+    pub(crate) fn activity_reporting(&self) -> Option<&crate::activity::ActivityReporting> {
+        self.activity.as_ref()
     }
 
     /// Issue #610: sets up reporting of completed AI requests to observers.
@@ -749,6 +813,7 @@ impl Session {
         &self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        redaction_incomplete: bool,
         sudo_password: Option<secrecy::SecretString>,
     ) {
         *self.sftp.inner.lock().await = None;
@@ -756,7 +821,8 @@ impl Session {
         // One read feeds both: the password sent to `sudo -S` and the
         // redactor always agree.
         self.safety.sudo_password.replace(sudo_password);
-        self.redactor.replace(redactor);
+        // Issue #1543: swap and flag under one lock, after the awaits above.
+        apply_reconnect_redactor(self, redactor, redaction_incomplete, || {});
     }
 
     /// Replaces the redactor of the open session (an extension's secret

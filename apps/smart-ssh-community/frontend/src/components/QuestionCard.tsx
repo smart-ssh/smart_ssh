@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { QuestionOption } from "../api/types";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 /** Issue #547 (Spec 0111 §5): lock state of a question card, derived from
  * the chat item list by `deriveQuestionStates`. */
@@ -66,7 +66,7 @@ export function QuestionCard({
     <div role="presentation" onKeyDown={onKeyDown} className="max-w-[90%]">
       <fieldset
         aria-label={t("chat.question.cardLabel", { question })}
-        className={`m-0 min-w-0 rounded border px-3 py-2 text-sm ${
+        className={`m-0 min-w-0 border px-3 py-2 text-sm ${
           locked
             ? "border-border bg-surface/60"
             : "border-accent-strong/60 bg-surface"
@@ -85,7 +85,7 @@ export function QuestionCard({
                   disabled={locked}
                   aria-pressed={multiSelect ? isMarked : undefined}
                   onClick={() => choose(o.label)}
-                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus-ring-flush ${
+                  className={`flex w-full items-start gap-2 border px-2 py-1 text-left focus-ring-flush ${
                     isMarked
                       ? "border-accent-fg bg-accent-subtle-hover/60 text-accent-fg-faintest"
                       : "border-border text-fg-soft enabled:hover:bg-surface-raised"
@@ -94,12 +94,10 @@ export function QuestionCard({
                   <span aria-hidden="true" className="w-4 shrink-0 text-center">
                     {locked
                       ? isMarked
-                        ? "✓"
+                        ? <Icon name="check" />
                         : ""
                       : multiSelect
-                        ? isMarked
-                          ? "☑"
-                          : "☐"
+                        ? <Icon name={isMarked ? "square-check" : "square"} />
                         : i + 1}
                   </span>
                   <span className="min-w-0">
@@ -120,7 +118,7 @@ export function QuestionCard({
             type="button"
             disabled={ticked.length === 0}
             onClick={submitMulti}
-            className="mt-2 rounded bg-accent px-3 py-1 text-xs text-on-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
+            className="mt-2 bg-accent px-3 py-1 text-xs text-on-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
           >
             {t("chat.question.send")}
           </Button>

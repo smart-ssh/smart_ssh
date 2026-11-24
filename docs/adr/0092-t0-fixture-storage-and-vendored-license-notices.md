@@ -46,8 +46,9 @@ hat, statt gegen eine Attrappe, die diese Eigenschaft nur behauptet.
 
 **Entscheidung:** `scripts/generate-third-party-notices.mjs` bekommt eine
 feste Liste (`VENDORED_LICENSE_FILES`) von (Crate, Datei-Pfad im
-Crate-Verzeichnis, Label) — aktuell SQLCipher in `libsqlite3-sys`
-(`sqlcipher/LICENSE`) und die vendorte OpenSSL-Quelle in `openssl-src`
+Crate-Verzeichnis, Label) — aktuell SQLCipher in `sqlcipher-src`
+(`sqlcipher/LICENSE-sqlcipher`, plus `sqlcipher/LICENSE-libtomcrypt`; before
+`libsqlite3-sys` 0.40 it was `sqlcipher/LICENSE` in `libsqlite3-sys`, #1243) und die vendorte OpenSSL-Quelle in `openssl-src`
 (`openssl/LICENSE.txt`). Beide werden wie die bestehenden `NOTICE*`-Dateien
 in den Abschnitt "Hinweisdateien" der generierten Ausgabe aufgenommen.
 Fehlt eines der beiden Crates im Abhängigkeitsbaum, bricht der Lauf ab,

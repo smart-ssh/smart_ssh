@@ -13,8 +13,8 @@ interface Props {
 export function TagsField({ tags, setTags, children }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="block text-sm text-fg-muted">
-      {t("serverForm.tags")}
+    <div className="flex flex-col gap-1">
+      <span className="text-label">{t("serverForm.tags")}</span>
       <TagInput value={tags} onChange={setTags} placeholder={t("serverForm.tagPlaceholder")} aria-label={t("serverForm.tags")} />
       {children}
     </div>

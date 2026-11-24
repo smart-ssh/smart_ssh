@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Điều hướng chính",
     "connect": "Kết nối",
     "manage": "Quản lý",
     "rules": "Quy tắc lọc"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Chưa thêm máy chủ nào",
     "emptyStateHint": "Thêm máy chủ đầu tiên để kết nối qua SSH.",
     "emptyStateCreateFirstServer": "Thêm máy chủ đầu tiên",
-    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật."
+    "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật.",
+    "localBadge": "Cục bộ",
+    "thisDevice": "thiết bị này",
+    "sessionOpen": "Phiên đang mở",
+    "sessionPending": "Đang chờ xác nhận",
+    "sessionDisconnected": "Phiên đã ngắt kết nối",
+    "sessionReconnecting": "Đang kết nối lại"
   },
   "settings": {
     "title": "Cài đặt",
@@ -136,11 +143,15 @@
     "importSshConfig": "Nhập …",
     "importSshConfigHint": "Nhập máy chủ từ tệp ssh_config của OpenSSH",
     "exportSshConfig": "Xuất …",
-    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH"
+    "exportSshConfigHint": "Xuất máy chủ sang ssh_config của OpenSSH",
+    "title": "Máy chủ",
+    "collapseGroup": "Thu gọn nhóm “{{name}}”",
+    "expandGroup": "Mở rộng nhóm “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
+    "current": "hiện tại",
     "hintGroup": "→ chuyển vào nhóm này",
     "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
     "moveTo": "Di chuyển “{{name}}” tới…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Việc này cũng xóa vĩnh viễn lịch sử trò chuyện, ghi chú và thẻ của máy chủ này.",
     "confirmDeleteServer": "Xóa vĩnh viễn",
     "testResult": {
-      "success": "✓ Kết nối thành công",
-      "authFailed": "✗ Đăng nhập bị từ chối. Kiểm tra tên người dùng và mật khẩu hoặc khóa.",
+      "success": "Kết nối thành công",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Đăng nhập bị từ chối. Kiểm tra tên người dùng và mật khẩu hoặc khóa.",
       "hostKeyUnknown": "Khóa máy chủ chưa biết — cần xác nhận",
-      "hostKeyMismatch": "⚠ Khóa máy chủ đã thay đổi",
-      "networkError": "✗ Lỗi mạng: {{message}}",
-      "timeout": "✗ Máy chủ không phản hồi. Kiểm tra địa chỉ, cổng và tường lửa."
+      "hostKeyMismatch": "Khóa máy chủ đã thay đổi",
+      "networkError": "Lỗi mạng: {{message}}",
+      "timeout": "Máy chủ không phản hồi. Kiểm tra địa chỉ, cổng và tường lửa."
     },
     "largeNoteHint": "Ghi chú này rất lớn và có thể bị rút gọn trong ngữ cảnh AI ở các phiên dài. Ghi chú đã lưu vẫn được giữ nguyên vẹn.",
     "summarizeNow": "Tóm tắt ngay",
@@ -356,7 +368,10 @@
     "matchedRuleLabel": "Quy tắc:",
     "segmentLabel": "Đoạn {{index}}",
     "checksLabel": "Kiểm tra:",
-    "hardBlacklistLabel": "Danh sách chặn cứng:"
+    "hardBlacklistLabel": "Danh sách chặn cứng:",
+    "invalidPattern": "Mẫu không hợp lệ",
+    "rowActions": "Thao tác của hàng",
+    "ruleCount_other": "{{count}} quy tắc"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Chế độ tự động tiếp tục đã tạm dừng sau {{limit}} bước mà không có xác nhận của bạn — hãy gửi một tin nhắn để tiếp tục.",
@@ -377,8 +392,8 @@
     "discardedAfterReconnect": "Đã bỏ sau khi kết nối được thiết lập lại. Không có gì được chạy.",
     "expiredTimeout": "Không trả lời kịp thời và đã bị bỏ. Không có gì được chạy.",
     "expiredUnknown": "Yêu cầu này không còn chờ xử lý. Không có gì được chạy.",
-    "usesStoredSudoPassword": "🔑 Chạy bằng mật khẩu sudo đã lưu.",
-    "writeMayUseStoredSudoPassword": "🔑 Nếu thiếu quyền ghi, ứng dụng sẽ ghi bằng mật khẩu sudo đã lưu (sudo).",
+    "usesStoredSudoPassword": "Chạy bằng mật khẩu sudo đã lưu.",
+    "writeMayUseStoredSudoPassword": "Nếu thiếu quyền ghi, ứng dụng sẽ ghi bằng mật khẩu sudo đã lưu (sudo).",
     "takeIntoNote": "Đưa vào ghi chú",
     "takeIntoNoteFailed": "Thất bại — hãy thử lại",
     "riskServerLabel": "Máy chủ",
@@ -388,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "Không thể lấy ý kiến thứ hai của AI. Mức rủi ro hiển thị là mức dựa trên quy tắc.",
     "riskHint": "Đánh giá dựa trên các mẫu đã biết — không đảm bảo.",
     "runningSince": "đang chạy {{seconds}} giây…",
+    "exitCode": "mã thoát: {{code}}",
     "waitingForInputHint": "Lệnh này có thể đang chờ nhập liệu. Hãy dừng nó, AI sẽ đề xuất một biến thể không tương tác.",
     "cancelCommand": "Ngắt kết nối lệnh này",
     "cancellingCommand": "Đang ngắt kết nối…",
-    "commandCancelledNotice": "⚠ Đã hủy thủ công — đầu ra có thể chưa đầy đủ, không có mã thoát thông thường.",
-    "commandTruncatedNotice": "⚠ Đầu ra bị cắt ở giới hạn kích thước — có thể chưa đầy đủ.",
+    "commandCancelledNotice": "Đã hủy thủ công — đầu ra có thể chưa đầy đủ, không có mã thoát thông thường.",
+    "commandTruncatedNotice": "Đầu ra bị cắt ở giới hạn kích thước — có thể chưa đầy đủ.",
     "liveOutputLabel": "Đầu ra trực tiếp",
-    "liveOutputTruncatedNotice": "⚠ Đã đạt giới hạn kích thước — đầu ra tiếp theo không còn được hiển thị.",
+    "liveOutputTruncatedNotice": "Đã đạt giới hạn kích thước — đầu ra tiếp theo không còn được hiển thị.",
     "autoRanLead": "Đã chạy tự động",
     "autoRanRule": "quy tắc",
     "autoRanScopeGlobal": "toàn cục",
@@ -409,17 +425,14 @@
     "editableCommand": "Lệnh — có thể chỉnh sửa",
     "execute": "Thực thi",
     "deny": "Từ chối",
-    "quickRule": "Chấp nhận + Quy tắc",
-    "quickRuleDropdownAria": "Hiện các đề xuất quy tắc",
-    "newRulePatternHeading": "Mẫu cho quy tắc cho phép mới",
     "scopeThisServer": "Máy chủ này",
     "scopeGlobal": "Toàn cục",
     "scopeTag": "Thẻ",
     "tagNamePlaceholder": "Tên thẻ",
     "loadingSuggestions": "Đang tải đề xuất…",
     "noSuggestions": "Không có đề xuất.",
-    "binaryFileHint": "⚠ Tệp nhị phân — không thể so sánh văn bản. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Nội dung quá lớn để so sánh theo dòng. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
+    "binaryFileHint": "Tệp nhị phân — không thể so sánh văn bản. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
+    "diffTooLargeHint": "Nội dung quá lớn để so sánh theo dòng. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
     "noContentChange": "(nội dung không thay đổi)",
     "quickRuleLabel": {
       "exact": "Chính xác: {{patterns}}",
@@ -437,9 +450,17 @@
       "blocked": "luôn hỏi, bất kể quy tắc nào: {{reasons}}",
       "verdictAuto": "lần sau sẽ tự động chạy",
       "verdictAsk": "vẫn sẽ hỏi: {{reasons}}",
-      "notice": "Đã tạo quy tắc. Lệnh này lần sau vẫn sẽ hỏi: {{reasons}}",
       "reasonOther": "một kiểm tra an toàn khác",
-      "loadFailed": "Không thể tải phạm vi áp dụng quy tắc"
+      "loadFailed": "Không thể tải phạm vi áp dụng quy tắc",
+      "summaryHeading": "Đã được cho phép",
+      "toDecideHeading": "Còn cần quyết định",
+      "expandAria": "Gợi ý quy tắc cho {{segment}}",
+      "stagedBadge": "chưa lưu",
+      "removeStaged": "Xóa",
+      "saveRules": "Lưu quy tắc ({{count}})",
+      "saveFailed": "Không thể lưu quy tắc: {{message}}",
+      "unsavedHint": "Quy tắc chưa lưu: {{count}}",
+      "segmentCovered": "bao phủ phần này; lệnh vẫn sẽ hỏi: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +477,7 @@
     "mismatchBodyAfterHost": " đang đưa ra một khóa khác với khóa đã lưu lần trước. Điều này có thể cho thấy một cuộc tấn công man-in-the-middle. Chỉ tiếp tục nếu bạn chắc chắn khóa máy chủ đã thay đổi một cách hợp lệ (ví dụ: cài đặt lại máy chủ).",
     "known": "Đã biết",
     "offeredNow": "Đang được đưa ra",
+    "offered": "Được đưa ra",
     "keyType": "Loại khóa",
     "cancelConnection": "Hủy kết nối",
     "trustAnyway": "Vẫn tin cậy",
@@ -468,13 +490,16 @@
   },
   "sessionTabs": {
     "newSession": "Phiên mới",
-    "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",
     "menu": {
       "open": "Mở menu điều hướng",
       "title": "Menu điều hướng",
-      "sessions": "Phiên đang mở"
+      "sessions": "Phiên đang mở",
+      "close": "Đóng menu điều hướng",
+      "needsConfirmation": "Cần xác nhận",
+      "activities": "Hoạt động",
+      "activitiesRunning_other": "{{count}} đang chạy"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +508,9 @@
       "pendingBadge": "Cần xác nhận",
       "readOnlyHint": "Phiên này thuộc về một công cụ bên ngoài (MCP). Nó chỉ hiển thị các hành động của công cụ để xác nhận hoặc từ chối cùng kết quả của chúng; ở đây không có ô nhập trò chuyện hay terminal. Đóng phiên sẽ kết thúc phiên MCP và từ chối các xác nhận đang chờ."
     },
-    "confirmClosePending": "Vẫn còn một yêu cầu xác nhận đang chờ cho \"{{name}}\". Vẫn đóng tab? Hành động đang chờ khi đó sẽ được tính là bị từ chối."
+    "confirmClosePending": "Vẫn còn một yêu cầu xác nhận đang chờ cho \"{{name}}\". Vẫn đóng tab? Hành động đang chờ khi đó sẽ được tính là bị từ chối.",
+    "pendingBadge": "Đang chờ",
+    "newConnection": "Kết nối mới"
   },
   "aiProvider": {
     "openLogs": "Mở nhật ký chẩn đoán trong trình quản lý tệp",
@@ -505,16 +532,16 @@
     "apiKeyFormatHint": "Không giống khóa {{providerLabel}} – cần có tiền tố như \"{{expectedPrefix}}\". Bạn vẫn có thể lưu; các nhà cung cấp thỉnh thoảng đổi định dạng.",
     "testCredentials": "Kiểm tra thông tin xác thực",
     "testingCredentials": "Đang kiểm tra…",
-    "testResultValid": "✓ Thông tin xác thực hợp lệ",
-    "testResultAuthFailed": "✗ Xác thực thất bại – hãy kiểm tra khóa API",
-    "testResultUnreachable": "✗ Không kết nối được nhà cung cấp: {{message}}",
+    "testResultValid": "Thông tin xác thực hợp lệ",
+    "testResultAuthFailed": "Xác thực thất bại – hãy kiểm tra khóa API",
+    "testResultUnreachable": "Không kết nối được nhà cung cấp: {{message}}",
     "testResultRateLimited": "Thông tin xác thực có vẻ hợp lệ, nhưng nhà cung cấp đang giới hạn tần suất. Hãy kiểm tra lại sau một phút.",
     "nativeToolCalling": "Hỗ trợ gọi công cụ gốc",
     "discoverModels": "Tải danh sách mô hình",
     "discoveringModels": "Đang tải danh sách mô hình…",
     "modelDiscoveryFailedHint": "Không thể tải danh sách mô hình tự động — hãy nhập tên mô hình thủ công.",
     "modelDiscoveryEmptyHint": "Nhà cung cấp không trả về mô hình nào. Hãy nhập tên mô hình thủ công.",
-    "modelDiscoveryAuthFailed": "✗ Nhà cung cấp đã từ chối thông tin xác thực này – hãy kiểm tra khóa API",
+    "modelDiscoveryAuthFailed": "Nhà cung cấp đã từ chối thông tin xác thực này – hãy kiểm tra khóa API",
     "advanced": "Nâng cao",
     "extraHeadersLabel": "Header bổ sung",
     "extraHeadersHint": "Được đính kèm vào mọi yêu cầu gửi đến nhà cung cấp này (ví dụ: HTTP-Referer/X-Title của OpenRouter).",
@@ -557,6 +584,7 @@
     "ollamaProbeRetry": "Tìm lại",
     "ollamaProbeNotFoundHeading": "Không tìm thấy Ollama cục bộ (cổng mặc định 11434).",
     "ollamaProbeNotFoundInstructions": "Cài đặt Ollama từ ollama.com, khởi động và tải một mô hình (ví dụ `ollama pull llama3`), rồi tìm lại.",
+    "typeLabel": "Loại",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +701,7 @@
     "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Nhà cung cấp AI đã chọn chưa được cấu hình. Hãy chọn một nhà cung cấp đã cấu hình.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Hãy chọn nhà cung cấp AI trước khi bật ý kiến thứ hai về rủi ro.",
+    "CHAT_SESSION_NOT_FOUND": "Cuộc trò chuyện đã lưu này không còn tồn tại. Chọn Thử lại để kết nối bình thường mà không tiếp tục nó.",
     "SESSION_NOT_FOUND": "Phiên này không còn mở nữa. Hãy mở lại từ danh sách máy chủ.",
     "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này",
@@ -848,6 +877,8 @@
     "groupsHeading": "Cấu trúc thư mục kết quả",
     "entriesHeading": "{{count}} máy chủ",
     "field": {
+      "name": "Tên",
+      "include": "Bao gồm",
       "host": "Địa chỉ",
       "port": "Cổng",
       "username": "Người dùng",
@@ -923,6 +954,7 @@
       "proxyJumpLocalPseudoServer": "trỏ đến máy chủ giả lập cục bộ"
     },
     "confirm": "Nhập",
+    "confirmCount_other": "Nhập {{count}} máy chủ",
     "applying": "Đang nhập …",
     "result": {
       "success": "Đã tạo {{created}} máy chủ, {{groups}} thư mục, bỏ qua {{skipped}} xung đột.",
@@ -1076,6 +1108,7 @@
     "parentDirectory": "Thư mục cha",
     "newFolderButton": "+ Thư mục",
     "fileActionsGroup": "Thao tác tệp",
+    "directoryActions": "Thao tác thư mục",
     "upload": "Tải lên",
     "uploadDialogTitle": "Tải tệp lên",
     "uploadFolder": "Tải thư mục lên",
@@ -1121,8 +1154,7 @@
       "editing": "Đang chỉnh sửa “{{name}}” cục bộ…",
       "end": "Dừng chỉnh sửa",
       "uploadTitle": "Tải lên các thay đổi cục bộ?",
-      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước mới: {{size}}."
+      "remoteChanged": "Tệp trên máy chủ đã thay đổi kể từ lúc tải xuống — việc tải lên sẽ ghi đè thay đổi kia."
     },
     "deleteDialog": {
       "fileTitle": "Xóa tệp?",
@@ -1142,7 +1174,6 @@
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
       "conflictBody": "Việc tải “{{name}}” lên sẽ ghi đè {{count}} tệp này trên máy chủ. Không có gì bị ghi đè nếu bạn chưa xác nhận.",
       "summaryTitle": "Tải thư mục lên: “{{name}}”",
-      "summary": "Đã tải lên {{uploaded}} tệp, bỏ qua {{skipped}}, thất bại {{failed}}.",
       "notAttempted": "{{count}} tệp chưa được thử vì không thể tạo thư mục của chúng.",
       "skipped": "Đã bỏ qua",
       "failed": "Thất bại",
@@ -1153,12 +1184,14 @@
         "unsupported": "không phải tệp hoặc thư mục thông thường",
         "notGranted": "không nằm trong phần bạn đã chọn",
         "overwriteNotConfirmed": "đã có trên máy chủ, chưa xác nhận ghi đè"
-      }
+      },
+      "uploaded": "Đã tải lên"
     },
     "uploadConflict": {
       "title": "Ghi đè tệp?",
       "body": "đã tồn tại trên máy chủ.",
-      "noDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn). Kích thước hiện tại: {{remoteSize}}, kích thước mới: {{localSize}}."
+      "currentSize": "Kích thước hiện tại",
+      "newSize": "Kích thước mới"
     },
     "menu": {
       "download": "Tải xuống",
@@ -1247,7 +1280,9 @@
       "recursive": "Áp dụng cho nội dung",
       "recursiveWarning": "— đổi chủ sở hữu của TẤT CẢ tệp và thư mục con trong thư mục này. Liên kết tượng trưng không được theo. Không thể hoàn tác."
     },
-    "transferChown": "Đang đổi chủ sở hữu của {{name}}"
+    "transferChown": "Đang đổi chủ sở hữu của {{name}}",
+    "stopProgress": "Tiến độ",
+    "noTextDiff": "Không thể so sánh văn bản (tệp nhị phân hoặc quá lớn)."
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
@@ -1277,12 +1312,16 @@
     "queued": "Sẽ được gửi cùng yêu cầu tiếp theo",
     "responseCancelled": "Đã hủy phản hồi.",
     "contextCompactedNotice": "Các phần cũ hơn của cuộc trò chuyện này đã được tóm tắt để vừa với ngữ cảnh của mô hình.",
-    "contextUsage": "Ngữ cảnh {{used}} / {{window}}",
     "contextUsageTooltip": "Các phần cũ hơn của cuộc trò chuyện được tự động tóm tắt khi ngữ cảnh đầy.",
+    "messageLabel": "Tin nhắn",
+    "headerProviderTooltip": "Nhà cung cấp: {{provider}}",
     "webResearchUnavailable": "Tra cứu web không khả dụng cho tài khoản nhà cung cấp này (tìm kiếm web bị tắt ở đó). Phiên này trả lời mà không tra cứu web. Để tắt vĩnh viễn: Cài đặt → Nhà cung cấp AI → “Tra cứu web”.",
     "emptyResponse": "Mô hình không trả về phản hồi nào. Với các mô hình có giai đoạn suy nghĩ, nên tăng giới hạn đầu ra trong cài đặt nhà cung cấp.",
     "refusedResponse": "Mô hình đã từ chối yêu cầu này. Hãy diễn đạt lại hoặc bắt đầu cuộc trò chuyện mới.",
     "outputTruncated": "(đã cắt bớt)",
+    "outputMoreLines_other": "… {{count}} dòng nữa",
+    "outputShowAll": "Hiện tất cả",
+    "outputShowLess": "Thu gọn",
     "fileWritten": "Đã ghi tệp '{{path}}'.",
     "writtenWithSudoPassword": "Đã ghi bằng mật khẩu sudo đã lưu.",
     "documentGenerated": "Đã tạo tài liệu",
@@ -1359,6 +1398,8 @@
     "aiTab": "AI",
     "paneTabs": "Các ngăn của phiên",
     "moreActions": "Thêm hành động",
+    "thisDevice": "thiết bị này",
+    "paneSwitch": "Chuyển đổi khung",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "extraKeys": {
       "group": "Phím bổ sung",
@@ -1578,6 +1619,10 @@
     "quitBody": "Các hoạt động này vẫn đang chạy và sẽ bị dừng:",
     "quitResumeHint": "Các bản tải xuống bị gián đoạn có thể tiếp tục ở lần mở ứng dụng tiếp theo.",
     "quitAnyway": "Vẫn thoát",
-    "keepRunning": "Tiếp tục chạy"
+    "keepRunning": "Tiếp tục chạy",
+    "summaryRunning_other": "{{count}} đang chạy",
+    "summaryInterrupted_other": "{{count}} bị gián đoạn",
+    "summaryFailed_other": "{{count}} thất bại",
+    "remaining": "còn {{time}}"
   }
 }

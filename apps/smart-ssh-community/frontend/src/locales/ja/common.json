@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "メインナビゲーション",
     "connect": "接続",
     "manage": "管理",
     "rules": "フィルタールール"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "サーバーがまだ追加されていません",
     "emptyStateHint": "最初のサーバーを追加して、SSHで接続しましょう。",
     "emptyStateCreateFirstServer": "最初のサーバーを追加",
-    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。"
+    "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。",
+    "localBadge": "ローカル",
+    "thisDevice": "このデバイス",
+    "sessionOpen": "セッション接続中",
+    "sessionPending": "確認待ち",
+    "sessionDisconnected": "セッション切断",
+    "sessionReconnecting": "再接続中"
   },
   "settings": {
     "title": "設定",
@@ -136,11 +143,15 @@
     "importSshConfig": "インポート…",
     "importSshConfigHint": "OpenSSHのssh_configファイルからサーバーをインポートします",
     "exportSshConfig": "エクスポート…",
-    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします"
+    "exportSshConfigHint": "サーバーをOpenSSHのssh_config形式でエクスポートします",
+    "title": "サーバー",
+    "collapseGroup": "グループ「{{name}}」を折りたたむ",
+    "expandGroup": "グループ「{{name}}」を展開"
   },
   "treeDrag": {
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
+    "current": "現在",
     "hintGroup": "→ このグループに移動",
     "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
     "moveTo": "「{{name}}」の移動先…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "このサーバーのチャット履歴、メモ、タグも完全に削除されます。",
     "confirmDeleteServer": "完全に削除",
     "testResult": {
-      "success": "✓ 接続に成功しました",
-      "authFailed": "✗ ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
+      "success": "接続に成功しました",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "ログインが拒否されました。ユーザー名とパスワードまたは鍵を確認してください。",
       "hostKeyUnknown": "ホストキーが不明です — 確認が必要です",
-      "hostKeyMismatch": "⚠ ホストキーが変更されました",
-      "networkError": "✗ ネットワークエラー: {{message}}",
-      "timeout": "✗ サーバーが応答しません。アドレス、ポート、ファイアウォールを確認してください。"
+      "hostKeyMismatch": "ホストキーが変更されました",
+      "networkError": "ネットワークエラー: {{message}}",
+      "timeout": "サーバーが応答しません。アドレス、ポート、ファイアウォールを確認してください。"
     },
     "largeNoteHint": "このメモは非常に大きいため、長いセッションではAIのコンテキスト用に短縮されることがあります。保存されたメモは完全なまま残ります。",
     "summarizeNow": "今すぐ要約",
@@ -356,7 +368,10 @@
     "matchedRuleLabel": "ルール:",
     "segmentLabel": "セグメント {{index}}",
     "checksLabel": "チェック:",
-    "hardBlacklistLabel": "ハードブラックリスト:"
+    "hardBlacklistLabel": "ハードブラックリスト:",
+    "invalidPattern": "無効なパターン",
+    "rowActions": "行の操作",
+    "ruleCount_other": "{{count}} 件のルール"
   },
   "actionCard": {
     "autoContinuationLimitReached": "確認なしで{{limit}}ステップが続いたため、自動継続を一時停止しました。メッセージを送信すると続行します。",
@@ -377,8 +392,8 @@
     "discardedAfterReconnect": "再接続されたため破棄されました。何も実行されていません。",
     "expiredTimeout": "時間内に応答がなく破棄されました。何も実行されていません。",
     "expiredUnknown": "このリクエストは保留中ではありません。何も実行されていません。",
-    "usesStoredSudoPassword": "🔑 保存済みのsudoパスワードを使用して実行されます。",
-    "writeMayUseStoredSudoPassword": "🔑 書き込み権限がない場合、アプリは保存済みのsudoパスワード（sudo）を使用して書き込みます。",
+    "usesStoredSudoPassword": "保存済みのsudoパスワードを使用して実行されます。",
+    "writeMayUseStoredSudoPassword": "書き込み権限がない場合、アプリは保存済みのsudoパスワード（sudo）を使用して書き込みます。",
     "takeIntoNote": "メモに取り込む",
     "takeIntoNoteFailed": "失敗しました — もう一度お試しください",
     "riskServerLabel": "サーバー",
@@ -388,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "AIのセカンドオピニオンを取得できませんでした。表示されているリスクはルールベースのものです。",
     "riskHint": "既知のパターンに基づく評価です。保証するものではありません。",
     "runningSince": "{{seconds}}秒間実行中…",
+    "exitCode": "終了コード: {{code}}",
     "waitingForInputHint": "このコマンドは入力待ちの可能性があります。停止すると、AI が非対話型の代替案を提案します。",
     "cancelCommand": "このコマンドを切断",
     "cancellingCommand": "切断中…",
-    "commandCancelledNotice": "⚠ 手動でキャンセルされました — 出力が不完全な可能性があり、通常の終了コードはありません。",
-    "commandTruncatedNotice": "⚠ 出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
+    "commandCancelledNotice": "手動でキャンセルされました — 出力が不完全な可能性があり、通常の終了コードはありません。",
+    "commandTruncatedNotice": "出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
     "liveOutputLabel": "ライブ出力",
-    "liveOutputTruncatedNotice": "⚠ サイズ上限に達しました — これ以降の出力は表示されません。",
+    "liveOutputTruncatedNotice": "サイズ上限に達しました — これ以降の出力は表示されません。",
     "autoRanLead": "自動実行",
     "autoRanRule": "ルール",
     "autoRanScopeGlobal": "グローバル",
@@ -409,17 +425,14 @@
     "editableCommand": "コマンド — 編集可能",
     "execute": "実行",
     "deny": "拒否",
-    "quickRule": "承認 + ルール",
-    "quickRuleDropdownAria": "ルールの候補を表示",
-    "newRulePatternHeading": "新しい許可ルールのパターン",
     "scopeThisServer": "このサーバー",
     "scopeGlobal": "グローバル",
     "scopeTag": "タグ",
     "tagNamePlaceholder": "タグ名",
     "loadingSuggestions": "候補を読み込み中…",
     "noSuggestions": "候補はありません。",
-    "binaryFileHint": "⚠ バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
-    "diffTooLargeHint": "⚠ 内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
+    "binaryFileHint": "バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
+    "diffTooLargeHint": "内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
     "noContentChange": "（内容の変更なし）",
     "quickRuleLabel": {
       "exact": "完全一致: {{patterns}}",
@@ -437,9 +450,17 @@
       "blocked": "ルールに関係なく常に確認します: {{reasons}}",
       "verdictAuto": "次回から自動的に実行されます",
       "verdictAsk": "引き続き確認します: {{reasons}}",
-      "notice": "ルールを作成しました。このコマンドは次回も確認が必要です: {{reasons}}",
       "reasonOther": "別の安全チェック",
-      "loadFailed": "ルールの適用範囲を読み込めませんでした"
+      "loadFailed": "ルールの適用範囲を読み込めませんでした",
+      "summaryHeading": "許可済み",
+      "toDecideHeading": "未決定",
+      "expandAria": "{{segment}} のルール候補",
+      "stagedBadge": "未保存",
+      "removeStaged": "削除",
+      "saveRules": "ルールを保存 ({{count}})",
+      "saveFailed": "ルールを保存できませんでした: {{message}}",
+      "unsavedHint": "未保存のルール: {{count}}",
+      "segmentCovered": "この部分は対象ですが、コマンドは引き続き確認を求めます: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +477,7 @@
     "mismatchBodyAfterHost": " が、前回保存された鍵とは異なる鍵を提示しています。中間者攻撃の可能性があります。サーバーの鍵が正当な理由（例: サーバーの再インストール）で変更されたと確信できる場合にのみ、続行してください。",
     "known": "既知",
     "offeredNow": "今回提示",
+    "offered": "提示",
     "keyType": "鍵の種類",
     "cancelConnection": "接続をキャンセル",
     "trustAnyway": "それでも信頼する",
@@ -468,13 +490,16 @@
   },
   "sessionTabs": {
     "newSession": "新しいセッション",
-    "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
     "menu": {
       "open": "ナビゲーションメニューを開く",
       "title": "ナビゲーションメニュー",
-      "sessions": "開いているセッション"
+      "sessions": "開いているセッション",
+      "close": "ナビゲーションメニューを閉じる",
+      "needsConfirmation": "確認が必要",
+      "activities": "アクティビティ",
+      "activitiesRunning_other": "{{count}}件実行中"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +508,9 @@
       "pendingBadge": "確認が必要",
       "readOnlyHint": "このセッションは外部ツール（MCP）のものです。確認または拒否するツールの操作とその結果のみが表示され、チャット入力やターミナルはありません。閉じるとMCPセッションが終了し、保留中の確認は拒否されます。"
     },
-    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。"
+    "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。",
+    "pendingBadge": "保留中",
+    "newConnection": "新しい接続"
   },
   "aiProvider": {
     "openLogs": "診断ログをファイルマネージャーで開く",
@@ -505,16 +532,16 @@
     "apiKeyFormatHint": "{{providerLabel}}のキーではないようです。「{{expectedPrefix}}」のようなプレフィックスが想定されます。そのまま保存することもできます。プロバイダーは形式を変更することがあります。",
     "testCredentials": "認証情報をテスト",
     "testingCredentials": "テスト中…",
-    "testResultValid": "✓ 認証情報は有効です",
-    "testResultAuthFailed": "✗ 認証に失敗しました – APIキーを確認してください",
-    "testResultUnreachable": "✗ プロバイダーに到達できません: {{message}}",
+    "testResultValid": "認証情報は有効です",
+    "testResultAuthFailed": "認証に失敗しました – APIキーを確認してください",
+    "testResultUnreachable": "プロバイダーに到達できません: {{message}}",
     "testResultRateLimited": "認証情報は有効のようですが、プロバイダーが現在レート制限中です。1分ほど待ってからもう一度テストしてください。",
     "nativeToolCalling": "ネイティブのツール呼び出しに対応",
     "discoverModels": "モデルを読み込む",
     "discoveringModels": "モデルを読み込み中…",
     "modelDiscoveryFailedHint": "モデルを自動で読み込めませんでした — モデル名を手動で入力してください。",
     "modelDiscoveryEmptyHint": "プロバイダーからモデルが返されませんでした。モデル名を手動で入力してください。",
-    "modelDiscoveryAuthFailed": "✗ プロバイダーがこの認証情報を拒否しました – APIキーを確認してください",
+    "modelDiscoveryAuthFailed": "プロバイダーがこの認証情報を拒否しました – APIキーを確認してください",
     "advanced": "詳細設定",
     "extraHeadersLabel": "追加ヘッダー",
     "extraHeadersHint": "このプロバイダーへのすべてのリクエストに付加されます（例: OpenRouterのHTTP-Referer／X-Title）。",
@@ -557,6 +584,7 @@
     "ollamaProbeRetry": "再検索",
     "ollamaProbeNotFoundHeading": "ローカルのOllamaが見つかりません（既定のポート 11434）。",
     "ollamaProbeNotFoundInstructions": "ollama.comからOllamaをインストールして起動し、モデルを読み込んで（例: `ollama pull llama3`）から、もう一度検索してください。",
+    "typeLabel": "種類",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +701,7 @@
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "選択した AI プロバイダーは設定されていません。設定済みのプロバイダーを選択してください。",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
+    "CHAT_SESSION_NOT_FOUND": "保存されたこのチャットは存在しません。「再試行」を選ぶと、再開せずに通常どおり接続します。",
     "SESSION_NOT_FOUND": "このセッションは既に閉じられています。サーバー一覧からもう一度開いてください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません",
@@ -848,6 +877,8 @@
     "groupsHeading": "作成されるフォルダー構造",
     "entriesHeading": "{{count}}台のサーバー",
     "field": {
+      "name": "名前",
+      "include": "含める",
       "host": "アドレス",
       "port": "ポート",
       "username": "ユーザー",
@@ -923,6 +954,7 @@
       "proxyJumpLocalPseudoServer": "ローカル擬似サーバーを指しています"
     },
     "confirm": "インポート",
+    "confirmCount_other": "{{count}}台のサーバーをインポート",
     "applying": "インポート中…",
     "result": {
       "success": "サーバー{{created}}台、フォルダー{{groups}}個を作成し、競合{{skipped}}件をスキップしました。",
@@ -1076,6 +1108,7 @@
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
     "fileActionsGroup": "ファイル操作",
+    "directoryActions": "ディレクトリ操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",
@@ -1121,8 +1154,7 @@
       "editing": "「{{name}}」をローカルで編集中…",
       "end": "編集を終了",
       "uploadTitle": "ローカルの変更をアップロードしますか？",
-      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。新しいサイズ: {{size}}。"
+      "remoteChanged": "ダウンロード後にリモートのファイルが変更されています。アップロードすると、その別の変更が上書きされます。"
     },
     "deleteDialog": {
       "fileTitle": "ファイルを削除しますか？",
@@ -1142,7 +1174,6 @@
       "conflictTitle": "フォルダー内のファイルを上書きしますか？",
       "conflictBody": "「{{name}}」をアップロードすると、サーバー上のこれら{{count}}個のファイルが上書きされます。確認しない限り、何も上書きされません。",
       "summaryTitle": "フォルダーのアップロード: 「{{name}}」",
-      "summary": "{{uploaded}}個のファイルをアップロード、{{skipped}}個をスキップ、{{failed}}個が失敗しました。",
       "notAttempted": "フォルダーを作成できなかったため、{{count}}個のファイルは処理されませんでした。",
       "skipped": "スキップ",
       "failed": "失敗",
@@ -1153,12 +1184,14 @@
         "unsupported": "通常のファイルまたはフォルダーではありません",
         "notGranted": "選択範囲に含まれていません",
         "overwriteNotConfirmed": "サーバー上に存在し、上書きが確認されていません"
-      }
+      },
+      "uploaded": "アップロード済み"
     },
     "uploadConflict": {
       "title": "ファイルを上書きしますか？",
       "body": "はサーバー上にすでに存在します。",
-      "noDiff": "テキストの差分を表示できません（バイナリファイル、または大きすぎます）。現在のサイズ: {{remoteSize}}、新しいサイズ: {{localSize}}。"
+      "currentSize": "現在のサイズ",
+      "newSize": "新しいサイズ"
     },
     "menu": {
       "download": "ダウンロード",
@@ -1247,7 +1280,9 @@
       "recursive": "内容にも適用",
       "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの所有者を変更します。シンボリックリンクはたどりません。元に戻せません。"
     },
-    "transferChown": "{{name}} の所有者を変更中"
+    "transferChown": "{{name}} の所有者を変更中",
+    "stopProgress": "進捗",
+    "noTextDiff": "テキスト差分を表示できません(バイナリファイル、またはサイズが大きすぎます)。"
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
@@ -1277,12 +1312,16 @@
     "queued": "次のリクエストと一緒に送信されます",
     "responseCancelled": "応答をキャンセルしました。",
     "contextCompactedNotice": "このチャットの古い部分は、モデルのコンテキストに収めるために要約されました。",
-    "contextUsage": "コンテキスト {{used}} / {{window}}",
     "contextUsageTooltip": "コンテキストがいっぱいになると、チャットの古い部分は自動的に要約されます。",
+    "messageLabel": "メッセージ",
+    "headerProviderTooltip": "プロバイダー: {{provider}}",
     "webResearchUnavailable": "このプロバイダーのアカウントではWebリサーチを利用できません（Web検索が無効になっています）。このセッションはWebリサーチなしで回答します。恒久的にオフにするには、設定 → AIプロバイダー → 「Webリサーチ」を開いてください。",
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "refusedResponse": "モデルはこのリクエストを拒否しました。言い換えるか、新しいチャットを始めてください。",
     "outputTruncated": "（省略されました）",
+    "outputMoreLines_other": "… 他 {{count}} 行",
+    "outputShowAll": "すべて表示",
+    "outputShowLess": "表示を減らす",
     "fileWritten": "ファイル「{{path}}」を書き込みました。",
     "writtenWithSudoPassword": "保存済みのsudoパスワードを使用して書き込みました。",
     "documentGenerated": "ドキュメントを生成しました",
@@ -1359,6 +1398,8 @@
     "aiTab": "AI",
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
+    "thisDevice": "このデバイス",
+    "paneSwitch": "ペイン切り替え",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "extraKeys": {
       "group": "追加キー",
@@ -1578,6 +1619,10 @@
     "quitBody": "次のアクティビティは実行中で、停止されます:",
     "quitResumeHint": "中断されたダウンロードは、次回の起動時に再開できます。",
     "quitAnyway": "終了する",
-    "keepRunning": "実行を続ける"
+    "keepRunning": "実行を続ける",
+    "summaryRunning_other": "実行中 {{count}} 件",
+    "summaryInterrupted_other": "中断 {{count}} 件",
+    "summaryFailed_other": "失敗 {{count}} 件",
+    "remaining": "残り {{time}}"
   }
 }

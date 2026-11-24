@@ -128,11 +128,34 @@ test.describe("chat panel review", () => {
     await captureScreen(app.page, "chat-messages");
   });
 
-  test("screenshot of the command confirmation and its quick-rule popup", async ({ app }) => {
+  // Issue #1371: the transcript is flat — no rounded corners, no shadows on any
+  // item (shared button and tooltip primitives are restyled in their own issues).
+  for (const [name, open] of [
+    ["messages", openChatWithMessages],
+    ["confirmation", openChatWithConfirmation],
+  ] as const) {
+    test(`transcript items have square corners and no shadows (${name})`, async ({ app }) => {
+      await open(app);
+      const transcript = app.page.getByTestId("chat-transcript");
+      await expect(transcript).toBeVisible();
+      const offenders = await transcript.evaluate((root) =>
+        Array.from(root.querySelectorAll("*"))
+          .filter((el) => !el.closest("button, [role=tooltip]"))
+          .filter((el) => {
+            const cs = getComputedStyle(el);
+            return cs.borderTopLeftRadius !== "0px" || cs.boxShadow !== "none";
+          })
+          .map((el) => el.tagName + "." + el.className),
+      );
+      expect(offenders).toEqual([]);
+    });
+  }
+
+  test("screenshot of the command confirmation and its expanded rule row", async ({ app }) => {
     await openChatWithConfirmation(app);
     await captureScreen(app.page, "chat-confirmation");
-    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
+    await app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ }).click();
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
     await captureScreen(app.page, "chat-quick-rule");
   });
 
@@ -148,33 +171,22 @@ test.describe("chat panel review", () => {
     for (const s of stops) expect(s.ring, `no focus indicator on "${s.name}"`).toBe(true);
   });
 
-  test("composer: one-line text, prompt and buttons share a vertical centre; multi-line keeps bottom/top alignment", async ({ app }) => {
+  test("composer: labelled box, toolbar row below the input, voice and Send share a vertical centre", async ({ app }) => {
     await openChatWithMessages(app);
     const input = chatInput(app.page);
     const form = app.page.locator("form:has(textarea)").locator("visible=true");
-    const prompt = form.locator("span", { hasText: ">" }).first();
     const send = form.getByRole("button", { name: "Send", exact: true });
     const voice = form.getByRole("button", { name: "Start voice input" });
-    // Empty (placeholder) and one line of text.
-    // In the narrow layout the placeholder itself wraps onto two lines; that
-    // is a multi-line state and is covered below, so only check it when the
-    // placeholder fits on one line.
-    if ((await input.boundingBox())!.height < 36) {
-      await expectVerticallyCentredWith(input, send);
-      await expectVerticallyCentredWith(prompt, send);
-      await expectVerticallyCentredWith(input, voice);
-    }
+    await expect(app.page.getByLabel("Message", { exact: true }).locator("visible=true")).toBeVisible();
+    await expect(form.locator("span", { hasText: /^>$/ })).toHaveCount(0);
     await input.fill("one line");
-    await expectVerticallyCentredWith(input, voice);
-    await expectVerticallyCentredWith(input, send);
-    await expectVerticallyCentredWith(prompt, send);
-    // Five lines: send stays on the bottom line, prompt on the first.
+    await expectVerticallyCentredWith(voice, send);
+    // The toolbar sits below the input and keeps its place when the input grows.
     await input.fill("1\n2\n3\n4\n5");
     await expect(async () => {
-      const [i, p, s] = await Promise.all([input.boundingBox(), prompt.boundingBox(), send.boundingBox()]);
+      const [i, s] = await Promise.all([input.boundingBox(), send.boundingBox()]);
       expect(i!.height).toBeGreaterThan(80);
-      expect(Math.abs(s!.y + s!.height - (i!.y + i!.height))).toBeLessThanOrEqual(2);
-      expect(Math.abs(p!.y - i!.y)).toBeLessThanOrEqual(2);
+      expect(s!.y).toBeGreaterThanOrEqual(i!.y + i!.height - 2);
     }).toPass({ timeout: 5_000 });
   });
 
@@ -196,14 +208,14 @@ test.describe("chat panel review", () => {
     expect(ring, "the chat input shows no focus indicator").toBe(true);
   });
 
-  test("the quick-rule popup closes with Escape and focus returns to its trigger", async ({ app }) => {
+  test("the rule row toggle expands inline and keeps focus on itself", async ({ app }) => {
     await openChatWithConfirmation(app);
-    const trigger = app.page.getByRole("button", { name: "Show rule suggestions" });
-    await trigger.click();
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
-    await app.page.keyboard.press("Escape");
-    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+    const toggle = app.page.getByRole("button", { name: /^Rule suggestions for rm -rf/ });
+    await toggle.focus();
+    await app.page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(app.page.getByText(/rm -rf \/var\/lib\/app\/\*/)).toBeVisible();
+    await expect(toggle).toBeFocused();
   });
 
   for (const size of SIZES) {

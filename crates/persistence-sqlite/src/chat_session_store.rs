@@ -152,7 +152,8 @@ impl SqliteChatSessionStore {
     ) -> Result<Uuid, ChatSessionStoreError> {
         let id = Uuid::new_v4();
         sqlx::query(
-            "INSERT INTO chat_sessions (id, server_id, title, started_at, ended_at, ai_provider_id) \
+            "INSERT INTO chat_sessions \
+             (id, server_id, title, started_at, ended_at, ai_provider_id) \
              VALUES (?, ?, NULL, ?, NULL, ?)",
         )
         .bind(id.to_string())
@@ -160,9 +161,7 @@ impl SqliteChatSessionStore {
         .bind(Utc::now().to_rfc3339())
         .bind(ai_provider_id.map(|id| id.to_string()))
         .execute(&self.pool)
-        .await
-        ?;
-
+        .await?;
         Ok(id)
     }
 
@@ -267,6 +266,15 @@ impl SqliteChatSessionStore {
             .collect()
     }
 
+    /// Whether a `chat_sessions` row with this id exists.
+    pub async fn session_exists(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count > 0)
+    }
+
     /// Spec 0034, Abschnitt 4: "endet bei `disconnect()`".
     pub async fn mark_ended(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
         sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")
@@ -278,14 +286,13 @@ impl SqliteChatSessionStore {
     }
 
     /// Issue #543 / Spec 0034, Abschnitt 4: deletes the session iff it has
-    /// no `chat_messages` and no `ledger_entries`. Check and delete are one
+    /// no `chat_messages`. Check and delete are one
     /// statement, so a message arriving concurrently either lands first (row
     /// kept) or hits a missing session. Returns whether a row was deleted.
     pub async fn delete_if_empty(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
         let res = sqlx::query(
             "DELETE FROM chat_sessions WHERE id = ? \
-             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
-             AND NOT EXISTS (SELECT 1 FROM ledger_entries WHERE session_id = chat_sessions.id)",
+             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)",
         )
         .bind(session_id.to_string())
         .execute(&self.pool)
@@ -818,25 +825,6 @@ mod tests {
             .unwrap()
             .get("ended_at");
         assert!(ended.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_delete_if_empty_keeps_session_with_ledger_entry() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
-             VALUES (?, ?, 1, 'mcp-agent', 'command_executed', x'00', ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(id.to_string())
-        .bind(Utc::now().to_rfc3339())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-        assert!(!chat_store.delete_if_empty(id).await.unwrap());
-        assert_eq!(session_count(&profile_store, id).await, 1);
     }
 
     #[tokio::test]
@@ -1412,7 +1400,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=28).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=30).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.
@@ -1580,53 +1568,6 @@ mod tests {
         );
     }
 
-    /// Ein Inhalt, der kein Text ist (eine nicht umgestellte Altzeile), ist
-    /// ein klarer Fehler — kein Panic, keine stille Lücke im Verlauf.
-    #[tokio::test]
-    async fn test_a_blob_message_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "INSERT INTO chat_messages \
-             (id, session_id, role, content_type, content, sequence, created_at) \
-             VALUES (?, ?, 'user', 'text', ?, 0, ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(session_id.to_string())
-        .bind(vec![0u8; 40])
-        .bind(Utc::now().to_rfc3339())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_session(session_id).await,
-            Err(ChatSessionStoreError::Database(_))
-        ));
-    }
-
-    /// Wie oben, für `load_summary`.
-    #[tokio::test]
-    async fn test_a_blob_summary_yields_a_clean_error_not_a_panic() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        sqlx::query(
-            "UPDATE chat_sessions SET summary_text = ?, summary_rounds_covered = 2 WHERE id = ?",
-        )
-        .bind(vec![0u8; 40])
-        .bind(session_id.to_string())
-        .execute(&profile_store.pool)
-        .await
-        .unwrap();
-
-        assert!(matches!(
-            chat_store.load_summary(session_id).await,
-            Err(ChatSessionStoreError::Database(_))
-        ));
-    }
-
     /// `load_summary` muss für eine Sitzung ohne je gespeicherte
     /// Zusammenfassung `Ok(None)` liefern (additive Migration: beide
     /// Spalten `NULL`), nicht fälschlich einen Fehler.
@@ -1640,3 +1581,6 @@ mod tests {
         assert_eq!(loaded, None);
     }
 }
+
+#[cfg(test)]
+mod tests_blob;

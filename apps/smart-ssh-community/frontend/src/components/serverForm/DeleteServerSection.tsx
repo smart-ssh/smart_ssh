@@ -13,7 +13,7 @@ export function DeleteServerSection({ del, onDeleted }: Props) {
   const { t } = useTranslation();
   const { deleting, deletePreview, secretsLeftBehind, setDeletePreview, setSecretsLeftBehind, handleDeleteClick, handleConfirmDelete } = del;
   return (
-            <div className="border-t border-border pt-4">
+            <section className="border-t border-border pt-4" aria-label={t("serverForm.deleteServer")}>
               <Button variant="danger" size="sm"
                 onClick={handleDeleteClick}
               >
@@ -125,6 +125,6 @@ export function DeleteServerSection({ del, onDeleted }: Props) {
                   </div>
                 </div>
               )}
-            </div>
+            </section>
   );
 }

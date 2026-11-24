@@ -100,20 +100,6 @@ impl crate::policy_store::PolicyStoreError {
     }
 }
 
-impl crate::ledger_store::LedgerStoreError {
-    /// Machine-readable kind of the failure; `None` for errors that are not
-    /// a database failure.
-    pub fn kind(&self) -> Option<StoreErrorKind> {
-        use crate::ledger_store::LedgerStoreError as E;
-        match self {
-            E::Database(d) => Some(d.kind),
-            E::Backend(_) => Some(StoreErrorKind::Other),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-}
-
 impl crate::prompt_history_store::PromptHistoryStoreError {
     /// Machine-readable kind of the failure; `None` for errors that are not
     /// a database failure.
@@ -184,16 +170,6 @@ impl ErrorCode for crate::policy_store::PolicyStoreError {
             _ => None,
         };
         kind_code(self.kind(), domain)
-    }
-}
-
-impl ErrorCode for crate::ledger_store::LedgerStoreError {
-    fn code(&self) -> &'static str {
-        use crate::ledger_store::LedgerStoreError as E;
-        match self {
-            E::CorruptContent { .. } => StoreErrorKind::Corrupt.code(),
-            _ => kind_code(self.kind(), None),
-        }
     }
 }
 

@@ -2,7 +2,7 @@ import { isRealDir } from "../../lib/remotePath";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type RemoteEntryDto } from "../../api/types";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "../ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon } from "../ui";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Issue #654: "Change owner…" dialog. User and group are prefilled with the
@@ -38,6 +38,7 @@ export function ChownDialog({
     <DialogFrame
       layer="sessionTab"
       size="sm"
+      icon={<Icon name="user" />}
       title={t("fileBrowser.chown.title")}
       onClose={onCancel}
       initialFocusRef={ownerRef}
@@ -58,7 +59,7 @@ export function ChownDialog({
       <p className="mb-3 font-mono text-xs break-all text-fg-subtle">{entry.path}</p>
       {modeNote && (
         <p className="mb-3 border border-warning/60 bg-warning-subtle/40 px-2 py-1 text-xs text-warning-fg-soft">
-          ⚠ {modeNote}
+          <Icon name="warn" className="mr-1 inline align-text-bottom" /> {modeNote}
         </p>
       )}
       <Field label={t("fileBrowser.chown.owner")} className="mb-3">

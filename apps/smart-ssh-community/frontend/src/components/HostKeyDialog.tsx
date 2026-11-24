@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -60,6 +60,10 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // `ServerList`; das Portal bleibt trotzdem nötig — `ServerForm` zeigt
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
+  const rejectLabel = isMismatch ? t("hostKeyDialog.cancelConnection") : t("hostKeyDialog.reject");
+  const trustLabel = isMismatch ? t("hostKeyDialog.trustAnyway") : t("hostKeyDialog.trust");
+  const rowClass = "grid grid-cols-[6rem_1fr] gap-3 border-t border-border px-3 py-2 first:border-t-0 narrow:grid-cols-1 narrow:gap-1";
+  const labelClass = "label-condensed text-xs text-fg-subtle";
   return (
     <DialogFrame
       layer="app"
@@ -72,115 +76,74 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
       onClose={() => decide("reject")}
       initialFocusRef={rejectButtonRef}
       resetKey={event}
-      panelClassName={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 ${
-        isMismatch ? "border-danger bg-danger-subtle/95" : "border-border-strong bg-surface-raised"
-      }`}
+      tone={isMismatch ? "danger" : undefined}
+      ticks={isMismatch ? "danger" : undefined}
+      panelClassName={`relative flex max-h-[85vh] w-full max-w-lg flex-col border ${isMismatch ? "" : "border-border-strong"} bg-surface-raised p-0 shadow-offset-lg narrow:max-h-none narrow:max-w-none narrow:border-0 narrow:shadow-none`}
     >
-        {isMismatch ? (
-          <>
-            {/* Gefahren-Warnstreifen — Design-Import, Abschnitt "HOST-KEY
-             * GEÄNDERT"-Dialog: diagonale Rot-Schwarz-Schraffur als
-             * unübersehbarer Alarm-Kopf. */}
-            <div
-              className="h-3 shrink-0"
-              style={{
-                background:
-                  "repeating-linear-gradient(135deg, var(--color-danger) 0 10px, var(--color-danger-subtle) 10px 20px)",
-              }}
-            />
-            <div className="flex min-h-0 flex-1 flex-col p-6">
-              <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="font-mono text-xs tracking-[0.18em] text-danger-fg uppercase">
-                {t("hostKeyDialog.mismatchLabel")}
-              </div>
-              <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-danger-fg-faint">
-                {t("hostKeyDialog.mismatchHeading")}
-              </h2>
-              <p id={descriptionId} className="mb-4 text-sm text-danger-fg-softer/90">
-                {t("hostKeyDialog.mismatchBodyBeforeHost")}
-                <strong className="break-all">{event.host}:{event.port}</strong>
-                {t("hostKeyDialog.mismatchBodyAfterHost")}
-              </p>
-              {event.keyType ? (
-                <p className="mb-4 text-sm text-danger-fg-softer/90" data-testid="host-key-type">
-                  {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
-                </p>
-              ) : null}
-              <div className="mb-4 grid grid-cols-2 gap-px narrow:grid-cols-1 border border-danger-border-strong/40 bg-danger-border-strong/25">
-                <div className="flex flex-col gap-1 bg-danger-subtle p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-danger-fg-soft uppercase">
-                    {t("hostKeyDialog.known")}
-                  </span>
-                  <span className="font-mono text-xs break-all text-success-fg-soft">
-                    {event.expectedFingerprint}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 bg-danger-subtle p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-danger-fg-soft uppercase">
-                    {t("hostKeyDialog.offeredNow")}
-                  </span>
-                  <span className="font-mono text-xs break-all text-danger-fg-soft">
-                    {event.fingerprint}
-                  </span>
-                </div>
-              </div>
-
-              </div>
-
-              <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-danger-border-strong/30 pt-4">
-                <Button variant="bare"
-                  ref={rejectButtonRef}
-                  type="button"
-                  onClick={() => decide("reject")}
-                  className="font-heading bg-danger-border-strong px-3 py-2 text-sm font-bold tracking-wide text-danger-fg-faintest hover:bg-danger focus-ring focus-visible:ring-offset-danger-subtle"
-                >
-                  {t("hostKeyDialog.cancelConnection")}
-                </Button>
-                <Button variant="bare"
-                  type="button"
-                  onClick={() => decide("trust")}
-                  className="font-heading border border-fg-bright/15 px-3 py-2 text-sm font-semibold tracking-wide text-danger-fg-softer hover:bg-fg-bright/6 focus-ring focus-visible:ring-offset-danger-subtle"
-                >
-                  {t("hostKeyDialog.trustAnyway")}
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col p-6">
-            <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-fg">
-              {t("hostKeyDialog.unknownHeading")}
-            </h2>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-            <p id={descriptionId} className="mb-4 text-sm text-fg-muted">
-              {t("hostKeyDialog.unknownBodyBeforeHost")}
-              <strong className="break-all">{event.host}:{event.port}</strong>
-              {t("hostKeyDialog.unknownBodyAfterHost")}
-            </p>
-            {event.keyType ? (
-              <p className="mb-2 text-sm text-fg-muted" data-testid="host-key-type">
-                {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
-              </p>
-            ) : null}
-            <div className="mb-4 border border-border bg-surface-sunken p-2 font-mono text-xs break-all text-fg-muted">
-              {event.fingerprint}
-            </div>
-
-            </div>
-
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
-              <Button
-                ref={rejectButtonRef}
-                onClick={() => decide("reject")}
-              >
-                {t("hostKeyDialog.reject")}
-              </Button>
-              <Button variant="primary" onClick={() => decide("trust")}>
-                {t("hostKeyDialog.trust")}
-              </Button>
-            </div>
+      {isMismatch ? (
+        <div
+          className="flex shrink-0 items-center gap-2 border-b border-danger-border bg-danger-subtle px-5 py-3 text-danger-fg narrow:px-4"
+          data-testid="host-key-header"
+        >
+          <Icon name="warn" />
+          <div className="label-condensed text-xs">{t("hostKeyDialog.mismatchLabel")}</div>
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 narrow:px-4">
+        {event.serverName ? (
+          <div className="mb-1 break-words font-mono text-sm text-fg" data-testid="host-key-server-name">
+            {event.serverName}
           </div>
-        )}
+        ) : null}
+        <h2
+          id={headingId}
+          className="text-title mb-2 break-words text-fg-strong"
+        >
+          {isMismatch ? t("hostKeyDialog.mismatchHeading") : t("hostKeyDialog.unknownHeading")}
+        </h2>
+        <p id={descriptionId} className="mb-4 text-sm text-fg-muted">
+          {t(isMismatch ? "hostKeyDialog.mismatchBodyBeforeHost" : "hostKeyDialog.unknownBodyBeforeHost")}
+          <strong className="font-mono break-all text-fg" data-testid="host-key-address">
+            {event.host}:{event.port}
+          </strong>
+          {t(isMismatch ? "hostKeyDialog.mismatchBodyAfterHost" : "hostKeyDialog.unknownBodyAfterHost")}
+        </p>
+        <dl className="border border-border bg-surface font-mono text-xs">
+          {isMismatch ? (
+            <div className={rowClass}>
+              <dt className={labelClass}>{t("hostKeyDialog.known")}</dt>
+              <dd className="break-all text-fg select-text">{event.expectedFingerprint}</dd>
+            </div>
+          ) : null}
+          <div className={`${rowClass} ${isMismatch ? "bg-danger-subtle" : ""}`}>
+            <dt className={`${labelClass} ${isMismatch ? "text-danger-fg" : ""}`}>
+              {t(isMismatch ? "hostKeyDialog.offeredNow" : "hostKeyDialog.offered")}
+            </dt>
+            <dd className={`break-all select-text ${isMismatch ? "text-danger-fg" : "text-fg"}`}>{event.fingerprint}</dd>
+          </div>
+          {event.keyType ? (
+            <div className={rowClass} data-testid="host-key-type">
+              <dt className={labelClass}>{t("hostKeyDialog.keyType")}</dt>
+              <dd className="text-fg select-text">{event.keyType}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-surface px-5 py-3 narrow:px-4">
+        <Button
+          ref={rejectButtonRef}
+          variant={isMismatch ? "primary" : "secondary"}
+          onClick={() => decide("reject")}
+        >
+          {rejectLabel}
+        </Button>
+        <Button
+          variant={isMismatch ? "danger" : "primary"}
+          onClick={() => decide("trust")}
+        >
+          {trustLabel}
+        </Button>
+      </div>
     </DialogFrame>
   );
 }

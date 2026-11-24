@@ -104,14 +104,14 @@ describe("FileBrowserPanel sort propagation (#747)", () => {
       expect(b.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "ascending"),
     );
     expect(b.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
-    expect(rowNames(screen.getByTestId("panel-b"))).toEqual(["📄 a.txt", "📄 b.txt"]);
+    expect(rowNames(screen.getByTestId("panel-b"))).toEqual(["a.txt", "b.txt"]);
 
     // Reverses from the shared state, not a stale local one.
     fireEvent.click(b.getByTestId("column-sort-size"));
     await waitFor(() =>
       expect(a.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "descending"),
     );
-    expect(rowNames(screen.getByTestId("panel-a"))).toEqual(["📄 b.txt", "📄 a.txt"]);
+    expect(rowNames(screen.getByTestId("panel-a"))).toEqual(["b.txt", "a.txt"]);
     expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "desc" });
   });
 });

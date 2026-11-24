@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { commandErrorMessage, requestNoteShrink } from "../api/api";
 import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../api/events";
 import { publishRequestServerNoteEdit } from "../buses/navigationBus";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 
 interface PendingShrinkSuggestion {
   serverId: string;
@@ -121,7 +121,7 @@ export function NoteShrinkSuggestionToast() {
       {suggestions.map((suggestion) => (
         <div
           key={suggestion.serverId}
-          className="rounded-lg border border-border bg-surface-raised p-3 text-sm shadow-lg"
+          className="border border-border bg-surface-raised p-3 text-sm"
         >
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-fg">
@@ -136,7 +136,7 @@ export function NoteShrinkSuggestionToast() {
               aria-label={t("noteShrink.dismissHint")}
               className="shrink-0"
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </div>
           <p className="mt-1 text-xs text-fg-subtle">
@@ -163,7 +163,7 @@ export function NoteShrinkSuggestionToast() {
       {failures.map((failure) => (
         <div
           key={failure.id}
-          className="flex items-start justify-between gap-2 rounded-lg border border-danger-subtle-hover bg-danger-subtle p-3 text-sm shadow-lg"
+          className="flex items-start justify-between gap-2 border border-danger-subtle-hover bg-danger-subtle p-3 text-sm"
         >
           <p role="alert" className="min-w-0 break-words text-danger-fg-softer">
             {failure.message}
@@ -175,7 +175,7 @@ export function NoteShrinkSuggestionToast() {
             aria-label={t("noteShrink.dismissError")}
             className="shrink-0"
           >
-            ✕
+            <Icon name="x" />
           </Button>
         </div>
       ))}

@@ -108,6 +108,39 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     expect(await screen.findByText(invalidPatternText())).toBeInTheDocument();
     expect(screen.getByText(LIBRARY_ERROR)).toBeInTheDocument();
     expect(createRuleMock).toHaveBeenCalled();
+
+    const input = screen.getByPlaceholderText("ls *");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby")!;
+    const errorEl = document.getElementById(describedBy.split(" ").pop()!)!;
+    expect(errorEl).toHaveTextContent(invalidPatternText());
+    expect(errorEl).toHaveTextContent(LIBRARY_ERROR);
+  });
+
+  // A later scope-validation failure must not leave the old pattern error
+  // on the pattern field. Fails if the early return skips the clearing.
+  it("clears the old pattern error when a later submit fails on the scope", async () => {
+    listRulesMock.mockResolvedValue([]);
+    createRuleMock.mockRejectedValue({
+      message: LIBRARY_ERROR,
+      code: "FILTER_RULE_PATTERN_INVALID",
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: /\+ Regel|\+ Rule/ }));
+    fireEvent.change(screen.getByPlaceholderText("ls *"), {
+      target: { value: "^systemctl stop (.*" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
+    expect(await screen.findByText(LIBRARY_ERROR)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Tag" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
+
+    expect(await screen.findByText("Bitte ein Tag angeben.")).toBeInTheDocument();
+    expect(screen.queryByText(LIBRARY_ERROR)).not.toBeInTheDocument();
+    expect(screen.queryByText(invalidPatternText())).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("ls *")).not.toHaveAttribute("aria-invalid", "true");
   });
 
   // Gegenprobe: Ein anderer Fehler behält das bisherige Verhalten (roher
@@ -123,6 +156,7 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
 
     expect(await screen.findByText("Datenbankfehler: disk full")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("ls *")).not.toHaveAttribute("aria-invalid");
   });
 });
 
@@ -191,7 +225,7 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     renderView();
 
     await screen.findByText(/rule-broken-pattern/);
-    const brokenRow = screen.getByText(/rule-broken-pattern/).closest("li")!;
+    const brokenRow = screen.getByText(/rule-broken-pattern/).closest("tr")!;
     const up = within(brokenRow).getByRole("button", { name: /Priorität erhöhen|Increase priority/ });
     const down = within(brokenRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
@@ -216,14 +250,14 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
 
     await screen.findByText(/rule-top-pattern/);
     const neighbourReason = testI18n.getFixedT("de")("filterRules.priorityDisabledNeighbourPatternError");
-    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topRow = screen.getByText(/rule-top-pattern/).closest("tr")!;
     const topDown = within(topRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
     });
     expect(topDown).toBeDisabled();
     expect(topDown).toHaveAttribute("title", neighbourReason);
 
-    const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("li")!;
+    const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("tr")!;
     const bottomUp = within(bottomRow).getByRole("button", {
       name: /Priorität erhöhen|Increase priority/,
     });
@@ -248,7 +282,7 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     renderView();
 
     await screen.findByText(/rule-top-pattern/);
-    const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
+    const topRow = screen.getByText(/rule-top-pattern/).closest("tr")!;
     const topDown = within(topRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
     });

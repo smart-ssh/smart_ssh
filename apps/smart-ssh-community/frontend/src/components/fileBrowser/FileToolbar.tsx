@@ -1,8 +1,8 @@
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { parentPath } from "../../lib/remotePath";
-import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
-import { Button, FIELD_CONTROL_CLASS } from "../ui";
+import { Button, Icon } from "../ui";
+import { PathBar } from "./PathBar";
 
 interface FileToolbarProps {
   narrow: boolean;
@@ -11,6 +11,12 @@ interface FileToolbarProps {
   pathInput: string;
   setPathInput: (value: string) => void;
   load: (path: string) => void;
+  /** The path bar shows the editable input instead of the breadcrumb. */
+  pathEditing: boolean;
+  setPathEditing: (editing: boolean) => void;
+  onRefresh: () => void;
+  /** Opens the columns menu below the given point (the toolbar button's corner). */
+  onShowColumns: (point: { x: number; y: number }) => void;
   /** Narrow layout: the "⋯" overflow menu. */
   overflowRef: RefObject<HTMLDivElement | null>;
   overflowButtonRef: RefObject<HTMLButtonElement | null>;
@@ -47,6 +53,10 @@ export function FileToolbar({
   pathInput,
   setPathInput,
   load,
+  pathEditing,
+  setPathEditing,
+  onRefresh,
+  onShowColumns,
   overflowRef,
   overflowButtonRef,
   overflowOpen,
@@ -73,44 +83,29 @@ export function FileToolbar({
   return (
     <>
       {narrow && (
-        <div className="flex items-center gap-1.5 border-b border-surface-raised px-2 py-1.5">
+        <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
           <Button
-            className="min-h-11 min-w-11"
-            onClick={() => load(startPath)}
-            title={t("fileBrowser.toStartDirectory")}
-            aria-label={t("fileBrowser.toStartDirectory")}
-          >
-            ⌂
-          </Button>
-          <Button
-            className="min-h-11 min-w-11"
+            iconOnly
             onClick={() => load(parentPath(path))}
             disabled={path === "."}
             title={t("fileBrowser.parentDirectory")}
             aria-label={t("fileBrowser.parentDirectory")}
           >
-            ↑
+            <Icon name="parent" />
           </Button>
-          <form
-            className="min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              load(pathInput.trim() || ".");
-            }}
-          >
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              value={pathInput}
-              onChange={(e) => setPathInput(e.target.value)}
-              aria-label={t("fileBrowser.properties.path")}
-              title={pathInput}
-              className={`${FIELD_CONTROL_CLASS} min-h-11 w-full px-2 py-1 font-mono text-xs`}
-            />
-          </form>
+          <PathBar
+            narrow
+            path={path}
+            pathInput={pathInput}
+            setPathInput={setPathInput}
+            load={load}
+            editing={pathEditing}
+            setEditing={setPathEditing}
+          />
           <div ref={overflowRef} className="shrink-0">
             <Button
               ref={overflowButtonRef}
-              className="min-h-11 min-w-11"
+              iconOnly
               onClick={() => {
                 setElevationMenuOpen(false);
                 setOtherUserOpen(false);
@@ -118,18 +113,23 @@ export function FileToolbar({
               }}
               aria-haspopup="menu"
               aria-expanded={overflowOpen}
-              aria-label={t("fileBrowser.fileActionsGroup")}
-              title={t("fileBrowser.fileActionsGroup")}
+              aria-label={t("fileBrowser.directoryActions")}
+              title={t("fileBrowser.directoryActions")}
             >
-              ⋯
+              <Icon name="more" />
             </Button>
             {overflowOpen && (
               <div
                 role="menu"
-                aria-label={t("fileBrowser.fileActionsGroup")}
+                aria-label={t("fileBrowser.directoryActions")}
                 className="fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-border-strong bg-surface-raised py-1 shadow-lg"
               >
                 {[
+                  {
+                    key: "home",
+                    label: t("fileBrowser.toStartDirectory"),
+                    run: () => load(startPath),
+                  },
                   {
                     key: "mkdir",
                     label: t("fileBrowser.newFolderButton"),
@@ -151,7 +151,7 @@ export function FileToolbar({
                           key: "elevate",
                           label: enablingElevation
                             ? t("fileElevation.enabling")
-                            : `🔓 ${t("fileElevation.toggle")}`,
+                            : <><Icon name="lock" className="mr-1 inline align-text-bottom" />{t("fileElevation.toggle")}</>,
                           run: () => onToggleElevation("root"),
                           disabled: enablingElevation,
                         },
@@ -189,78 +189,89 @@ export function FileToolbar({
         </div>
       )}
       {!narrow && (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-surface-raised px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-2 py-1.5">
         <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
         <Button
-          size="sm"
-          onClick={() => load(startPath)}
-          title={t("fileBrowser.toStartDirectory")}
-          aria-label={t("fileBrowser.toStartDirectory")}
-        >
-          ⌂
-        </Button>
-        <Button
-          size="sm"
+          iconOnly
           onClick={() => load(parentPath(path))}
           disabled={path === "."}
           title={t("fileBrowser.parentDirectory")}
           aria-label={t("fileBrowser.parentDirectory")}
         >
-          ↑
+          <Icon name="parent" />
         </Button>
-        <form
-          className="min-w-32 flex-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            load(pathInput.trim() || ".");
-          }}
+        <Button
+          iconOnly
+          onClick={() => load(startPath)}
+          title={t("fileBrowser.toStartDirectory")}
+          aria-label={t("fileBrowser.toStartDirectory")}
         >
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            aria-label={t("fileBrowser.properties.path")}
-            title={pathInput}
-            className={`${FIELD_CONTROL_CLASS} w-full px-2 py-1 font-mono text-xs`}
-          />
-        </form>
+          <Icon name="home" />
+        </Button>
+        <Button
+          iconOnly
+          onClick={onRefresh}
+          title={t("fileBrowser.menu.refresh")}
+          aria-label={t("fileBrowser.menu.refresh")}
+        >
+          <Icon name="refresh" />
+        </Button>
+        <PathBar
+          narrow={false}
+          path={path}
+          pathInput={pathInput}
+          setPathInput={setPathInput}
+          load={load}
+          editing={pathEditing}
+          setEditing={setPathEditing}
+        />
         </div>
         <fieldset
           aria-label={t("fileBrowser.fileActionsGroup")}
-          className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
+          className="m-0 flex min-w-0 items-center gap-1.5 border-0 border-l border-border p-0 pl-2"
         >
-        <Button
-          size="sm"
-          onClick={onNewFolder}
-        >
+        <Button onClick={onNewFolder}>
           {t("fileBrowser.newFolderButton")}
         </Button>
-        <Button size="sm" onClick={onUpload}>
+        <Button onClick={onUpload}>
+          <Icon name="upload" />
           {t("fileBrowser.upload")}
         </Button>
         {folderPickerAvailable && (
-          <Button size="sm" onClick={onUploadFolder}>
+          <Button onClick={onUploadFolder}>
+            <Icon name="folder-open" />
             {t("fileBrowser.uploadFolder")}
           </Button>
         )}
         </fieldset>
+        <Button
+          iconOnly
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            onShowColumns({ x: rect.left, y: rect.bottom + 2 });
+          }}
+          aria-haspopup="menu"
+          title={t("fileBrowser.columnsMenu")}
+          aria-label={t("fileBrowser.columnsMenu")}
+        >
+          <Icon name="sliders" />
+        </Button>
         {elevationControls}
         {cutEntry && (
           <>
             <Button
-              size="sm"
               onClick={onPaste}
               title={t("fileBrowser.pasteTitle", { name: cutEntry.name })}
             >
               {t("fileBrowser.paste")}
             </Button>
             <Button
-              size="sm"
+              iconOnly
               onClick={onCancelCut}
               title={t("fileBrowser.cancelCut")}
               aria-label={t("fileBrowser.cancelCut")}
             >
-              ✕
+              <Icon name="x" />
             </Button>
           </>
         )}

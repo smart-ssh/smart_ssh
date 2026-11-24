@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hovednavigation",
     "connect": "Opret forbindelse",
     "manage": "Administrer",
     "rules": "Filterregler"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Ingen server tilføjet endnu",
     "emptyStateHint": "Tilføj din første server for at oprette forbindelse via SSH.",
     "emptyStateCreateFirstServer": "Tilføj første server",
-    "emptyStateTryLocalhost": "Prøv uden en server: \"Localhost\" ovenfor åbner en session på denne maskine – med de samme bekræftelser som på en rigtig server."
+    "emptyStateTryLocalhost": "Prøv uden en server: \"Localhost\" ovenfor åbner en session på denne maskine – med de samme bekræftelser som på en rigtig server.",
+    "localBadge": "Lokal",
+    "thisDevice": "denne enhed",
+    "sessionOpen": "Session åben",
+    "sessionPending": "Venter på bekræftelse",
+    "sessionDisconnected": "Session afbrudt",
+    "sessionReconnecting": "Opretter forbindelse igen"
   },
   "settings": {
     "title": "Indstillinger",
@@ -136,11 +143,15 @@
     "importSshConfig": "Importér …",
     "importSshConfigHint": "Importér servere fra en OpenSSH ssh_config-fil",
     "exportSshConfig": "Eksportér …",
-    "exportSshConfigHint": "Eksportér servere til OpenSSH ssh_config"
+    "exportSshConfigHint": "Eksportér servere til OpenSSH ssh_config",
+    "title": "Servere",
+    "collapseGroup": "Skjul gruppen “{{name}}”",
+    "expandGroup": "Vis gruppen “{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Slip her for at flytte til øverste niveau (ingen gruppe)",
     "hintRoot": "→ øverste niveau (ingen gruppe)",
+    "current": "nuværende",
     "hintGroup": "→ flyt ind i denne gruppe",
     "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
     "moveTo": "Flyt “{{name}}” til…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Dette sletter også denne servers chathistorik, noter og tags permanent.",
     "confirmDeleteServer": "Slet permanent",
     "testResult": {
-      "success": "✓ Forbindelse oprettet",
-      "authFailed": "✗ Login afvist. Kontrollér brugernavn og adgangskode eller nøgle.",
+      "success": "Forbindelse oprettet",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Login afvist. Kontrollér brugernavn og adgangskode eller nøgle.",
       "hostKeyUnknown": "Værtsnøgle ukendt – bekræftelse kræves",
-      "hostKeyMismatch": "⚠ Værtsnøglen er ændret",
-      "networkError": "✗ Netværksfejl: {{message}}",
-      "timeout": "✗ Serveren svarer ikke. Kontrollér adresse, port og firewall."
+      "hostKeyMismatch": "Værtsnøglen er ændret",
+      "networkError": "Netværksfejl: {{message}}",
+      "timeout": "Serveren svarer ikke. Kontrollér adresse, port og firewall."
     },
     "largeNoteHint": "Denne note er meget stor og kan blive forkortet i AI-konteksten under lange sessioner. Den gemte note forbliver fuldt intakt.",
     "summarizeNow": "Opsummér nu",
@@ -356,7 +368,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Del {{index}}",
     "checksLabel": "Kontroller:",
-    "hardBlacklistLabel": "Hård sortliste:"
+    "hardBlacklistLabel": "Hård sortliste:",
+    "invalidPattern": "Ugyldigt mønster",
+    "rowActions": "Rækkehandlinger",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regler"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisk fortsættelse sat på pause efter {{limit}} trin uden din bekræftelse – send en besked for at fortsætte.",
@@ -377,8 +393,8 @@
     "discardedAfterReconnect": "Kasseret efter genoprettelse af forbindelsen. Intet blev kørt.",
     "expiredTimeout": "Ikke besvaret i tide og kasseret. Intet blev kørt.",
     "expiredUnknown": "Anmodningen venter ikke længere. Intet blev kørt.",
-    "usesStoredSudoPassword": "🔑 Kører med den gemte sudo-adgangskode.",
-    "writeMayUseStoredSudoPassword": "🔑 Mangler der skrivetilladelse, skriver appen med den gemte sudo-adgangskode (sudo).",
+    "usesStoredSudoPassword": "Kører med den gemte sudo-adgangskode.",
+    "writeMayUseStoredSudoPassword": "Mangler der skrivetilladelse, skriver appen med den gemte sudo-adgangskode (sudo).",
     "takeIntoNote": "Tag med i noten",
     "takeIntoNoteFailed": "Mislykkedes – prøv igen",
     "riskServerLabel": "Server",
@@ -388,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "AI-anden vurdering kunne ikke indhentes. Den viste risiko er den regelbaserede.",
     "riskHint": "Vurdering baseret på kendte mønstre – ingen garanti.",
     "runningSince": "kører i {{seconds}} s…",
+    "exitCode": "exitkode: {{code}}",
     "waitingForInputHint": "Denne kommando venter sandsynligvis på input. Stop den, så foreslår AI'en en ikke-interaktiv variant.",
     "cancelCommand": "Afbryd forbindelsen til denne kommando",
     "cancellingCommand": "Afbryder…",
-    "commandCancelledNotice": "⚠ Annulleret manuelt – udskriften kan være ufuldstændig, ingen almindelig afslutningskode.",
-    "commandTruncatedNotice": "⚠ Udskriften blev afskåret ved størrelsesgrænsen – den kan være ufuldstændig.",
+    "commandCancelledNotice": "Annulleret manuelt – udskriften kan være ufuldstændig, ingen almindelig afslutningskode.",
+    "commandTruncatedNotice": "Udskriften blev afskåret ved størrelsesgrænsen – den kan være ufuldstændig.",
     "liveOutputLabel": "Live-udskrift",
-    "liveOutputTruncatedNotice": "⚠ Størrelsesgrænsen er nået – yderligere udskrift vises ikke mere.",
+    "liveOutputTruncatedNotice": "Størrelsesgrænsen er nået – yderligere udskrift vises ikke mere.",
     "autoRanLead": "Kørt automatisk",
     "autoRanRule": "regel",
     "autoRanScopeGlobal": "global",
@@ -409,17 +426,14 @@
     "editableCommand": "Kommando – kan redigeres",
     "execute": "Udfør",
     "deny": "Forbyd",
-    "quickRule": "Acceptér + regel",
-    "quickRuleDropdownAria": "Vis regelforslag",
-    "newRulePatternHeading": "Mønster til den nye tillad-regel",
     "scopeThisServer": "Denne server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
     "tagNamePlaceholder": "Tagnavn",
     "loadingSuggestions": "Indlæser forslag…",
     "noSuggestions": "Ingen forslag.",
-    "binaryFileHint": "⚠ Binær fil – tekstsammenligning er ikke mulig. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Indholdet er for stort til en linjeforskel. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
+    "binaryFileHint": "Binær fil – tekstsammenligning er ikke mulig. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
+    "diffTooLargeHint": "Indholdet er for stort til en linjeforskel. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "noContentChange": "(ingen indholdsændring)",
     "quickRuleLabel": {
       "exact": "Nøjagtig: {{patterns}}",
@@ -437,9 +451,17 @@
       "blocked": "spørger altid, uanset regler: {{reasons}}",
       "verdictAuto": "kører automatisk næste gang",
       "verdictAsk": "spørger stadig: {{reasons}}",
-      "notice": "Regel oprettet. Denne kommando spørger stadig næste gang: {{reasons}}",
       "reasonOther": "endnu en sikkerhedskontrol",
-      "loadFailed": "Regeldækningen kunne ikke indlæses"
+      "loadFailed": "Regeldækningen kunne ikke indlæses",
+      "summaryHeading": "Allerede tilladt",
+      "toDecideHeading": "Mangler at blive afgjort",
+      "expandAria": "Regelforslag til {{segment}}",
+      "stagedBadge": "endnu ikke gemt",
+      "removeStaged": "Fjern",
+      "saveRules": "Gem regler ({{count}})",
+      "saveFailed": "Reglerne kunne ikke gemmes: {{message}}",
+      "unsavedHint": "Ikke gemte regler: {{count}}",
+      "segmentCovered": "dækker denne del; kommandoen spørger stadig: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +478,7 @@
     "mismatchBodyAfterHost": " fremviser en anden nøgle end den, der blev gemt sidst. Det kan tyde på et man-in-the-middle-angreb. Fortsæt kun, hvis du er sikker på, at servernøglen er ændret legitimt (f.eks. ved ominstallation af serveren).",
     "known": "Kendt",
     "offeredNow": "Tilbudt nu",
+    "offered": "Tilbudt",
     "keyType": "Nøgletype",
     "cancelConnection": "Annuller forbindelse",
     "trustAnyway": "Stol på alligevel",
@@ -468,13 +491,17 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
     "menu": {
       "open": "Åbn navigationsmenuen",
       "title": "Navigationsmenu",
-      "sessions": "Åbne sessioner"
+      "sessions": "Åbne sessioner",
+      "close": "Luk navigationsmenuen",
+      "needsConfirmation": "Kræver bekræftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} kører",
+      "activitiesRunning_other": "{{count}} kører"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +510,9 @@
       "pendingBadge": "Kræver bekræftelse",
       "readOnlyHint": "Denne session tilhører et eksternt værktøj (MCP). Den viser kun værktøjets handlinger, der skal bekræftes eller afvises, og deres resultater; her er hverken chatinput eller terminal. Lukkes den, afsluttes MCP-sessionen, og ventende bekræftelser afvises."
     },
-    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist."
+    "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist.",
+    "pendingBadge": "Afventer",
+    "newConnection": "Ny forbindelse"
   },
   "aiProvider": {
     "openLogs": "Åbn diagnoselogfiler i filhåndtering",
@@ -505,16 +534,16 @@
     "apiKeyFormatHint": "Ligner ikke en {{providerLabel}}-nøgle – forventede et præfiks som \"{{expectedPrefix}}\". Du kan stadig gemme den; udbydere ændrer indimellem formater.",
     "testCredentials": "Test legitimationsoplysninger",
     "testingCredentials": "Tester…",
-    "testResultValid": "✓ Legitimationsoplysninger gyldige",
-    "testResultAuthFailed": "✗ Godkendelse mislykkedes – kontrollér API-nøglen",
-    "testResultUnreachable": "✗ Udbyderen kan ikke nås: {{message}}",
+    "testResultValid": "Legitimationsoplysninger gyldige",
+    "testResultAuthFailed": "Godkendelse mislykkedes – kontrollér API-nøglen",
+    "testResultUnreachable": "Udbyderen kan ikke nås: {{message}}",
     "testResultRateLimited": "Legitimationsoplysningerne ser gyldige ud, men udbyderen begrænser anmodninger lige nu. Test igen om et minut.",
     "nativeToolCalling": "Understøtter native værktøjskald",
     "discoverModels": "Indlæs modeller",
     "discoveringModels": "Indlæser modeller…",
     "modelDiscoveryFailedHint": "Modeller kunne ikke indlæses automatisk – angiv modelnavnet manuelt.",
     "modelDiscoveryEmptyHint": "Udbyderen returnerede ingen modeller. Angiv modelnavnet manuelt.",
-    "modelDiscoveryAuthFailed": "✗ Udbyderen afviste disse legitimationsoplysninger – kontrollér API-nøglen",
+    "modelDiscoveryAuthFailed": "Udbyderen afviste disse legitimationsoplysninger – kontrollér API-nøglen",
     "advanced": "Avanceret",
     "extraHeadersLabel": "Ekstra headere",
     "extraHeadersHint": "Vedhæftes hver anmodning til denne udbyder (f.eks. OpenRouters HTTP-Referer/X-Title).",
@@ -557,6 +586,7 @@
     "ollamaProbeRetry": "Søg igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama fundet (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installér Ollama fra ollama.com, start den og indlæs en model (f.eks. `ollama pull llama3`), og søg derefter igen.",
+    "typeLabel": "Type",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +703,7 @@
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte AI-udbyder er ikke konfigureret. Vælg en konfigureret udbyder.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Vælg en AI-udbyder, før du slår den anden vurdering af risiko til.",
+    "CHAT_SESSION_NOT_FOUND": "Denne gemte chat findes ikke længere. Vælg Prøv igen for at forbinde normalt uden at genoptage den.",
     "SESSION_NOT_FOUND": "Denne session er ikke længere åben. Åbn den igen fra serverlisten.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed",
@@ -853,6 +884,8 @@
     "groupsHeading": "Resulterende mappestruktur",
     "entriesHeading": "{{count}} servere",
     "field": {
+      "name": "Navn",
+      "include": "Medtag",
       "host": "Adresse",
       "port": "Port",
       "username": "Bruger",
@@ -928,6 +961,8 @@
       "proxyJumpLocalPseudoServer": "peger på den lokale pseudoserver"
     },
     "confirm": "Importér",
+    "confirmCount_one": "Importér {{count}} server",
+    "confirmCount_other": "Importér {{count}} servere",
     "applying": "Importerer …",
     "result": {
       "success": "{{created}} servere oprettet, {{groups}} mapper, {{skipped}} konflikt(er) sprunget over.",
@@ -1081,6 +1116,7 @@
     "parentDirectory": "Overordnet mappe",
     "newFolderButton": "+ Mappe",
     "fileActionsGroup": "Filhandlinger",
+    "directoryActions": "Mappehandlinger",
     "upload": "Upload",
     "uploadDialogTitle": "Upload fil(er)",
     "uploadFolder": "Upload mappe",
@@ -1126,8 +1162,7 @@
       "editing": "Redigerer “{{name}}” lokalt…",
       "end": "Stop redigering",
       "uploadTitle": "Upload lokale ændringer?",
-      "remoteChanged": "Filen på serveren er ændret siden hentningen – en upload ville overskrive den anden ændring.",
-      "noDiff": "Ingen tekstforskel mulig (binær fil eller for stor). Ny størrelse: {{size}}."
+      "remoteChanged": "Filen på serveren er ændret siden hentningen – en upload ville overskrive den anden ændring."
     },
     "deleteDialog": {
       "fileTitle": "Slet fil?",
@@ -1149,7 +1184,6 @@
       "conflictTitle": "Overskriv filer i mappen?",
       "conflictBody": "Upload af “{{name}}” ville overskrive disse {{count}} filer på serveren. Intet overskrives, medmindre du bekræfter.",
       "summaryTitle": "Mappeupload: “{{name}}”",
-      "summary": "{{uploaded}} filer uploadet, {{skipped}} sprunget over, {{failed}} mislykkedes.",
       "notAttempted": "{{count}} filer blev ikke forsøgt, fordi deres mappe ikke kunne oprettes.",
       "skipped": "Sprunget over",
       "failed": "Mislykkedes",
@@ -1160,12 +1194,14 @@
         "unsupported": "ikke en almindelig fil eller mappe",
         "notGranted": "ikke dækket af dit valg",
         "overwriteNotConfirmed": "findes på serveren, overskrivning ikke bekræftet"
-      }
+      },
+      "uploaded": "Uploadet"
     },
     "uploadConflict": {
       "title": "Overskriv fil?",
       "body": "findes allerede på serveren.",
-      "noDiff": "Ingen tekstforskel mulig (binær fil eller for stor). Nuværende størrelse: {{remoteSize}}, ny størrelse: {{localSize}}."
+      "currentSize": "Nuværende størrelse",
+      "newSize": "Ny størrelse"
     },
     "menu": {
       "download": "Hent",
@@ -1254,7 +1290,9 @@
       "recursive": "Anvend på indhold",
       "recursiveWarning": "— skifter ejer på ALLE filer og undermapper i denne mappe. Symbolske links følges ikke. Kan ikke fortrydes."
     },
-    "transferChown": "Skifter ejer af {{name}}"
+    "transferChown": "Skifter ejer af {{name}}",
+    "stopProgress": "Fremskridt",
+    "noTextDiff": "Ingen tekstdiff mulig (binær fil eller for stor)."
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
@@ -1284,12 +1322,17 @@
     "queued": "Sendes med næste anmodning",
     "responseCancelled": "Svaret blev annulleret.",
     "contextCompactedNotice": "Ældre dele af denne chat er blevet opsummeret, så de passer ind i modellens kontekst.",
-    "contextUsage": "Kontekst {{used}} / {{window}}",
     "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
+    "messageLabel": "Besked",
+    "headerProviderTooltip": "Udbyder: {{provider}}",
     "webResearchUnavailable": "Webresearch er ikke tilgængelig for denne udbyderkonto (websøgning er slået fra dér). Denne session svarer uden webresearch. Sådan slår du det fra permanent: Indstillinger → AI-udbyder → “Webresearch”.",
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
     "refusedResponse": "Modellen afviste denne anmodning. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(afkortet)",
+    "outputMoreLines_one": "… {{count}} flere linje",
+    "outputMoreLines_other": "… {{count}} flere linjer",
+    "outputShowAll": "Vis alle",
+    "outputShowLess": "Vis færre",
     "fileWritten": "Filen '{{path}}' er skrevet.",
     "writtenWithSudoPassword": "Skrevet med den gemte sudo-adgangskode.",
     "documentGenerated": "Dokument genereret",
@@ -1367,6 +1410,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdele",
     "moreActions": "Flere handlinger",
+    "thisDevice": "denne enhed",
+    "paneSwitch": "Panelskift",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
     "extraKeys": {
       "group": "Ekstra taster",
@@ -1586,6 +1631,13 @@
     "quitBody": "Disse aktiviteter kører stadig og bliver stoppet:",
     "quitResumeHint": "Afbrudte downloads kan genoptages, næste gang du starter appen.",
     "quitAnyway": "Afslut alligevel",
-    "keepRunning": "Lad dem køre"
+    "keepRunning": "Lad dem køre",
+    "summaryRunning_one": "{{count}} kører",
+    "summaryRunning_other": "{{count}} kører",
+    "summaryInterrupted_one": "{{count}} afbrudt",
+    "summaryInterrupted_other": "{{count}} afbrudt",
+    "summaryFailed_one": "{{count}} mislykkedes",
+    "summaryFailed_other": "{{count}} mislykkedes",
+    "remaining": "{{time}} tilbage"
   }
 }

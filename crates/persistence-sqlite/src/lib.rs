@@ -26,7 +26,6 @@ mod extension_store;
 mod field_content_decryption;
 /// Issue #19: exklusive Sperre auf das Datenverzeichnis.
 mod instance_lock;
-mod ledger_store;
 mod mapping;
 mod paths;
 mod policy_store;
@@ -41,9 +40,11 @@ mod test_exit_guard;
 /// `test-support`, wie `SqliteProfileStore::connect_plaintext`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+mod time_zone;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
 #[cfg(test)]
 mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
@@ -75,9 +76,12 @@ mod tests_fixture_t0;
 /// `SqliteProfileStore`-Testsuite dort weder Helfer noch Aufbaumuster.
 #[cfg(test)]
 mod tests_raw_file;
+#[cfg(test)]
 /// Issue #15: jede Release-Fixture, Migration für Migration aktualisiert.
 #[cfg(test)]
 mod tests_release_chain;
+#[cfg(test)]
+mod tests_remove_activity_record;
 #[cfg(test)]
 mod tests_runtime_bridge_guard;
 #[cfg(test)]
@@ -115,7 +119,6 @@ pub use field_content_decryption::{
     ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,
 };
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
-pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::{
     android_cache_dir, android_cache_dir_for, android_files_dir, android_files_dir_for,
     android_user_id_from_uid, data_dir_flag_from, data_dir_override, data_dir_override_from,
@@ -127,3 +130,4 @@ pub use paths::{
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};
 pub use store::SqliteProfileStore;
+pub use time_zone::{device_time_zone_source, TimeZoneSource};

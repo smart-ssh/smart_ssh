@@ -993,11 +993,9 @@ async fn archive(
     insert_all(&mut *conn, &head).await?;
     // History follows its server to the copy.
     for (old, new) in &server_map {
-        for sql in [
-            "UPDATE chat_sessions SET server_id = ? WHERE server_id = ?",
-            "UPDATE prompt_history SET server_id = ? WHERE server_id = ?",
-        ] {
-            sqlx::query(sql)
+        for table in ["chat_sessions", "prompt_history"] {
+            let sql = format!("UPDATE {table} SET server_id = ? WHERE server_id = ?");
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(new.to_string())
                 .bind(old.to_string())
                 .execute(&mut *conn)

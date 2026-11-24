@@ -626,7 +626,7 @@ async fn compact_rounds_with_summary(
 }
 
 /// Bester-effort-Persistenz der aktuellen [`RollingSummary`] (Spec 0057,
-/// §2.3) — analog zu `orchestration::write_ledger_entry`/`push_history_
+/// §2.3) — analog zu `orchestration::emit_activity`/`push_history_
 /// scoped`: ein Fehlschlag hier bricht den laufenden Kompaktierungs-/
 /// Sende-Vorgang nicht ab, nur geloggt. `session.summary` (der In-Memory-
 /// Stand) ist zu diesem Zeitpunkt bereits aktualisiert, unabhängig davon,
@@ -1109,7 +1109,7 @@ impl ContextUsageTracker {
 /// Historie und die gespeicherte Notiz bleiben in jedem Fall unverändert
 /// (Spec 0057, §3.3/§4.1/§6). Das Ledger (Etappe 1) bekommt diese Kürzung
 /// nie zu Gesicht — es protokolliert an ganz anderer Stelle
-/// (`orchestration::write_ledger_entry`), unabhängig davon, ob hier je
+/// (`orchestration::emit_activity`), unabhängig davon, ob hier je
 /// kompaktiert wird oder nicht (Spec 0057, §3.3: "Kompaktierung betrifft
 /// nur den an die KI gesendeten Kontext, nie den Ledger").
 ///

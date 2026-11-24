@@ -63,6 +63,7 @@ mod startup_dialog;
 /// Spec 0101, A16: das Tor, das vor der Entsperrung jedes Kommando außer
 /// Entsperren, Beenden und Neu-anfangen abweist.
 mod startup_gate;
+use startup_gate::gated;
 /// Spec 0101, A16/T18: die Verdrahtung des Tors — dass es vor dem Verteiler
 /// sitzt und der MCP-Server vor der Entsperrung nicht startet.
 #[cfg(test)]
@@ -116,6 +117,8 @@ pub(crate) struct StartupInputs {
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Issue #610: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    /// Issue #1505: from `Wiring`, handed to the `AppState`.
+    pub(crate) activity: Arc<app_logic::activity::ActivityHub>,
     /// Issue #1246: from `Wiring`, handed to the `AppState`.
     pub(crate) ai_provider_decorators:
         Arc<Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>>,
@@ -127,6 +130,7 @@ fn startup_inputs(
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
+    activity: Arc<app_logic::activity::ActivityHub>,
     ai_provider_decorators: Arc<
         Vec<Arc<dyn app_logic::ai_provider_decorator::AiProviderDecorator>>,
     >,
@@ -173,6 +177,7 @@ fn startup_inputs(
         keychain,
         outgoing_transform,
         ai_usage_observers,
+        activity,
         ai_provider_decorators,
     }
 }
@@ -294,10 +299,9 @@ pub(crate) async fn open_and_assemble(
     // Issue #504 (ADR 0141): removal callbacks and the one-time reconcile.
     chat_content::attach_chat_content(&profile_store, chat_content).await;
 
-    let (prompt_history_store, chat_session_store, ledger_store) = (
+    let (prompt_history_store, chat_session_store) = (
         profile_store.prompt_history_store(),
         profile_store.chat_session_store(),
-        profile_store.ledger_store(),
     );
 
     // Host-Keys leben bewusst neben (nicht in) der SQLite-Datenbank — s.
@@ -354,9 +358,8 @@ pub(crate) async fn open_and_assemble(
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
-        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
-        // geöffnet wurde — damit das Einrichten aus den Einstellungen
-        // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
+        // Klarstellung 9: die Kennung des K, mit dem diese Datenbank geöffnet wurde —
+        // damit das Einrichten aus den Einstellungen denselben Schlüssel prüfen kann (Fund 10).
         root_key_fingerprint: ssh_manager_core::crypto::root_key_fingerprint(&root_key),
         profile_store: Arc::new(profile_store),
         credential_store: Arc::new(credential_store),
@@ -374,7 +377,6 @@ pub(crate) async fn open_and_assemble(
         policy_store,
         prompt_history_store,
         chat_session_store,
-        ledger_store,
         // Spec 0038, Abschnitt 2: aus dem übergebenen `Wiring` gelesen.
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
@@ -387,6 +389,7 @@ pub(crate) async fn open_and_assemble(
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
         ai_usage_observers: inputs.ai_usage_observers.clone(),
+        activity: inputs.activity.clone(),
         ai_provider_decorators: inputs.ai_provider_decorators.clone(),
         chat_content: chat_content.clone(),
         title_attempts: Default::default(),
@@ -538,12 +541,16 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
+    let activity = Arc::new(app_logic::activity::ActivityHub::new(std::mem::take(
+        &mut wiring.activity_observers,
+    )));
     let inputs = startup_inputs(
         db_path,
         data_dir_lock,
         language,
         wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
+        activity.clone(),
         Arc::new(std::mem::take(&mut wiring.ai_provider_decorators)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
@@ -701,7 +708,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wie die App, sonst springt das Fenster beim Entsperren.
         .plugin(tauri_plugin_decoration::init());
     builder
-        .setup(|app| {
+        .setup(move |app| {
             use tauri::Manager;
 
             // Spec 0047, Fund B1: letzter Startschritt — steht dieser
@@ -721,6 +728,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 
             // Issue #881: the one worker that delivers AI usage records.
             app_logic::ai_usage::start_worker(&background_tasks::app_scope(app.handle()));
+            // Issue #1505: the one worker that delivers activity events.
+            activity.start_worker(&background_tasks::app_scope(app.handle()));
 
             background_tasks::activate_window_decoration(app.handle());
 
@@ -807,6 +816,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::stop_auto_continuation,
             commands::stop_auto_reconnect,
             commands::start_new_chat,
+            commands::get_session_ai_provider,
             commands::disconnect,
             commands::reconnect_session,
             commands::list_chat_sessions,
@@ -883,7 +893,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_known_tags,
             commands::evaluate_explained,
             commands::explain_confirmation,
-            commands::accept_and_create_rule,
+            commands::explain_segment_rules,
+            commands::create_quick_rules_batch,
             commands::export_document,
             commands::read_credential_file,
             // Spec 0075, §3.1.11: Vorschau und Ausführung des
@@ -1161,38 +1172,6 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"
     );
-}
-
-/// Spec 0101, A16: legt das Tor vor den von `generate_handler!` erzeugten
-/// Verteiler.
-///
-/// Als eigene Funktion, damit die Reihenfolge an einer Stelle steht und
-/// nicht in einem Schließungsausdruck mitten in der Builder-Kette
-/// verschwindet: **erst** prüfen, **dann** weiterleiten.
-///
-/// Über die Laufzeit `R` abstrahiert, damit `startup_gate_wiring` die
-/// Verdrahtung mit der Test-Laufzeit **durch den echten IPC-Weg** prüfen
-/// kann (T18): In `run()` wird `R` zu `tauri::Wry`, am Aufruf ändert sich
-/// nichts.
-fn gated<R: tauri::Runtime, F>(
-    gate: std::sync::Arc<crate::startup_gate::StartupGate>,
-    inner: F,
-) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
-where
-    F: Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
-{
-    move |invoke| {
-        let command = invoke.message.command();
-        if !gate.allows(command) {
-            tracing::warn!(
-                command,
-                "a command was refused because the application is locked (Spec 0101, A16)"
-            );
-            invoke.resolver.reject(crate::startup_gate::APP_LOCKED_CODE);
-            return true;
-        }
-        inner(invoke)
-    }
 }
 
 /// Android: the microphone permission plugin (shipped by `tauri-plugin-android-host`); elsewhere a plugin that does

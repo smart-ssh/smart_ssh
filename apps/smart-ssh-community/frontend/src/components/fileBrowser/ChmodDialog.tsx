@@ -2,7 +2,7 @@ import { isRealDir } from "../../lib/remotePath";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type RemoteEntryDto } from "../../api/types";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "../ui";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Icon } from "../ui";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
 
 /** Reihen-Reihenfolge der chmod-Checkbox-Matrix: owner/group/other × je
@@ -73,6 +73,7 @@ export function ChmodDialog({
   return (
     <DialogFrame
       layer="sessionTab"
+      icon={<Icon name="lock" />}
       size="sm"
       title={t("fileBrowser.chmod.title")}
       onClose={onCancel}
@@ -92,11 +93,11 @@ export function ChmodDialog({
       <p className="mb-3 font-mono text-xs break-all text-fg-subtle">{entry.path}</p>
       {modeNote && (
         <p className="mb-3 border border-warning/60 bg-warning-subtle/40 px-2 py-1 text-xs text-warning-fg-soft">
-          ⚠ {modeNote}
+          <Icon name="warn" className="mr-1 inline align-text-bottom" /> {modeNote}
         </p>
       )}
 
-      <table className="mb-3 w-full text-sm text-fg-muted">
+      <table className="mb-3 w-full font-mono text-sm text-fg-muted" data-testid="chmod-grid">
         <thead>
           <tr className="text-fg-subtle">
             <th className="text-left font-normal">

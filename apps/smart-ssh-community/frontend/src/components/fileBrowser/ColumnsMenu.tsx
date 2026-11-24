@@ -1,7 +1,7 @@
 import { COLUMN_ORDER } from "./shared";
 import { useTranslation } from "react-i18next";
 import { type HideableFileColumn } from "../../settings/layoutSettings";
-import { Menu, MenuItem } from "../ui";
+import { Menu, MenuItem, Icon } from "../ui";
 
 /** Issue #653: right-click menu on the header row — one checkbox per
  * column except Name, which cannot be hidden. */
@@ -23,7 +23,7 @@ export function ColumnsMenu({
         <MenuItem
           key={c}
           checked={!hidden.includes(c)}
-          icon={hidden.includes(c) ? "" : "✓"}
+          icon={hidden.includes(c) ? "" : <Icon name="check" />}
           onClick={() => onToggle(c)}
         >
           {t(`fileBrowser.column.${c}`)}

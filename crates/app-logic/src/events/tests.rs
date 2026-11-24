@@ -55,6 +55,7 @@ fn test_host_key_verification_needed_carries_prompt_id() {
         "SHA256:abc".to_string(),
         None,
         Some("ssh-ed25519".to_string()),
+        Some("web-01".to_string()),
     );
     let events = emitter.events.lock().unwrap();
     assert_eq!(events.len(), 1);
@@ -63,6 +64,27 @@ fn test_host_key_verification_needed_carries_prompt_id() {
     assert_eq!(events[0].1["promptId"], 7);
     assert_eq!(events[0].1["fingerprint"], "SHA256:abc");
     assert_eq!(events[0].1["keyType"], "ssh-ed25519");
+    assert_eq!(events[0].1["serverName"], "web-01");
+}
+
+/// Backwards compatible: without a saved server the field is absent.
+#[test]
+fn test_host_key_verification_needed_omits_server_name_when_unsaved() {
+    let emitter = TestEmitter::default();
+    emit_host_key_verification_needed(
+        &emitter,
+        Uuid::new_v4(),
+        1,
+        "h".to_string(),
+        22,
+        HostKeyKind::Unknown,
+        "SHA256:abc".to_string(),
+        None,
+        None,
+        None,
+    );
+    let events = emitter.events.lock().unwrap();
+    assert!(events[0].1.get("serverName").is_none());
 }
 
 #[test]
@@ -76,6 +98,7 @@ fn test_host_key_verification_needed_key_type_is_null_when_unknown() {
         22,
         HostKeyKind::Unknown,
         "SHA256:abc".to_string(),
+        None,
         None,
         None,
     );

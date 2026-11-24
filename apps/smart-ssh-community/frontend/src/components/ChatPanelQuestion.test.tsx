@@ -87,8 +87,8 @@ describe("ChatPanel question card (issue #547)", () => {
         within(group).getByRole("button", { name: /Alpha/ }),
       ).toBeDisabled();
       expect(
-        within(group).getByRole("button", { name: /Beta/ }),
-      ).toHaveTextContent("✓");
+        within(group).getByRole("button", { name: /Beta/ }).querySelector('[data-icon="check"]'),
+      ).not.toBeNull();
       expect(screen.getAllByText("Beta")).toHaveLength(2);
     });
     expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Beta");
@@ -189,8 +189,8 @@ describe("ChatPanel question card (issue #547)", () => {
     renderChatPanel();
     const groups = await screen.findAllByRole("group");
     expect(
-      within(groups[0]).getByRole("button", { name: /Beta/ }),
-    ).toHaveTextContent("✓");
+      within(groups[0]).getByRole("button", { name: /Beta/ }).querySelector('[data-icon="check"]'),
+    ).not.toBeNull();
     expect(
       within(groups[0]).getByRole("button", { name: /Alpha/ }),
     ).toBeDisabled();

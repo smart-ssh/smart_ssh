@@ -140,13 +140,13 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     expect(layer).toHaveAttribute("data-tauri-drag-region");
     expect(layer).toHaveAttribute("aria-hidden", "true");
     expect(layer).toBeEmptyDOMElement();
-    // Fest an der Fensteroberkante, so hoch wie die Titelleiste (`h-9`).
-    expect(layer).toHaveClass("fixed", "top-0", "h-9");
+    // Fest an der Fensteroberkante, so hoch wie die Titelleiste (`h-11`).
+    expect(layer).toHaveClass("fixed", "top-0", "h-11");
 
     // Die Karte liegt nicht in der Leiste, hat keinen Stapelrang darüber,
     // und die Maske hält oben Titelleistenhöhe + Rand frei (`pt-15` =
-    // `h-9` + `p-6`), sodass die zentrierte Karte nie darunter rückt.
-    const card = screen.getByRole("heading", { name: "Smart SSH" }).parentElement!;
+    // `h-11` + `p-6`), sodass die zentrierte Karte nie darunter rückt.
+    const card = screen.getByTestId("startup-card");
     expect(layer!.contains(card)).toBe(false);
     expect(stackRankOf(card)).toBeLessThan(zIndexOf(layer!));
     const gateRoot = container.firstElementChild!;
@@ -194,7 +194,7 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     // Kein Kind des Backdrops und nicht durchlässig.
     expect(backdrop!.contains(layer)).toBe(false);
     expect(layer).not.toHaveClass("pointer-events-none");
-    // Der Dialog hält oben die Titelleistenhöhe frei (`pt-13` = `h-9` +
+    // Der Dialog hält oben die Titelleistenhöhe frei (`pt-13` = `h-11` +
     // `p-4`), seine Knöpfe und Eingaben rücken nie unter die Leiste.
     expect(backdrop).toHaveClass("pt-13");
     expect(backdrop).not.toHaveClass("p-4");

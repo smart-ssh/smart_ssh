@@ -15,9 +15,14 @@ export const SCREENSHOT_SIZES = [
 /**
  * Captures the page as it is at each of `SCREENSHOT_SIZES` and restores the
  * original viewport. Returns the written file paths. `name` is the screen's
- * name (letters, digits, `-`, `_`).
+ * name (letters, digits, `-`, `_`). `afterResize` runs after each resize (e.g. to
+ * scroll an element back into view, since a resize can move the scroll position).
  */
-export async function captureScreen(page: Page, name: string): Promise<string[]> {
+export async function captureScreen(
+  page: Page,
+  name: string,
+  afterResize?: () => Promise<void>,
+): Promise<string[]> {
   if (!/^[\w-]+$/.test(name)) throw new Error(`invalid screenshot name: ${name}`);
   const label = process.env.SCREENSHOT_LABEL ?? "current";
   if (!/^[\w-]+$/.test(label)) throw new Error(`invalid SCREENSHOT_LABEL: ${label}`);
@@ -30,6 +35,7 @@ export async function captureScreen(page: Page, name: string): Promise<string[]>
       await page.setViewportSize(size);
       // Let the layout settle after the resize.
       await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+      if (afterResize) await afterResize();
       const file = path.join(dir, `${name}-${size.width}x${size.height}.png`);
       await page.screenshot({ path: file });
       files.push(file);
@@ -38,4 +44,20 @@ export async function captureScreen(page: Page, name: string): Promise<string[]>
     if (original) await page.setViewportSize(original);
   }
   return files;
+}
+
+/**
+ * Captures the page at its current viewport without resizing, for states that a
+ * resize would drop (open menus). Written as `<name>-<width>x<height>.png`.
+ */
+export async function captureCurrent(page: Page, name: string): Promise<string> {
+  if (!/^[\w-]+$/.test(name)) throw new Error(`invalid screenshot name: ${name}`);
+  const label = process.env.SCREENSHOT_LABEL ?? "current";
+  if (!/^[\w-]+$/.test(label)) throw new Error(`invalid SCREENSHOT_LABEL: ${label}`);
+  const dir = path.join(import.meta.dirname, "..", "screenshots", label);
+  fs.mkdirSync(dir, { recursive: true });
+  const size = page.viewportSize();
+  const file = path.join(dir, `${name}-open-${size?.width ?? 0}x${size?.height ?? 0}.png`);
+  await page.screenshot({ path: file });
+  return file;
 }

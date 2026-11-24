@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DocumentFormat } from "../../api/types";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { MARKDOWN_COMPONENTS } from "./DocumentCard";
 
 /** Spec 0055, Teil 2: "Export to Markdown"/"Als Notiz übernehmen" hingen
@@ -77,8 +77,8 @@ export function AssistantMessageView({
   const forceVisible = exporting !== null || savedFormat !== null || noteState !== "idle";
 
   return (
-    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 rounded-lg bg-surface-raised p-3 text-sm text-fg shadow-sm">
-      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-surface-sunken prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 text-sm text-fg-soft">
+      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-surface-sunken prose-p:text-fg-soft prose-headings:text-fg prose-strong:text-fg prose-code:bg-surface-raised prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
       </div>
       {/* Spec 0080, A3, zweiter Punkt: keine Export-/Notiz-Leiste bei
@@ -102,9 +102,9 @@ export function AssistantMessageView({
             disabled={exporting !== null}
             onClick={() => handleExportClick("markdown")}
           >
-            {exporting === "markdown" ? t("common.saving") : `📄 ${t("chat.exportAsMarkdown")}`}
+            {exporting === "markdown" ? t("common.saving") : <><Icon name="file-text" className="mr-1 inline align-text-bottom" />{t("chat.exportAsMarkdown")}</>}
           </Button>
-          {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
+          {savedFormat && <span className="text-xs text-success-fg"><Icon name="check" className="mr-1 inline align-text-bottom" /> {t("chat.exportedAsMarkdown")}</span>}
         </div>
       )}
       {truncated ? (
@@ -114,7 +114,7 @@ export function AssistantMessageView({
         // gerade unvollständig endet. Reines UI-Element aus dem `truncated`-
         // Flag, nicht Teil von `text` (nicht fälschbar, s. Feld-Kommentar).
         <div className="flex flex-wrap items-center gap-2 border-t border-warning-border-strong/40 pt-2 text-xs text-warning-fg-soft">
-          <span>✂ {t("chat.responseTruncated")}</span>
+          <span><Icon name="scissors" className="mr-1 inline align-text-bottom" /> {t("chat.responseTruncated")}</span>
           <Button size="sm" onClick={onContinue}>
             {t("chat.continue")}
           </Button>

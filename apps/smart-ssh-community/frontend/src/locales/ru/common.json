@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Основная навигация",
     "connect": "Подключение",
     "manage": "Управление",
     "rules": "Правила фильтра"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Серверы ещё не добавлены",
     "emptyStateHint": "Добавьте первый сервер для подключения по SSH.",
     "emptyStateCreateFirstServer": "Добавить первый сервер",
-    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере."
+    "emptyStateTryLocalhost": "Попробуйте без сервера: «Localhost» выше открывает сеанс на этом компьютере — с теми же подтверждениями, что и на реальном сервере.",
+    "localBadge": "Локальный",
+    "thisDevice": "это устройство",
+    "sessionOpen": "Сеанс открыт",
+    "sessionPending": "Ожидает подтверждения",
+    "sessionDisconnected": "Сеанс отключён",
+    "sessionReconnecting": "Переподключение"
   },
   "settings": {
     "title": "Настройки",
@@ -136,11 +143,15 @@
     "importSshConfig": "Импорт …",
     "importSshConfigHint": "Импортировать серверы из файла ssh_config OpenSSH",
     "exportSshConfig": "Экспорт …",
-    "exportSshConfigHint": "Экспортировать серверы в ssh_config OpenSSH"
+    "exportSshConfigHint": "Экспортировать серверы в ssh_config OpenSSH",
+    "title": "Серверы",
+    "collapseGroup": "Свернуть группу «{{name}}»",
+    "expandGroup": "Развернуть группу «{{name}}»"
   },
   "treeDrag": {
     "rootDropZone": "Отпустите здесь, чтобы переместить на верхний уровень (без группы)",
     "hintRoot": "→ верхний уровень (без группы)",
+    "current": "текущая",
     "hintGroup": "→ переместить в эту группу",
     "hintCycle": "Группу нельзя переместить в её собственную подгруппу",
     "moveTo": "Переместить «{{name}}» в…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Это также безвозвратно удалит историю чата, заметки и теги этого сервера.",
     "confirmDeleteServer": "Удалить безвозвратно",
     "testResult": {
-      "success": "✓ Подключение успешно",
-      "authFailed": "✗ Вход отклонён. Проверьте имя пользователя и пароль или ключ.",
+      "success": "Подключение успешно",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Вход отклонён. Проверьте имя пользователя и пароль или ключ.",
       "hostKeyUnknown": "Ключ хоста неизвестен — требуется подтверждение",
-      "hostKeyMismatch": "⚠ Ключ хоста изменился",
-      "networkError": "✗ Ошибка сети: {{message}}",
-      "timeout": "✗ Сервер не отвечает. Проверьте адрес, порт и брандмауэр."
+      "hostKeyMismatch": "Ключ хоста изменился",
+      "networkError": "Ошибка сети: {{message}}",
+      "timeout": "Сервер не отвечает. Проверьте адрес, порт и брандмауэр."
     },
     "largeNoteHint": "Эта заметка очень велика и в долгих сеансах может сокращаться для контекста ИИ. Сохранённая заметка остаётся нетронутой.",
     "summarizeNow": "Сократить сейчас",
@@ -356,7 +368,13 @@
     "matchedRuleLabel": "Правило:",
     "segmentLabel": "Часть {{index}}",
     "checksLabel": "Проверки:",
-    "hardBlacklistLabel": "Жёсткий чёрный список:"
+    "hardBlacklistLabel": "Жёсткий чёрный список:",
+    "invalidPattern": "Недопустимый шаблон",
+    "rowActions": "Действия строки",
+    "ruleCount_one": "{{count}} правило",
+    "ruleCount_few": "{{count}} правила",
+    "ruleCount_many": "{{count}} правил",
+    "ruleCount_other": "{{count}} правила"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Автоматическое продолжение приостановлено после {{limit}} шагов без вашего подтверждения — отправьте сообщение, чтобы продолжить.",
@@ -377,8 +395,8 @@
     "discardedAfterReconnect": "Отменено после повторного подключения. Ничего не выполнено.",
     "expiredTimeout": "Не подтверждено вовремя, отменено. Ничего не выполнено.",
     "expiredUnknown": "Этот запрос больше не ожидает ответа. Ничего не выполнено.",
-    "usesStoredSudoPassword": "🔑 Выполняется с сохранённым паролем sudo.",
-    "writeMayUseStoredSudoPassword": "🔑 Если нет прав на запись, приложение записывает с сохранённым паролем sudo (sudo).",
+    "usesStoredSudoPassword": "Выполняется с сохранённым паролем sudo.",
+    "writeMayUseStoredSudoPassword": "Если нет прав на запись, приложение записывает с сохранённым паролем sudo (sudo).",
     "takeIntoNote": "Добавить в заметку",
     "takeIntoNoteFailed": "Не удалось — повторите",
     "riskServerLabel": "Сервер",
@@ -388,13 +406,14 @@
     "riskSecondOpinionUnavailableHint": "Не удалось получить второе мнение ИИ. Показана оценка риска по правилам.",
     "riskHint": "Оценка по известным шаблонам — без гарантий.",
     "runningSince": "выполняется {{seconds}} с…",
+    "exitCode": "код завершения: {{code}}",
     "waitingForInputHint": "Эта команда, вероятно, ждёт ввода. Остановите её, и ИИ предложит неинтерактивный вариант.",
     "cancelCommand": "Отключиться от этой команды",
     "cancellingCommand": "Отключение…",
-    "commandCancelledNotice": "⚠ Отменено вручную — вывод может быть неполным, штатного кода завершения нет.",
-    "commandTruncatedNotice": "⚠ Вывод обрезан по предельному размеру — он может быть неполным.",
+    "commandCancelledNotice": "Отменено вручную — вывод может быть неполным, штатного кода завершения нет.",
+    "commandTruncatedNotice": "Вывод обрезан по предельному размеру — он может быть неполным.",
     "liveOutputLabel": "Вывод в реальном времени",
-    "liveOutputTruncatedNotice": "⚠ Достигнут предел размера — дальнейший вывод не показывается.",
+    "liveOutputTruncatedNotice": "Достигнут предел размера — дальнейший вывод не показывается.",
     "autoRanLead": "Выполнено автоматически",
     "autoRanRule": "правило",
     "autoRanScopeGlobal": "глобальное",
@@ -409,17 +428,14 @@
     "editableCommand": "Команда — можно изменить",
     "execute": "Выполнить",
     "deny": "Запретить",
-    "quickRule": "Принять + правило",
-    "quickRuleDropdownAria": "Показать варианты правил",
-    "newRulePatternHeading": "Шаблон для нового правила разрешения",
     "scopeThisServer": "Этот сервер",
     "scopeGlobal": "Глобально",
     "scopeTag": "Тег",
     "tagNamePlaceholder": "Название тега",
     "loadingSuggestions": "Загрузка вариантов…",
     "noSuggestions": "Вариантов нет.",
-    "binaryFileHint": "⚠ Двоичный файл — текстовое сравнение невозможно. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Содержимое слишком велико для построчного сравнения. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
+    "binaryFileHint": "Двоичный файл — текстовое сравнение невозможно. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
+    "diffTooLargeHint": "Содержимое слишком велико для построчного сравнения. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
     "noContentChange": "(содержимое не изменилось)",
     "quickRuleLabel": {
       "exact": "Точно: {{patterns}}",
@@ -437,9 +453,17 @@
       "blocked": "всегда спрашивает независимо от правил: {{reasons}}",
       "verdictAuto": "в следующий раз выполнится автоматически",
       "verdictAsk": "по-прежнему будет спрашивать: {{reasons}}",
-      "notice": "Правило создано. Эта команда и в следующий раз будет спрашивать: {{reasons}}",
       "reasonOther": "другая проверка безопасности",
-      "loadFailed": "Не удалось загрузить покрытие правил"
+      "loadFailed": "Не удалось загрузить покрытие правил",
+      "summaryHeading": "Уже разрешено",
+      "toDecideHeading": "Осталось решить",
+      "expandAria": "Варианты правил для {{segment}}",
+      "stagedBadge": "ещё не сохранено",
+      "removeStaged": "Убрать",
+      "saveRules": "Сохранить правила ({{count}})",
+      "saveFailed": "Не удалось сохранить правила: {{message}}",
+      "unsavedHint": "Несохранённые правила: {{count}}",
+      "segmentCovered": "покрывает эту часть; команда всё равно будет спрашивать: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +480,7 @@
     "mismatchBodyAfterHost": " предъявляет ключ, отличный от сохранённого в прошлый раз. Это может указывать на атаку «человек посередине». Продолжайте, только если уверены, что ключ сервера изменился правомерно (например, при переустановке сервера).",
     "known": "Известный",
     "offeredNow": "Предъявлен сейчас",
+    "offered": "Предъявлен",
     "keyType": "Тип ключа",
     "cancelConnection": "Отменить подключение",
     "trustAnyway": "Всё равно доверять",
@@ -468,13 +493,19 @@
   },
   "sessionTabs": {
     "newSession": "Новый сеанс",
-    "overview": "Обзор",
     "pendingAction": "Ожидает подтверждения",
     "closeTab": "Закрыть вкладку «{{name}}»",
     "menu": {
       "open": "Открыть меню навигации",
       "title": "Меню навигации",
-      "sessions": "Открытые сеансы"
+      "sessions": "Открытые сеансы",
+      "close": "Закрыть меню навигации",
+      "needsConfirmation": "Требуется подтверждение",
+      "activities": "Активности",
+      "activitiesRunning_one": "выполняется: {{count}}",
+      "activitiesRunning_few": "выполняется: {{count}}",
+      "activitiesRunning_many": "выполняется: {{count}}",
+      "activitiesRunning_other": "выполняется: {{count}}"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +514,9 @@
       "pendingBadge": "Нужно подтверждение",
       "readOnlyHint": "Этот сеанс принадлежит внешнему инструменту (MCP). Здесь видны лишь его действия для подтверждения или отклонения и их результаты; чата и терминала нет. Закрытие завершает сеанс MCP и отклоняет ожидающие подтверждения."
     },
-    "confirmClosePending": "Для «{{name}}» ещё ожидается подтверждение. Всё равно закрыть вкладку? Ожидающее действие будет считаться отклонённым."
+    "confirmClosePending": "Для «{{name}}» ещё ожидается подтверждение. Всё равно закрыть вкладку? Ожидающее действие будет считаться отклонённым.",
+    "pendingBadge": "Ожидает",
+    "newConnection": "Новое подключение"
   },
   "aiProvider": {
     "openLogs": "Открыть журналы диагностики в файловом менеджере",
@@ -505,16 +538,16 @@
     "apiKeyFormatHint": "Не похоже на ключ {{providerLabel}} – ожидается префикс вида «{{expectedPrefix}}». Сохранить всё равно можно: форматы иногда меняются.",
     "testCredentials": "Проверить учётные данные",
     "testingCredentials": "Проверка…",
-    "testResultValid": "✓ Учётные данные верны",
-    "testResultAuthFailed": "✗ Аутентификация не удалась – проверьте ключ API",
-    "testResultUnreachable": "✗ Провайдер недоступен: {{message}}",
+    "testResultValid": "Учётные данные верны",
+    "testResultAuthFailed": "Аутентификация не удалась – проверьте ключ API",
+    "testResultUnreachable": "Провайдер недоступен: {{message}}",
     "testResultRateLimited": "Учётные данные выглядят верными, но провайдер сейчас ограничивает запросы. Повторите проверку через минуту.",
     "nativeToolCalling": "Поддерживает встроенный вызов инструментов",
     "discoverModels": "Загрузить модели",
     "discoveringModels": "Загрузка моделей…",
     "modelDiscoveryFailedHint": "Не удалось загрузить модели автоматически — введите название модели вручную.",
     "modelDiscoveryEmptyHint": "Провайдер не вернул моделей. Введите название модели вручную.",
-    "modelDiscoveryAuthFailed": "✗ Провайдер отклонил эти учётные данные – проверьте ключ API",
+    "modelDiscoveryAuthFailed": "Провайдер отклонил эти учётные данные – проверьте ключ API",
     "advanced": "Дополнительно",
     "extraHeadersLabel": "Дополнительные заголовки",
     "extraHeadersHint": "Добавляются к каждому запросу к этому провайдеру (например, HTTP-Referer/X-Title у OpenRouter).",
@@ -557,6 +590,7 @@
     "ollamaProbeRetry": "Искать снова",
     "ollamaProbeNotFoundHeading": "Локальный Ollama не найден (порт по умолчанию 11434).",
     "ollamaProbeNotFoundInstructions": "Установите Ollama с ollama.com, запустите его и загрузите модель (например, `ollama pull llama3`), затем повторите поиск.",
+    "typeLabel": "Тип",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +707,7 @@
     "CLIPBOARD_FILE_FAILED": "Не удалось поместить файл в буфер обмена в этой системе.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Выбранный ИИ-провайдер не настроен. Выберите настроенного провайдера.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Выберите ИИ-провайдера, прежде чем включать второе мнение о риске.",
+    "CHAT_SESSION_NOT_FOUND": "Этот сохранённый чат больше не существует. Нажмите «Повторить», чтобы подключиться обычным образом, не возобновляя его.",
     "SESSION_NOT_FOUND": "Этот сеанс больше не открыт. Откройте его снова из списка серверов.",
     "SSH_SFTP_ALREADY_EXISTS": "Файл или папка с таким именем уже существует",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Файл ключа не найден на этом устройстве",
@@ -863,6 +898,8 @@
     "groupsHeading": "Итоговая структура папок",
     "entriesHeading": "Серверов: {{count}}",
     "field": {
+      "name": "Имя",
+      "include": "Включить",
       "host": "Адрес",
       "port": "Порт",
       "username": "Пользователь",
@@ -938,6 +975,10 @@
       "proxyJumpLocalPseudoServer": "указывает на локальный псевдосервер"
     },
     "confirm": "Импортировать",
+    "confirmCount_one": "Импортировать {{count}} сервер",
+    "confirmCount_few": "Импортировать {{count}} сервера",
+    "confirmCount_many": "Импортировать {{count}} серверов",
+    "confirmCount_other": "Импортировать {{count}} сервера",
     "applying": "Импорт …",
     "result": {
       "success": "Создано серверов: {{created}}, папок: {{groups}}, пропущено конфликтов: {{skipped}}.",
@@ -1091,6 +1132,7 @@
     "parentDirectory": "Родительский каталог",
     "newFolderButton": "+ Папка",
     "fileActionsGroup": "Действия с файлами",
+    "directoryActions": "Действия с каталогом",
     "upload": "Загрузить",
     "uploadDialogTitle": "Загрузка файлов",
     "uploadFolder": "Загрузить папку",
@@ -1136,8 +1178,7 @@
       "editing": "Локальное редактирование «{{name}}»…",
       "end": "Завершить редактирование",
       "uploadTitle": "Загрузить локальные изменения?",
-      "remoteChanged": "Удалённый файл изменился после скачивания — загрузка перезапишет те изменения.",
-      "noDiff": "Текстовое сравнение невозможно (двоичный файл или слишком большой). Новый размер: {{size}}."
+      "remoteChanged": "Удалённый файл изменился после скачивания — загрузка перезапишет те изменения."
     },
     "deleteDialog": {
       "fileTitle": "Удалить файл?",
@@ -1163,7 +1204,6 @@
       "conflictTitle": "Перезаписать файлы в папке?",
       "conflictBody": "Загрузка «{{name}}» перезапишет на сервере эти файлы ({{count}}). Без вашего подтверждения ничто не перезаписывается.",
       "summaryTitle": "Загрузка папки: «{{name}}»",
-      "summary": "Загружено файлов: {{uploaded}}, пропущено: {{skipped}}, с ошибкой: {{failed}}.",
       "notAttempted": "Файлов, которые не пытались загрузить, потому что их папку не удалось создать: {{count}}.",
       "skipped": "Пропущено",
       "failed": "Ошибка",
@@ -1174,12 +1214,14 @@
         "unsupported": "не обычный файл и не папка",
         "notGranted": "не входит в ваш выбор",
         "overwriteNotConfirmed": "есть на сервере, перезапись не подтверждена"
-      }
+      },
+      "uploaded": "Загружено"
     },
     "uploadConflict": {
       "title": "Перезаписать файл?",
       "body": "уже существует на сервере.",
-      "noDiff": "Текстовое сравнение невозможно (двоичный файл или слишком большой). Текущий размер: {{remoteSize}}, новый размер: {{localSize}}."
+      "currentSize": "Текущий размер",
+      "newSize": "Новый размер"
     },
     "menu": {
       "download": "Скачать",
@@ -1268,7 +1310,9 @@
       "recursive": "Применить к содержимому",
       "recursiveWarning": "— меняет владельца ВСЕХ файлов и вложенных папок в этой папке. Символические ссылки не отслеживаются. Отменить нельзя."
     },
-    "transferChown": "Смена владельца {{name}}"
+    "transferChown": "Смена владельца {{name}}",
+    "stopProgress": "Ход выполнения",
+    "noTextDiff": "Текстовое сравнение невозможно (двоичный файл или слишком большой)."
   },
   "chat": {
     "jumpToLatest": "К последнему сообщению",
@@ -1298,12 +1342,19 @@
     "queued": "Будет отправлено со следующим запросом",
     "responseCancelled": "Ответ отменён.",
     "contextCompactedNotice": "Более ранние части этого чата были сжаты в краткое изложение, чтобы уместиться в контекст модели.",
-    "contextUsage": "Контекст {{used}} / {{window}}",
     "contextUsageTooltip": "Более ранние части чата автоматически сжимаются, когда контекст заполняется.",
+    "messageLabel": "Сообщение",
+    "headerProviderTooltip": "Провайдер: {{provider}}",
     "webResearchUnavailable": "Веб-поиск недоступен для учётной записи этого провайдера (веб-поиск там отключён). Этот сеанс отвечает без веб-поиска. Чтобы отключить его навсегда: Настройки → ИИ-провайдер → «Веб-поиск».",
     "emptyResponse": "Модель не вернула ответа. Для моделей с этапом рассуждения поможет больший предел вывода в настройках провайдера.",
     "refusedResponse": "Модель отклонила этот запрос. Переформулируйте его или начните новый чат.",
     "outputTruncated": "(обрезано)",
+    "outputMoreLines_one": "… ещё строк: {{count}}",
+    "outputMoreLines_few": "… ещё строк: {{count}}",
+    "outputMoreLines_many": "… ещё строк: {{count}}",
+    "outputMoreLines_other": "… ещё строк: {{count}}",
+    "outputShowAll": "Показать все",
+    "outputShowLess": "Показать меньше",
     "fileWritten": "Файл '{{path}}' записан.",
     "writtenWithSudoPassword": "Записано с сохранённым паролем sudo.",
     "documentGenerated": "Документ создан",
@@ -1383,6 +1434,8 @@
     "aiTab": "ИИ",
     "paneTabs": "Панели сеанса",
     "moreActions": "Ещё действия",
+    "thisDevice": "это устройство",
+    "paneSwitch": "Переключатель панелей",
     "terminalOpenFailed": "Не удалось открыть терминал: {{error}}",
     "extraKeys": {
       "group": "Дополнительные клавиши",
@@ -1602,6 +1655,19 @@
     "quitBody": "Эти задачи ещё выполняются и будут остановлены:",
     "quitResumeHint": "Прерванные загрузки можно возобновить при следующем запуске приложения.",
     "quitAnyway": "Всё равно выйти",
-    "keepRunning": "Продолжить выполнение"
+    "keepRunning": "Продолжить выполнение",
+    "summaryRunning_one": "выполняется: {{count}}",
+    "summaryRunning_few": "выполняется: {{count}}",
+    "summaryRunning_many": "выполняется: {{count}}",
+    "summaryRunning_other": "выполняется: {{count}}",
+    "summaryInterrupted_one": "прервано: {{count}}",
+    "summaryInterrupted_few": "прервано: {{count}}",
+    "summaryInterrupted_many": "прервано: {{count}}",
+    "summaryInterrupted_other": "прервано: {{count}}",
+    "summaryFailed_one": "с ошибкой: {{count}}",
+    "summaryFailed_few": "с ошибкой: {{count}}",
+    "summaryFailed_many": "с ошибкой: {{count}}",
+    "summaryFailed_other": "с ошибкой: {{count}}",
+    "remaining": "осталось {{time}}"
   }
 }

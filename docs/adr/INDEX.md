@@ -50,7 +50,7 @@
 | 0044 | filemanager-layout-persistence-and-scope-choices | Accepted | [0044-filemanager-layout-persistence-and-scope-choices.md](0044-filemanager-layout-persistence-and-scope-choices.md) |
 | 0045 | sftp-browser-actions-scope-choices | Accepted | [0045-sftp-browser-actions-scope-choices.md](0045-sftp-browser-actions-scope-choices.md) |
 | 0046 | ui-politur-scope-choices | Accepted | [0046-ui-politur-scope-choices.md](0046-ui-politur-scope-choices.md) |
-| 0047 | Session-Ledger (Spec 0057, Etappe 1): Scope- und Herkunfts-Entscheidungen | Accepted | [0047-session-ledger-scope-and-source-decisions.md](0047-session-ledger-scope-and-source-decisions.md) |
+| 0047 | Session-Ledger (Spec 0057, Etappe 1): Scope- und Herkunfts-Entscheidungen | Superseded by 0161 | [0047-session-ledger-scope-and-source-decisions.md](0047-session-ledger-scope-and-source-decisions.md) |
 | 0048 | Kompaktierung (Spec 0057, Etappe 2): Token-Schätzung, Kontextfenster, `SystemContextParts` | Accepted | [0048-compaction-token-estimation-and-context-parts.md](0048-compaction-token-estimation-and-context-parts.md) |
 | 0049 | Rollierende Zusammenfassung (Spec 0057, Etappe 3): Fallback, Persistenz, 0039-Erhalt | Accepted | [0049-rolling-summary-fallback-and-untrusted-content-preservation.md](0049-rolling-summary-fallback-and-untrusted-content-preservation.md) |
 | 0050 | Sitzungsende-Notiz-Kürzungs-Dialog (Spec 0057, Etappe 4): Zusammenspiel, Mechanismus, Schwellwert | Accepted | [0050-note-shrink-dialog-design.md](0050-note-shrink-dialog-design.md) |
@@ -163,4 +163,6 @@
 | 0157 | Parakeet TDT 0.6B v3 on ONNX Runtime | Accepted | [0157-parakeet-on-onnx-runtime.md](0157-parakeet-on-onnx-runtime.md) |
 | 0158 | Rolling cache breakpoint on the Anthropic conversation history | Accepted | [0158-anthropic-history-cache-breakpoint.md](0158-anthropic-history-cache-breakpoint.md) |
 | 0159 | Whisper on ONNX Runtime, whisper.cpp removed | Accepted | [0159-whisper-on-onnx-runtime.md](0159-whisper-on-onnx-runtime.md) |
+| 0160 | Activity record: AI file reads and writes | Superseded by 0161 | [0160-activity-record-file-reads-and-writes.md](0160-activity-record-file-reads-and-writes.md) |
+| 0161 | No activity record in the core | Accepted | [0161-no-activity-record-in-the-core.md](0161-no-activity-record-in-the-core.md) |
 | 0162 | Filter parser: shell lexing of escapes, comments and line continuations | Accepted | [0162-filter-shell-lexing-escapes-comments.md](0162-filter-shell-lexing-escapes-comments.md) |

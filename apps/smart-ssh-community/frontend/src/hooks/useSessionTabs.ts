@@ -9,7 +9,7 @@
 // `event.sessionId` aus den jeweiligen Events, nie implizit über den
 // gerade aktiven Tab (Abschnitt 4, "das ist der wahrscheinlichste
 // Fehlerfall bei dieser Umstellung").
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   cancelConnect,
@@ -19,11 +19,12 @@ import {
   connect,
   disconnect,
   getServer,
+  listServers,
   listSessions,
   respondToAction,
   resumeChatSession,
 } from "../api/api";
-import { translateErrorCode } from "../api/errorCodes";
+import { CHAT_SESSION_NOT_FOUND_CODE, translateErrorCode } from "../api/errorCodes";
 import { showOutdatedAlgorithmsToast } from "../lib/outdatedAlgorithmsToast";
 import {
   onActionDecisionEscalated,
@@ -84,6 +85,8 @@ export interface SessionTab {
   /** Issue #657: ordinal among the open user tabs of the same server
    * (1 = the first one); `undefined` for MCP tabs. */
   serverNumber?: number;
+  /** Local pseudo-server tab (marker colour); filled from the server list. */
+  isLocal?: boolean;
   /** Issue #548. */
   phase: TabPhase;
   /** Issue #548: id of the running connect attempt (`connecting` only). */
@@ -174,6 +177,50 @@ export function useSessionTabs() {
   // Zuletzt gerenderter Tab-Stand für Callbacks, die erst nach einem `await`
   // weiterlaufen (`requestCloseTab`) und sonst einen veralteten `tabs`-Wert
   // aus ihrer Closure lesen würden.
+  // Ids of the local pseudo-server(s), from the server list (marker colour only).
+  const [localServerIds, setLocalServerIds] = useState<ReadonlySet<string>>(new Set());
+  // Server ids seen in the last successful list; a tab for an id outside it
+  // (list failed, or the server was added later) triggers a refetch.
+  const knownServerIdsRef = useRef<ReadonlySet<string> | null>(null);
+  // A server id missing from the list triggers at most one successful refetch;
+  // after a failed one, a single retry (on the next `tabs` change). Issue #1465.
+  const serverListAttemptsRef = useRef(new Map<string, number>());
+  const serverListSettledRef = useRef(new Set<string>());
+  const serverListInFlightRef = useRef(false);
+  // Bumped when a fetch settles so the effect re-checks tabs that changed meanwhile.
+  const [serverListTick, setServerListTick] = useState(0);
+  const refreshServerList = useCallback((keys: string[]) => {
+    serverListInFlightRef.current = true;
+    for (const k of keys) serverListAttemptsRef.current.set(k, (serverListAttemptsRef.current.get(k) ?? 0) + 1);
+    listServers()
+      .then((servers) => {
+        for (const k of keys) serverListSettledRef.current.add(k);
+        knownServerIdsRef.current = new Set(servers.map((s) => s.id));
+        setLocalServerIds(new Set(servers.filter((s) => s.isLocal).map((s) => s.id)));
+        serverListInFlightRef.current = false;
+        setServerListTick((n) => n + 1);
+      })
+      .catch((err) => {
+        console.warn("list_servers failed:", commandErrorMessage(err));
+        serverListInFlightRef.current = false;
+        setServerListTick((n) => n + 1);
+      });
+  }, []);
+  useEffect(() => {
+    if (serverListInFlightRef.current) return;
+    const known = knownServerIdsRef.current;
+    const wanted = known === null
+        ? ["", ...tabs.map((x) => x.serverId)]
+        : tabs.filter((x) => !known.has(x.serverId)).map((x) => x.serverId);
+    const keys = [...new Set(wanted)].filter(
+      (k) => !serverListSettledRef.current.has(k) && (serverListAttemptsRef.current.get(k) ?? 0) < 2,
+    );
+    if (keys.length > 0) refreshServerList(keys);
+  }, [tabs, serverListTick, refreshServerList]);
+  const tabsWithLocal = useMemo(
+    () => (localServerIds.size === 0 ? tabs : tabs.map((x) => (localServerIds.has(x.serverId) ? { ...x, isLocal: true } : x))),
+    [tabs, localServerIds],
+  );
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
@@ -421,7 +468,16 @@ export function useSessionTabs() {
       setTabs((prev) =>
         prev.map((t) =>
           t.sessionId === key && t.attemptId === attemptId
-            ? { ...t, phase: "failed", attemptId: null, failure }
+            ? {
+                ...t,
+                phase: "failed",
+                attemptId: null,
+                failure,
+                // Issue #1500: a retry must not loop on a chat that is gone.
+                ...(commandErrorCode(err) === CHAT_SESSION_NOT_FOUND_CODE
+                  ? { resumeChatSessionId: null }
+                  : {}),
+              }
             : t,
         ),
       );
@@ -491,7 +547,7 @@ export function useSessionTabs() {
 
   const switchTo = (sessionId: string | null) => setActiveSessionId(sessionId);
 
-  /** Vom Chat-Bestätigungsdialog aufgerufen (`respond`/`acceptWithRule` in
+  /** Vom Chat-Bestätigungsdialog aufgerufen (`respond` in
    * `ChatPanel`), sobald der Nutzer eine wartende Aktion auflöst — nötig,
    * weil eine Ablehnung (anders als Approve/EditThenApprove) kein
    * `chat-action-result`-Event auslöst (s. `ChatPanel`-Doc-Kommentar), der
@@ -561,7 +617,7 @@ export function useSessionTabs() {
   };
 
   return {
-    tabs,
+    tabs: tabsWithLocal,
     activeSessionId,
     openTab,
     startConnect,

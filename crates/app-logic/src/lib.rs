@@ -23,6 +23,7 @@
 mod ts_export;
 
 pub mod activities;
+pub mod activity;
 pub mod ai_provider_decorator;
 pub mod ai_provider_factory;
 pub mod ai_usage;
@@ -90,6 +91,8 @@ pub mod owner_names;
 /// `#[cfg(test)]`.
 #[cfg(any(test, feature = "test-support"))]
 pub mod policy;
+pub mod quick_rules_batch;
+mod redact_for_server;
 pub mod rule_suggestions;
 pub mod second_opinion;
 /// Spec 0101, A10/A11: der einmalige Umzug der Secrets aus dem

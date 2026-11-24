@@ -231,7 +231,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
+    const valid = await screen.findByText("Zugangsdaten gültig");
+    expect(valid).toBeInTheDocument();
+    expect(valid.querySelector("svg")?.getAttribute("data-icon")).toBe("check");
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
@@ -250,7 +252,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen")).toBeInTheDocument();
+    const failed = await screen.findByText("Authentifizierung fehlgeschlagen – API-Key prüfen");
+    expect(failed).toBeInTheDocument();
+    expect(failed.querySelector("svg")?.getAttribute("data-icon")).toBe("x");
   });
 
   it("shows an unreachable result including the message", async () => {
@@ -267,7 +271,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    expect(await screen.findByText("✗ Provider nicht erreichbar: connection refused")).toBeInTheDocument();
+    expect(await screen.findByText("Provider nicht erreichbar: connection refused")).toBeInTheDocument();
   });
 
   // Spec 0069, Teil A5, Test 19: `unreachable` mit `AI_RATE_LIMITED` zeigt
@@ -348,13 +352,13 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.click(
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
-    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
+    expect(await screen.findByText("Zugangsdaten gültig")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc-changed" },
     });
 
-    expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zugangsdaten gültig")).not.toBeInTheDocument();
   });
 });
 
@@ -1493,5 +1497,52 @@ describe("AiProviderSettings edit saved provider (issue #690)", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(updateAiProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe("AiProviderSettings provider grid and risk switches (issue #1377)", () => {
+  it("shows type and base URL, the model and an active badge; the active row is highlighted", async () => {
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      ollamaProvider({ isActive: true }),
+      ollamaProvider({ id: "b", displayName: "Other", baseUrl: null, model: "m2" }),
+    ]);
+    renderForm();
+    const row = (await screen.findByText("Ollama (lokal)")).closest("li")!;
+    expect(row.dataset.active).toBe("true");
+    expect(row.className).toMatch(/bg-accent-subtle/);
+    expect(within(row).getByText(/http:\/\/127\.0\.0\.1:11434\/v1/)).toBeTruthy();
+    expect(within(row).getByText("llama3").className).toMatch(/font-mono/);
+    expect(within(row).getByText("aktiv")).toBeTruthy();
+    const other = screen.getByText("Other").closest("li")!;
+    expect(other.dataset.active).toBeUndefined();
+  });
+
+  it("renders both risk options as labelled checkboxes in a single card that toggle", async () => {
+    // Non-default stored values, so the assertions below only hold after the load.
+    const risk = await import("../settings/riskSettings");
+    vi.mocked(risk.loadRiskClassifierSettings).mockResolvedValueOnce({ enabled: true, providerId: null });
+    vi.mocked(risk.loadRedRiskAlwaysConfirm).mockResolvedValueOnce(false);
+    renderForm();
+    const redRisk = await screen.findByRole("checkbox", {
+      name: testI18n.t("aiProvider.redRiskAlwaysConfirmEnable"),
+    });
+    const second = screen.getByRole("checkbox", {
+      name: testI18n.t("aiProvider.riskClassifierEnable"),
+    });
+    // Wait for the settings load before asserting or toggling.
+    await waitFor(() => expect((redRisk as HTMLInputElement).checked).toBe(false));
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(true));
+    expect(redRisk.closest("section")).toBe(second.closest("section"));
+    const { saveRiskClassifierSettings, saveRedRiskAlwaysConfirm } = await import(
+      "../settings/riskSettings"
+    );
+    fireEvent.click(second);
+    await waitFor(() => expect((second as HTMLInputElement).checked).toBe(false));
+    expect(saveRiskClassifierSettings).toHaveBeenCalledWith({
+      enabled: false,
+      providerId: null,
+    });
+    fireEvent.click(redRisk);
+    await waitFor(() => expect(saveRedRiskAlwaysConfirm).toHaveBeenCalledWith(true));
   });
 });

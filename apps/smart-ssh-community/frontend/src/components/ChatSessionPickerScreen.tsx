@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../lib/formatDateTime";
 import { deleteChatSession, renameChatSession } from "../api/api";
 import type { ChatSessionSummaryDto } from "../api/types";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, Icon } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../lib/technicalInputProps";
 
 interface ChatSessionPickerScreenProps {
@@ -95,10 +95,10 @@ export function ChatSessionPickerScreen({
         {t("chatSessionPicker.newConversation")}
       </Button>
 
-      <p className="mb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
+      <p className="text-label mb-2">
         {t("chatSessionPicker.pastSessions")}
       </p>
-      <ul className="max-h-72 narrow:max-h-none divide-y divide-border overflow-y-auto rounded border border-border">
+      <ul className="max-h-72 narrow:max-h-none divide-y divide-border overflow-y-auto border border-border">
         {sessions.map((session) => (
           <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
             <Button variant="bare"
@@ -150,7 +150,7 @@ export function ChatSessionPickerScreen({
               title={t("chatSessionPicker.rename")}
               aria-label={t("chatSessionPicker.rename")}
             >
-              ✎
+              <Icon name="edit" />
             </Button>
             <Button
               variant="ghost"
@@ -164,7 +164,7 @@ export function ChatSessionPickerScreen({
               title={t("chatSessionPicker.delete")}
               aria-label={t("chatSessionPicker.delete")}
             >
-              🗑
+              <Icon name="trash" />
             </Button>
           </li>
         ))}

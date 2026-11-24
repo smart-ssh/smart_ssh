@@ -185,6 +185,26 @@ impl TaskScope {
     }
 }
 
+/// Time budget of the steps in `SessionManager::shutdown_for_exit`; the
+/// drain slice is reserved for the app scope.
+#[derive(Debug, Clone, Copy)]
+pub struct ExitBudget {
+    pub sessions: Duration,
+    pub end_events: Duration,
+    pub drain: Duration,
+}
+
+impl Default for ExitBudget {
+    /// 2 s + 1 s + 3 s: the 6 s the exit sequence had before #1539.
+    fn default() -> Self {
+        Self {
+            sessions: Duration::from_secs(2),
+            end_events: Duration::from_secs(1),
+            drain: Duration::from_secs(3),
+        }
+    }
+}
+
 /// One per process. Hands out scopes by key.
 pub struct TaskSupervisor {
     root: CancellationToken,
@@ -300,6 +320,38 @@ impl TaskSupervisor {
         let report = scope.shutdown(timeout).await;
         lock_tolerating_poison(&self.scopes).remove(&ScopeKey::Session(session_id));
         report
+    }
+
+    /// Exit phase 1 (issue #1539): cancels and awaits every session scope
+    /// within one shared deadline. The app scope and the root stay alive, so
+    /// the activity worker keeps draining. Follow with [`Self::shutdown_app`].
+    pub async fn shutdown_sessions(&self, timeout: Duration) -> Vec<ShutdownReport> {
+        self.shutdown_matching(timeout, true).await
+    }
+
+    /// Exit phase 2 (issue #1539): shuts down the remaining non-session
+    /// scopes (the app scope, which holds the activity worker) with their
+    /// own `timeout`, independent of how long phase 1 took, then cancels the
+    /// root.
+    pub async fn shutdown_app(&self, timeout: Duration) -> Vec<ShutdownReport> {
+        let reports = self.shutdown_matching(timeout, false).await;
+        self.root.cancel();
+        reports
+    }
+
+    async fn shutdown_matching(&self, timeout: Duration, sessions: bool) -> Vec<ShutdownReport> {
+        let deadline = Instant::now() + timeout;
+        let scopes: Vec<TaskScope> = lock_tolerating_poison(&self.scopes)
+            .iter()
+            .filter(|(key, _)| matches!(key, ScopeKey::Session(_)) == sessions)
+            .map(|(_, scope)| scope.clone())
+            .collect();
+        let mut reports = Vec::new();
+        for scope in scopes {
+            let left = deadline.saturating_duration_since(Instant::now());
+            reports.push(scope.shutdown(left).await);
+        }
+        reports
     }
 
     /// Shuts down every scope within one shared deadline.

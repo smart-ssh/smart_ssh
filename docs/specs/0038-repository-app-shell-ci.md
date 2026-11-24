@@ -156,15 +156,15 @@ umgewandelten Text. Lässt sich schon das Original nicht zerlegen, wird der
 umgewandelte Text nur gesendet, wenn er dem Original gleicht.
 
 **Wer was sieht.** Filter, Risiko-Einstufung, Zweitmeinung, Bestätigungsdialog,
-Ledger, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
+Aktivitäts-Ereignisse, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
 ursprünglichen Text. Der umgewandelte Text existiert nur im Aufruf an den
-Transport und steht in keiner Anzeige, keinem Verlauf, keinem Ledger und
+Transport und steht in keiner Anzeige, keinem Verlauf, keinem Aktivitäts-Ereignis und
 keiner Log-Zeile; auch die Debug-Ausgabe des Ergebnisses der Umwandlung zeigt
 ihn nicht.
 
 **Geheimnisse.** Die gemeldeten eingesetzten Werte werden dem Redactor der
 Sitzung hinzugefügt, bevor das Kommando startet. Bereits die Ausgabe genau
-dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Ledger, Verlauf,
+dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Aktivitäts-Ereignis, Verlauf,
 Logs).
 
 **Ablehnung.** Lehnt die Umwandlung ab, wird nichts gesendet und nichts
@@ -311,6 +311,24 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
 
+### Beobachter der Aktivität
+
+Eine Edition kann über die Verdrahtung beliebig viele Beobachter für die
+Aktivität einer Sitzung registrieren (Befehlsvorschläge, Entscheidungen,
+Ausführungen). Regeln:
+
+- Jedes Ereignis wird jedem Beobachter gemeldet. Der Text darin stammt aus
+  demselben zentralen Schwärzungsschritt wie Protokoll und Ereignis; ein
+  Beobachter sieht nur geschwärzten Text.
+- Die Beobachter sind rein passiv: Sie geben nichts zurück und beeinflussen
+  weder Filter noch Bestätigung noch Ausführung. Die Zustellung läuft über
+  eine begrenzte Warteschlange außerhalb des Sitzungspfads. Ist sie voll,
+  wird das Ereignis verworfen und gezählt (`dropped_activity_events`); ein
+  langsamer oder abstürzender Beobachter stört den Ablauf nicht.
+- Der Kern führt keine eigene Aktivitätsaufzeichnung. Ohne registrierten
+  Beobachter wird kein Ereignis gebaut. Community registriert keinen
+  Beobachter; dann ändert sich nichts.
+
 ### Umhüllung der KI-Anbieter
 
 Eine Edition kann über die Verdrahtung beliebig viele Umhüller für KI-Anbieter
@@ -350,6 +368,10 @@ Nach Themen:
   `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,
   `seal_extension_parts`, `accept_extension_content`.
 - **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
+- **Aktivität:** `ActivityObserver`, `ActivityEvent`, `ActivityEventKind`,
+  `ActivityDecisionOutcome`, `ActivitySessionKind`, `ActivitySource`,
+  `RuleSnapshot`, `ServerSnapshot`, `SessionEndReason`, `SessionRef`,
+  `dropped_activity_events`.
 - **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
   `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
   `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,

@@ -39,6 +39,26 @@ describe("check-spec-index", () => {
     expect(run(f).some((m) => /missing `Zweck:`/.test(m))).toBe(true);
   });
 
+  it("ignores a Zweck line below the first ## heading", () => {
+    const f = valid();
+    f.set("0003-none.md", "# Spec 0003 — None\n\nStatus: umgesetzt\n\n## 1. x\n\nZweck: body text\n");
+    expect(run(f).some((m) => /missing `Zweck:`/.test(m))).toBe(true);
+  });
+
+  it("ignores a Status line below the first ## heading", () => {
+    const f = valid();
+    f.set("0003-none.md", "# Spec 0003 — None\n\nZweck: x\n\n## 1. x\n\nStatus: body\n");
+    expect(run(f).some((m) => /missing `Status:`/.test(m))).toBe(true);
+  });
+
+  it("never leaks a body Zweck line into the index", () => {
+    const f = valid();
+    f.set("0003-own.md", "# Spec 0003 — Own\r\n\r\nStatus: umgesetzt\r\nZweck: header\r\n\r\n## 1. x\r\nZweck: body leak\r\n");
+    const index = buildIndex(f);
+    expect(index).toContain("| header |");
+    expect(index).not.toContain("body leak");
+  });
+
   it("fails on a missing Status line", () => {
     const f = valid();
     f.set("0003-none.md", "# Spec 0003 — None\n\nZweck: x\n");

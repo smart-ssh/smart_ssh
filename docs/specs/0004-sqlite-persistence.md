@@ -86,7 +86,7 @@ Löschverhalten:
   Schlüsselbund-Modus liegt dort höchstens noch der Datenbankschlüssel; im
   Master-Passwort-Modus liegt er, mit dem Passwort verpackt, in einer Datei
   neben der Datenbank.
-- Konversationsinhalte (Chat, Ledger, Eingabe-Historie, Zusammenfassungen)
+- Konversationsinhalte (Chat, Eingabe-Historie, Zusammenfassungen)
   liegen als Klartext innerhalb der verschlüsselten Datei und haben keine
   eigene Feldverschlüsselung (Spec 0036).
 

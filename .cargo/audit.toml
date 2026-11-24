@@ -18,15 +18,11 @@
 # Vulnerabilities als auch auf informational Warnings (unmaintained/
 # unsound), da beide über dieselbe Advisory-ID gefiltert werden.
 #
-# Der `wnaf`-Yanked-Fund (s. u.) hat KEINE RUSTSEC-ID (Yanked-Prüfung läuft
-# separat gegen den crates.io-Index, nicht gegen die Advisory-Datenbank)
-# und kann deshalb strukturell NICHT einzeln in dieser Liste unterdrückt
-# werden — die einzige Stellschraube dafür wäre `[yanked] enabled = false`,
-# was die Yanked-Prüfung *komplett* abschalten würde (auch für künftige,
-# tatsächlich relevante Funde). Bewusst NICHT gemacht — der `wnaf`-Hinweis
-# bleibt daher als sichtbare, nicht blockierende Warnung in jedem Lauf
-# bestehen — cargo-audit behandelt Yanked-Funde unabhängig vom Blockier-
-# Status (Spec 0090, A2) als nicht blockierende Warnung.
+# Yanked findings have no RUSTSEC id (the yanked check runs against the
+# crates.io index, not the advisory database) and cannot be suppressed
+# individually in this list; they are resolved by updating the lockfile.
+# `[yanked] enabled = false` would disable the check completely and is
+# deliberately not used.
 
 [advisories]
 # Spec 0090, A3/A4: jede Ausnahme unten nennt das betroffene Crate, die
@@ -106,27 +102,6 @@ ignore = [
     # Begründung oben.
     "RUSTSEC-2024-0429", # glib::VariantStrIter 0.18.5 — AKTIV BEOBACHTEN bei gtk-rs-Updates, s. Begründung oben
 
-    # --- RUSTSEC-2026-0459: dokumentiertes Risk-Acceptance (2026-11-09) ---
-    #
-    # SQLite vor 3.54.0 liefert uninitialisierten Page-Cache-Speicher, wenn
-    # ein Prozess eine Datenbank zusammen mit einer präparierten `-wal`-Datei
-    # anderer Seitengröße öffnet (CVE-2026-119375, lokal, das Opfer muss die
-    # Dateien öffnen). Vom Maintainer entschieden, s. Issue #1243.
-    #
-    # Nicht behebbar: `sqlx-sqlite` 0.9.0 verlangt `libsqlite3-sys` < 0.38,
-    # der Fix ist >= 0.39; und laut Advisory bündelt selbst dessen
-    # SQLCipher-Build (unser Build, Spec 0101) noch SQLite 3.53.4.
-    #
-    # Warum vertretbar: Die App öffnet nur ihre eigene Datenbank im
-    # Datenverzeichnis. Backups sind ein eigenes verschlüsseltes Dateiformat
-    # und werden als typisierte Snapshots importiert, nicht als Datenbank
-    # geöffnet. Wer dort eine `-wal` ablegen kann, hat bereits Schreibzugriff
-    # auf die Daten des Nutzers.
-    #
-    # Überholt, wenn: ein `sqlx`-Release eine `libsqlite3-sys` erlaubt, deren
-    # SQLCipher auf SQLite >= 3.54 beruht; spätestens 2027-01-31 erneut prüfen.
-    "RUSTSEC-2026-0459",
-
     # --- RUSTSEC-2026-0495: documented risk acceptance (2026-11-14) ---
     #
     # russh < 0.65.0: the agent server (`russh::keys::agent::server`) signs
@@ -151,10 +126,7 @@ ignore = [
     # RUSTSEC-2026-0495 goes here once activated.
 ]
 
-# `wnaf 0.14.0` (transitiv über primeorder ← p256/p384/p521 ← russh) ist
-# yanked — kein Sicherheitsproblem, aber strukturell nicht in `ignore`
-# oben unterdrückbar (s. Hinweis am Dateianfang: keine RUSTSEC-ID, kein
-# Pro-Crate-Mechanismus in dieser cargo-audit-Version). Bleibt als
-# sichtbare, nicht blockierende Warnung bestehen; `[yanked] enabled` bleibt
-# bewusst auf dem Default `true`, damit künftige, tatsächlich relevante
-# Yanked-Funde weiterhin auffallen.
+# Yanked crates have no RUSTSEC id (the yanked check runs against the crates.io
+# index), so they cannot be listed in `ignore` above; the fix is to update the
+# lockfile. `[yanked] enabled` stays at the default `true` so that future
+# yanked findings stay visible.

@@ -122,6 +122,11 @@ impl<'a> CloseContext<'a> {
         // actor, connection watch, SFTP pumps, auto-reconnect, MCP action
         // task) are cancelled and awaited.
         self.close_task_scope(session_id).await;
+        // Issue #1505: after the scope closed, so events of the cancelled action task
+        // reach the observers before the end.
+        session
+            .emit_session_ended(app_logic::activity::SessionEndReason::Closed)
+            .await;
         let _ = tokio::time::timeout(CLOSE_STEP_TIMEOUT, async {
             session.transport.lock().await.disconnect().await
         })

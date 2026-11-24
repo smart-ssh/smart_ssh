@@ -88,6 +88,10 @@ export type {
   StoredHostKeyDto,
   SuggestionKind,
   SuggestionPatternDto,
+  SegmentRuleSuggestionsDto,
+  SegmentSuggestionDto,
+  SegmentVerdictDto,
+  StagedRuleDto,
   SuggestionVerdictDto,
   TestConnectionReport,
   TestConnectionResult,
@@ -311,6 +315,9 @@ export interface HostKeyInfo {
   /** Algorithm of the key the server offers now (e.g. `ssh-ed25519`);
    * `null` when it could not be determined. Display-only. */
   keyType?: string | null;
+  /** Name the user gave the saved server; absent for an unsaved server
+   * (connection test). Display-only, never part of the trust decision. */
+  serverName?: string;
 }
 
 /** Issue #696: one rule behind an automatic run; `segmentIndices` are the

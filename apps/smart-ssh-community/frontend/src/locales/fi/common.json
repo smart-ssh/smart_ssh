@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Päänavigointi",
     "connect": "Yhdistä",
     "manage": "Hallinta",
     "rules": "Suodatussäännöt"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Palvelimia ei ole vielä lisätty",
     "emptyStateHint": "Lisää ensimmäinen palvelin yhdistääksesi SSH:lla.",
     "emptyStateCreateFirstServer": "Lisää ensimmäinen palvelin",
-    "emptyStateTryLocalhost": "Kokeile ilman palvelinta: yllä oleva \"Localhost\" avaa istunnon tähän koneeseen – samoilla vahvistuksilla kuin oikealla palvelimella."
+    "emptyStateTryLocalhost": "Kokeile ilman palvelinta: yllä oleva \"Localhost\" avaa istunnon tähän koneeseen – samoilla vahvistuksilla kuin oikealla palvelimella.",
+    "localBadge": "Paikallinen",
+    "thisDevice": "tämä laite",
+    "sessionOpen": "Istunto auki",
+    "sessionPending": "Odottaa vahvistusta",
+    "sessionDisconnected": "Istunto katkaistu",
+    "sessionReconnecting": "Yhdistetään uudelleen"
   },
   "settings": {
     "title": "Asetukset",
@@ -136,11 +143,15 @@
     "importSshConfig": "Tuo …",
     "importSshConfigHint": "Tuo palvelimia OpenSSH:n ssh_config-tiedostosta",
     "exportSshConfig": "Vie …",
-    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon"
+    "exportSshConfigHint": "Vie palvelimet OpenSSH:n ssh_config-tiedostoon",
+    "title": "Palvelimet",
+    "collapseGroup": "Kutista ryhmä ”{{name}}”",
+    "expandGroup": "Laajenna ryhmä ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
+    "current": "nykyinen",
     "hintGroup": "→ siirrä tähän ryhmään",
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Tämä poistaa pysyvästi myös tämän palvelimen keskusteluhistorian, muistiinpanot ja tunnisteet.",
     "confirmDeleteServer": "Poista pysyvästi",
     "testResult": {
-      "success": "✓ Yhteys onnistui",
-      "authFailed": "✗ Kirjautuminen hylättiin. Tarkista käyttäjätunnus ja salasana tai avain.",
+      "success": "Yhteys onnistui",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Kirjautuminen hylättiin. Tarkista käyttäjätunnus ja salasana tai avain.",
       "hostKeyUnknown": "Isäntäavain tuntematon – vahvistus tarvitaan",
-      "hostKeyMismatch": "⚠ Isäntäavain on muuttunut",
-      "networkError": "✗ Verkkovirhe: {{message}}",
-      "timeout": "✗ Palvelin ei vastaa. Tarkista osoite, portti ja palomuuri."
+      "hostKeyMismatch": "Isäntäavain on muuttunut",
+      "networkError": "Verkkovirhe: {{message}}",
+      "timeout": "Palvelin ei vastaa. Tarkista osoite, portti ja palomuuri."
     },
     "largeNoteHint": "Tämä muistiinpano on hyvin suuri, ja sitä voidaan lyhentää tekoälyn kontekstia varten pitkissä istunnoissa. Tallennettu muistiinpano säilyy täysin ehjänä.",
     "summarizeNow": "Tiivistä nyt",
@@ -356,7 +368,11 @@
     "matchedRuleLabel": "Sääntö:",
     "segmentLabel": "Osa {{index}}",
     "checksLabel": "Tarkistukset:",
-    "hardBlacklistLabel": "Kiinteä estolista:"
+    "hardBlacklistLabel": "Kiinteä estolista:",
+    "invalidPattern": "Virheellinen kaava",
+    "rowActions": "Rivin toiminnot",
+    "ruleCount_one": "{{count}} sääntö",
+    "ruleCount_other": "{{count}} sääntöä"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automaattinen jatkaminen keskeytetty {{limit}} vaiheen jälkeen ilman vahvistustasi – lähetä viesti jatkaaksesi.",
@@ -377,8 +393,8 @@
     "discardedAfterReconnect": "Hylätty yhteyden uudelleenmuodostuksen jälkeen. Mitään ei suoritettu.",
     "expiredTimeout": "Ei vastattu ajoissa, hylätty. Mitään ei suoritettu.",
     "expiredUnknown": "Pyyntö ei ole enää odottamassa. Mitään ei suoritettu.",
-    "usesStoredSudoPassword": "🔑 Suoritetaan tallennetulla sudo-salasanalla.",
-    "writeMayUseStoredSudoPassword": "🔑 Jos kirjoitusoikeus puuttuu, sovellus kirjoittaa tallennetulla sudo-salasanalla (sudo).",
+    "usesStoredSudoPassword": "Suoritetaan tallennetulla sudo-salasanalla.",
+    "writeMayUseStoredSudoPassword": "Jos kirjoitusoikeus puuttuu, sovellus kirjoittaa tallennetulla sudo-salasanalla (sudo).",
     "takeIntoNote": "Lisää muistiinpanoon",
     "takeIntoNoteFailed": "Epäonnistui – yritä uudelleen",
     "riskServerLabel": "Palvelin",
@@ -388,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "Tekoälyn toista mielipidettä ei saatu. Näytetty riski perustuu sääntöihin.",
     "riskHint": "Arvio perustuu tunnettuihin kuvioihin – ei takuuta.",
     "runningSince": "käynnissä {{seconds}} s…",
+    "exitCode": "paluukoodi: {{code}}",
     "waitingForInputHint": "Tämä komento odottaa todennäköisesti syötettä. Pysäytä se, niin tekoäly ehdottaa ei-interaktiivista vaihtoehtoa.",
     "cancelCommand": "Katkaise tämä komento",
     "cancellingCommand": "Katkaistaan…",
-    "commandCancelledNotice": "⚠ Peruttu käsin – tuloste voi olla vajaa, ei normaalia paluuarvoa.",
-    "commandTruncatedNotice": "⚠ Tuloste katkaistiin kokorajalla – se voi olla vajaa.",
+    "commandCancelledNotice": "Peruttu käsin – tuloste voi olla vajaa, ei normaalia paluuarvoa.",
+    "commandTruncatedNotice": "Tuloste katkaistiin kokorajalla – se voi olla vajaa.",
     "liveOutputLabel": "Reaaliaikainen tuloste",
-    "liveOutputTruncatedNotice": "⚠ Kokoraja saavutettu – lisätulostetta ei enää näytetä.",
+    "liveOutputTruncatedNotice": "Kokoraja saavutettu – lisätulostetta ei enää näytetä.",
     "autoRanLead": "Suoritettu automaattisesti",
     "autoRanRule": "sääntö",
     "autoRanScopeGlobal": "yleinen",
@@ -409,17 +426,14 @@
     "editableCommand": "Komento – muokattavissa",
     "execute": "Suorita",
     "deny": "Estä",
-    "quickRule": "Hyväksy + sääntö",
-    "quickRuleDropdownAria": "Näytä sääntöehdotukset",
-    "newRulePatternHeading": "Uuden sallimissäännön kuvio",
     "scopeThisServer": "Tämä palvelin",
     "scopeGlobal": "Yleinen",
     "scopeTag": "Tunniste",
     "tagNamePlaceholder": "Tunnisteen nimi",
     "loadingSuggestions": "Ladataan ehdotuksia…",
     "noSuggestions": "Ei ehdotuksia.",
-    "binaryFileHint": "⚠ Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
+    "binaryFileHint": "Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
+    "diffTooLargeHint": "Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
     "noContentChange": "(ei sisällön muutosta)",
     "quickRuleLabel": {
       "exact": "Täsmälleen: {{patterns}}",
@@ -437,9 +451,17 @@
       "blocked": "kysyy aina säännöistä riippumatta: {{reasons}}",
       "verdictAuto": "suoritetaan ensi kerralla automaattisesti",
       "verdictAsk": "kysyy edelleen: {{reasons}}",
-      "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
       "reasonOther": "toinen turvatarkistus",
-      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
+      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata",
+      "summaryHeading": "Jo sallittu",
+      "toDecideHeading": "Vielä päätettävä",
+      "expandAria": "Sääntöehdotukset kohteelle {{segment}}",
+      "stagedBadge": "ei vielä tallennettu",
+      "removeStaged": "Poista",
+      "saveRules": "Tallenna säännöt ({{count}})",
+      "saveFailed": "Sääntöjä ei voitu tallentaa: {{message}}",
+      "unsavedHint": "Tallentamattomat säännöt: {{count}}",
+      "segmentCovered": "kattaa tämän osan; komento kysyy silti: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +478,7 @@
     "mismatchBodyAfterHost": " esittää eri avaimen kuin viimeksi tallennettu. Tämä voi viitata väliinhyökkäykseen (man-in-the-middle). Jatka vain, jos olet varma, että palvelimen avain on muuttunut oikeutetusti (esim. palvelimen uudelleenasennus).",
     "known": "Tunnettu",
     "offeredNow": "Nyt tarjottu",
+    "offered": "Tarjottu",
     "keyType": "Avaintyyppi",
     "cancelConnection": "Peruuta yhteys",
     "trustAnyway": "Luota silti",
@@ -468,13 +491,17 @@
   },
   "sessionTabs": {
     "newSession": "Uusi istunto",
-    "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
     "menu": {
       "open": "Avaa navigointivalikko",
       "title": "Navigointivalikko",
-      "sessions": "Avoimet istunnot"
+      "sessions": "Avoimet istunnot",
+      "close": "Sulje navigointivalikko",
+      "needsConfirmation": "Vaatii vahvistuksen",
+      "activities": "Toiminnot",
+      "activitiesRunning_one": "{{count}} käynnissä",
+      "activitiesRunning_other": "{{count}} käynnissä"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +510,9 @@
       "pendingBadge": "Vaatii vahvistuksen",
       "readOnlyHint": "Tämä istunto kuuluu ulkoiselle työkalulle (MCP). Se näyttää vain työkalun vahvistettavat tai hylättävät toiminnot ja niiden tulokset; keskustelukenttää tai päätettä ei ole. Sulkeminen päättää MCP-istunnon ja hylkää odottavat vahvistukset."
     },
-    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi."
+    "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi.",
+    "pendingBadge": "Odottaa",
+    "newConnection": "Uusi yhteys"
   },
   "aiProvider": {
     "openLogs": "Avaa diagnostiikkalokit tiedostonhallinnassa",
@@ -505,16 +534,16 @@
     "apiKeyFormatHint": "Ei näytä {{providerLabel}}-avaimelta – odotettiin etuliitettä kuten \"{{expectedPrefix}}\". Voit silti tallentaa sen; palveluntarjoajat muuttavat muotoja joskus.",
     "testCredentials": "Testaa tunnistetiedot",
     "testingCredentials": "Testataan…",
-    "testResultValid": "✓ Tunnistetiedot kelvolliset",
-    "testResultAuthFailed": "✗ Todennus epäonnistui – tarkista API-avain",
-    "testResultUnreachable": "✗ Palveluntarjoaja ei tavoitettavissa: {{message}}",
+    "testResultValid": "Tunnistetiedot kelvolliset",
+    "testResultAuthFailed": "Todennus epäonnistui – tarkista API-avain",
+    "testResultUnreachable": "Palveluntarjoaja ei tavoitettavissa: {{message}}",
     "testResultRateLimited": "Tunnistetiedot näyttävät kelvollisilta, mutta palveluntarjoaja rajoittaa nyt pyyntöjä. Testaa uudelleen minuutin kuluttua.",
     "nativeToolCalling": "Tukee natiivia työkalukutsua",
     "discoverModels": "Lataa mallit",
     "discoveringModels": "Ladataan malleja…",
     "modelDiscoveryFailedHint": "Malleja ei voitu ladata automaattisesti – anna mallin nimi käsin.",
     "modelDiscoveryEmptyHint": "Palveluntarjoaja ei palauttanut malleja. Anna mallin nimi käsin.",
-    "modelDiscoveryAuthFailed": "✗ Palveluntarjoaja hylkäsi nämä tunnistetiedot – tarkista API-avain",
+    "modelDiscoveryAuthFailed": "Palveluntarjoaja hylkäsi nämä tunnistetiedot – tarkista API-avain",
     "advanced": "Lisäasetukset",
     "extraHeadersLabel": "Lisäotsakkeet",
     "extraHeadersHint": "Liitetään jokaiseen tälle palveluntarjoajalle lähetettävään pyyntöön (esim. OpenRouterin HTTP-Referer/X-Title).",
@@ -557,6 +586,7 @@
     "ollamaProbeRetry": "Etsi uudelleen",
     "ollamaProbeNotFoundHeading": "Paikallista Ollamaa ei löytynyt (oletusportti 11434).",
     "ollamaProbeNotFoundInstructions": "Asenna Ollama osoitteesta ollama.com, käynnistä se ja lataa malli (esim. `ollama pull llama3`), ja etsi sitten uudelleen.",
+    "typeLabel": "Tyyppi",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +703,7 @@
     "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Valittua tekoälypalvelua ei ole määritetty. Valitse määritetty palvelu.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Valitse tekoälypalvelu ennen riskin toisen mielipiteen käyttöönottoa.",
+    "CHAT_SESSION_NOT_FOUND": "Tätä tallennettua keskustelua ei enää ole. Valitse Yritä uudelleen yhdistääksesi normaalisti jatkamatta sitä.",
     "SESSION_NOT_FOUND": "Tämä istunto ei ole enää auki. Avaa se uudelleen palvelinluettelosta.",
     "SSH_SFTP_ALREADY_EXISTS": "Tämänniminen tiedosto tai kansio on jo olemassa",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Avaintiedostoa ei löytynyt tältä laitteelta",
@@ -853,6 +884,8 @@
     "groupsHeading": "Syntyvä kansiorakenne",
     "entriesHeading": "{{count}} palvelinta",
     "field": {
+      "name": "Nimi",
+      "include": "Sisällytä",
       "host": "Osoite",
       "port": "Portti",
       "username": "Käyttäjä",
@@ -928,6 +961,8 @@
       "proxyJumpLocalPseudoServer": "osoittaa paikalliseen näennäispalvelimeen"
     },
     "confirm": "Tuo",
+    "confirmCount_one": "Tuo {{count}} palvelin",
+    "confirmCount_other": "Tuo {{count}} palvelinta",
     "applying": "Tuodaan …",
     "result": {
       "success": "{{created}} palvelinta luotu, {{groups}} kansiota, {{skipped}} ristiriitaa ohitettu.",
@@ -1081,6 +1116,7 @@
     "parentDirectory": "Ylempi hakemisto",
     "newFolderButton": "+ Kansio",
     "fileActionsGroup": "Tiedostotoiminnot",
+    "directoryActions": "Hakemiston toiminnot",
     "upload": "Lähetä",
     "uploadDialogTitle": "Lähetä tiedostoja",
     "uploadFolder": "Lähetä kansio",
@@ -1126,8 +1162,7 @@
       "editing": "Muokataan “{{name}}” paikallisesti…",
       "end": "Lopeta muokkaus",
       "uploadTitle": "Lähetetäänkö paikalliset muutokset?",
-      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Uusi koko: {{size}}."
+      "remoteChanged": "Etätiedostoa on muutettu latauksen jälkeen – lähetys korvaisi tuon toisen muutoksen."
     },
     "deleteDialog": {
       "fileTitle": "Poistetaanko tiedosto?",
@@ -1149,7 +1184,6 @@
       "conflictTitle": "Korvataanko kansion tiedostot?",
       "conflictBody": "Kohteen “{{name}}” lähetys korvaisi nämä {{count}} tiedostoa palvelimella. Mitään ei korvata, ellet vahvista.",
       "summaryTitle": "Kansion lähetys: “{{name}}”",
-      "summary": "{{uploaded}} tiedostoa lähetetty, {{skipped}} ohitettu, {{failed}} epäonnistui.",
       "notAttempted": "{{count}} tiedostoa jätettiin yrittämättä, koska niiden kansiota ei voitu luoda.",
       "skipped": "Ohitettu",
       "failed": "Epäonnistui",
@@ -1160,12 +1194,14 @@
         "unsupported": "ei tavallinen tiedosto tai kansio",
         "notGranted": "valintasi ei kata sitä",
         "overwriteNotConfirmed": "on palvelimella, korvausta ei vahvistettu"
-      }
+      },
+      "uploaded": "Lähetetty"
     },
     "uploadConflict": {
       "title": "Korvataanko tiedosto?",
       "body": "on jo palvelimella.",
-      "noDiff": "Tekstivertailu ei ole mahdollista (binääritiedosto tai liian suuri). Nykyinen koko: {{remoteSize}}, uusi koko: {{localSize}}."
+      "currentSize": "Nykyinen koko",
+      "newSize": "Uusi koko"
     },
     "menu": {
       "download": "Lataa",
@@ -1254,7 +1290,9 @@
       "recursive": "Käytä sisältöön",
       "recursiveWarning": "— vaihtaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden omistajan. Symbolisia linkkejä ei seurata. Ei voi perua."
     },
-    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa"
+    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa",
+    "stopProgress": "Eteneminen",
+    "noTextDiff": "Tekstivertailu ei ole mahdollinen (binääritiedosto tai liian suuri)."
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
@@ -1284,12 +1322,17 @@
     "queued": "Lähetetään seuraavan pyynnön mukana",
     "responseCancelled": "Vastaus peruttu.",
     "contextCompactedNotice": "Tämän keskustelun vanhempia osia tiivistettiin, jotta ne mahtuvat mallin kontekstiin.",
-    "contextUsage": "Konteksti {{used}} / {{window}}",
     "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
+    "messageLabel": "Viesti",
+    "headerProviderTooltip": "Palveluntarjoaja: {{provider}}",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
     "refusedResponse": "Malli hylkäsi pyynnön. Muotoile se uudelleen tai aloita uusi keskustelu.",
     "outputTruncated": "(katkaistu)",
+    "outputMoreLines_one": "… {{count}} rivi lisää",
+    "outputMoreLines_other": "… {{count}} riviä lisää",
+    "outputShowAll": "Näytä kaikki",
+    "outputShowLess": "Näytä vähemmän",
     "fileWritten": "Tiedosto '{{path}}' kirjoitettu.",
     "writtenWithSudoPassword": "Kirjoitettu tallennetulla sudo-salasanalla.",
     "documentGenerated": "Asiakirja luotu",
@@ -1367,6 +1410,8 @@
     "aiTab": "Tekoäly",
     "paneTabs": "Istunnon osat",
     "moreActions": "Lisää toimintoja",
+    "thisDevice": "tämä laite",
+    "paneSwitch": "Paneelin vaihto",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
     "extraKeys": {
       "group": "Lisänäppäimet",
@@ -1586,6 +1631,13 @@
     "quitBody": "Nämä toiminnot ovat vielä käynnissä ja pysäytetään:",
     "quitResumeHint": "Keskeytyneet lataukset voi jatkaa, kun käynnistät sovelluksen seuraavan kerran.",
     "quitAnyway": "Sulje silti",
-    "keepRunning": "Jatka suoritusta"
+    "keepRunning": "Jatka suoritusta",
+    "summaryRunning_one": "{{count}} käynnissä",
+    "summaryRunning_other": "{{count}} käynnissä",
+    "summaryInterrupted_one": "{{count}} keskeytetty",
+    "summaryInterrupted_other": "{{count}} keskeytetty",
+    "summaryFailed_one": "{{count}} epäonnistui",
+    "summaryFailed_other": "{{count}} epäonnistui",
+    "remaining": "{{time}} jäljellä"
   }
 }

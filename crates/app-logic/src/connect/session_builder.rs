@@ -307,6 +307,15 @@ pub async fn build_session(
         side_call: side_call_source,
     };
 
+    // Issue #1505: the snapshot is only read when an observer listens.
+    let activity_reporting = if state.activity.is_active() {
+        let snapshot =
+            crate::activity::server_snapshot(state.profile_store.as_ref(), &server).await;
+        crate::activity::ActivityReporting::new(&state.activity, session_id.to_string(), snapshot)
+    } else {
+        None
+    };
+
     // Spec 0034, Abschnitt 2: the local pseudo-server has no `servers` row, so
     // it gets no `chat_sessions` row (foreign key). The special case belongs
     // here (session construction), not in the filter/risk loop.
@@ -318,6 +327,22 @@ pub async fn build_session(
     let (mut initial_history, chat_session_id, initial_summary) = if let Some(existing_id) = resume
     {
         let store = &state.chat_session_store;
+        // Only an existing chat session can be resumed; an unknown id must
+        // never become the chat session of a human tab.
+        match store.session_exists(existing_id).await {
+            Ok(true) => {}
+            Ok(false) => {
+                transport.disconnect().await.ok();
+                return Err(CommandError::with_code(
+                    format!("chat session {existing_id} does not exist"),
+                    crate::error::CHAT_SESSION_NOT_FOUND,
+                ));
+            }
+            Err(err) => {
+                transport.disconnect().await.ok();
+                return Err(err.into());
+            }
+        }
         let loaded = match store.load_session(existing_id).await {
             Ok(loaded) => loaded,
             Err(err) => {
@@ -433,13 +458,12 @@ pub async fn build_session(
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(
                 redaction_incomplete,
             ),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(redaction_incomplete),
         },
         persistence: ChatPersistence {
             chat_content: state.chat_content.clone(),
             title_attempts: state.title_attempts.clone(),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
-            // Spec 0057, §1: same gating as `chat_session_store` (FK, migration 0011).
-            ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),
             chat_session_id: tokio::sync::Mutex::new(chat_session_id),
         },
         conn: TransportState {
@@ -456,7 +480,8 @@ pub async fn build_session(
     })
     .with_start_directory(start_directory)
     .with_is_root(is_root)
-    .with_usage_reporting(Some(ai_usage_reporting));
+    .with_usage_reporting(Some(ai_usage_reporting))
+    .with_activity_reporting(activity_reporting);
     // Byte-wise copy: stays masked if a later lookup fails (issue #843).
     session.redactor.add_secret_values(&extension_secrets);
     Ok(BuiltSession {
@@ -467,7 +492,8 @@ pub async fn build_session(
 }
 
 /// Reconnect (Spec 0105): the sudo password is read again so the redactor
-/// knows the current value. Returns the new redactor and the sudo password.
+/// knows the current value. Returns the new redactor, whether it is "redaction incomplete" and the sudo
+/// password; the flag is raised when the redactor is swapped in.
 pub async fn redaction_for_reconnect(
     state: &AppState,
     session: &Session,
@@ -475,6 +501,7 @@ pub async fn redaction_for_reconnect(
     scope_lookup: &ScopeLookup,
 ) -> (
     Box<dyn ssh_manager_core::ai::OutputRedactor>,
+    bool,
     Option<secrecy::SecretString>,
 ) {
     let sudo = crate::server_redaction::read_sudo_password_checked_async(
@@ -486,13 +513,13 @@ pub async fn redaction_for_reconnect(
         state.session_extension.as_deref(),
         scope_lookup.scope.as_ref(),
     );
-    let redactor = crate::session_extension::redactor_for_reconnect(
+    let (redactor, incomplete) = crate::session_extension::redactor_for_reconnect(
         session,
         &sudo,
         scope_lookup,
         &extension_secrets,
     );
-    (redactor, sudo.0)
+    (redactor, incomplete, sudo.0)
 }
 
 #[cfg(test)]

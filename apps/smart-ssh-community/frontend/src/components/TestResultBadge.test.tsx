@@ -6,10 +6,10 @@ import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
 import { testI18n } from "../testI18n";
-import type { TestConnectionResult } from "../api/types";
+import type { ConnectStepRecord, TestConnectionResult } from "../api/types";
 import { TestResultBadge } from "./ServerForm";
 
-function renderBadge(result: TestConnectionResult) {
+function renderBadge(result: TestConnectionResult & { steps?: ConnectStepRecord[] }) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <TestResultBadge result={result} />
@@ -39,7 +39,7 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
       code: null,
     });
 
-    expect(screen.getByText("✗ Netzwerkfehler: some raw backend text")).toBeInTheDocument();
+    expect(screen.getByText("Netzwerkfehler: some raw backend text")).toBeInTheDocument();
   });
 
   // Spec 0098, T8 (A4/A5/A6): Der Verbindungstest meldet einen
@@ -53,7 +53,7 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
   //
   // *Gegenbeweis:* ohne den Eintrag in `KNOWN_ERROR_CODES` greift
   // `translateErrorCode` auf den Fallback zurück und die Zeile lautet
-  // „✗ Netzwerkfehler: deploy@jump.example:22: Zugriff auf den
+  // „Netzwerkfehler: deploy@jump.example:22: Zugriff auf den
   // Schlüsselbund fehlgeschlagen (Passwort)" — beide Erwartungen unten
   // schlagen dann fehl.
   it("shows the keychain reason for a networkError, not a network error text", () => {
@@ -71,6 +71,42 @@ describe("TestResultBadge (Spec 0069, Teil A5)", () => {
   it("still shows the plain success text unaffected by the code change", () => {
     renderBadge({ kind: "success" });
 
-    expect(screen.getByText("✓ Verbindung erfolgreich")).toBeInTheDocument();
+    expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
+  });
+
+  // Issue #1380: the success badge shows the sum of the step durations.
+  const stepWith = (durationMs: number | null): ConnectStepRecord => ({
+    hopIndex: 0,
+    hop: "deploy@example.invalid:22",
+    step: { kind: "sessionReady" },
+    status: { state: "ok" },
+    durationMs,
+  });
+
+  it("shows 'OK · <sum> ms' for a successful test with measured steps", () => {
+    renderBadge({ kind: "success", steps: [stepWith(100), stepWith(42), stepWith(null)] });
+    expect(screen.getByText("OK · 142 ms")).toBeInTheDocument();
+  });
+
+  it("keeps the plain success text when no step has a duration", () => {
+    renderBadge({ kind: "success" });
+    expect(screen.getByText("Verbindung erfolgreich")).toBeInTheDocument();
+  });
+
+  it("shows a failure with its existing message", () => {
+    renderBadge({ kind: "timeout" });
+    expect(screen.getByText(/antwortet nicht/)).toBeInTheDocument();
+  });
+
+  it("renders the check icon for the success state", () => {
+    const { container } = renderBadge({ kind: "success" });
+
+    expect(container.querySelector("svg")?.getAttribute("data-icon")).toBe("check");
+  });
+
+  it("renders the x icon for the failure state", () => {
+    const { container } = renderBadge({ kind: "authenticationFailed" });
+
+    expect(container.querySelector("svg")?.getAttribute("data-icon")).toBe("x");
   });
 });

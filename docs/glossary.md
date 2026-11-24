@@ -66,11 +66,6 @@ attempts; the outcome can only raise caution for that server.
 `crates/app-logic/src/second_opinion.rs` (`fetch_injection_check_with_usage`);
 Spec 0039, section 5.
 
-**Ledger** — The append-only record of a session's events (entries are
-written, never updated or deleted, except when the whole session is
-deleted). Content is redacted before it is appended.
-`crates/persistence-sqlite/src/ledger_store.rs`; Spec 0057.
-
 **Local pseudo-server** — The always-present "Localhost" entry that runs
 commands on the user's own machine through the same traits as a real
 server, so filter, risk and confirmation apply identically.

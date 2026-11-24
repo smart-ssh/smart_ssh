@@ -34,7 +34,8 @@ import type {
   NoteTarget,
   PatternDto,
   ConfirmationExplanationDto,
-  SuggestionPatternDto,
+  SegmentRuleSuggestionsDto,
+  StagedRuleDto,
   RemoteEntryDto,
   RuleDto,
   RuleInput,
@@ -306,6 +307,11 @@ export const stopAutoReconnect = (sessionId: string) =>
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Issue #1372: the provider name and model this session was pinned to at
+ * connect time (shown in the chat header). */
+export const getSessionAiProvider = (sessionId: string) =>
+  invoke<{ displayName: string; model: string }>("get_session_ai_provider", { sessionId });
+
 /** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
  * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
  * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */
@@ -480,29 +486,28 @@ export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
 export const explainConfirmation = (sessionId: string, command: string, scope: Scope) =>
   invoke<ConfirmationExplanationDto>("explain_confirmation", { sessionId, command, scope });
 
-/** `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
- * `undefined`/gleich dem ursprünglichen Kommando löst wie zuvor über
- * `Approve` auf; unterscheidet er sich, muss das Backend über
- * `EditThenApprove` erneut die Filter-Engine durchlaufen (sonst würde das
- * UNBEARBEITETE Kommando ausgeführt, während die Regel aus dem bearbeiteten
- * Text abgeleitet wird — genau der Bestätigungsdialog-Bypass, den
- * `EditThenApprove` beim normalen "Ausführen"-Button bereits verhindert). */
-export const acceptAndCreateRule = (
+/** Issue #1356: suggestions for one segment (`segmentIndex` as in
+ * `SegmentCoverageDto.index`) in `scope`, with a segment and a command verdict
+ * each, given the rules staged so far. Read-only. */
+export const explainSegmentRules = (
   sessionId: string,
-  actionId: string,
-  patterns: SuggestionPatternDto[],
+  command: string,
+  segmentIndex: number,
   scope: Scope,
-  priority: number | undefined,
-  editedCommand: string | null,
+  staged: StagedRuleDto[],
 ) =>
-  invoke<string[]>("accept_and_create_rule", {
+  invoke<SegmentRuleSuggestionsDto>("explain_segment_rules", {
     sessionId,
-    actionId,
-    patterns,
+    command,
+    segmentIndex,
     scope,
-    priority: priority ?? null,
-    editedCommand,
+    staged,
   });
+
+/** Issue #1356: saves the staged rules (own patterns and scope each) in one
+ * transaction, all or nothing. Does not resolve a pending confirmation. */
+export const createQuickRulesBatch = (rules: StagedRuleDto[]) =>
+  invoke<string[]>("create_quick_rules_batch", { rules });
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 

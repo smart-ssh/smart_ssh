@@ -47,7 +47,7 @@ Anmeldeart der Server). Bei fehlendem K wurde früher still ein neuer erzeugt.
 
 **Messungen** (macOS; Linux wo genannt):
 
-- SQLCipher 4.10 mit mitgebautem OpenSSL neben dem SQL-Treiber: alle
+- SQLCipher mit mitgebautem OpenSSL neben dem SQL-Treiber: alle
   Migrationen laufen, WAL ist mitverschlüsselt, alle Tests grün, `cargo audit`
   ohne Funde (macOS, Linux). Die CI baut und testet mit SQLCipher auf Ubuntu,
   Windows und macOS grün. Ungemessen bleiben die Release-Ziele
@@ -63,7 +63,10 @@ Anmeldeart der Server). Bei fehlendem K wurde früher still ein neuer erzeugt.
 - Der Export in eine verschlüsselte Kopie überträgt weder `journal_mode`
   (danach `delete`) noch `user_version` (danach 0); auf der geöffneten Kopie
   gesetzt, bleiben beide erhalten.
-- SQLite sinkt durch SQLCipher von 3.51.3 auf 3.50.4.
+- Stand der Messungen: Sie entstanden mit SQLCipher 4.10; der Build nutzt
+  seit dem SQLite-3.54-Update SQLCipher 4.20.0 auf SQLite 3.54.1 (die
+  Werte dieses Abschnitts gelten unverändert). Die ältere Angabe, SQLite sinke
+  durch SQLCipher von 3.51.3 auf 3.50.4, ist damit überholt.
 
 ## 2. Vorab geklärte Fragen
 

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "./ui";
 import type { DropKind } from "../lib/treeDrag";
 import type { TreeDragState } from "../hooks/useTreeDrag";
 
@@ -8,7 +9,7 @@ import type { TreeDragState } from "../hooks/useTreeDrag";
  * findet. */
 export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropKind | null }) {
   const { t } = useTranslation();
-  const icon = drag.item.kind === "group" ? "📁" : "🖥️";
+  const icon = <Icon name={drag.item.kind === "group" ? "folder" : "server"} className="inline align-text-bottom" />;
   const hint =
     kind === "valid"
       ? drag.target?.kind === "root"
@@ -21,14 +22,19 @@ export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropK
     <div
       aria-hidden="true"
       style={{ position: "fixed", left: drag.x + 14, top: drag.y + 14 }}
-      className={`pointer-events-none z-50 rounded border px-2 py-1 text-xs shadow-lg ${
+      className={`pointer-events-none z-50 rounded border px-2 py-1 text-xs shadow-offset-sm ${
         kind === "cycle"
           ? "border-danger-strong bg-danger-subtle text-danger-fg-faint"
           : "border-border-strong bg-surface-raised text-fg"
       }`}
     >
-      {icon} {drag.item.label}
-      {hint && <span className="ml-2 text-fg-subtle">{hint}</span>}
+      {icon} <span className="font-mono">{drag.item.label}</span>
+      {hint && (
+        <span className="ml-2 text-fg-subtle">
+          {kind === "valid" && <Icon name="move" size={12} className="mr-1 inline align-text-bottom" />}
+          {hint}
+        </span>
+      )}
     </div>
   );
 }

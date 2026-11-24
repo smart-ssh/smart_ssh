@@ -277,7 +277,13 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "RISK_SETTINGS_PROVIDER_REQUIRED",
   // Issue #883: a command named a session that is no longer open.
   "SESSION_NOT_FOUND",
+  // Issue #1500: the saved chat to resume is gone (or was never a chat).
+  "CHAT_SESSION_NOT_FOUND",
 ]);
+
+/** Issue #1500: the connect error that means "the chat to resume is gone";
+ * the tab then forgets the id so "Retry" connects normally. */
+export const CHAT_SESSION_NOT_FOUND_CODE = "CHAT_SESSION_NOT_FOUND";
 
 /** Issue #600: errors for which the error card offers "Try again". */
 const RETRYABLE_AI_CODES = new Set<string>([

@@ -1,4 +1,5 @@
 import { dynamicKey } from "../i18nTypes";
+import { Icon } from "./ui";
 import { useTranslation } from "react-i18next";
 import type { WebActivityDto } from "../api/types";
 
@@ -39,11 +40,11 @@ export function WebActivityCard({ activity }: { activity: WebActivityDto }) {
 
   return (
     <div
-      className="rounded border border-web-border/50 bg-surface px-3 py-2 text-xs text-fg-muted"
+      className="border border-web-border/50 bg-surface px-3 py-2 text-xs text-fg-muted"
       data-testid="web-activity-card"
     >
-      <p className="font-medium break-all text-web-fg">🌐 {title}</p>
-      {errorText !== null && <p className="mt-1 text-warning-fg-soft">⚠ {errorText}</p>}
+      <p className="font-medium break-all text-web-fg"><Icon name="globe" className="mr-1 inline align-text-bottom" /> {title}</p>
+      {errorText !== null && <p className="mt-1 text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" /> {errorText}</p>}
       {errorText === null && activity.cited.length > 0 && (
         <div className="mt-1">
           <p className="text-fg-subtle">{t("chat.webCitedSources")}</p>

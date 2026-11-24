@@ -320,7 +320,7 @@ Docker-Container oder ein externer Server ist dafür nicht nötig.
 - **Kein automatischer Wiederaufbau.** Reißt die Verbindung ab, schlagen
   Kommandos und Dateizugriffe mit „Sitzung verloren" fehl. Der Tab zeigt
   „getrennt", sobald das Terminal endet; ohne geöffnetes Terminal bleibt der
-  Statuspunkt auf „verbunden", bis der Tab geschlossen wird (Spec 0017). Der
+  Statusquadrat auf „verbunden", bis der Tab geschlossen wird (Spec 0017). Der
   Nutzer schließt den Tab und verbindet neu.
 - **Keine geteilten Verbindungen.** Ein Server-Tab hat seine eigene Verbindung;
   mehrere Tabs zum selben Server oder ein Pool werden nicht angeboten.

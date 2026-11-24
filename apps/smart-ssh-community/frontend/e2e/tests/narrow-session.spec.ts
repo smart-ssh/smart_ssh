@@ -12,23 +12,37 @@ test.describe("narrow session view @phone", () => {
     await openSession(app, "web-1");
     const page = app.page;
     const tab = (name: string) => page.getByRole("tab", { name, exact: true });
-    for (const name of ["AI", "Terminal", "Files"]) await expectUsable(tab(name));
+    for (const name of ["AI", "Terminal", "Files"]) {
+      await expectUsable(tab(name));
+      // Issue #1366: every pane tab carries an icon.
+      await expect(tab(name).locator("[data-icon]")).toHaveCount(1);
+    }
+    // Issue #1387, Spec 0113 §4: one header row; name, status and ⋯ live in the title bar.
+    await expect(page.locator("header")).toHaveCount(1);
+    await expect(page.getByTestId("narrow-title")).toContainText("web-1");
+    await expect(page.locator("header").getByRole("button", { name: "More actions" })).toBeVisible();
     await expect(tab("AI")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("separator")).toHaveCount(0);
     await captureScreen(page, "session-narrow-ai");
 
     await tab("Terminal").click();
     await expect(page.locator(".xterm-screen").locator("visible=true")).toBeVisible();
+    // Narrow layout: 10 px inner padding on the terminal surface (issue #1370).
+    await expect(page.getByTestId("terminal-surface").locator("visible=true")).toHaveCSS("padding-left", "10px");
     await captureScreen(page, "session-narrow-terminal");
     await tab("Files").click();
     await captureScreen(page, "session-narrow-files");
+    const bar = page.getByTestId("narrow-action-bar");
+    await expectUsable(bar.getByRole("button", { name: "Upload" }));
+    await expectUsable(bar.getByRole("button", { name: "+ Folder" }));
+    await expectNoSeriousA11yViolations(page, "session narrow files");
     await tab("AI").click();
     await expectNoHorizontalPageScroll(page);
 
     const more = page.getByRole("button", { name: "More actions" });
     await expectUsable(more);
     await more.click();
-    await expectUsable(page.getByRole("button", { name: "Disconnect" }));
+    await expectUsable(page.getByRole("menuitem", { name: "Disconnect" }));
     await expectNoSeriousA11yViolations(page, "session narrow");
   });
 });

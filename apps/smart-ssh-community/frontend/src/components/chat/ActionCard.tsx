@@ -1,6 +1,5 @@
-import { type ChatItem, describeAction, splitInjectionReason, formatReason, truncateMcpClientName, decisionBadge, decisionCardTone } from "./chatItem";
-import { QuickRuleButton } from "./QuickRuleButton";
-import { CoverageList } from "./CoverageList";
+import { type ChatItem, describeAction, splitInjectionReason, formatReason, truncateMcpClientName, decisionBadge } from "./chatItem";
+import { SegmentRules, useRuleStaging } from "./RuleStaging";
 import { RiskBadges, RiskHintFootnote } from "./RiskBadges";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,12 +8,13 @@ import { translateErrorCode } from "../../api/errorCodes";
 import { type LiveOutput } from "../../lib/liveOutput";
 import { LiveCommandOutput } from "../LiveCommandOutput";
 import { formatBytes } from "../../lib/format";
-import type { ActionResultPayload, ActionUserDecision, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../../api/types";
+import type { ActionResultPayload, ActionUserDecision, InjectionCheckState } from "../../api/types";
 import { NoteDiffPreview } from "../NoteDiffPreview";
-import { Button } from "../ui";
+import { Button, Icon } from "../ui";
 import { AutoExecRulesLine } from "../AutoExecRulesLine";
 import { InjectionCheckStatus } from "../InjectionCheckStatus";
 import { TECHNICAL_INPUT_PROPS } from "../../lib/technicalInputProps";
+import { StatusSquare } from "../ui/StatusSquare";
 
 export function ActionCard({
   item,
@@ -22,7 +22,6 @@ export function ActionCard({
   waitingForInput = false,
   injectionCheck,
   onRespond,
-  onAcceptWithRule,
   serverId,
   sessionId,
 }: {
@@ -31,13 +30,6 @@ export function ActionCard({
   waitingForInput?: boolean;
   injectionCheck?: InjectionCheckState;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   serverId: string;
   sessionId: string;
 }) {
@@ -53,29 +45,39 @@ export function ActionCard({
   const settled = item.settled;
   const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
   const badge = settled
-    ? { text: t("actionCard.expired"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
+    ? { text: t("actionCard.expired"), className: "text-danger-fg", icon: "x" as const }
     : rejectedByUser
-    ? { text: t("actionCard.rejected"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
+    ? { text: t("actionCard.rejected"), className: "text-danger-fg", icon: "x" as const }
     : decisionBadge(t, item.decision);
-  const cardTone = settled || rejectedByUser
-    ? "border-danger-border-strong/45 bg-danger-subtle/15"
-    : decisionCardTone(item.decision);
+  // Issue #1371: executed card shows how the command ran in its header
+  // (bolt, "Ran automatically", rules, exit code); other states keep
+  // their status colour in the header label and icon, with a neutral frame.
+  const autoExecHeader = item.decision === "AutoExec" && !settled && !rejectedByUser;
+  const exitCode =
+    item.result && item.result.kind !== "noteUpdate" && item.result.kind !== "fileRead" &&
+    item.result.kind !== "fileWrite" && !item.result.cancelled
+      ? (item.result.exitCode ?? "—")
+      : null;
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
 
   return (
-    <div className={`border p-3 text-sm ${cardTone}`}>
+    <div className="border border-border bg-surface-sunken text-sm">
       {/* Spec 0029, Abschnitt 2: Label — Lücke — Risiko-Badges —
        * Entscheidungs-Badge, alle in derselben Zeile, der rechte Cluster
        * rechtsbündig ans Zeilenende (`ml-auto`). Der Ursprungs-Badge (Spec
        * 0028) ist in der Positionierungs-Spec nicht erwähnt, reiht sich
        * aber sinngemäß vor die Risiko-Badges ein — der Entscheidungs-Badge
        * bleibt so, wie von der Spec verlangt, das letzte Element. */}
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="font-heading font-semibold tracking-wide text-fg">{label}</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        {autoExecHeader ? (
+          <AutoExecRulesLine rules={item.autoExecRules ?? []} />
+        ) : (
+          <span className="text-label text-fg">{label}</span>
+        )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {item.origin.kind === "mcp" && (
             <span
-              className="font-heading rounded-sm bg-mcp-subtle px-2 py-0.5 text-xs font-semibold tracking-wide text-mcp-fg"
+              className="font-heading bg-mcp-subtle px-2 py-0.5 text-xs font-semibold tracking-wide text-mcp-fg"
               title={t("actionCard.mcpOriginHint")}
             >
               {t("actionCard.mcpOrigin", {
@@ -98,32 +100,36 @@ export function ActionCard({
             pending={item.riskSecondOpinionPending}
             unavailable={item.secondOpinionUnavailable}
           />
-          <span
-            className={`font-heading px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${badge.className}`}
-          >
-            {badge.text}
-          </span>
+          {!autoExecHeader && (
+            <span className={`text-label inline-flex items-center gap-1 ${badge.className}`}>
+              <Icon name={badge.icon} />
+              {badge.text}
+            </span>
+          )}
+          {autoExecHeader && exitCode !== null && (
+            <span className="font-mono text-xs text-fg-subtle">{t("actionCard.exitCode", { code: exitCode })}</span>
+          )}
         </div>
       </div>
+      <div className="p-3">
       <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
-          className={`block border border-border bg-surface-sunken px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
+          className={`block font-mono text-xs break-words whitespace-pre-wrap ${
             settled || rejectedByUser || blockedByFilter
               ? "text-fg-subtle line-through decoration-danger-strong/60"
               : "text-fg-soft"
           }`}
         >
+          <span aria-hidden="true" className="select-none">$ </span>
           {command}
         </code>
-      )}
-      {item.decision === "AutoExec" && item.autoExecRules && item.autoExecRules.length > 0 && (
-        <AutoExecRulesLine rules={item.autoExecRules} />
       )}
       {item.usesStoredSudoPassword && (
         // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher
         // Fallback nach einem Rechte-Fehler — vorab angekündigt, nie still.
         <p className="mt-1 text-xs text-warning-fg-soft">
+          <Icon name="key" className="mr-1 inline align-text-bottom" />
           {"WriteRemoteFile" in item.action
             ? t("actionCard.writeMayUseStoredSudoPassword")
             : t("actionCard.usesStoredSudoPassword")}
@@ -212,8 +218,7 @@ export function ActionCard({
           actionId={item.actionId}
           initialCommand={command}
           onRespond={onRespond}
-          onAcceptWithRule={onAcceptWithRule}
-          serverId={serverId}
+                    serverId={serverId}
           sessionId={sessionId}
         />
       )}
@@ -232,8 +237,9 @@ export function ActionCard({
         <LiveCommandOutput output={liveOutput} />
       )}
 
-      {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}
+      {item.result && <ActionResultView result={item.result} sessionId={sessionId} exitInHeader={autoExecHeader} />}
       {item.result && <InjectionCheckStatus check={injectionCheck} />}
+      </div>
     </div>
   );
 }
@@ -275,7 +281,7 @@ export function RunningCommandIndicator({
 
   return (
     <div className="mt-2 flex items-center gap-2 border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning-fg" />
+      <StatusSquare tone="warning" pulse />
       <span className="flex-1">
         {waitingForInput
           ? t("actionCard.waitingForInputHint")
@@ -292,7 +298,6 @@ export function ConfirmActionForm({
   actionId,
   initialCommand,
   onRespond,
-  onAcceptWithRule,
   serverId,
   sessionId,
 }: {
@@ -300,17 +305,11 @@ export function ConfirmActionForm({
   sessionId: string;
   initialCommand?: string;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
-  onAcceptWithRule: (
-    actionId: string,
-    patterns: SuggestionPatternDto[],
-    scope: Scope,
-    editedCommand: string | null,
-    verdict?: SuggestionVerdictDto,
-  ) => void;
   serverId: string;
 }) {
   const { t } = useTranslation();
   const [edited, setEdited] = useState(initialCommand ?? "");
+  const staging = useRuleStaging(sessionId, edited, initialCommand !== undefined);
 
   const handleApprove = () => {
     if (initialCommand !== undefined && edited !== initialCommand) {
@@ -320,6 +319,9 @@ export function ConfirmActionForm({
     }
   };
 
+  const canSaveRules =
+    initialCommand !== undefined &&
+    (staging.explanation?.segments.some((s) => s.state === "needsRule") ?? false);
   return (
     <div className="mt-3 space-y-3">
       {initialCommand !== undefined && (
@@ -327,7 +329,7 @@ export function ConfirmActionForm({
         // accessible name (without it screen readers announce an unnamed
         // text field in the confirmation dialog).
         <label className="flex flex-col gap-1">
-          <span className="font-heading text-xs font-semibold tracking-wide text-fg-subtle uppercase">
+          <span className="text-label text-fg-subtle">
             {t("confirmDialog.editableCommand")}
           </span>
           <textarea
@@ -339,43 +341,49 @@ export function ConfirmActionForm({
           />
         </label>
       )}
-      {/* Reihenfolge/Gruppierung aus dem Design-Import (Abschnitt 1b,
-       * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
-       * daneben, der Regel-Schnellvorschlag als eigene, deutlich
-       * abgesetzte Aktionsgruppe rechts. */}
       {initialCommand !== undefined && (
-        <CoverageList sessionId={sessionId} command={edited} />
+        <SegmentRules staging={staging} sessionId={sessionId} command={edited} serverId={serverId} />
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
-         * look stays hand-written; the focus ring is the shared one. */}
-        <Button variant="bare"
-          type="button"
-          onClick={handleApprove}
-          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-ring"
-        >
-          {t("confirmDialog.execute")}
-        </Button>
-        <Button
-          variant="danger"
-          size="sm"
-          className="px-4 py-1.5 narrow:min-h-11"
-          onClick={() => onRespond(actionId, { decision: "deny" })}
-        >
-          {t("confirmDialog.deny")}
-        </Button>
-        {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
-         * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
-        {initialCommand !== undefined && (
-          <QuickRuleButton
-            sessionId={sessionId}
-            actionId={actionId}
-            command={edited}
-            wasEdited={edited !== initialCommand}
-            serverId={serverId}
-            onAccept={onAcceptWithRule}
-          />
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        {canSaveRules && (
+          <Button
+            size="sm"
+            className="narrow:min-h-11"
+            disabled={staging.unsavedCount < 1 || staging.saving}
+            onClick={staging.save}
+          >
+            <Icon name="shield" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.explain.saveRules", { count: staging.unsavedCount })}
+          </Button>
         )}
+        {/* Issue #1357: unsaved staged rules are only a hint; Execute does
+         * not save them, Deny and Execute discard them. */}
+        {staging.unsavedCount > 0 && (
+          <span className="text-xs text-warning-fg-soft">
+            {t("confirmDialog.explain.unsavedHint", { count: staging.unsavedCount })}
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
+            size="sm"
+            className="px-4 py-1.5 narrow:min-h-11"
+            onClick={() => onRespond(actionId, { decision: "deny" })}
+          >
+            <Icon name="x" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.deny")}
+          </Button>
+          {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
+           * look stays hand-written; the focus ring is the shared one. */}
+          <Button variant="bare"
+            type="button"
+            onClick={handleApprove}
+            className="text-label bg-success px-4 py-1.5 narrow:min-h-11 text-success-subtle hover:bg-success-strong focus-ring"
+          >
+            <Icon name="play" className="mr-1 inline align-text-bottom" />
+            {t("confirmDialog.execute")}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -390,6 +398,7 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
   const newSize = new TextEncoder().encode(newContent).length;
   return (
     <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+      <Icon name="warn" className="mr-1 inline align-text-bottom" />
       {t("confirmDialog.binaryFileHint", {
         oldSize: formatBytes(oldSize),
         newSize: formatBytes(newSize),
@@ -398,12 +407,48 @@ export function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number;
   );
 }
 
+/** Finished output longer than this many lines is shown as a preview. */
+export const OUTPUT_PREVIEW_LINES = 8;
+
+/** Output block with an 8-line preview and a per-card "Show all" toggle (not persisted). */
+export function CollapsibleOutput({ text, className, cut = false }: { text: string; className: string; cut?: boolean }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  // Real output ends with a newline; it is not an extra line.
+  const body = text.endsWith("\n") ? text.slice(0, -1) : text;
+  const lines = body.split("\n");
+  const hidden = lines.length - OUTPUT_PREVIEW_LINES;
+  const cutNotice = cut ? <p className="text-fg-subtle">… {t("chat.outputTruncated")}</p> : null;
+  if (hidden <= 0) {
+    return (
+      <div>
+        <pre className={`whitespace-pre-wrap ${className}`}>{body}</pre>
+        {cutNotice}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <pre className={`whitespace-pre-wrap ${className}`}>
+        {expanded ? body : lines.slice(0, OUTPUT_PREVIEW_LINES).join("\n")}
+      </pre>
+      {(expanded || hidden > 0) && cutNotice}
+      {!expanded && <p className="text-fg-subtle">{t("chat.outputMoreLines", { count: hidden })}</p>}
+      <Button size="sm" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+        {expanded ? t("chat.outputShowLess") : t("chat.outputShowAll")}
+      </Button>
+    </div>
+  );
+}
+
 export function ActionResultView({
   result,
   sessionId,
+  exitInHeader = false,
 }: {
   result: ActionResultPayload;
   sessionId: string;
+  exitInHeader?: boolean;
 }) {
   const { t } = useTranslation();
   if (result.kind === "noteUpdate") {
@@ -411,9 +456,10 @@ export function ActionResultView({
   }
   const truncate = (s: string, max = 2000) =>
     s.length > max ? `${s.slice(0, max)}\n… ${t("chat.outputTruncated")}` : s;
+  const cap = (s: string, max = 2000) => s.slice(0, max);
   if (result.kind === "fileRead") {
     return (
-      <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
+      <div className="mt-2 space-y-1 border-t border-border pt-2 font-mono text-xs">
         <div className="flex items-start justify-between gap-2 font-sans">
           <TakeIntoNoteButton sessionId={sessionId} content={result.content} />
         </div>
@@ -424,25 +470,25 @@ export function ActionResultView({
   if (result.kind === "fileWrite") {
     return (
       <div className="mt-2 space-y-1 text-xs text-success-fg-soft">
-        <p>✓ {t("chat.fileWritten", { path: result.path })}</p>
+        <p><Icon name="check" className="mr-1 inline align-text-bottom" /> {t("chat.fileWritten", { path: result.path })}</p>
         {result.backupPath && <p className="text-fg-subtle">Backup: {result.backupPath}</p>}
         {result.usedSudoPassword && (
-          <p className="text-warning-fg-soft">🔑 {t("chat.writtenWithSudoPassword")}</p>
+          <p className="text-warning-fg-soft"><Icon name="key" className="mr-1 inline align-text-bottom" /> {t("chat.writtenWithSudoPassword")}</p>
         )}
       </div>
     );
   }
   const noteContent = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return (
-    <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
+    <div className="mt-2 space-y-1 border-t border-border pt-2 font-mono text-xs">
       {/* Spec 0027, Abschnitt 4: bei Abbruch statt "exit code: —" ein
        * expliziter Hinweis — ein fehlender Exit-Code allein sähe sonst wie
        * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
       {result.cancelled ? (
-        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
+        <p className="font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandCancelledNotice")}</p>
       ) : null}
       {result.truncated ? (
-        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
+        <p className="font-sans text-warning-fg-soft"><Icon name="warn" className="mr-1 inline align-text-bottom" />{t("actionCard.commandTruncatedNotice")}</p>
       ) : null}
       {noteContent && (
         <div className="flex items-start justify-between gap-2 font-sans">
@@ -450,12 +496,12 @@ export function ActionResultView({
         </div>
       )}
       {result.stdout && (
-        <pre className="whitespace-pre-wrap text-fg-muted">{truncate(result.stdout)}</pre>
+        <CollapsibleOutput text={cap(result.stdout)} cut={result.stdout.length > 2000} className="text-fg-subtle" />
       )}
       {result.stderr && (
-        <pre className="whitespace-pre-wrap text-danger-fg-soft">{truncate(result.stderr)}</pre>
+        <CollapsibleOutput text={cap(result.stderr)} cut={result.stderr.length > 2000} className="text-danger-fg-soft" />
       )}
-      {!result.cancelled && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
+      {!result.cancelled && !exitInHeader && <p className="text-fg-subtle">{t("actionCard.exitCode", { code: result.exitCode ?? "—" })}</p>}
     </div>
   );
 }

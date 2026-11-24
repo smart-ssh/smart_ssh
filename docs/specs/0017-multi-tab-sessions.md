@@ -41,14 +41,24 @@ ein Warten hinweg gehalten.
 - Die Leiste sitzt in der Titelleiste (Spec 0014), rechts neben dem
   App-Namen. Tabs und ihre Schaltflächen sind Klickflächen und ziehen das
   Fenster nicht; die Leerfläche dazwischen tut es weiterhin.
-- Ganz links steht eine feste Kachel „Übersicht". Sie führt zu den Server- und
-  Verwaltungsansichten, ohne offene Sitzungen zu schließen. Sie erscheint,
-  sobald mindestens eine Sitzung offen ist.
+- Eine Kachel „Übersicht“ gibt es nicht. Die Navigationsreiter der Titelleiste
+  (Spec 0014, Abschnitt 4) bleiben auch bei geöffneter Sitzung sichtbar;
+  „Verbinden“ führt zur Übersicht zurück, ohne offene Sitzungen zu schließen.
+  Ganz am Ende der Tab-Leiste steht eine „+“-Schaltfläche („Neue Verbindung“),
+  die dieselbe Verbinden-Ansicht öffnet. Sie ist per Tastatur bedienbar.
 - Ein Tab zeigt den Servernamen (bei langen Namen gekürzt, der volle Name steht
-  im Tooltip), einen Statuspunkt (grün verbunden, grau getrennt, gelb wartet
-  auf Host-Key) und eine Schließen-Schaltfläche.
+  im Tooltip), ein quadratisches Statuszeichen (grün verbunden, grau getrennt, gelb wartet
+  auf Host-Key oder verbindet neu, bei der lokalen Shell die Farbe des
+  lokalen Servers) und eine Schließen-Schaltfläche (12-px-Kreuz). Die
+  Tabs sind flach, mit Akzentlinie oben beim aktiven Tab; passen sie nicht
+  nebeneinander, werden die Namen bis zu einer Mindestbreite gekürzt; darüber
+  hinaus scrollt die Leiste waagerecht. Verdeckte Tabs kündigt ein
+  Ausblenden am betreffenden Rand an, und das Mausrad scrollt die Leiste
+  waagerecht. Passen alle Tabs, gibt es weder Ausblenden noch Umlenken des
+  Mausrads. Pfeiltasten, Pos1 und Ende bewegen
+  den Fokus zwischen den Tabs und der „+“-Schaltfläche.
 - Ein Tab, dessen Verbindung gerade aufgebaut wird oder gescheitert ist, trägt
-  statt des Statuspunkts ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
+  statt des Statuszeichens ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
   mit …“ bzw. „Verbindung zu … fehlgeschlagen“ (Spec 0112, Abschnitt 4). Er
   zählt als der Tab dieses Servers: ein Klick auf den Server wechselt zu ihm.
 - Ein Klick auf einen Server in der Serverliste öffnet einen **neuen** Tab. Ist
@@ -73,7 +83,7 @@ ein Warten hinweg gehalten.
   desselben Servers. Ein Klick auf einen Server wechselt nie zu einem
   MCP-Tab, und ein MCP-Tab wird nie von selbst aktiv, auch nicht nach dem
   Schließen eines anderen.
-- **Tastatur.** `Cmd`/`Ctrl+W` schließt den aktiven Tab (nicht die Übersicht).
+- **Tastatur.** `Cmd`/`Ctrl+W` schließt den aktiven Tab (nicht die Übersicht-Ansicht).
   `Cmd`/`Ctrl+Tab` wechselt zum nächsten Tab, nach dem letzten wieder zum
   ersten. `Cmd`/`Ctrl+1` bis `9` springt zum n-ten Tab. Unter macOS fängt das
   System `Cmd+Tab` ab; dort bleiben `Cmd+W` und `Cmd+1..9`.
@@ -102,15 +112,24 @@ und wird strikt dieser Sitzung zugeordnet — nie dem gerade sichtbaren Tab.
 Ausgabe einer Hintergrund-Sitzung landet also nie im Terminal oder Chat einer
 anderen.
 
+## 4a. Kopfzeile der Sitzung
+
+Jede Sitzung hat über Chat und Terminal/Dateien eine feste Kopfzeile in einer Zeile:
+
+- eine quadratische Statusmarkierung (verbunden, verbindet neu, verloren; für den lokalen Pseudo-Server eine eigene Farbe),
+- den Servernamen, auf breiten Fenstern dahinter `user@host:port` (beim lokalen Pseudo-Server `<Benutzer> · dieses Gerät`) und, falls vorhanden, die Gruppe als Badge. Lange Namen werden abgeschnitten (mit Tooltip mit dem vollen Text); die Zeile umbricht nie. Lässt sich der Server nicht laden, entfallen Zeile und Gruppen-Badge. Alle Statushinweise (Verbindung getrennt mit Grund, „Verbinde neu …“, automatischer Versuch mit „Stopp“, „Verbindung konnte nicht wiederhergestellt werden.“) und ein Fehler beim Neuverbinden stehen vollständig lesbar in einem Streifen unter der Kopfzeile, nicht in ihr; die Kopfzeile hält ihre feste Höhe.
+- rechts auf breiten Fenstern den Umschalter KI / Terminal / Dateien, die Schaltfläche „Trennen“ und die Schaltfläche „Weitere Aktionen“.
+- Das Menü „Weitere Aktionen“ enthält immer „Trennen“ und, solange die Sitzung nicht verbunden ist und kein automatisches Neuverbinden läuft, „Neu verbinden“ (Spec 0107). Im schmalen Layout (Spec 0113) ist „Trennen“ nur im Menü.
+
 ## 5. Wartende Bestätigungen in Hintergrund-Tabs
 
 Legt eine Hintergrund-Sitzung ein Kommando zur Bestätigung vor, erscheint
 **kein** Dialog im gerade sichtbaren Tab: der Nutzer könnte sonst eine
 Bestätigung geben, ohne zu sehen, auf welchem Server sie wirkt.
 
-- Der betroffene Tab trägt einen auffälligen Hinweis: einen pulsierenden gelben
-  Punkt (Tooltip „Wartet auf Bestätigung"); bei einem MCP-Tab ein
-  beschriftetes Abzeichen „Bestätigung nötig".
+- Der betroffene Tab trägt einen auffälligen Hinweis: ein gelbes Abzeichen
+  „Ausstehend“ neben dem Namen (Tooltip „Wartet auf Bestätigung"); bei einem
+  MCP-Tab steht statt dessen das beschriftete Abzeichen „Bestätigung nötig".
 - Der Dialog erscheint erst, wenn der Nutzer zu diesem Tab wechselt, also im
   Kontext des Servers, auf dem er wirkt.
 - Der Hinweis erscheint auch dann, wenn eine zunächst automatisch erlaubte

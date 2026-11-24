@@ -8,7 +8,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../api/types";
-import { ServerList } from "./ServerList";
+import { ServerList, serverSessionMarkers, type ServerMarker } from "./ServerList";
 import {
   listChatSessions,
   listGroups,
@@ -105,10 +105,12 @@ const startConnectMock = vi.fn();
 function renderList(
   onCreateFirstServer: () => void = vi.fn(),
   onToggleGroup: (groupId: string) => void = vi.fn(),
+  serverMarkers: ReadonlyMap<string, ServerMarker> = new Map(),
 ) {
   return render(
     <I18nextProvider i18n={testI18n}>
       <ServerList
+        serverMarkers={serverMarkers}
         onStartConnect={startConnectMock}
         connectingServerIds={new Set()}
         findExistingSessionId={() => undefined}
@@ -138,9 +140,18 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
 
     expect(await screen.findByText("Localhost")).toBeInTheDocument();
 
-    expect(screen.getByText("me@localhost")).toBeInTheDocument();
+    // Issue #1367: the local pseudo-server says "this device" instead (test locale: de).
+    expect(screen.getByText("dieses Gerät")).toBeInTheDocument();
+    expect(screen.getByText("Lokal")).toBeInTheDocument();
+    expect(screen.queryByText("me@localhost")).toBeNull();
     expect(screen.queryByText(/:0\b/)).toBeNull();
     expect(screen.queryByText("me@localhost:0")).toBeNull();
+  });
+
+  it("omits the port when it is 22 (Issue #1367)", async () => {
+    vi.mocked(listServers).mockResolvedValueOnce([localServer(), { ...remoteServer(), port: 22 }]);
+    renderList();
+    expect(await screen.findByText("deploy@prod-1.internal")).toBeInTheDocument();
   });
 
   it("still shows the port for a normal remote server", async () => {
@@ -182,9 +193,9 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
     renderList();
 
     await screen.findByText("Noch kein Server angelegt");
-    // Issue #49: `/📁 Prod/` statt `/Prod/` — die Gruppenzeile hat jetzt
-    // zusätzlich einen „+"-Button, dessen Name den Gruppennamen enthält.
-    expect(screen.getByRole("button", { name: /📁 Prod/ })).toBeInTheDocument();
+    // Issue #49: the group row additionally has a "+" button whose name
+    // contains the group name.
+    expect(screen.getByRole("button", { name: /Prod/ })).toBeInTheDocument();
   });
 
   it('clicking "Ersten Server anlegen" invokes the callback', async () => {
@@ -300,11 +311,34 @@ describe("ServerList new server in a group (issue #49)", () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
   });
 
+  it("shows the open-folder icon for an expanded group and the folder icon for a collapsed one (issue #1363)", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
+    const { unmount } = renderList();
+    const open = await screen.findByRole("button", { name: /Prod/ });
+    expect(open.querySelector('[data-icon="folder-open"]')).not.toBeNull();
+    unmount();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerList
+          onStartConnect={startConnectMock}
+          connectingServerIds={new Set()}
+          findExistingSessionId={() => undefined}
+          onSwitchToExistingTab={vi.fn()}
+          collapsedGroupIds={new Set(["group-1"])}
+          onToggleGroup={vi.fn()}
+          onCreateFirstServer={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    const closed = await screen.findByRole("button", { name: /Prod/ });
+    expect(closed.querySelector('[data-icon="folder"]')).not.toBeNull();
+  });
+
   it("group rows have no + action and expose aria-expanded (Issue #978)", async () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     const onToggleGroup = vi.fn();
     renderList(vi.fn(), onToggleGroup);
-    const header = await screen.findByRole("button", { name: /📁/ });
+    const header = await screen.findByRole("button", { name: /Prod/ });
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(screen.queryByRole("button", { name: /^(New server in|Neuer Server in)/ })).toBeNull();
     expect(header.textContent).not.toMatch(/[▸▾]/);
@@ -674,5 +708,101 @@ describe("ServerList data-changed reload (issue #1292 / Spec 0033)", () => {
     fire(["servers"]);
     expect(await screen.findByText(/boom/)).toBeInTheDocument();
     expect(screen.getByText("prod-1")).toBeInTheDocument();
+  });
+});
+
+// Issue #1367: tree counts and status markers.
+describe("ServerList counts and status markers (Issue #1367)", () => {
+  it("shows 2 for a group with one server and one subgroup, and 0 for an empty group", async () => {
+    vi.mocked(listGroups).mockResolvedValueOnce([
+      { isCopy: false, id: "g1", name: "staging", parentId: null, notes: "" },
+      { isCopy: false, id: "g2", name: "sub", parentId: "g1", notes: "" },
+    ]);
+    vi.mocked(listServers).mockResolvedValueOnce([
+      localServer(),
+      { ...remoteServer(), groupId: "g1" },
+    ]);
+    renderList();
+    const staging = (await screen.findByRole("button", { name: /staging/ })).closest("li")!;
+    expect(staging.querySelector("[data-testid=group-count]")).toHaveTextContent("2");
+    const sub = screen.getByRole("button", { name: /sub/ });
+    expect(sub.querySelector("[data-testid=group-count]")).toHaveTextContent("0");
+  });
+
+  it.each([
+    ["connected", "success", "Sitzung offen"],
+    ["attention", "warning", "Wartet auf Bestätigung"],
+    ["disconnected", "neutral", "Sitzung getrennt"],
+  ] as const)("renders a %s marker square on the row", async (marker, tone, text) => {
+    renderList(vi.fn(), vi.fn(), new Map([["remote-1", marker]]));
+    const row = (await screen.findByText("prod-1")).closest("button")!;
+    expect(row.querySelector("[data-status-square]")).toHaveAttribute("data-status-square", tone);
+    expect(row).toHaveTextContent(text);
+    const local = screen.getByText("Localhost").closest("button")!;
+    expect(local.querySelector("[data-status-square]")).toBeNull();
+  });
+
+  it("shows no marker without an open session", async () => {
+    renderList();
+    const row = (await screen.findByText("prod-1")).closest("button")!;
+    expect(row.querySelector("[data-status-square]")).toBeNull();
+  });
+});
+
+describe("serverSessionMarkers (Issue #1367)", () => {
+  const tab = (serverId: string, over: Record<string, unknown> = {}) => ({
+    serverId,
+    status: "connected" as const,
+    hasPendingAction: false,
+    mcp: null,
+    phase: "connected" as const,
+    ...over,
+  });
+
+  it("maps connected, pending confirmation, host-key wait and disconnected", () => {
+    const m = serverSessionMarkers([
+      tab("a"),
+      tab("b", { hasPendingAction: true }),
+      tab("c", { status: "awaiting_host_key" }),
+      tab("d", { status: "disconnected" }),
+    ]);
+    expect([m.get("a"), m.get("b"), m.get("c"), m.get("d")]).toEqual([
+      "connected",
+      "attention",
+      "attention",
+      "disconnected",
+    ]);
+  });
+
+  it("drops the marker when the tab is gone, and ignores MCP and connecting tabs", () => {
+    expect(serverSessionMarkers([]).size).toBe(0);
+    expect(
+      serverSessionMarkers([tab("a", { mcp: { clientName: "x" } }), tab("b", { phase: "connecting" })]).size,
+    ).toBe(0);
+  });
+
+  it("lets the most urgent of several tabs win", () => {
+    const m = serverSessionMarkers([tab("a", { hasPendingAction: true }), tab("a")]);
+    expect(m.get("a")).toBe("attention");
+  });
+
+  it("maps a reconnecting tab to its own marker (warning, like the tab bar)", () => {
+    expect(serverSessionMarkers([tab("a", { status: "reconnecting" })]).get("a")).toBe("reconnecting");
+  });
+
+  it("ranks reconnecting above connected/disconnected and below attention", () => {
+    const rec = tab("a", { status: "reconnecting" });
+    expect(serverSessionMarkers([tab("a"), rec]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { status: "disconnected" })]).get("a")).toBe("reconnecting");
+    expect(serverSessionMarkers([rec, tab("a", { hasPendingAction: true })]).get("a")).toBe("attention");
+  });
+
+  it("gives no marker to reconnecting MCP tabs or tabs that are still connecting/failed", () => {
+    const m = serverSessionMarkers([
+      tab("a", { status: "reconnecting", mcp: { clientName: "x" } }),
+      tab("b", { status: "reconnecting", phase: "connecting" }),
+      tab("c", { status: "reconnecting", phase: "failed" }),
+    ]);
+    expect(m.size).toBe(0);
   });
 });

@@ -13,7 +13,7 @@ import {
 import { commandErrorText } from "../api/errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../api/types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button, FIELD_CONTROL_CLASS } from "./ui";
+import { Button, FIELD_CONTROL_CLASS, Icon } from "./ui";
 
 interface NotesPanelProps {
   target: NoteTarget;
@@ -184,14 +184,14 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
         </div>
       )}
 
-      <label className="block text-sm text-fg-muted">
+      <label className="block text-label">
         {t("notes.noteLabel")}
         <textarea
           ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={6}
-          className={`${FIELD_CONTROL_CLASS} mt-1 w-full`}
+          className={`${FIELD_CONTROL_CLASS} mt-1 w-full normal-case tracking-normal`}
         />
       </label>
 
@@ -206,6 +206,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           {saving ? t("common.saving") : t("notes.saveNote")}
         </Button>
         <Button onClick={() => setShowHistory((s) => !s)} aria-expanded={showHistory}>
+          <Icon name={showHistory ? "chev-d" : "chev-r"} />
           {showHistory ? t("notes.hideHistory") : t("notes.showHistory")}
         </Button>
       </div>
@@ -232,7 +233,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     aria-expanded={expanded}
                     className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-fg-subtle hover:text-fg-soft focus-ring-flush"
                   >
-                    <span className="select-none">{expanded ? "▾" : "▸"}</span>
+                    <Icon name={expanded ? "chev-d" : "chev-r"} />
                     {formatDateTime(r.createdAt, i18n.language)} ·{" "}
                     {r.editedBy.kind === "user"
                       ? t("notes.editedByUser")

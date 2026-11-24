@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Huvudnavigering",
     "connect": "Anslut",
     "manage": "Hantera",
     "rules": "Filterregler"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Ingen server har lagts till ännu",
     "emptyStateHint": "Lägg till din första server för att ansluta via SSH.",
     "emptyStateCreateFirstServer": "Lägg till första servern",
-    "emptyStateTryLocalhost": "Prova utan server: \"Localhost\" ovan öppnar en session på den här datorn — med samma bekräftelser som på en riktig server."
+    "emptyStateTryLocalhost": "Prova utan server: \"Localhost\" ovan öppnar en session på den här datorn — med samma bekräftelser som på en riktig server.",
+    "localBadge": "Lokal",
+    "thisDevice": "den här enheten",
+    "sessionOpen": "Session öppen",
+    "sessionPending": "Väntar på bekräftelse",
+    "sessionDisconnected": "Session frånkopplad",
+    "sessionReconnecting": "Ansluter igen"
   },
   "settings": {
     "title": "Inställningar",
@@ -136,11 +143,15 @@
     "importSshConfig": "Importera …",
     "importSshConfigHint": "Importera servrar från en OpenSSH-ssh_config-fil",
     "exportSshConfig": "Exportera …",
-    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config"
+    "exportSshConfigHint": "Exportera servrar till OpenSSH-ssh_config",
+    "title": "Servrar",
+    "collapseGroup": "Fäll ihop gruppen ”{{name}}”",
+    "expandGroup": "Expandera gruppen ”{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
+    "current": "nuvarande",
     "hintGroup": "→ flytta in i den här gruppen",
     "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
     "moveTo": "Flytta ”{{name}}” till…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Detta raderar även serverns chatthistorik, anteckningar och taggar permanent.",
     "confirmDeleteServer": "Ta bort permanent",
     "testResult": {
-      "success": "✓ Anslutningen lyckades",
-      "authFailed": "✗ Inloggningen avvisades. Kontrollera användarnamn och lösenord eller nyckel.",
+      "success": "Anslutningen lyckades",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Inloggningen avvisades. Kontrollera användarnamn och lösenord eller nyckel.",
       "hostKeyUnknown": "Värdnyckeln är okänd — bekräftelse krävs",
-      "hostKeyMismatch": "⚠ Värdnyckeln har ändrats",
-      "networkError": "✗ Nätverksfel: {{message}}",
-      "timeout": "✗ Servern svarar inte. Kontrollera adress, port och brandvägg."
+      "hostKeyMismatch": "Värdnyckeln har ändrats",
+      "networkError": "Nätverksfel: {{message}}",
+      "timeout": "Servern svarar inte. Kontrollera adress, port och brandvägg."
     },
     "largeNoteHint": "Anteckningen är mycket stor och kan förkortas i AI-kontexten under långa sessioner. Den sparade anteckningen förblir helt intakt.",
     "summarizeNow": "Sammanfatta nu",
@@ -356,7 +368,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Del {{index}}",
     "checksLabel": "Kontroller:",
-    "hardBlacklistLabel": "Hård svartlista:"
+    "hardBlacklistLabel": "Hård svartlista:",
+    "invalidPattern": "Ogiltigt mönster",
+    "rowActions": "Radåtgärder",
+    "ruleCount_one": "{{count}} regel",
+    "ruleCount_other": "{{count}} regler"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatisk fortsättning pausad efter {{limit}} steg utan din bekräftelse — skicka ett meddelande för att fortsätta.",
@@ -377,8 +393,8 @@
     "discardedAfterReconnect": "Kasserad efter att anslutningen återupprättats. Inget kördes.",
     "expiredTimeout": "Inte besvarad i tid och kasserad. Inget kördes.",
     "expiredUnknown": "Begäran väntar inte längre. Inget kördes.",
-    "usesStoredSudoPassword": "🔑 Körs med det sparade sudo-lösenordet.",
-    "writeMayUseStoredSudoPassword": "🔑 Om skrivbehörighet saknas skriver appen med det sparade sudo-lösenordet (sudo).",
+    "usesStoredSudoPassword": "Körs med det sparade sudo-lösenordet.",
+    "writeMayUseStoredSudoPassword": "Om skrivbehörighet saknas skriver appen med det sparade sudo-lösenordet (sudo).",
     "takeIntoNote": "Ta med i anteckning",
     "takeIntoNoteFailed": "Misslyckades — försök igen",
     "riskServerLabel": "Server",
@@ -388,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "AI:s andra åsikt kunde inte hämtas. Den visade risken är den regelbaserade.",
     "riskHint": "Bedömning baserad på kända mönster — ingen garanti.",
     "runningSince": "körs sedan {{seconds}} s…",
+    "exitCode": "slutkod: {{code}}",
     "waitingForInputHint": "Det här kommandot väntar sannolikt på inmatning. Stoppa det, så föreslår AI:n en icke-interaktiv variant.",
     "cancelCommand": "Koppla från det här kommandot",
     "cancellingCommand": "Kopplar från…",
-    "commandCancelledNotice": "⚠ Avbrutet manuellt — utdata kan vara ofullständig, ingen vanlig slutkod.",
-    "commandTruncatedNotice": "⚠ Utdata kapades vid storleksgränsen — den kan vara ofullständig.",
+    "commandCancelledNotice": "Avbrutet manuellt — utdata kan vara ofullständig, ingen vanlig slutkod.",
+    "commandTruncatedNotice": "Utdata kapades vid storleksgränsen — den kan vara ofullständig.",
     "liveOutputLabel": "Liveutdata",
-    "liveOutputTruncatedNotice": "⚠ Storleksgränsen är nådd — ytterligare utdata visas inte längre.",
+    "liveOutputTruncatedNotice": "Storleksgränsen är nådd — ytterligare utdata visas inte längre.",
     "autoRanLead": "Kördes automatiskt",
     "autoRanRule": "regel",
     "autoRanScopeGlobal": "global",
@@ -409,17 +426,14 @@
     "editableCommand": "Kommando — redigerbart",
     "execute": "Kör",
     "deny": "Neka",
-    "quickRule": "Godkänn + regel",
-    "quickRuleDropdownAria": "Visa regelförslag",
-    "newRulePatternHeading": "Mönster för den nya tillåtregeln",
     "scopeThisServer": "Den här servern",
     "scopeGlobal": "Global",
     "scopeTag": "Tagg",
     "tagNamePlaceholder": "Taggnamn",
     "loadingSuggestions": "Laddar förslag…",
     "noSuggestions": "Inga förslag.",
-    "binaryFileHint": "⚠ Binärfil — textjämförelse är inte möjlig. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Innehållet är för stort för en raddiff. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
+    "binaryFileHint": "Binärfil — textjämförelse är inte möjlig. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
+    "diffTooLargeHint": "Innehållet är för stort för en raddiff. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
     "noContentChange": "(ingen innehållsändring)",
     "quickRuleLabel": {
       "exact": "Exakt: {{patterns}}",
@@ -437,9 +451,17 @@
       "blocked": "frågar alltid, oavsett regler: {{reasons}}",
       "verdictAuto": "körs automatiskt nästa gång",
       "verdictAsk": "frågar fortfarande: {{reasons}}",
-      "notice": "Regel skapad. Det här kommandot frågar fortfarande nästa gång: {{reasons}}",
       "reasonOther": "en annan säkerhetskontroll",
-      "loadFailed": "Regeltäckningen kunde inte läsas in"
+      "loadFailed": "Regeltäckningen kunde inte läsas in",
+      "summaryHeading": "Redan tillåtet",
+      "toDecideHeading": "Återstår att avgöra",
+      "expandAria": "Regelförslag för {{segment}}",
+      "stagedBadge": "inte sparad än",
+      "removeStaged": "Ta bort",
+      "saveRules": "Spara regler ({{count}})",
+      "saveFailed": "Reglerna kunde inte sparas: {{message}}",
+      "unsavedHint": "Osparade regler: {{count}}",
+      "segmentCovered": "täcker den här delen; kommandot frågar ändå: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +478,7 @@
     "mismatchBodyAfterHost": " presenterar en annan nyckel än den som sparades senast. Det kan tyda på en man-in-the-middle-attack. Fortsätt bara om du är säker på att servernyckeln ändrats på legitimt sätt (t.ex. ominstallation av servern).",
     "known": "Känd",
     "offeredNow": "Erbjuds nu",
+    "offered": "Erbjuds",
     "keyType": "Nyckeltyp",
     "cancelConnection": "Avbryt anslutning",
     "trustAnyway": "Lita på ändå",
@@ -468,13 +491,17 @@
   },
   "sessionTabs": {
     "newSession": "Ny session",
-    "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
     "menu": {
       "open": "Öppna navigeringsmenyn",
       "title": "Navigeringsmeny",
-      "sessions": "Öppna sessioner"
+      "sessions": "Öppna sessioner",
+      "close": "Stäng navigeringsmenyn",
+      "needsConfirmation": "Kräver bekräftelse",
+      "activities": "Aktiviteter",
+      "activitiesRunning_one": "{{count}} pågår",
+      "activitiesRunning_other": "{{count}} pågår"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +510,9 @@
       "pendingBadge": "Behöver bekräftelse",
       "readOnlyHint": "Den här sessionen tillhör ett externt verktyg (MCP). Den visar bara verktygets åtgärder att bekräfta eller avvisa samt deras resultat; här finns ingen chattinmatning eller terminal. Stängs den avslutas MCP-sessionen och väntande bekräftelser avvisas."
     },
-    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad."
+    "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad.",
+    "pendingBadge": "Väntar",
+    "newConnection": "Ny anslutning"
   },
   "aiProvider": {
     "openLogs": "Öppna diagnostikloggar i filhanteraren",
@@ -505,16 +534,16 @@
     "apiKeyFormatHint": "Ser inte ut som en {{providerLabel}}-nyckel – förväntar ett prefix som \"{{expectedPrefix}}\". Du kan ändå spara den; leverantörer ändrar format ibland.",
     "testCredentials": "Testa inloggningsuppgifter",
     "testingCredentials": "Testar…",
-    "testResultValid": "✓ Inloggningsuppgifterna är giltiga",
-    "testResultAuthFailed": "✗ Autentiseringen misslyckades – kontrollera API-nyckeln",
-    "testResultUnreachable": "✗ Leverantören kan inte nås: {{message}}",
+    "testResultValid": "Inloggningsuppgifterna är giltiga",
+    "testResultAuthFailed": "Autentiseringen misslyckades – kontrollera API-nyckeln",
+    "testResultUnreachable": "Leverantören kan inte nås: {{message}}",
     "testResultRateLimited": "Inloggningsuppgifterna ser giltiga ut, men leverantören begränsar just nu antalet anrop. Testa igen om en minut.",
     "nativeToolCalling": "Stöder inbyggda verktygsanrop",
     "discoverModels": "Läs in modeller",
     "discoveringModels": "Läser in modeller…",
     "modelDiscoveryFailedHint": "Modellerna kunde inte läsas in automatiskt — ange modellnamnet manuellt.",
     "modelDiscoveryEmptyHint": "Leverantören returnerade inga modeller. Ange modellnamnet för hand.",
-    "modelDiscoveryAuthFailed": "✗ Leverantören avvisade dessa inloggningsuppgifter – kontrollera API-nyckeln",
+    "modelDiscoveryAuthFailed": "Leverantören avvisade dessa inloggningsuppgifter – kontrollera API-nyckeln",
     "advanced": "Avancerat",
     "extraHeadersLabel": "Extra headerfält",
     "extraHeadersHint": "Bifogas varje anrop till den här leverantören (t.ex. OpenRouters HTTP-Referer/X-Title).",
@@ -557,6 +586,7 @@
     "ollamaProbeRetry": "Sök igen",
     "ollamaProbeNotFoundHeading": "Ingen lokal Ollama hittades (standardport 11434).",
     "ollamaProbeNotFoundInstructions": "Installera Ollama från ollama.com, starta den och läs in en modell (t.ex. `ollama pull llama3`), sök sedan igen.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +703,7 @@
     "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valda AI-leverantören är inte konfigurerad. Välj en konfigurerad leverantör.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Välj en AI-leverantör innan du slår på den andra bedömningen av risk.",
+    "CHAT_SESSION_NOT_FOUND": "Den här sparade chatten finns inte längre. Välj Försök igen för att ansluta som vanligt utan att återuppta den.",
     "SESSION_NOT_FOUND": "Den här sessionen är inte längre öppen. Öppna den igen från serverlistan.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten",
@@ -853,6 +884,8 @@
     "groupsHeading": "Resulterande mappstruktur",
     "entriesHeading": "{{count}} servrar",
     "field": {
+      "name": "Namn",
+      "include": "Inkludera",
       "host": "Adress",
       "port": "Port",
       "username": "Användare",
@@ -928,6 +961,8 @@
       "proxyJumpLocalPseudoServer": "pekar på den lokala pseudoservern"
     },
     "confirm": "Importera",
+    "confirmCount_one": "Importera {{count}} server",
+    "confirmCount_other": "Importera {{count}} servrar",
     "applying": "Importerar …",
     "result": {
       "success": "{{created}} servrar skapade, {{groups}} mappar, {{skipped}} konflikt(er) överhoppade.",
@@ -1081,6 +1116,7 @@
     "parentDirectory": "Överordnad katalog",
     "newFolderButton": "+ Mapp",
     "fileActionsGroup": "Filåtgärder",
+    "directoryActions": "Katalogåtgärder",
     "upload": "Ladda upp",
     "uploadDialogTitle": "Ladda upp fil(er)",
     "uploadFolder": "Ladda upp mapp",
@@ -1126,8 +1162,7 @@
       "editing": "Redigerar “{{name}}” lokalt…",
       "end": "Sluta redigera",
       "uploadTitle": "Ladda upp lokala ändringar?",
-      "remoteChanged": "Fjärrfilen har ändrats sedan nedladdningen — en uppladdning skulle skriva över den andra ändringen.",
-      "noDiff": "Ingen textdiff möjlig (binärfil eller för stor). Ny storlek: {{size}}."
+      "remoteChanged": "Fjärrfilen har ändrats sedan nedladdningen — en uppladdning skulle skriva över den andra ändringen."
     },
     "deleteDialog": {
       "fileTitle": "Ta bort filen?",
@@ -1149,7 +1184,6 @@
       "conflictTitle": "Skriva över filer i mappen?",
       "conflictBody": "Uppladdningen av “{{name}}” skulle skriva över dessa {{count}} filer på servern. Inget skrivs över om du inte bekräftar.",
       "summaryTitle": "Mappuppladdning: “{{name}}”",
-      "summary": "{{uploaded}} filer uppladdade, {{skipped}} överhoppade, {{failed}} misslyckade.",
       "notAttempted": "{{count}} filer försöktes inte eftersom deras mapp inte kunde skapas.",
       "skipped": "Överhoppade",
       "failed": "Misslyckade",
@@ -1160,12 +1194,14 @@
         "unsupported": "varken vanlig fil eller mapp",
         "notGranted": "ingår inte i ditt urval",
         "overwriteNotConfirmed": "finns på servern, överskrivning inte bekräftad"
-      }
+      },
+      "uploaded": "Uppladdade"
     },
     "uploadConflict": {
       "title": "Skriva över filen?",
       "body": "finns redan på servern.",
-      "noDiff": "Ingen textdiff möjlig (binärfil eller för stor). Nuvarande storlek: {{remoteSize}}, ny storlek: {{localSize}}."
+      "currentSize": "Nuvarande storlek",
+      "newSize": "Ny storlek"
     },
     "menu": {
       "download": "Ladda ned",
@@ -1254,7 +1290,9 @@
       "recursive": "Tillämpa på innehållet",
       "recursiveWarning": "— ändrar ägare för ALLA filer och undermappar i den här mappen. Symboliska länkar följs inte. Kan inte ångras."
     },
-    "transferChown": "Ändrar ägare för {{name}}"
+    "transferChown": "Ändrar ägare för {{name}}",
+    "stopProgress": "Förlopp",
+    "noTextDiff": "Ingen textdiff möjlig (binär fil eller för stor)."
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
@@ -1284,12 +1322,17 @@
     "queued": "Skickas med nästa begäran",
     "responseCancelled": "Svaret avbröts.",
     "contextCompactedNotice": "Äldre delar av den här chatten har sammanfattats för att rymmas i modellens kontext.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Äldre delar av chatten sammanfattas automatiskt när kontexten blir full.",
+    "messageLabel": "Meddelande",
+    "headerProviderTooltip": "Leverantör: {{provider}}",
     "webResearchUnavailable": "Webbsökning är inte tillgänglig för det här leverantörskontot (webbsökning är avstängd där). Den här sessionen svarar utan webbsökning. Så stänger du av den permanent: Inställningar → AI-leverantör → “Webbsökning”.",
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
     "refusedResponse": "Modellen avvisade begäran. Formulera om den eller starta en ny chatt.",
     "outputTruncated": "(kapad)",
+    "outputMoreLines_one": "… {{count}} rad till",
+    "outputMoreLines_other": "… {{count}} rader till",
+    "outputShowAll": "Visa alla",
+    "outputShowLess": "Visa färre",
     "fileWritten": "Filen '{{path}}' skriven.",
     "writtenWithSudoPassword": "Skriven med det sparade sudo-lösenordet.",
     "documentGenerated": "Dokument skapat",
@@ -1367,6 +1410,8 @@
     "aiTab": "AI",
     "paneTabs": "Sessionsdelar",
     "moreActions": "Fler åtgärder",
+    "thisDevice": "den här enheten",
+    "paneSwitch": "Panelväxlare",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "extraKeys": {
       "group": "Extra tangenter",
@@ -1586,6 +1631,13 @@
     "quitBody": "Dessa aktiviteter pågår fortfarande och stoppas:",
     "quitResumeHint": "Avbrutna nedladdningar kan återupptas nästa gång du startar appen.",
     "quitAnyway": "Avsluta ändå",
-    "keepRunning": "Låt dem fortsätta"
+    "keepRunning": "Låt dem fortsätta",
+    "summaryRunning_one": "{{count}} pågår",
+    "summaryRunning_other": "{{count}} pågår",
+    "summaryInterrupted_one": "{{count}} avbruten",
+    "summaryInterrupted_other": "{{count}} avbrutna",
+    "summaryFailed_one": "{{count}} misslyckad",
+    "summaryFailed_other": "{{count}} misslyckade",
+    "remaining": "{{time}} kvar"
   }
 }

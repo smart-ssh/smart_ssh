@@ -1,10 +1,7 @@
-//! Tests of `connect_session` against an injected connector.
-//! Issue #259: `connect_session` gegen einen eingespeisten `Connector` — der
-//! echte Verbindungsaufbau (Verbinden, Fortsetzen, Fehlerpfad beim
-//! Fortsetzen) ohne Netzwerk. Echte SQLite-Stores (je Test eigene
-//! Datenbankdateien), `MockRuntime`, ein Mock-Connector mit Mock-Transport.
+//! Issue #259: tests of `connect_session` against an injected `Connector` — der
+//! echte Verbindungsaufbau (Verbinden, Fortsetzen, Fehlerpfad beim Fortsetzen)
+//! ohne Netzwerk, mit echten SQLite-Stores, `MockRuntime` und Mock-Connector.
 // Testcode-Ausnahme zum `deny` — s. `lib.rs`, Modulkopf.
-
 #![expect(clippy::expect_used, reason = "test code")]
 /// Issue #395: the in-process SSH test server of `ssh-transport`, reused for
 /// the real two-hop reconnect test in `connect_flow_tests`. Test-only.
@@ -215,7 +212,6 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         policy_store: main_db.policy_store(),
         prompt_history_store: main_db.prompt_history_store(),
         chat_session_store: chat_db.chat_session_store(),
-        ledger_store: chat_db.ledger_store(),
         profile_store: Arc::new(main_db),
         credential_store: Arc::new(credential_store),
         key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
@@ -241,6 +237,7 @@ async fn fixture(connector: Arc<dyn Connector>) -> Fixture {
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        activity: Default::default(),
         ai_provider_decorators: Default::default(),
     };
     Fixture {
@@ -1997,4 +1994,5 @@ mod decorator_sites {
         reset(app.handle());
     }
 }
+mod tests_host_key_hop_name;
 mod tests_reconnect_refusal;

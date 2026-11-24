@@ -16,6 +16,7 @@
     "ok": "OK"
   },
   "nav": {
+    "label": "Hauptnavigation",
     "connect": "Verbinden",
     "manage": "Verwalten",
     "rules": "Filter-Regeln"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "Noch kein Server angelegt",
     "emptyStateHint": "Lege deinen ersten Server an, um dich per SSH zu verbinden.",
     "emptyStateCreateFirstServer": "Ersten Server anlegen",
-    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server."
+    "emptyStateTryLocalhost": "Ohne Server ausprobieren: „Localhost“ oben öffnet eine Sitzung auf diesem Rechner — mit denselben Bestätigungen wie auf einem Server.",
+    "localBadge": "Lokal",
+    "thisDevice": "dieses Gerät",
+    "sessionOpen": "Sitzung offen",
+    "sessionPending": "Wartet auf Bestätigung",
+    "sessionDisconnected": "Sitzung getrennt",
+    "sessionReconnecting": "Sitzung verbindet neu"
   },
   "settings": {
     "title": "Einstellungen",
@@ -136,11 +143,15 @@
     "importSshConfig": "Import …",
     "importSshConfigHint": "Server aus einer OpenSSH-ssh_config-Datei importieren",
     "exportSshConfig": "Export …",
-    "exportSshConfigHint": "Server nach OpenSSH-ssh_config exportieren"
+    "exportSshConfigHint": "Server nach OpenSSH-ssh_config exportieren",
+    "title": "Server",
+    "collapseGroup": "Gruppe „{{name}}“ zuklappen",
+    "expandGroup": "Gruppe „{{name}}“ aufklappen"
   },
   "treeDrag": {
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
     "hintRoot": "→ oberste Ebene (ohne Gruppe)",
+    "current": "aktuell",
     "hintGroup": "→ in diese Gruppe verschieben",
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "Zusätzlich werden Chat-Historie, Notizen und Tags dieses Servers unwiderruflich gelöscht.",
     "confirmDeleteServer": "Endgültig löschen",
     "testResult": {
-      "success": "✓ Verbindung erfolgreich",
-      "authFailed": "✗ Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
+      "success": "Verbindung erfolgreich",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "Anmeldung abgelehnt. Benutzername und Passwort bzw. Schlüssel prüfen.",
       "hostKeyUnknown": "Host-Key unbekannt — Bestätigung nötig",
-      "hostKeyMismatch": "⚠ Host-Key hat sich geändert",
-      "networkError": "✗ Netzwerkfehler: {{message}}",
-      "timeout": "✗ Der Server antwortet nicht. Adresse, Port und Firewall prüfen."
+      "hostKeyMismatch": "Host-Key hat sich geändert",
+      "networkError": "Netzwerkfehler: {{message}}",
+      "timeout": "Der Server antwortet nicht. Adresse, Port und Firewall prüfen."
     },
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
     "summarizeNow": "Jetzt zusammenfassen",
@@ -356,7 +368,11 @@
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Teilkommando {{index}}",
     "checksLabel": "Prüfungen:",
-    "hardBlacklistLabel": "Hard-Blacklist:"
+    "hardBlacklistLabel": "Hard-Blacklist:",
+    "invalidPattern": "Ungültiges Muster",
+    "rowActions": "Zeilenaktionen",
+    "ruleCount_one": "{{count}} Regel",
+    "ruleCount_other": "{{count}} Regeln"
   },
   "actionCard": {
     "autoContinuationLimitReached": "Automatische Fortsetzung nach {{limit}} Schritten ohne deine Bestätigung angehalten — schreib weiter, um fortzufahren.",
@@ -377,8 +393,8 @@
     "discardedAfterReconnect": "Verworfen, nachdem die Verbindung neu aufgebaut wurde. Es wurde nichts ausgeführt.",
     "expiredTimeout": "Nicht rechtzeitig beantwortet und verworfen. Es wurde nichts ausgeführt.",
     "expiredUnknown": "Diese Anfrage ist nicht mehr offen. Es wurde nichts ausgeführt.",
-    "usesStoredSudoPassword": "🔑 Wird mit hinterlegtem Sudo-Passwort ausgeführt.",
-    "writeMayUseStoredSudoPassword": "🔑 Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort (sudo).",
+    "usesStoredSudoPassword": "Wird mit hinterlegtem Sudo-Passwort ausgeführt.",
+    "writeMayUseStoredSudoPassword": "Fehlen die Rechte zum Schreiben, schreibt die App mit dem hinterlegten Sudo-Passwort (sudo).",
     "takeIntoNote": "In Notiz übernehmen",
     "takeIntoNoteFailed": "Fehlgeschlagen — erneut versuchen",
     "riskServerLabel": "Server",
@@ -388,13 +404,14 @@
     "riskSecondOpinionUnavailableHint": "Die KI-Zweitmeinung konnte nicht eingeholt werden. Angezeigt wird die regelbasierte Einstufung.",
     "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie.",
     "runningSince": "läuft seit {{seconds}}s…",
+    "exitCode": "Exit-Code: {{code}}",
     "waitingForInputHint": "Dieses Kommando wartet vermutlich auf eine Eingabe. Stoppe es, dann schlägt die KI eine nicht-interaktive Variante vor.",
     "cancelCommand": "Verbindung zu diesem Kommando trennen",
     "cancellingCommand": "Wird getrennt…",
-    "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
-    "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
+    "commandCancelledNotice": "Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
+    "commandTruncatedNotice": "Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
     "liveOutputLabel": "Live-Ausgabe",
-    "liveOutputTruncatedNotice": "⚠ Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
+    "liveOutputTruncatedNotice": "Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
     "autoRanLead": "Automatisch ausgeführt",
     "autoRanRule": "Regel",
     "autoRanScopeGlobal": "global",
@@ -409,17 +426,14 @@
     "editableCommand": "Kommando — editierbar",
     "execute": "Ausführen",
     "deny": "Ablehnen",
-    "quickRule": "Akzeptieren + Regel",
-    "quickRuleDropdownAria": "Regel-Vorschläge anzeigen",
-    "newRulePatternHeading": "Muster für die neue Allow-Regel",
     "scopeThisServer": "Dieser Server",
     "scopeGlobal": "Global",
     "scopeTag": "Tag",
     "tagNamePlaceholder": "Tag-Name",
     "loadingSuggestions": "Lädt Vorschläge…",
     "noSuggestions": "Keine Vorschläge.",
-    "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
-    "diffTooLargeHint": "⚠ Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
+    "binaryFileHint": "Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
+    "diffTooLargeHint": "Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
     "noContentChange": "(keine inhaltliche Änderung)",
     "quickRuleLabel": {
       "exact": "Exakt: {{patterns}}",
@@ -437,9 +451,17 @@
       "blocked": "fragt immer nach, egal welche Regeln: {{reasons}}",
       "verdictAuto": "läuft beim nächsten Mal automatisch",
       "verdictAsk": "fragt weiterhin nach: {{reasons}}",
-      "notice": "Regel angelegt. Dieses Kommando fragt beim nächsten Mal weiterhin nach: {{reasons}}",
       "reasonOther": "eine andere Sicherheitsprüfung",
-      "loadFailed": "Regelabdeckung konnte nicht geladen werden"
+      "loadFailed": "Regelabdeckung konnte nicht geladen werden",
+      "summaryHeading": "Bereits erlaubt",
+      "toDecideHeading": "Noch zu entscheiden",
+      "expandAria": "Regelvorschläge für {{segment}}",
+      "stagedBadge": "noch nicht gespeichert",
+      "removeStaged": "Entfernen",
+      "saveRules": "Regeln speichern ({{count}})",
+      "saveFailed": "Regeln konnten nicht gespeichert werden: {{message}}",
+      "unsavedHint": "Nicht gespeicherte Regeln: {{count}}",
+      "segmentCovered": "deckt diesen Teil ab; der Befehl fragt trotzdem nach: {{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +478,7 @@
     "mismatchBodyAfterHost": " präsentiert einen anderen Schlüssel als beim letzten Mal gespeichert. Das kann auf einen Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).",
     "known": "Bekannt",
     "offeredNow": "Jetzt angeboten",
+    "offered": "Angeboten",
     "keyType": "Schlüsseltyp",
     "cancelConnection": "Verbindung abbrechen",
     "trustAnyway": "Trotzdem vertrauen",
@@ -468,13 +491,17 @@
   },
   "sessionTabs": {
     "newSession": "Neue Sitzung",
-    "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",
     "menu": {
       "open": "Navigationsmenü öffnen",
       "title": "Navigationsmenü",
-      "sessions": "Offene Sitzungen"
+      "sessions": "Offene Sitzungen",
+      "close": "Navigationsmenü schließen",
+      "needsConfirmation": "Bestätigung nötig",
+      "activities": "Aktivitäten",
+      "activitiesRunning_one": "{{count}} läuft",
+      "activitiesRunning_other": "{{count}} laufen"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +510,9 @@
       "pendingBadge": "Bestätigung nötig",
       "readOnlyHint": "Diese Sitzung gehört einem externen Tool (MCP). Hier erscheinen nur seine Aktionen zum Bestätigen oder Ablehnen und deren Ergebnis; eigene Eingaben und Terminal gibt es hier nicht. Schließen beendet die MCP-Sitzung und lehnt offene Bestätigungen ab."
     },
-    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt."
+    "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt.",
+    "pendingBadge": "Ausstehend",
+    "newConnection": "Neue Verbindung"
   },
   "aiProvider": {
     "openLogs": "Diagnose-Logs im Dateimanager öffnen",
@@ -505,16 +534,16 @@
     "apiKeyFormatHint": "Sieht nicht wie ein {{providerLabel}}-Key aus – erwartet wird ein Präfix wie \"{{expectedPrefix}}\". Trotzdem speicherbar; Provider ändern Formate gelegentlich.",
     "testCredentials": "Zugangsdaten testen",
     "testingCredentials": "Teste …",
-    "testResultValid": "✓ Zugangsdaten gültig",
-    "testResultAuthFailed": "✗ Authentifizierung fehlgeschlagen – API-Key prüfen",
-    "testResultUnreachable": "✗ Provider nicht erreichbar: {{message}}",
+    "testResultValid": "Zugangsdaten gültig",
+    "testResultAuthFailed": "Authentifizierung fehlgeschlagen – API-Key prüfen",
+    "testResultUnreachable": "Provider nicht erreichbar: {{message}}",
     "testResultRateLimited": "Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.",
     "nativeToolCalling": "Natives Tool-Calling unterstützt",
     "discoverModels": "Modelle laden",
     "discoveringModels": "Lädt Modelle…",
     "modelDiscoveryFailedHint": "Modelle konnten nicht automatisch geladen werden — Modellname manuell eingeben.",
     "modelDiscoveryEmptyHint": "Der Anbieter hat keine Modelle geliefert. Modellname manuell eingeben.",
-    "modelDiscoveryAuthFailed": "✗ Der Anbieter hat diese Zugangsdaten abgelehnt – API-Key prüfen",
+    "modelDiscoveryAuthFailed": "Der Anbieter hat diese Zugangsdaten abgelehnt – API-Key prüfen",
     "advanced": "Erweitert",
     "extraHeadersLabel": "Zusatz-Header",
     "extraHeadersHint": "Werden an jede Anfrage an diesen Provider angehängt (z. B. OpenRouters HTTP-Referer/X-Title).",
@@ -557,6 +586,7 @@
     "ollamaProbeRetry": "Erneut suchen",
     "ollamaProbeNotFoundHeading": "Kein lokales Ollama gefunden (Standard-Port 11434).",
     "ollamaProbeNotFoundInstructions": "Ollama von ollama.com installieren, starten und ein Modell laden (z. B. `ollama pull llama3`), dann erneut suchen.",
+    "typeLabel": "Typ",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +703,7 @@
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "Der gewählte KI-Anbieter ist nicht eingerichtet. Wähle einen eingerichteten Anbieter.",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "Wähle einen KI-Anbieter, bevor du die Zweitmeinung zum Risiko einschaltest.",
+    "CHAT_SESSION_NOT_FOUND": "Dieser gespeicherte Chat existiert nicht mehr. Wähle „Erneut versuchen“, um normal zu verbinden, ohne ihn fortzusetzen.",
     "SESSION_NOT_FOUND": "Diese Sitzung ist nicht mehr geöffnet. Öffne sie erneut über die Serverliste.",
     "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden",
@@ -853,6 +884,8 @@
     "groupsHeading": "Entstehende Ordnerstruktur",
     "entriesHeading": "{{count}} Server",
     "field": {
+      "name": "Name",
+      "include": "Übernehmen",
       "host": "Adresse",
       "port": "Port",
       "username": "Benutzer",
@@ -928,6 +961,8 @@
       "proxyJumpLocalPseudoServer": "zeigt auf den lokalen Pseudo-Server"
     },
     "confirm": "Importieren",
+    "confirmCount_one": "{{count}} Server importieren",
+    "confirmCount_other": "{{count}} Server importieren",
     "applying": "Importiert …",
     "result": {
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",
@@ -1081,6 +1116,7 @@
     "parentDirectory": "Übergeordnetes Verzeichnis",
     "newFolderButton": "+ Ordner",
     "fileActionsGroup": "Dateiaktionen",
+    "directoryActions": "Verzeichnisaktionen",
     "upload": "Hochladen",
     "uploadDialogTitle": "Datei(en) hochladen",
     "uploadFolder": "Ordner hochladen",
@@ -1126,8 +1162,7 @@
       "editing": "„{{name}}\" wird lokal bearbeitet…",
       "end": "Bearbeitung beenden",
       "uploadTitle": "Lokale Änderungen hochladen?",
-      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Neue Größe: {{size}}."
+      "remoteChanged": "Die Remote-Datei wurde seit dem Download verändert — ein Hochladen würde diese andere Änderung überschreiben."
     },
     "deleteDialog": {
       "fileTitle": "Datei löschen?",
@@ -1149,7 +1184,6 @@
       "conflictTitle": "Dateien im Ordner überschreiben?",
       "conflictBody": "Beim Hochladen von „{{name}}“ würden diese {{count}} Dateien auf dem Server überschrieben. Ohne deine Bestätigung wird nichts überschrieben.",
       "summaryTitle": "Ordner-Upload: „{{name}}“",
-      "summary": "{{uploaded}} Dateien hochgeladen, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
       "notAttempted": "{{count}} Dateien wurden nicht versucht, weil ihr Ordner nicht angelegt werden konnte.",
       "skipped": "Übersprungen",
       "failed": "Fehlgeschlagen",
@@ -1160,12 +1194,14 @@
         "unsupported": "keine normale Datei oder Ordner",
         "notGranted": "nicht von deiner Auswahl abgedeckt",
         "overwriteNotConfirmed": "existiert auf dem Server, Überschreiben nicht bestätigt"
-      }
+      },
+      "uploaded": "Hochgeladen"
     },
     "uploadConflict": {
       "title": "Datei überschreiben?",
       "body": "existiert bereits auf dem Server.",
-      "noDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß). Bisherige Größe: {{remoteSize}}, neue Größe: {{localSize}}."
+      "currentSize": "Bisherige Größe",
+      "newSize": "Neue Größe"
     },
     "menu": {
       "download": "Herunterladen",
@@ -1254,7 +1290,9 @@
       "recursive": "Auf Inhalt anwenden",
       "recursiveWarning": "— ändert den Besitzer ALLER Dateien und Unterordner in diesem Ordner. Symbolische Links werden nicht verfolgt. Nicht rückgängig zu machen."
     },
-    "transferChown": "Besitzer ändern: {{name}}"
+    "transferChown": "Besitzer ändern: {{name}}",
+    "stopProgress": "Fortschritt",
+    "noTextDiff": "Kein Text-Diff möglich (Binärdatei oder zu groß)."
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
@@ -1284,12 +1322,17 @@
     "queued": "Wird mit der nächsten Anfrage gesendet",
     "responseCancelled": "Antwort abgebrochen.",
     "contextCompactedNotice": "Ältere Teile dieses Chats wurden zusammengefasst, damit sie in den Kontext des Modells passen.",
-    "contextUsage": "Kontext {{used}} / {{window}}",
     "contextUsageTooltip": "Ältere Teile des Chats werden automatisch zusammengefasst, wenn der Kontext voll wird.",
+    "messageLabel": "Nachricht",
+    "headerProviderTooltip": "Anbieter: {{provider}}",
     "webResearchUnavailable": "Web-Recherche ist für dieses Provider-Konto nicht verfügbar (die Websuche ist dort abgeschaltet). Diese Sitzung antwortet ohne Web-Recherche. Dauerhaft abschalten: Einstellungen → KI-Provider → „Web-Recherche“.",
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
     "refusedResponse": "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
     "outputTruncated": "(gekürzt)",
+    "outputMoreLines_one": "… {{count}} weitere Zeile",
+    "outputMoreLines_other": "… {{count}} weitere Zeilen",
+    "outputShowAll": "Alle anzeigen",
+    "outputShowLess": "Weniger anzeigen",
     "fileWritten": "Datei '{{path}}' geschrieben.",
     "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
     "documentGenerated": "Dokument generiert",
@@ -1367,6 +1410,8 @@
     "aiTab": "KI",
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
+    "thisDevice": "dieses Gerät",
+    "paneSwitch": "Bereichsumschalter",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "extraKeys": {
       "group": "Zusatztasten",
@@ -1586,6 +1631,13 @@
     "quitBody": "Diese Aktivitäten laufen noch und werden gestoppt:",
     "quitResumeHint": "Unterbrochene Downloads lassen sich beim nächsten Start fortsetzen.",
     "quitAnyway": "Trotzdem beenden",
-    "keepRunning": "Weiterlaufen lassen"
+    "keepRunning": "Weiterlaufen lassen",
+    "summaryRunning_one": "{{count}} laufend",
+    "summaryRunning_other": "{{count}} laufend",
+    "summaryInterrupted_one": "{{count}} unterbrochen",
+    "summaryInterrupted_other": "{{count}} unterbrochen",
+    "summaryFailed_one": "{{count}} fehlgeschlagen",
+    "summaryFailed_other": "{{count}} fehlgeschlagen",
+    "remaining": "noch {{time}}"
   }
 }

@@ -17,10 +17,17 @@ test.describe("narrow chat panel @phone", () => {
   test("messages, cards and confirmation fit; the composer works", async ({ app }) => {
     await app.launch({
       ...populated(),
-      commands: { accept_and_create_rule: { result: null }, explain_confirmation: { result: { segments: [], suggestions: [
-        { kind: "exact", verdict: { autoExec: true, reasons: [] }, names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
-        { kind: "subcommand", verdict: { autoExec: true, reasons: [] }, names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
-      ] } } },
+      commands: {
+    explain_confirmation: { result: { segments: [
+      { index: 0, text: "rm -rf /var/lib/app/cache", state: "needsRule", rule: null, reasons: [] },
+      { index: 1, text: "echo done", state: "covered", rule: { patternType: "glob", patternValue: "echo *" }, reasons: [] },
+    ], suggestions: [] } },
+    explain_segment_rules: { result: { segmentIndex: 0, segmentText: "rm -rf /var/lib/app/cache", blockedReasons: [], suggestions: [
+      { kind: "exact", segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: true, reasons: [] }, names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
+      { kind: "subcommand", segmentVerdict: { covered: true, reasons: [] }, commandVerdict: { autoExec: true, reasons: [] }, names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
+    ] } },
+    create_quick_rules_batch: { result: ["rule-1"] },
+  },
     });
     const page = app.page;
     await page.evaluate(() => {
@@ -55,14 +62,27 @@ test.describe("narrow chat panel @phone", () => {
     }
     await captureScreen(page, "chat-narrow-confirmation");
 
-    // Quick rule panel inside the viewport; picking a suggestion works.
-    await page.getByRole("button", { name: "Accept + Rule" }).click();
+    // Inline expansion (no popup): suggestions inside the viewport, tall
+    // touch targets; staging a rule neither executes nor saves it.
+    await expect(page.getByRole("button", { name: /^Rule suggestions for/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Accept \+ Rule/ })).toHaveCount(0);
+    const toggle = page.getByRole("button", { name: /^Rule suggestions for rm -rf/ });
+    await expectUsable(toggle);
+    expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await toggle.click();
     const suggestion = page.getByRole("button", { name: /rm -rf \/var\/lib\/app\/\*/ });
     await expectFullyInViewport(suggestion);
     await expectNoHorizontalPageScroll(page);
     await captureScreen(page, "chat-narrow-quick-rule");
     await suggestion.click();
-    expect((await app.calls("accept_and_create_rule")).length).toBe(1);
+    await expect(page.getByTestId("staged-rule")).toBeVisible();
+    await expectNoHorizontalPageScroll(page);
+    const save = page.getByRole("button", { name: "Save rules (1)" });
+    await expectUsable(save);
+    await save.click();
+    await expect(page.getByTestId("saved-rule")).toBeVisible();
+    await expect.poll(() => app.calls("create_quick_rules_batch")).toHaveLength(1);
+    await expect.poll(() => app.calls("respond_to_action")).toHaveLength(0);
 
     // Composer: both extension actions behind "+", send reachable.
     await expectFullyInViewport(chatInput(page));

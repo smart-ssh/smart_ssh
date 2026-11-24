@@ -116,7 +116,7 @@ function renderView() {
 /** Eine Zeile der Sidebar (nicht die gleichlautende Formular-Überschrift). */
 function sidebarRow(text: string): HTMLElement {
   const row = screen
-    .getAllByText(new RegExp(`^\\S+ ${text}$`))
+    .getAllByText(new RegExp(`^${text}$`))
     .find((el) => el.closest("[data-drop-target]") !== null);
   if (!row) throw new Error(`sidebar row ${text} not found`);
   return row;

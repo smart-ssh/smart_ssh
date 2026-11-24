@@ -122,12 +122,12 @@ fn dummy_session(server_id: ServerId) -> Session {
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete: std::sync::atomic::AtomicBool::new(false),
         },
         persistence: crate::session::ChatPersistence {
             chat_content: Arc::default(),
             title_attempts: Arc::default(),
             chat_session_store: None,
-            ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
         },
         conn: crate::session::TransportState {
@@ -552,6 +552,7 @@ async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
         .succeed(
             Box::new(UnusedTransport),
             Box::new(DefaultOutputRedactor::new()),
+            false,
             None,
         )
         .await;
@@ -850,7 +851,6 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         policy_store: db.policy_store(),
         prompt_history_store: db.prompt_history_store(),
         chat_session_store: db.chat_session_store(),
-        ledger_store: db.ledger_store(),
         profile_store: Arc::new(db),
         credential_store: Arc::new(InMemoryCredentialStore::new()),
         key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
@@ -876,6 +876,7 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
         chat_content: Default::default(),
         title_attempts: Default::default(),
         ai_usage_observers: Default::default(),
+        activity: Default::default(),
         ai_provider_decorators: Default::default(),
     };
 
@@ -1069,6 +1070,37 @@ mod lookup_failures {
             .safety
             .redaction_incomplete_notice_pending
             .load(SeqCst));
+    }
+
+    /// Issue #1533: an incomplete reconnect raises the live flag; a complete
+    /// one never lowers it (the literal set is kept).
+    #[test]
+    fn test_reconnect_redactor_sets_live_flag_and_complete_does_not_clear() {
+        let session = dummy_session(ServerId::new());
+        let incomplete = |inc| crate::session_extension::ScopeLookup {
+            scope: None,
+            incomplete: inc,
+        };
+        let sudo = (None, true);
+        let reconnect = |inc| {
+            let (r, flag) = crate::session_extension::redactor_for_reconnect(
+                &session,
+                &sudo,
+                &incomplete(inc),
+                &[],
+            );
+            crate::session::apply_reconnect_redactor(&session, r, flag, || {});
+        };
+        reconnect(false);
+        assert!(!session.safety.redaction_incomplete.load(SeqCst));
+        reconnect(true);
+        assert!(session.safety.redaction_incomplete.load(SeqCst));
+        assert!(session
+            .safety
+            .redaction_incomplete_notice_pending
+            .load(SeqCst));
+        reconnect(false);
+        assert!(session.safety.redaction_incomplete.load(SeqCst));
     }
 
     /// A literal the regex size limit rejects flags the session and is not

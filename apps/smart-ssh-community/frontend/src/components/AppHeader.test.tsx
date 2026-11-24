@@ -8,9 +8,10 @@
 // getestet wird, ist die Drag-Region-Attributierung und das
 // plattform-/aktivierungsabhängige Platz-Reservieren für die
 // Plugin-Controls.
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppHeader } from "./AppHeader";
+import { testI18n } from "../testI18n";
 
 const invokeMock = vi.fn();
 
@@ -197,7 +198,7 @@ describe("AppHeader version display (Spec 0052)", () => {
       expect(invokeMock.mock.calls.some(([command]) => command === "get_app_info")).toBe(true),
     );
     expect(screen.queryByText(/Early Access/)).not.toBeInTheDocument();
-    expect(screen.getByText("Smart SSH")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Smart SSH" })).toBeInTheDocument();
   });
 
   it("the version text stays inside the drag region", async () => {
@@ -294,5 +295,40 @@ describe("AppHeader data directory marker (issue #1313)", () => {
     render(<AppHeader />);
     await screen.findByTestId("titlebar-version-full");
     expect(screen.queryByTestId("titlebar-data-dir-marker")).toBeNull();
+  });
+});
+
+/** Issue #1365: main navigation and the Settings icon button live in the bar. */
+describe("AppHeader navigation and settings (issue #1365)", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    mockCommands("linux", "custom");
+  });
+
+  it("renders Connect / Manage / Filter Rules as tabs, marks the active one and reports clicks", async () => {
+    const onSelect = vi.fn();
+    render(<AppHeader mainNav={{ active: "manage", onSelect }} />);
+    expect(screen.getByRole("navigation", { name: testI18n.t("nav.label") })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: testI18n.t("nav.manage") })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: testI18n.t("nav.connect") })).not.toHaveAttribute("aria-current");
+    fireEvent.click(screen.getByRole("button", { name: testI18n.t("nav.rules") }));
+    expect(onSelect).toHaveBeenCalledWith("rules");
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+  });
+
+  it("marks no tab active while a session is shown", () => {
+    render(<AppHeader mainNav={{ active: null, onSelect: vi.fn() }} />);
+    for (const name of [testI18n.t("nav.connect"), testI18n.t("nav.manage"), testI18n.t("nav.rules")]) {
+      expect(screen.getByRole("button", { name })).not.toHaveAttribute("aria-current");
+    }
+  });
+
+  it("opens settings from an icon-only button named Settings, which is not a drag region", () => {
+    const onOpenSettings = vi.fn();
+    render(<AppHeader onOpenSettings={onOpenSettings} />);
+    const button = screen.getByRole("button", { name: testI18n.t("settings.title") });
+    expect(button).not.toHaveAttribute("data-tauri-drag-region");
+    fireEvent.click(button);
+    expect(onOpenSettings).toHaveBeenCalledWith(button);
   });
 });

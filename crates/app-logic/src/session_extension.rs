@@ -13,6 +13,7 @@
 //! sense as notes. It is redacted first and fenced afterwards (Spec 0039,
 //! ADR 0034 order). Known secrets only ever extend the redactor.
 
+pub(crate) use crate::session::REDACTOR_APPLY_LOCK;
 use secrecy::{ExposeSecret, SecretString};
 
 use ssh_manager_core::ai::{fence_untrusted, DefaultOutputRedactor, OutputRedactor, UntrustedKind};
@@ -456,20 +457,48 @@ pub async fn rebuild_redactors_for_sessions(
                 .or_else(|| session.safety.sudo_password.get().map(|p| (*p).clone()))
         };
         let (redactor, compiled) = redactor_with_secrets_checked(sudo_now.as_ref(), &secrets);
-        if lookup_complete {
-            // The only path that replaces (not extends) the literal secret set.
-            session.swap_redactor_with_literals(redactor, &secrets);
-        } else {
-            // The scope is not fully known: extend, never shrink (issue #843).
-            session.swap_redactor(redactor);
-            session.redactor.add_secret_values(&secrets);
-        }
-        if !(lookup_complete && compiled) {
-            session
-                .safety
-                .redaction_incomplete_notice_pending
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-        }
+        apply_rebuilt_redactor(
+            &session,
+            redactor,
+            &secrets,
+            lookup_complete,
+            !(lookup_complete && compiled),
+            || {},
+        );
+    }
+}
+
+/// Swaps in a rebuilt redactor and stores the matching "redaction incomplete"
+/// flag as one step with respect to other rebuilds. `between` runs after the
+/// swap, before the store (a test hook).
+pub(crate) fn apply_rebuilt_redactor(
+    session: &crate::session::Session,
+    redactor: Box<dyn OutputRedactor>,
+    secrets: &[SecretString],
+    lookup_complete: bool,
+    incomplete: bool,
+    between: impl FnOnce(),
+) {
+    let _guard = ssh_manager_core::sync::lock_tolerating_poison(&REDACTOR_APPLY_LOCK);
+    if lookup_complete {
+        // The only path that replaces (not extends) the literal secret set.
+        session.swap_redactor_with_literals(redactor, secrets);
+    } else {
+        // The scope is not fully known: extend, never shrink (issue #843).
+        session.swap_redactor(redactor);
+        session.redactor.add_secret_values(secrets);
+    }
+    between();
+    // Issue #1533: the flag on activity events mirrors this rebuild.
+    session
+        .safety
+        .redaction_incomplete
+        .store(incomplete, std::sync::atomic::Ordering::SeqCst);
+    if incomplete {
+        session
+            .safety
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -522,12 +551,16 @@ pub fn notify_note_request_redaction_incomplete(
 /// determined (sudo read, scope lookup, literal compile), the secrets known
 /// now are added to the session's kept literal set and the session is flagged
 /// "redaction incomplete".
+///
+/// Returns the redactor and whether the lookup was incomplete. The flag is
+/// raised by [`apply_reconnect_redactor`] at swap time, under
+/// `REDACTOR_APPLY_LOCK` (issue #1543).
 pub fn redactor_for_reconnect(
     session: &crate::session::Session,
     sudo: &(Option<SecretString>, bool),
     lookup: &ScopeLookup,
     extension_secrets: &[SecretString],
-) -> Box<dyn OutputRedactor> {
+) -> (Box<dyn OutputRedactor>, bool) {
     let (sudo_password, sudo_complete) = sudo;
     let sudo_for_redactor = if *sudo_complete {
         sudo_password.clone()
@@ -538,14 +571,11 @@ pub fn redactor_for_reconnect(
     };
     let (redactor, compiled) =
         redactor_with_secrets_checked(sudo_for_redactor.as_ref(), extension_secrets);
-    if !(*sudo_complete && !lookup.incomplete && compiled) {
+    let incomplete = !(*sudo_complete && !lookup.incomplete && compiled);
+    if incomplete {
         session.redactor.add_secret_values(extension_secrets);
-        session
-            .safety
-            .redaction_incomplete_notice_pending
-            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
-    redactor
+    (redactor, incomplete)
 }
 
 /// Test double recording the removal callbacks.
@@ -568,6 +598,9 @@ impl SessionExtension for RecordingExtension {
 
 #[cfg(test)]
 mod tests_connect;
+
+#[cfg(test)]
+mod tests_apply;
 
 #[cfg(test)]
 mod tests_sessionless;

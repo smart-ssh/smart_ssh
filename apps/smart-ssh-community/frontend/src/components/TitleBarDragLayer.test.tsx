@@ -109,10 +109,10 @@ describe("title bar drag layer above modals (issue #160)", () => {
     // Ziehbar, ohne Inhalt: nur Fensterfunktion, keine App-Inhalte.
     expect(layer).toHaveAttribute("data-tauri-drag-region");
     expect(layer).toBeEmptyDOMElement();
-    // Fest an der Fensteroberkante, so hoch wie der Header (`h-9`).
+    // Fest an der Fensteroberkante, so hoch wie der Header (`h-11`).
     const header = container.querySelector("header")!;
-    expect(header).toHaveClass("h-9");
-    expect(layer).toHaveClass("fixed", "top-0", "h-9");
+    expect(header).toHaveClass("h-11");
+    expect(layer).toHaveClass("fixed", "top-0", "h-11");
     // Über dem Backdrop des Dialogs in der Stapelreihenfolge.
     expect(zIndexOf(backdrop())).toBe(50);
     expect(zIndexOf(layer!)).toBeGreaterThan(zIndexOf(backdrop()));
@@ -338,7 +338,9 @@ describe("no component portals a modal backdrop itself (issue #244)", () => {
 
   it("only ModalBackdrop.tsx calls createPortal", () => {
     const offenders = sourceFiles(SRC_DIR)
-      .filter((file) => path.basename(file) !== "ModalBackdrop.tsx")
+      // SettingsSectionAction portals an action button into the settings header, not a backdrop.
+      // SessionView portals the session actions button into the narrow title bar (#1387).
+      .filter((file) => !["ModalBackdrop.tsx", "SettingsSectionAction.tsx", "SessionView.tsx"].includes(path.basename(file)))
       .filter((file) => /\bcreatePortal\s*\(/.test(fs.readFileSync(file, "utf8")))
       .map((file) => path.relative(SRC_DIR, file));
     expect(offenders, offenders.join("\n")).toEqual([]);

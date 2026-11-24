@@ -6,9 +6,9 @@
 // wenn die KI-Zweitmeinung eine ursprünglich automatisch laufende Aktion erst
 // NACH dem Vorschlag auf Rot hebt (A3.1) — und "Tab schließen" würde die
 // wartende Bestätigung nicht ablehnen.
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { disconnect, listSessions, respondToAction } from "../api/api";
+import { disconnect, listServers, listSessions, respondToAction } from "../api/api";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
@@ -398,5 +398,74 @@ describe("useSessionTabs / chat session id (Issue #611)", () => {
     expect(getChatSessionId("session-1")).toBe("chat-b");
     act(() => handler!({ sessionId: "not-a-tab-yet", chatSessionId: "chat-c" }));
     expect(getChatSessionId("not-a-tab-yet")).toBe("chat-c");
+  });
+});
+
+describe("useSessionTabs / local tab marker (#1409, #1465)", () => {
+  const server = (id: string, isLocal: boolean) => ({ id, name: id, isLocal }) as never;
+
+  beforeEach(() => {
+    vi.mocked(listServers).mockReset();
+    vi.mocked(listServers).mockResolvedValue([]);
+  });
+
+  it("marks a local tab even if the first listServers() call failed", async () => {
+    vi.mocked(listServers).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(listServers).mockResolvedValue([server("server-1", true)]);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = await renderWithOneTab();
+    // The retry runs on the next tabs update.
+    act(() => {
+      result.current.openTab("session-2", "server-1", "Other");
+    });
+    await waitFor(() => expect(result.current.tabs[0].isLocal).toBe(true));
+  });
+
+  it("marks a local server added after startup when its tab opens", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false)]);
+    const { result } = await renderWithOneTab();
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false), server("local-2", true)]);
+    act(() => {
+      result.current.openTab("session-9", "local-2", "Local");
+    });
+    await waitFor(() =>
+      expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true),
+    );
+  });
+
+  it("initial load and retry failed, later local tab still gets the marker", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(listServers).mockRejectedValue(new Error("boom"));
+    const { result } = await renderWithOneTab();
+    act(() => {
+      result.current.openTab("session-2", "server-1", "Other");
+    });
+    await waitFor(() => expect(vi.mocked(listServers).mock.calls.length).toBeGreaterThanOrEqual(2));
+    vi.mocked(listServers).mockResolvedValue([server("server-1", true), server("local-9", true)]);
+    act(() => {
+      result.current.openTab("session-9", "local-9", "Local");
+    });
+    await waitFor(() =>
+      expect(result.current.tabs.find((x) => x.sessionId === "session-9")?.isLocal).toBe(true),
+    );
+  });
+
+  it("refetches at most once per unknown server id across tabs updates", async () => {
+    vi.mocked(listSessions).mockResolvedValue([]);
+    vi.mocked(listServers).mockResolvedValue([server("server-1", false)]);
+    const { result } = await renderWithOneTab();
+    const before = vi.mocked(listServers).mock.calls.length;
+    act(() => {
+      result.current.openTab("session-9", "removed-srv", "Gone");
+    });
+    await waitFor(() => expect(vi.mocked(listServers).mock.calls.length).toBe(before + 1));
+    for (let i = 0; i < 4; i++) {
+      act(() => {
+        result.current.openTab(`session-x${i}`, "server-1", "Same");
+      });
+    }
+    await waitFor(() => expect(result.current.tabs).toHaveLength(5));
+    expect(vi.mocked(listServers).mock.calls.length).toBe(before + 1);
   });
 });

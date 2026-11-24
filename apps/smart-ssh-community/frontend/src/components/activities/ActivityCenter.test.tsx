@@ -6,6 +6,7 @@ import type { Activity } from "../../api/activitiesApi";
 import { resetActivitiesStoreForTests } from "../../hooks/useActivities";
 import { resetInterruptedForTests } from "../../hooks/useInterruptedActivities";
 import { registerActivityResumeHandler } from "../../lib/activityResume";
+import { RATE_WINDOW_MS } from "../../lib/transferRate";
 import { ActivityCenter, combinedProgress } from "./ActivityCenter";
 
 const api = vi.hoisted(() => ({
@@ -103,6 +104,119 @@ describe("ActivityCenter", () => {
     expect(bars[0]).toHaveAttribute("aria-valuetext", "512 B / 1.0 KB");
     // total unknown: indeterminate, no value
     expect(bars[1]).not.toHaveAttribute("value");
+    expect(bars[1]).toHaveAttribute("data-indeterminate", "true");
+    // header summary
+    expect(within(dialog).getByText("2 laufend")).toBeInTheDocument();
+  });
+
+  it("trigger shows the activity icon, the count and a progress rule", async () => {
+    renderCenter();
+    await emit(activity({ id: "a", done: 512, total: 1024 }));
+    const button = await screen.findByTestId("activity-center-button");
+    expect(button.querySelector('[data-icon="activity"]')).not.toBeNull();
+    const rule = within(button).getByTestId("activity-progress-rule");
+    expect(rule.firstElementChild).toHaveStyle({ width: "50%" });
+    expect(rule).not.toHaveAttribute("data-indeterminate");
+    await emit(activity({ id: "b", total: null, startedAt: 2 }));
+    await emit(activity({ id: "a", state: "succeeded", done: 1024, total: 1024 }));
+    expect(within(button).getByTestId("activity-progress-rule")).toHaveAttribute("data-indeterminate", "true");
+  });
+
+  it("shows rate and remaining time of a running download", async () => {
+    const now = vi.spyOn(Date, "now");
+    try {
+      renderCenter();
+      now.mockReturnValue(10_000);
+      await emit(activity({ done: 0, total: 10 * 1024 * 1024 }));
+      now.mockReturnValue(12_000);
+      await emit(activity({ done: 2 * 1024 * 1024, total: 10 * 1024 * 1024 }));
+      fireEvent.click(await screen.findByTestId("activity-center-button"));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText(/2\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:08/)).toBeInTheDocument();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("hides speed and remaining time of a stalled download and shows them again on progress", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const mb = 1024 * 1024;
+      act(() => api.handler?.(activity({ done: 0, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => api.handler?.(activity({ done: 2 * mb, total: 10 * mb })));
+      fireEvent.click(screen.getByTestId("activity-center-button"));
+      expect(screen.getByText(/2\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:08/)).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RATE_WINDOW_MS + 100);
+      });
+      expect(screen.getByText(/2\.0 MB \/ 10\.0 MB/)).toBeInTheDocument();
+      expect(screen.queryByText(/MB\/s/)).toBeNull();
+      expect(screen.queryByText(/noch/)).toBeNull();
+      // Progress resumes: the values reappear after the next updates.
+      act(() => api.handler?.(activity({ done: 3 * mb, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      act(() => api.handler?.(activity({ done: 4 * mb, total: 10 * mb })));
+      expect(screen.getByText(/4\.0 MB \/ 10\.0 MB · 1\.0 MB\/s · noch 00:06/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks an entry stalled even if the timer fires early because the clock stepped back", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const mb = 1024 * 1024;
+      act(() => api.handler?.(activity({ done: 0, total: 10 * mb })));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => api.handler?.(activity({ done: 2 * mb, total: 10 * mb })));
+      fireEvent.click(screen.getByTestId("activity-center-button"));
+      expect(screen.getByText(/MB\/s/)).toBeInTheDocument();
+      // Step the wall clock back, then let the first timer fire: nothing is due yet.
+      vi.setSystemTime(Date.now() - 5000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RATE_WINDOW_MS);
+      });
+      expect(screen.getByText(/MB\/s/)).toBeInTheDocument();
+      // The re-armed timer fires once the window has really elapsed.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+      expect(screen.queryByText(/MB\/s/)).toBeNull();
+      expect(screen.queryByText(/noch/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the stall timer on unmount", async () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderCenter();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => api.handler?.(activity({ done: 1, total: 10 })));
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows a cancel button only for cancellable activities and calls cancel", async () => {
@@ -131,6 +245,19 @@ describe("ActivityCenter", () => {
     await waitFor(() => expect(screen.queryByTestId("activity-center-button")).toBeNull());
   });
 
+  it("marks finished rows with check (succeeded) and warn (failed), running rows with the kind icon", async () => {
+    renderCenter();
+    await emit(activity({ id: "ok", state: "succeeded", done: 9, total: 9 }));
+    await emit(activity({ id: "bad", state: "failed", startedAt: 2 }));
+    await emit(activity({ id: "run", kind: "speech-model", state: "running", startedAt: 3 }));
+    fireEvent.click(await screen.findByTestId("activity-center-button"));
+    const dialog = await screen.findByRole("dialog");
+    const items = within(dialog).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    const icons = items.map((li) => li.querySelector("svg[data-icon]")?.getAttribute("data-icon"));
+    expect([...icons].sort()).toEqual(["check", "mic", "warn"]);
+  });
+
   it("shows the translated message for a speech model error code (issue #1326)", async () => {
     renderCenter();
     await emit(
@@ -153,7 +280,7 @@ describe("ActivityCenter", () => {
     renderCenter();
     await emit(activity({ state: "succeeded", done: 1000 }));
     const button = await screen.findByTestId("activity-center-button");
-    expect(button).toHaveTextContent("✓");
+    expect(button.querySelector('[data-icon="check"]')).not.toBeNull();
     fireEvent.click(button);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });

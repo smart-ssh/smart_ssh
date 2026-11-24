@@ -40,15 +40,26 @@ pub(crate) fn session_spawner<R: tauri::Runtime>(
     ssh_manager_core::ssh::TaskSpawner::new(move |name, fut| scope.spawn(name, fut))
 }
 
-/// Exit steps: stop background services (issue #669; bounded by the
-/// per-service timeout), then cancel and await the app-scope tasks. Both are
-/// bounded, so a hanging one cannot block exit.
+/// Exit steps (issues #669, #1532, #1539), each bounded so a hanging one
+/// cannot block exit: (1) stop background services, (2) cancel and await the
+/// session scopes, (3) emit `SessionEnded { AppExit }` for the started
+/// sessions, (4) shut down the app scope, which holds the activity worker and
+/// gets its own budget to drain the queue.
 pub(crate) fn shutdown_at_exit(app: &tauri::AppHandle) {
     use tauri::Manager;
     if let Some(host) = app.try_state::<crate::ServiceHost>() {
         tauri::async_runtime::block_on(host.stop_all());
     }
-    if let Some(tasks) = app.try_state::<Arc<TaskSupervisor>>() {
+    if let (Some(tasks), Some(state)) = (
+        app.try_state::<Arc<TaskSupervisor>>(),
+        app.try_state::<app_logic::state::AppState>(),
+    ) {
+        tauri::async_runtime::block_on(
+            state
+                .sessions
+                .shutdown_for_exit(&tasks, app_logic::tasks::ExitBudget::default()),
+        );
+    } else if let Some(tasks) = app.try_state::<Arc<TaskSupervisor>>() {
         tauri::async_runtime::block_on(tasks.shutdown(Duration::from_secs(3)));
     }
 }

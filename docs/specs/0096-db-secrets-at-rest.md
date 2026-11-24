@@ -7,7 +7,7 @@ Review-Priorität: ERHÖHT (Redaction, Persistenz)
 
 ## 1. Was wo liegt
 
-- **Verlauf** (Chat-Nachrichten, Ausführungsprotokoll, Eingabe-Historie,
+- **Verlauf** (Chat-Nachrichten, Eingabe-Historie,
   Zusammenfassungen) liegt unverändert in der Datenbank. Geschützt ist er
   durch die Verschlüsselung der ganzen Datenbankdatei (Spec 0101, Spec 0036
   Abschnitt 1); der Verlauf zeigt weiter, was der Nutzer getippt hat.
@@ -68,7 +68,7 @@ sieht das vor dem Bestätigen.
 **A3 Rohdatei-Nachweis.** Ein Test legt eine Datenbank in einem
 Temp-Verzeichnis an, schreibt über die echten Stores je einen Eintrag mit einem
 Geheimnis in: Chat-Nachricht, Kommando-Ergebnis (Kommando und Ausgabe),
-Ausführungsprotokoll, Eingabe-Historie und Zusammenfassung. Danach durchsucht
+Eingabe-Historie und Zusammenfassung. Danach durchsucht
 er **jede Datei** des Verzeichnisses (Datenbank, `-wal`, `-shm`, `-journal`)
 byteweise nach dem Geheimnis → kein Treffer. Die Suche läuft sowohl nach dem
 Schließen der Verbindung als auch bei offener Datenbank, wo `-wal` und `-shm`
@@ -83,8 +83,7 @@ Geheimnis **finden**. Findet sie es nicht, ist der Test rot.
 - **Redaction vor Datensenke:** verschärft um den Titel.
 - **Verschlüsselung:** kein Pfad schreibt Klartext außerhalb der
   verschlüsselten Datenbankdatei.
-- **Transparenz:** Chatverlauf und Eingabe-Historie zeigen weiter das Original;
-  das Ausführungsprotokoll ist wie bisher redigiert.
+- **Transparenz:** Chatverlauf und Eingabe-Historie zeigen weiter das Original.
 
 ## 6. Klarstellungen
 

@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
 import { listDocumentActions, subscribeDocumentActions } from "../../extensions/registry";
 import type { DocumentFormat } from "../../api/types";
-import { Button, ErrorBoundary } from "../ui";
+import { Button, ErrorBoundary, Icon } from "../ui";
 import { CodeBlock } from "./CodeBlock";
 
 export const MARKDOWN_COMPONENTS = { pre: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"pre"> & { node?: unknown }) => <CodeBlock {...rest} /> };
@@ -39,17 +39,17 @@ export function DocumentCard({
   };
 
   return (
-    <div className="rounded-lg border border-accent-border-strong/60 bg-surface-raised/80 p-3.5 text-sm shadow-md">
+    <div className="border border-border bg-surface-sunken p-3.5 text-sm">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="text-base">📄</span>
+          <Icon name="file-text" size={20} />
           <span className="min-w-0 break-words font-semibold text-fg">{title}</span>
         </div>
-        <span className="rounded bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
+        <span className="bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
           {t("chat.documentGenerated")}
         </span>
       </div>
-      <div className="prose prose-sm prose-invert max-w-none rounded bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+      <div className="prose prose-sm prose-invert max-w-none bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{contentMarkdown}</ReactMarkdown>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 narrow:[&_button]:min-h-11">
@@ -61,7 +61,7 @@ export function DocumentCard({
         >
           {exporting === "markdown" ? t("common.saving") : t("chat.saveAsMarkdown")}
         </Button>
-        {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
+        {savedFormat && <span className="text-xs text-success-fg"><Icon name="check" className="mr-1 inline align-text-bottom" /> {t("chat.exportedAsMarkdown")}</span>}
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
          * Export (reaktiv), der Export-Button bleibt an seinem Platz. */}
         {documentActions.map((action) => (

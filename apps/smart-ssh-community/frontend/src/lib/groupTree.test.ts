@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGroupTree, flattenGroupOptions, groupOptionLabel } from "./groupTree";
+import { buildGroupTree, flattenGroupOptions, groupItemCount, groupOptionLabel } from "./groupTree";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../api/types";
 
 // Spec 0033, Abschnitt 3/4/5 — reine Baum-Aufbau-Logik, geteilt zwischen
@@ -139,5 +139,27 @@ describe("flattenGroupOptions (issue #49)", () => {
     const groups = [g("orphan", "Orphan", "missing"), g("a", "A", "b"), g("b", "B", "a")];
     const ids = flattenGroupOptions(groups).map((o) => o.group.id);
     expect(ids.sort()).toEqual(["a", "b", "orphan"]);
+  });
+});
+
+describe("groupItemCount (issue #1367)", () => {
+  it("counts direct servers, unusable servers and subgroups — not deeper descendants", () => {
+    const groups = [group("a", "A", null), group("b", "B", "a"), group("c", "C", "b")];
+    const unusable: UnusableServerDto[] = [
+      { id: "u", name: "u", host: "h", groupId: "a", reason: "x" } as unknown as UnusableServerDto,
+    ];
+    const tree = buildGroupTree(groups, [server("s1", "s1", "a"), server("s2", "s2", "c")], unusable);
+    // A: one server + one unusable server + subgroup B = 3; C's server is not counted.
+    expect(groupItemCount(tree.roots[0])).toBe(3);
+    expect(groupItemCount(tree.roots[0].children[0])).toBe(1);
+  });
+
+  it("is 1 + 1 = 2 for one server and one subgroup, and 0 for an empty group", () => {
+    const tree = buildGroupTree(
+      [group("a", "A", null), group("b", "B", "a"), group("e", "E", null)],
+      [server("s1", "s1", "a")],
+    );
+    expect(groupItemCount(tree.roots[0])).toBe(2);
+    expect(groupItemCount(tree.roots[1])).toBe(0);
   });
 });

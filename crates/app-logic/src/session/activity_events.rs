@@ -1,0 +1,258 @@
+//! Emission of activity events from a [`Session`] (issue #1505, see
+//! `crate::activity`). Kept in the session module so `activity` does not
+//! depend on `session`.
+
+use ssh_manager_core::ai::OutputRedactor;
+use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
+use ssh_manager_core::filter::EvalContext;
+
+use chrono::Utc;
+use ssh_manager_core::sync::lock_tolerating_poison;
+
+use super::Session;
+use crate::activity::{
+    ActivityEvent, ActivityEventKind, ActivitySessionKind, ActivitySource, RuleSnapshot,
+    SessionEndReason, SessionRef,
+};
+
+impl Session {
+    /// Builds and queues one event. Callers check [`Session::activity_active`]
+    /// before they build `kind`, so nothing is built without an observer.
+    async fn push_activity(&self, source: ActivitySource, kind: ActivityEventKind) {
+        let Some(reporting) = self.activity_reporting() else {
+            return;
+        };
+        let chat_session_id =
+            (*self.persistence.chat_session_id.lock().await).map(|i| i.to_string());
+        let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
+        let is_start = matches!(kind, ActivityEventKind::SessionStarted { .. });
+        #[cfg(test)]
+        crate::activity::CONSTRUCTED.with(|c| c.set(c.get() + 1));
+        // Held across the check and the push, so no event can slip in after
+        // the end event is queued (issue #1539).
+        let mut ended = lock_tolerating_poison(&self.activity_ended);
+        if *ended {
+            return;
+        }
+        // Issue #1545: no start once the exit began, or it would never get
+        // its end. The started flag is set under the same lock, so the exit
+        // sequence sees either a complete start or none.
+        if is_start {
+            if self
+                .activity_exiting
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return;
+            }
+            self.activity_started
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        *ended = is_end;
+        reporting.hub.push(ActivityEvent {
+            at: Utc::now(),
+            session: SessionRef {
+                runtime_session_id: reporting.runtime_session_id.clone(),
+                chat_session_id,
+                server_id: (!crate::dto::is_local(self.server_id))
+                    .then(|| self.server_id.0.to_string()),
+            },
+            source,
+            redaction_incomplete: self
+                .safety
+                .redaction_incomplete
+                .load(std::sync::atomic::Ordering::SeqCst),
+            kind,
+        });
+    }
+
+    /// `true` if an observer listens to this session.
+    pub(crate) fn activity_active(&self) -> bool {
+        self.activity_reporting().is_some()
+    }
+
+    /// Tells the observers that this session started.
+    pub async fn emit_session_started(&self, kind: ActivitySessionKind, mcp_client: Option<&str>) {
+        let Some(reporting) = self.activity_reporting() else {
+            return;
+        };
+        let source = match kind {
+            ActivitySessionKind::Chat => ActivitySource::User,
+            ActivitySessionKind::Mcp => ActivitySource::McpAgent,
+        };
+        let kind = ActivityEventKind::SessionStarted {
+            kind,
+            mcp_client: mcp_client.map(str::to_string),
+            server: reporting.server.clone(),
+            time_zone: reporting.time_zone.clone(),
+        };
+        self.push_activity(source, kind).await;
+    }
+
+    /// Issue #1545: from now on `emit_session_started` queues nothing. Takes
+    /// the lock that `push_activity` holds across a start, so a start either
+    /// finished before this returns (and is visible via `activity_started`)
+    /// or is refused.
+    pub(crate) fn refuse_activity_start(&self) {
+        let _guard = lock_tolerating_poison(&self.activity_ended);
+        self.activity_exiting
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// `true` once `SessionStarted` was queued for this session.
+    pub(crate) fn activity_started(&self) -> bool {
+        self.activity_started
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Tells the observers that this session ended.
+    pub async fn emit_session_ended(&self, reason: SessionEndReason) {
+        if self.activity_active() {
+            self.push_activity(
+                ActivitySource::User,
+                ActivityEventKind::SessionEnded { reason },
+            )
+            .await;
+        }
+    }
+
+    /// Emits the event matching `redacted`, content that already went
+    /// through the central ledger redaction. Content kinds without an event
+    /// (connection events, activity ticks) emit nothing.
+    pub(crate) async fn emit_activity_for_content(
+        &self,
+        source: LedgerSource,
+        redacted: &LedgerEntryContent,
+        action_id: Option<uuid::Uuid>,
+    ) {
+        if !self.activity_active() {
+            return;
+        }
+        let action = action_id.map(|id| id.to_string());
+        let kind = match redacted {
+            LedgerEntryContent::AiMessage { text } => {
+                ActivityEventKind::AiMessage { text: text.clone() }
+            }
+            LedgerEntryContent::CommandProposed { command } => {
+                let Some(action_id) = action else {
+                    return missing_action_id();
+                };
+                ActivityEventKind::CommandProposed {
+                    action_id,
+                    command: command.clone(),
+                }
+            }
+            LedgerEntryContent::Decision {
+                outcome,
+                reason,
+                code,
+                matched_rule,
+                matched_rule_origin: _,
+            } => {
+                let Some(action_id) = action else {
+                    return missing_action_id();
+                };
+                let rule = match matched_rule {
+                    Some(id) => self.rule_snapshot(id).await,
+                    None => None,
+                };
+                ActivityEventKind::Decision {
+                    action_id,
+                    outcome: (*outcome).into(),
+                    code: code.clone(),
+                    // The reason is generated by the filter, but may quote
+                    // part of the command: masked like any other text.
+                    reason: reason.as_deref().map(|r| self.redactor.redact_text(r)),
+                    rule,
+                }
+            }
+            LedgerEntryContent::CommandExecuted {
+                command,
+                output,
+                cancelled,
+            } => {
+                let Some(action_id) = action else {
+                    return missing_action_id();
+                };
+                ActivityEventKind::CommandExecuted {
+                    action_id,
+                    command: command.clone(),
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                    exit_code: output.exit_code,
+                    truncated: output.truncated,
+                    cancelled: *cancelled,
+                }
+            }
+            LedgerEntryContent::FileRead {
+                path,
+                bytes,
+                sha256,
+            } => {
+                let Some(action_id) = action else {
+                    return missing_action_id();
+                };
+                ActivityEventKind::FileRead {
+                    action_id,
+                    path: path.clone(),
+                    size: *bytes,
+                    sha256: sha256.clone(),
+                }
+            }
+            LedgerEntryContent::FileWritten {
+                path,
+                backup_path,
+                bytes_before,
+                bytes_after,
+                sha256_before,
+                sha256_after,
+                sudo,
+            } => {
+                let Some(action_id) = action else {
+                    return missing_action_id();
+                };
+                ActivityEventKind::FileWritten {
+                    action_id,
+                    path: path.clone(),
+                    backup_path: backup_path.clone(),
+                    size_before: *bytes_before,
+                    size_after: *bytes_after,
+                    sha256_before: sha256_before.clone(),
+                    sha256_after: sha256_after.clone(),
+                    sudo: *sudo,
+                }
+            }
+            // Replaced by SessionStarted/SessionEnded; no content at all.
+            LedgerEntryContent::Connection { .. } | LedgerEntryContent::ActivityTick => return,
+        };
+        self.push_activity(source.into(), kind).await;
+    }
+
+    /// The rule as currently stored; `None` if it was deleted meanwhile.
+    async fn rule_snapshot(&self, id: &ssh_manager_core::filter::RuleId) -> Option<RuleSnapshot> {
+        let ctx = EvalContext {
+            server_id: self.server_id,
+            tags: self.tags.clone(),
+        };
+        let rule = self
+            .safety
+            .filter_engine
+            .rules_by_ids(&ctx, std::slice::from_ref(id))
+            .await
+            .into_iter()
+            .next()?;
+        Some(RuleSnapshot {
+            id: rule.id.0,
+            pattern: rule.pattern,
+            action: rule.action,
+            scope: rule.scope,
+            origin: rule.origin,
+        })
+    }
+}
+
+/// An action event without its action id would be unusable for the
+/// observer; this is a bug of the caller, so it is loud in tests.
+fn missing_action_id() {
+    debug_assert!(false, "activity event for an action without an action id");
+    tracing::warn!("activity event dropped: the action id is missing");
+}

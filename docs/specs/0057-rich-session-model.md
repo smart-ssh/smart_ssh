@@ -1,8 +1,8 @@
-# Spec 0057 — Reiches Session-Modell (Ledger, Summary, Kompaktierung)
+# Spec 0057 — Reiches Session-Modell (Aktivitäts-Beobachter, Summary, Kompaktierung)
 
-Status: umgesetzt
-Zweck: Lange Sitzungen und große Notizen lassen den KI-Kontext nicht mehr anwachsen, bis die Sitzung hängt: Der an die KI gesendete Kontext wird vor jeder Anfrage bei Bedarf verkleinert (Zusammenfassung alter Runden, Kürzung einzelner Ausgaben, verkürzte Notiz), während ein dauerhaftes, redigiertes Ledger alle Vorgänge der Sitzung vollständig festhält.
-Bezüge: Spec 0004 (Persistenz und Migrationen), Spec 0034 (Chat-Sitzungen), Spec 0036 (Chat-Inhalte), Spec 0101 (verschlüsselte Datenbank), Spec 0039 (Fencing), Spec 0051 (Rate-Limit-Handling), Spec 0024 (Sprache), Spec 0003 und 0023 (Notiz-Vorschläge, Diff-Bestätigung), Spec 0058 und 0079 (Notiz-Oberfläche), ADR 0003 und 0004 (Notiz-Scopes), ADR 0047 (Ledger), ADR 0048 (Token-Schätzung, Kontextaufbau), ADR 0049 (Summary-Fallback), ADR 0050 (Notiz-Kürzungs-Dialog).
+Status: umgesetzt. Das frühere Ledger und die aufgezeichneten Sitzungen sind entfernt (#1506); Aktivität erreicht Erweiterungen nur noch über Beobachter (#1505).
+Zweck: Lange Sitzungen und große Notizen lassen den KI-Kontext nicht mehr anwachsen, bis die Sitzung hängt: Der an die KI gesendete Kontext wird vor jeder Anfrage bei Bedarf verkleinert (Zusammenfassung alter Runden, Kürzung einzelner Ausgaben, verkürzte Notiz), während registrierte Beobachter alle Vorgänge der Sitzung vollständig und redigiert als Ereignisse erhalten.
+Bezüge: Spec 0004 (Persistenz und Migrationen), Spec 0034 (Chat-Sitzungen), Spec 0036 (Chat-Inhalte), Spec 0101 (verschlüsselte Datenbank), Spec 0039 (Fencing), Spec 0051 (Rate-Limit-Handling), Spec 0024 (Sprache), Spec 0003 und 0023 (Notiz-Vorschläge, Diff-Bestätigung), Spec 0058 und 0079 (Notiz-Oberfläche), ADR 0003 und 0004 (Notiz-Scopes), ADR 0161 (kein Protokoll im Kern; ersetzt ADR 0047 und 0160), ADR 0048 (Token-Schätzung, Kontextaufbau), ADR 0049 (Summary-Fallback), ADR 0050 (Notiz-Kürzungs-Dialog).
 Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
 
 ## Entscheidungen
@@ -16,69 +16,95 @@ Review-Priorität: ERHÖHT (Redaction, Persistenz, Migration)
    (server-spezifisch bleibt am längsten), und erst als letztes Mittel nach
    Chat-Verlauf und Ausgaben. Bei großen Notizen schlägt die Anwendung am
    Verbindungsende eine dauerhafte Kürzung vor, die der Nutzer bestätigt.
-3. **Ledger:** Kommandos, Entscheidungen, Ergebnisse und KI-Nachrichten,
-   **redigiert vor dem Schreiben**, nur anhängend, nie zusammengefasst.
+3. **Kein Protokoll im Kern:** Kommandos, Entscheidungen, Ergebnisse,
+   KI-Nachrichten und Dateizugriffe der KI gehen **redigiert** als Ereignisse
+   an registrierte Beobachter (§1). Der Kern speichert sie nicht.
 4. **Summary:** Eigener KI-Aufruf beim Kompaktieren, **mit Fallback**: bei
    Ausfall werden die Runden abgeschnitten, die Sitzung hängt nie.
-5. **Migration:** Keine Daten-Migration. Additive Schema-Änderung, alte
-   Sitzungen bleiben unberührt.
+5. **Migration:** Bestehende Chats bleiben unverändert erhalten; das alte
+   Ledger wird entfernt (§5).
 
-## 1. Das Ledger
+## 1. Aktivitäts-Beobachter (kein Protokoll im Kern)
 
-Ein **nur anhängendes Protokoll** der Vorgänge einer Sitzung — die dauerhafte
-Wahrheit, aus der später Audit-Log und Report schöpfen können. Es wird nicht
-von der Kompaktierung berührt (§3.3).
+Der Kern führt **kein eigenes Protokoll** der Sitzungsaktivität: Es gibt keine
+Tabelle dafür, keine Aufbewahrung, keinen Lösch- und keinen Lesezugriff
+(Issue #1506, ADR 0161). Wer Aktivität festhalten will, registriert als
+Erweiterung einen **Beobachter** (Issue #1505); was er damit speichert, liegt
+in seiner Verantwortung.
 
-### 1.1 Was hineinkommt
+### 1.1 Was ein Beobachter erhält
 
-Pro Eintrag: Zeitstempel, Sitzung, eine in der Sitzung monoton wachsende
-Reihenfolge, **Quelle** (`user`, `ai` oder `mcp-agent`), Typ und Inhalt:
+Pro Ereignis: Zeitstempel, die Sitzung (Kennung der laufenden Verbindung,
+Art `chat`, `mcp` oder `terminal`), die **Quelle** (`user`, `ai` oder
+`mcp-agent`; bei `mcp-agent` nennt der Sitzungsbeginn den MCP-Client), das
+Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
 
+- **Sitzungsbeginn / -ende** — Server-Schnappschuss (Name, Host, Port,
+  Benutzer, Gruppen, Tags) und Zeitzone des Geräts; beim Ende der Grund.
 - **Kommando vorgeschlagen** — das Kommando; die Quelle ist die Herkunft des
-  Vorschlags (KI oder MCP-Agent). Ein im Bestätigungsdialog vom Nutzer
-  bearbeiteter Text ist ein eigener Vorschlag mit Quelle `user`.
+  Vorschlags. Ein im Bestätigungsdialog vom Nutzer bearbeiteter Text ist ein
+  eigener Vorschlag mit Quelle `user`.
 - **Entscheidung** — bestätigt, abgelehnt oder per Regel automatisch
   freigegeben; mit Grund, Code und, falls eine Regel ausschlaggebend war,
-  dieser Regel samt Herkunft. Ein Klick im Bestätigungsdialog hat die Quelle
-  `user`. Entscheidet die Filter-Engine allein (automatische Freigabe oder
-  Blockade, auch bei erneuter Prüfung eines bearbeiteten Textes), oder läuft
-  die Bestätigungsfrist ab (Code `TIMEOUT`), ist die Quelle die Herkunft des
-  ursprünglichen Vorschlags: ein Mensch hat dann nicht entschieden.
-- **Kommando ausgeführt** — das Kommando, das Ergebnis (stdout, stderr,
+  dieser Regel (Muster, Wirkung, Geltungsbereich) samt Herkunft. Ein Klick im
+  Bestätigungsdialog hat die Quelle `user`. Entscheidet die Filter-Engine
+  allein oder läuft die Bestätigungsfrist ab (Code `TIMEOUT`), ist die Quelle
+  die Herkunft des ursprünglichen Vorschlags.
+- **Kommando ausgeführt** — das Kommando und das Ergebnis (stdout, stderr,
   Exit-Code, ob die Ausgabe gekürzt oder das Kommando abgebrochen wurde),
   **redigiert**.
-- **KI-Nachricht** — Antworttext der KI, auch ein erzeugtes Dokument.
+- **KI-Nachricht** — Antworttext der KI.
+- **Datei gelesen** — Pfad, Größe und SHA-256, nie der Dateiinhalt.
+- **Datei geschrieben** — Pfad, Pfad der Sicherungskopie, Größe und SHA-256
+  vorher/nachher, ob Sudo genutzt wurde; nie Inhalt und nie ein Diff. Ein
+  abgelehnter oder fehlgeschlagener Schreibvorgang erzeugt kein „Datei
+  geschrieben"-Ereignis; die Entscheidung dazu ist über dieselbe
+  Aktions-Kennung verknüpft.
 
-Das Ledger erfasst auch MCP-Aktivität (Quelle `mcp-agent`), unabhängig davon,
-dass MCP-Aktionen nicht in die wiederaufnehmbare Chat-Historie gehen
-(Spec 0034).
+Vorschlag, Entscheidung, Ausführung und Dateizugriff derselben Aktion tragen
+dieselbe Aktions-Kennung. MCP-Aktivität erscheint mit Quelle `mcp-agent`,
+unabhängig davon, dass MCP-Aktionen nicht in die wiederaufnehmbare
+Chat-Historie gehen (Spec 0034).
 
 ### 1.2 Redaction — Pflicht
 
-**Jeder Ledger-Eintrag wird redigiert, bevor er geschrieben wird** — mit
-derselben Redaction wie der KI-Kontext. Der Ledger liegt dauerhaft auf der
-Platte; ohne Redaction wäre er eine Klartextsammlung sensibler Ausgaben.
-Die Redaction passiert an der einen Schreibstelle, nicht bei den Aufrufern,
-damit ein Aufrufer sie nicht vergessen kann. (Entscheidungs-Einträge tragen
-nur Texte der Filter-Engine, keine Serverinhalte.)
+**Jeder Text eines Ereignisses wird redigiert, bevor ihn ein Beobachter
+erhält** — mit derselben Redaction wie der KI-Kontext. Sie passiert an der
+einen Stelle, die Ereignisse erzeugt, nicht bei den Aufrufern. Konnte die
+Redaction der Sitzung nicht vollständig aufgebaut werden, trägt jedes Ereignis
+das Kennzeichen „Redaction unvollständig". Entscheidungs-Ereignisse tragen nur
+Texte der Filter-Engine, keine Serverinhalte.
 
-### 1.3 Verschlüsselung
+### 1.3 Zustellung
 
-Das Ledger liegt wie die Chat-Historie in der verschlüsselten
-Datenbankdatei (Spec 0101, Spec 0036 §1); der Inhalt steht dort ohne eigene
-Feldverschlüsselung. Wo diese Spec „verschlüsselt" sagt (Ledger, Summary),
-ist dieser Schutz gemeint.
+Die Zustellung blockiert nie einen Befehl: Ereignisse laufen über eine
+begrenzte Warteschlange an einen eigenen Arbeitsfaden. Ist ein Beobachter zu
+langsam, gehen Ereignisse verloren (gezählt, ohne Inhalt protokolliert); ein
+Beobachter, der abstürzt, stört weder die Sitzung noch andere Beobachter.
+Ohne registrierten Beobachter wird kein Ereignis gebaut, und es ändert sich
+nichts. Das Sitzungsende trägt einen Grund: „geschlossen" (ausdrücklich
+geschlossen) oder „App beendet". Beim Beenden der App erhält ein Beobachter für
+jede noch offene Sitzung, für die ein Sitzungsbeginn gemeldet wurde, ein
+Sitzungsende mit dem Grund „App beendet" (Umsetzung: #1532, #1539); eine Sitzung,
+die noch verbindet, erhält keins. Sobald das Beenden begonnen hat, wird auch kein
+Sitzungsbeginn mehr gemeldet: eine Sitzung, die erst dabei fertig verbindet,
+erzeugt weder Beginn noch Ende, sodass nie ein Beginn ohne Ende zurückbleibt (#1545). Die Reihenfolge beim Beenden: zuerst enden die
+Aufgaben aller Sitzungen, dann folgen die Sitzungsenden, zuletzt wird die
+Zustellung geleert. Ein Ereignis einer Sitzung kommt daher nie nach deren
+Sitzungsende; nach dem Sitzungsende wird kein weiteres Ereignis dieser Sitzung
+mehr eingereiht. Das Beenden insgesamt bleibt bei etwa 6 s: die Aufgaben der
+Sitzungen bekommen 2 s, die Sitzungsenden 1 s und die Zustellung ihre eigenen
+3 s, auch wenn eine Sitzung nicht endet. Bereits eingereihte Ereignisse werden
+noch zugestellt, sodass ein blockierender Beobachter das Beenden nicht länger
+aufhält. Eine Chat-Sitzung wird beim Verwerfen ohne Nachricht samt ihrer Zeile
+entfernt; nichts bleibt zurück.
 
-### 1.4 Persistenz
+### 1.4 Frühere Protokolldaten
 
-Eigene Tabelle, die additiv angelegt wird. Einträge werden nie geändert oder
-gelöscht, außer zusammen mit der ganzen Sitzung (Löschen der Sitzung löscht
-ihr Ledger). Zwei gleichzeitige Schreibvorgänge derselben Sitzung (Chat und
-MCP) bekommen nie dieselbe Reihenfolgenummer.
-
-Das Ledger gehört zur gespeicherten Chat-Sitzung: Wird für eine Verbindung
-keine Chat-Sitzung gespeichert (Chat-Historie aus, rein MCP-getriebene
-Sitzung, lokaler Pseudo-Server, Anlegefehler), entstehen auch keine Ledger-Einträge.
+Frühere Versionen hielten ein Ledger und „aufgezeichnete Sitzungen" in der
+Datenbank. Beim Update auf diese Version werden beide Tabellen und ihre
+Verweise aus den Chat-Sitzungen entfernt (Migration 0030); Chats, Nachrichten,
+Summaries und Notizen bleiben unverändert.
 
 ## 2. Die Summary
 
@@ -101,7 +127,7 @@ Wenn die Kompaktierung alte Runden aus dem KI-Kontext entfernt, ersetzt eine
   auf höchstens 8 000 Byte begrenzt, damit sie nicht jede weitere
   Kompaktierung dominiert.
 - Nachrichten, die von MCP-Aktionen stammen, fließen nicht in die Summary
-  ein (sie bildet Chat-Kontinuität ab; der Audit-Verlauf bleibt im Ledger).
+  ein (sie bildet Chat-Kontinuität ab; der Audit-Verlauf geht an die Beobachter).
   Die Runden selbst werden trotzdem wie jede andere entfernt.
 
 ### 2.2 Fallback — kritisch
@@ -119,10 +145,10 @@ Der Kürzungshinweis (§2.2) und die Hülle, in der eine Summary im Kontext
 steht, sind auf Deutsch und Englisch vorhanden und folgen der Sprache des
 System-Prompts derselben Anfrage (Spec 0024, Abschnitt 2: gespeicherte
 UI-Sprache, sonst System-Locale, sonst Englisch). Beide Fassungen tragen
-dieselbe Information: wie viele frühere Runden entfernt wurden und dass der
-vollständige Verlauf im Session-Ledger erhalten bleibt. Der Text der Summary
+dieselbe Information: wie viele frühere Runden entfernt wurden. Der Hinweis
+macht keine Aussage darüber, wo der Verlauf sonst verbleibt. Der Text der Summary
 selbst wird nicht übersetzt. Ohne Sprachwechsel bleiben die Hinweise von
-Anfrage zu Anfrage unverändert; gespeicherte Historie und Ledger enthalten
+Anfrage zu Anfrage unverändert; gespeicherte Historie enthält
 sie nicht, sie entstehen bei jeder Anfrage neu.
 
 ### 2.3 Persistenz
@@ -162,14 +188,16 @@ kompaktiert die nächste Anfrage in jedem Fall, was auch die Schätzung sagt.
 Das gilt für Anthropic ebenso wie für OpenAI-kompatible Anbieter (Chat Completions, Responses, Ollama), sofern sie Usage melden; die gemeldete Größe ist dabei immer die volle Prompt-Größe (Cache-Anteile werden weder doppelt gezählt noch weggelassen). Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
 nur im Speicher der Sitzung.
 
-**Anzeige im Chat.** Nach jeder Antwort zeigt der Chat über dem Eingabefeld
-die zuletzt gemeldete Eingabegröße und das Fenster, z. B. „Kontext 120k /
-200k“ — ab 75 % farbig hervorgehoben; ein Tooltip erklärt, dass ältere Teile
+**Anzeige im Chat.** Nach jeder Antwort zeigt der Chat in der Kopfzeile
+(neben „AI · <Modell>“ und „Neuer Chat“) die zuletzt gemeldete Eingabegröße
+und das Fenster als Balken aus 8 Segmenten (gefüllt: aufgerundeter Anteil
+× 8) samt Zahlen, z. B. „120k / 200k“ — ab 75 % in der Warnfarbe; vor der
+ersten Antwort erscheint nichts; ein Tooltip erklärt, dass ältere Teile
 automatisch zusammengefasst werden. Es werden nur Zahlen angezeigt, nie
 Inhalte. Wurden für eine Anfrage ältere Teile zusammengefasst oder gekürzt,
 erscheint einmal pro Kompaktierungsschritt (nicht je Anfrage) der Hinweis
 „Ältere Teile dieses Chats wurden zusammengefasst, damit sie in den Kontext
-des Modells passen.“ Gespeicherte Historie, Ledger und Notizen bleiben
+des Modells passen.“ Gespeicherte Historie und Notizen bleiben
 unverändert.
 
 **Neuer Chat (Issue #648).** „Neuer Chat“ setzt die gemerkte Größe und das
@@ -197,9 +225,9 @@ der Request unter der Grenze liegt:
 
 ### 3.3 Was nicht kompaktiert wird
 
-Das **Ledger** behält immer alles. Die Kompaktierung betrifft nur die an
+Die **Ereignisse** für Beobachter enthalten immer alles. Die Kompaktierung betrifft nur die an
 den Provider gesendete Kopie des Kontexts; weder die im Frontend gezeigte
-vollständige Historie noch die gespeicherte Notiz noch das Ledger werden je
+vollständige Historie noch die gespeicherte Notiz noch die Ereignisse werden je
 verändert. Die Ersatzstellen (Hinweis, Summary) gehören nur zu dieser einen
 Anfrage.
 
@@ -255,18 +283,17 @@ selbst"** (öffnet die Notiz-Bearbeitung) und **„Später"**.
 
 ## 5. Migration
 
-**Keine Daten-Migration.** Neue Tabelle (Ledger) und zusätzliche Spalten
-(Summary) werden **additiv** angelegt (vorwärts, datenerhaltend, Spec 0004).
-Alte Sitzungen bleiben **unberührt und lesbar**; sie haben kein Ledger und
-keine Summary. Nur neue (und fortgesetzte, ab da) Sitzungen führen das
-Ledger. Kein Parsen oder Umschreiben alter Daten.
+Die Umstellung (vorwärts, Spec 0004) entfernt das Ledger, die aufgezeichneten
+Sitzungen und deren Verweis aus den Chat-Sitzungen. Jede bestehende
+Chat-Sitzung, jede Nachricht, jede Summary und jede Notiz bleibt unverändert
+(gleiche Kennung, Reihenfolge, Inhalt und Zeitstempel). Das Entfernen der
+Protokolldaten ist beabsichtigt und nicht umkehrbar.
 
 ## 6. Sicherheitszusagen
 
-- **Ledger redigiert vor dem Persistieren** — kein Klartext-Secret
-  dauerhaft auf der Platte.
-- **Ledger liegt in der verschlüsselten Datenbankdatei** (§1.3).
-- **Kompaktierung betrifft nur den KI-Kontext, nie das Ledger.**
+- **Ereignisse sind redigiert, bevor ein Beobachter sie erhält** (§1.2); der
+  Kern legt davon nichts auf der Platte ab.
+- **Kompaktierung betrifft nur den KI-Kontext, nie die Ereignisse.**
 - **Die gespeicherte Notiz wird nie ohne Nutzer-Bestätigung verändert**
   (das verkürzte Senden ist verlustfrei; die dauerhafte Kürzung braucht den
   Diff-Dialog).
@@ -277,7 +304,7 @@ Ledger. Kein Parsen oder Umschreiben alter Daten.
 - Eine Summary wird wie jeder KI-Inhalt behandelt: redigiert und nicht
   privilegiert; Hinweise der Anwendung stehen außerhalb von
   Ausgabe-Blöcken.
-- Die additive Migration bricht keine bestehende Sitzung.
+- Die Migration bricht keine bestehende Sitzung und verliert keine Zeile.
 
 ## 7. und 8. (entfallen)
 
@@ -287,14 +314,13 @@ nicht neu vergeben.
 
 ## 9. Grenzen
 
-- **Das Ledger erfasst nur Kommandovorschläge** als Aktionstyp. Dateilese-
-  und Schreibaktionen sowie Notiz-Änderungsvorschläge der KI erzeugen
-  derzeit keine Ledger-Einträge (Kommandos, Entscheidungen, Ergebnisse und
-  KI-Nachrichten dagegen vollständig, ADR 0047).
-- **Das Ledger hat noch keine Oberfläche:** Es wird geschrieben und
-  gelöscht, aber nirgends angezeigt oder exportiert.
-- **Ledger-Schreiben ist bestmöglich:** Ein Schreibfehler wird protokolliert
-  und bricht die Sitzung nicht ab; der Eintrag fehlt dann.
+- **Notiz-Änderungsvorschläge der KI erzeugen keine Ereignisse**
+  (Kommandos, Entscheidungen, Ergebnisse, KI-Nachrichten und Dateizugriffe
+  dagegen vollständig).
+- **Der Kern hat keine Oberfläche und keinen Export für Aktivität**; das ist
+  Sache einer Erweiterung.
+- **Zustellung ist bestmöglich:** Bei vollem Puffer gehen Ereignisse
+  verloren (§1.3).
 - **Die Token-Schätzung ist eine Faustregel**, kein Tokenizer, und das
   Kontextfenster eine Namens-Heuristik. Selbst gehostete Modelle haben
   tatsächlich oft ein anderes Fenster.
@@ -303,7 +329,8 @@ nicht neu vergeben.
   nicht (sehr kleines Fenster), wird der Request trotzdem gesendet und nur
   protokolliert.
 - **Lokaler Pseudo-Server und rein MCP-getriebene Sitzungen** speichern keine
-  Chat-Sitzung (§1.4), daher kein Ledger und keine gespeicherte Summary; die
+  Chat-Sitzung (§1.1), daher keine gespeicherte Summary (MCP-Aktionen gehen
+  trotzdem an die Beobachter, §1.1); die
   Kompaktierung läuft dort trotzdem im Speicher.
 - **Der Banner des Servers** (Betriebssystem-Information) steht in der
   ersten Runde und kann so indirekt in eine gespeicherte Summary gelangen;

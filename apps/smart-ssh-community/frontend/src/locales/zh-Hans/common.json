@@ -16,6 +16,7 @@
     "ok": "确定"
   },
   "nav": {
+    "label": "主导航",
     "connect": "连接",
     "manage": "管理",
     "rules": "过滤规则"
@@ -30,7 +31,13 @@
     "emptyStateTitle": "尚未添加服务器",
     "emptyStateHint": "添加您的第一台服务器，即可通过 SSH 连接。",
     "emptyStateCreateFirstServer": "添加第一台服务器",
-    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。"
+    "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。",
+    "localBadge": "本地",
+    "thisDevice": "此设备",
+    "sessionOpen": "会话已打开",
+    "sessionPending": "等待确认",
+    "sessionDisconnected": "会话已断开",
+    "sessionReconnecting": "正在重新连接"
   },
   "settings": {
     "title": "设置",
@@ -136,11 +143,15 @@
     "importSshConfig": "导入…",
     "importSshConfigHint": "从 OpenSSH ssh_config 文件导入服务器",
     "exportSshConfig": "导出…",
-    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config"
+    "exportSshConfigHint": "将服务器导出为 OpenSSH ssh_config",
+    "title": "服务器",
+    "collapseGroup": "折叠分组“{{name}}”",
+    "expandGroup": "展开分组“{{name}}”"
   },
   "treeDrag": {
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
+    "current": "当前",
     "hintGroup": "→ 移入此分组",
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
@@ -277,12 +288,13 @@
     "deleteAlwaysRemovesHistory": "这也会永久删除该服务器的聊天记录、备注和标签。",
     "confirmDeleteServer": "永久删除",
     "testResult": {
-      "success": "✓ 连接成功",
-      "authFailed": "✗ 登录被拒绝。请检查用户名以及密码或密钥。",
+      "success": "连接成功",
+      "successTimed": "OK · {{ms}} ms",
+      "authFailed": "登录被拒绝。请检查用户名以及密码或密钥。",
       "hostKeyUnknown": "主机密钥未知——需要确认",
-      "hostKeyMismatch": "⚠ 主机密钥已更改",
-      "networkError": "✗ 网络错误：{{message}}",
-      "timeout": "✗ 服务器没有响应。请检查地址、端口和防火墙。"
+      "hostKeyMismatch": "主机密钥已更改",
+      "networkError": "网络错误：{{message}}",
+      "timeout": "服务器没有响应。请检查地址、端口和防火墙。"
     },
     "largeNoteHint": "此备注非常大，在长时间会话中可能会被缩短后再提供给 AI 作为上下文。已保存的备注保持完整。",
     "summarizeNow": "立即总结",
@@ -356,7 +368,10 @@
     "matchedRuleLabel": "规则：",
     "segmentLabel": "片段 {{index}}",
     "checksLabel": "检查：",
-    "hardBlacklistLabel": "硬性黑名单："
+    "hardBlacklistLabel": "硬性黑名单：",
+    "invalidPattern": "无效的模式",
+    "rowActions": "行操作",
+    "ruleCount_other": "{{count}} 条规则"
   },
   "actionCard": {
     "autoContinuationLimitReached": "在 {{limit}} 步内未经您确认，自动继续已暂停——发送一条消息即可继续。",
@@ -377,8 +392,8 @@
     "discardedAfterReconnect": "连接重新建立后已丢弃。未执行任何操作。",
     "expiredTimeout": "未及时答复，已丢弃。未执行任何操作。",
     "expiredUnknown": "此请求已不再待处理。未执行任何操作。",
-    "usesStoredSudoPassword": "🔑 使用已保存的 sudo 密码运行。",
-    "writeMayUseStoredSudoPassword": "🔑 如果缺少写入权限，应用会使用已保存的 sudo 密码（sudo）进行写入。",
+    "usesStoredSudoPassword": "使用已保存的 sudo 密码运行。",
+    "writeMayUseStoredSudoPassword": "如果缺少写入权限，应用会使用已保存的 sudo 密码（sudo）进行写入。",
     "takeIntoNote": "记入备注",
     "takeIntoNoteFailed": "失败——请重试",
     "riskServerLabel": "服务器",
@@ -388,13 +403,14 @@
     "riskSecondOpinionUnavailableHint": "无法获取 AI 二次意见。所示风险为基于规则的评估。",
     "riskHint": "基于已知模式的评估——不作保证。",
     "runningSince": "已运行 {{seconds}} 秒…",
+    "exitCode": "退出码：{{code}}",
     "waitingForInputHint": "该命令可能正在等待输入。停止它后，AI 会建议一个非交互式的替代方案。",
     "cancelCommand": "断开此命令",
     "cancellingCommand": "正在断开…",
-    "commandCancelledNotice": "⚠ 已手动取消——输出可能不完整，也没有正常的退出码。",
-    "commandTruncatedNotice": "⚠ 输出已在大小上限处被截断——可能不完整。",
+    "commandCancelledNotice": "已手动取消——输出可能不完整，也没有正常的退出码。",
+    "commandTruncatedNotice": "输出已在大小上限处被截断——可能不完整。",
     "liveOutputLabel": "实时输出",
-    "liveOutputTruncatedNotice": "⚠ 已达到大小上限——不再显示后续输出。",
+    "liveOutputTruncatedNotice": "已达到大小上限——不再显示后续输出。",
     "autoRanLead": "已自动执行",
     "autoRanRule": "规则",
     "autoRanScopeGlobal": "全局",
@@ -409,17 +425,14 @@
     "editableCommand": "命令——可编辑",
     "execute": "执行",
     "deny": "拒绝",
-    "quickRule": "接受并添加规则",
-    "quickRuleDropdownAria": "显示规则建议",
-    "newRulePatternHeading": "新允许规则的模式",
     "scopeThisServer": "此服务器",
     "scopeGlobal": "全局",
     "scopeTag": "标签",
     "tagNamePlaceholder": "标签名称",
     "loadingSuggestions": "正在加载建议…",
     "noSuggestions": "没有建议。",
-    "binaryFileHint": "⚠ 二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
-    "diffTooLargeHint": "⚠ 内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
+    "binaryFileHint": "二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
+    "diffTooLargeHint": "内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
     "noContentChange": "（内容无变化）",
     "quickRuleLabel": {
       "exact": "精确：{{patterns}}",
@@ -437,9 +450,17 @@
       "blocked": "无论规则如何都会询问：{{reasons}}",
       "verdictAuto": "下次将自动运行",
       "verdictAsk": "仍会询问：{{reasons}}",
-      "notice": "规则已创建。此命令下次仍会询问：{{reasons}}",
       "reasonOther": "另一项安全检查",
-      "loadFailed": "无法加载规则覆盖情况"
+      "loadFailed": "无法加载规则覆盖情况",
+      "summaryHeading": "已允许",
+      "toDecideHeading": "待决定",
+      "expandAria": "{{segment}} 的规则建议",
+      "stagedBadge": "尚未保存",
+      "removeStaged": "移除",
+      "saveRules": "保存规则（{{count}}）",
+      "saveFailed": "无法保存规则：{{message}}",
+      "unsavedHint": "未保存的规则：{{count}}",
+      "segmentCovered": "已覆盖此部分；该命令仍会询问：{{reasons}}"
     }
   },
   "authPrompt": {
@@ -456,6 +477,7 @@
     "mismatchBodyAfterHost": " 出示的密钥与上次保存的不同。这可能意味着存在中间人攻击。仅当您确定服务器密钥是合理更改（例如服务器重装）时，才可继续。",
     "known": "已知",
     "offeredNow": "当前出示",
+    "offered": "出示",
     "keyType": "密钥类型",
     "cancelConnection": "取消连接",
     "trustAnyway": "仍然信任",
@@ -468,13 +490,16 @@
   },
   "sessionTabs": {
     "newSession": "新建会话",
-    "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
     "menu": {
       "open": "打开导航菜单",
       "title": "导航菜单",
-      "sessions": "已打开的会话"
+      "sessions": "已打开的会话",
+      "close": "关闭导航菜单",
+      "needsConfirmation": "需要确认",
+      "activities": "活动",
+      "activitiesRunning_other": "{{count}} 个运行中"
     },
     "mcp": {
       "badge": "MCP",
@@ -483,7 +508,9 @@
       "pendingBadge": "需要确认",
       "readOnlyHint": "此会话属于外部工具（MCP）。这里只显示该工具待确认或待拒绝的操作及其结果，没有聊天输入框或终端。关闭它会结束该 MCP 会话，并拒绝所有待确认的操作。"
     },
-    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。"
+    "confirmClosePending": "“{{name}}”仍有待处理的确认。仍要关闭标签页吗？待处理的操作将视为已拒绝。",
+    "pendingBadge": "待处理",
+    "newConnection": "新建连接"
   },
   "aiProvider": {
     "openLogs": "在文件管理器中打开诊断日志",
@@ -505,16 +532,16 @@
     "apiKeyFormatHint": "看起来不像 {{providerLabel}} 的密钥——预期前缀类似“{{expectedPrefix}}”。您仍可保存；提供商偶尔会更改格式。",
     "testCredentials": "测试凭据",
     "testingCredentials": "正在测试…",
-    "testResultValid": "✓ 凭据有效",
-    "testResultAuthFailed": "✗ 验证失败——请检查 API 密钥",
-    "testResultUnreachable": "✗ 无法连接提供商：{{message}}",
+    "testResultValid": "凭据有效",
+    "testResultAuthFailed": "验证失败——请检查 API 密钥",
+    "testResultUnreachable": "无法连接提供商：{{message}}",
     "testResultRateLimited": "凭据看起来有效，但提供商目前正在限流。请一分钟后再测试。",
     "nativeToolCalling": "支持原生工具调用",
     "discoverModels": "加载模型",
     "discoveringModels": "正在加载模型…",
     "modelDiscoveryFailedHint": "无法自动加载模型——请手动输入模型名称。",
     "modelDiscoveryEmptyHint": "提供商没有返回任何模型。请手动输入模型名称。",
-    "modelDiscoveryAuthFailed": "✗ 提供商拒绝了这些凭据——请检查 API 密钥",
+    "modelDiscoveryAuthFailed": "提供商拒绝了这些凭据——请检查 API 密钥",
     "advanced": "高级",
     "extraHeadersLabel": "额外请求头",
     "extraHeadersHint": "附加到发往此提供商的每个请求（例如 OpenRouter 的 HTTP-Referer/X-Title）。",
@@ -557,6 +584,7 @@
     "ollamaProbeRetry": "重新搜索",
     "ollamaProbeNotFoundHeading": "未找到本地 Ollama（默认端口 11434）。",
     "ollamaProbeNotFoundInstructions": "请从 ollama.com 安装 Ollama，启动并加载一个模型（例如 `ollama pull llama3`），然后重新搜索。",
+    "typeLabel": "类型",
     "providerTypes": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",
@@ -673,6 +701,7 @@
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
     "RISK_SETTINGS_PROVIDER_UNKNOWN": "所选的 AI 提供商尚未配置。请选择已配置的提供商。",
     "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
+    "CHAT_SESSION_NOT_FOUND": "这个已保存的聊天已不存在。选择“重试”即可正常连接，而不恢复它。",
     "SESSION_NOT_FOUND": "此会话已不再打开。请从服务器列表重新打开。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件",
@@ -848,6 +877,8 @@
     "groupsHeading": "生成的文件夹结构",
     "entriesHeading": "{{count}} 台服务器",
     "field": {
+      "name": "名称",
+      "include": "包含",
       "host": "地址",
       "port": "端口",
       "username": "用户",
@@ -923,6 +954,7 @@
       "proxyJumpLocalPseudoServer": "指向本地伪服务器"
     },
     "confirm": "导入",
+    "confirmCount_other": "导入 {{count}} 台服务器",
     "applying": "正在导入…",
     "result": {
       "success": "已创建 {{created}} 台服务器、{{groups}} 个文件夹，跳过 {{skipped}} 个冲突。",
@@ -1076,6 +1108,7 @@
     "parentDirectory": "上级目录",
     "newFolderButton": "+ 文件夹",
     "fileActionsGroup": "文件操作",
+    "directoryActions": "目录操作",
     "upload": "上传",
     "uploadDialogTitle": "上传文件",
     "uploadFolder": "上传文件夹",
@@ -1121,8 +1154,7 @@
       "editing": "正在本地编辑“{{name}}”…",
       "end": "停止编辑",
       "uploadTitle": "上传本地更改？",
-      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。新大小：{{size}}。"
+      "remoteChanged": "远程文件在下载之后已被更改——上传将覆盖那处其他更改。"
     },
     "deleteDialog": {
       "fileTitle": "删除文件？",
@@ -1142,7 +1174,6 @@
       "conflictTitle": "覆盖文件夹中的文件？",
       "conflictBody": "上传“{{name}}”会覆盖服务器上的这 {{count}} 个文件。除非您确认，否则不会覆盖任何内容。",
       "summaryTitle": "文件夹上传：“{{name}}”",
-      "summary": "已上传 {{uploaded}} 个文件，跳过 {{skipped}} 个，失败 {{failed}} 个。",
       "notAttempted": "有 {{count}} 个文件因其文件夹无法创建而未尝试上传。",
       "skipped": "已跳过",
       "failed": "失败",
@@ -1153,12 +1184,14 @@
         "unsupported": "不是普通文件或文件夹",
         "notGranted": "不在您的选择范围内",
         "overwriteNotConfirmed": "服务器上已存在，且未确认覆盖"
-      }
+      },
+      "uploaded": "已上传"
     },
     "uploadConflict": {
       "title": "覆盖文件？",
       "body": "在服务器上已存在。",
-      "noDiff": "无法进行文本对比（二进制文件或过大）。当前大小：{{remoteSize}}，新大小：{{localSize}}。"
+      "currentSize": "当前大小",
+      "newSize": "新大小"
     },
     "menu": {
       "download": "下载",
@@ -1247,7 +1280,9 @@
       "recursive": "应用到内容",
       "recursiveWarning": "— 更改此文件夹中所有文件和子文件夹的所有者。不会跟随符号链接。无法撤销。"
     },
-    "transferChown": "正在更改 {{name}} 的所有者"
+    "transferChown": "正在更改 {{name}} 的所有者",
+    "stopProgress": "进度",
+    "noTextDiff": "无法显示文本差异(二进制文件或文件过大)。"
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
@@ -1277,12 +1312,16 @@
     "queued": "将随下一次请求一并发送",
     "responseCancelled": "回复已取消。",
     "contextCompactedNotice": "此聊天较早的部分已被总结，以适应模型的上下文。",
-    "contextUsage": "上下文 {{used}} / {{window}}",
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
+    "messageLabel": "消息",
+    "headerProviderTooltip": "提供商：{{provider}}",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
     "refusedResponse": "模型拒绝了此请求。请换一种说法，或开始新的聊天。",
     "outputTruncated": "（已截断）",
+    "outputMoreLines_other": "… 还有 {{count}} 行",
+    "outputShowAll": "显示全部",
+    "outputShowLess": "收起",
     "fileWritten": "文件“{{path}}”已写入。",
     "writtenWithSudoPassword": "已使用保存的 sudo 密码写入。",
     "documentGenerated": "文档已生成",
@@ -1359,6 +1398,8 @@
     "aiTab": "AI",
     "paneTabs": "会话面板",
     "moreActions": "更多操作",
+    "thisDevice": "本设备",
+    "paneSwitch": "面板切换",
     "terminalOpenFailed": "无法打开终端：{{error}}",
     "extraKeys": {
       "group": "附加按键",
@@ -1578,6 +1619,10 @@
     "quitBody": "以下活动仍在运行，退出后将被停止：",
     "quitResumeHint": "中断的下载可在下次启动应用时继续。",
     "quitAnyway": "仍然退出",
-    "keepRunning": "继续运行"
+    "keepRunning": "继续运行",
+    "summaryRunning_other": "{{count}} 个运行中",
+    "summaryInterrupted_other": "{{count}} 个已中断",
+    "summaryFailed_other": "{{count}} 个失败",
+    "remaining": "剩余 {{time}}"
   }
 }

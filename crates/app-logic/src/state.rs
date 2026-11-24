@@ -6,8 +6,7 @@ use uuid::Uuid;
 
 use credentials_keyring::KeychainAvailability;
 use persistence_sqlite::{
-    SqliteAiProviderStore, SqliteChatSessionStore, SqliteLedgerStore, SqlitePolicyStore,
-    SqlitePromptHistoryStore,
+    SqliteAiProviderStore, SqliteChatSessionStore, SqlitePolicyStore, SqlitePromptHistoryStore,
 };
 use ssh_manager_core::entitlements::EntitlementProvider;
 use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
@@ -133,8 +132,6 @@ pub struct AppState {
     /// Spec 0034: persistente Chat-Sitzungen/-Nachrichten — wie
     /// `policy_store`/`prompt_history_store` `Clone` statt `Arc<dyn ...>`.
     pub chat_session_store: SqliteChatSessionStore,
-    /// Spec 0057, §1: das Session-Ledger.
-    pub ledger_store: SqliteLedgerStore,
     /// Spec 0037, Abschnitt 2/3 (D5): aktueller Entitlement-Stand — die
     /// Community Edition kennt aktuell nur den einen festen Zustand
     /// `FixedEntitlements(Entitlements::free())`, kein Lizenzschlüssel-
@@ -218,6 +215,9 @@ pub struct AppState {
     /// Issue #610 (Spec 0038 §2): observers of completed AI requests an
     /// edition registered; empty in Community. Handed to every new session.
     pub ai_usage_observers: Arc<Vec<Arc<dyn crate::ai_usage::AiUsageObserver>>>,
+    /// Issue #1505: observers of session activity an edition registered and
+    /// the queue that delivers to them; inactive in Community.
+    pub activity: Arc<crate::activity::ActivityHub>,
     /// Issue #1246 (Spec 0038 §2): decorators applied to every AI provider
     /// the app builds, in registration order; empty in Community.
     pub ai_provider_decorators:

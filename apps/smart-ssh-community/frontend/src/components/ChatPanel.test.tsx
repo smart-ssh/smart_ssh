@@ -60,7 +60,6 @@ function renderItem(item: ChatItem) {
       <ChatItemView
         item={item}
         onRespond={vi.fn()}
-        onAcceptWithRule={vi.fn()}
         onExport={vi.fn()}
         onContinueTruncated={vi.fn()}
         serverId="server-1"
@@ -134,7 +133,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
     ]) {
       const badge = screen.getByText(label).closest("button");
       expect(badge).not.toBeNull();
-      expect(badge?.textContent).toContain("ⓘ");
+      expect(badge?.querySelector('[data-icon="info"]')).not.toBeNull();
       expect(badge).toHaveAccessibleDescription(reason);
       expect(badge?.hasAttribute("title")).toBe(false);
     }
@@ -147,7 +146,7 @@ describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
       }),
     );
     const badge = screen.getByText("Daten");
-    expect(badge.textContent).not.toContain("ⓘ");
+    expect(badge.querySelector('[data-icon="info"]')).toBeNull();
     expect(badge.closest("button")).toBeNull();
     expect(badge.hasAttribute("title")).toBe(false);
   });
@@ -201,7 +200,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -241,7 +239,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -270,7 +267,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -291,7 +287,6 @@ describe("registered document actions (Spec 0045)", () => {
         <ChatItemView
           item={documentItem()}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -318,7 +313,6 @@ describe("assistant message actions (Spec 0055, Teil 2)", () => {
         <ChatItemView
           item={assistantItem(text)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -374,7 +368,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(false)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -393,7 +386,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(true)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -416,7 +408,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={truncatedItem(true)}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={onContinueTruncated}
           serverId="server-1"
@@ -447,7 +438,6 @@ describe("truncated response notice (Spec 0065, Teil 2)", () => {
         <ChatItemView
           item={emptyTruncatedItem}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -473,7 +463,6 @@ describe("empty response notice (Spec 0080, A3)", () => {
         <ChatItemView
           item={{ type: "emptyResponse", id: "empty-1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -539,7 +528,6 @@ describe("chat notices follow the UI language (issue #116)", () => {
         <ChatItemView
           item={item}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -551,26 +539,26 @@ describe("chat notices follow the UI language (issue #116)", () => {
 
   it("renders the English texts with an English UI", () => {
     renderItemIn("en", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Response cancelled.")).toBeInTheDocument();
+    expect(screen.getByText("Response cancelled.")).toBeInTheDocument();
 
     renderItemIn("en", { type: "user", id: "u-1", text: "hi", queued: true });
-    expect(screen.getByText("⏳ Will be sent with the next request")).toBeInTheDocument();
+    expect(screen.getByText("Will be sent with the next request")).toBeInTheDocument();
 
     renderItemIn("en", { type: "emptyResponse", id: "e-1" });
     expect(screen.getByText(/^The model returned no response\./)).toBeInTheDocument();
 
     renderItemIn("en", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Response was cut off (length limit reached).")).toBeInTheDocument();
+    expect(screen.getByText("Response was cut off (length limit reached).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "📄 As Markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "As Markdown" })).toBeInTheDocument();
   });
 
   it("keeps the German wording with a German UI", () => {
     renderItemIn("de", { type: "responseCancelled", id: "c-1" });
-    expect(screen.getByText("⏹ Antwort abgebrochen.")).toBeInTheDocument();
+    expect(screen.getByText("Antwort abgebrochen.")).toBeInTheDocument();
 
     renderItemIn("de", { type: "assistant", id: "a-1", text: "partial", truncated: true });
-    expect(screen.getByText("✂ Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
+    expect(screen.getByText("Antwort wurde abgeschnitten (Längenlimit erreicht).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeInTheDocument();
   });
 });
@@ -592,19 +580,26 @@ describe("resumed command results (issue #167)", () => {
   it("shows exit code 0 instead of the placeholder", () => {
     renderItem(historyCommandResult(0));
 
-    expect(screen.getByText("exit code: 0")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 0")).toBeTruthy();
   });
 
   it("shows a non-zero exit code", () => {
     renderItem(historyCommandResult(1));
 
-    expect(screen.getByText("exit code: 1")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: 1")).toBeTruthy();
   });
 
   it("falls back to the placeholder only when no exit code is known", () => {
     renderItem(historyCommandResult(null));
 
-    expect(screen.getByText("exit code: —")).toBeTruthy();
+    expect(screen.getByText("Exit-Code: —")).toBeTruthy();
+  });
+
+  it("renders the translated (German) exit-code text, not the English one", () => {
+    renderItem(historyCommandResult(2));
+
+    expect(screen.queryByText(/exit code/i)).toBeNull();
+    expect(screen.getByText("Exit-Code: 2")).toBeTruthy();
   });
 });
 
@@ -618,7 +613,6 @@ describe("web research unavailable notice (issue #169)", () => {
         <ChatItemView
           item={{ type: "webResearchUnavailable", id: "w-1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -656,7 +650,6 @@ describe("context compaction note (Issue #601)", () => {
         <ChatItemView
           item={{ type: "contextCompacted", id: "c1" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"
@@ -679,7 +672,6 @@ describe("document actions are reactive (#884)", () => {
         <ChatItemView
           item={{ type: "document", id: "doc-1", title: "T", contentMarkdown: "# T" }}
           onRespond={vi.fn()}
-          onAcceptWithRule={vi.fn()}
           onExport={vi.fn()}
           onContinueTruncated={vi.fn()}
           serverId="server-1"

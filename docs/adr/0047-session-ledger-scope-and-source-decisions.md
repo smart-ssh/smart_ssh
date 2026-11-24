@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by 0161
 
 ## Kontext
 
@@ -41,6 +41,9 @@ per Klick im Bestätigungsdialog ist weder "die KI" noch "ein MCP-Agent".
 in `core::audit`.
 
 ### 3. Scope-Reduktion: nur `AiAction::SuggestCommand` in Etappe 1
+
+> Für `ReadRemoteFile`/`WriteRemoteFile` überholt durch ADR 0160 (Issue #1446):
+> beide erzeugen jetzt Ledger-Einträge.
 
 Spec 0057 §1.1 listet vier Ereignistypen, ohne den Aktionstyp
 einzuschränken. Diese Etappe schreibt Ledger-Einträge ausschließlich für

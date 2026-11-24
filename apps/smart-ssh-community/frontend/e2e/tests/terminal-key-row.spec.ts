@@ -19,6 +19,27 @@ test.describe("terminal key row @phone", () => {
       expect(box?.width).toBeGreaterThanOrEqual(44);
     }
   });
+
+  test("two fixed rows of eight keys fit 360px without scrolling", async ({ app }) => {
+    await app.page.setViewportSize({ width: 360, height: 740 });
+    await app.launch(populated());
+    await openSession(app, "web-1");
+    const page = app.page;
+    await page.getByRole("tab", { name: "Terminal", exact: true }).click();
+    const row = page.getByTestId("terminal-key-row").locator("visible=true");
+    await expect(row).toBeVisible();
+    const buttons = row.getByRole("button");
+    await expect(buttons).toHaveCount(16);
+    for (let i = 0; i < 16; i++) {
+      const box = await buttons.nth(i).boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(360.5);
+    }
+    const noScroll = await row.evaluate((el) => el.scrollWidth <= el.clientWidth);
+    expect(noScroll).toBe(true);
+  });
 });
 
 test.describe("terminal key row on desktop", () => {

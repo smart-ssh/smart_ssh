@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Desktop – Server form</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&amp;family=Barlow+Condensed:wght@500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;background:#0e1116}
+*,*::before,*::after{box-sizing:border-box;border-radius:0 !important}
+.ss{--surface-sunken:#080a0d;--surface:#0e1116;--surface-raised:#151a21;--border:#242b35;--border-strong:#3a4452;--fg-faint:#7d8796;--fg-subtle:#96a0ae;--fg-muted:#aeb6c2;--fg-soft:#c9cfd8;--fg:#e3e7ed;--fg-strong:#f2f4f7;--accent:#2cc6e8;--accent-fg:#6fdcf2;--accent-subtle:#0a2630;--accent-border:#134a59;--on-accent:#041015;--danger-fg:#ff8a85;--danger-border:#5c1c1d;--success:#3dd68c;--success-fg:#7be5ae;--success-border:#175536;--local-fg:#e9a6f7;--local-border:#5a2366;font-family:Barlow,system-ui,sans-serif;font-size:14px;line-height:1.45;color:var(--fg);background:var(--surface)}
+.h{font-family:"Barlow Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);display:block;margin-bottom:5px}
+.mono{font-family:"JetBrains Mono",monospace}
+.btn{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;height:32px;padding:0 12px;border:1px solid var(--border-strong);background:transparent;color:var(--fg-soft);display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 6px;border:1px solid var(--border-strong);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-muted);white-space:nowrap}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;flex:none}
+.sq{width:8px;height:8px;display:inline-block;flex:none}
+.tab{height:44px;padding:0 14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.06em;color:var(--fg-subtle);background:transparent;border-top:2px solid transparent;border-left:0;border-bottom:0;cursor:pointer}
+.tab.on{background:var(--surface);color:var(--fg-strong);border-top-color:var(--accent)}
+.ft{height:38px;padding:0 18px;background:transparent;border:0;border-top:2px solid transparent;border-right:1px solid var(--border);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);cursor:pointer}
+.ft.on{border-top-color:var(--accent);background:var(--surface-raised);color:var(--fg-strong)}
+.inp{height:34px;border:1px solid var(--border-strong);background:var(--surface-sunken);color:var(--fg);padding:0 10px;font:inherit;width:100%}
+.tr{height:30px;display:flex;align-items:center;gap:7px;padding:0 10px;color:var(--fg-soft);font-size:13.5px;position:relative}
+.tr.sel{background:var(--accent-subtle);color:var(--fg-strong);box-shadow:inset 0 0 0 1px var(--accent-border)}
+.kids{margin-left:17px;border-left:1px solid var(--border-strong)}
+.kids .tr::before{content:"";position:absolute;left:0;top:15px;width:8px;height:1px;background:var(--border-strong)}
+.kids .tr{padding-left:14px}
+.seg{display:flex;border:1px solid var(--border-strong);flex-wrap:wrap}
+.seg span{height:32px;padding:0 12px;display:flex;align-items:center;border-left:1px solid var(--border-strong);font-size:13px;color:var(--fg-muted)}
+.seg span:first-child{border-left:0}
+.seg span.on{background:var(--accent);color:var(--on-accent);font-weight:600}
+fieldset{border:1px solid var(--border);margin:0;padding:12px 14px 14px}
+legend{padding:0 6px;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-muted)}
+</style>
+</head>
+<body>
+<div class="ss" style="width: 100%; height: 900px; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 44px; display: flex; align-items: stretch; background: var(--surface-sunken); border-bottom: 1px solid var(--border); flex: none">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 0 16px; border-right: 1px solid var(--border)">
+      <svg viewBox="0 0 64 64" style="width: 20px; height: 20px" aria-hidden="true"><path d="M48 14H16v18h32v18H16" style="fill: none; stroke: #e3e7ed; stroke-width: 7; stroke-linecap: square; stroke-linejoin: miter"></path><rect x="42" y="8" width="12" height="12" style="fill: #2cc6e8"></rect><rect x="10" y="44" width="12" height="12" style="fill: #2cc6e8"></rect></svg>
+      <span class="h" style="font-size: 15px; font-weight: 700; letter-spacing: .1em; color: var(--fg-strong)">Smart SSH</span>
+    </div>
+    <nav aria-label="Main" style="display: flex"><button class="tab" type="button">Connect</button><button class="tab on" type="button">Manage</button><button class="tab" type="button">Filter Rules</button></nav>
+    <div style="flex: 1"></div>
+    <button class="tab" type="button" aria-label="Settings" style="border-left: 1px solid var(--border)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9 M17 6h3 M15 3v6 M4 12h3 M11 12h9 M9 9v6 M4 18h11 M19 18h1 M17 15v6"></path></svg></button>
+  </header>
+
+  <div style="flex: 1; min-height: 0; display: flex">
+    <aside style="width: 288px; flex: none; background: var(--surface-sunken); border-right: 1px solid var(--border); display: flex; flex-direction: column">
+      <div style="display: flex; align-items: center; gap: 6px; padding: 12px 12px 10px; border-bottom: 1px solid var(--border)">
+        <span class="h" style="flex: 1; font-size: 11.5px; letter-spacing: .14em; color: var(--fg-faint)">Servers</span>
+        <button class="btn" type="button" style="height: 26px; padding: 0 8px; font-size: 12px">+ Group</button>
+        <button class="btn" type="button" style="height: 26px; padding: 0 8px; font-size: 12px">+ Server</button>
+      </div>
+      <div style="padding: 8px 6px">
+        <div class="tr" style="color: var(--local-fg)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20v13H2z M8 21h8 M12 17v4 M6 8l3 2.5L6 13 M11 13h4"></path></svg>Localhost</div>
+        <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V5h6l2 2h8v3 M3 20l3-10h16l-3 10z"></path></svg><b>production</b></div>
+        <div class="kids">
+          <div class="tr sel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">web-01</span></div>
+          <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">web-02</span></div>
+          <div class="tr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">db-prod</span></div>
+        </div>
+        <div class="tr"><svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--fg-faint)" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6l2 2h10v13H3z M3 10h18"></path></svg><b>staging</b></div>
+        <div class="tr"><span style="width: 12px"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg><span class="mono" style="font-size: 12.5px">bastion</span></div>
+      </div>
+    </aside>
+
+    <main style="flex: 1; min-width: 0; overflow: hidden; padding: 22px 28px">
+      <div style="max-width: 980px">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px">
+          <svg class="ico" viewBox="0 0 24 24" style="width: 22px; height: 22px; color: var(--fg-muted)" aria-hidden="true"><path d="M3 4h18v7H3z M3 13h18v7H3z M7 7.5h2 M7 16.5h2 M13 7.5h4 M13 16.5h4"></path></svg>
+          <h1 class="h" style="margin: 0; font-size: 24px; font-weight: 700; color: var(--fg-strong)">Server: web-01</h1>
+          <div style="flex: 1"></div>
+          <button class="btn pri" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2v5 M15 2v5 M6 7h12v5l-3 4H9l-3-4z M12 16v6"></path></svg>Connect</button>
+        </div>
+        <div role="tablist" aria-label="Server settings" style="display: flex; border-bottom: 1px solid var(--border-strong); border-left: 1px solid var(--border)">
+          <button class="ft" type="button" role="tab">General</button>
+          <button class="ft on" type="button" role="tab" aria-selected="true">Connection</button>
+          <button class="ft" type="button" role="tab">Security</button>
+          <button class="ft" type="button" role="tab">Notes</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; padding-top: 18px">
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 10px">
+              <div><label class="lbl" for="host">Host</label><input id="host" class="inp mono" style="font-size: 12.5px" value="10.0.4.21"></div>
+              <div><label class="lbl" for="port">Port</label><input id="port" class="inp mono" style="font-size: 12.5px" value="22"></div>
+            </div>
+            <div><label class="lbl" for="user">Username</label><input id="user" class="inp mono" style="font-size: 12.5px" value="deploy"></div>
+            <div><label class="lbl" for="jump">Jump Host</label><select id="jump" class="inp"><option>bastion</option></select></div>
+            <fieldset>
+              <legend>Authentication</legend>
+              <div class="seg" role="radiogroup" aria-label="Authentication method"><span>Password</span><span>Private Key</span><span>Use SSH Agent</span><span>Certificate</span><span class="on">Key File</span></div>
+              <div style="margin-top: 12px"><label class="lbl" for="kf">Path to key file</label>
+                <div style="display: flex; gap: 6px"><input id="kf" class="inp mono" style="font-size: 12.5px" value="~/.ssh/id_ed25519"><button class="btn" type="button" style="height: 34px">Choose file…</button></div>
+              </div>
+              <ul style="list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+                <li style="display: flex; gap: 8px; align-items: center; color: var(--success-fg)"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>Looks like a valid OpenSSH key.</li>
+                <li style="display: flex; gap: 8px; align-items: center; color: var(--success-fg)"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>The file's permissions are tight enough.</li>
+                <li style="display: flex; gap: 8px; align-items: center; color: var(--fg-subtle)"><svg class="ico" viewBox="0 0 24 24" style="width: 14px; height: 14px" aria-hidden="true"><path d="M3 3h18v18H3z M12 11v6 M12 7v.5"></path></svg>The key is not encrypted.</li>
+              </ul>
+              <div style="margin-top: 10px"><label class="lbl" for="pp">Passphrase (optional)</label><input id="pp" type="password" class="inp" placeholder="(empty = unchanged)"></div>
+            </fieldset>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <button class="btn" type="button">Test Connection</button>
+              <span class="badge" style="border-color: var(--success-border); color: var(--success-fg)"><span class="sq" style="width: 7px; height: 7px; background: var(--success)"></span>OK · 142 ms</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <fieldset>
+              <legend>Sudo Password (optional)</legend>
+              <p style="margin: 0 0 10px; font-size: 13px; color: var(--fg-subtle)">Automatically fed via standard input for a "sudo" command suggested by the AI.</p>
+              <label class="lbl" for="sudo">Sudo Password</label>
+              <input id="sudo" type="password" class="inp" placeholder="(empty = unchanged, currently stored)">
+              <button class="btn" type="button" style="margin-top: 8px; border-color: var(--danger-border); color: var(--danger-fg)">Remove sudo password</button>
+            </fieldset>
+            <fieldset>
+              <legend>Advanced</legend>
+              <label class="lbl" for="sd">Start directory (terminal and file browser)</label>
+              <input id="sd" class="inp mono" style="font-size: 12.5px" value="/var/www/shop">
+              <p style="margin: 4px 0 12px; font-size: 12.5px; color: var(--fg-faint)">Absolute path (/…) or a path starting with ~/.</p>
+              <label style="display: flex; gap: 10px; align-items: center; font-size: 13.5px; margin-bottom: 4px"><input type="checkbox" checked style="position: absolute; opacity: 0; width: 1px; height: 1px"><span aria-hidden="true" style="width: 16px; height: 16px; background: var(--accent); display: flex; align-items: center; justify-content: center; flex: none"><svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--on-accent); stroke-width: 3" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg></span>Allow elevated rights in the file browser</label>
+              <p style="margin: 0 0 12px 26px; font-size: 12.5px; color: var(--fg-faint)">When off, the file browser does not offer elevated rights for this server.</p>
+              <label class="lbl" for="sftp">Path to sftp-server (elevated file access)</label>
+              <input id="sftp" class="inp mono" style="font-size: 12.5px" placeholder="Automatic">
+            </fieldset>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border)">
+          <button class="btn pri" type="button">Save</button>
+          <button class="btn" type="button" style="border-color: transparent">Cancel</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

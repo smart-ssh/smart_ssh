@@ -14,7 +14,7 @@ use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
 use super::super::approval::ApprovedAction;
-use super::super::chat_turn::{ledger_source_for_origin, push_history_scoped, write_ledger_entry};
+use super::super::chat_turn::{emit_activity_event, ledger_source_for_origin, push_history_scoped};
 
 /// Gibt zurück, ob die Aktion tatsächlich ausgeführt wurde.
 #[expect(clippy::too_many_arguments, reason = "one argument per input")]
@@ -88,6 +88,15 @@ pub(super) async fn handle_user_decision(
     }
 }
 
+/// Whether the user's/engine's decision on `action` is announced to the
+/// activity observers: commands and file writes (Spec 0057).
+pub(super) fn records_decision(action: &AiAction) -> bool {
+    matches!(
+        action,
+        AiAction::SuggestCommand { .. } | AiAction::WriteRemoteFile { .. }
+    )
+}
+
 /// Everything the decision steps share.
 struct DecisionEnv<'a> {
     session: &'a Session,
@@ -104,10 +113,10 @@ struct DecisionEnv<'a> {
 }
 
 /// The ledger `Decision` fields of the user's decision (Spec 0057, §1.1).
-struct DecisionRecord {
-    source: LedgerSource,
+pub(super) struct DecisionRecord {
+    pub(super) source: LedgerSource,
     reason: Option<String>,
-    code: Option<String>,
+    pub(super) code: Option<String>,
     matched_rule: Option<RuleId>,
     matched_rule_origin: Option<RuleOrigin>,
 }
@@ -118,7 +127,7 @@ impl DecisionRecord {
     /// proposal and the specific code `TIMEOUT`. Otherwise the original
     /// escalation reason/code is kept so the ledger shows WHY a confirmation
     /// was needed.
-    fn new(
+    pub(super) fn new(
         deny_reason: &RejectionReason,
         origin: &ActionOrigin,
         confirm_reason: String,
@@ -185,11 +194,12 @@ impl DecisionEnv<'_> {
         action: &AiAction,
         reason: RejectionReason,
     ) -> bool {
-        if let AiAction::SuggestCommand { .. } = action {
-            write_ledger_entry(
+        if records_decision(action) {
+            emit_activity_event(
                 self.session,
                 record.source,
                 record.content(LedgerDecisionOutcome::Rejected),
+                Some(self.action_id),
             )
             .await;
         }
@@ -209,11 +219,12 @@ impl DecisionEnv<'_> {
     }
 
     async fn approve(&self, record: &DecisionRecord, action: AiAction) -> bool {
-        if let AiAction::SuggestCommand { .. } = &action {
-            write_ledger_entry(
+        if records_decision(&action) {
+            emit_activity_event(
                 self.session,
                 record.source,
                 record.content(LedgerDecisionOutcome::Confirmed),
+                Some(self.action_id),
             )
             .await;
         }
@@ -251,12 +262,13 @@ impl DecisionEnv<'_> {
         let session = self.session;
         // Spec 0057, §1.1: the edited text is a proposal of its own, written
         // by the user, hence `LedgerSource::User`.
-        write_ledger_entry(
+        emit_activity_event(
             session,
             LedgerSource::User,
             LedgerEntryContent::CommandProposed {
                 command: edited.clone(),
             },
+            Some(self.action_id),
         )
         .await;
         // A store failure is logged by the lookup; only `Deny` matters in
@@ -274,7 +286,7 @@ impl DecisionEnv<'_> {
         if let Decision::Deny { reason, code } = re_evaluation.decision {
             self.earlier_rejection
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            write_ledger_entry(
+            emit_activity_event(
                 session,
                 ledger_source_for_origin(self.origin),
                 LedgerEntryContent::Decision {
@@ -284,12 +296,13 @@ impl DecisionEnv<'_> {
                     matched_rule: re_evaluation.matched_rule,
                     matched_rule_origin: re_evaluation.matched_rule_origin,
                 },
+                Some(self.action_id),
             )
             .await;
             self.report_blocked_edit(edited, reason, code).await;
             return None;
         }
-        write_ledger_entry(
+        emit_activity_event(
             session,
             LedgerSource::User,
             LedgerEntryContent::Decision {
@@ -299,6 +312,7 @@ impl DecisionEnv<'_> {
                 matched_rule: re_evaluation.matched_rule,
                 matched_rule_origin: re_evaluation.matched_rule_origin,
             },
+            Some(self.action_id),
         )
         .await;
         Some(AiAction::SuggestCommand { command: edited })
