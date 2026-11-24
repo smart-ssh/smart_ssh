@@ -366,7 +366,8 @@ fn missing_action_id() {
 /// Starts the once-a-minute user-activity tick of `session` in `tasks` (its
 /// session scope). The tick runs off every input path: input only sets a
 /// flag, this task reads it. It emits one `UserActivity` per interval in
-/// which there was input or a command was running. Without an observer no
+/// which there was input or a command started by the user was running
+/// (a command started through MCP does not count). Without an observer no
 /// task is started. Holds only a weak reference to the session.
 pub fn spawn_user_activity_tick(
     session: &std::sync::Arc<Session>,
@@ -393,7 +394,7 @@ pub fn spawn_user_activity_tick(
             let input = reporting
                 .input_seen
                 .swap(false, std::sync::atomic::Ordering::Relaxed);
-            if input || session.transport.running_action().is_some() {
+            if input || session.transport.user_command_running() {
                 session
                     .push_activity(ActivitySource::User, ActivityEventKind::UserActivity)
                     .await;

@@ -320,7 +320,7 @@ pub struct SessionTransport {
     epoch: std::sync::atomic::AtomicU64,
     /// Issue #328: action currently running as an AI command, so a
     /// disconnect can cancel it (Spec 0027).
-    running_action: std::sync::Mutex<Option<ActionId>>,
+    running_action: std::sync::Mutex<Option<(ActionId, bool)>>,
 }
 
 /// Issue #328: proof that this AI command is the only one running in its
@@ -353,11 +353,20 @@ impl SessionTransport {
     /// Issue #328: waits until no other AI command of this session runs and
     /// claims the slot for `action_id`. `None` if the session was closed.
     pub async fn begin_command(&self, action_id: ActionId) -> Option<CommandSlot<'_>> {
+        self.begin_command_from(action_id, false).await
+    }
+
+    /// Like `begin_command`; `from_mcp` marks a command an MCP client started.
+    pub async fn begin_command_from(
+        &self,
+        action_id: ActionId,
+        from_mcp: bool,
+    ) -> Option<CommandSlot<'_>> {
         let guard = self.command_guard.lock().await;
         if self.is_closed() {
             return None;
         }
-        *lock_tolerating_poison(&self.running_action) = Some(action_id);
+        *lock_tolerating_poison(&self.running_action) = Some((action_id, from_mcp));
         Some(CommandSlot {
             owner: self,
             _guard: guard,
@@ -366,7 +375,13 @@ impl SessionTransport {
 
     /// Issue #328: the AI command running right now, if any.
     pub fn running_action(&self) -> Option<ActionId> {
-        *lock_tolerating_poison(&self.running_action)
+        (*lock_tolerating_poison(&self.running_action)).map(|(id, _)| id)
+    }
+
+    /// A running command not started through MCP (activity tick).
+    pub fn user_command_running(&self) -> bool {
+        let running = *lock_tolerating_poison(&self.running_action);
+        matches!(running, Some((_, false)))
     }
 
     /// Issue #328: the session is being disconnected.

@@ -561,6 +561,7 @@ async fn run_approved(
         ctx.persist,
         ledger_source_for_origin(&ctx.origin),
         uses_password,
+        ctx.is_mcp(),
     )
     .await
 }

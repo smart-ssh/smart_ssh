@@ -181,6 +181,7 @@ impl DecisionEnv<'_> {
             self.persist,
             source,
             self.sudo_fallback_announced,
+            matches!(self.origin, ActionOrigin::Mcp { .. }),
         )
         .await
     }
