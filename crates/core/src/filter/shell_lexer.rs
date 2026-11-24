@@ -149,7 +149,12 @@ enum Context {
 
 /// Reserved words after which a command follows.
 const COMMAND_PREFIX_WORDS: &[&str] = &[
-    "if", "then", "else", "elif", "do", "while", "until", "!", "time", "coproc", "{",
+    "if", "then", "else", "elif", "do", "while", "until", "!", "time", "coproc", "function", "{",
+];
+
+/// Reserved words that start a compound command.
+const COMPOUND_WORDS: &[&str] = &[
+    "{", "case", "if", "while", "until", "for", "select", "[[", "((",
 ];
 
 /// Lexes `cmd` as a shell would read it. Returns `None` if a quote, an
@@ -235,9 +240,9 @@ impl Lexer<'_> {
             ')' if list.parens > 0 => {
                 self.push(c);
                 self.update(|list| list.parens -= 1);
-                // The body of `f()` is in command position.
-                let definition = i > 0 && self.chars[i - 1] == '(';
-                self.mark(true, definition);
+                // A command may follow: the body of `f ( )` or of
+                // `for ((...))`. Any other word here is a syntax error.
+                self.mark(true, true);
             }
             ')' if list.closer == Closer::Paren => self.close(&[c]),
             ')' | '<' | '>' => {
@@ -397,6 +402,30 @@ impl Lexer<'_> {
             .find(|word| self.word_at(i, word))
     }
 
+    fn skip_blanks(&self, i: usize) -> usize {
+        i + self.chars[i.min(self.chars.len())..]
+            .iter()
+            .take_while(|&&c| matches!(c, ' ' | '\t'))
+            .count()
+    }
+
+    /// The index after `word` when it follows `i` after blanks.
+    fn after_blanks(&self, i: usize, word: &str) -> Option<usize> {
+        let start = self.skip_blanks(i);
+        (start > i && self.word_at(start, word)).then(|| start + word.chars().count())
+    }
+
+    /// The index after the plain word (a name, no quotes or expansions) at
+    /// `i`.
+    fn name_end(&self, i: usize) -> Option<usize> {
+        let len = self.chars[i.min(self.chars.len())..]
+            .iter()
+            .take_while(|&&c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'))
+            .count();
+        (len > 0 && self.word_at(i, &self.chars[i..i + len].iter().collect::<String>()))
+            .then_some(i + len)
+    }
+
     /// Whether `word` stands at `i`, followed by a blank, an operator or the
     /// end.
     fn word_at(&self, i: usize, word: &str) -> bool {
@@ -437,14 +466,29 @@ impl Lexer<'_> {
             }
             "}" => self.update(|list| list.braces = list.braces.saturating_sub(1)),
             "{" => self.update(|list| list.braces += 1),
-            // `time -p` is still followed by a command.
+            // A command follows `time -p --`, `coproc NAME` before a
+            // compound command and `function NAME ()`.
             "time" => {
-                let blanks = self.chars[end..]
+                while let Some(next) = ["-p", "--"]
                     .iter()
-                    .take_while(|&&c| matches!(c, ' ' | '\t'))
-                    .count();
-                if self.word_at(end + blanks, "-p") {
-                    end += blanks + 2;
+                    .find_map(|option| self.after_blanks(end, option))
+                {
+                    end = next;
+                }
+            }
+            "coproc" => {
+                if let Some(name) = self.name_end(self.skip_blanks(end)) {
+                    let start = self.skip_blanks(name);
+                    let compound = self.chars.get(start) == Some(&'(')
+                        || COMPOUND_WORDS.iter().any(|word| self.word_at(start, word));
+                    if compound && start > name {
+                        end = name;
+                    }
+                }
+            }
+            "function" => {
+                if let Some(name) = self.name_end(self.skip_blanks(end)) {
+                    end = name;
                 }
             }
             _ => {}
@@ -948,6 +992,19 @@ mod tests {
             ("echo \"$(echo case in esac)\"", "echo case in esac"),
         ] {
             assert_eq!(substitutions(text), [inner], "{text:?}");
+        }
+        for text in [
+            "echo \"${ coproc foo { a; }; echo \"}\"; rm x; }\"",
+            "echo \"${ function f { a; }; echo \"}\"; rm x; }\"",
+            "echo \"${ f ( ) { a; }; echo \"}\"; rm x; }\"",
+            "echo \"${ for ((i=0;i<1;i++)) { a; }; echo \"}\"; rm x; }\"",
+            "echo \"${ time -p -- { a; }; echo \"}\"; rm x; }\"",
+        ] {
+            let found = substitutions(text);
+            assert!(
+                found.len() == 1 && found[0].ends_with("rm x; "),
+                "{text:?}: {found:?}"
+            );
         }
         assert_eq!(
             substitutions("echo \"${ case x in a) ;; {) ;; esac; }\"; rm x"),

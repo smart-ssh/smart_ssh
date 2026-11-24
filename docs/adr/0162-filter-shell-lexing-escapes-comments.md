@@ -123,8 +123,14 @@ see the inner `rm`.
    substitution: in a pattern `(`, `|`, `{`, `}` and `case` are words, and
    `esac` ends the statement only at the start of a pattern list or in
    command position. Reserved words count only in command position (also
-   after `time -p`, `coproc` and the `()` of a function definition), and
-   only space, tab and newline delimit them (`case<CR>` is a plain word). It reports which
+   after `time -p --`, `coproc NAME` before a compound command, `function
+   NAME` and any `)` closing a group, as in `f ( )` or `for ((...))`), and
+   only space, tab and newline delimit them (`case<CR>` is a plain word).
+   Where the lexer still misreads a command position inside a substitution,
+   the result can only fall from `Deny` to `Confirm`: every substitution
+   needs confirmation. Extended glob patterns (`@(a|b)`) in a `case` pattern
+   are not followed; bash accepts them there only with `extglob` already on
+   when the line is parsed. It reports which
    chars are at the top level and where each substitution starts and ends.
    The segment scanner splits only at top-level operators, and
    `strip_substitutions` takes the substitution bounds from the same lexer,

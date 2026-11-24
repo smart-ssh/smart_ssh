@@ -287,6 +287,16 @@ async fn test_adv_case_and_reserved_words_inside_substitution() {
         "echo \"$(case x in #c)\nx) echo \")\";; esac; rm -rf /)\"",
         "echo \"$(case x in x) echo \")\" ;;& y) ;& z) ;; esac; rm -rf /)\"",
         "echo \"$(if true; then case x in x) echo \")\";; esac; fi; rm -rf /)\"",
+        "echo \"$(time -- case x in x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(coproc foo case x in x) echo \")\"; rm -rf /;; esac)\"",
+        "echo \"$(function f case x in x) echo \")\"; rm -rf /;; esac; f)\"",
+        "echo \"$(f ( ) case x in x) echo \")\"; rm -rf /;; esac; f)\"",
+        // A `{` group in command position inside `${ ...; }`.
+        "echo \"${ coproc foo { true; }; echo \"}\"; rm -rf /; }\"",
+        "echo \"${ function f { true; }; echo \"}\"; rm -rf /; }\"",
+        "echo \"${ f ( ) { true; }; echo \"}\"; rm -rf /; }\"",
+        "echo \"${ for ((i=0;i<1;i++)) { true; }; echo \"}\"; rm -rf /; }\"",
+        "echo \"${ time -p -- { true; }; echo \"}\"; rm -rf /; }\"",
     ] {
         assert_denied_by_rm_rule(cmd).await;
     }
