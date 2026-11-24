@@ -101,6 +101,24 @@ fn test_data_risk_red_cat_id_rsa() {
 }
 
 #[test]
+fn backup_id_rsa_is_rated_like_id_rsa() {
+    for f in [
+        "backup_id_rsa",
+        "old_id_ed25519",
+        "id_rsa.bak",
+        "x_id_ecdsa_sk",
+        "backup_id_rsa.bak",
+    ] {
+        let a = classify(&format!("cat ~/.ssh/{f}"));
+        assert_eq!(a.data_risk, RiskLevel::Red, "{f}");
+    }
+    for f in ["backup_id_rsa.pub", "id_rsa.pub", "rapid_search.txt"] {
+        let a = classify(&format!("cat ~/.ssh/{f}"));
+        assert_ne!(a.data_risk, RiskLevel::Red, "{f}");
+    }
+}
+
+#[test]
 fn test_data_risk_red_less_head_tail_on_secret_files() {
     assert_eq!(classify("less /app/.env").data_risk, RiskLevel::Red);
     assert_eq!(classify("head server.key").data_risk, RiskLevel::Red);
