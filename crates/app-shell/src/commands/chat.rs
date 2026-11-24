@@ -166,8 +166,6 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
-    // Issue #1507: the first chat message turns the session into a chat.
-    session.emit_chat_started_once().await;
     send_turn_impl(
         app,
         emitter,
@@ -209,6 +207,33 @@ pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
         action_confirmations,
     )
     .await
+}
+
+/// Appends the accepted user texts and extension parts to the history.
+/// Issue #1507/#1562: the first message that made it into the history turns
+/// the session into a chat; a rejected message never gets here.
+async fn push_accepted_message(
+    session: &Session,
+    texts: Vec<String>,
+    parts: Option<app_logic::orchestration::PreparedExtensionParts>,
+) {
+    let accepted_text = !texts.is_empty();
+    for text in texts {
+        app_logic::orchestration::push_history(
+            session,
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text(text),
+            },
+        )
+        .await;
+    }
+    if let Some(parts) = parts {
+        app_logic::orchestration::push_extension_parts(session, parts).await;
+    }
+    if accepted_text {
+        session.emit_chat_started_once().await;
+    }
 }
 
 /// Shared turn entry. `text == None` means "resend the last user turn".
@@ -392,19 +417,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
         // Nutzertext fortlaufend in `chat_messages` landet — verschlüsselt,
         // Spec 0036). Muss VOR `run_chat_turn` passieren, damit die Nachricht
         // in der DB steht, bevor der KI-Aufruf überhaupt startet.
-        for text in texts {
-            app_logic::orchestration::push_history(
-                session,
-                ChatMessage {
-                    role: Role::User,
-                    content: MessageContent::Text(text),
-                },
-            )
-            .await;
-        }
-        if let Some(parts) = extension_parts.take() {
-            app_logic::orchestration::push_extension_parts(session, parts).await;
-        }
+        push_accepted_message(session, texts, extension_parts.take()).await;
 
         let unanswered_injected_messages = run_chat_turn(
             session,
