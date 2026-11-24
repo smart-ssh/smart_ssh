@@ -152,8 +152,6 @@ fn segment_command_at_depth(command: &str, depth: usize) -> Vec<String> {
         ParseResult::Segments(segments) => {
             let mut result = Vec::new();
             for segment in segments {
-                // Not normalised first: a newline inside a substitution
-                // separates commands.
                 let (literal, inner_contents) = strip_substitutions(&segment);
                 result.push(normalize_whitespace(&literal));
                 if depth >= MAX_SUBSTITUTION_DEPTH {
@@ -192,7 +190,10 @@ pub(super) fn detect_elevation(normalized: &str) -> (bool, String) {
 /// Kommandos und werden beim rekursiven Aufruf erneut aufgelöst.
 ///
 /// Wo eine Substitution endet, liest [`shell_lexer::lex`] wie die Shell
-/// (Quotes, Kommentare und Klammern innerhalb der Substitution). In
+/// (Quotes, Kommentare und Klammern innerhalb der Substitution). Aufrufer
+/// übergeben das Teilkommando, wie es zerlegt wurde, nicht
+/// whitespace-normalisiert: Ein Zeilenumbruch in einer Substitution trennt
+/// Kommandos. In
 /// einfachen Anführungszeichen führt die Shell nichts aus; Substitutionen
 /// dort werden trotzdem extrahiert — im Zweifel lieber zu viel als zu wenig,
 /// passend zu den Fail-safe-defaults der Spec. Text, der sich nicht lexen

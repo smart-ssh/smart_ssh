@@ -140,7 +140,7 @@ see the inner `rm`.
 
 ## Testing
 
-`crates/core/src/filter/adversarial_tests.rs` holds the four inputs above,
+`crates/core/src/filter/adversarial_tests/shell_lexing.rs` holds the four inputs above,
 the substitution and `)#` cases of decisions 2 and 5 and further variants;
 they failed before this change and pass after it. A differential test runs
 bash (skipped where none is installed) with a `DEBUG` trap under `extdebug`
