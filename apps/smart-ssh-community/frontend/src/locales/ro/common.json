@@ -434,6 +434,7 @@
     "loadingSuggestions": "Se încarcă sugestiile…",
     "noSuggestions": "Nicio sugestie.",
     "binaryFileHint": "Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
+    "fileTooLargeHint": "Fișierul este mai mare de {{limit}}, fără comparație de text. Dimensiune nouă: {{newSize}}.",
     "diffTooLargeHint": "Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
     "noContentChange": "(conținut nemodificat)",
     "quickRuleLabel": {

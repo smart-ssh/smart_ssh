@@ -91,6 +91,7 @@ export function actionItemFromProposed(
     usesStoredSudoPassword: event.usesStoredSudoPassword,
     previousFileContent: event.previousFileContent,
     previousFileSize: event.previousFileSize,
+    previousFileTooLarge: event.previousFileTooLarge,
     targetName: event.targetName,
     riskAssessment: event.riskAssessment,
     riskSecondOpinionPending,

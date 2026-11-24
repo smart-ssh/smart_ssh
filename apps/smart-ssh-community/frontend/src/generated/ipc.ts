@@ -56,7 +56,7 @@ export type BuildType = "Dev" | "Release";
 
 export type ChatActionOutputPayload = { sessionId: string, actionId: string, stdout: string, stderr: string, truncated: boolean, };
 
-export type ChatActionProposedPayload = { sessionId: string, actionId: string, action: AiAction, decision: Decision, previousNoteContent: string | null, usesStoredSudoPassword: boolean, previousFileContent: string | null, previousFileSize: number | null, targetName: string | null, riskAssessment: RiskAssessment | null, origin: ActionOrigin, autoExecRules: Array<AutoExecRuleDto>, };
+export type ChatActionProposedPayload = { sessionId: string, actionId: string, action: AiAction, decision: Decision, previousNoteContent: string | null, usesStoredSudoPassword: boolean, previousFileContent: string | null, previousFileSize: number | null, previousFileTooLarge: boolean, targetName: string | null, riskAssessment: RiskAssessment | null, origin: ActionOrigin, autoExecRules: Array<AutoExecRuleDto>, };
 
 export type ChatActionResultPayload = { sessionId: string, actionId: string, result: ActionResultPayload, };
 

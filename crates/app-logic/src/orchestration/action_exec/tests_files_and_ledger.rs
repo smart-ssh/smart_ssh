@@ -665,6 +665,10 @@ async fn test_chat_action_proposed_binary_file_reports_size_not_content() {
         events[0].1["previousFileSize"],
         serde_json::json!(binary_len)
     );
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
 }
 
 /// Spec 0020, Abschnitt 4.2, Punkt 4: vor dem Überschreiben einer
@@ -1537,7 +1541,8 @@ async fn preview_read_is_capped() {
     let path = "/home/deploy/huge.bin";
     let session =
         test_session_allowing_everything(write_proposal(path), MockSshTransport::default());
-    let big = vec![b'a'; (MAX_PREVIEW_FILE_BYTES + 10) as usize];
+    // Cap + 1 bytes: the smallest file that is over the cap (issue #1559).
+    let big = vec![b'a'; (MAX_PREVIEW_FILE_BYTES + 1) as usize];
     let sftp = MockSftpSession::new().with_file(path, big);
     session.set_sftp_for_tests(Box::new(sftp.clone())).await;
 
@@ -1552,10 +1557,9 @@ async fn preview_read_is_capped() {
     assert_eq!(sftp.capped_read_limits(), vec![MAX_PREVIEW_FILE_BYTES + 1]);
     let events = emitter.events.lock().unwrap().clone();
     assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
-    assert_eq!(
-        events[0].1["previousFileSize"],
-        serde_json::json!(MAX_PREVIEW_FILE_BYTES)
-    );
+    // Issue #1559: not the cap as a fake size, but an explicit flag.
+    assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(events[0].1["previousFileTooLarge"], serde_json::json!(true));
 }
 
 /// A file exactly at the cap still gets a content preview.
@@ -1571,6 +1575,10 @@ async fn preview_file_at_cap_still_shows_content() {
     let events = emitter.events.lock().unwrap().clone();
     assert!(events[0].1["previousFileContent"].is_string());
     assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
 }
 
 /// A `WriteRemoteFile` denied by the filter engine triggers no SFTP access.
@@ -1608,6 +1616,10 @@ async fn denied_write_proposal_reads_nothing() {
 
     let events = emitter.events.lock().unwrap().clone();
     assert!(events[0].1["decision"]["Deny"].is_object());
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
     assert!(
         !sftp.calls().iter().any(|c| c.starts_with("read_file")),
         "{:?}",

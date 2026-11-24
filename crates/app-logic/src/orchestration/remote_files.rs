@@ -30,7 +30,7 @@ pub(crate) const MAX_READ_FILE_BYTES: u64 = 256 * 1024;
 
 /// Issue #1550, Spec 0020 section 4.2 point 3: upper bound for reading the
 /// current target file for the diff preview. A larger file gets no content
-/// preview (reported like a binary file, with this cap as the size).
+/// preview (flagged `previous_file_too_large`, issue #1559).
 pub(crate) const MAX_PREVIEW_FILE_BYTES: u64 = 1024 * 1024;
 
 /// Lowercase hex SHA-256 of `bytes` — the content fingerprint the activity
@@ -80,20 +80,23 @@ pub async fn ensure_sftp_open(session: &Session) -> Result<(), SshError> {
 /// ist eine Zusatzinformation, kein Blocker für den Vorschlag selbst).
 /// `(Some(text), None)` bei einer als UTF-8 dekodierbaren bestehenden
 /// Datei; `(None, Some(size))` bei einer bestehenden Binärdatei (Abschnitt
-/// 4.2, Punkt 3, letzter Satz).
+/// 4.2, Punkt 3, letzter Satz). The third element (issue #1559) is `true`
+/// only when the existing file is larger than `MAX_PREVIEW_FILE_BYTES`: then
+/// content and size are both `None` (the size is not known, only that it is
+/// over the cap).
 pub(crate) async fn previous_file_content_for_action(
     action: &AiAction,
     session: &Session,
-) -> (Option<String>, Option<u64>) {
+) -> (Option<String>, Option<u64>, bool) {
     let AiAction::WriteRemoteFile { path, .. } = action else {
-        return (None, None);
+        return (None, None, false);
     };
     if ensure_sftp_open(session).await.is_err() {
-        return (None, None);
+        return (None, None, false);
     }
     let mut guard = session.lock_sftp().await;
     let Some(sftp) = guard.sftp() else {
-        return (None, None);
+        return (None, None, false);
     };
     // Issue #1550: bounded read (cap + 1 detects "larger than the cap"); the
     // target may be a huge file or a special file such as /dev/zero.
@@ -101,14 +104,12 @@ pub(crate) async fn previous_file_content_for_action(
         .read_file_capped(path, MAX_PREVIEW_FILE_BYTES + 1, &mut |_| {})
         .await
     {
-        Ok(bytes) if bytes.len() as u64 > MAX_PREVIEW_FILE_BYTES => {
-            (None, Some(MAX_PREVIEW_FILE_BYTES))
-        }
+        Ok(bytes) if bytes.len() as u64 > MAX_PREVIEW_FILE_BYTES => (None, None, true),
         Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => (Some(text), None),
-            Err(err) => (None, Some(err.into_bytes().len() as u64)),
+            Ok(text) => (Some(text), None, false),
+            Err(err) => (None, Some(err.into_bytes().len() as u64), false),
         },
-        Err(_) => (None, None),
+        Err(_) => (None, None, false),
     }
 }
 

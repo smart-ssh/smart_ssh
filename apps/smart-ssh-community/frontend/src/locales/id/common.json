@@ -432,6 +432,7 @@
     "loadingSuggestions": "Memuat saran…",
     "noSuggestions": "Tidak ada saran.",
     "binaryFileHint": "Berkas biner — perbandingan teks tidak memungkinkan. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
+    "fileTooLargeHint": "Berkas lebih besar dari {{limit}}, tanpa perbandingan teks. Ukuran baru: {{newSize}}.",
     "diffTooLargeHint": "Konten terlalu besar untuk diff per baris. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
     "noContentChange": "(tidak ada perubahan konten)",
     "quickRuleLabel": {

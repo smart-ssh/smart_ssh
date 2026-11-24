@@ -80,6 +80,7 @@ function proposed(): ChatActionProposedEvent {
     usesStoredSudoPassword: false,
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: {
       serverRisk: "none",
