@@ -965,3 +965,75 @@ async fn test_first_chat_message_emits_chat_started_once() {
         ActivityEventKind::ChatStarted { .. }
     ));
 }
+
+/// Issue #1562: a message rejected before it reaches the history (here:
+/// "new chat" is swapping the chat) emits no `ChatStarted`; the first
+/// accepted message afterwards still does.
+#[tokio::test]
+async fn test_rejected_chat_message_emits_no_chat_started() {
+    use app_logic::activity::{
+        ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+        ActivitySessionKind, ServerSnapshot,
+    };
+    struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+    impl ActivityObserver for Rec {
+        fn on_event(&self, event: &ActivityEvent) {
+            self.0.lock().unwrap().push(event.clone());
+        }
+    }
+    let _guard = lock_async().await;
+    let rec = Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+    let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+    let mut session =
+        test_session(ServerId::new()).with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        ));
+    session.set_chat_session_id_for_tests(AsyncMutex::new(Some(uuid::Uuid::new_v4())));
+    session
+        .emit_session_started(ActivitySessionKind::Terminal, None)
+        .await;
+    {
+        let mut turn = session.conn.chat_turn.lock().unwrap();
+        turn.running = true;
+        turn.swapping = true;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let policy_store =
+        persistence_sqlite::SqliteProfileStore::connect_plaintext(&tmp.path().join("p.db"))
+            .await
+            .unwrap()
+            .policy_store();
+    let app = test_app();
+    let err = send_chat_message_impl(
+        app.handle(),
+        &TestEmitter::default(),
+        &session,
+        uuid::Uuid::new_v4(),
+        "rejected".to_string(),
+        None,
+        &InMemoryProfileStore::default(),
+        &policy_store,
+        &ConfirmationRegistry::new(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.code, Some(app_logic::orchestration::CHAT_SWITCHING));
+    let events = rec.0.lock().unwrap().clone();
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e.kind, ActivityEventKind::ChatStarted { .. })),
+        "{events:?}"
+    );
+}
