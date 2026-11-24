@@ -374,15 +374,46 @@ pub(super) async fn close_edit_session_impl(
     // nichts an Funktionalität — `close_edit_session` wird ohnehin nie mit
     // einem anderen Pfad aufgerufen.
     let dir = edit_session_dir_in(edit_root, session_id)?;
-    if !std::path::Path::new(local_path).starts_with(&dir) {
-        return Err(CommandError::with_code(
-            "Pfad liegt außerhalb des Editier-Temp-Ordners dieser Session",
-            "EDIT_SESSION_PATH_OUTSIDE",
-        ));
+    let path = std::path::Path::new(local_path);
+    // `Path::starts_with` compares components lexically: `<dir>/../x`
+    // "starts with" `<dir>` but names a file outside of it. A `..`
+    // component is never part of a path this app hands out, so it is
+    // refused outright.
+    if !path.starts_with(&dir)
+        || path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(path_outside_edit_session_dir());
     }
-    match tokio::fs::remove_file(local_path).await {
+    // A symlinked directory inside the session dir could still lead out of
+    // it, so the parent is compared canonically. The file name itself is
+    // not resolved: `remove_file` removes a symlink, never its target.
+    let (Some(parent), Some(file_name)) = (path.parent(), path.file_name()) else {
+        return Err(path_outside_edit_session_dir());
+    };
+    let (parent, dir) = match (
+        tokio::fs::canonicalize(parent).await,
+        tokio::fs::canonicalize(&dir).await,
+    ) {
+        (Ok(parent), Ok(dir)) => (parent, dir),
+        // Nothing left to clean up: the folder (and so the file) is gone.
+        (Err(e), _) | (_, Err(e)) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        (Err(e), _) | (_, Err(e)) => return Err(CommandError::from(e)),
+    };
+    if !parent.starts_with(&dir) {
+        return Err(path_outside_edit_session_dir());
+    }
+    match tokio::fs::remove_file(parent.join(file_name)).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(CommandError::from(e)),
     }
+}
+
+fn path_outside_edit_session_dir() -> CommandError {
+    CommandError::with_code(
+        "Pfad liegt außerhalb des Editier-Temp-Ordners dieser Session",
+        "EDIT_SESSION_PATH_OUTSIDE",
+    )
 }
