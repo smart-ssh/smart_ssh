@@ -152,8 +152,9 @@ fn segment_command_at_depth(command: &str, depth: usize) -> Vec<String> {
         ParseResult::Segments(segments) => {
             let mut result = Vec::new();
             for segment in segments {
-                let normalized = normalize_whitespace(&segment);
-                let (literal, inner_contents) = strip_substitutions(&normalized);
+                // Not normalised first: a newline inside a substitution
+                // separates commands.
+                let (literal, inner_contents) = strip_substitutions(&segment);
                 result.push(normalize_whitespace(&literal));
                 if depth >= MAX_SUBSTITUTION_DEPTH {
                     continue;
@@ -182,59 +183,60 @@ pub(super) fn detect_elevation(normalized: &str) -> (bool, String) {
     }
 }
 
-/// Ersetzt jede `$(...)`-, `<(...)`-, `>(...)`- oder Backtick-Command-Substitution in `text` durch
-/// ein einzelnes Leerzeichen und gibt zusätzlich die extrahierten inneren
-/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5, Spec 0013 Abschnitt 2.3).
-/// Verschachtelte Klammern werden über eine einfache Klammer-Tiefenzählung
-/// korrekt erkannt (die innere Substitution wird unverändert als Teil des
-/// extrahierten inneren Kommandos zurückgegeben und beim rekursiven Aufruf
-/// erneut aufgelöst).
+/// Ersetzt jede Command-Substitution in `text` (`$(...)`, `<(...)`,
+/// `>(...)`, Backticks, bash 5.3 `${ ...; }` und `${| ...; }`, auch in
+/// doppelten Anführungszeichen oder einer Parameter-Expansion) durch ein
+/// einzelnes Leerzeichen und gibt zusätzlich die extrahierten inneren
+/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5, Spec 0013
+/// Abschnitt 2.3). Verschachtelte Substitutionen bleiben Teil des inneren
+/// Kommandos und werden beim rekursiven Aufruf erneut aufgelöst.
 ///
-/// Arbeitet bewusst ohne Quote-Kontext (anders als
-/// [`shell_lexer::scan_top_level_segments`], das für die Operator-Erkennung Quotes
-/// respektieren muss) — im Zweifel wird eine Substitution lieber zu viel als
-/// zu wenig erkannt, das passt zu den Fail-safe-defaults der Spec.
+/// Wo eine Substitution endet, liest [`shell_lexer::lex`] wie die Shell
+/// (Quotes, Kommentare und Klammern innerhalb der Substitution). In
+/// einfachen Anführungszeichen führt die Shell nichts aus; Substitutionen
+/// dort werden trotzdem extrahiert — im Zweifel lieber zu viel als zu wenig,
+/// passend zu den Fail-safe-defaults der Spec. Text, der sich nicht lexen
+/// lässt, bleibt unverändert: [`split_command`] lehnt solche Eingaben schon
+/// als nicht sicher analysierbar ab.
 pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
-    let chars: Vec<char> = text.chars().collect();
+    let Some(lexed) = shell_lexer::lex(text, shell_lexer::CommentMode::Strip) else {
+        return (text.to_string(), Vec::new());
+    };
+    let chars: Vec<char> = lexed.canonical.chars().collect();
     let mut result = String::with_capacity(text.len());
     let mut inner_contents = Vec::new();
+    let mut quoted = lexed.single_quoted.iter().peekable();
     let mut i = 0usize;
 
-    while i < chars.len() {
-        if (chars[i] == '$' || chars[i] == '<' || chars[i] == '>') && chars.get(i + 1) == Some(&'(')
-        {
-            let start = i + 2;
-            let mut depth = 1i32;
-            let mut j = start;
-            while j < chars.len() && depth > 0 {
-                match chars[j] {
-                    '(' => depth += 1,
-                    ')' => depth -= 1,
-                    _ => {}
-                }
-                j += 1;
+    for substitution in lexed.substitutions.iter().map(Some).chain([None]) {
+        let until = substitution.map_or(chars.len(), |found| found.whole.start);
+        while let Some(range) = quoted.next_if(|range| range.start < until) {
+            result.extend(&chars[i..range.start]);
+            let content: String = chars[range.clone()].iter().collect();
+            if may_hold_substitution(&content) {
+                let (literal, inner) = strip_substitutions(&content);
+                result.push_str(&literal);
+                inner_contents.extend(inner);
+            } else {
+                result.push_str(&content);
             }
-            let end = if depth == 0 { j - 1 } else { chars.len() };
-            inner_contents.push(chars[start..end].iter().collect());
+            i = range.end;
+        }
+        result.extend(&chars[i..until]);
+        if let Some(found) = substitution {
+            inner_contents.push(chars[found.inner.clone()].iter().collect());
             result.push(' ');
-            i = if depth == 0 { j } else { chars.len() };
-            continue;
+            i = found.whole.end;
         }
-        if chars[i] == '`' {
-            if let Some(offset) = chars[(i + 1)..].iter().position(|&c| c == '`') {
-                let start = i + 1;
-                let end = start + offset;
-                inner_contents.push(chars[start..end].iter().collect());
-                result.push(' ');
-                i = end + 1;
-                continue;
-            }
-        }
-        result.push(chars[i]);
-        i += 1;
     }
 
     (result, inner_contents)
+}
+
+fn may_hold_substitution(text: &str) -> bool {
+    ["$(", "<(", ">(", "`", "${ ", "${\t", "${\n", "${|"]
+        .iter()
+        .any(|opener| text.contains(opener))
 }
 
 /// Here-Docs und `bash -c "..."`-artige Aufrufe komplett als einen Block
@@ -321,7 +323,7 @@ fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
 /// the whole command:
 ///
 /// - the command must split into segments (balanced quotes, see
-///   [`shell_lexer::scan_top_level_segments`]), and exactly one unquoted `<` run must
+///   [`shell_lexer::lexed_segments`]), and exactly one unquoted `<` run must
 ///   occur in the whole command, and it must be exactly `<<<` — here-docs
 ///   (`<<`, `<<-`), several here-strings and any other input redirection or
 ///   process substitution are left alone;
@@ -708,8 +710,7 @@ fn unquote_first_word(cmd: &str) -> String {
 /// Review-Pass, Spec 0002 — arbiträres Datei-Überschreiben über die
 /// harmloseste denkbare Whitelist-Regel). Ein `>` direkt vor `(` ist
 /// Process-Substitution (`>(...)`, bereits separat über
-/// `strip_substitutions`/Klammer-Tiefe in [`shell_lexer::scan_top_level_segments`]
-/// behandelt), keine Umleitung.
+/// [`strip_substitutions`] behandelt), keine Umleitung.
 pub(super) fn contains_unquoted_output_redirection(text: &str) -> bool {
     let chars: Vec<char> = text.chars().collect();
     let mut in_single = false;

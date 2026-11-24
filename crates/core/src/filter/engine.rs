@@ -586,7 +586,10 @@ impl<S: PolicyStore> FilterEngine<S> {
         let (_elevated, stripped) = parser::detect_elevation(&normalized);
 
         let (original_literal, _) = parser::strip_substitutions(&normalized);
-        let (stripped_literal, inner_contents) = parser::strip_substitutions(&stripped);
+        let (stripped_literal, _) = parser::strip_substitutions(&stripped);
+        // From the segment as split, not normalised: a newline inside a
+        // substitution separates commands.
+        let (_, inner_contents) = parser::strip_substitutions(raw_segment);
         let original_literal = parser::normalize_whitespace(&original_literal);
         let stripped_literal = parser::normalize_whitespace(&stripped_literal);
 

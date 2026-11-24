@@ -132,7 +132,8 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    nicht), ein Backslash vor einem Zeilenumbruch verbindet zwei Zeilen (auch
    innerhalb doppelter Quotes, z. B. `r\` + Zeilenumbruch + `m` ist `rm`),
    und ein `#` am Wortanfang außerhalb von Quotes beginnt einen Kommentar bis
-   zum Zeilenende. Ein dahinter verstecktes Kommando ist damit ein eigenes
+   zum Zeilenende (auch direkt nach `)`, `<` oder `>`, etwa in
+   `(true)#...`). Ein dahinter verstecktes Kommando ist damit ein eigenes
    Teilkommando, für das Deny-Regeln und die Hard-Blacklist gelten. Ein
    einfacher Backslash-Escape wird dabei genau aufgelöst und wie quotierter
    Text gegen die Regeln geprüft: `echo a\ b` oder `find . -exec ls {} \;`
@@ -142,9 +143,16 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    oder mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a #
    Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#` innerhalb
    von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern nichts.
-5. Command-Substitution (`$(...)`, Backticks) ist ein eigener Prüfbestandteil
-   und erzwingt mindestens `Confirm`, weil sie zur Laufzeit anderen Code
-   ausführen kann, der bei der Prüfung nicht vollständig bekannt ist.
+5. Command-Substitution (`$(...)`, Backticks, `<(...)`/`>(...)` und die
+   bash-5.3-Formen `${ ...; }` und `${| ...; }`) ist ein eigener
+   Prüfbestandteil und erzwingt mindestens `Confirm`, weil sie zur Laufzeit
+   anderen Code ausführen kann, der bei der Prüfung nicht vollständig bekannt
+   ist. Das innere Kommando wird wie ein eigenes Kommando geprüft, auch
+   innerhalb doppelter Quotes oder einer Parameter-Expansion; es wird dabei
+   so gelesen, wie die Shell es liest: mit eigenen Quotes, Kommentaren,
+   Subshells und `case`-Mustern (`"$(echo ")"; rm -rf /)"` endet nicht am
+   ersten `"` oder `)`) und mit seinen Zeilenumbrüchen als Trennern. Eine
+   Deny-Regel oder die Hard-Blacklist greift also auch darin.
 
    **Hinterlegter Code** wird genauso behandelt: Ein Kommando, das Code für
    später speichert, erzwingt mindestens `Confirm` mit einem Grund, der

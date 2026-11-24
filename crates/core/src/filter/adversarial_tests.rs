@@ -1856,19 +1856,102 @@ async fn test_adv_plain_escapes_follow_the_rules() {
     }
 }
 
+/// Bash 5.3 runs `${ cmd; }` and `${| cmd; }` as command substitutions, also
+/// inside double quotes. They were read as parameter expansions.
+#[tokio::test]
+async fn test_adv_function_substitution_hides_rm() {
+    for cmd in [
+        "echo \"${ rm -rf /; }\"",
+        "echo ${ rm -rf /; }",
+        "echo ${| rm -rf /; }",
+        "echo \"${\trm -rf /; }\"",
+        "echo \"${\nrm -rf /\n}\"",
+        "echo \"${ echo \")\"; rm -rf /; }\"",
+        "echo \"${ { echo a; }; rm -rf /; }x\"",
+        "echo \"${x:-${ rm -rf /; }}\"",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// After a `)` that closes a subshell or a case pattern a new word begins,
+/// so a `#` there starts a comment in bash. Read as code, the quote in it
+/// hid the next line.
+#[tokio::test]
+async fn test_adv_comment_after_closing_paren_hides_rm() {
+    for cmd in [
+        "(true)#'\nrm -rf /\n#'",
+        "(true)#\"\nrm -rf /\n#\"",
+        "case x in x)#'\nrm -rf /\n#'\nesac",
+        "echo $( (true)#'\nrm -rf /\n#'\n)",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// Inside `"$(...)"` bash reads a new command list, with its own quotes and
+/// comments. The double quote used to end at the first inner `"`, and the
+/// substitution at the first `)`, quoted or not.
+#[tokio::test]
+async fn test_adv_quotes_and_comments_inside_quoted_substitution() {
+    for cmd in [
+        "echo \"$(echo \"a\"; rm -rf /)\"",
+        "echo \"$(echo \")\"; rm -rf /)\"",
+        "x=\"$(printf '%s' \"$(rm -rf /)\")\"",
+        "echo \"$(#'\nrm -rf /\n)\"",
+        "echo \"$(#\"\n(:)#\"\nrm -rf /\n#\"\"\n)\"",
+        "echo \"$(echo \"it's\"; rm -rf /)\"",
+        "echo \"$(echo ')'; rm -rf /)\"",
+        "echo $(echo ')'; rm -rf /)",
+        "echo $(true\nrm -rf /)",
+        "echo \"$(case x in x) echo \")\";; esac; rm -rf /)\"",
+        "echo \"${x:-$(echo \"}\"; rm -rf /)}\"",
+        "echo \"`rm -rf /`\"",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// The counter-check: ordinary escapes, quotes, `#` in words and parameter
+/// expansions stay `AutoExec` under `Allow "*"`.
+#[tokio::test]
+async fn test_adv_ordinary_quoting_stays_autoexec() {
+    for cmd in [
+        "echo a\\ b",
+        "ls my\\ dir",
+        "echo 'it'\\''s'",
+        "echo \\#x",
+        "git log --format='%h #%s'",
+        "grep -E 'a|b'",
+        "ps aux | grep java | sort",
+        "echo \"${HOME}\"",
+        "echo \"${var:-x}\"",
+        "echo \"${x:-\"a b\"}\" ${#x} ${x#a}",
+        "echo \"a (b) c\" 'd)'",
+        "echo \"it's\"",
+    ] {
+        assert_benign_autoexec(cmd).await;
+    }
+}
+
 /// Differential check against a real bash (skipped where none is
-/// installed): every simple command bash would run for an input must be a
-/// segment the parser sees, judged by its command word. Bash runs with a
-/// `DEBUG` trap under `extdebug` that prints each command and skips it, an
-/// empty environment and a `PATH` that does not exist, and the inputs only
-/// name `echo` and made-up `probe_*` programs, so nothing is executed.
+/// installed): every simple command bash would run for an input, also inside
+/// a substitution, must be a command the parser sees (a segment or a command
+/// in one of its substitutions), judged by its command word. Bash runs with
+/// a `DEBUG` trap under `extdebug` that prints each command and skips it
+/// unless it is `echo`, `printf`, `true`, `case` or an assignment (so their
+/// substitutions are expanded), with stdout on `/dev/null`, an empty
+/// environment and a `PATH` that does not exist. The inputs only name those
+/// and made-up `probe_*` programs, so nothing else is executed.
 #[cfg(unix)]
 #[test]
 fn test_adv_segments_match_bash() {
     use std::process::Command;
 
-    const TRACE: &str = "set -T; shopt -s extdebug; \
-                         trap 'printf \"%s\\0\" \"$BASH_COMMAND\"; false' DEBUG";
+    const TRACE: &str = "exec 3>&1 >/dev/null; set -T; shopt -s extdebug; \
+                         trap 'printf \"%s\\0\" \"$BASH_COMMAND\" >&3; \
+                         case $BASH_COMMAND in echo*|printf*|true*|case*|x=*) true;; \
+                         *) false;; esac' DEBUG";
     // Resolved here, since the child's own `PATH` points nowhere.
     let Some(bash) = std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
@@ -1878,6 +1961,21 @@ fn test_adv_segments_match_bash() {
         eprintln!("bash not found, differential test skipped");
         return;
     };
+    // Bash 3 misreads comments and `case` inside `"$(...)"`.
+    let major = Command::new(&bash)
+        .args(["--norc", "--noprofile", "-c", "echo ${BASH_VERSINFO[0]}"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<u32>()
+                .ok()
+        });
+    if major.is_none_or(|major| major < 4) {
+        eprintln!("bash older than 4, differential test skipped");
+        return;
+    }
     let bash_commands = |cmd: &str| -> Option<Vec<String>> {
         let output = Command::new(&bash)
             .args(["--norc", "--noprofile", "-c", &format!("{TRACE}\n{cmd}")])
@@ -1895,12 +1993,18 @@ fn test_adv_segments_match_bash() {
         )
     };
     let command_word = |text: &str| -> String {
-        shell_words::split(text)
-            .ok()
-            .and_then(|words| words.into_iter().next())
-            .unwrap_or_default()
+        // `shell_words` does not know `$(...)`; its first word is plain.
+        let word = match shell_words::split(text) {
+            Ok(words) => words.into_iter().next().unwrap_or_default(),
+            Err(_) => text
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string(),
+        };
+        word.trim_matches(['(', ')']).to_string()
     };
-    for cmd in [
+    let mut cases = vec![
         "echo \\' ; probe_hidden -rf / ; echo \\'",
         "echo a #'\nprobe_hidden -rf /\n#'",
         "echo \\\" > /dev/null; echo RAN; echo \"\\\"\"",
@@ -1925,18 +2029,54 @@ fn test_adv_segments_match_bash() {
         "probe_ls my\\ dir\\|x | probe_hidden",
         "probe_a | probe_b && probe_c; probe_d & probe_e",
         "echo a#b; echo $#; probe_hidden",
-    ] {
+        // A `#` after a closing `)` starts a comment.
+        "(probe_a)#'\nprobe_hidden\n#'",
+        "case x in x)#'\nprobe_hidden\n#'\nesac",
+        "echo $(echo a)#x; probe_hidden",
+        // Quotes and comments inside a substitution in double quotes.
+        "echo \"$(echo \")\"; probe_hidden)\"",
+        "echo \"$(echo \"a\"; probe_hidden)\"",
+        "echo \"$(echo \"it's\"; probe_hidden)\"",
+        "echo \"$(#'\nprobe_hidden\n)\"",
+        "echo \"$(#\"\n(probe_a)#\"\nprobe_hidden\n#\"\"\n)\"",
+        "x=\"$(printf '%s' \"$(probe_hidden)\")\"",
+        "echo $(echo ')'; probe_hidden)",
+        "echo $(true\nprobe_hidden)",
+        "echo \"$(case x in x) echo \")\";; esac; probe_hidden)\"",
+        "echo \"${x:-$(echo \"}\"; probe_hidden)}\"",
+        "echo \"`probe_hidden`\"",
+    ];
+    // Function substitutions exist since bash 5.3.
+    if bash_commands("echo ${ true; }").is_some_and(|run| run.len() > 1) {
+        cases.extend([
+            "echo \"${ probe_hidden; }\"",
+            "echo ${ probe_hidden; }",
+            "echo ${| probe_hidden; }",
+            "echo \"${ echo \")\"; probe_hidden; }\"",
+            "echo \"${ { echo a; }; probe_hidden; }x\"",
+            "echo ${ echo a }; probe_hidden; }",
+        ]);
+    } else {
+        eprintln!("bash without function substitution, those cases skipped");
+    }
+    for cmd in cases {
         let Some(segments) = split_top_level_segments(cmd) else {
             panic!("{cmd:?}: the parser must split this input");
         };
-        let seen: Vec<String> = segments.iter().map(|s| command_word(s)).collect();
+        let commands = parser::segment_command(cmd);
+        let seen: Vec<String> = commands.iter().map(|s| command_word(s)).collect();
         let run = bash_commands(cmd).expect("bash ran before");
         assert!(!run.is_empty(), "{cmd:?}: bash ran nothing");
         for command in &run {
             let word = command_word(command);
+            // Assignments are not matched by their word.
+            if word.contains('=') {
+                continue;
+            }
             assert!(
                 seen.contains(&word),
-                "{cmd:?}: bash runs {command:?}, parser sees only {segments:?}"
+                "{cmd:?}: bash runs {command:?}, parser sees only {commands:?} \
+                 (segments {segments:?})"
             );
         }
     }

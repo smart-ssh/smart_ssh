@@ -4,7 +4,7 @@
 
 Accepted
 
-Betrifft: Spec 0002 (Abschnitt 4.4), ADR 0107, ADR 0001
+Betrifft: Spec 0002 (Abschnitt 4.4, 4.5), ADR 0107, ADR 0001
 
 ## Problem
 
@@ -33,6 +33,14 @@ The helpers that run on each segment afterwards (output-redirection check,
 substitution stripping, first-word unquoting, rule matching) share the same
 blind spot.
 
+Substitutions had a similar gap. A double-quoted string ended at the next
+`"` even inside `"$(...)"`, the substitution stripping ended `$(` at the
+next `)` without regard to quotes or comments, and bash 5.3's `${ cmd; }`
+was taken for a parameter expansion. `echo "${ rm -rf /; }"` was `AutoExec`
+under `Allow "*"` plus `Deny "rm *"`; `echo "$(echo ")"; rm -rf /)"` and
+`echo "$(#'<LF>rm -rf /<LF>)"` were only `Confirm`, the deny rule did not
+see the inner `rm`.
+
 ## Decision
 
 1. **One lexer in front of the scanner** (`crates/core/src/filter/shell_lexer.rs`).
@@ -55,11 +63,16 @@ blind spot.
    unbalanced quotes did before.
 
 2. **Where a comment starts.** Only at a word start: at the beginning, after
-   a blank (space, tab, newline), after `;`, `&`, `|` and after an opening
-   `(` / `$(` / `<(` / `>(`. Never inside quotes, inside `${...}` (bash
+   a blank (space, tab, newline), after `;`, `&`, `|`, `<`, `>`, after an
+   opening `(` / `$(` / `<(` / `>(` and after a `)` that closes a subshell,
+   a `case` pattern or `f()` (bash runs the next line of
+   `(true)#'<LF>rm -rf /<LF>#'`). Never inside quotes, inside `${...}` (bash
    reads `${x:- #}` as a parameter expansion), inside a word (`a#b`, `$#`,
-   `a\ #b`) or after `)`, `<`, `>` or `\r`. Where in doubt the `#` is read as
-   code: that only adds segments.
+   `a\ #b`), after the `)` of a substitution (`$(ls)#x` is one word) or
+   after `\r`. Where in doubt the `#` is read as a comment: the second view
+   below still evaluates its text, and a comment needs confirmation. Read
+   the other way, a real comment taken for code can let a quote in it hide
+   the next line.
 
 3. **A misread comment cannot hide a segment.** When the lexer found a
    comment, the command is lexed a second time with the comment kept as
@@ -99,7 +112,27 @@ blind spot.
    keep their decision. `echo a # comment` needs confirmation under an
    Allow rule.
 
-5. **Risk classification changes with it.** ADR 0107 kept its new checks out
+5. **Substitutions are command lists of their own.** The lexer follows the
+   nesting the shell reads instead of counting quotes and parentheses: inside
+   `$(...)`, `<(...)`, `>(...)` and bash 5.3's function substitutions
+   `${ ...; }` / `${| ...; }` it reads a command list with its own quotes,
+   comments, escapes, subshells, `{ ...; }` groups and `case` patterns, also
+   when the substitution stands in double quotes or in a parameter
+   expansion (`"${x:-"a"}"`, where quotes nest as well). It reports which
+   chars are at the top level and where each substitution starts and ends.
+   The segment scanner splits only at top-level operators, and
+   `strip_substitutions` takes the substitution bounds from the same lexer,
+   so `"$(echo ")"; rm -rf /)"` and `"$(#'<LF>rm -rf /<LF>)"` yield the inner
+   `rm -rf /`, and `"${ rm -rf /; }"` (before: a parameter expansion, so
+   `AutoExec` under `Allow "*"`) is a substitution: at least `Confirm`, and
+   `Deny` under `Deny "rm *"`. The inner command is taken from the segment
+   as split, before whitespace is normalised, so a newline in it still
+   separates commands (`$(true<LF>rm -rf /)`). Substitutions inside single
+   quotes are still extracted as before (the shell does not run them; in
+   doubt more is checked). A function substitution ends at a `}` in command
+   position, as in bash: `${ echo a }; ls; }` holds `echo a }; ls;`.
+
+6. **Risk classification changes with it.** ADR 0107 kept its new checks out
    of `split_command` so that the risk segmentation stayed the same. This
    decision changes `split_command` on purpose: the risk classifier must see
    the hidden `rm -rf /` too, and for input without the three constructs the
@@ -107,9 +140,13 @@ blind spot.
 
 ## Testing
 
-`crates/core/src/filter/adversarial_tests.rs` holds the four inputs above
-and further variants; they failed before this change and pass after it. A
-differential test runs bash (skipped where none is installed) with a
-`DEBUG` trap under `extdebug` that prints and skips every simple command,
-and checks that each command word bash would run is a segment the parser
-sees. The lexer has its own unit tests in `shell_lexer.rs`.
+`crates/core/src/filter/adversarial_tests.rs` holds the four inputs above,
+the substitution and `)#` cases of decisions 2 and 5 and further variants;
+they failed before this change and pass after it. A differential test runs
+bash (skipped where none is installed) with a `DEBUG` trap under `extdebug`
+that prints every simple command and skips all but `echo`, `printf`, `true`,
+`case` and assignments (so substitutions in them are expanded), and checks
+that each command word bash would run is a command the parser sees, at the
+top level or in a substitution. Its function-substitution cases run only
+with a bash that has them (5.3); the lexer's own unit tests in
+`shell_lexer.rs` cover them independently of the installed bash.
