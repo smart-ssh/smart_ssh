@@ -70,6 +70,7 @@ async fn test_live_output_precedes_an_unchanged_final_result() {
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     )
     .await;
     assert!(executed);
@@ -131,6 +132,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     );
     let cancel_future = async {
         // Cancel only once live output was shown.
@@ -201,6 +203,7 @@ async fn test_two_sessions_stream_only_their_own_output() {
             empty_store(),
             true,
             LedgerSource::Ai,
+            false,
         ),
         execute_suggested_command(
             &session_b,
@@ -211,6 +214,7 @@ async fn test_two_sessions_stream_only_their_own_output() {
             empty_store(),
             true,
             LedgerSource::Ai,
+            false,
         ),
     );
 
@@ -260,6 +264,7 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     );
     let cancel_future = async {
         if wait_for_hint {

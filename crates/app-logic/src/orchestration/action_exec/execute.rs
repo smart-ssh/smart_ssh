@@ -42,6 +42,9 @@ pub(super) async fn execute_action(
     ledger_source: LedgerSource,
     // Spec 0068, Teil 3: s. `handle_user_decision`.
     sudo_fallback_announced: bool,
+    // Issue #1561: the action's `ActionOrigin` is MCP. Not derivable from
+    // `ledger_source`: a confirmed/edited MCP command runs as `User`.
+    from_mcp: bool,
 ) -> bool {
     let action = match action {
         ApprovedAction::Command(command) => {
@@ -54,6 +57,7 @@ pub(super) async fn execute_action(
                 profile_store,
                 persist,
                 ledger_source,
+                from_mcp,
             )
             .await;
         }
@@ -506,6 +510,7 @@ pub(super) async fn execute_suggested_command(
     profile_store: &dyn ProfileStore,
     persist: bool,
     ledger_source: LedgerSource,
+    from_mcp: bool,
 ) -> bool {
     let prepared = match prepare_command(session, profile_store, approved.as_str().to_owned()).await
     {
@@ -514,15 +519,8 @@ pub(super) async fn execute_suggested_command(
             return emit_action_error(session, emitter, session_id, message, None, persist).await;
         }
     };
-    let (raw_outcome, waiting_for_input) = run_prepared_command(
-        session,
-        session_id,
-        action_id,
-        emitter,
-        &prepared,
-        ledger_source == LedgerSource::McpAgent,
-    )
-    .await;
+    let (raw_outcome, waiting_for_input) =
+        run_prepared_command(session, session_id, action_id, emitter, &prepared, from_mcp).await;
     // Spec 0018, Abschnitt 5: the command that actually ran (with `-S`,
     // without the password) goes into event/log/context.
     let command = prepared.effective_command.unwrap_or(prepared.command);
