@@ -111,7 +111,7 @@ async fn test_app_exit_emits_disconnect_app_exit_then_session_ended() {
         false,
     );
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     manager.insert(Uuid::new_v4(), Arc::new(session));
     manager.emit_app_exit_activity().await;
@@ -215,21 +215,105 @@ async fn test_no_input_marker_reaches_any_event_and_nothing_is_built_without_obs
     tokio::task::yield_now().await;
     assert_eq!(crate::activity::CONSTRUCTED.with(|c| c.get()), 0);
     assert_eq!(sup.running_in(scope_id), 0, "no tick task without observer");
+}
 
-    // With an observer: input bytes are never seen, only a flag is set
-    // (`note_user_input` takes no argument at all), so the marker typed into
-    // the terminal cannot be in any event.
+/// Shell that records nothing and never produces output.
+struct SilentShell;
+
+#[async_trait::async_trait]
+impl ssh_manager_core::ssh::InteractiveShell for SilentShell {
+    async fn write(&mut self, _: &[u8]) -> Result<(), ssh_manager_core::ssh::SshError> {
+        Ok(())
+    }
+    async fn read(&mut self) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+        std::future::pending().await
+    }
+    async fn resize(
+        &mut self,
+        _: ssh_manager_core::ssh::PtySize,
+    ) -> Result<(), ssh_manager_core::ssh::SshError> {
+        Ok(())
+    }
+}
+
+/// The marker is sent through the real terminal actor (the path of
+/// `terminal_input`); the tick fires; no event contains it.
+#[tokio::test(start_paused = true)]
+async fn test_no_input_marker_reaches_any_event() {
     let (session, recorder) = observed();
+    let sup = crate::tasks::TaskSupervisor::new();
+    let scope = sup.session_scope(Uuid::new_v4());
+    spawn_user_activity_tick(&session, &scope);
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    crate::session::spawn_terminal_actor(
+        Uuid::new_v4(),
+        Arc::clone(&session),
+        Box::new(SilentShell),
+        rx,
+        Arc::new(TestEmitter::default()),
+        &scope,
+    );
+    session
+        .emit_session_started(ActivitySessionKind::Terminal, None)
+        .await;
     let marker = "TYPED-MARKER-7f3a";
-    let _typed = marker.as_bytes().to_vec();
-    session.note_user_input();
+    tx.send(crate::session::TerminalCommand::Write(
+        marker.as_bytes().to_vec(),
+    ))
+    .await
+    .unwrap();
+    tokio::task::yield_now().await;
+    tokio::time::advance(USER_ACTIVITY_INTERVAL).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    // The input did reach the activity path (flag -> tick) ...
+    assert_eq!(recorder.count_activity(), 1, "{:?}", recorder.kinds());
+    // ... but nothing of it is in any event.
+    assert!(!format!("{:?}", recorder.0.lock().unwrap()).contains(marker));
+}
+
+/// The first chat message announces the chat once; events carry the chat id
+/// only from then on; a repeat (second message, reconnect) emits nothing.
+#[tokio::test]
+async fn test_chat_started_comes_once_and_later_events_carry_the_chat_id() {
+    let (session, recorder) = observed();
+    let chat_id = Uuid::new_v4();
+    *session.persistence.chat_session_id.lock().await = Some(chat_id);
+    session
+        .emit_session_started(ActivitySessionKind::Terminal, None)
+        .await;
     session
         .emit_connection(
             ConnectionChange::Connected,
             crate::activity::ActivitySource::User,
         )
         .await;
-    assert!(!format!("{:?}", recorder.kinds()).contains(marker));
+    session.emit_chat_started_once().await;
+    session.emit_chat_started_once().await;
+    session
+        .emit_connection(
+            ConnectionChange::Reconnected,
+            crate::activity::ActivitySource::User,
+        )
+        .await;
+    session.emit_chat_started_once().await;
+    let events = recorder.0.lock().unwrap().clone();
+    let ids: Vec<_> = events
+        .iter()
+        .map(|e| e.session.chat_session_id.clone())
+        .collect();
+    let want = Some(chat_id.to_string());
+    assert_eq!(ids, [None, None, want.clone(), want], "{events:?}");
+    let started: Vec<_> = events
+        .iter()
+        .filter(|e| matches!(e.kind, ActivityEventKind::ChatStarted { .. }))
+        .collect();
+    assert_eq!(started.len(), 1);
+    assert!(matches!(
+        &started[0].kind,
+        ActivityEventKind::ChatStarted { chat_session_id } if *chat_id.to_string() == *chat_session_id
+    ));
 }
 
 #[tokio::test]

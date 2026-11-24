@@ -582,7 +582,7 @@ async fn test_without_observer_no_event_is_constructed() {
     )
     .await;
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     assert_eq!(crate::activity::CONSTRUCTED.with(|c| c.get()), 0);
 
@@ -728,7 +728,7 @@ async fn manager_with_two(hub: &Arc<ActivityHub>) -> crate::session::SessionMana
             false,
         );
         session
-            .emit_session_started(ActivitySessionKind::Chat, None)
+            .emit_session_started(ActivitySessionKind::Terminal, None)
             .await;
         manager.insert(Uuid::new_v4(), Arc::new(session));
     }
@@ -806,12 +806,12 @@ async fn test_events_queued_before_cancellation_are_delivered_by_the_shutdown() 
         false,
     );
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     seen_rx.recv_timeout(WAIT).expect("worker holds event 1");
     for _ in 0..4 {
         session
-            .emit_session_started(ActivitySessionKind::Chat, None)
+            .emit_session_started(ActivitySessionKind::Terminal, None)
             .await;
     }
     scope.cancel();
@@ -888,7 +888,7 @@ async fn test_hanging_session_scope_does_not_starve_the_drain_and_events_precede
         false,
     ));
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     let id = Uuid::new_v4();
     let manager = crate::session::SessionManager::default();
@@ -971,7 +971,7 @@ async fn test_no_event_follows_the_session_end_when_its_own_scope_times_out() {
         false,
     ));
     session
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     let id = Uuid::new_v4();
     let manager = crate::session::SessionManager::default();

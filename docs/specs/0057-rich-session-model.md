@@ -35,13 +35,20 @@ in seiner Verantwortung.
 ### 1.1 Was ein Beobachter erhält
 
 Pro Ereignis: Zeitstempel, die Sitzung (Kennung der laufenden Verbindung,
-Art `chat`, `mcp` oder `terminal`; `terminal` ist eine Sitzung ohne Chat,
-z. B. der lokale Pseudo-Server), die **Quelle** (`user`, `ai` oder
+Art `mcp` oder `terminal`; jede Nutzer-Sitzung beginnt als `terminal`, auch
+wenn zu ihr ein Chat gehört; die Chat-Kennung trägt sie erst ab „Chat
+begonnen"), die **Quelle** (`user`, `ai` oder
 `mcp-agent`; bei `mcp-agent` nennt der Sitzungsbeginn den MCP-Client), das
 Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
 
 - **Sitzungsbeginn / -ende** — Server-Schnappschuss (Name, Host, Port,
   Benutzer, Gruppen, Tags) und Zeitzone des Geräts; beim Ende der Grund.
+- **Chat begonnen** — kommt genau einmal je Sitzung mit der ersten
+  Chat-Nachricht des Nutzers und nennt die Chat-Sitzung; alle späteren
+  Ereignisse der Sitzung tragen deren Kennung, die früheren keine. Eine
+  Wiederverbindung oder eine fortgesetzte Chat-Sitzung erzeugt kein zweites
+  „Chat begonnen". Eine Sitzung ohne Chat-Sitzung (lokaler Pseudo-Server)
+  erzeugt es nie.
 - **Kommando vorgeschlagen** — das Kommando; die Quelle ist die Herkunft des
   Vorschlags. Ein im Bestätigungsdialog vom Nutzer bearbeiteter Text ist ein
   eigener Vorschlag mit Quelle `user`.

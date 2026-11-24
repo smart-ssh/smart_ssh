@@ -86,6 +86,9 @@ pub fn spawn_terminal_actor_with_idle(
                     match cmd {
                         Some(TerminalCommand::Write(data)) => {
                             idle.touch();
+                            // Issue #1507: a flag only; `data` is never looked
+                            // at, and the keystroke path is not touched.
+                            session.note_user_input();
                             if let Err(err) = shell.write(&data).await {
                                 break Some(Some(err.to_string()));
                             }

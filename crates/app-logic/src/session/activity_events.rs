@@ -25,8 +25,15 @@ impl Session {
         let Some(reporting) = self.activity_reporting() else {
             return;
         };
-        let chat_session_id =
-            (*self.persistence.chat_session_id.lock().await).map(|i| i.to_string());
+        // The chat id is only known to observers from `ChatStarted` on.
+        let chat_session_id = if self
+            .activity_chat_announced
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            (*self.persistence.chat_session_id.lock().await).map(|i| i.to_string())
+        } else {
+            None
+        };
         let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
         #[cfg(test)]
         crate::activity::CONSTRUCTED.with(|c| c.set(c.get() + 1));
@@ -65,7 +72,7 @@ impl Session {
             return;
         };
         let source = match kind {
-            ActivitySessionKind::Chat | ActivitySessionKind::Terminal => ActivitySource::User,
+            ActivitySessionKind::Terminal => ActivitySource::User,
             ActivitySessionKind::Mcp => ActivitySource::McpAgent,
         };
         let kind = ActivityEventKind::SessionStarted {
@@ -83,6 +90,32 @@ impl Session {
     pub(crate) fn activity_started(&self) -> bool {
         self.activity_started
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Tells the observers that the first chat message of this session
+    /// arrived; only the first call per session emits (a reconnect or a
+    /// resumed chat keeps the session, so it does not repeat). Sessions
+    /// without a chat session (local pseudo-server) emit nothing.
+    pub async fn emit_chat_started_once(&self) {
+        if !self.activity_active() || !self.activity_started() {
+            return;
+        }
+        let Some(chat_id) = *self.persistence.chat_session_id.lock().await else {
+            return;
+        };
+        if self
+            .activity_chat_announced
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return;
+        }
+        self.push_activity(
+            ActivitySource::User,
+            ActivityEventKind::ChatStarted {
+                chat_session_id: chat_id.to_string(),
+            },
+        )
+        .await;
     }
 
     /// Tells the observers that the connection of this session changed.

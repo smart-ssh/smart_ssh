@@ -65,10 +65,9 @@ pub struct SessionRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ActivitySessionKind {
-    Chat,
     Mcp,
-    /// A session without a chat (no saved chat session, e.g. the local
-    /// pseudo-server): only the terminal and the connection exist.
+    /// Every user session starts as this; `ChatStarted` follows with the
+    /// first chat message.
     Terminal,
 }
 
@@ -234,6 +233,11 @@ pub enum ActivityEventKind {
     /// secret and no error text.
     Connection {
         change: ConnectionChange,
+    },
+    /// The first chat message of a user session: from now on the events of
+    /// the session carry this chat session id. At most once per session.
+    ChatStarted {
+        chat_session_id: String,
     },
     /// The user was active in the session during the last minute (terminal
     /// input, chat message, confirmation) or a command was running. At most

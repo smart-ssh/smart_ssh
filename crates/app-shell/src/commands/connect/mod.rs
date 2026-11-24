@@ -351,14 +351,11 @@ async fn connect_session_steps<R: tauri::Runtime>(
     // Issue #1505: an MCP-driven session (`persist_chat_session: false`)
     // announces itself with its client name from `mcp_backend`.
     if persist_chat_session {
-        // Issue #1507: a session without a chat session (the local
-        // pseudo-server) is a terminal-only session.
-        let kind = if chat_session_id.is_some() {
-            app_logic::activity::ActivitySessionKind::Chat
-        } else {
-            app_logic::activity::ActivitySessionKind::Terminal
-        };
-        session.emit_session_started(kind, None).await;
+        // Issue #1507: every user session starts as a terminal session;
+        // `ChatStarted` follows with the first chat message.
+        session
+            .emit_session_started(app_logic::activity::ActivitySessionKind::Terminal, None)
+            .await;
         session
             .emit_connection(
                 app_logic::activity::ConnectionChange::Connected,

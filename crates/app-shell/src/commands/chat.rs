@@ -225,6 +225,10 @@ async fn send_turn_impl<R: tauri::Runtime>(
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
     let resend = text.is_none();
+    if !resend {
+        // Issue #1507: the first chat message turns the session into a chat.
+        session.emit_chat_started_once().await;
+    }
     if resend {
         let last_is_user_text = {
             let ctx = session.ai.context.lock().await;

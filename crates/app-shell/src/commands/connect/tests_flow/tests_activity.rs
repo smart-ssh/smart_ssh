@@ -40,7 +40,7 @@ fn connection(change: ConnectionChange) -> ActivityEventKind {
 }
 
 #[tokio::test]
-async fn test_connect_emits_session_started_then_connected() {
+async fn test_remote_session_without_chat_emits_started_terminal_then_connected() {
     let _guard = lock_async().await;
     let app = acknowledged_app();
     let connector = ScriptedConnector::new(connected(&Arc::new(AtomicBool::new(false))));
@@ -61,11 +61,19 @@ async fn test_connect_emits_session_started_then_connected() {
     assert!(matches!(
         kinds[0],
         ActivityEventKind::SessionStarted {
-            kind: ActivitySessionKind::Chat,
+            kind: ActivitySessionKind::Terminal,
             ..
         }
     ));
     assert_eq!(kinds[1], connection(ConnectionChange::Connected));
+    // A remote session starts as a terminal session: no chat id is announced
+    // before the first chat message, although the chat session row exists.
+    assert!(recorder
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|e| e.session.chat_session_id.is_none()));
     reset(app.handle());
 }
 
