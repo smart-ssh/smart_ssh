@@ -83,8 +83,9 @@ Kennzeichen **Redaction unvollständig** und den Inhalt. Typen:
   der lokale Pseudo-Server melden kein `failed`. Scheitert dagegen ein
   Wiederverbindungsversuch einer bestehenden Sitzung (manuell oder
   automatisch), meldet er genau ein `failed` mit dem erreichten Schritt; das
-  Ereignis trägt die Kennung und die Chat-Sitzung der bestehenden Sitzung. Eine bereits verlorene Verbindung
-  meldet beim Schließen kein zweites `disconnected`.
+  Ereignis trägt die Kennung der bestehenden Sitzung und, sobald „Chat
+  begonnen" gemeldet wurde, deren Chat-Sitzung (davor keine). Eine bereits
+  verlorene Verbindung meldet beim Schließen kein zweites `disconnected`.
 - **Nutzeraktivität** — höchstens einmal pro Minute und Sitzung, wenn in dieser
   Minute eine Eingabe stattfand (Terminal-Taste, Chat-Nachricht, Bestätigung)
   oder ein Befehl lief. Ohne jeden Inhalt, auch ohne Anzahl; getippte Zeichen
