@@ -322,7 +322,11 @@ instead of being hidden.
 
 **Activity observers.** An edition can register observers that receive each
 event of a session as it happens (commands, decisions, AI messages, file reads
-and writes, session start and end). The core builds these events from redacted
+and writes, failed file writes, connection changes, session start and end,
+and a content-free "user was active" tick at most once a minute per session).
+Terminal input is never read for this: a keystroke only sets a flag, nothing of
+what is typed is stored, counted or put into an event; connection events carry
+no error text. The core builds these events from redacted
 content; file events carry path, size and hashes, never content. Delivery runs on its own worker behind a bounded queue
 and never blocks a command: a slow observer makes events drop (counted), a
 panicking observer is caught. With no observer registered no event is built.

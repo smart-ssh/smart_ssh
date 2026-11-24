@@ -86,6 +86,9 @@ pub fn spawn_terminal_actor_with_idle(
                     match cmd {
                         Some(TerminalCommand::Write(data)) => {
                             idle.touch();
+                            // Issue #1507: a flag only; `data` is never looked
+                            // at, and the keystroke path is not touched.
+                            session.note_user_input();
                             if let Err(err) = shell.write(&data).await {
                                 break Some(Some(err.to_string()));
                             }
@@ -116,7 +119,7 @@ pub fn spawn_terminal_actor_with_idle(
             // noch offen ist — sonst zeigt eine wiederhergestellte Tab-Leiste
             // (Abschnitt 2, "Backend ist maßgebliche Quelle") eine tote
             // Session fälschlich als weiterhin verbunden an.
-            report_connection_lost(session_id, &session, emitter.as_ref(), reason);
+            report_connection_lost(session_id, &session, emitter.as_ref(), reason).await;
         }
     });
 }

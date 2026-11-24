@@ -584,6 +584,14 @@ pub(crate) async fn execute_write_remote_file(
                 .get()
                 .filter(|_| sudo_fallback_announced)
             else {
+                session
+                    .emit_file_write_failed(
+                        ledger_source,
+                        action_id,
+                        &path,
+                        SshError::SftpPermissionDenied(String::new()).code(),
+                    )
+                    .await;
                 return emit_action_error(
                     session,
                     emitter,
@@ -615,6 +623,9 @@ pub(crate) async fn execute_write_remote_file(
                 Ok(done) => (done, true),
                 Err(err) => {
                     let code = err.code();
+                    session
+                        .emit_file_write_failed(ledger_source, action_id, &path, code)
+                        .await;
                     return emit_action_error(
                         session,
                         emitter,
@@ -631,6 +642,9 @@ pub(crate) async fn execute_write_remote_file(
         }
         Err(err) => {
             let code = err.code();
+            session
+                .emit_file_write_failed(ledger_source, action_id, &path, code)
+                .await;
             return emit_action_error(
                 session,
                 emitter,
