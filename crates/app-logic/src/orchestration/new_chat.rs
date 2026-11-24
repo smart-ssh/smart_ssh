@@ -153,6 +153,9 @@ pub async fn start_new_chat(
         *summary = None;
         if new_id.is_some() {
             *chat_session_id = new_id;
+            // The new chat is unknown to the observers until its first
+            // message emits `ChatStarted` again.
+            session.reset_chat_announced();
         }
     }
     // Issue #648: the provider-reported size belongs to the old chat. Reset
@@ -219,6 +222,65 @@ mod tests {
         }
         *session.safety.mcp_origin_flags.lock().unwrap() = vec![false, false];
         (session, store, id, tmp)
+    }
+
+    /// Issue #1507: after "new chat" the events carry no chat id until the
+    /// first message of the new chat announces it (never an unannounced id).
+    #[tokio::test]
+    async fn test_new_chat_resets_the_announcement_of_the_chat_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ActivitySource, ConnectionChange, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, old_id, _tmp) = persisted_session().await;
+        let session = session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        ));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        session.emit_chat_started_once().await;
+        let new_id = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        session.emit_chat_started_once().await;
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        let events = rec.0.lock().unwrap().clone();
+        let ids: Vec<_> = events
+            .iter()
+            .map(|e| e.session.chat_session_id.clone())
+            .collect();
+        let (a, b) = (Some(old_id.to_string()), Some(new_id.to_string()));
+        assert_eq!(ids, [None, a, None, b.clone(), b], "{events:?}");
+        assert!(matches!(
+            events[3].kind,
+            ActivityEventKind::ChatStarted { .. }
+        ));
     }
 
     #[tokio::test]

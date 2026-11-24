@@ -49,6 +49,7 @@ use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitt
 use crate::state::{ActionId, SessionId};
 
 mod activity_events;
+pub use activity_events::{spawn_user_activity_tick, USER_ACTIVITY_INTERVAL};
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -590,6 +591,9 @@ pub struct Session {
     /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
     /// event is only sent for sessions the observers know.
     activity_started: std::sync::atomic::AtomicBool,
+    /// `true` once `ChatStarted` was queued: events carry the chat session id
+    /// from then on.
+    activity_chat_announced: std::sync::atomic::AtomicBool,
     /// Issue #1539: `true` once `SessionEnded` was queued; later events of
     /// this session are dropped so none follows its end.
     activity_ended: std::sync::Mutex<bool>,
@@ -677,6 +681,7 @@ impl Session {
             usage_reporting: None,
             activity: None,
             activity_started: std::sync::atomic::AtomicBool::new(false),
+            activity_chat_announced: std::sync::atomic::AtomicBool::new(false),
             activity_ended: std::sync::Mutex::new(false),
             activity_exiting: std::sync::atomic::AtomicBool::new(false),
         }
@@ -1100,7 +1105,7 @@ pub use terminal_actor::{spawn_terminal_actor, spawn_terminal_actor_with_idle};
 /// `connection-status-changed` — exactly once per session: later reports
 /// find the status already `Disconnected` and do nothing. Returns whether
 /// this call made the transition.
-pub fn report_connection_lost(
+pub async fn report_connection_lost(
     session_id: SessionId,
     session: &Session,
     emitter: &dyn EventEmitter,
@@ -1125,6 +1130,15 @@ pub fn report_connection_lost(
     // The hook runs first: it announces the automatic attempts before the
     // status event, so the UI never shows "lost" for a moment.
     session.conn.auto_reconnect.fire_hook(session_id);
+    // Issue #1507: observers learn of the loss (no reason text).
+    session
+        .emit_connection(
+            crate::activity::ConnectionChange::Disconnected(
+                crate::activity::DisconnectReason::Network,
+            ),
+            crate::activity::ActivitySource::User,
+        )
+        .await;
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1158,7 +1172,7 @@ pub fn spawn_connection_watch(
         if session.transport.is_closed() || session.transport.epoch() != epoch {
             return;
         }
-        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason).await;
     });
 }
 

@@ -884,3 +884,84 @@ async fn test_no_note_without_an_interrupted_turn_or_after_stop() {
         .await
         .is_none());
 }
+
+/// Issue #1507: the first chat message of a session announces the chat
+/// (`ChatStarted`) exactly once; a second message announces nothing again and
+/// the events carry the chat id only from the announcement on.
+#[tokio::test]
+async fn test_first_chat_message_emits_chat_started_once() {
+    use app_logic::activity::{
+        ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+        ActivitySessionKind, ServerSnapshot,
+    };
+    struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+    impl ActivityObserver for Rec {
+        fn on_event(&self, event: &ActivityEvent) {
+            self.0.lock().unwrap().push(event.clone());
+        }
+    }
+    let _guard = lock_async().await;
+    let rec = Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+    let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+    let chat_id = uuid::Uuid::new_v4();
+    let mut session =
+        test_session(ServerId::new()).with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        ));
+    session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_id)));
+    session
+        .emit_session_started(ActivitySessionKind::Terminal, None)
+        .await;
+    let app = test_app();
+    let emitter = TestEmitter::default();
+    let confirmations = ConfirmationRegistry::new();
+    let profile_store = InMemoryProfileStore::default();
+    let tmp = tempfile::tempdir().unwrap();
+    let stores =
+        persistence_sqlite::SqliteProfileStore::connect_plaintext(&tmp.path().join("p.db"))
+            .await
+            .unwrap();
+    let policy_store = stores.policy_store();
+    for text in ["one", "two"] {
+        send_chat_message_impl(
+            app.handle(),
+            &emitter,
+            &session,
+            uuid::Uuid::new_v4(),
+            text.to_string(),
+            None,
+            &profile_store,
+            &policy_store,
+            &confirmations,
+        )
+        .await
+        .unwrap();
+    }
+    let events = rec.0.lock().unwrap().clone();
+    let started: Vec<_> = events
+        .iter()
+        .filter(|e| matches!(e.kind, ActivityEventKind::ChatStarted { .. }))
+        .collect();
+    assert_eq!(started.len(), 1, "{events:?}");
+    assert!(matches!(
+        &started[0].kind,
+        ActivityEventKind::ChatStarted { chat_session_id } if *chat_session_id == chat_id.to_string()
+    ));
+    // SessionStarted (no chat id) comes before ChatStarted.
+    assert_eq!(events[0].session.chat_session_id, None);
+    assert!(matches!(
+        events[1].kind,
+        ActivityEventKind::ChatStarted { .. }
+    ));
+}

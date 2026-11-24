@@ -124,6 +124,17 @@ impl<'a> CloseContext<'a> {
         self.close_task_scope(session_id).await;
         // Issue #1505: after the scope closed, so events of the cancelled action task
         // reach the observers before the end.
+        // Issue #1507: a connection that was already lost reported that.
+        if *lock_tolerating_poison(&session.conn.status) == ConnectionStatus::Connected {
+            session
+                .emit_connection(
+                    app_logic::activity::ConnectionChange::Disconnected(
+                        app_logic::activity::DisconnectReason::User,
+                    ),
+                    app_logic::activity::ActivitySource::User,
+                )
+                .await;
+        }
         session
             .emit_session_ended(app_logic::activity::SessionEndReason::Closed)
             .await;
@@ -363,6 +374,78 @@ mod tests {
         let closed = rig.ctx().close(rig.f.session_id).await;
         assert!(closed.is_some());
         assert_fully_closed(&rig, &slot, &op, rx).await;
+    }
+
+    /// Issue #1507: a user close reports the end of the connection by the
+    /// user, then the end of the session; a session that was already lost
+    /// reports no second disconnect.
+    #[tokio::test]
+    async fn test_close_emits_user_disconnect_then_session_ended() {
+        use app_logic::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ConnectionChange, DisconnectReason, ServerSnapshot, SessionEndReason,
+        };
+        #[derive(Default)]
+        struct Rec(std::sync::Mutex<Vec<ActivityEventKind>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.kind.clone());
+            }
+        }
+        let rec = Arc::new(Rec::default());
+        let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let snapshot = ServerSnapshot {
+            id: "s".into(),
+            name: "n".into(),
+            host: "h".into(),
+            port: 22,
+            user: "u".into(),
+            group_ids: vec![],
+            group_names: vec![],
+            tags: vec![],
+        };
+        let rig = Rig::new(Box::new(working_transport()));
+        let open_id = SessionId::new_v4();
+        let lost_id = SessionId::new_v4();
+        for id in [open_id, lost_id] {
+            let session =
+                app_logic::test_support::session_with_transport(Box::new(working_transport()))
+                    .with_activity_reporting(ActivityReporting::new(
+                        &hub,
+                        id.to_string(),
+                        snapshot.clone(),
+                    ));
+            rig.f.sessions.insert(id, Arc::new(session));
+        }
+        *rig.f
+            .sessions
+            .get(lost_id)
+            .unwrap()
+            .conn
+            .status
+            .lock()
+            .unwrap() = app_logic::events::ConnectionStatus::Disconnected;
+
+        assert!(rig.ctx().close(open_id).await.is_some());
+        assert_eq!(
+            *rec.0.lock().unwrap(),
+            vec![
+                ActivityEventKind::Connection {
+                    change: ConnectionChange::Disconnected(DisconnectReason::User)
+                },
+                ActivityEventKind::SessionEnded {
+                    reason: SessionEndReason::Closed
+                },
+            ]
+        );
+        rec.0.lock().unwrap().clear();
+        assert!(rig.ctx().close(lost_id).await.is_some());
+        assert_eq!(
+            *rec.0.lock().unwrap(),
+            vec![ActivityEventKind::SessionEnded {
+                reason: SessionEndReason::Closed
+            }]
+        );
     }
 
     /// Issue #816: the import path used to skip the grants (and the running

@@ -460,19 +460,22 @@ async fn wait_for_status_events(emitter: &crate::events::TestEmitter, count: usi
 
 /// Issue #353: terminal EOF first, then a later loss report (exec/SFTP
 /// error, keepalive) must not emit a second `disconnected` event.
-#[test]
-fn test_connection_loss_is_reported_once_per_session() {
+#[tokio::test]
+async fn test_connection_loss_is_reported_once_per_session() {
     let session = dummy_session(ServerId::new());
     let emitter = crate::events::TestEmitter::default();
     let id = Uuid::new_v4();
 
-    assert!(report_connection_lost(id, &session, &emitter, None));
-    assert!(!report_connection_lost(
-        id,
-        &session,
-        &emitter,
-        Some("The server stopped responding".to_string())
-    ));
+    assert!(report_connection_lost(id, &session, &emitter, None).await);
+    assert!(
+        !report_connection_lost(
+            id,
+            &session,
+            &emitter,
+            Some("The server stopped responding".to_string())
+        )
+        .await
+    );
     assert_eq!(status_events(&emitter).len(), 1);
     assert_eq!(
         *session.conn.status.lock().unwrap(),
@@ -506,12 +509,7 @@ async fn test_connection_watch_reports_loss_without_terminal() {
         *session.conn.status.lock().unwrap(),
         ConnectionStatus::Disconnected
     );
-    assert!(!report_connection_lost(
-        id,
-        &session,
-        emitter.as_ref(),
-        None
-    ));
+    assert!(!report_connection_lost(id, &session, emitter.as_ref(), None).await);
     assert_eq!(status_events(&emitter).len(), 1);
 }
 
