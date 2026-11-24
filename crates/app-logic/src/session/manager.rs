@@ -27,6 +27,8 @@ pub struct SessionSnapshotEntry {
 /// Map.
 #[derive(Default)]
 pub struct SessionManager {
+    /// Issue #1545: set when the exit sequence begins.
+    exiting: std::sync::atomic::AtomicBool,
     sessions: StdMutex<HashMap<SessionId, Arc<Session>>>,
     /// Spec 0114 §4: number of open sessions, for the background keep-alive.
     count_tx: tokio::sync::watch::Sender<usize>,
@@ -149,6 +151,9 @@ impl SessionManager {
 
     pub fn insert(&self, id: SessionId, session: Arc<Session>) {
         let mut sessions = lock_tolerating_poison(&self.sessions);
+        if self.exiting.load(std::sync::atomic::Ordering::SeqCst) {
+            session.refuse_activity_start();
+        }
         sessions.insert(id, session);
         self.count_tx.send_replace(sessions.len());
     }
@@ -168,6 +173,7 @@ impl SessionManager {
     /// still running) get no end event. Call after the session scopes ended
     /// and before the app scope is cancelled, so the worker drains the events.
     pub async fn emit_app_exit_activity(&self) {
+        self.begin_exit();
         let sessions: Vec<Arc<Session>> = lock_tolerating_poison(&self.sessions)
             .values()
             .cloned()
@@ -190,6 +196,18 @@ impl SessionManager {
         }
     }
 
+    /// Issue #1545: marks the exit as begun. Sessions inserted from now on and
+    /// every session already open refuse to queue `SessionStarted`, so no
+    /// start is left without an end. Idempotent.
+    pub fn begin_exit(&self) {
+        let sessions = lock_tolerating_poison(&self.sessions);
+        self.exiting
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        for session in sessions.values() {
+            session.refuse_activity_start();
+        }
+    }
+
     /// The exit sequence for the scopes and the activity stream (issues
     /// #669, #1532, #1539): session scopes end first, then every started
     /// session gets `SessionEnded { AppExit }`, last the app scope drains the
@@ -200,6 +218,7 @@ impl SessionManager {
         tasks: &crate::tasks::TaskSupervisor,
         budget: crate::tasks::ExitBudget,
     ) {
+        self.begin_exit();
         tasks.shutdown_sessions(budget.sessions).await;
         if tokio::time::timeout(budget.end_events, self.emit_app_exit_activity())
             .await

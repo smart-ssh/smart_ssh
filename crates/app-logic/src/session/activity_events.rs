@@ -35,6 +35,7 @@ impl Session {
             None
         };
         let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
+        let is_start = matches!(kind, ActivityEventKind::SessionStarted { .. });
         #[cfg(test)]
         crate::activity::CONSTRUCTED.with(|c| c.set(c.get() + 1));
         // Held across the check and the push, so no event can slip in after
@@ -42,6 +43,19 @@ impl Session {
         let mut ended = lock_tolerating_poison(&self.activity_ended);
         if *ended {
             return;
+        }
+        // Issue #1545: no start once the exit began, or it would never get
+        // its end. The started flag is set under the same lock, so the exit
+        // sequence sees either a complete start or none.
+        if is_start {
+            if self
+                .activity_exiting
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return;
+            }
+            self.activity_started
+                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
         *ended = is_end;
         reporting.hub.push(ActivityEvent {
@@ -82,7 +96,15 @@ impl Session {
             time_zone: reporting.time_zone.clone(),
         };
         self.push_activity(source, kind).await;
-        self.activity_started
+    }
+
+    /// Issue #1545: from now on `emit_session_started` queues nothing. Takes
+    /// the lock that `push_activity` holds across a start, so a start either
+    /// finished before this returns (and is visible via `activity_started`)
+    /// or is refused.
+    pub(crate) fn refuse_activity_start(&self) {
+        let _guard = lock_tolerating_poison(&self.activity_ended);
+        self.activity_exiting
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
