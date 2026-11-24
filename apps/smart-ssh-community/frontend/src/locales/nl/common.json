@@ -433,6 +433,7 @@
     "loadingSuggestions": "Suggesties laden…",
     "noSuggestions": "Geen suggesties.",
     "binaryFileHint": "Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
+    "fileTooLargeHint": "Het bestand is groter dan {{limit}}, geen tekstvergelijking. Nieuwe grootte: {{newSize}}.",
     "diffTooLargeHint": "Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
     "noContentChange": "(geen inhoudswijziging)",
     "quickRuleLabel": {

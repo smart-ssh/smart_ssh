@@ -432,6 +432,7 @@
     "loadingSuggestions": "Đang tải đề xuất…",
     "noSuggestions": "Không có đề xuất.",
     "binaryFileHint": "Tệp nhị phân — không thể so sánh văn bản. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
+    "fileTooLargeHint": "Tệp lớn hơn {{limit}}, không so sánh văn bản. Kích thước mới: {{newSize}}.",
     "diffTooLargeHint": "Nội dung quá lớn để so sánh theo dòng. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
     "noContentChange": "(nội dung không thay đổi)",
     "quickRuleLabel": {

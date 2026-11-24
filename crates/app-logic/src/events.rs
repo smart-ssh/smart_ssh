@@ -315,19 +315,15 @@ pub(crate) struct ChatActionProposedPayload {
     /// nach Rechte-Fehler) werden kann — Grundlage für den Hinweis im
     /// Bestätigungsdialog. Nur mit diesem Wert darf der Fallback laufen.
     uses_stored_sudo_password: bool,
-    /// Spec 0020, Abschnitt 4.2, Punkt 3: nur bei `action: WriteRemoteFile`
-    /// gesetzt — aktueller (Text-)Inhalt der Zieldatei, für dieselbe
-    /// Diff-Vorschau-Komponente wie bei `previous_note_content`. `None`,
-    /// wenn die Datei noch nicht existiert **oder** nicht als Text
-    /// dekodierbar ist (Binärdatei) — dann unterscheidet
-    /// `previous_file_size` zwischen beiden Fällen.
+    /// Spec 0020, 4.2, Punkt 3: only for `WriteRemoteFile` — current text of
+    /// the target file for the diff preview. `None` for a new, a binary or an
+    /// over-cap file (told apart by `previous_file_size` / `_too_large`).
     previous_file_content: Option<String>,
-    /// Nur gesetzt, wenn die Zieldatei existiert, aber nicht als Text
-    /// dekodierbar war (Binärdatei) — Größe der *alten* Datei für den in
-    /// diesem Fall angezeigten Hinweis (Spec 0020, Abschnitt 4.2, Punkt 3,
-    /// letzter Satz). `None` sowohl bei einer neuen Datei als auch bei
-    /// jeder Nicht-`WriteRemoteFile`-Aktion.
+    /// Size of an existing, non-text (binary) target file (Spec 0020, 4.2,
+    /// Punkt 3, last sentence); `None` otherwise.
     previous_file_size: Option<u64>,
+    /// Issue #1559: `true` only if the existing target is over the preview cap.
+    previous_file_too_large: bool,
     /// Spec 0023, Abschnitt 3: nur bei `action: ProposeNoteUpdate` gesetzt —
     /// Server- oder Gruppenname des bereits serverseitig aufgelösten Ziels.
     /// Der Nutzer muss immer eindeutig erkennen können, worauf sich der
@@ -363,6 +359,7 @@ pub fn emit_chat_action_proposed(
     uses_stored_sudo_password: bool,
     previous_file_content: Option<String>,
     previous_file_size: Option<u64>,
+    previous_file_too_large: bool,
     target_name: Option<String>,
     risk_assessment: Option<RiskAssessment>,
     origin: ActionOrigin,
@@ -377,6 +374,7 @@ pub fn emit_chat_action_proposed(
         uses_stored_sudo_password,
         previous_file_content,
         previous_file_size,
+        previous_file_too_large,
         target_name,
         risk_assessment,
         origin,

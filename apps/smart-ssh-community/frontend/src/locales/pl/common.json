@@ -435,6 +435,7 @@
     "loadingSuggestions": "Wczytywanie propozycji…",
     "noSuggestions": "Brak propozycji.",
     "binaryFileHint": "Plik binarny — porównanie tekstowe niemożliwe. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
+    "fileTooLargeHint": "Plik jest większy niż {{limit}}, brak porównania tekstowego. Nowy rozmiar: {{newSize}}.",
     "diffTooLargeHint": "Zawartość zbyt duża na porównanie wierszy. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
     "noContentChange": "(brak zmiany zawartości)",
     "quickRuleLabel": {

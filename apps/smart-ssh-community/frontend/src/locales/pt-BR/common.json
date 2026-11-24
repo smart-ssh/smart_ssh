@@ -434,6 +434,7 @@
     "loadingSuggestions": "Carregando sugestões…",
     "noSuggestions": "Nenhuma sugestão.",
     "binaryFileHint": "Arquivo binário — comparação de texto não é possível. Tamanho anterior: {{oldSize}}, novo tamanho: {{newSize}}.",
+    "fileTooLargeHint": "O arquivo é maior que {{limit}}, sem comparação de texto. Novo tamanho: {{newSize}}.",
     "diffTooLargeHint": "Conteúdo grande demais para uma comparação por linhas. Tamanho anterior: {{oldSize}}, novo tamanho: {{newSize}}.",
     "noContentChange": "(sem alteração de conteúdo)",
     "quickRuleLabel": {

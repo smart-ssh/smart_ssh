@@ -28,6 +28,7 @@ function buildActionItem(overrides: Partial<ActionItem> = {}): ChatItem {
     usesStoredSudoPassword: false,
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: null,
     riskSecondOpinionPending: false,

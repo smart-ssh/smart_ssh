@@ -433,6 +433,7 @@
     "loadingSuggestions": "Lädt Vorschläge…",
     "noSuggestions": "Keine Vorschläge.",
     "binaryFileHint": "Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
+    "fileTooLargeHint": "Datei ist größer als {{limit}}, kein Textvergleich. Neue Größe: {{newSize}}.",
     "diffTooLargeHint": "Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
     "noContentChange": "(keine inhaltliche Änderung)",
     "quickRuleLabel": {
