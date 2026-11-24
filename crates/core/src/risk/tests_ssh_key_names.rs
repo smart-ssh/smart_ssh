@@ -15,6 +15,8 @@ fn backup_id_rsa_is_rated_like_id_rsa() {
         "id_rsa.bak",
         "x_id_ecdsa_sk",
         "backup_id_rsa.bak",
+        "backupid_rsa",
+        "key2id_ed25519",
     ] {
         let a = classify(&format!("cat ~/.ssh/{f}"));
         assert_eq!(a.data_risk, RiskLevel::Red, "{f}");

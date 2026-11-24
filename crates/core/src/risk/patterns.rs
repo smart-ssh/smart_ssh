@@ -52,13 +52,13 @@ macro_rules! ssh_key_end {
 
 /// Jede `id_<name>` (nicht `.pub`) sowie Dateinamen, die einen bekannten
 /// Schlüsseltyp (`id_rsa`, `id_ed25519`, `id_ecdsa`, `id_dsa`, auch `-sk`)
-/// nach einem `_`-Präfix tragen (`backup_id_rsa`, Issue #1551): `_` ist ein
+/// mit beliebigem Präfix tragen (`backup_id_rsa`, Issue #1551): `_` ist ein
 /// Wortzeichen, `\b` allein trifft dort nicht. Bewusst nur bekannte Typen,
 /// damit `rapid_search` o. Ä. nicht treffen.
 macro_rules! ssh_identity_key {
     () => {
         concat!(
-            r"(?:\bid_[a-z0-9_-]+|_id_(?:rsa|ed25519|ecdsa|dsa)[a-z0-9_-]*)",
+            r"(?:\bid_[a-z0-9_-]+|id_(?:rsa|ed25519|ecdsa|dsa)[a-z0-9_-]*)",
             ssh_key_end!()
         )
     };
