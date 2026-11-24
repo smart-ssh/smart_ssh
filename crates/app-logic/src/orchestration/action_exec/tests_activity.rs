@@ -1026,7 +1026,7 @@ async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() 
         .session_scope(Uuid::new_v4())
         .spawn_blocking("late-start", move || {
             let _ = go_rx.recv();
-            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Chat, None));
+            handle.block_on(in_flight.emit_session_started(ActivitySessionKind::Terminal, None));
         });
     assert!(spawned);
     let exit = manager.shutdown_for_exit(&sup, budget);
@@ -1041,12 +1041,12 @@ async fn test_start_after_exit_began_is_refused_and_started_sessions_end_once() 
     go.send(()).expect("task alive");
     exit.await;
     after_end
-        .emit_session_started(ActivitySessionKind::Chat, None)
+        .emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     // Inserted after the exit began.
     let late = mk();
     manager.insert(Uuid::new_v4(), late.clone());
-    late.emit_session_started(ActivitySessionKind::Chat, None)
+    late.emit_session_started(ActivitySessionKind::Terminal, None)
         .await;
     sup.shutdown_app(Duration::from_secs(3)).await;
     let events: Vec<_> = rx.try_iter().collect();
