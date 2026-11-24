@@ -192,6 +192,122 @@ async fn test_running_command_counts_as_activity_without_input() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn test_mcp_started_command_is_not_user_activity_but_input_is() {
+    let recorder = Arc::new(Recorder::default());
+    let hub = Arc::new(ActivityHub::new_inline_for_tests(vec![recorder.clone()]));
+    let session = Arc::new(with_hub(
+        session_allowing_all(MockSshTransport::default()),
+        &hub,
+        false,
+    ));
+    let _slot = session
+        .transport
+        .begin_command_from(Uuid::new_v4(), true)
+        .await
+        .unwrap();
+    let sup = crate::tasks::TaskSupervisor::new();
+    spawn_user_activity_tick(&session, &sup.session_scope(Uuid::new_v4()));
+    tokio::task::yield_now().await;
+    tokio::time::advance(USER_ACTIVITY_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(recorder.count_activity(), 0);
+    // User input during the MCP command still counts.
+    session.note_user_input();
+    tokio::time::advance(USER_ACTIVITY_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(recorder.count_activity(), 1);
+}
+
+/// Issue #1561: an MCP command only runs after a confirmation, i.e. with
+/// `LedgerSource::User`; the real proposal -> confirm -> execute path must
+/// still mark the running command as MCP-started (internal one: not).
+async fn running_command_is_user_activity(
+    origin: ActionOrigin,
+    decision: ActionUserDecision,
+) -> bool {
+    const LONG: &str = "journalctl -f";
+    let session = Arc::new(session_allowing_all(
+        MockSshTransport::default().with_never_completing(LONG),
+    ));
+    let emitter = Arc::new(TestEmitter::default());
+    let confirmations = Arc::new(ConfirmationRegistry::<ActionId, ActionUserDecision>::new());
+    let store = Arc::new(crate::orchestration::test_support::InMemoryProfileStore::default());
+    let needs_confirmation = matches!(origin, ActionOrigin::Mcp { .. });
+    let session_id = Uuid::new_v4();
+    let task = {
+        let (session, emitter, confirmations, store) = (
+            session.clone(),
+            emitter.clone(),
+            confirmations.clone(),
+            store.clone(),
+        );
+        tokio::spawn(async move {
+            handle_action_proposed(
+                &session,
+                session_id,
+                AiAction::SuggestCommand {
+                    command: LONG.to_string(),
+                },
+                emitter.as_ref(),
+                store.as_ref(),
+                confirmations.as_ref(),
+                origin,
+                test_fresh_rejection_flag(),
+            )
+            .await
+        })
+    };
+    let wait = Duration::from_secs(10);
+    let action_id = tokio::time::timeout(wait, async {
+        loop {
+            let id =
+                emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                    (n == "chat-action-proposed").then(|| p["actionId"].clone())
+                });
+            if let Some(id) = id {
+                return Uuid::parse_str(id.as_str().unwrap()).unwrap();
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("proposal must wait for confirmation");
+    // The internal control command is auto-approved (allow-all rules).
+    if needs_confirmation {
+        confirmations.resolve(&action_id, decision).unwrap();
+    }
+    tokio::time::timeout(wait, async {
+        while session.transport.running_action() != Some(action_id) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("command must start");
+    let counts = session.transport.user_command_running();
+    session
+        .conn
+        .running_command_cancellations
+        .resolve(&action_id, ())
+        .unwrap();
+    tokio::time::timeout(wait, task).await.unwrap().unwrap();
+    counts
+}
+
+#[tokio::test]
+async fn test_confirmed_mcp_command_is_not_user_activity() {
+    let mcp = ActionOrigin::Mcp { client_name: None };
+    assert!(!running_command_is_user_activity(mcp.clone(), ActionUserDecision::Approve).await);
+    let edited = ActionUserDecision::EditThenApprove {
+        command: "journalctl -f".to_string(),
+    };
+    assert!(!running_command_is_user_activity(mcp, edited).await);
+    // Control: a command of the internal chat flow does count.
+    assert!(
+        running_command_is_user_activity(ActionOrigin::Internal, ActionUserDecision::Approve).await
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn test_no_input_marker_reaches_any_event_and_nothing_is_built_without_observer() {
     // Without an observer no tick task runs, no flag is kept, nothing is built.
     crate::activity::CONSTRUCTED.with(|c| c.set(0));
