@@ -28,7 +28,7 @@ scripts/gate.sh rust       # cargo fmt --check, clippy -D warnings, tests, build
 scripts/gate.sh frontend   # tsc, npm run lint, vitest, npm run build
 ```
 
-The individual commands (`cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm run lint`, `npm test`) and the setup are in [README_DEV.md](README_DEV.md) and [docs/dev-environment.md](docs/dev-environment.md). CI also runs `cargo deny` and `cargo audit` and the browser tests (`npm run test:e2e` in `apps/smart-ssh-community/frontend`). A regression test must fail against the un-fixed code.
+The individual commands (`cargo fmt --all`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, `npm run lint`, `npm test`) and the setup are in [README_DEV.md](README_DEV.md) and [docs/dev-environment.md](docs/dev-environment.md). CI also runs `cargo deny` and `cargo audit` and the browser tests (`npm run test:e2e` in `apps/smart-ssh-community/frontend`). A regression test must fail against the un-fixed code.
 
 ## Changelog
 

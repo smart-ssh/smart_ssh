@@ -25,8 +25,8 @@ You represent that:
 
 ## 4. Scope
 
-This agreement covers all Contributions You submit after signing, until You withdraw in writing for future Contributions. Licenses already granted for earlier Contributions remain in force.
+This agreement covers all Contributions You submit in the pull request in which You sign, including those made before You post the signature comment, and all Contributions You submit afterwards, until You withdraw in writing for future Contributions. Licenses already granted for earlier Contributions remain in force.
 
 ## 5. How to sign
 
-Post the comment requested by the CLA bot in Your first pull request. The bot records Your GitHub account name and the date of the comment. One signature covers all later Contributions.
+Post the comment requested by the CLA bot in Your first pull request. The bot records Your GitHub account name and the date of the comment. One signature covers the Contributions in that pull request and all later Contributions.
