@@ -1016,7 +1016,8 @@ fn glob_reads_private_key(segment: &str) -> bool {
         return false;
     }
     words.any(|word| {
-        let word = word.trim_matches(|c| c == '"' || c == '\'' || c == ')');
+        let word = cut_at_redirect(word);
+        let word = word.trim_matches(|c| c == '"' || c == '\'' || c == ')' || c == '`');
         let last = word.rsplit('/').next().unwrap_or(word);
         if !last.contains(GLOB)
             || !["id_", "rsa", "ed25519", "ecdsa", "dsa"]
@@ -1044,6 +1045,21 @@ fn glob_reads_private_key(segment: &str) -> bool {
             })
         })
     })
+}
+
+/// Issue #1593: cuts a word at the first unquoted redirect operator (`<`, `>`)
+/// so `backup_id_*>/tmp/x` is judged as `backup_id_*`.
+fn cut_at_redirect(word: &str) -> &str {
+    let mut quote: Option<char> = None;
+    for (i, c) in word.char_indices() {
+        match (quote, c) {
+            (Some(q), _) if c == q => quote = None,
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '<' | '>') => return &word[..i],
+            _ => {}
+        }
+    }
+    word
 }
 
 /// Heuristik der ersten Fassung: Platzhalter in einem Wort, das auf eine

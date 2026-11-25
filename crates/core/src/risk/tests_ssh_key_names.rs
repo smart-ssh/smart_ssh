@@ -84,3 +84,28 @@ fn secret_path_check_escalates_prefixed_key_globs() {
         assert!(super::secret_path_read_reason(c).is_some(), "{c}");
     }
 }
+
+/// Issue #1593: glued redirects and backticks do not hide a key glob.
+#[test]
+fn glob_reads_with_glued_redirect_or_backticks_are_red() {
+    for c in [
+        "cat ~/.ssh/backup_id_*>/tmp/x",
+        "cat ~/.ssh/id_*>>/tmp/x",
+        "cat ~/.ssh/id_*</dev/null",
+        "echo `cat ~/.ssh/backup_id_*`",
+    ] {
+        assert_eq!(classify(c).data_risk, RiskLevel::Red, "{c}");
+    }
+}
+
+#[test]
+fn glob_reads_with_glued_redirect_stay_non_red_for_near_misses() {
+    for c in [
+        "cat ~/.ssh/*.pub>/tmp/x",
+        "cat ~/.ssh/known_*>/tmp/x",
+        "cat ~/.ssh/rapid_*>/tmp/x",
+        "cat ~/.ssh/bid_*>/tmp/x",
+    ] {
+        assert_ne!(classify(c).data_risk, RiskLevel::Red, "{c}");
+    }
+}
