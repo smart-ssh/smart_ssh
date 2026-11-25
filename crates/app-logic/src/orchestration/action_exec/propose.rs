@@ -341,8 +341,13 @@ async fn announce_proposal(
     };
     let (previous_note_content, target_name) =
         note_target_preview_for_action(action, ctx.session, ctx.profile_store).await;
-    let (previous_file_content, previous_file_size) =
-        previous_file_content_for_action(action, ctx.session).await;
+    // Issue #1550: a denied action never reads the target file.
+    let (previous_file_content, previous_file_size, previous_file_too_large) =
+        if matches!(decision, Decision::Deny { .. }) {
+            (None, None, false)
+        } else {
+            previous_file_content_for_action(action, ctx.session).await
+        };
     let payload = emit_chat_action_proposed(
         ctx.emitter,
         ctx.session_id,
@@ -353,6 +358,7 @@ async fn announce_proposal(
         uses_password,
         previous_file_content,
         previous_file_size,
+        previous_file_too_large,
         target_name,
         risk_assessment,
         ctx.origin.clone(),
@@ -555,6 +561,7 @@ async fn run_approved(
         ctx.persist,
         ledger_source_for_origin(&ctx.origin),
         uses_password,
+        ctx.is_mcp(),
     )
     .await
 }

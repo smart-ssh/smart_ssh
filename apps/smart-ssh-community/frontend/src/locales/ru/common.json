@@ -435,6 +435,7 @@
     "loadingSuggestions": "Загрузка вариантов…",
     "noSuggestions": "Вариантов нет.",
     "binaryFileHint": "Двоичный файл — текстовое сравнение невозможно. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
+    "fileTooLargeHint": "Файл больше {{limit}}, текстовое сравнение недоступно. Новый размер: {{newSize}}.",
     "diffTooLargeHint": "Содержимое слишком велико для построчного сравнения. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
     "noContentChange": "(содержимое не изменилось)",
     "quickRuleLabel": {

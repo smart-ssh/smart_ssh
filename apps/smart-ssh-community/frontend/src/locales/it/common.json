@@ -434,6 +434,7 @@
     "loadingSuggestions": "Caricamento dei suggerimenti…",
     "noSuggestions": "Nessun suggerimento.",
     "binaryFileHint": "File binario: confronto testuale non possibile. Dimensione precedente: {{oldSize}}, nuova dimensione: {{newSize}}.",
+    "fileTooLargeHint": "Il file supera {{limit}}, nessun confronto testuale. Nuova dimensione: {{newSize}}.",
     "diffTooLargeHint": "Contenuto troppo grande per un diff per righe. Dimensione precedente: {{oldSize}}, nuova dimensione: {{newSize}}.",
     "noContentChange": "(nessuna modifica del contenuto)",
     "quickRuleLabel": {

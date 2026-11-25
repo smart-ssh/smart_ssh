@@ -49,6 +49,7 @@ use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitt
 use crate::state::{ActionId, SessionId};
 
 mod activity_events;
+pub use activity_events::{spawn_user_activity_tick, USER_ACTIVITY_INTERVAL};
 mod ai_config;
 mod chat_persistence;
 mod locks;
@@ -319,7 +320,7 @@ pub struct SessionTransport {
     epoch: std::sync::atomic::AtomicU64,
     /// Issue #328: action currently running as an AI command, so a
     /// disconnect can cancel it (Spec 0027).
-    running_action: std::sync::Mutex<Option<ActionId>>,
+    running_action: std::sync::Mutex<Option<(ActionId, bool)>>,
 }
 
 /// Issue #328: proof that this AI command is the only one running in its
@@ -352,11 +353,20 @@ impl SessionTransport {
     /// Issue #328: waits until no other AI command of this session runs and
     /// claims the slot for `action_id`. `None` if the session was closed.
     pub async fn begin_command(&self, action_id: ActionId) -> Option<CommandSlot<'_>> {
+        self.begin_command_from(action_id, false).await
+    }
+
+    /// Like `begin_command`; `from_mcp` marks a command an MCP client started.
+    pub async fn begin_command_from(
+        &self,
+        action_id: ActionId,
+        from_mcp: bool,
+    ) -> Option<CommandSlot<'_>> {
         let guard = self.command_guard.lock().await;
         if self.is_closed() {
             return None;
         }
-        *lock_tolerating_poison(&self.running_action) = Some(action_id);
+        *lock_tolerating_poison(&self.running_action) = Some((action_id, from_mcp));
         Some(CommandSlot {
             owner: self,
             _guard: guard,
@@ -365,7 +375,13 @@ impl SessionTransport {
 
     /// Issue #328: the AI command running right now, if any.
     pub fn running_action(&self) -> Option<ActionId> {
-        *lock_tolerating_poison(&self.running_action)
+        (*lock_tolerating_poison(&self.running_action)).map(|(id, _)| id)
+    }
+
+    /// A running command not started through MCP (activity tick).
+    pub fn user_command_running(&self) -> bool {
+        let running = *lock_tolerating_poison(&self.running_action);
+        matches!(running, Some((_, false)))
     }
 
     /// Issue #328: the session is being disconnected.
@@ -590,6 +606,9 @@ pub struct Session {
     /// Issue #1539: `true` once `SessionStarted` was queued, so that an end
     /// event is only sent for sessions the observers know.
     activity_started: std::sync::atomic::AtomicBool,
+    /// `true` once `ChatStarted` was queued: events carry the chat session id
+    /// from then on.
+    activity_chat_announced: std::sync::atomic::AtomicBool,
     /// Issue #1539: `true` once `SessionEnded` was queued; later events of
     /// this session are dropped so none follows its end.
     activity_ended: std::sync::Mutex<bool>,
@@ -677,6 +696,7 @@ impl Session {
             usage_reporting: None,
             activity: None,
             activity_started: std::sync::atomic::AtomicBool::new(false),
+            activity_chat_announced: std::sync::atomic::AtomicBool::new(false),
             activity_ended: std::sync::Mutex::new(false),
             activity_exiting: std::sync::atomic::AtomicBool::new(false),
         }
@@ -1100,7 +1120,7 @@ pub use terminal_actor::{spawn_terminal_actor, spawn_terminal_actor_with_idle};
 /// `connection-status-changed` — exactly once per session: later reports
 /// find the status already `Disconnected` and do nothing. Returns whether
 /// this call made the transition.
-pub fn report_connection_lost(
+pub async fn report_connection_lost(
     session_id: SessionId,
     session: &Session,
     emitter: &dyn EventEmitter,
@@ -1125,6 +1145,15 @@ pub fn report_connection_lost(
     // The hook runs first: it announces the automatic attempts before the
     // status event, so the UI never shows "lost" for a moment.
     session.conn.auto_reconnect.fire_hook(session_id);
+    // Issue #1507: observers learn of the loss (no reason text).
+    session
+        .emit_connection(
+            crate::activity::ConnectionChange::Disconnected(
+                crate::activity::DisconnectReason::Network,
+            ),
+            crate::activity::ActivitySource::User,
+        )
+        .await;
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1158,7 +1187,7 @@ pub fn spawn_connection_watch(
         if session.transport.is_closed() || session.transport.epoch() != epoch {
             return;
         }
-        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason).await;
     });
 }
 

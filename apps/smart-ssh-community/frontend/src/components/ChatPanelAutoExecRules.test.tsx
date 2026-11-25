@@ -52,6 +52,7 @@ function item(
     usesStoredSudoPassword: false,
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: null,
     riskSecondOpinionPending: false,

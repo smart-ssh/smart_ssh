@@ -40,6 +40,7 @@ export function redCommandProposal(
     autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: {
       serverRisk: "red",

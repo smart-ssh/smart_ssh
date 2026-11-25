@@ -55,6 +55,9 @@ export type ChatItem =
        * unterscheidet `previousFileSize`). */
       previousFileContent: string | null;
       previousFileSize: number | null;
+      /** Issue #1559 — `true` only when the existing file is over the preview cap
+       * (content and size are then both `null`). */
+      previousFileTooLarge: boolean;
       /** Spec 0023, Abschnitt 3 — nur bei `ProposeNoteUpdate` gesetzt,
        * *immer* angezeigt (auch wenn es der aktuell offene Server der
        * Session ist — Konsistenz statt Redundanzvermeidung). */

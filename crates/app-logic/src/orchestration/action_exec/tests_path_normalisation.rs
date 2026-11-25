@@ -72,7 +72,7 @@ async fn test_read_remote_file_filter_and_sftp_see_same_normalised_path() {
         mock_sftp.calls(),
         vec![
             "stat /etc/nginx/secret.conf",
-            "read_file /etc/nginx/secret.conf"
+            "read_file_capped /etc/nginx/secret.conf"
         ]
     );
 }

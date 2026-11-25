@@ -433,6 +433,7 @@
     "loadingSuggestions": "सुझाव लोड हो रहे हैं…",
     "noSuggestions": "कोई सुझाव नहीं।",
     "binaryFileHint": "बाइनरी फ़ाइल — टेक्स्ट तुलना संभव नहीं। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
+    "fileTooLargeHint": "फ़ाइल {{limit}} से बड़ी है, टेक्स्ट तुलना नहीं दी जाती। नया आकार: {{newSize}}।",
     "diffTooLargeHint": "पंक्ति-अंतर के लिए सामग्री बहुत बड़ी है। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
     "noContentChange": "(सामग्री में कोई बदलाव नहीं)",
     "quickRuleLabel": {

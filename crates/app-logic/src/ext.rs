@@ -45,8 +45,8 @@ pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 // --- Activity observers (issue #1505) --------------------------------------
 pub use crate::activity::{
     ActivityDecisionOutcome, ActivityEvent, ActivityEventKind, ActivityObserver,
-    ActivitySessionKind, ActivitySource, RuleSnapshot, ServerSnapshot, SessionEndReason,
-    SessionRef,
+    ActivitySessionKind, ActivitySource, ConnectFailureStep, ConnectionChange, DisconnectReason,
+    RuleSnapshot, ServerSnapshot, SessionEndReason, SessionRef,
 };
 
 /// Activity events dropped so far because the delivery queue was full.
@@ -164,5 +164,37 @@ mod tests {
         let _: Option<ChatContentRegistry> = None;
         let _: Option<crate::backup::BackupKey> = None::<BackupKey>;
         let _: Option<crate::session::Session> = None::<Session>;
+    }
+}
+
+#[cfg(test)]
+mod activity_payload_tests {
+    use super::{ActivityEventKind, ConnectFailureStep, ConnectionChange, DisconnectReason};
+
+    /// Matches the connection payload using only `ext` imports.
+    fn describe(kind: &ActivityEventKind) -> Option<&'static str> {
+        match kind {
+            ActivityEventKind::Connection { change } => Some(match change {
+                ConnectionChange::Connected => "connected",
+                ConnectionChange::Disconnected(DisconnectReason::User) => "user",
+                ConnectionChange::Disconnected(_) => "disconnected",
+                ConnectionChange::Reconnected => "reconnected",
+                ConnectionChange::Failed(ConnectFailureStep::Transport) => "transport",
+                ConnectionChange::Failed(_) => "failed",
+            }),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn connection_payload_types_are_the_activity_types() {
+        let change: crate::activity::ConnectionChange =
+            ConnectionChange::Disconnected(DisconnectReason::User);
+        let kind = ActivityEventKind::Connection { change };
+        assert_eq!(describe(&kind), Some("user"));
+        let failed = ActivityEventKind::Connection {
+            change: ConnectionChange::Failed(ConnectFailureStep::Transport),
+        };
+        assert_eq!(describe(&failed), Some("transport"));
     }
 }

@@ -153,6 +153,9 @@ pub async fn start_new_chat(
         *summary = None;
         if new_id.is_some() {
             *chat_session_id = new_id;
+            // The new chat is unknown to the observers until its first
+            // message emits `ChatStarted` again.
+            session.reset_chat_announced();
         }
     }
     // Issue #648: the provider-reported size belongs to the old chat. Reset
@@ -219,6 +222,218 @@ mod tests {
         }
         *session.safety.mcp_origin_flags.lock().unwrap() = vec![false, false];
         (session, store, id, tmp)
+    }
+
+    /// Issue #1507: after "new chat" the events carry no chat id until the
+    /// first message of the new chat announces it (never an unannounced id).
+    #[tokio::test]
+    async fn test_new_chat_resets_the_announcement_of_the_chat_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ActivitySource, ConnectionChange, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, old_id, _tmp) = persisted_session().await;
+        let session = session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        ));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        session.emit_chat_started_once().await;
+        let new_id = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        session.emit_chat_started_once().await;
+        session
+            .emit_connection(ConnectionChange::Reconnected, ActivitySource::User)
+            .await;
+        let events = rec.0.lock().unwrap().clone();
+        let ids: Vec<_> = events
+            .iter()
+            .map(|e| e.session.chat_session_id.clone())
+            .collect();
+        let (a, b) = (Some(old_id.to_string()), Some(new_id.to_string()));
+        assert_eq!(ids, [None, a, None, b.clone(), b], "{events:?}");
+        assert!(matches!(
+            events[3].kind,
+            ActivityEventKind::ChatStarted { .. }
+        ));
+    }
+
+    /// Issue #1562: `emit_chat_started_once` running concurrently with "new
+    /// chat" never leaves the announcement and the current chat apart: the
+    /// payload id equals the envelope id, and after the next message the
+    /// last announced id is the current one.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_chat_started_racing_with_new_chat_announces_the_current_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        let session = std::sync::Arc::new(session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        )));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        for round in 0..300 {
+            let emitter = {
+                let session = session.clone();
+                tokio::spawn(async move {
+                    session.emit_chat_started_once().await;
+                })
+            };
+            let new_chat = {
+                let session = session.clone();
+                tokio::spawn(async move {
+                    start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+                        .await
+                        .unwrap()
+                })
+            };
+            emitter.await.unwrap();
+            let new_id = new_chat.await.unwrap().expect("new row");
+            // The first message of the (new) chat.
+            session.emit_chat_started_once().await;
+            let events = rec.0.lock().unwrap().clone();
+            let announced: Vec<_> = events
+                .iter()
+                .filter_map(|e| match &e.kind {
+                    ActivityEventKind::ChatStarted { chat_session_id } => {
+                        Some((chat_session_id.clone(), e.session.chat_session_id.clone()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            for (payload, envelope) in &announced {
+                assert_eq!(Some(payload), envelope.as_ref(), "round {round}");
+            }
+            assert_eq!(
+                announced.last().map(|(id, _)| id.clone()),
+                Some(new_id.to_string()),
+                "round {round}: {announced:?}"
+            );
+        }
+    }
+
+    /// Issue #1562: deterministic interleaving (tokio's mutex is FIFO on a
+    /// current-thread runtime). The emitter waits for the chat id lock, "new
+    /// chat" queues behind it and swaps the id while the emitter has not run:
+    /// the announcement must carry one id in payload and envelope, and the
+    /// next message must announce the new id.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_chat_started_waiting_on_the_lock_while_new_chat_swaps_the_id() {
+        use crate::activity::{
+            ActivityEvent, ActivityEventKind, ActivityHub, ActivityObserver, ActivityReporting,
+            ActivitySessionKind, ServerSnapshot,
+        };
+        struct Rec(std::sync::Mutex<Vec<ActivityEvent>>);
+        impl ActivityObserver for Rec {
+            fn on_event(&self, event: &ActivityEvent) {
+                self.0.lock().unwrap().push(event.clone());
+            }
+        }
+        let rec = std::sync::Arc::new(Rec(std::sync::Mutex::new(Vec::new())));
+        let hub = std::sync::Arc::new(ActivityHub::new_inline_for_tests(vec![rec.clone()]));
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        let session = std::sync::Arc::new(session.with_activity_reporting(ActivityReporting::new(
+            &hub,
+            "runtime-1".into(),
+            ServerSnapshot {
+                id: "srv".into(),
+                name: "Test".into(),
+                host: "example.test".into(),
+                port: 22,
+                user: "deploy".into(),
+                group_ids: vec![],
+                group_names: vec![],
+                tags: vec![],
+            },
+        )));
+        session
+            .emit_session_started(ActivitySessionKind::Terminal, None)
+            .await;
+        let new_id = Uuid::new_v4();
+        let guard = session.persistence.chat_session_id.lock().await;
+        let emitter = {
+            let session = session.clone();
+            tokio::spawn(async move { session.emit_chat_started_once().await })
+        };
+        tokio::task::yield_now().await;
+        let swapper = {
+            let session = session.clone();
+            tokio::spawn(async move {
+                let mut id = session.persistence.chat_session_id.lock().await;
+                *id = Some(new_id);
+                session.reset_chat_announced();
+            })
+        };
+        tokio::task::yield_now().await;
+        drop(guard);
+        emitter.await.unwrap();
+        swapper.await.unwrap();
+        session.emit_chat_started_once().await;
+        let events = rec.0.lock().unwrap().clone();
+        let announced: Vec<_> = events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                ActivityEventKind::ChatStarted { chat_session_id } => {
+                    Some((chat_session_id.clone(), e.session.chat_session_id.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        for (payload, envelope) in &announced {
+            assert_eq!(Some(payload), envelope.as_ref(), "{announced:?}");
+        }
+        assert_eq!(
+            announced.last().map(|(id, _)| id.clone()),
+            Some(new_id.to_string()),
+            "{announced:?}"
+        );
     }
 
     #[tokio::test]

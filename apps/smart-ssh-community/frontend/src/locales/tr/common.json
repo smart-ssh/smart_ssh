@@ -433,6 +433,7 @@
     "loadingSuggestions": "Öneriler yükleniyor…",
     "noSuggestions": "Öneri yok.",
     "binaryFileHint": "İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
+    "fileTooLargeHint": "Dosya {{limit}} sınırından büyük, metin karşılaştırması yok. Yeni boyut: {{newSize}}.",
     "diffTooLargeHint": "İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
     "noContentChange": "(içerik değişikliği yok)",
     "quickRuleLabel": {

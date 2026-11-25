@@ -51,6 +51,7 @@ function proposed(sessionId = "session-1"): ChatActionProposedEvent {
     autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: null,
     origin: { kind: "internal" },

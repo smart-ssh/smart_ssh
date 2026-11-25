@@ -55,6 +55,7 @@ function proposed(
     autoExecRules: [],
     previousFileContent: null,
     previousFileSize: null,
+    previousFileTooLarge: false,
     targetName: null,
     riskAssessment: null,
     origin: { kind: "internal" },

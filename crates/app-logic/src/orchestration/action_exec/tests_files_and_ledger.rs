@@ -236,7 +236,7 @@ async fn test_read_remote_file_allow_rule_autoexecs_and_redacts_content() {
         mock_sftp.calls(),
         vec![
             "stat /home/deploy/app.conf",
-            "read_file /home/deploy/app.conf"
+            "read_file_capped /home/deploy/app.conf"
         ]
     );
 }
@@ -664,6 +664,10 @@ async fn test_chat_action_proposed_binary_file_reports_size_not_content() {
     assert_eq!(
         events[0].1["previousFileSize"],
         serde_json::json!(binary_len)
+    );
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
     );
 }
 
@@ -1496,6 +1500,171 @@ async fn test_file_actions_report_a_chat_error_when_sftp_cannot_be_opened() {
             errors[0]["code"].is_string(),
             "der Fehler muss einen Fehlercode tragen: {:?}",
             errors[0]
+        );
+    }
+}
+
+// --- Issue #1550: bounded reads before the user decides ---------------------
+
+use super::super::remote_files::MAX_PREVIEW_FILE_BYTES;
+
+async fn run_write_proposal_turn(session: &Session) -> TestEmitter {
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+    let turn = run_chat_turn(
+        session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let responder = deny_first_proposed_action(&emitter, &confirmations);
+    tokio::join!(turn, responder);
+    emitter
+}
+
+fn write_proposal(path: &str) -> Vec<AiEvent> {
+    vec![
+        AiEvent::ActionProposed(AiAction::WriteRemoteFile {
+            path: path.to_string(),
+            content: "new".to_string(),
+        }),
+        AiEvent::Done,
+    ]
+}
+
+/// The preview read never uses the uncapped `read_file` and asks for at most
+/// cap + 1 bytes; a file above the cap yields a size note, no content.
+#[tokio::test]
+async fn preview_read_is_capped() {
+    let path = "/home/deploy/huge.bin";
+    let session =
+        test_session_allowing_everything(write_proposal(path), MockSshTransport::default());
+    // Cap + 1 bytes: the smallest file that is over the cap (issue #1559).
+    let big = vec![b'a'; (MAX_PREVIEW_FILE_BYTES + 1) as usize];
+    let sftp = MockSftpSession::new().with_file(path, big);
+    session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+
+    let emitter = run_write_proposal_turn(&session).await;
+
+    let calls = sftp.calls();
+    assert!(
+        !calls.contains(&format!("read_file {path}")),
+        "uncapped read: {calls:?}"
+    );
+    assert!(calls.contains(&format!("read_file_capped {path}")));
+    assert_eq!(sftp.capped_read_limits(), vec![MAX_PREVIEW_FILE_BYTES + 1]);
+    let events = emitter.events.lock().unwrap().clone();
+    assert_eq!(events[0].1["previousFileContent"], serde_json::json!(null));
+    // Issue #1559: not the cap as a fake size, but an explicit flag.
+    assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(events[0].1["previousFileTooLarge"], serde_json::json!(true));
+}
+
+/// A file exactly at the cap still gets a content preview.
+#[tokio::test]
+async fn preview_file_at_cap_still_shows_content() {
+    let path = "/home/deploy/edge.conf";
+    let session =
+        test_session_allowing_everything(write_proposal(path), MockSshTransport::default());
+    let sftp = MockSftpSession::new().with_file(path, vec![b'a'; MAX_PREVIEW_FILE_BYTES as usize]);
+    session.set_sftp_for_tests(Box::new(sftp)).await;
+
+    let emitter = run_write_proposal_turn(&session).await;
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events[0].1["previousFileContent"].is_string());
+    assert_eq!(events[0].1["previousFileSize"], serde_json::json!(null));
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
+}
+
+/// A `WriteRemoteFile` denied by the filter engine triggers no SFTP access.
+#[tokio::test]
+async fn denied_write_proposal_reads_nothing() {
+    struct DenyAllWrites;
+    #[async_trait]
+    impl PolicyStore for DenyAllWrites {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
+                id: ssh_manager_core::filter::RuleId("deny-writes".to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob("sftp-write /etc/*".to_string()),
+                action: ssh_manager_core::filter::RuleAction::Deny,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            }])
+        }
+    }
+    let path = "/etc/passwd";
+    let mut session = test_session(write_proposal(path), MockSshTransport::default());
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyAllWrites)));
+    let sftp = MockSftpSession::new().with_file(path, b"root".to_vec());
+    session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+
+    let emitter = TestEmitter::default();
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events[0].1["decision"]["Deny"].is_object());
+    assert_eq!(
+        events[0].1["previousFileTooLarge"],
+        serde_json::json!(false)
+    );
+    assert!(
+        !sftp.calls().iter().any(|c| c.starts_with("read_file")),
+        "{:?}",
+        sftp.calls()
+    );
+}
+
+/// `ReadRemoteFile` with a failing `stat` (missing path) or size 0 reads only
+/// through the capped variant.
+#[tokio::test]
+async fn read_remote_file_without_usable_stat_uses_capped_read_only() {
+    for existing in [false, true] {
+        let path = "/dev/zero";
+        let session = test_session_allowing_everything(
+            vec![
+                AiEvent::ActionProposed(AiAction::ReadRemoteFile {
+                    path: path.to_string(),
+                }),
+                AiEvent::Done,
+            ],
+            MockSshTransport::default(),
+        );
+        let mut sftp = MockSftpSession::new();
+        if existing {
+            sftp = sftp.with_file(path, Vec::new());
+        }
+        session.set_sftp_for_tests(Box::new(sftp.clone())).await;
+        let emitter = TestEmitter::default();
+        run_chat_turn(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &InMemoryProfileStore::default(),
+            &ConfirmationRegistry::new(),
+        )
+        .await;
+        let calls = sftp.calls();
+        assert!(
+            calls.contains(&format!("read_file_capped {path}")),
+            "{calls:?}"
+        );
+        assert!(!calls.contains(&format!("read_file {path}")), "{calls:?}");
+        assert_eq!(
+            sftp.capped_read_limits(),
+            vec![crate::orchestration::remote_files::MAX_READ_FILE_BYTES + 1]
         );
     }
 }

@@ -433,6 +433,7 @@
     "loadingSuggestions": "Javaslatok betöltése…",
     "noSuggestions": "Nincs javaslat.",
     "binaryFileHint": "Bináris fájl – szöveges összehasonlítás nem lehetséges. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
+    "fileTooLargeHint": "A fájl nagyobb, mint {{limit}}, nincs szöveges összehasonlítás. Új méret: {{newSize}}.",
     "diffTooLargeHint": "A tartalom túl nagy a soronkénti összehasonlításhoz. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
     "noContentChange": "(nincs tartalmi változás)",
     "quickRuleLabel": {
