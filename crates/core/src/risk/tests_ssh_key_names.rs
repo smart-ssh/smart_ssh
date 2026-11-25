@@ -26,3 +26,40 @@ fn backup_id_rsa_is_rated_like_id_rsa() {
         assert_ne!(a.data_risk, RiskLevel::Red, "{f}");
     }
 }
+
+/// Issue #1564: glob reads that can match a private key name are red.
+#[test]
+fn glob_reads_of_private_key_names_are_red() {
+    for c in [
+        "cat ~/.ssh/backup_id_*",
+        "cat ~/.ssh/*_id_*",
+        "cat ~/.ssh/id_*",
+        "cat ~/.ssh/id_r*",
+        "cat ~/.ssh/old_id_ed2551?",
+        "tail -n 5 ~/.ssh/*_id_rsa",
+        "cat \"$HOME/.ssh/backup_id_*\"",
+        "cat ~/.ssh/{id,backup_id}_rsa*",
+    ] {
+        assert_eq!(classify(c).data_risk, RiskLevel::Red, "{c}");
+    }
+}
+
+#[test]
+fn glob_reads_of_other_files_stay_non_red() {
+    for c in [
+        "cat ~/.ssh/*.pub",
+        "cat ~/.ssh/known_hosts*",
+        "cat ~/.ssh/known_*",
+        "cat ~/notes/rapid_*",
+        "cat ~/docs/*.txt",
+    ] {
+        assert_ne!(classify(c).data_risk, RiskLevel::Red, "{c}");
+    }
+}
+
+#[test]
+fn secret_path_check_escalates_prefixed_key_globs() {
+    for c in ["cat ~/.ssh/*_id_*", "cat ~/.ssh/x_id_*"] {
+        assert!(super::secret_path_read_reason(c).is_some(), "{c}");
+    }
+}

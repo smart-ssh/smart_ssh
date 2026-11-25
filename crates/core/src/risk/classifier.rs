@@ -7,6 +7,7 @@ use crate::filter::{
 use super::patterns::{
     data_risk_patterns, secret_path_patterns, server_risk_patterns, SECRET_FILE_CANDIDATES,
     SECRET_PATH_HINTS, SECRET_READ_COMMANDS, SECRET_RELATIVE_PREFIXES, SFTP_SERVER_INVOCATION,
+    SSH_KEY_GLOB_CANDIDATES,
 };
 use super::sftp_word_check::{quoted_sftp_server_invocation, sftp_server_word_check, WordCheck};
 use super::types::{RiskAssessment, RiskLevel};
@@ -168,6 +169,11 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
                 acc.data_risk = level;
                 acc.data_risk_reason = Some(reason);
             }
+        }
+        if acc.data_risk < RiskLevel::Red && glob_reads_private_key(&lower) {
+            acc.data_risk = RiskLevel::Red;
+            acc.data_risk_reason =
+                Some("Zugriff auf eine SSH-Private-Key-Datei per Platzhalter (id_*)");
         }
     }
 
@@ -991,6 +997,57 @@ fn glob_may_hit_secret(arg: &str, cd_prefixes: &[String]) -> Option<&'static str
                 secret_path_match(&normalize_path(&format!("{prefix}{candidate}")))
             })
         })
+}
+
+/// Issue #1564: a read command whose last path part is a wildcard that can
+/// match a private SSH key name (`id_*`, `backup_id_*`, `*_id_*`) is red data
+/// risk. The pattern must name part of a key (`id_` or a key type) literally,
+/// so `*`, `*.pub` and `known_hosts*` stay as they were. Input is lowercased.
+fn glob_reads_private_key(segment: &str) -> bool {
+    const GLOB: [char; 4] = ['*', '?', '[', '{'];
+    let mut words = segment.split_whitespace();
+    let Some(cmd) = words.next() else {
+        return false;
+    };
+    if !matches!(
+        cmd.rsplit('/').next().unwrap_or(cmd),
+        "cat" | "less" | "head" | "tail" | "sftp-read" | "sftp-write"
+    ) {
+        return false;
+    }
+    words.any(|word| {
+        let word = word.trim_matches(|c| c == '"' || c == '\'');
+        let last = word.rsplit('/').next().unwrap_or(word);
+        if !last.contains(GLOB)
+            || !["id_", "rsa", "ed25519", "ecdsa", "dsa"]
+                .iter()
+                .any(|lit| last.contains(lit))
+        {
+            return false;
+        }
+        let Some(re) = glob_to_regex(last) else {
+            return false;
+        };
+        // File names a private key can carry: every known candidate, plus the
+        // key types behind each literal head the glob itself spells before an
+        // `id_` (`backup_id_*` -> `backup_id_rsa`).
+        let heads = last
+            .match_indices("id_")
+            .map(|(i, _)| &last[..i])
+            .filter(|head| {
+                !head.contains(GLOB) && (head.is_empty() || head.ends_with(['_', '-', '.']))
+            });
+        let derived = heads.flat_map(|head| {
+            ["rsa", "ed25519", "ecdsa", "dsa"]
+                .iter()
+                .map(move |kind| format!("{head}id_{kind}"))
+        });
+        SSH_KEY_GLOB_CANDIDATES
+            .iter()
+            .map(|candidate| candidate.to_string())
+            .chain(derived)
+            .any(|name| re.is_match(&name))
+    })
 }
 
 /// Heuristik der ersten Fassung: Platzhalter in einem Wort, das auf eine
