@@ -374,6 +374,7 @@ async fn test_adv_ordinary_quoting_stays_autoexec() {
 /// and made-up `probe_*` programs, so nothing else is executed.
 #[cfg(unix)]
 #[test]
+#[allow(clippy::too_many_lines)] // one long case list plus the oracle
 fn test_adv_segments_match_bash() {
     use std::process::Command;
 
