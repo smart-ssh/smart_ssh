@@ -148,6 +148,9 @@ The redactor recognises a **finite list of known secret formats**:
   ([Spec 0078](docs/specs/0078-redactor-at-in-url-password.md),
   [ADR 0069](docs/adr/0069-redactor-at-in-url-credentials-decisions.md));
 - password hashes (crypt/shadow formats, Argon2, phpass);
+- the formats of common secret files: `.netrc` entries (any field order,
+  quoted values, also a single entry line), `.pgpass` lines, Docker `auth`
+  values, kubeconfig `client-key-data`;
 - passwords on common command lines: `mysql -p…`, `sshpass -p`, `curl -u`,
   `htpasswd -b`, `redis-cli -a`, `smbclient -U`, `openssl -pass`
   ([Spec 0095](docs/specs/0095-redactor-command-line-passwords-and-tokens.md),
