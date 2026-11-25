@@ -92,4 +92,4 @@ bewusst dünn und wird nicht auf dieselbe Weise durchgetestet.
 ## 6. Grenzen
 
 - Ein Teamfreigabe-Konzept für Server-Profile gibt es nicht.
-- Die Lizenz des Projekts ist Apache-2.0.
+- Die Lizenz des Projekts ist GPL-3.0-only.
