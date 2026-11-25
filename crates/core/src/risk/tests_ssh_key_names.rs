@@ -41,6 +41,11 @@ fn glob_reads_of_private_key_names_are_red() {
         "tail -n 5 ~/.ssh/*_id_rsa",
         "cat \"$HOME/.ssh/backup_id_*\"",
         "cat ~/.ssh/{id,backup_id}_rsa*",
+        "cat ~/.ssh/{old,backup}_id_*",
+        "cat ~/.ssh/backup{,2}_id_*",
+        "cat ~/.ssh/[bo]*_id_*",
+        "cat ~/.ssh/back[u]p_id_*",
+        "cat ~/.ssh/{a,b}*_id_*",
     ] {
         assert_eq!(classify(c).data_risk, RiskLevel::Red, "{c}");
     }
@@ -53,6 +58,9 @@ fn glob_reads_of_other_files_stay_non_red() {
         "cat ~/.ssh/known_hosts*",
         "cat ~/.ssh/known_*",
         "cat ~/notes/rapid_*",
+        "cat ~/notes/bid_*",
+        "cat ~/notes/rabid_*",
+        "cat ~/notes/web_bid_*",
         "cat ~/docs/*.txt",
         "cat ~/.ssh/*",
         "cat ~/.ssh/i*",
