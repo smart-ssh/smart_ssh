@@ -180,4 +180,6 @@ that prints every simple command and skips all but `echo`, `printf`, `true`,
 that each command word bash would run is a command the parser sees, at the
 top level or in a substitution. Its function-substitution cases run only
 with a bash that has them (5.3); the lexer's own unit tests in
-`shell_lexer.rs` cover them independently of the installed bash.
+`shell_lexer/tests.rs` cover them independently of the installed bash.
+Cases the risk property tests found, such as `${a;rm;}`, are fixed tests
+in `crates/core/src/risk/tests_chaining.rs`.
