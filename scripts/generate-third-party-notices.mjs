@@ -179,6 +179,29 @@ function hasEscapedQuotedKey(line) {
   return false;
 }
 
+// Removes a trailing comment: a `#` only starts one outside a basic string
+// ("…" with backslash escapes) and a literal string ('…').
+function stripTomlComment(line) {
+  let i = 0;
+  while (i < line.length) {
+    const c = line[i];
+    if (c === "#") return line.slice(0, i);
+    if (c === "'") {
+      const e = line.indexOf("'", i + 1);
+      if (e < 0) return line;
+      i = e + 1;
+    } else if (c === '"') {
+      let j = i + 1;
+      while (j < line.length && line[j] !== '"') j += line[j] === "\\" ? 2 : 1;
+      if (j >= line.length) return line;
+      i = j + 1;
+    } else {
+      i++;
+    }
+  }
+  return line;
+}
+
 // Per-Crate-Ausnahmen aus `[licenses] exceptions = [{ crate, allow }]`
 // (ADR 0135). cargo-about kennt sie als `[<crate>] accepted = [...]`.
 function parseExceptions(licensesFilePath) {
@@ -186,7 +209,7 @@ function parseExceptions(licensesFilePath) {
   const content = fs
     .readFileSync(licensesFilePath, "utf8")
     .split(/\r?\n/)
-    .map((l) => l.replace(/#.*$/, ""))
+    .map(stripTomlComment)
     .join("\n");
   // Other valid TOML spellings of the same data are rejected (fail closed):
   // the repo uses the `exceptions = [ … ]` block only.
@@ -246,9 +269,11 @@ function parseExceptions(licensesFilePath) {
     }
     out.push({ crate: m[1], allow });
   }
+  // Comments are already stripped above (string-aware), so a `#` left here
+  // sits inside a string and must not be dropped.
   // Anything left over (besides comments, commas, whitespace) is an entry the
   // parser does not understand: fail instead of silently skipping it.
-  const rest = block[1].replace(entryRe, "").replace(/#[^\n]*/g, "").trim();
+  const rest = block[1].replace(entryRe, "").trim();
   if (rest.replace(/[\s,]+/g, "") !== "") {
     fail(
       `Nicht lesbare Ausnahme in ${licensesFilePath} (erwartet: { crate = "…", allow = ["…"] }): ${rest}`,
