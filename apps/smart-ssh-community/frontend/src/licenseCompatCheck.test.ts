@@ -123,7 +123,8 @@ describe("check-license-compat", () => {
       expect(() => parseExceptions(raw(body))).toThrow(/array of tables/);
       const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
       expect(bad.status).not.toBe(0);
-    });
+      expect(bad.stderr).toMatch(/array of tables/);
+    }, 30_000);
 
     it("rejects the dotted-key form", () => {
       const body = 'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n';
@@ -134,16 +135,40 @@ describe("check-license-compat", () => {
       expect(parseExceptions(raw('# [[licenses.exceptions]]\n#licenses.exceptions = []\n'))).toEqual([]);
     });
 
-    it("check-license-compat exits non-zero for both alternative forms", () => {
-      for (const body of [
-        '[[licenses.exceptions]]\ncrate = "x"\nallow = ["GPL-2.0"]\n',
-        'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n',
-      ]) {
-        const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
-        expect(bad.status).not.toBe(0);
-        expect(bad.stderr).toContain("exceptions");
+    const FORMS: [string, string, RegExp][] = [
+      ["array of tables", '[[licenses.exceptions]]\ncrate = "x"\nallow = ["GPL-2.0"]\n', /array of tables/],
+      ["dotted key", 'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /dotted key/],
+      ["quoted array of tables", '[[licenses."exceptions"]]\ncrate = "x"\n', /array of tables/],
+      ["quoted licenses", '"licenses".exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /quoted key/],
+      ["quoted exceptions", "licenses.'exceptions' = [{ crate = \"x\", allow = [\"GPL-2.0\"] }]\n", /quoted key/],
+      ["spaced dots", 'licenses . "exceptions" = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /quoted key/],
+      ["inline table", 'licenses = { exceptions = [{ crate = "x", allow = ["GPL-2.0"] }] }\n', /inline table/],
+    ];
+
+    it.each(FORMS)("rejects %s, also with comment and CRLF", (_n, body, re) => {
+      expect(() => parseExceptions(raw(body))).toThrow(re);
+      const withComment = body.replace(/\n/, " # note\n");
+      expect(() => parseExceptions(raw(withComment))).toThrow(re);
+      expect(() => parseExceptions(raw(withComment.replace(/\n/g, "\r\n")))).toThrow(re);
+    });
+
+    it("does not throw for commented-out forms", () => {
+      for (const [, body] of FORMS) {
+        expect(parseExceptions(raw(body.replace(/^/gm, "# ")))).toEqual([]);
       }
     });
+
+    it(
+      "check-license-compat exits non-zero naming the form",
+      () => {
+        for (const [, body, re] of FORMS) {
+          const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
+          expect(bad.status).not.toBe(0);
+          expect(bad.stderr).toMatch(re);
+        }
+      },
+      30_000,
+    );
 
     it("returns the sqlcipher-src entry of the repo deny.toml", () => {
       expect(parseExceptions(path.resolve(__dirname, "../../../../deny.toml"))).toEqual([
@@ -159,6 +184,6 @@ describe("check-license-compat", () => {
       expect(bad.stderr).toContain('crate = "x"');
       const ok = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
       expect(ok.status).toBe(0);
-    });
+    }, 30_000);
   });
 });
