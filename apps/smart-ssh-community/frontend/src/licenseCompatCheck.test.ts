@@ -88,6 +88,25 @@ describe("check-license-compat", () => {
       expect(parseExceptions(raw("exceptions = [\n    # nothing\n]\n"))).toEqual([]);
     });
 
+    it("reads single-line and indented exceptions blocks", () => {
+      expect(parseExceptions(raw('exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n'))).toEqual([
+        { crate: "x", allow: ["GPL-2.0"] },
+      ]);
+      expect(
+        parseExceptions(raw('  exceptions = [\n    { crate = "y", allow = ["MIT"] },\n  ]\n')),
+      ).toEqual([{ crate: "y", allow: ["MIT"] }]);
+    });
+
+    it("fails when the exceptions block has no closing bracket", () => {
+      expect(() => parseExceptions(raw('exceptions = [{ crate = "x", allow = ["MIT"] }\n'))).toThrow();
+    });
+
+    it("ignores commented-out entries", () => {
+      expect(
+        parseExceptions(raw('exceptions = [\n    # { crate = "x", allow = ["GPL-2.0"] },\n]\n')),
+      ).toEqual([]);
+    });
+
     it("returns the sqlcipher-src entry of the repo deny.toml", () => {
       expect(parseExceptions(path.resolve(__dirname, "../../../../deny.toml"))).toEqual([
         { crate: "sqlcipher-src", allow: ["blessing", "WTFPL"] },

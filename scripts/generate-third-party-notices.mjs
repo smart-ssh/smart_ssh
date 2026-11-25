@@ -147,9 +147,33 @@ function parseAllowList(licensesFilePath) {
 // Per-Crate-Ausnahmen aus `[licenses] exceptions = [{ crate, allow }]`
 // (ADR 0135). cargo-about kennt sie als `[<crate>] accepted = [...]`.
 function parseExceptions(licensesFilePath) {
-  const content = fs.readFileSync(licensesFilePath, "utf8");
-  const block = content.match(/^exceptions\s*=\s*\[([\s\S]*?)^\]/m);
-  if (!block) return [];
+  // Strip comments first, so commented-out entries are not counted as active.
+  const content = fs
+    .readFileSync(licensesFilePath, "utf8")
+    .split("\n")
+    .map((l) => l.replace(/#.*$/, ""))
+    .join("\n");
+  const key = content.match(/^[ \t]*exceptions\s*=\s*\[/m);
+  if (!key) return [];
+  // Find the matching closing bracket (entries contain nested `allow = [..]`),
+  // so single-line and indented forms work. Fail closed if it is missing.
+  const start = key.index + key[0].length;
+  let depth = 1;
+  let inStr = false;
+  let end = -1;
+  for (let i = start; i < content.length; i++) {
+    const c = content[i];
+    if (c === '"') inStr = !inStr;
+    else if (!inStr && c === "[") depth++;
+    else if (!inStr && c === "]" && --depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) {
+    fail(`"exceptions = [" in ${licensesFilePath} hat kein schließendes "]".`);
+  }
+  const block = [null, content.slice(start, end)];
   const out = [];
   const entryRe = /\{\s*crate\s*=\s*"([^"]+)"\s*,\s*allow\s*=\s*\[([^\]]*)\]\s*\}/g;
   for (const m of block[1].matchAll(entryRe)) {
