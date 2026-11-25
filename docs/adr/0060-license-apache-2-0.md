@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by 0163
 
 Bezug: docs/specs/0070-license-apache-2-0.md, Commit `ef756d3`
 
