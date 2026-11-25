@@ -63,7 +63,7 @@
 | 0057 | ADR 0057: Entscheidungen bei der Umsetzung von Spec 0066 (Chat unterbrechbar) | Accepted | [0057-chat-interrupt-decisions.md](0057-chat-interrupt-decisions.md) |
 | 0058 | ADR 0058: Entscheidungen bei der Umsetzung von Spec 0067 (erhöhter Dateibrowser + Meldungen) | Accepted | [0058-sftp-elevated-and-toasts-decisions.md](0058-sftp-elevated-and-toasts-decisions.md) |
 | 0059 | ADR 0059: Entscheidungen bei der Umsetzung von Spec 0068 (Sicherheitshärtung vor dem Launch) | Accepted | [0059-security-hardening-prelaunch-decisions.md](0059-security-hardening-prelaunch-decisions.md) |
-| 0060 | ADR 0060: Lizenzwechsel FSL-1.1-MIT → Apache License 2.0 | Accepted | [0060-license-apache-2-0.md](0060-license-apache-2-0.md) |
+| 0060 | ADR 0060: Lizenzwechsel FSL-1.1-MIT → Apache License 2.0 | Superseded by 0163 | [0060-license-apache-2-0.md](0060-license-apache-2-0.md) |
 | 0061 | keychain-unavailable-reporting-decisions | Proposed | [0061-keychain-unavailable-reporting-decisions.md](0061-keychain-unavailable-reporting-decisions.md) |
 | 0062 | ADR 0062: Entscheidungen bei der Umsetzung von Spec 0069 (Fünf-Minuten-Pfad: Einstieg und verständliche Fehler) | Accepted | [0062-five-minute-path-error-mapping-decisions.md](0062-five-minute-path-error-mapping-decisions.md) |
 | 0063 | ADR 0063: Entscheidungen bei der Umsetzung von Spec 0072 (Anthropic: strukturierte Fehlererkennung, Modell-Discovery, Locale-Fix) | Accepted | [0063-anthropic-model-discovery-decisions.md](0063-anthropic-model-discovery-decisions.md) |
@@ -166,3 +166,4 @@
 | 0160 | Activity record: AI file reads and writes | Superseded by 0161 | [0160-activity-record-file-reads-and-writes.md](0160-activity-record-file-reads-and-writes.md) |
 | 0161 | No activity record in the core | Accepted | [0161-no-activity-record-in-the-core.md](0161-no-activity-record-in-the-core.md) |
 | 0162 | Filter parser: shell lexing of escapes, comments and line continuations | Accepted | [0162-filter-shell-lexing-escapes-comments.md](0162-filter-shell-lexing-escapes-comments.md) |
+| 0163 | License change Apache-2.0 → GPL-3.0-only | Accepted | [0163-license-change-gpl-3-0-only.md](0163-license-change-gpl-3-0-only.md) |

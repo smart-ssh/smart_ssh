@@ -2,7 +2,7 @@
   "name": "smart-ssh",
   "private": true,
   "version": "0.7.0",
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "exports": {
     "./public-api": "./src/public-api.ts",
@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "npm run check-commands && npm run check-events && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-spec-index && npm run check-conventions && npm run check-workspace-deps && npm run check-codemap && npm run check-doc-paths && npm run check-file-size && npm run check-test-waits && oxlint",
+    "lint": "npm run check-commands && npm run check-events && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-spec-index && npm run check-conventions && npm run check-workspace-deps && npm run check-license-compat && npm run check-codemap && npm run check-doc-paths && npm run check-file-size && npm run check-test-waits && oxlint",
     "check-commands": "node ../../../scripts/check-tauri-commands.mjs",
     "check-events": "node ../../../scripts/check-event-names.mjs",
     "check-a11y-rules": "node ../../../scripts/check-a11y-lint-rules.mjs",
@@ -23,6 +23,7 @@
     "check-codemap": "node ../../../scripts/check-codemap.mjs",
     "check-conventions": "node ../../../scripts/check-conventions.mjs",
     "check-workspace-deps": "node ../../../scripts/check-workspace-deps.mjs",
+    "check-license-compat": "node ../../../scripts/check-license-compat.mjs",
     "check-doc-paths": "node ../../../scripts/check-doc-paths.mjs",
     "check-test-waits": "node ../../../scripts/check-test-waits.mjs",
     "preview": "vite preview",
