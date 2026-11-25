@@ -46,7 +46,8 @@ export function checkLicenseCompat(denyTomlPath = path.join(REPO_ROOT, "deny.tom
 
 function main() {
   try {
-    const problems = checkLicenseCompat();
+    // Optional argument: path of the deny.toml to check (default: the repo's).
+    const problems = process.argv[2] ? checkLicenseCompat(path.resolve(process.argv[2])) : checkLicenseCompat();
     if (problems.length > 0) {
       console.error(`License compatibility check failed (${problems.length} problem(s)):`);
       for (const p of problems) console.error(`  - ${p}`);

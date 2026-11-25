@@ -151,8 +151,21 @@ function parseExceptions(licensesFilePath) {
   const block = content.match(/^exceptions\s*=\s*\[([\s\S]*?)^\]/m);
   if (!block) return [];
   const out = [];
-  for (const m of block[1].matchAll(/\{\s*crate\s*=\s*"([^"]+)"\s*,\s*allow\s*=\s*\[([^\]]*)\]\s*\}/g)) {
-    out.push({ crate: m[1], allow: [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]) });
+  const entryRe = /\{\s*crate\s*=\s*"([^"]+)"\s*,\s*allow\s*=\s*\[([^\]]*)\]\s*\}/g;
+  for (const m of block[1].matchAll(entryRe)) {
+    const allow = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+    if (allow.length === 0) {
+      fail(`Ausnahme in ${licensesFilePath} hat eine leere "allow"-Liste: ${m[0]}`);
+    }
+    out.push({ crate: m[1], allow });
+  }
+  // Anything left over (besides comments, commas, whitespace) is an entry the
+  // parser does not understand: fail instead of silently skipping it.
+  const rest = block[1].replace(entryRe, "").replace(/#[^\n]*/g, "").trim();
+  if (rest.replace(/[\s,]+/g, "") !== "") {
+    fail(
+      `Nicht lesbare Ausnahme in ${licensesFilePath} (erwartet: { crate = "…", allow = ["…"] }): ${rest}`,
+    );
   }
   return out;
 }
