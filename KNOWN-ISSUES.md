@@ -62,6 +62,5 @@ If you run into a limitation that is not listed, please report it through the
   ([Spec 0028](docs/specs/0028-mcp-server-integration.md), section 3,
   [Spec 0034](docs/specs/0034-chat-session-persistence.md), section 10,
   [Spec 0104](docs/specs/0104-mcp-sessions.md)).
-- **Workaround:** Review the action in its tab while it is open. If you need a
-  record, copy it from there.
+- **Workaround:** none.
 - **Status:** by design
