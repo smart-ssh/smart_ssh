@@ -144,6 +144,41 @@ function parseAllowList(licensesFilePath) {
   return entries;
 }
 
+// True when a basic-string key ("…" containing a backslash) appears in key
+// position: before `=`/`.` or, in a table header, before `]`/`.`. Value
+// strings with backslashes are not keys and stay accepted. Fail closed:
+// escaped spellings are not decoded, just rejected.
+function hasEscapedQuotedKey(line) {
+  const isHeader = /^\s*\[/.test(line);
+  let i = 0;
+  while (i < line.length) {
+    const c = line[i];
+    if (c === "'") {
+      const e = line.indexOf("'", i + 1);
+      if (e < 0) return false;
+      i = e + 1;
+    } else if (c === '"') {
+      let j = i + 1;
+      let escaped = false;
+      while (j < line.length && line[j] !== '"') {
+        if (line[j] === "\\") {
+          escaped = true;
+          j++;
+        }
+        j++;
+      }
+      if (escaped) {
+        const next = line.slice(j + 1).match(/^\s*(.)/)?.[1];
+        if (next === "=" || next === "." || (isHeader && next === "]")) return true;
+      }
+      i = j + 1;
+    } else {
+      i++;
+    }
+  }
+  return false;
+}
+
 // Per-Crate-Ausnahmen aus `[licenses] exceptions = [{ crate, allow }]`
 // (ADR 0135). cargo-about kennt sie als `[<crate>] accepted = [...]`.
 function parseExceptions(licensesFilePath) {
@@ -158,6 +193,13 @@ function parseExceptions(licensesFilePath) {
   // General rule: any line using `exceptions` as a key (bare or quoted) other
   // than the supported `exceptions = [` block is rejected, so future spellings
   // fail closed too.
+  for (const line of content.split("\n")) {
+    if (hasEscapedQuotedKey(line)) {
+      fail(
+        `Nicht unterstützte Schreibweise der Ausnahmen in ${licensesFilePath} (quoted key with escape sequence): ${line.trim()} — bitte den Block "exceptions = [ … ]" unter [licenses] verwenden.`,
+      );
+    }
+  }
   const keyRe = /(^|[\s.{,\[])(["']?)exceptions\2\s*(=|\]|\.|$)/;
   for (const line of content.split("\n")) {
     if (/^[ \t]*exceptions[ \t]*=[ \t]*\[/.test(line)) continue;
