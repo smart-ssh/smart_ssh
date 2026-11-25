@@ -156,7 +156,7 @@ function parseExceptions(licensesFilePath) {
   // Other valid TOML spellings of the same data are rejected (fail closed):
   // the repo uses the `exceptions = [ … ]` block only.
   const alt = content.match(
-    /^[ \t]*(?:\[\[[^\]\n]*\bexceptions\s*\]\]|licenses\s*\.\s*exceptions\s*=.*)$/m,
+    /^[ \t]*(?:\[\[[^\]\n]*\bexceptions\s*\]\]|licenses\s*\.\s*exceptions\s*=.*)[ \t]*$/m,
   );
   if (alt) {
     fail(

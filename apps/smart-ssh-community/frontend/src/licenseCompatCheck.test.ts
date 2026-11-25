@@ -112,6 +112,12 @@ describe("check-license-compat", () => {
       expect(() => parseExceptions(raw(body))).toThrow(/array of tables/);
     });
 
+    it("rejects headers with a trailing comment or whitespace", () => {
+      for (const h of ["[[licenses.exceptions]] # note", "[[licenses.exceptions]]  "]) {
+        expect(() => parseExceptions(raw(`${h}\ncrate = "x"\n`))).toThrow(/array of tables/);
+      }
+    });
+
     it("rejects the dotted-key form", () => {
       const body = 'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n';
       expect(() => parseExceptions(raw(body))).toThrow(/dotted key/);
