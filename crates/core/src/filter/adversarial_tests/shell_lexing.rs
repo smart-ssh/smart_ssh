@@ -302,6 +302,43 @@ async fn test_adv_case_and_reserved_words_inside_substitution() {
     }
 }
 
+/// Bash runs nothing in a bad substitution (`${a;rm -rf /;}`) or in the
+/// word of a parameter expansion (`${x:-a;rm -rf /}`), but a `${` the lexer
+/// misreads must not hide a command: the text of a parameter expansion is
+/// also split as code, and a `${` that starts no parameter expansion needs
+/// confirmation.
+#[tokio::test]
+async fn test_adv_parameter_expansion_text_is_read_as_code() {
+    for cmd in [
+        "echo ${a;rm -rf /;}",
+        "${a;rm x;}",
+        "echo ${a|rm -rf /}",
+        "echo ${a&rm -rf /}",
+        "echo ${a&&rm -rf /;}",
+        "echo ${a\nrm -rf /\n}",
+        "echo ${;rm -rf /;}",
+        "echo ${x:-a;rm -rf /;}",
+        "echo ${x#*;rm -rf /}",
+        "echo $(echo ${a;rm -rf /;})",
+        "echo ${x:-${a;rm -rf /;}}",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+    for cmd in [
+        "echo ${a;b}",
+        "echo ${a b}",
+        "echo ${}",
+        "echo ${(x)}",
+        "echo ${1a}",
+        "echo \"${a;b}\"",
+        "echo $(echo ${a;b})",
+        // Valid in bash, but `b}` from the code view is no plain command.
+        "echo ${x:-a;b}",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
 /// The counter-check: ordinary escapes, quotes, `#` in words and parameter
 /// expansions stay `AutoExec` under `Allow "*"`.
 #[tokio::test]
@@ -317,6 +354,8 @@ async fn test_adv_ordinary_quoting_stays_autoexec() {
         "echo \"${HOME}\"",
         "echo \"${var:-x}\"",
         "echo \"${x:-\"a b\"}\" ${#x} ${x#a}",
+        "echo ${#} ${!} ${#@} ${10} ${!x} ${!x*} ${!x@} ${a[0]} ${x@Q} ${x,,} ${x/a/b}",
+        "echo ${$} ${?} ${-} ${_x1:2:3}",
         "echo \"a (b) c\" 'd)'",
         "echo \"it's\"",
     ] {

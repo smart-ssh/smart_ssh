@@ -57,9 +57,16 @@ pub(super) struct Lexed {
     /// A backslash inside backticks, where it can nest a substitution the
     /// scanner does not follow.
     pub(super) escape_in_backticks: bool,
+    /// A `${` that starts neither a function substitution nor a parameter
+    /// expansion bash accepts (`${a;rm;}`, `${a|b}`): a "bad substitution".
+    pub(super) bad_substitution: bool,
     /// Per char: in the top-level command list, outside any quote,
     /// expansion or substitution. Only there do operators split segments.
     pub(super) top_level: Vec<bool>,
+    /// Like `top_level`, but the inside of a parameter expansion counts as
+    /// top level where the expansion itself is: the view in which its text
+    /// is read as code (see [`lexed_segments`]).
+    pub(super) top_level_in_parameters: Vec<bool>,
     /// Command substitutions not nested in another one, in order, also
     /// those inside double quotes or a parameter expansion.
     pub(super) substitutions: Vec<Substitution>,
@@ -169,6 +176,7 @@ pub(super) fn lex(cmd: &str, mode: CommentMode) -> Option<Lexed> {
         stack: vec![Context::Commands(List::new(Closer::End))],
         substitutions: 0,
         enclosed: 0,
+        parameters: 0,
         len: 0,
         out: Lexed {
             canonical: String::with_capacity(cmd.len()),
@@ -176,7 +184,9 @@ pub(super) fn lex(cmd: &str, mode: CommentMode) -> Option<Lexed> {
             continuation: false,
             comment: false,
             escape_in_backticks: false,
+            bad_substitution: false,
             top_level: Vec::with_capacity(chars.len()),
+            top_level_in_parameters: Vec::with_capacity(chars.len()),
             substitutions: Vec::new(),
             single_quoted: Vec::new(),
         },
@@ -206,6 +216,8 @@ struct Lexer<'a> {
     /// Contexts on the stack other than the bottom one and `case`
     /// statements: inside them nothing is at the top level.
     enclosed: usize,
+    /// Parameter expansions on the stack.
+    parameters: usize,
     /// Length of `out.canonical` in chars.
     len: usize,
     out: Lexed,
@@ -509,10 +521,48 @@ impl Lexer<'_> {
                 i + 3
             }
             _ => {
+                if !self.parameter_start(i + 2) {
+                    self.out.bad_substitution = true;
+                }
                 self.open(Context::Parameter { quoted }, &['$', '{']);
                 i + 2
             }
         }
+    }
+
+    /// Whether the text at `i`, after `${`, starts a parameter expansion:
+    /// an optional `#` (length) or `!` (indirection), a name, a positional
+    /// or a special parameter, then `}`, a subscript or an operator. Close
+    /// to what bash accepts; it does not check what follows the operator.
+    fn parameter_start(&self, i: usize) -> bool {
+        let at = |i: usize| self.chars.get(i).copied();
+        let parameter_end = |i: usize| match at(i)? {
+            c if c.is_ascii_alphabetic() || c == '_' => Some(
+                i + self.chars[i..]
+                    .iter()
+                    .take_while(|c| c.is_ascii_alphanumeric() || **c == '_')
+                    .count(),
+            ),
+            c if c.is_ascii_digit() => Some(
+                i + self.chars[i..]
+                    .iter()
+                    .take_while(|c| c.is_ascii_digit())
+                    .count(),
+            ),
+            '@' | '*' | '#' | '?' | '-' | '$' | '!' => Some(i + 1),
+            _ => None,
+        };
+        let operator = |i: usize, indirect: bool| {
+            at(i).is_some_and(|c| {
+                matches!(
+                    c,
+                    '}' | '[' | ':' | '-' | '=' | '?' | '+' | '#' | '%' | '/' | '^' | ',' | '@'
+                ) || (indirect && c == '*')
+            })
+        };
+        let prefixed = matches!(at(i), Some('#' | '!'))
+            && parameter_end(i + 1).is_some_and(|end| operator(end, at(i) == Some('!')));
+        prefixed || parameter_end(i).is_some_and(|end| operator(end, false))
     }
 
     /// An unquoted `\x` becomes `'x'` (`\'` becomes `"'"`), a line
@@ -683,7 +733,11 @@ impl Lexer<'_> {
                 self.substitutions += 1;
                 self.enclosed += 1;
             }
-            Context::DoubleQuoted | Context::Parameter { .. } => self.enclosed += 1,
+            Context::DoubleQuoted => self.enclosed += 1,
+            Context::Parameter { .. } => {
+                self.enclosed += 1;
+                self.parameters += 1;
+            }
         }
         self.stack.push(context);
     }
@@ -703,7 +757,11 @@ impl Lexer<'_> {
                 self.substitutions -= 1;
                 self.enclosed -= 1;
             }
-            Context::DoubleQuoted | Context::Parameter { .. } => self.enclosed -= 1,
+            Context::DoubleQuoted => self.enclosed -= 1,
+            Context::Parameter { .. } => {
+                self.enclosed -= 1;
+                self.parameters -= 1;
+            }
         }
         Some(context)
     }
@@ -734,7 +792,8 @@ impl Lexer<'_> {
 
     fn push(&mut self, c: char) {
         let top_level = self.enclosed == 0;
-        self.emit(c, top_level);
+        let in_parameters = self.enclosed == self.parameters;
+        self.emit(c, top_level, in_parameters);
     }
 
     fn push_str(&mut self, text: &str) {
@@ -745,13 +804,14 @@ impl Lexer<'_> {
 
     fn push_quoted(&mut self, text: impl IntoIterator<Item = char>) {
         for c in text {
-            self.emit(c, false);
+            self.emit(c, false, false);
         }
     }
 
-    fn emit(&mut self, c: char, top_level: bool) {
+    fn emit(&mut self, c: char, top_level: bool, in_parameters: bool) {
         self.out.canonical.push(c);
         self.out.top_level.push(top_level);
+        self.out.top_level_in_parameters.push(in_parameters);
         self.len += 1;
     }
 }
@@ -794,33 +854,62 @@ pub(super) fn opaque_syntax_reason(cmd: &str) -> Option<&'static str> {
              analysiert werden",
         );
     }
+    if lexed.bad_substitution {
+        return Some(
+            "Kommando enthält eine ungültige Parameter-Expansion (${...}) und \
+             konnte nicht sicher analysiert werden",
+        );
+    }
     None
 }
 
 /// Lexes `cmd` and splits the canonical text into its top-level segments.
 /// If the lexer found a comment, the segments of the [`CommentMode::AsCode`]
 /// view are added (when that view lexes), so a misread comment can only add
-/// segments to evaluate, never hide one. `None` if the text cannot be lexed.
+/// segments to evaluate, never hide one. Likewise the text of a top-level
+/// parameter expansion is also split as code
+/// ([`Lexed::top_level_in_parameters`]): bash runs nothing in
+/// `${x:-a;rm -rf /}` or in the bad substitution `${a;rm -rf /;}`, but a
+/// `${` the lexer misreads must not hide a command either. `None` if the
+/// text cannot be lexed.
 pub(super) fn lexed_segments(cmd: &str) -> Option<Vec<String>> {
     let lexed = lex(cmd, CommentMode::Strip)?;
-    let mut segments = scan_top_level_segments(&lexed);
+    let mut segments = scan_top_level_segments(&lexed, &lexed.top_level);
+    add_parameter_view(&lexed, &mut segments);
     if lexed.comment {
-        let extra = lex(cmd, CommentMode::AsCode)
-            .map(|view| scan_top_level_segments(&view))
-            .unwrap_or_default();
-        for segment in extra {
-            if !segments.contains(&segment) {
-                segments.push(segment);
-            }
+        if let Some(view) = lex(cmd, CommentMode::AsCode) {
+            add_new(
+                scan_top_level_segments(&view, &view.top_level),
+                &mut segments,
+            );
+            add_parameter_view(&view, &mut segments);
         }
     }
     Some(segments)
 }
 
+/// Adds the segments of the view of `lexed` with parameter expansions read
+/// as code, if it differs.
+fn add_parameter_view(lexed: &Lexed, segments: &mut Vec<String>) {
+    if lexed.top_level_in_parameters != lexed.top_level {
+        let extra = scan_top_level_segments(lexed, &lexed.top_level_in_parameters);
+        add_new(extra, segments);
+    }
+}
+
+fn add_new(extra: Vec<String>, segments: &mut Vec<String>) {
+    for segment in extra {
+        if !segments.contains(&segment) {
+            segments.push(segment);
+        }
+    }
+}
+
 /// Zerlegt den kanonischen Text an den Top-Level-Operatoren `&&`, `||`,
 /// `;`, `|`, `&` sowie Zeilenumbrüchen (`\n`, `\r`, `\r\n`), ohne in Quotes,
-/// Expansionen oder Substitutionen hineinzuspalten ([`Lexed::top_level`]).
-pub(super) fn scan_top_level_segments(lexed: &Lexed) -> Vec<String> {
+/// Expansionen oder Substitutionen hineinzuspalten (`top_level`, eine der
+/// beiden Sichten von `lexed`).
+pub(super) fn scan_top_level_segments(lexed: &Lexed, top_level: &[bool]) -> Vec<String> {
     let chars: Vec<char> = lexed.canonical.chars().collect();
     let mut segments = Vec::new();
     let mut current_start = 0usize;
@@ -828,7 +917,7 @@ pub(super) fn scan_top_level_segments(lexed: &Lexed) -> Vec<String> {
 
     while i < chars.len() {
         let c = chars[i];
-        if !lexed.top_level[i] {
+        if !top_level[i] {
             i += 1;
             continue;
         }
@@ -1195,5 +1284,51 @@ mod tests {
             lexed_segments("echo a # x; rm -rf /").unwrap(),
             ["echo a", "echo a '#' x", "rm -rf /"]
         );
+    }
+
+    #[test]
+    fn parameter_expansion_text_is_also_read_as_code() {
+        assert_eq!(
+            lexed_segments("echo ${a;rm -rf /;}; ls").unwrap(),
+            ["echo ${a;rm -rf /;}", "ls", "echo ${a", "rm -rf /", "}"]
+        );
+        assert_eq!(
+            lexed_segments("echo ${x:-a|b} \"${y;z}\"").unwrap(),
+            ["echo ${x:-a|b} \"${y;z}\"", "echo ${x:-a", "b} \"${y;z}\""]
+        );
+        assert_eq!(
+            lexed_segments("echo ${x:-a b}").unwrap(),
+            ["echo ${x:-a b}"]
+        );
+    }
+
+    #[test]
+    fn bad_substitutions_are_reported() {
+        for text in [
+            "echo ${a;b}",
+            "echo ${a|b}",
+            "echo ${a b}",
+            "echo ${}",
+            "echo ${1a}",
+            "echo ${#a;b}",
+            "echo \"${(x)}\"",
+            "echo ${x:-${a&b}}",
+        ] {
+            assert!(
+                lex(text, CommentMode::Strip).unwrap().bad_substitution,
+                "{text:?}"
+            );
+            assert!(opaque_syntax_reason(text).is_some(), "{text:?}");
+        }
+        for text in [
+            "echo ${a} ${_a1:-x} ${10} ${#} ${#a} ${!a} ${!a*} ${!a@} ${a[1]} ${a@Q}",
+            "echo ${$} ${?} ${-} ${!} ${@} ${*} ${##} ${a//x/y} ${a^^} ${a,} ${a%%x}",
+            "echo ${ ls; } ${| ls; }",
+        ] {
+            assert!(
+                !lex(text, CommentMode::Strip).unwrap().bad_substitution,
+                "{text:?}"
+            );
+        }
     }
 }

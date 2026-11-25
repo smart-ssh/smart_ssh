@@ -1342,6 +1342,26 @@ fn heredoc_fragments_never_lower_risk_for_red_commands() {
     assert_eq!(chained.server_risk, RiskLevel::Red);
 }
 
+// --- Text of a parameter expansion in a chain ----------------------------
+
+#[test]
+fn chaining_into_a_parameter_expansion_never_lowers_risk() {
+    // Failing proptest case: `${a;rm;}` was read as one parameter
+    // expansion, so the `rm` of `rm;}` was not classified.
+    let alone = classify("rm;}");
+    assert!(alone.server_risk > RiskLevel::None);
+    for head in ["${a", "${a-", "${a:-", "${", "${#a"] {
+        for sep in [";", "&&", "||", "|", "\n"] {
+            let joined = format!("{head}{sep}rm;}}");
+            let chained = classify(&joined);
+            assert!(
+                chained.server_risk >= alone.server_risk && chained.data_risk >= alone.data_risk,
+                "risk fell for {joined:?}: {chained:?}"
+            );
+        }
+    }
+}
+
 // --- Issue #488: Platzhalter und Secret-Pfade -----------------------------
 
 const GLOB_HINT_REASON: &str = "Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad";

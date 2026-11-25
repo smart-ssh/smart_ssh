@@ -81,6 +81,19 @@ see the inner `rm`.
    that the shell runs, those commands are still evaluated, so a deny rule
    or the hard blacklist still applies.
 
+   The text of a parameter expansion gets the same second view. In
+   `${...}` bash runs nothing outside a substitution (`${x:-a;rm -rf /}`
+   holds a literal word, `${a;rm -rf /;}` is a "bad substitution"), so the
+   lexer reads it as one word; read only that way, chaining could lower the
+   risk rating (`${a` + `;` + `rm;}` gave `${a;rm;}`, rated lower than
+   `rm;}`), and a `${` the lexer takes for an expansion could hide a command.
+   So the text of a parameter expansion at the top level is also split as
+   code, and those segments are added: `echo ${a;rm -rf /;}` is `Deny`
+   under `Deny "rm *"`. More segments can only raise a decision or a risk
+   rating. A valid expansion with an operator in its word usually needs
+   confirmation then (`echo ${x:-a;b}` adds the segment `b}`, which is no
+   plain command); such words are rare in generated commands.
+
 4. **Fail closed only where the lexer cannot make the text exact.** A line
    continuation, a comment or a backslash inside backticks raises the
    decision to at least `Confirm` with `FILTER_PARSE_AMBIGUOUS` (via
@@ -94,6 +107,12 @@ see the inner `rm`.
    - A backslash inside backticks is not resolved (`` \` `` nests a
      substitution the scanner does not follow); it only triggers the
      confirmation.
+   - A `${` that starts neither a function substitution nor a parameter
+     expansion (after an optional `#` or `!`, a name, a positional or a
+     special parameter, followed by `}`, a subscript or an operator), such
+     as `${a;b}`, `${a|b}`, `${a b}` or `${}`, is a bad substitution in
+     bash. Other shells read some of these forms differently, so it also
+     needs confirmation.
 
    **Plain backslash escapes do not raise the decision.** An unquoted `\x`
    outside backticks is resolved exactly into quotes (`'x'`), and the

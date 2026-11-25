@@ -143,6 +143,12 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    oder mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a #
    Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#` innerhalb
    von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern nichts.
+   Der Text einer Parameter-Expansion (`${...}`) wird zusätzlich als Code
+   zerlegt, obwohl die Shell darin außerhalb einer Substitution nichts
+   ausführt: `echo ${a;rm -rf /;}` trifft eine Deny-Regel für `rm *`. Ein
+   `${`, auf das weder eine Funktions-Substitution noch eine gültige
+   Parameter-Expansion folgt (`${a;b}`, `${a|b}`, `${a b}`, `${}`), ist
+   mindestens `Confirm`.
 5. Command-Substitution (`$(...)`, Backticks, `<(...)`/`>(...)` und die
    bash-5.3-Formen `${ ...; }` und `${| ...; }`) ist ein eigener
    Prüfbestandteil und erzwingt mindestens `Confirm`, weil sie zur Laufzeit
