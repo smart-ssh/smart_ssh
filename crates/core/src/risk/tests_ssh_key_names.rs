@@ -93,6 +93,9 @@ fn glob_reads_with_glued_redirect_or_backticks_are_red() {
         "cat ~/.ssh/id_*>>/tmp/x",
         "cat ~/.ssh/id_*</dev/null",
         "echo `cat ~/.ssh/backup_id_*`",
+        "cat <~/.ssh/backup_id_*",
+        "cat <~/.ssh/id_*",
+        "cat 0<~/.ssh/backup_id_*",
     ] {
         assert_eq!(classify(c).data_risk, RiskLevel::Red, "{c}");
     }
