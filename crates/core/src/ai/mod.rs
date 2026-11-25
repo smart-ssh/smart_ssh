@@ -23,6 +23,7 @@ mod redacted_context;
 mod redactor;
 #[cfg(test)]
 mod redactor_generators;
+mod redactor_netrc;
 #[cfg(test)]
 mod redactor_property;
 #[cfg(test)]
@@ -35,6 +36,8 @@ mod types;
 mod tests;
 #[cfg(test)]
 mod tests_issue270;
+#[cfg(test)]
+mod tests_netrc;
 
 pub use extension_content::{
     seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,

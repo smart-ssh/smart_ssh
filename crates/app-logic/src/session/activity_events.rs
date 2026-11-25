@@ -22,9 +22,9 @@ impl Session {
     /// Builds and queues one event. Callers check [`Session::activity_active`]
     /// before they build `kind`, so nothing is built without an observer.
     async fn push_activity(&self, source: ActivitySource, kind: ActivityEventKind) {
-        let Some(reporting) = self.activity_reporting() else {
+        if self.activity_reporting().is_none() {
             return;
-        };
+        }
         // The chat id is only known to observers from `ChatStarted` on.
         // The flag is read under the chat id lock, which "new chat" holds while
         // it swaps the id and resets the flag, so an unannounced id never leaks.
@@ -38,6 +38,20 @@ impl Session {
             } else {
                 None
             }
+        };
+        self.push_activity_with_chat_id(chat_session_id, source, kind);
+    }
+
+    /// Queues one event with an already decided chat id. Does not touch the
+    /// chat id lock, so a caller that holds it can use this.
+    fn push_activity_with_chat_id(
+        &self,
+        chat_session_id: Option<String>,
+        source: ActivitySource,
+        kind: ActivityEventKind,
+    ) {
+        let Some(reporting) = self.activity_reporting() else {
+            return;
         };
         let is_end = matches!(kind, ActivityEventKind::SessionEnded { .. });
         let is_start = matches!(kind, ActivityEventKind::SessionStarted { .. });
@@ -134,7 +148,11 @@ impl Session {
         if !self.activity_active() || !self.activity_started() {
             return;
         }
-        let Some(chat_id) = *self.persistence.chat_session_id.lock().await else {
+        // Read the id, swap the flag and queue the event under the chat id
+        // lock: "new chat" resets the flag under the same lock, so it cannot
+        // interleave and the announced id is the current one.
+        let guard = self.persistence.chat_session_id.lock().await;
+        let Some(chat_id) = *guard else {
             return;
         };
         if self
@@ -143,13 +161,14 @@ impl Session {
         {
             return;
         }
-        self.push_activity(
+        self.push_activity_with_chat_id(
+            Some(chat_id.to_string()),
             ActivitySource::User,
             ActivityEventKind::ChatStarted {
                 chat_session_id: chat_id.to_string(),
             },
-        )
-        .await;
+        );
+        drop(guard);
     }
 
     /// Tells the observers that the connection of this session changed.
@@ -347,7 +366,8 @@ fn missing_action_id() {
 /// Starts the once-a-minute user-activity tick of `session` in `tasks` (its
 /// session scope). The tick runs off every input path: input only sets a
 /// flag, this task reads it. It emits one `UserActivity` per interval in
-/// which there was input or a command was running. Without an observer no
+/// which there was input or a command started by the user was running
+/// (a command started through MCP does not count). Without an observer no
 /// task is started. Holds only a weak reference to the session.
 pub fn spawn_user_activity_tick(
     session: &std::sync::Arc<Session>,
@@ -374,7 +394,7 @@ pub fn spawn_user_activity_tick(
             let input = reporting
                 .input_seen
                 .swap(false, std::sync::atomic::Ordering::Relaxed);
-            if input || session.transport.running_action().is_some() {
+            if input || session.transport.user_command_running() {
                 session
                     .push_activity(ActivitySource::User, ActivityEventKind::UserActivity)
                     .await;

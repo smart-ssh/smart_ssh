@@ -370,6 +370,7 @@ Nach Themen:
 - **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
 - **Aktivität:** `ActivityObserver`, `ActivityEvent`, `ActivityEventKind`,
   `ActivityDecisionOutcome`, `ActivitySessionKind`, `ActivitySource`,
+  `ConnectionChange`, `DisconnectReason`, `ConnectFailureStep`,
   `RuleSnapshot`, `ServerSnapshot`, `SessionEndReason`, `SessionRef`,
   `dropped_activity_events`.
 - **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,

@@ -2504,11 +2504,11 @@ mod segmentation_pins {
 
     #[test]
     fn unbalanced_constructs_are_ambiguous() {
-        // A backslash outside quotes is invisible to the scanner but not to
-        // shell-words, so these pass the quote pre-check and reach the
-        // final balance check — each state alone must be enough.
-        assert_ambiguous(r"echo \'abc");
-        assert_ambiguous(r#"echo \"abc"#);
+        // An escaped quote outside quotes is literal, as in the shell.
+        assert_eq!(segs(r"echo \'abc"), vec![r#"echo "'"abc"#]);
+        assert_eq!(segs(r#"echo \"abc"#), vec![r#"echo '"'abc"#]);
+        assert_ambiguous("echo 'abc");
+        assert_ambiguous("echo \"abc");
         assert_ambiguous("echo `abc");
         assert_ambiguous("echo $(abc");
         assert_ambiguous("echo <(abc");
@@ -2730,8 +2730,8 @@ mod substitution_and_shell_c_pins {
         assert_eq!(opaque_encoding_reason("echo $'"), None);
         // A quote that is not preceded by `$` must not start an ANSI-C string.
         assert_eq!(opaque_encoding_reason("echo 'a\\b'"), None);
-        // `$'$'` is a complete ANSI-C string; the backslash after it is outside.
-        assert_eq!(opaque_encoding_reason("echo $'$'abc\\x"), None);
+        // `$'$'` is a complete ANSI-C string; the quoted backslash after it is outside.
+        assert_eq!(opaque_encoding_reason("echo $'$'abc'\\x'"), None);
         // An escape in a later ANSI-C string is still found.
         assert!(opaque_encoding_reason("echo $'a' $'\\x41'").is_some());
     }

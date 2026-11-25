@@ -1646,3 +1646,4 @@ mod non_writing_redirection_adversarial {
         }
     }
 }
+mod shell_lexing;

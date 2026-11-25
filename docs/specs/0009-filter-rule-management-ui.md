@@ -96,4 +96,4 @@ sich nur, dass Nutzerregeln greifen.
 ## 7. Grenzen
 
 - Regeln lassen sich nicht deaktivieren, ohne sie zu löschen.
-- Ein Import oder Export von Regelsätzen ist nicht vorgesehen.
+- Import und Export von Regelsätzen als teilbare Regelpakete sind in Spec 0117 beschrieben.

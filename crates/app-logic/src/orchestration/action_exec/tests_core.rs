@@ -499,6 +499,7 @@ async fn test_execute_suggested_command_cancellation_returns_partial_output() {
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     );
     let cancel_future = async {
         // Kleine Verzögerung, damit `exec_future` sicher schon
@@ -578,6 +579,7 @@ async fn test_running_command_does_not_hold_transport_and_commands_stay_serial()
             empty_store(),
             true,
             LedgerSource::Ai,
+            false,
         )
     };
     let probe = async {
@@ -648,6 +650,7 @@ async fn test_execute_suggested_command_without_cancellation_leaves_no_registry_
         empty_store(),
         true,
         LedgerSource::Ai,
+        false,
     )
     .await;
     assert!(executed);
