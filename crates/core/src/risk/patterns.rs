@@ -84,6 +84,19 @@ macro_rules! ssh_host_key {
 /// Richtung).
 pub(super) const SECRET_READ_COMMANDS: &str = r"(?:cat|less|more|head|tail|bat|batcat|tac|nl|grep|egrep|fgrep|zgrep|rgrep|ugrep|rg|ag|ack|sed|awk|gawk|mawk|nawk|xxd|od|hexdump|strings|base64|base32|openssl|jq|yq|sort|uniq|cut|paste|diff|cmp|comm|column|rev|fold|iconv|tr|pr|fmt|expand|look|dd|tee|zcat|bzcat|xzcat|zless|zmore|gzip|bzip2|xz|view|vim|vi|nano|ex|ed|emacs|curl|wget|scp|rsync|tar|zip|cpio|7z|getent|perl|python|python3|ruby|php|node|sftp-read)";
 
+/// Issue #1564: the private-key subset of [`SECRET_FILE_CANDIDATES`] used for
+/// the red data-risk rating of glob reads.
+pub(super) const SSH_KEY_GLOB_CANDIDATES: &[&str] = &[
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    "id_dsa",
+    "x_id_rsa",
+    "x_id_ed25519",
+    "x_id_ecdsa",
+    "x_id_dsa",
+];
+
 /// Spec 0068, Teil 2 (Review-Fund): Dateinamen, gegen die ein Platzhalter
 /// im letzten Pfadteil geprüft wird (`cat /etc/sha*` trifft `shadow`).
 /// Für Muster, die nur eine Endung verlangen, steht ein Stellvertreter
@@ -93,6 +106,12 @@ pub(super) const SECRET_FILE_CANDIDATES: &[&str] = &[
     "id_ed25519",
     "id_ecdsa",
     "id_dsa",
+    // Renamed private keys (`backup_id_rsa`, issue #1564): a glob such as
+    // `backup_id_*` or `*_id_*` must be able to hit them.
+    "x_id_rsa",
+    "x_id_ed25519",
+    "x_id_ecdsa",
+    "x_id_dsa",
     "shadow",
     "gshadow",
     "credentials",
