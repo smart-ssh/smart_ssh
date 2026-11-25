@@ -118,6 +118,13 @@ describe("check-license-compat", () => {
       }
     });
 
+    it("rejects a CRLF header with a trailing comment", () => {
+      const body = '[[licenses.exceptions]] # note\r\ncrate = "x"\r\nallow = ["GPL-2.0"]\r\n';
+      expect(() => parseExceptions(raw(body))).toThrow(/array of tables/);
+      const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
+      expect(bad.status).not.toBe(0);
+    });
+
     it("rejects the dotted-key form", () => {
       const body = 'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n';
       expect(() => parseExceptions(raw(body))).toThrow(/dotted key/);

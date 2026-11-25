@@ -150,7 +150,7 @@ function parseExceptions(licensesFilePath) {
   // Strip comments first, so commented-out entries are not counted as active.
   const content = fs
     .readFileSync(licensesFilePath, "utf8")
-    .split("\n")
+    .split(/\r?\n/)
     .map((l) => l.replace(/#.*$/, ""))
     .join("\n");
   // Other valid TOML spellings of the same data are rejected (fail closed):
