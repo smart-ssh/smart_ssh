@@ -150,9 +150,19 @@ function parseExceptions(licensesFilePath) {
   // Strip comments first, so commented-out entries are not counted as active.
   const content = fs
     .readFileSync(licensesFilePath, "utf8")
-    .split("\n")
+    .split(/\r?\n/)
     .map((l) => l.replace(/#.*$/, ""))
     .join("\n");
+  // Other valid TOML spellings of the same data are rejected (fail closed):
+  // the repo uses the `exceptions = [ … ]` block only.
+  const alt = content.match(
+    /^[ \t]*(?:\[\[[^\]\n]*\bexceptions\s*\]\]|licenses\s*\.\s*exceptions\s*=.*)[ \t]*$/m,
+  );
+  if (alt) {
+    fail(
+      `Nicht unterstützte Schreibweise der Ausnahmen in ${licensesFilePath} (array of tables / dotted key): ${alt[0].trim()} — bitte den Block "exceptions = [ … ]" unter [licenses] verwenden.`,
+    );
+  }
   const key = content.match(/^[ \t]*exceptions\s*=\s*\[/m);
   if (!key) return [];
   // Find the matching closing bracket (entries contain nested `allow = [..]`),

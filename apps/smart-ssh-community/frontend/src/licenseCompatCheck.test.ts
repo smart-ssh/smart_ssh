@@ -107,6 +107,44 @@ describe("check-license-compat", () => {
       ).toEqual([]);
     });
 
+    it("rejects the array-of-tables form, naming the form", () => {
+      const body = '[[licenses.exceptions]]\ncrate = "x"\nallow = ["GPL-2.0"]\n';
+      expect(() => parseExceptions(raw(body))).toThrow(/array of tables/);
+    });
+
+    it("rejects headers with a trailing comment or whitespace", () => {
+      for (const h of ["[[licenses.exceptions]] # note", "[[licenses.exceptions]]  "]) {
+        expect(() => parseExceptions(raw(`${h}\ncrate = "x"\n`))).toThrow(/array of tables/);
+      }
+    });
+
+    it("rejects a CRLF header with a trailing comment", () => {
+      const body = '[[licenses.exceptions]] # note\r\ncrate = "x"\r\nallow = ["GPL-2.0"]\r\n';
+      expect(() => parseExceptions(raw(body))).toThrow(/array of tables/);
+      const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
+      expect(bad.status).not.toBe(0);
+    });
+
+    it("rejects the dotted-key form", () => {
+      const body = 'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n';
+      expect(() => parseExceptions(raw(body))).toThrow(/dotted key/);
+    });
+
+    it("ignores a commented-out array-of-tables header", () => {
+      expect(parseExceptions(raw('# [[licenses.exceptions]]\n#licenses.exceptions = []\n'))).toEqual([]);
+    });
+
+    it("check-license-compat exits non-zero for both alternative forms", () => {
+      for (const body of [
+        '[[licenses.exceptions]]\ncrate = "x"\nallow = ["GPL-2.0"]\n',
+        'licenses.exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n',
+      ]) {
+        const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
+        expect(bad.status).not.toBe(0);
+        expect(bad.stderr).toContain("exceptions");
+      }
+    });
+
     it("returns the sqlcipher-src entry of the repo deny.toml", () => {
       expect(parseExceptions(path.resolve(__dirname, "../../../../deny.toml"))).toEqual([
         { crate: "sqlcipher-src", allow: ["blessing", "WTFPL"] },
