@@ -1016,7 +1016,7 @@ fn glob_reads_private_key(segment: &str) -> bool {
         return false;
     }
     words.any(|word| {
-        let word = word.trim_matches(|c| c == '"' || c == '\'');
+        let word = word.trim_matches(|c| c == '"' || c == '\'' || c == ')');
         let last = word.rsplit('/').next().unwrap_or(word);
         if !last.contains(GLOB)
             || !["id_", "rsa", "ed25519", "ecdsa", "dsa"]
@@ -1028,24 +1028,21 @@ fn glob_reads_private_key(segment: &str) -> bool {
         let Some(re) = glob_to_regex(last) else {
             return false;
         };
-        // File names a private key can carry: every known candidate, plus the
-        // key types behind each literal head the glob itself spells before an
-        // `id_` (`backup_id_*` -> `backup_id_rsa`).
-        let heads = last
-            .match_indices("id_")
-            .map(|(i, _)| &last[..i])
-            .filter(|head| head.is_empty() || head.ends_with(['_', '-', '.', '*', '?', ']', '}']))
-            .flat_map(super::glob_head::expand_glob_head);
-        let derived = heads.flat_map(|head| {
-            ["rsa", "ed25519", "ecdsa", "dsa"]
-                .iter()
-                .map(move |kind| format!("{head}id_{kind}"))
-        });
-        SSH_KEY_GLOB_CANDIDATES
-            .iter()
-            .map(|candidate| candidate.to_string())
-            .chain(derived)
-            .any(|name| re.is_match(&name))
+        if SSH_KEY_GLOB_CANDIDATES.iter().any(|c| re.is_match(c)) {
+            return true;
+        }
+        // Positional rule: a literal `id_` at the start of the last path part,
+        // after `_`/`-`/`.`, or right after a glob construct (`*?]}`), whose
+        // remainder can match `id_<key type>` (`backup_id_*`, `[!bx]_id_*`).
+        last.match_indices("id_").any(|(i, _)| {
+            let ok =
+                last[..i].is_empty() || last[..i].ends_with(['_', '-', '.', '*', '?', ']', '}']);
+            ok && glob_to_regex(&last[i..]).is_some_and(|rest| {
+                ["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"]
+                    .iter()
+                    .any(|n| rest.is_match(n))
+            })
+        })
     })
 }
 

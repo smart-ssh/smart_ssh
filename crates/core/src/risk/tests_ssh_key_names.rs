@@ -46,6 +46,10 @@ fn glob_reads_of_private_key_names_are_red() {
         "cat ~/.ssh/[bo]*_id_*",
         "cat ~/.ssh/back[u]p_id_*",
         "cat ~/.ssh/{a,b}*_id_*",
+        "cat ~/.ssh/[!bx]_id_*",
+        "cat ~/.ssh/[!b]?_id_*",
+        "cat ~/.ssh/{a,{b,c}}_id_*",
+        "cat $(echo ~/.ssh/backup_id_*)",
     ] {
         assert_eq!(classify(c).data_risk, RiskLevel::Red, "{c}");
     }
