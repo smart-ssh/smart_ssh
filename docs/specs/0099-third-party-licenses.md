@@ -1,30 +1,29 @@
 # Spec 0099 — Lizenzen: Projektlizenz und Drittlizenzen
 
 Status: umgesetzt
-Zweck: Smart SSH steht unter der Apache License 2.0. Jedes Release-Paket
+Zweck: Smart SSH steht unter der GNU General Public License v3.0 (GPL-3.0-only). Jedes Release-Paket
 enthält die Lizenztexte aller ausgelieferten Rust- und npm-Abhängigkeiten
 und der mitgelieferten Schriften, und die App zeigt sie offline im
 Über-Bereich der Einstellungen an.
 Bezüge: Spec 0090 (CI und Release, erlaubte Lizenzen A12), ADR 0060
-(Lizenzwechsel), ADR 0090 (Weg der Liste ins Paket), ADR 0100 (eine Quelle
+und ADR 0163 (Lizenzwechsel), ADR 0090 (Weg der Liste ins Paket), ADR 0100 (eine Quelle
 für die Kennzeile).
 
 Diese Spec nimmt die frühere Spec 0070 (Lizenzwechsel) auf.
 
 ## 1. Projektlizenz
 
-- **L1:** Das gesamte Repository steht unter der Apache License 2.0
-  (SPDX `Apache-2.0`). Der Lizenztext liegt unverändert, mit nicht
-  ausgefüllten Platzhaltern im Anhang, als `LICENSE` im
-  Wurzelverzeichnis.
+- **L1:** Das gesamte Repository steht unter der GNU General Public
+  License v3.0 (SPDX `GPL-3.0-only`). Der Lizenztext liegt unverändert als
+  `LICENSE` im Wurzelverzeichnis. Fremder Code unter `vendor/` behält seine
+  eigene Lizenz.
 - **L2:** Jede Stelle, die eine Lizenz für dieses Projekt deklariert
-  (Rust-Manifest des Workspace, Frontend-Manifest, README), nennt
-  übereinstimmend `Apache-2.0`.
-- **L3:** `NOTICE` im Wurzelverzeichnis enthält nur Produktname und
-  Urheberrechtsvermerk. Sie ist kein Sammelort für Drittlizenzen.
+  (Rust-Manifest des Workspace, Frontend-Manifest, Tauri-Bundle, README),
+  nennt übereinstimmend `GPL-3.0-only`.
+- **L3:** `NOTICE` im Wurzelverzeichnis enthält Produktname, Urheberrechtsvermerk
+  und die Lizenzangabe. Sie ist kein Sammelort für Drittlizenzen.
 - Quelldateien tragen keine Lizenz-Kopfzeilen.
-- Die Apache License 2.0 gilt auch für alle früher veröffentlichten
-  Versionen.
+- Versionen bis einschließlich 0.7.0 stehen unter der Apache License 2.0.
 
 ## 2. Liste der Drittlizenzen
 

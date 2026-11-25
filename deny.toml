@@ -51,6 +51,10 @@ feature-depth = 1
 #
 # GPL/AGPL/LGPL bewusst NICHT enthalten (Spec 0090, A12) — jeder
 # Fund muss dem Menschen gemeldet werden, nie automatisch toleriert werden.
+#
+# Das Projekt steht unter GPL-3.0-only (ADR 0163): jeder Eintrag hier (und in
+# `exceptions`) muss GPL-3.0-kompatibel sein. `npm run check-license-compat`
+# (scripts/check-license-compat.mjs) prüft das gegen eine feste Liste.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -81,10 +85,10 @@ exceptions = [
 
 [licenses.private]
 # Spec 0090, A12 gilt für Abhängigkeiten, nicht für die eigene Lizenz des
-# Projekts (`[workspace.package] license = "Apache-2.0"`, Spec 0099, L1) —
+# Projekts (`[workspace.package] license = "GPL-3.0-only"`, Spec 0099, L1) —
 # cargo-deny prüft standardmäßig aber auch Workspace-Member-Crates mit.
 # `ignore = true` überspringt Crates, die als `publish = false` markiert
-# sind (alle 8 Workspace-Crates, s. deren `Cargo.toml`) — die korrekte,
+# sind (alle Workspace-Crates, s. deren `Cargo.toml`) — die korrekte,
 # enge Lösung (überspringt nur unveröffentlichte eigene Crates), kein
 # Eintrag der eigenen Lizenz in die Allow-Liste, die weiterhin
 # ausschließlich für Drittanbieter-Abhängigkeiten gilt.

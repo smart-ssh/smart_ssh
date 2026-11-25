@@ -125,6 +125,8 @@ Betriebssystem ab).
   verlangt eine bewusste Entscheidung. MPL-2.0 ist erst nach einer
   Einzelprüfung auf die Liste gekommen, BSL-1.0 (Boost) nach einer
   Maintainer-Entscheidung (permissive, nur Windows-Zwischenabhängigkeiten).
+  Jede erlaubte Lizenz muss mit GPL-3.0 kompatibel sein; das erzwingt
+  `check-license-compat`.
   Die Lizenzen `blessing` und WTFPL sind nur für die gebündelte
   SQLCipher-Quelle (`sqlcipher-src`) als Einzel-Ausnahme erlaubt, nicht
   allgemein.
