@@ -59,7 +59,7 @@ Der Export schreibt **keine Geheimnisse, Server-IDs, Hostnamen, Regel-IDs, Zeits
 
 1. **Ort:** Regelverwaltung (Spec 0009), Aktion „Exportieren…".
 2. Der Nutzer wählt Regeln einzeln oder „alle exportierbaren". Exportierbar sind Regeln mit Geltungsbereich **global** oder **Schlagwort**.
-3. **Server-Regeln sind nicht exportierbar** (Server-IDs sind lokal und nur auf dieser Maschine gültig). Sie sind im Dialog nicht auswählbar. Waren Regeln mit Server-Bezug ausgewählt (oder gibt es welche), sagt der Dialog, **wie viele** ausgelassen wurden und **warum**.
+3. **Server-Regeln sind nicht exportierbar** (Server-IDs sind lokal und nur auf dieser Maschine gültig). Der Dialog listet sie trotzdem auf, aber **ausgegraut und nicht auswählbar**, jeweils mit dem Grund. Darüber nennt er **die Zahl der nicht exportierbaren Regeln** („N Regeln mit Server-Bezug werden nicht exportiert") und den Grund. „Alle exportierbaren" wählt nur Regeln mit global/Schlagwort; die Zahl bezieht sich auf alle lokalen Regeln mit Server-Bezug. Es gibt keinen Weg, eine Server-Regel in die Auswahl zu bringen.
 4. Der Nutzer gibt Name (Pflicht), Beschreibung, Version (Pflicht) und die Paket-ID an (Vorschlag aus dem Namen, änderbar; Regeln aus §2.2). Fehlt eine Pflichtangabe oder ist sie ungültig, ist „Speichern" gesperrt, mit Hinweis am Feld.
 5. Gespeichert wird über den **System-Speichern-Dialog**. Der Export braucht **keine Netzwerkverbindung** und ruft nichts ab.
 6. Ohne ausgewählte Regeln ist „Speichern" gesperrt. Ein Schreibfehler wird dem Nutzer gemeldet; es bleibt keine halbe Datei als Erfolg stehen.
@@ -96,7 +96,7 @@ Die Vorschau berechnet nur; sie ändert nichts am Regelspeicher.
 2. Jede Allow-Regel muss **einzeln** angehakt werden und trägt eine **sichtbare Warnung**, dass passende Kommandos danach **ohne Rückfrage** ausgeführt werden.
 3. „Alle auswählen" **schließt Allow-Regeln nicht ein**; ebenso „Alle abwählen/auswählen" nach einer Filterung. Es gibt keine Aktion, die mehrere Allow-Regeln auf einmal auswählt.
 4. Eine Vorschau mit mindestens einer ausgewählten Allow-Regel weist beim Bestätigen noch einmal auf deren Anzahl hin.
-5. Dasselbe gilt unverändert für die erneute Importierung einer neueren Paketversion (§7.3) und für Pakete, die über die Erweiterungsfassade (§9) kommen.
+5. Dasselbe gilt unverändert für die erneute Importierung einer neueren Paketversion (§7.3, dort zusätzlich für das Entfernen von Deny-/Confirm-Regeln) und für Pakete, die über die Erweiterungsfassade (§9) kommen.
 6. Eine Allow-Regel ändert die Auswertung nur in den Grenzen von Spec 0002: Die Hard-Blacklist und strengere Regeln bleiben davon unberührt.
 
 ## 6. Import: Ergebnis
@@ -117,7 +117,8 @@ Neue Migration neben `0003_filter_rules.sql` (die Migration kommt mit der Umsetz
 - Neue Tabelle `filter_rule_packs`: `pack_id TEXT PRIMARY KEY`, `name TEXT NOT NULL`, `version TEXT NOT NULL`, `imported_at TEXT NOT NULL`. Pro Paket-ID eine Zeile (die zuletzt importierte Version).
 - Neue Spalte `filter_rules.pack_id TEXT NULL` (Verweis auf `filter_rule_packs.pack_id`, `ON DELETE`-Verhalten wird per Anwendungslogik gesteuert; NULL = selbst angelegt) und `filter_rules.pack_rule_key TEXT NULL`: ein stabiler Schlüssel der Regel im Paket, abgeleitet aus Mustertyp, Muster, Aktion und Geltungsbereich (also ohne Priorität), mit dem eine Regel bei einer neueren Version wiedererkannt wird. Index auf `pack_id`.
 - Bestehende Zeilen behalten `NULL`; Rückwärtskompatibilität: eine Datenbank vor der Migration verhält sich wie vorher. Die Spalten ändern die Auswertung nicht.
-- Die Herkunftsangabe ist reine Anzeige- und Verwaltungsinformation. Sie wird **nicht** exportiert (§3.8), nicht an die KI gegeben und kommt nicht in Backup-Dateien über den normalen Regelweg hinaus (Spec 0109 sichert die Tabellen, wie sie sind).
+- Die Herkunftsangabe ist reine Anzeige- und Verwaltungsinformation. Sie wird **nicht** exportiert (§3.8) und nicht an die KI gegeben.
+- **Backup (Spec 0109):** Der Abschnitt „Filterregeln" des Voll-Backups hat typisierte, strenge Nutzdaten (0109 F10, U2) und trägt **keine** Herkunftsfelder; diese Spec erweitert ihn nicht und ändert Spec 0109 nicht. Nach einer Wiederherstellung sind alle Regeln selbst angelegte Regeln ohne `pack_id`; die Tabelle `filter_rule_packs` wird weder gesichert noch wiederhergestellt, und beim Ersetzen des Bestands (0109 I3) wird sie geleert, damit keine Paketzeile ohne Regeln bleibt. „Paket entfernen" gibt es danach für diese Regeln nicht mehr; ein erneuter Import desselben Pakets legt Regeln, die lokal schon gleich vorhanden sind, als Duplikate (§4.3) nicht an.
 - Eine Regel, die der Nutzer nach dem Import **bearbeitet**, behält `pack_id` (Anzeige „aus Paket X, geändert"); ändert sich dabei Mustertyp, Muster, Aktion oder Geltungsbereich, gilt sie bei einer Neu-Importierung (§7.3) als „vom Nutzer geändert" und wird nicht überschrieben.
 
 ### 7.2 Anzeige und Entfernen
@@ -133,8 +134,10 @@ Neue Migration neben `0003_filter_rules.sql` (die Migration kommt mit der Umsetz
   - **geändert:** gleicher Schlüssel, andere Priorität (die einzigen Felder, die sich bei gleichem Schlüssel unterscheiden können);
   - **entfernt:** lokale Regel aus dem alten Paket, die im neuen Paket fehlt und noch unverändert vorhanden ist;
   - **unverändert** (gleicher Schlüssel und gleiche Priorität): nur gezählt;
-  - **vom Nutzer geändert oder gelöscht:** lokal geänderte Regeln eines Pakets werden nicht überschrieben, gelöschte nicht wieder angelegt; die Vorschau nennt sie.
-- Auswahl: „hinzugefügt" folgt §5 (Deny/Confirm vorausgewählt, **Allow nie**). Ein „geändert" bei einer Allow-Regel ist ebenfalls nicht vorausgewählt, eine „entfernt"-Regel ist vorausgewählt (Entfernen erweitert nie, was ohne Rückfrage läuft) – bei einer entfernten Deny-/Confirm-Regel weist die Vorschau aber darauf hin, dass dadurch ein Schutz entfällt.
+  - **vom Nutzer geändert:** lokal bearbeitete Regeln eines Pakets (§7.1) werden nicht überschrieben; die Vorschau nennt sie.
+- Es wird **nicht gespeichert, welche Regeln der Nutzer gelöscht hat** (kein Grabstein). Eine Regel des neuen Pakets, die lokal nicht mehr vorhanden ist, gilt daher als **hinzugefügt** und folgt §5, auch wenn der Nutzer sie früher gelöscht hat. Sie wird nie stillschweigend angelegt, sondern wie jede neue Regel in der Vorschau gezeigt und nur bei Auswahl angelegt.
+- Auswahl: „hinzugefügt" folgt §5 (Deny/Confirm vorausgewählt, **Allow nie**). Ein „geändert" bei einer Allow-Regel ist ebenfalls nicht vorausgewählt.
+- **Entfernen kann erweitern, was ohne Rückfrage läuft:** Fällt eine Deny- oder Confirm-Regel weg, kann ein passendes Allow (Vorrang Deny > Confirm > Allow, Spec 0002 §3.2) greifen. Deshalb ist eine „entfernt"-Regel nur vorausgewählt, wenn sie eine **Allow**-Regel ist. **Entfernen einer Deny- oder Confirm-Regel ist Opt-in je Regel**: nicht vorausgewählt, mit Warnung („danach laufen passende Kommandos womöglich ohne Rückfrage oder werden nicht mehr blockiert"), kein „Alle auswählen" für sie, und der Bestätigungsdialog nennt ihre Anzahl wie bei §5.4. Bleibt eine solche Regel abgewählt, bleibt sie lokal bestehen (mit ihrem `pack_id`); die Paketzeile erhält trotzdem die neue Version.
 - Angewendet wird alles in **einer Transaktion** (§6); die Paketzeile erhält die neue Version.
 - Ein Paket mit anderer `pack.id` ist ein anderes Paket, auch bei gleichem Namen.
 - Dieselbe Version nochmals importieren zeigt denselben Vergleich (alles „unverändert", daher „nichts zu tun").
@@ -166,17 +169,18 @@ Pakete der Community sind **gewöhnliche Paketdateien**, die jeder veröffentlic
 1. **Unbekannte Formatversion:** Datei mit `format_version: 2` (und mit `0`, Text statt Zahl) wird abgelehnt, Meldung nennt gefundene und unterstützte Version, Regelspeicher unverändert. Falsches `format` → „kein Regelpaket".
 2. **Ungültiges Muster:** Paket mit Glob `ls [abc *` und Regex `a{1000}{1000}` → beide ungültig und nicht auswählbar, Grund angezeigt; die anderen Regeln bleiben importierbar; Ergebnis meldet die Zahl abgewiesener Regeln.
 3. **Duplikat:** Lokal existiert eine Regel gleichen Mustertyps, Musters, Aktion und Geltungsbereichs (andere Priorität) → als Duplikat markiert und übersprungen; ein zweites Vorkommen innerhalb der Datei ebenso; Ergebnis zählt „übersprungen".
-4. **Server-Bereich beim Export:** Auswahl aus 5 Regeln, davon 2 mit Server-Bereich → Datei enthält 3 Regeln, Dialog nennt „2 ausgelassen" mit Grund; die Datei enthält keine Server-ID, keinen Hostnamen, keine Regel-ID.
+4. **Server-Bereich beim Export:** Lokal 5 Regeln, davon 2 mit Server-Bereich → der Dialog zeigt die 2 ausgegraut und nicht auswählbar und nennt „2 nicht exportiert" mit Grund; „alle exportierbaren" wählt die 3 anderen; die Datei enthält 3 Regeln, keine Server-ID, keinen Hostnamen, keine Regel-ID. Server-Regeln lassen sich auch über die Kommando-Schnittstelle nicht in den Export bringen (abgewiesen).
 5. **Allow nicht vorausgewählt:** Vorschau mit Allow-, Confirm-, Deny-Regel → Confirm und Deny ausgewählt, Allow nicht und mit Warnung; „Alle auswählen" lässt Allow unberührt; ohne einzelnes Anhaken wird keine Allow-Regel angelegt (auch über die Erweiterungsfassade).
 6. **Transaktion zurückrollen:** Schlägt das Schreiben der dritten von fünf ausgewählten Regeln fehl (eingespielter Fehler), sind weder Regeln noch Paketzeile gespeichert; es erscheint ein Fehler.
 7. **Herkunft entfernen:** Zwei Pakete A (3 Regeln) und B (2 Regeln) und eine eigene Regel → „Paket entfernen" für A löscht genau 3 Regeln und die Paketzeile A; B und die eigene Regel bleiben. Bestätigung nennt Name, Version, Anzahl.
-8. **Neuere Version:** Paket v1 importiert, danach v2 mit einer neuen, einer in der Priorität geänderten und einer fehlenden Regel → Vorschau zeigt 1 hinzugefügt, 1 geändert, 1 entfernt; eine neue Allow-Regel ist nicht vorausgewählt; nach Anwenden stimmen Regeln und Version; eine vom Nutzer bearbeitete Regel wird nicht überschrieben.
+8. **Neuere Version:** Paket v1 importiert, danach v2 mit einer neuen, einer in der Priorität geänderten und einer fehlenden Regel → Vorschau zeigt 1 hinzugefügt, 1 geändert, 1 entfernt; eine neue Allow-Regel ist nicht vorausgewählt; nach Anwenden stimmen Regeln und Version; eine vom Nutzer bearbeitete Regel wird nicht überschrieben. Eine in v1 vorhandene, lokal gelöschte Regel erscheint bei v2 als „hinzugefügt" (bei Allow nicht vorausgewählt). Eine entfernte Allow-Regel ist vorausgewählt; eine entfernte **Deny- oder Confirm-Regel** nicht (mit Warnung), ohne Anhaken bleibt sie lokal bestehen. Gegenprobe: entfernte Deny-Regel plus passendes lokales Allow → ohne Opt-in bleibt `FilterEngine::evaluate` bei Deny.
 9. **Runde:** Export und anschließender Import der Datei in einen leeren Speicher liefert gleiche Regeln (Mustertyp, Muster, Aktion, Geltungsbereich, Priorität), Herkunft `User`, `pack_id` gesetzt.
 10. **Unbekannte Felder:** Zusätzliche Felder auf jeder Ebene werden ignoriert, der Import gelingt.
 11. **Kein Netz:** Import und Export laufen bei gesperrtem Netzwerk; eine `pack.homepage` löst keinen Aufruf aus.
 12. **Auswertung unverändert:** Mit importierten Regeln liefert `FilterEngine::evaluate` dieselben Ergebnisse wie mit gleichen von Hand angelegten Regeln; die Hard-Blacklist gewinnt weiterhin gegen eine importierte Allow-Regel.
 13. **Erweiterungsfassade:** Vorschau und Anwenden mit Paketinhalt durchlaufen dieselbe Prüfung und dasselbe Opt-in; ohne registrierte Quelle ändert sich der Standardweg nicht.
 14. **Grenzen:** mehr als 1000 Regeln oder Datei über 2 MiB → abgelehnt; Pflichtfelder fehlen → abgelehnt.
+15. **Backup und Herkunft:** Voll-Backup (Spec 0109) einer Installation mit Paketregeln, Wiederherstellung auf leerer Installation → Regeln gleich, `pack_id` leer, keine Paketzeile; das Backup-Format enthält kein Herkunftsfeld.
 
 ## 12. Umsetzung in Schritten
 
@@ -184,5 +188,5 @@ Vorschlag für Folge-Issues ohne Überschneidung:
 
 1. **Format und Export.** Pakettypen, Parser/Schreiber und Format-Prüfung in `crates/core/src/filter/` (z. B. `rule_pack.rs`), Export-Logik in `crates/app-logic/src/filter_rules.rs`, Kommandos in `crates/app-shell/src/commands/rules.rs`, Export-Dialog in `frontend/src/components/filterRules/`. Testfälle 1 (Format), 4, 9, 10, 14.
 2. **Import und Vorschau.** Vorschau-Berechnung (ungültig, Duplikat, unbekanntes Schlagwort), Anwenden in einer Transaktion, Allow-Opt-in, Import-Dialog; `crates/app-logic/src/` (neues Modul neben `filter_rules.rs`), `crates/persistence-sqlite` (Transaktion), `crates/app-shell/src/commands/rules.rs`, Frontend `filterRules/`. Testfälle 2, 3, 5, 6, 11, 12.
-3. **Herkunft und neuere Version.** Migration `filter_rule_packs` und Spalten (§7.1), Anzeige, „Paket entfernen", Versionsvergleich; `crates/persistence-sqlite/migrations/`, `crates/persistence-sqlite/src/`, `crates/app-logic/src/`, Frontend. Testfälle 7, 8.
+3. **Herkunft und neuere Version.** Migration `filter_rule_packs` und Spalten (§7.1), Anzeige, „Paket entfernen", Versionsvergleich; `crates/persistence-sqlite/migrations/`, `crates/persistence-sqlite/src/`, `crates/app-logic/src/`, Frontend. Außerdem: Backup-Import leert `filter_rule_packs` (§7.1, Backup). Testfälle 7, 8, 15.
 4. **Erweiterungsfassade.** Zwei Funktionen in `crates/app-logic/src/ext.rs`, Anpassung von Spec 0038 und Changelog-Eintrag, `THREAT-MODEL.md` Abschnitt 6. Testfall 13.
