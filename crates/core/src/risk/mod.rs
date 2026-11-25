@@ -32,6 +32,8 @@ mod property_tests;
 
 mod sudo_options;
 #[cfg(test)]
+mod tests_chaining;
+#[cfg(test)]
 mod tests_sftp_server_args;
 #[cfg(test)]
 mod tests_ssh_key_names;

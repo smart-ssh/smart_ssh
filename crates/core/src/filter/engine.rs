@@ -585,8 +585,8 @@ impl<S: PolicyStore> FilterEngine<S> {
         // Elevated-Wissen stattdessen ins Matching einfließt.
         let (_elevated, stripped) = parser::detect_elevation(&normalized);
 
-        let (original_literal, _) = parser::strip_substitutions(&normalized);
-        let (stripped_literal, inner_contents) = parser::strip_substitutions(&stripped);
+        let (original_literal, inner_contents) = parser::strip_substitutions(raw_segment);
+        let (stripped_literal, _) = parser::strip_substitutions(&stripped);
         let original_literal = parser::normalize_whitespace(&original_literal);
         let stripped_literal = parser::normalize_whitespace(&stripped_literal);
 

@@ -58,7 +58,7 @@ pub fn plain_secret() -> impl Strategy<Value = String> {
 pub fn secret_snippet() -> impl Strategy<Value = Snippet> {
     (
         plain_secret(),
-        0usize..26,
+        0usize..30,
         prefixed_secret(),
         chars("abcdefghij", 3, 8),
     )
@@ -89,9 +89,13 @@ pub fn secret_snippet() -> impl Strategy<Value = Snippet> {
                 22 => format!("AccountKey={secret}"),
                 23 => strong.clone(),
                 24 => format!("key is {strong} ok"),
+                25 => format!("machine h.example.com account a login {user} password {secret}"),
+                26 => format!("machine h.example.com\n  password {secret}\n  login {user}"),
+                27 => format!("login {user} password {secret}"),
+                28 => format!("default\n\tlogin {user}\n\tpassword \"{secret}\""),
                 _ => format!("{{\"token\": \"{secret}\"}}"),
             };
-            let secrets = if shape >= 23 {
+            let secrets = if matches!(shape, 23 | 24) {
                 vec![strong]
             } else {
                 vec![secret]

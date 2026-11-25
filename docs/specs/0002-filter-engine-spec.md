@@ -125,9 +125,40 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    ungewöhnliche Escape-Folgen, Here-Docs), lautet die Entscheidung
    `Confirm` mit dem Grund „Kommando konnte nicht sicher analysiert
    werden", nie `AutoExec`.
-5. Command-Substitution (`$(...)`, Backticks) ist ein eigener Prüfbestandteil
-   und erzwingt mindestens `Confirm`, weil sie zur Laufzeit anderen Code
-   ausführen kann, der bei der Prüfung nicht vollständig bekannt ist.
+
+   Die Zerlegung liest das Kommando so, wie die Shell es liest: Ein
+   Backslash außerhalb von Quotes macht das nächste Zeichen zu einem
+   gewöhnlichen Zeichen (`\'` öffnet keinen quotierten Bereich, `\;` trennt
+   nicht), ein Backslash vor einem Zeilenumbruch verbindet zwei Zeilen (auch
+   innerhalb doppelter Quotes, z. B. `r\` + Zeilenumbruch + `m` ist `rm`),
+   und ein `#` am Wortanfang außerhalb von Quotes beginnt einen Kommentar bis
+   zum Zeilenende (auch direkt nach `)`, `<` oder `>`, etwa in
+   `(true)#...`). Ein dahinter verstecktes Kommando ist damit ein eigenes
+   Teilkommando, für das Deny-Regeln und die Hard-Blacklist gelten. Ein
+   einfacher Backslash-Escape wird dabei genau aufgelöst und wie quotierter
+   Text gegen die Regeln geprüft: `echo a\ b` oder `find . -exec ls {} \;`
+   laufen unter einer passenden Allow-Regel weiter automatisch, `\rm -rf /`
+   trifft eine Deny-Regel für `rm *`. Weil der bestätigte Text sonst vom
+   geprüften abweicht, ist ein Kommando mit Zeilenfortsetzung, mit Kommentar
+   oder mit Backslash in Backticks mindestens `Confirm` (z. B. `echo a #
+   Kommentar`); ein `Deny` bleibt `Deny`. Ein Backslash oder `#` innerhalb
+   von Quotes und ein `#` mitten im Wort (`a#b`, `$#`) ändern nichts.
+   Der Text einer Parameter-Expansion (`${...}`) wird zusätzlich als Code
+   zerlegt, obwohl die Shell darin außerhalb einer Substitution nichts
+   ausführt: `echo ${a;rm -rf /;}` trifft eine Deny-Regel für `rm *`. Ein
+   `${`, auf das weder eine Funktions-Substitution noch eine gültige
+   Parameter-Expansion folgt (`${a;b}`, `${a|b}`, `${a b}`, `${}`), ist
+   mindestens `Confirm`.
+5. Command-Substitution (`$(...)`, Backticks, `<(...)`/`>(...)` und die
+   bash-5.3-Formen `${ ...; }` und `${| ...; }`) ist ein eigener
+   Prüfbestandteil und erzwingt mindestens `Confirm`, weil sie zur Laufzeit
+   anderen Code ausführen kann, der bei der Prüfung nicht vollständig bekannt
+   ist. Das innere Kommando wird wie ein eigenes Kommando geprüft, auch
+   innerhalb doppelter Quotes oder einer Parameter-Expansion; es wird dabei
+   so gelesen, wie die Shell es liest: mit eigenen Quotes, Kommentaren,
+   Subshells und `case`-Mustern (`"$(echo ")"; rm -rf /)"` endet nicht am
+   ersten `"` oder `)`) und mit seinen Zeilenumbrüchen als Trennern. Eine
+   Deny-Regel oder die Hard-Blacklist greift also auch darin.
 
    **Hinterlegter Code** wird genauso behandelt: Ein Kommando, das Code für
    später speichert, erzwingt mindestens `Confirm` mit einem Grund, der

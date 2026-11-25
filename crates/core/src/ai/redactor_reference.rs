@@ -1049,24 +1049,12 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"(?i)\bclient-key-data\s*:\s*\S+",
             "eingebautes kubeconfig-client-key-data-Muster ist gültig",
         ),
-        // `.netrc`: `machine h login u password p` bzw. `password p` als
-        // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
-        // "password is required" unberührt bleibt.
-        simple(
-            r"(?i)\b(?:machine\s+\S+(?:\s+login\s+\S+)?|default\s+login\s+\S+)\s+password\s+[^\s:=]\S*",
-            "eingebautes netrc-Muster ist gültig",
-        ),
-        // `default password x` (ohne `login`, laut netrc-Syntax gültig) —
-        // am Zeilenanfang verankert, damit Fließtext "The default password
-        // is …" unberührt bleibt (vierte Review-Runde).
-        simple(
-            r"(?im)^[ \t]*default\s+(?:login\s+\S+\s+)?password\s+[^\s:=]\S*",
-            "eingebautes netrc-default-Muster ist gültig",
-        ),
-        simple(
-            r"(?im)^[ \t]*password[ \t]+[^\s:=]\S*[ \t]*$",
-            "eingebautes netrc-Zeilen-Muster ist gültig",
-        ),
+        // `.netrc`, bewusst aktualisiert: die alte Fassung kannte nur
+        // `machine h [login u] password p`; jetzt die Feldfolgen, die curl, ftp
+        // und Python lesen (Kopie von `redactor_netrc`, redigiert mehr).
+        simple(r#"(?i)(?:\bmachine[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:[\s,]+(?:#[^\r\n]*)?)+(?:(?:(?:machine|(?:login|user|port|protocol|path)|(?:password|passwd|account))(?:[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|default)(?:[\s,]+(?:#[^\r\n]*)?)+)*(?:password|passwd|account)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)|\bdefault\s+(?:login|user|port|protocol|path)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:[\s,]+(?:#[^\r\n]*)?)+(?:(?:(?:machine|(?:login|user|port|protocol|path)|(?:password|passwd|account))(?:[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|default)(?:[\s,]+(?:#[^\r\n]*)?)+)*(?:password|passwd|account)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)|(?m:^)[ \t]*default\s(?:(?:[\s,]+(?:#[^\r\n]*)?)+)?(?:(?:(?:(?:machine|(?:login|user|port|protocol|path)|(?:password|passwd|account))(?:[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|default)(?:[\s,]+(?:#[^\r\n]*)?)+)*(?:password|passwd)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:(?:[\s,]+(?:#[^\r\n]*)?)+(?:(?:(?:machine|(?:login|user|port|protocol|path)|(?:password|passwd|account))(?:[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|default)(?:[\s,]+(?:#[^\r\n]*)?)+)*(?:password|passwd|account)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|(?:(?:(?:machine|(?:login|user|port|protocol|path)|(?:password|passwd|account))(?:[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))?|default)(?:[\s,]+(?:#[^\r\n]*)?)+)+(?:password|passwd|account)[\s,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)))"#, "eingebautes netrc-Muster ist gültig"),
+        keep_head(r#"(?imR)(?P<head>^(?:[ \t]*\d+(?:\t|[:-])|[^\s:]*(?:/|netrc)[^\s:]*?[:-](?:\d+[:-])?|[-+<>][ \t]?)?)[ \t]*password[ \t]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|[^\s:=]\S*)[ \t]*$"#, "eingebautes netrc-Zeilen-Muster ist gültig"),
+        keep_head(r#"(?mR)(?P<head>^(?:[ \t]*\d+(?:\t|[:-])|[^\s:]*(?:/|netrc)[^\s:]*?[:-](?:\d+[:-])?|[-+<>][ \t]?)?)(?:[ \t]*(?:(?:(?:(?:machine|login|user|account|password|passwd)[ \t,]+(?:"(?:[^"\\\r\n]|\\[^\r\n])*"?\S*|(?:\\[^\r\n]|\S)+)|default)[ \t,]+)*password[ \t,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:[ \t,]+(?:(?:machine|login|user|account|password|passwd)[ \t,]+(?:"(?:[^"\\\r\n]|\\[^\r\n])*"?\S*|(?:\\[^\r\n]|\S)+)|default))*|(?:(?:(?:machine|login|user|account|password|passwd)[ \t,]+(?:"(?:[^"\\\r\n]|\\[^\r\n])*"?\S*|(?:\\[^\r\n]|\S)+)|default)[ \t,]+)+(?:passwd|account)[ \t,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:[ \t,]+(?:(?:machine|login|user|account|password|passwd)[ \t,]+(?:"(?:[^"\\\r\n]|\\[^\r\n])*"?\S*|(?:\\[^\r\n]|\S)+)|default))*|(?:passwd|account)[ \t,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+)(?:[ \t,]+(?:(?:machine|login|user|account|password|passwd)[ \t,]+(?:"(?:[^"\\\r\n]|\\[^\r\n])*"?\S*|(?:\\[^\r\n]|\S)+)|default))+)|[ \t]+account[ \t,]+(?:"(?:[^"\\]|\\[\s\S])*"?\S*|(?:\\[\s\S]|\S)+))(?:[ \t]+#[^\r\n]*)?[ \t]*$"#, "eingebautes netrc-Feldzeilen-Muster ist gültig"),
         // `.pgpass`: `host:port:datenbank:nutzer:passwort` (Port Zahl oder
         // `*`) — ganze Zeile. Der Host muss einen Buchstaben/Punkt enthalten
         // oder `*` sein, damit MAC- und IPv6-Adressen nicht treffen.

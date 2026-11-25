@@ -2,6 +2,8 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
+use super::shell_lexer;
+
 /// Maximale Verschachtelungstiefe für `$(...)`/`<(...)`/`>(...)`/Backtick-
 /// Command-Substitution (Spec 0043, Fund B) — Filter-Engine
 /// (`filter::engine::evaluate_parsed_explained`) und Risiko-Klassifizierer
@@ -26,11 +28,11 @@ pub(super) enum ParseResult {
 
 /// Zerlegt ein Shell-Kommando in Teilkommandos (Spec 0002, Abschnitt 4.1).
 ///
-/// Nutzt `shell-words` als Basis-Validierung für ausgeglichene
-/// Anführungszeichen (das ist alles, was `shell-words` selbst kann — es
-/// tokenisiert nur, kennt aber keine Operatoren). Die eigentliche
-/// Operator-Erkennung (`&&`, `||`, `;`, `|`) sowie das Erkennen von
-/// Here-Docs/komplexen `bash -c`-Aufrufen kommt zusätzlich obendrauf.
+/// Lexes the command first (`shell_lexer`: backslash escapes, comments,
+/// line continuations, quote balance) and splits the resulting text at the
+/// operators (`&&`, `||`, `;`, `|`, `&`, newlines). Here-docs and complex
+/// `bash -c` calls are recognised before that, on the raw and the lexed
+/// text.
 pub(super) fn split_command(cmd: &str) -> ParseResult {
     let trimmed = cmd.trim();
     if trimmed.is_empty() {
@@ -48,7 +50,10 @@ pub(super) fn split_command(cmd: &str) -> ParseResult {
         };
     }
 
-    if looks_like_heredoc_or_complex_shell_c(trimmed) {
+    if looks_like_heredoc_or_complex_shell_c(trimmed)
+        || shell_lexer::lex(trimmed, shell_lexer::CommentMode::Strip)
+            .is_some_and(|lexed| looks_like_heredoc_or_complex_shell_c(&lexed.canonical))
+    {
         return ParseResult::Ambiguous {
             reason: "mehrzeiliges Skript (Here-Doc oder `... -c \"...\"`) wird als \
                      Ganzes behandelt, kein Sub-Parsing (Spec 0002, Abschnitt 8)"
@@ -56,17 +61,11 @@ pub(super) fn split_command(cmd: &str) -> ParseResult {
         };
     }
 
-    // shell-words schlägt bei unausgeglichenen Anführungszeichen fehl — das
-    // ist exakt der "nicht sicher zerlegbar"-Fall aus Abschnitt 4.4.
-    if shell_words::split(trimmed).is_err() {
-        return ParseResult::Ambiguous {
-            reason: "Kommando konnte nicht sicher analysiert werden \
-                     (unausgeglichene Anführungszeichen)"
-                .to_string(),
-        };
-    }
-
-    match scan_top_level_segments(trimmed) {
+    // Split what the shell reads: escapes, comments and line continuations
+    // are resolved first (`shell_lexer`), so none of them can hide a segment
+    // or fake a quote. Unbalanced quotes, checked on that text, are the "not
+    // safely analysable" case of Abschnitt 4.4.
+    match shell_lexer::lexed_segments(trimmed) {
         Some(segments) if !segments.is_empty() => ParseResult::Segments(segments),
         _ => ParseResult::Ambiguous {
             reason: "Kommando konnte nicht sicher analysiert werden \
@@ -153,8 +152,7 @@ fn segment_command_at_depth(command: &str, depth: usize) -> Vec<String> {
         ParseResult::Segments(segments) => {
             let mut result = Vec::new();
             for segment in segments {
-                let normalized = normalize_whitespace(&segment);
-                let (literal, inner_contents) = strip_substitutions(&normalized);
+                let (literal, inner_contents) = strip_substitutions(&segment);
                 result.push(normalize_whitespace(&literal));
                 if depth >= MAX_SUBSTITUTION_DEPTH {
                     continue;
@@ -183,59 +181,63 @@ pub(super) fn detect_elevation(normalized: &str) -> (bool, String) {
     }
 }
 
-/// Ersetzt jede `$(...)`-, `<(...)`-, `>(...)`- oder Backtick-Command-Substitution in `text` durch
-/// ein einzelnes Leerzeichen und gibt zusätzlich die extrahierten inneren
-/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5, Spec 0013 Abschnitt 2.3).
-/// Verschachtelte Klammern werden über eine einfache Klammer-Tiefenzählung
-/// korrekt erkannt (die innere Substitution wird unverändert als Teil des
-/// extrahierten inneren Kommandos zurückgegeben und beim rekursiven Aufruf
-/// erneut aufgelöst).
+/// Ersetzt jede Command-Substitution in `text` (`$(...)`, `<(...)`,
+/// `>(...)`, Backticks, bash 5.3 `${ ...; }` und `${| ...; }`, auch in
+/// doppelten Anführungszeichen oder einer Parameter-Expansion) durch ein
+/// einzelnes Leerzeichen und gibt zusätzlich die extrahierten inneren
+/// Kommandos zurück (zur rekursiven Auswertung, Spec Abschnitt 4.5, Spec 0013
+/// Abschnitt 2.3). Verschachtelte Substitutionen bleiben Teil des inneren
+/// Kommandos und werden beim rekursiven Aufruf erneut aufgelöst.
 ///
-/// Arbeitet bewusst ohne Quote-Kontext (anders als
-/// [`scan_top_level_segments`], das für die Operator-Erkennung Quotes
-/// respektieren muss) — im Zweifel wird eine Substitution lieber zu viel als
-/// zu wenig erkannt, das passt zu den Fail-safe-defaults der Spec.
+/// Wo eine Substitution endet, liest [`shell_lexer::lex`] wie die Shell
+/// (Quotes, Kommentare und Klammern innerhalb der Substitution). Aufrufer
+/// übergeben das Teilkommando, wie es zerlegt wurde, nicht
+/// whitespace-normalisiert: Ein Zeilenumbruch in einer Substitution trennt
+/// Kommandos. In
+/// einfachen Anführungszeichen führt die Shell nichts aus; Substitutionen
+/// dort werden trotzdem extrahiert — im Zweifel lieber zu viel als zu wenig,
+/// passend zu den Fail-safe-defaults der Spec. Text, der sich nicht lexen
+/// lässt, bleibt unverändert: [`split_command`] lehnt solche Eingaben schon
+/// als nicht sicher analysierbar ab.
 pub(super) fn strip_substitutions(text: &str) -> (String, Vec<String>) {
-    let chars: Vec<char> = text.chars().collect();
+    let Some(lexed) = shell_lexer::lex(text, shell_lexer::CommentMode::Strip) else {
+        return (text.to_string(), Vec::new());
+    };
+    let chars: Vec<char> = lexed.canonical.chars().collect();
     let mut result = String::with_capacity(text.len());
     let mut inner_contents = Vec::new();
+    let mut quoted = lexed.single_quoted.iter().peekable();
     let mut i = 0usize;
 
-    while i < chars.len() {
-        if (chars[i] == '$' || chars[i] == '<' || chars[i] == '>') && chars.get(i + 1) == Some(&'(')
-        {
-            let start = i + 2;
-            let mut depth = 1i32;
-            let mut j = start;
-            while j < chars.len() && depth > 0 {
-                match chars[j] {
-                    '(' => depth += 1,
-                    ')' => depth -= 1,
-                    _ => {}
-                }
-                j += 1;
+    for substitution in lexed.substitutions.iter().map(Some).chain([None]) {
+        let until = substitution.map_or(chars.len(), |found| found.whole.start);
+        while let Some(range) = quoted.next_if(|range| range.start < until) {
+            result.extend(&chars[i..range.start]);
+            let content: String = chars[range.clone()].iter().collect();
+            if may_hold_substitution(&content) {
+                let (literal, inner) = strip_substitutions(&content);
+                result.push_str(&literal);
+                inner_contents.extend(inner);
+            } else {
+                result.push_str(&content);
             }
-            let end = if depth == 0 { j - 1 } else { chars.len() };
-            inner_contents.push(chars[start..end].iter().collect());
+            i = range.end;
+        }
+        result.extend(&chars[i..until]);
+        if let Some(found) = substitution {
+            inner_contents.push(chars[found.inner.clone()].iter().collect());
             result.push(' ');
-            i = if depth == 0 { j } else { chars.len() };
-            continue;
+            i = found.whole.end;
         }
-        if chars[i] == '`' {
-            if let Some(offset) = chars[(i + 1)..].iter().position(|&c| c == '`') {
-                let start = i + 1;
-                let end = start + offset;
-                inner_contents.push(chars[start..end].iter().collect());
-                result.push(' ');
-                i = end + 1;
-                continue;
-            }
-        }
-        result.push(chars[i]);
-        i += 1;
     }
 
     (result, inner_contents)
+}
+
+fn may_hold_substitution(text: &str) -> bool {
+    ["$(", "<(", ">(", "`", "${ ", "${\t", "${\n", "${|"]
+        .iter()
+        .any(|opener| text.contains(opener))
 }
 
 /// Here-Docs und `bash -c "..."`-artige Aufrufe komplett als einen Block
@@ -322,7 +324,7 @@ fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
 /// the whole command:
 ///
 /// - the command must split into segments (balanced quotes, see
-///   [`scan_top_level_segments`]), and exactly one unquoted `<` run must
+///   [`shell_lexer::lexed_segments`]), and exactly one unquoted `<` run must
 ///   occur in the whole command, and it must be exactly `<<<` — here-docs
 ///   (`<<`, `<<-`), several here-strings and any other input redirection or
 ///   process substitution are left alone;
@@ -345,7 +347,7 @@ fn extract_here_string_code(cmd: &str) -> Option<String> {
     if runs.len() != 1 || runs[0].1 != 3 {
         return None;
     }
-    let segments = scan_top_level_segments(cmd)?;
+    let segments = shell_lexer::lexed_segments(cmd)?;
     let mut candidates = segments.iter().filter_map(|segment| {
         let runs = unquoted_input_redirection_runs(segment)?;
         (runs.len() == 1 && runs[0].1 == 3).then(|| (segment, runs[0].0))
@@ -709,8 +711,7 @@ fn unquote_first_word(cmd: &str) -> String {
 /// Review-Pass, Spec 0002 — arbiträres Datei-Überschreiben über die
 /// harmloseste denkbare Whitelist-Regel). Ein `>` direkt vor `(` ist
 /// Process-Substitution (`>(...)`, bereits separat über
-/// `strip_substitutions`/Klammer-Tiefe in [`scan_top_level_segments`]
-/// behandelt), keine Umleitung.
+/// [`strip_substitutions`] behandelt), keine Umleitung.
 pub(super) fn contains_unquoted_output_redirection(text: &str) -> bool {
     let chars: Vec<char> = text.chars().collect();
     let mut in_single = false;
@@ -766,7 +767,7 @@ fn is_word_end(c: Option<&char>) -> bool {
 /// (`>/dev/null`, `1>`/`2>`/`&>` `/dev/null`, `2>&1`, `>&2`, `1>&2`), returns
 /// how many chars from `i` it consumes; otherwise `None` (= output
 /// redirection). Everything not listed stays a redirection (Spec 0002).
-fn non_writing_redirection_len(chars: &[char], i: usize) -> Option<usize> {
+pub(super) fn non_writing_redirection_len(chars: &[char], i: usize) -> Option<usize> {
     // The char before `>` selects the form; a digit other than 1/2, `<`
     // (`<>`) and anything else unknown is not allowed.
     let prev = if i == 0 { None } else { Some(chars[i - 1]) };
@@ -796,160 +797,6 @@ fn non_writing_redirection_len(chars: &[char], i: usize) -> Option<usize> {
             (chars.get(j..end) == Some(&target[..]) && is_word_end(chars.get(end)))
                 .then_some(end - i)
         }
-    }
-}
-
-/// Zerlegt `cmd` an den Top-Level-Operatoren `&&`, `||`, `;`, `|`, `&` sowie
-/// Zeilenumbrüchen (`\n`, `\r`, `\r\n`), ohne dabei in einfache/doppelte
-/// Anführungszeichen, Backticks, `$(...)`, `<(...)` oder `>(...)`
-/// hineinzuspalten. Gibt `None` zurück, wenn am Ende Quotes/Klammern nicht
-/// ausgeglichen sind.
-fn scan_top_level_segments(cmd: &str) -> Option<Vec<String>> {
-    let chars: Vec<char> = cmd.chars().collect();
-    let mut segments = Vec::new();
-    let mut current_start = 0usize;
-    let mut i = 0usize;
-    let mut paren_depth = 0i32;
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut in_backtick = false;
-
-    while i < chars.len() {
-        let c = chars[i];
-
-        if in_single {
-            if c == '\'' {
-                in_single = false;
-            }
-            i += 1;
-            continue;
-        }
-        if in_double {
-            if c == '\\' && i + 1 < chars.len() {
-                i += 2;
-                continue;
-            }
-            if c == '"' {
-                in_double = false;
-            }
-            i += 1;
-            continue;
-        }
-        if in_backtick {
-            if c == '`' {
-                in_backtick = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        match c {
-            '\'' => {
-                in_single = true;
-                i += 1;
-                continue;
-            }
-            '"' => {
-                in_double = true;
-                i += 1;
-                continue;
-            }
-            '`' => {
-                in_backtick = true;
-                i += 1;
-                continue;
-            }
-            _ => {}
-        }
-
-        if (c == '$' || c == '<' || c == '>') && chars.get(i + 1) == Some(&'(') {
-            paren_depth += 1;
-            i += 2;
-            continue;
-        }
-        if c == ')' && paren_depth > 0 {
-            paren_depth -= 1;
-            i += 1;
-            continue;
-        }
-
-        if paren_depth == 0 {
-            match c {
-                '\n' | '\r' => {
-                    push_segment(&chars, current_start, i, &mut segments);
-                    if c == '\r' && chars.get(i + 1) == Some(&'\n') {
-                        i += 1;
-                    }
-                    i += 1;
-                    current_start = i;
-                    continue;
-                }
-                '&' if chars.get(i + 1) == Some(&'&') => {
-                    push_segment(&chars, current_start, i, &mut segments);
-                    i += 2;
-                    current_start = i;
-                    continue;
-                }
-                // `&>/dev/null` is one redirection operator, not a background
-                // `&` followed by `>`: keep it inside the segment.
-                '&' if chars.get(i + 1) == Some(&'>')
-                    && non_writing_redirection_len(&chars, i + 1).is_some() =>
-                {
-                    i += 1;
-                    continue;
-                }
-                // Likewise `2>&1` / `>&2`: the `&` belongs to the fd operator.
-                '&' if i > 0
-                    && chars[i - 1] == '>'
-                    && non_writing_redirection_len(&chars, i - 1).is_some() =>
-                {
-                    i += 1;
-                    continue;
-                }
-                '&' => {
-                    push_segment(&chars, current_start, i, &mut segments);
-                    i += 1;
-                    current_start = i;
-                    continue;
-                }
-                '|' if chars.get(i + 1) == Some(&'|') => {
-                    push_segment(&chars, current_start, i, &mut segments);
-                    i += 2;
-                    current_start = i;
-                    continue;
-                }
-                '|' | ';' => {
-                    push_segment(&chars, current_start, i, &mut segments);
-                    i += 1;
-                    current_start = i;
-                    continue;
-                }
-                _ => {}
-            }
-        }
-
-        i += 1;
-    }
-
-    push_segment(&chars, current_start, chars.len(), &mut segments);
-
-    if in_single || in_double || in_backtick || paren_depth != 0 {
-        return None;
-    }
-    Some(segments)
-}
-
-fn push_segment(chars: &[char], start: usize, end: usize, segments: &mut Vec<String>) {
-    if start >= end {
-        return;
-    }
-    let trimmed: String = chars[start..end]
-        .iter()
-        .collect::<String>()
-        .trim()
-        .to_string();
-    if !trimmed.is_empty() {
-        segments.push(trimmed);
     }
 }
 
@@ -1028,6 +875,9 @@ fn contains_ansi_c_escape(text: &str) -> bool {
 /// Checks the whole raw command for encodings the engine cannot see through
 /// (Unicode tricks, ANSI-C escapes). Returns the reason, or `None`.
 pub(super) fn opaque_encoding_reason(cmd: &str) -> Option<&'static str> {
+    if let Some(reason) = shell_lexer::opaque_syntax_reason(cmd) {
+        return Some(reason);
+    }
     if cmd.chars().any(is_deceptive_unicode) {
         return Some(
             "Kommando enthält unsichtbare Unicode-Zeichen, Unicode-Leerraum oder \

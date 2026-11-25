@@ -12,6 +12,7 @@ mod engine;
 mod parser;
 mod pattern;
 mod policy_rules;
+mod shell_lexer;
 mod types;
 mod wrapper_options;
 

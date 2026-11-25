@@ -165,4 +165,5 @@
 | 0159 | Whisper on ONNX Runtime, whisper.cpp removed | Accepted | [0159-whisper-on-onnx-runtime.md](0159-whisper-on-onnx-runtime.md) |
 | 0160 | Activity record: AI file reads and writes | Superseded by 0161 | [0160-activity-record-file-reads-and-writes.md](0160-activity-record-file-reads-and-writes.md) |
 | 0161 | No activity record in the core | Accepted | [0161-no-activity-record-in-the-core.md](0161-no-activity-record-in-the-core.md) |
+| 0162 | Filter parser: shell lexing of escapes, comments and line continuations | Accepted | [0162-filter-shell-lexing-escapes-comments.md](0162-filter-shell-lexing-escapes-comments.md) |
 | 0163 | License change Apache-2.0 → GPL-3.0-only | Accepted | [0163-license-change-gpl-3-0-only.md](0163-license-change-gpl-3-0-only.md) |

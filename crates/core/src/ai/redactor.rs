@@ -2,6 +2,8 @@ use regex::Regex;
 
 use crate::ssh::CommandOutput;
 
+use super::redactor_netrc;
+
 /// Läuft über einen [`CommandOutput`], bevor er als
 /// `MessageContent::CommandResult` in den Kontext für die nächste
 /// KI-Anfrage aufgenommen wird (Spec 0006, Abschnitt 5). Redaction passiert
@@ -1050,23 +1052,19 @@ fn built_in_patterns() -> Vec<PatternRule> {
             r"(?i)\bclient-key-data\s*:\s*\S+",
             "eingebautes kubeconfig-client-key-data-Muster ist gültig",
         ),
-        // `.netrc`: `machine h login u password p` bzw. `password p` als
-        // eigene Zeile. Nur in dieser Struktur, damit Fließtext wie
-        // "password is required" unberührt bleibt.
+        // `.netrc`: nur in seiner Struktur, damit Fließtext wie "password is
+        // required" unberührt bleibt (Einzelheiten in `redactor_netrc`).
         simple(
-            r"(?i)\b(?:machine\s+\S+(?:\s+login\s+\S+)?|default\s+login\s+\S+)\s+password\s+[^\s:=]\S*",
+            &redactor_netrc::entry_pattern(),
             "eingebautes netrc-Muster ist gültig",
         ),
-        // `default password x` (ohne `login`, laut netrc-Syntax gültig) —
-        // am Zeilenanfang verankert, damit Fließtext "The default password
-        // is …" unberührt bleibt (vierte Review-Runde).
-        simple(
-            r"(?im)^[ \t]*default\s+(?:login\s+\S+\s+)?password\s+[^\s:=]\S*",
-            "eingebautes netrc-default-Muster ist gültig",
-        ),
-        simple(
-            r"(?im)^[ \t]*password[ \t]+[^\s:=]\S*[ \t]*$",
+        keep_head(
+            &redactor_netrc::password_line_pattern(),
             "eingebautes netrc-Zeilen-Muster ist gültig",
+        ),
+        keep_head(
+            &redactor_netrc::field_line_pattern(),
+            "eingebautes netrc-Feldzeilen-Muster ist gültig",
         ),
         // `.pgpass`: `host:port:datenbank:nutzer:passwort` (Port Zahl oder
         // `*`) — ganze Zeile. Der Host muss einen Buchstaben/Punkt enthalten

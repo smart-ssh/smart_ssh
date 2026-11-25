@@ -149,6 +149,9 @@ The redactor recognises a **finite list of known secret formats**:
   ([Spec 0078](docs/specs/0078-redactor-at-in-url-password.md),
   [ADR 0069](docs/adr/0069-redactor-at-in-url-credentials-decisions.md));
 - password hashes (crypt/shadow formats, Argon2, phpass);
+- the formats of common secret files: `.netrc` entries (any field order,
+  quoted values, also a single entry line), `.pgpass` lines, Docker `auth`
+  values, kubeconfig `client-key-data`;
 - passwords on common command lines: `mysql -p…`, `sshpass -p`, `curl -u`,
   `htpasswd -b`, `redis-cli -a`, `smbclient -U`, `openssl -pass`
   ([Spec 0095](docs/specs/0095-redactor-command-line-passwords-and-tokens.md),
@@ -449,7 +452,7 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Commands into which stored secret values are inserted** right before sending (by an outgoing transform of the edition) | Always | [Spec 0038](docs/specs/0038-repository-app-shell-ci.md) |
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
-| **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
+| **Commands too long, too nested or too opaque to check**, including line continuations, shell comments and backslashes inside backticks (plain backslash escapes are resolved and checked against the rules) | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md), [ADR 0162](docs/adr/0162-filter-shell-lexing-escapes-comments.md) |
 | **Filter rules that cannot be loaded** (unreadable rule store or failing rule source): all allow rules are ignored | Always | [Spec 0002](docs/specs/0002-filter-engine-spec.md), §3.4 |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
