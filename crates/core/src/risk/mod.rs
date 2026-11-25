@@ -20,6 +20,7 @@
 //! — dieselbe Konvention, keine zweite Mapping-Logik in diesem Modul.
 
 mod classifier;
+mod glob_head;
 mod patterns;
 mod sftp_word_check;
 mod types;
