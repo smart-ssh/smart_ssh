@@ -177,6 +177,21 @@ describe("check-license-compat", () => {
       expect(parseExceptions(raw(body))).toEqual([{ crate: "x", allow: ["MIT"] }]);
     });
 
+    it("does not let a '#' inside a string hide an exceptions form (#1601)", () => {
+      const body = 'licenses = { allow = ["#"], exceptions = [{ crate = "x", allow = ["GPL-2.0"] }] }\n';
+      expect(() => parseExceptions(raw(body))).toThrow(/inline table/);
+      expect(() => parseExceptions(raw(body.replace(/\n/g, "\r\n")))).toThrow(/inline table/);
+      expect(() => parseExceptions(raw("licenses = { allow = ['#'], exceptions = [] }\n"))).toThrow(/inline table/);
+      expect(() => parseExceptions(raw('licenses = { allow = ["a\\"#"], "exceptions" = [] }\n'))).toThrow();
+    });
+
+    it("still strips real trailing comments after strings (#1601)", () => {
+      expect(parseExceptions(raw('allow = ["#"] # exceptions = [{ crate = "x", allow = ["GPL-2.0"] }]\n'))).toEqual([]);
+      expect(
+        parseExceptions(raw('exceptions = [\n  { crate = "x", allow = ["MIT"] }, # "q\n]\n')),
+      ).toEqual([{ crate: "x", allow: ["MIT"] }]);
+    });
+
     it("returns the sqlcipher-src entry of the repo deny.toml", () => {
       expect(parseExceptions(path.resolve(__dirname, "../../../../deny.toml"))).toEqual([
         { crate: "sqlcipher-src", allow: ["blessing", "WTFPL"] },
