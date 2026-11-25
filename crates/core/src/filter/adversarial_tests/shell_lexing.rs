@@ -498,6 +498,8 @@ fn test_adv_segments_match_bash() {
     } else {
         eprintln!("bash without function substitution, those cases skipped");
     }
+    const VERSION_DEPENDENT_CASES: &[&str] =
+        &["echo \"$(case x in (esac) ;; x) echo \")\"; probe_hidden;; esac)\""];
     for cmd in cases {
         let Some(segments) = split_top_level_segments(cmd) else {
             panic!("{cmd:?}: the parser must split this input");
@@ -506,10 +508,23 @@ fn test_adv_segments_match_bash() {
         let seen: Vec<String> = commands.iter().map(|s| command_word(s)).collect();
         let run = bash_commands(cmd).expect("bash ran before");
         assert!(!run.is_empty(), "{cmd:?}: bash ran nothing");
+        let bash_runs_hidden = run
+            .iter()
+            .any(|command| command_word(command) == "probe_hidden");
+        // Older bash ends the `case` at a reserved word inside a parenthesised
+        // pattern, so it never reaches `probe_hidden`; probe at run time and
+        // only compare against bash when it parses the input as intended.
+        if VERSION_DEPENDENT_CASES.contains(&cmd) && !bash_runs_hidden {
+            eprintln!("{cmd:?}: this bash parses it differently, bash comparison skipped");
+            assert!(
+                seen.contains(&"probe_hidden".to_string()),
+                "{cmd:?}: parser must see probe_hidden, sees only {commands:?}"
+            );
+            continue;
+        }
         if cmd.contains("probe_hidden") {
             assert!(
-                run.iter()
-                    .any(|command| command_word(command) == "probe_hidden"),
+                bash_runs_hidden,
                 "{cmd:?}: bash does not run probe_hidden, the case proves nothing: {run:?}"
             );
         }
