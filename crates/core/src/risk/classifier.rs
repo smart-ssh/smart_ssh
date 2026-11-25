@@ -1040,7 +1040,7 @@ fn glob_reads_private_key(segment: &str) -> bool {
                 // some text (`*backup_id_*`, `b*_id_*`).
                 [
                     head.replace('*', "").replace('?', "b"),
-                    head.replace('*', "b").replace('?', "b"),
+                    head.replace(['*', '?'], "b"),
                 ]
             })
             .filter(|head| {
