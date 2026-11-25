@@ -1,147 +1,131 @@
-# Smart SSH 🚀
+# Smart SSH
 
-[![CI](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml)
+[![CI](https://github.com/smart-ssh/smart_ssh/actions/workflows/community.yml/badge.svg)](https://github.com/smart-ssh/smart_ssh/actions/workflows/community.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.99%2B-orange.svg)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8.svg)](https://tauri.app/)
 
-**Smart SSH** ist ein moderner, plattformübergreifender Desktop-SSH-Client mit integriertem Server-Manager und sicherem KI-Kommando-Assistenten. Entwickelt mit **Rust** und **Tauri v2** für maximale Geschwindigkeit, minimale Ressourcennutzung und kompromisslose Sicherheit.
+**Smart SSH** is a desktop SSH client with a server manager and an AI assistant whose every proposed command passes a local policy engine (allow / confirm / deny) — the AI never sees your keys or passwords.
 
----
+## Why
 
-## ✨ Hauptfunktionen
+- **Every command is checked locally.** The policy engine decides allow, confirm or deny, explains which rule matched, and keeps a hard blacklist that no rule can override.
+- **No tricks with chaining or substitution.** Operators (`&&`, `||`, `;`, `|`) and command substitutions (`$(...)`, backticks) are split apart and each part is checked.
+- **Secrets stay local.** Output is redacted before anything is sent to the AI provider, and credentials live in the OS keychain or in an encrypted database.
+- **Bring your own AI.** Use your own OpenAI, Anthropic or OpenRouter key, or a local model through Ollama.
+- **Coding agents included.** An optional MCP endpoint lets tools such as Claude Code propose commands through the same policy engine.
 
-### 🖥️ Server- & Gruppen-Management
-- **Hierarchische Gruppen & Tags:** Organisiere Server in verschachtelten Gruppen mit Vererbung von Tags und Kontextnotizen.
-- **Jump Hosts / Bastions:** Nahtlose Verkettung über Zwischen-Server (SSH-Bastion-Hosts).
-- **Flexible Authentifizierung:** Unterstützung für Passwörter, Private Keys (verschlüsselt mit Passphrase), SSH-Agent (`SSH_AUTH_SOCK`) und OpenSSH-Zertifikate.
-- **Vollständig verschlüsselte Datenbank:** Die lokale SQLite-Datenbank ist komplett verschlüsselt (SQLCipher) — Serverprofile, Zugangsdaten, API-Keys, Notizen und Sicherheitsregeln liegen darin, nie im Klartext. Den Schlüssel verwahrt der native OS-Schlüsselbund (macOS Keychain, Windows Credential Manager, Linux Secret Service) oder, wenn du es einrichtest, dein eigenes Master-Passwort — unter Linux ohne laufenden Secret Service die einzige Möglichkeit, sonst optional.
-- **Serverprofile mit automatischen Migrationen:** Tags, Notizhistorien und Sicherheitsregeln je Server, versioniert über eingebaute Datenbank-Migrationen.
-- **Verbindungstest vorab:** Sofortige Validierung von Host, Port, Jump-Host und Zugangsdaten vor dem Speichern.
+## Install
 
-### 🤖 Sicherer KI-Assistent & Split-Screen UI
-- **Dual-Panel-Layout:** Chat-Panel als primärer Arbeitskanal links, interaktives xterm.js-Terminal rechts für Beobachtung und manuelle Eingriffe.
-- **Multi-Provider-Support:** Direkte Anbindung an **OpenAI** (GPT-4o, etc.), **Anthropic** (Claude 3.5 Sonnet, etc.), **Ollama** (lokale Modelle) sowie generische OpenAI-kompatible APIs.
-- **Live-Streaming:** Echtes Server-Sent Events (SSE) Streaming für sofortiges Text- und Status-Feedback.
-- **Automatisierte Folgerunden:** Die KI interpretiert ausgeführte Befehlsausgaben und schlägt bei mehrstufigen Diagnose- und Wartungsaufgaben selbstständig nächste Schritte vor.
+Installers are on the download section of the project website: <https://smart-ssh.dev/#download>.
 
-### 🛡️ Filter- & Policy-Engine (Fail-Safe Defaults)
-- **3-stufige Entscheidung:** Jedes vorgeschlagene Kommando wird strikt evaluiert:
-  - `AutoExec`: Automatische Ausführung (nur bei expliziter Allow-Regel)
-  - `Confirm`: Manuelle Bestätigung durch den Nutzer (mit Live-Kommando-Editor)
-  - `Deny`: Harte Blockierung gefährlicher Befehle
-- **Präzedenz:** `Hard-Blacklist > Deny > Confirm > Allow > Default (Confirm)`.
-- **Rotes Risiko verlangt Bestätigung (Standard: an):** Stuft der Risiko-Indikator einen Vorschlag auf der Server- oder der Daten-Achse als rot ein, erzwingt die Einstellung „Bei rotem Risiko immer nachfragen“ eine Bestätigung — auch gegen eine sonst greifende Allow-Regel. Das gilt auch, wenn erst die optionale KI-Zweitmeinung nachträglich auf Rot hebt. Ausschalten ist möglich; dann bleibt Rot wieder nur eine Anzeige (Spec 0092, ADR 0084).
-- **Evasionsschutz:** Parser zerlegt Operatoren (`&&`, `||`, `;`, `|`, `&`, `\n`, `\r`) und Command-Substitutionen (`$(...)`, Backticks, `<(...)`), um Filterumgehungen zuverlässig zu verhindern.
-- **Prompt-Isolation:** Verhindert Indirect Prompt Injections (IPI) durch strukturierte Kapselung von Server-Outputs und Validierung von System-Metadaten.
-- **Automatische Secret-Redaction:** Erkennt und maskiert Passwörter, Private Keys, Bearer-Tokens, GitHub-PATs und AWS-Keys im Terminal-Output, bevor Daten an die KI-API gesendet werden.
+- **macOS:** Apple Silicon and Intel.
+- **Windows:** x64.
+- **Linux:** `.deb`, `.rpm` or `.AppImage`.
 
-### 📝 Notizen, Revisionshistorie & Dokumenten-Export
-- **Automatische Notiz-Vorschläge:** Vorschlag relevanter Betriebsinformationen (Pfade, Versionen, Configs) beim Trennen einer SSH-Session.
-- **Revisionshistorie (Audit-Trail):** Vollständige Versionshistorie für Server- und Gruppennotizen mit 1-Klick-Rollback.
-- **Quick Rule Creation:** Erstelle dauerhafte Filterregeln direkt aus dem Bestätigungsdialog heraus.
-- **Dokumenten-Generator & Multi-Format-Export:** Erstelle Systemberichte, Runbooks und Protokolle und exportiere sie auf Knopfdruck nach **Markdown (`.md`)**, **HTML (`.html`)**, **PDF (`.pdf`)** und **Word (`.docx`)**.
+On Linux, Smart SSH needs a Secret Service (for example gnome-keyring) to keep its database key, or you set a master password instead. See [Data paths](docs/datenpfade.md) for where Smart SSH stores its data on each platform.
 
----
+## Five-minute path
 
-## 🏛️ Architektur-Übersicht
+1. Click **+ Server** (or **Add first server**), enter host, port and username, and choose how to authenticate.
+2. Click **Test Connection** to check host, port and credentials before you save.
+3. Click **Connect** and, on first contact, compare the fingerprint in the **Unknown Host** dialog and click **Trust**.
+4. Open **Settings** → **AI Provider** and add a provider: **Use Ollama** for a local model, or **Add Provider** with your own OpenAI or Anthropic key, or OpenRouter through the generic OpenAI-compatible type.
+5. Ask in plain language in the chat, for example "which service uses the most memory?".
+6. Review the proposed command in the confirmation dialog, which explains which rule matched and lets you edit the command.
+7. Click **Execute** (or **Deny**) and read the result in the chat.
+8. Close the app; when you connect to the server again, pick the conversation under **Past conversations** to continue it.
 
-Das Projekt ist als modularer Cargo-Workspace aufgebaut:
+## Use with Claude Code and other MCP clients
 
-```
-smart_ssh/
-├── crates/
-│   ├── core/                  # ssh-manager-core: Domain-Typen, Filter-Engine, Redactor
-│   ├── ssh-transport/         # russh-Implementierung, Shell-PTY, Exec, HostKey-Check
-│   ├── ai-providers/          # OpenAI, Anthropic, Ollama, SSE-Parser, Fallback-Modus
-│   ├── credentials-keyring/   # OS-Keychain-Anbindung (keyring-Crate)
-│   ├── persistence-sqlite/    # SQLite-Speicher für Profile, Notizen, Regeln & AI-Configs
-│   └── app-shell/             # App-Wiring, Orchestrierung, Tauri-Commands (Bibliothek)
-├── apps/
-│   └── smart-ssh-community/   # Dünnes Tauri-v2-Binary: app_shell::run(Wiring::community())
-│       └── frontend/          # React 19, TypeScript, Tailwind CSS, xterm.js
-├── docs/
-│   ├── adr/                   # Architecture Decision Records
-│   └── specs/                 # Feature-Spezifikationen
-└── .github/workflows/         # CI
+1. Open **Settings** → **MCP Server** and enable **Enable MCP server**.
+2. In **Server allow list (reachable via MCP)**, tick the servers the client may use.
+3. Copy the configuration with **Copy configuration**, or use this block (replace `<token>` with the token shown in the settings):
+
+```json
+{
+  "mcpServers": {
+    "smart-ssh": {
+      "type": "http",
+      "url": "http://127.0.0.1:47823/mcp",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+  }
+}
 ```
 
----
-
-## 📦 Installation & Download
-
-Fertige Installer und Binaries für alle Plattformen stehen unter [Releases](https://github.com/brokoskokoli/smart_ssh/releases) bereit:
-
-- **macOS:** `.dmg`-Installer *(Universal Binary für Apple Silicon & Intel, ab macOS 10.15 Catalina)*
-- **Windows:** `.msi` / `.exe`-Installer *(x64)*
-- **Linux:** `.AppImage` *(direkt startbar)* oder `.deb`-Paket
-
-> **Hinweis für macOS-Nutzer:** Falls Gatekeeper beim ersten Start eine Warnung anzeigt, kann das Quarantäne-Attribut im Terminal entfernt werden:
-> ```bash
-> xattr -cr /Applications/Smart\ SSH.app
-> ```
-
----
-
-## 🌍 Übersetzungen
-
-Deutsch und Englisch werden von Hand gepflegt. Alle weiteren Sprachen sind
-maschinell übersetzt und können Fehler enthalten. Fehlerhafte oder
-unpassende Übersetzungen gern als Issue melden (Sprache, Stelle in der App,
-besserer Text) – Korrekturen sind willkommen. Terminologie:
-[docs/i18n-glossary.md](docs/i18n-glossary.md).
-
-## 🛠️ Entwicklung & Bauen
-
-### Voraussetzungen
-- [Rust](https://www.rust-lang.org/tools/install) (Version 1.75+)
-- [Node.js](https://nodejs.org/) (Version 20+) & `npm`
-- Plattformspezifische Tauri-Abhängigkeiten (siehe [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/))
-
-### Lokaler Entwicklungsstart
+The equivalent Claude Code command:
 
 ```bash
-# 1. Repository klonen
-git clone https://github.com/brokoskokoli/smart_ssh.git
+claude mcp add --transport http smart-ssh http://127.0.0.1:47823/mcp --header "Authorization: Bearer <token>"
+```
+
+MCP is off by default, and only servers on the allow list are reachable. Every command a client proposes passes the same policy engine as your own and appears in the confirmation dialog in its own tab. Agents get no extra auto-execution: a command only runs after you confirm it in the app.
+
+## Security
+
+- [Threat model](THREAT-MODEL.md) — what the AI sees and never sees, limits of redaction, data storage, network connections and known residual risks.
+- [SECURITY.md](SECURITY.md) — how to report a vulnerability.
+- [KNOWN-ISSUES.md](KNOWN-ISSUES.md) — current limitations and deliberate design decisions.
+
+## Build from source
+
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) 1.99+ (the exact version is pinned in `rust-toolchain.toml`)
+- [Node.js](https://nodejs.org/) 20+ and `npm`
+- Platform-specific Tauri dependencies (see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/))
+
+### Run in development mode
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/smart-ssh/smart_ssh.git
 cd smart_ssh
 
-# 2. Frontend-Abhängigkeiten installieren
+# 2. Install the frontend dependencies
 cd apps/smart-ssh-community/frontend
 npm install
 cd ../../..
 
-# 3. Desktop-App im Dev-Modus starten
+# 3. Start the desktop app in dev mode
 cargo tauri dev --manifest-path apps/smart-ssh-community/Cargo.toml
-# oder aus apps/smart-ssh-community (dort liegt tauri.conf.json):
+# or from apps/smart-ssh-community (where tauri.conf.json lives):
 cd apps/smart-ssh-community
 ./frontend/node_modules/.bin/tauri dev
 ```
 
-### Tests & Linting
+### Tests and linting
 
 ```bash
-# Alle Unit- und Integrationstests im gesamten Workspace ausführen
+# Run all unit and integration tests in the workspace
 cargo test --workspace
 
-# Code-Formatierung prüfen
+# Check code formatting
 cargo fmt --all --check
 
-# Clippy-Lints prüfen
+# Check Clippy lints
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
----
+More in the [developer and release guide](README_DEV.md).
 
-## 📚 Dokumentation
+## Translations
 
-- [Threat Model](THREAT-MODEL.md) – Was die KI sieht und nie sieht, Grenzen der Redaction, Datenablage und Verschlüsselung, Netzwerkverbindungen, Bestätigungsgrenzen und bekannte Restrisiken
-- [Datenpfade](docs/datenpfade.md) – Wo Smart SSH Datenbank, Logs, Host-Keys und Einstellungen je Plattform ablegt
-- [Entwickler- & Release-Guide](README_DEV.md) – Versionsverwaltung, Release-Workflow und GitHub Secrets
-- [Feature-Spezifikationen](docs/specs/INDEX.md) – Übersicht aller Specs mit Status und Zweck
-- [Architecture Decision Records (ADRs)](docs/adr/INDEX.md) – Übersicht aller Architekturentscheidungen
+German and English are maintained by hand. All other languages are machine-translated and may contain mistakes. Please report wrong or unsuitable translations as an issue (language, place in the app, better text) — corrections are welcome. Terminology: [docs/i18n-glossary.md](docs/i18n-glossary.md).
 
----
+## Documentation
 
-## 📄 Lizenz
+- [Threat model](THREAT-MODEL.md) — what the AI sees and never sees, limits of redaction, data storage and encryption, network connections, confirmation boundaries and known residual risks
+- [Data paths](docs/datenpfade.md) — where Smart SSH stores the database, logs, host keys and settings on each platform
+- [Architecture](docs/architecture.md) — crate layout and boundaries
+- [Developer and release guide](README_DEV.md) — versioning, release workflow and GitHub secrets
+- [Feature specifications](docs/specs/INDEX.md) — all specs with status and purpose
+- [Architecture decision records](docs/adr/INDEX.md) — all architecture decisions
+- [Changelog](CHANGELOG.md)
 
-Smart SSH steht ab Version 0.8.0 unter der **GNU General Public License v3.0** (GPL-3.0-only) – siehe [LICENSE](LICENSE). Versionen bis einschließlich 0.7.0 stehen unter der Apache License 2.0. Urheberrechtsvermerk: [NOTICE](NOTICE).
+## License
+
+Smart SSH is licensed under the **GNU General Public License v3.0** (GPL-3.0-only) from version 0.8.0 — see [LICENSE](LICENSE). Versions up to and including 0.7.0 remain under the Apache License 2.0. Copyright notice: [NOTICE](NOTICE).
