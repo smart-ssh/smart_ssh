@@ -20,6 +20,7 @@ export interface NpmLsNode {
 }
 
 export function parseAllowList(licensesFilePath: string): string[];
+export function parseExceptions(licensesFilePath: string): { crate: string; allow: string[] }[];
 export function isLicenseAllowed(expr: string, allowList: string[]): boolean;
 export function collectProdPackages(npmLsTree: NpmLsNode): { name: string; version: string }[];
 export function localPackagePredicate(
