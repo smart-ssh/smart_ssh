@@ -8,7 +8,8 @@ written in German; file and section references are given so you can check
 each claim.
 
 If a statement here disagrees with the code, the code is wrong or this
-document is wrong — please open an issue.
+document is wrong — please open an issue. To report a vulnerability, do not
+open an issue; follow [`SECURITY.md`](SECURITY.md).
 
 **Scope.** The Community edition in this repository: the desktop app, its
 local database, its connections to SSH servers and to the AI providers you
