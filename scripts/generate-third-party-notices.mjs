@@ -155,12 +155,23 @@ function parseExceptions(licensesFilePath) {
     .join("\n");
   // Other valid TOML spellings of the same data are rejected (fail closed):
   // the repo uses the `exceptions = [ … ]` block only.
-  const alt = content.match(
-    /^[ \t]*(?:\[\[[^\]\n]*\bexceptions\s*\]\]|licenses\s*\.\s*exceptions\s*=.*)[ \t]*$/m,
-  );
-  if (alt) {
+  // General rule: any line using `exceptions` as a key (bare or quoted) other
+  // than the supported `exceptions = [` block is rejected, so future spellings
+  // fail closed too.
+  const keyRe = /(^|[\s.{,\[])(["']?)exceptions\2\s*(=|\]|\.|$)/;
+  for (const line of content.split("\n")) {
+    if (/^[ \t]*exceptions[ \t]*=[ \t]*\[/.test(line)) continue;
+    if (!keyRe.test(line)) continue;
+    const t = line.trim();
+    const form = /^\[\[/.test(t)
+      ? "array of tables"
+      : /\{[^}]*exceptions/.test(t)
+        ? "inline table"
+        : /["']/.test(t.split("=")[0])
+          ? "quoted key"
+          : "dotted key";
     fail(
-      `Nicht unterstützte Schreibweise der Ausnahmen in ${licensesFilePath} (array of tables / dotted key): ${alt[0].trim()} — bitte den Block "exceptions = [ … ]" unter [licenses] verwenden.`,
+      `Nicht unterstützte Schreibweise der Ausnahmen in ${licensesFilePath} (${form}): ${t} — bitte den Block "exceptions = [ … ]" unter [licenses] verwenden.`,
     );
   }
   const key = content.match(/^[ \t]*exceptions\s*=\s*\[/m);
