@@ -1015,8 +1015,8 @@ fn glob_reads_private_key(segment: &str) -> bool {
     ) {
         return false;
     }
-    words.any(|word| {
-        let word = word.trim_matches(|c| c == '"' || c == '\'' || c == ')');
+    words.flat_map(split_at_redirects).any(|word| {
+        let word = word.trim_matches(|c| c == '"' || c == '\'' || c == ')' || c == '`');
         let last = word.rsplit('/').next().unwrap_or(word);
         if !last.contains(GLOB)
             || !["id_", "rsa", "ed25519", "ecdsa", "dsa"]
@@ -1044,6 +1044,29 @@ fn glob_reads_private_key(segment: &str) -> bool {
             })
         })
     })
+}
+
+/// Issue #1593: splits a word at every unquoted redirect operator (`<`, `>`)
+/// and returns the non-empty parts, so `backup_id_*>/tmp/x` and
+/// `<~/.ssh/backup_id_*` each judge the path part on its own.
+fn split_at_redirects(word: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut quote: Option<char> = None;
+    let mut start = 0;
+    for (i, c) in word.char_indices() {
+        match (quote, c) {
+            (Some(q), _) if c == q => quote = None,
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '<' | '>') => {
+                parts.push(&word[start..i]);
+                start = i + c.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&word[start..]);
+    parts.retain(|p| !p.is_empty());
+    parts
 }
 
 /// Heuristik der ersten Fassung: Platzhalter in einem Wort, das auf eine
