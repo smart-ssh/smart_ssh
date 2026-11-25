@@ -143,6 +143,10 @@ describe("check-license-compat", () => {
       ["quoted exceptions", "licenses.'exceptions' = [{ crate = \"x\", allow = [\"GPL-2.0\"] }]\n", /quoted key/],
       ["spaced dots", 'licenses . "exceptions" = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /quoted key/],
       ["inline table", 'licenses = { exceptions = [{ crate = "x", allow = ["GPL-2.0"] }] }\n', /inline table/],
+      ["escaped exceptions key", 'licenses."exc\\u0065ptions" = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /quoted key with escape sequence/],
+      ["escaped exceptions key with quoted licenses", '"licenses"."exc\\u0065ptions" = [{ crate = "x", allow = ["GPL-2.0"] }]\n', /quoted key with escape sequence/],
+      ["escaped array of tables", '[[licenses."exc\\u0065ptions"]]\ncrate = "x"\n', /quoted key with escape sequence/],
+      ["escaped key in inline table", 'licenses = { "exc\\u0065ptions" = [{ crate = "x", allow = ["GPL-2.0"] }] }\n', /quoted key with escape sequence/],
     ];
 
     it.each(FORMS)("rejects %s, also with comment and CRLF", (_n, body, re) => {
@@ -158,17 +162,20 @@ describe("check-license-compat", () => {
       }
     });
 
-    it(
-      "check-license-compat exits non-zero naming the form",
-      () => {
-        for (const [, body, re] of FORMS) {
-          const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
-          expect(bad.status).not.toBe(0);
-          expect(bad.stderr).toMatch(re);
-        }
+    it.each(FORMS)(
+      "check-license-compat exits non-zero naming the form: %s",
+      (_n, body, re) => {
+        const bad = spawnSync(process.execPath, [SCRIPT, raw(body)], { encoding: "utf8" });
+        expect(bad.status).not.toBe(0);
+        expect(bad.stderr).toMatch(re);
       },
       30_000,
     );
+
+    it("accepts a value string containing a backslash", () => {
+      const body = 'exceptions = [\n    { crate = "x", allow = ["MIT"] },\n]\nnote = "a\\\\b \\u0041"\n';
+      expect(parseExceptions(raw(body))).toEqual([{ crate: "x", allow: ["MIT"] }]);
+    });
 
     it("returns the sqlcipher-src entry of the repo deny.toml", () => {
       expect(parseExceptions(path.resolve(__dirname, "../../../../deny.toml"))).toEqual([
