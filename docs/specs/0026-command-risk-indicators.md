@@ -80,7 +80,9 @@ Fork-Bomb, `shutdown*`/`reboot*`/`poweroff*`, `iptables -F*`,
 **Beispiele Daten-Risiko.** Rot: `cat`/`less`/`head`/`tail` auf jeden privaten SSH-Schlüssel
 (`id_<name>`, `ssh_host_<name>_key`, auch Sicherungskopien wie `id_rsa.bak`;
 nur exakt `.pub` ist ausgenommen und hat kein Daten-Risiko — gleiche Regel
-wie die Secret-Pfad-Prüfung aus Spec 0068), `*.pem`, `*.key`, `*.env`, `*credentials*`, `*shadow*`, `*.aws/credentials*`;
+wie die Secret-Pfad-Prüfung aus Spec 0068; auch ein Platzhalter, der so einen Namen treffen kann, etwa
+`id_*`, `backup_id_*`, `*backup_id_*`, `*_id_*` — dafür muss `id_` oder ein Schlüsseltyp wörtlich im
+Muster stehen, `*`, `i*` oder `*id*` bleiben ohne Daten-Risiko), `*.pem`, `*.key`, `*.env`, `*credentials*`, `*shadow*`, `*.aws/credentials*`;
 `env`/`printenv`; `mysqldump`/`pg_dump` ohne Ziel-Redaction; SQL mit
 `SELECT * FROM *user*`/`*password*`. Gelb: `find` mit `-name *.key`-artigen
 Mustern, `ls` in `~/.ssh` oder `/etc`, `grep` nach `password`/`secret`/`token`

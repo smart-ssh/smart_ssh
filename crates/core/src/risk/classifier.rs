@@ -1034,8 +1034,17 @@ fn glob_reads_private_key(segment: &str) -> bool {
         let heads = last
             .match_indices("id_")
             .map(|(i, _)| &last[..i])
+            .filter(|head| !head.contains(['[', '{']))
+            .flat_map(|head| {
+                // A wildcard before the literal `id_` may match nothing or
+                // some text (`*backup_id_*`, `b*_id_*`).
+                [
+                    head.replace('*', "").replace('?', "b"),
+                    head.replace('*', "b").replace('?', "b"),
+                ]
+            })
             .filter(|head| {
-                !head.contains(GLOB) && (head.is_empty() || head.ends_with(['_', '-', '.']))
+                head.is_empty() || head.ends_with(['_', '-', '.']) || head.ends_with('b')
             });
         let derived = heads.flat_map(|head| {
             ["rsa", "ed25519", "ecdsa", "dsa"]
