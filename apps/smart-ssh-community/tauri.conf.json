@@ -35,6 +35,7 @@
     }
   },
   "bundle": {
+    "license": "GPL-3.0-only",
     "android": {
       "minSdkVersion": 26
     },

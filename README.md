@@ -1,7 +1,7 @@
 # Smart SSH 🚀
 
 [![CI](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8.svg)](https://tauri.app/)
 
@@ -144,4 +144,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 📄 Lizenz
 
-Smart SSH steht unter der **Apache License 2.0** – siehe [LICENSE](LICENSE). Urheberrechtsvermerk: [NOTICE](NOTICE).
+Smart SSH steht ab Version 0.8.0 unter der **GNU General Public License v3.0** (GPL-3.0-only) – siehe [LICENSE](LICENSE). Versionen bis einschließlich 0.7.0 stehen unter der Apache License 2.0. Urheberrechtsvermerk: [NOTICE](NOTICE).
