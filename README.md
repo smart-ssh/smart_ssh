@@ -70,6 +70,10 @@ MCP is off by default, and only servers on the allow list are reachable. Every c
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability.
 - [KNOWN-ISSUES.md](KNOWN-ISSUES.md) — current limitations and deliberate design decisions.
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the spec-first workflow, the local checks and how pull requests are reviewed. Contributions need a one-time signature of the [CLA](CLA.md) in your first pull request.
+
 ## Build from source
 
 ### Prerequisites
