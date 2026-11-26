@@ -328,4 +328,16 @@ mod tests {
         let all_but_last: String = (0..199).map(|i| format!("line {i}\n")).collect();
         assert_eq!(shown, all_but_last);
     }
+
+    #[test]
+    fn test_coloured_secret_across_chunks_is_never_shown_nor_half_escape() {
+        let raw = "ok\n\x1b[01;31m\x1b[Kpassword \x1b[m\x1b[K= hunter2\nnext\nmore\n";
+        assert_never_shows(raw, "hunter2");
+        for chunk in 1..=raw.len() {
+            let shown = live_view(raw, chunk);
+            assert!(!shown.contains('\u{1b}'), "chunk {chunk}: {shown:?}");
+            assert!(!shown.contains("[01;31m"), "chunk {chunk}: {shown:?}");
+            assert!(!shown.contains("[K"), "chunk {chunk}: {shown:?}");
+        }
+    }
 }

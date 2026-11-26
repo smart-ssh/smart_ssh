@@ -43,6 +43,15 @@ Regeln dafür:
   „Basic authentication" bleiben unverändert.
 - **Kein generisches Hoch-Entropie-Muster** (bewusst verworfen: zu viele
   Falsch-Positive).
+- **Terminal-Escape-Sequenzen werden vor dem Abgleich entfernt.** Farb- und
+  Cursor-Codes (CSI inklusive `ESC[K` und der 8-Bit-Form `0x9B`, OSC,
+  sonstige `ESC`-Folgen, ein einzelnes `ESC`) zwischen Schlüssel und Wert, in
+  einer PEM-Kopfzeile oder vor einem Token verhindern die Erkennung nicht
+  mehr (z. B. Ausgabe von `grep --color=always`). Der weitergegebene Text
+  (KI, Chat, Logs) ist der bereinigte Text; eine Folge am Ende einer
+  abgeschnittenen Ausgabe wird bis zum Ende entfernt. Text ohne `ESC` bleibt
+  unverändert, Zeilenumbrüche bleiben erhalten. Das gilt auch für die
+  Live-Ausgabe.
 
 ## Teil 2 — Lesebefehle auf Secret-Pfade verlangen Bestätigung
 
