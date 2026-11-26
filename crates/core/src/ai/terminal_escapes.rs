@@ -15,6 +15,11 @@
 /// removes terminal escape sequences. Text without any escape introducer is
 /// returned unchanged.
 pub(crate) fn strip(data: &[u8]) -> String {
+    strip_text(decode(data))
+}
+
+/// Lossy UTF-8 decoding without removing any escape sequence.
+pub(crate) fn decode(data: &[u8]) -> String {
     let mut text = String::with_capacity(data.len());
     for chunk in data.utf8_chunks() {
         text.push_str(chunk.valid());
@@ -24,6 +29,11 @@ pub(crate) fn strip(data: &[u8]) -> String {
             text.push(if *b == 0x9B { '\u{9B}' } else { '\u{FFFD}' });
         }
     }
+    text
+}
+
+/// Removes terminal escape sequences from already decoded text.
+pub(crate) fn strip_text(text: String) -> String {
     if !text.contains(['\u{1B}', '\u{9B}']) {
         return text;
     }
@@ -187,14 +197,24 @@ mod tests {
     }
 
     #[test]
-    fn test_token_right_after_sgr_is_masked() {
+    fn test_token_split_by_sgr_is_masked() {
+        let out = red("ghp_abcdefghijkl\x1b[0mmnopqrstuvwxyz0123456789");
+        assert!(!out.contains("abcdefghijkl"), "{out:?}");
+        assert!(!out.contains("mnopqrstuvwxyz"), "{out:?}");
+    }
+
+    #[test]
+    fn test_secret_right_after_lone_esc_or_c1_csi_is_masked() {
         let token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
-        let out = red(&format!("\x1b[32m{token}\x1b[0m"));
-        assert!(!out.contains(token), "{out:?}");
-        assert!(
-            !out.contains("abcdefghijklmnopqrstuvwxyz0123456789"),
-            "{out:?}"
-        );
+        for lead in ["\x1b", "\u{9b}"] {
+            let out = red(&format!("{lead}{token}"));
+            assert!(!out.contains("abcdefghijkl"), "{lead:?}: {out:?}");
+        }
+        let out = red("\x1bAKIAIOSFODNN7EXAMPLE");
+        assert!(!out.contains("IOSFODNN7EXAMPLE"), "{out:?}");
+        let pem = "\x1b-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAsecretbody\n-----END RSA PRIVATE KEY-----";
+        let out = red(pem);
+        assert!(!out.contains("secretbody"), "{out:?}");
     }
 
     #[test]
