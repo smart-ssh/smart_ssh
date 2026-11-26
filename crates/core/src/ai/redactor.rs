@@ -1408,25 +1408,14 @@ impl OutputRedactor for DefaultOutputRedactor {
 /// Byte-Sequenzen ist "durch Ersatzzeichen ersetzt, aber Secret trotzdem
 /// erkannt" dem Fail-safe-Prinzip (Spec 0002 Abschnitt 1) angemessener als
 /// die Redaction bei Nicht-UTF-8-Output ganz zu überspringen.
-fn apply_patterns(text: &mut String, patterns: &[PatternRule]) {
-    for rule in patterns {
-        if rule.regex.is_match(text) {
-            *text = rule.regex.replace_all(text, rule.replacement).into_owned();
-        }
-    }
-}
-
 fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
-    // Pass 1 on the original text (a lone ESC or 0x9B directly in front of a
-    // secret would otherwise swallow its first character), then strip the
-    // escape sequences and run the patterns again for secrets that were
-    // split by them (issue #1605).
-    let mut text = super::terminal_escapes::decode(data);
-    apply_patterns(&mut text, patterns);
-    if text.contains(['\u{1B}', '\u{9B}']) {
-        text = super::terminal_escapes::strip_text(text);
-        apply_patterns(&mut text, patterns);
-    }
+    let text = super::terminal_escapes::around_strip(data, |text| {
+        for rule in patterns {
+            if rule.regex.is_match(text) {
+                *text = rule.regex.replace_all(text, rule.replacement).into_owned();
+            }
+        }
+    });
     absorb_fragments_next_to_placeholders(&text).into_bytes()
 }
 

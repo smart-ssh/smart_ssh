@@ -20,7 +20,7 @@ pub(crate) fn strip(data: &[u8]) -> String {
 }
 
 /// Lossy UTF-8 decoding without removing any escape sequence.
-pub(crate) fn decode(data: &[u8]) -> String {
+fn decode(data: &[u8]) -> String {
     let mut text = String::with_capacity(data.len());
     for chunk in data.utf8_chunks() {
         text.push_str(chunk.valid());
@@ -29,6 +29,19 @@ pub(crate) fn decode(data: &[u8]) -> String {
             // valid UTF-8 here. Keep it distinguishable from U+FFFD.
             text.push(if *b == 0x9B { '\u{9B}' } else { '\u{FFFD}' });
         }
+    }
+    text
+}
+
+/// Decodes `data` and runs `apply` before stripping escape sequences (a lone
+/// ESC would eat the first character of a following secret) and again after
+/// it (secrets split by escapes), issue #1605.
+pub(crate) fn around_strip(data: &[u8], apply: impl Fn(&mut String)) -> String {
+    let mut text = decode(data);
+    apply(&mut text);
+    if text.contains(['\u{1B}', '\u{9B}']) {
+        text = strip_text(text);
+        apply(&mut text);
     }
     text
 }
