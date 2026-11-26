@@ -14,6 +14,7 @@
 /// Decodes `data` as UTF-8 (invalid bytes become U+FFFD, as before) and
 /// removes terminal escape sequences. Text without any escape introducer is
 /// returned unchanged.
+#[cfg(test)]
 pub(crate) fn strip(data: &[u8]) -> String {
     strip_text(decode(data))
 }
