@@ -51,6 +51,12 @@ pub(crate) fn strip_text(text: String) -> String {
     if !text.contains(['\u{1B}', '\u{9B}']) {
         return text;
     }
+    // An introducer right before an already inserted placeholder would
+    // otherwise form `ESC [` + `R` and eat the placeholder's start; drop
+    // only the introducer (issue #1605 review).
+    let text = text
+        .replace("\u{1B}[REDACTED]", "[REDACTED]")
+        .replace("\u{9B}[REDACTED]", "[REDACTED]");
     strip_str(&text)
 }
 
@@ -136,6 +142,12 @@ mod tests {
     use super::strip;
 
     #[test]
+    fn test_introducer_before_placeholder_keeps_placeholder() {
+        assert_eq!(strip(b"a\x1b[REDACTED]b"), "a[REDACTED]b");
+        assert_eq!(strip(b"a\x9b[REDACTED]b"), "a[REDACTED]b");
+    }
+
+    #[test]
     fn test_sgr_and_erase_are_removed() {
         assert_eq!(
             strip(b"\x1b[01;31m\x1b[Kpassword \x1b[m\x1b[K= hunter2"),
@@ -191,6 +203,18 @@ mod tests {
 
     fn red(text: &str) -> String {
         DefaultOutputRedactor::new().redact_text(text)
+    }
+
+    #[test]
+    fn test_introducer_before_secret_keeps_placeholder_and_absorbs_tail() {
+        assert_eq!(
+            red("id \x1bAKIAIOSFODNN7EXAMPLEtailsecret99 y"),
+            "id [REDACTED] y"
+        );
+        assert_eq!(
+            red("id \u{9b}AKIAIOSFODNN7EXAMPLEtailsecret99 y"),
+            "id [REDACTED] y"
+        );
     }
 
     #[test]

@@ -1415,6 +1415,9 @@ fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
                 *text = rule.regex.replace_all(text, rule.replacement).into_owned();
             }
         }
+        // Absorb in every pass, so a tail next to a placeholder is gone
+        // before escape stripping can change what is adjacent to it.
+        *text = absorb_fragments_next_to_placeholders(text);
     });
     absorb_fragments_next_to_placeholders(&text).into_bytes()
 }
