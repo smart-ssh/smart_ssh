@@ -373,6 +373,10 @@ Nach Themen:
   `ConnectionChange`, `DisconnectReason`, `ConnectFailureStep`,
   `RuleSnapshot`, `ServerSnapshot`, `SessionEndReason`, `SessionRef`,
   `dropped_activity_events`.
+- **Regelpakete (Spec 0117 §9, mit dessen Umsetzungsschritt 4):** Vorschau,
+  Anwenden und die lesende Abfrage `stored_pack_version(pack_id)` (gespeicherter
+  Name, Version und Importzeitpunkt eines importierten Pakets, sonst `None`;
+  ohne Seiteneffekt, ohne Regeln, außerhalb der Regelauswertung).
 - **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
   `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
   `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,
