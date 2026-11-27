@@ -34,6 +34,11 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' tauri-plugin-decoration: http://tauri-plugin-decoration.localhost https://tauri-plugin-decoration.localhost; img-src 'self' data:; connect-src 'self' ipc:;"
     }
   },
+  "plugins": {
+    "opener": {
+      "requireLiteralLeadingDot": false
+    }
+  },
   "bundle": {
     "license": "GPL-3.0-only",
     "android": {

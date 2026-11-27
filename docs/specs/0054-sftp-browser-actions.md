@@ -301,6 +301,14 @@ Zeile in der Übertragungsliste. Ein erneuter Versuch ersetzt die Meldung,
 statt eine weitere hinzuzufügen. Ein erfolgreicher Upload meldet sich wie
 bisher.
 
+**Dateien mit führendem Punkt** (`.env.local`, `.bashrc`, `.gitignore`) lassen
+sich auf macOS, Linux und Windows gleich lokal öffnen. Die Freigabe zum Öffnen
+gilt weiter nur für den Ordner der Bearbeitungskopien; die Einstellung
+`requireLiteralLeadingDot: false` des Opener-Plugins sorgt nur dafür, dass
+Punkt-Dateien *innerhalb* dieses Ordners passen. Pfade außerhalb (auch
+Punkt-Dateien wie `~/.ssh/id_ed25519`) und Pfade mit `..` bleiben abgelehnt.
+Die Bearbeitungskopie behält den Originalnamen.
+
 ## Teil 5: Standardprogramme je Dateityp
 
 - In den Einstellungen legt der Nutzer je Dateiendung ein Programm fest
