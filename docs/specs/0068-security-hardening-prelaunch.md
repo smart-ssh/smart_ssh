@@ -49,7 +49,11 @@ Regeln dafür:
   einer PEM-Kopfzeile oder vor einem Token verhindern die Erkennung nicht
   mehr (z. B. Ausgabe von `grep --color=always`). Der weitergegebene Text
   (KI, Chat, Logs) ist der bereinigte Text; eine Folge am Ende einer
-  abgeschnittenen Ausgabe wird bis zum Ende entfernt. Text ohne `ESC` bleibt
+  abgeschnittenen Ausgabe wird bis zum Ende entfernt. Farb- und Löschcodes
+  (SGR `…m`, Erase `…K`) verschwinden spurlos; jede andere Folge (CSI mit
+  anderem Endbyte, OSC/DCS/APC …, ein einzelnes `ESC` oder `0x9B`) wird durch
+  genau ein Leerzeichen ersetzt, damit sie Schlüssel und Wert weiterhin
+  trennt und nie ein folgendes Zeichen verschluckt. Text ohne `ESC` bleibt
   unverändert, Zeilenumbrüche bleiben erhalten. Das gilt auch für die
   Live-Ausgabe.
 

@@ -7,7 +7,8 @@
 //! text. Removed: CSI (`ESC [` … final byte `0x40–0x7E`, also the 8-bit
 //! `0x9B` form), string sequences (OSC `ESC ]`, DCS, SOS, PM, APC up to
 //! `BEL` or `ESC \`), other two- and three-byte `ESC` sequences and a lone
-//! `ESC`. A sequence never swallows a line break: it ends in front of `\n`
+//! `ESC`. SGR (`m`) and erase (`K`) leave no trace; every other sequence
+//! (and a lone `ESC`/`0x9B`) becomes one space. A sequence never swallows a line break: it ends in front of `\n`
 //! or `\r`, so lines stay line-based for the live redactor. An unterminated
 //! sequence is removed up to the end of the text.
 
@@ -46,22 +47,25 @@ fn strip_str(text: &str) -> String {
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
         match c {
-            // A bare 0x9B is dropped alone; only with a parameter byte
-            // (`0x9B 3 1 m`) is it a sequence, so a secret's first
-            // character is never taken for the final byte.
+            // `0x9B` followed by a parameter byte is a CSI; a bare one is
+            // only the introducer, so a secret's first character is never
+            // taken for the final byte.
             '\u{9B}' => {
                 if matches!(it.peek(), Some(n) if ('\u{20}'..='\u{3F}').contains(n)) {
-                    skip_csi(&mut it);
+                    push_unless_silent(&mut out, skip_csi(&mut it));
+                } else {
+                    out.push(' ');
                 }
             }
             '\u{1B}' => match it.peek().copied() {
                 Some('[') => {
                     it.next();
-                    skip_csi(&mut it);
+                    push_unless_silent(&mut out, skip_csi(&mut it));
                 }
                 Some(']' | 'P' | 'X' | '^' | '_') => {
                     it.next();
                     skip_string(&mut it);
+                    out.push(' ');
                 }
                 // `-` and `.` stay out (a PEM header starts with dashes).
                 Some(' ' | '#' | '%' | '(' | ')' | '*' | '+') => {
@@ -72,11 +76,12 @@ fn strip_str(text: &str) -> String {
                     if matches!(it.peek(), Some(n) if ('\u{30}'..='\u{7E}').contains(n)) {
                         it.next();
                     }
+                    out.push(' ');
                 }
                 // Lone ESC (end of text, line break, printable character):
-                // drop only the ESC, never the character after it, which
-                // may be the first character of a secret.
-                _ => {}
+                // becomes a space and never eats the character after it,
+                // which may be the first character of a secret.
+                _ => out.push(' '),
             },
             _ => out.push(c),
         }
@@ -84,9 +89,18 @@ fn strip_str(text: &str) -> String {
     out
 }
 
+/// Only SGR (`m`) and erase (`K`) leave no trace; every other sequence
+/// becomes one space so that it still separates a key from its value.
+fn push_unless_silent(out: &mut String, silent: bool) {
+    if !silent {
+        out.push(' ');
+    }
+}
+
 /// CSI body: parameter/intermediate bytes, then a final byte. Any other
 /// character (a line break, say) ends the sequence without being consumed.
-fn skip_csi(it: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+/// Returns true for an SGR/erase sequence (final byte `m` or `K`).
+fn skip_csi(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> bool {
     while let Some(&c) = it.peek() {
         match c {
             '\u{20}'..='\u{3F}' => {
@@ -94,11 +108,12 @@ fn skip_csi(it: &mut std::iter::Peekable<std::str::Chars<'_>>) {
             }
             '\u{40}'..='\u{7E}' => {
                 it.next();
-                return;
+                return matches!(c, 'm' | 'K');
             }
-            _ => return,
+            _ => return false,
         }
     }
+    false
 }
 
 /// String sequence body: up to `BEL` or `ESC \` (both consumed). A line
@@ -139,29 +154,32 @@ mod tests {
 
     #[test]
     fn test_osc_with_bel_and_st_is_removed() {
-        assert_eq!(strip(b"a\x1b]0;title\x07b"), "ab");
-        assert_eq!(strip(b"a\x1b]8;;http://x\x1b\\b"), "ab");
+        assert_eq!(strip(b"a\x1b]0;title\x07b"), "a b");
+        assert_eq!(strip(b"a\x1b]8;;http://x\x1b\\b"), "a b");
     }
 
     #[test]
     fn test_lone_esc_and_two_byte_sequences_are_removed() {
-        assert_eq!(strip(b"a\x1bbcd"), "abcd");
-        assert_eq!(strip(b"a\x1b"), "a");
-        assert_eq!(strip(b"a\x1b\nb"), "a\nb");
-        assert_eq!(strip(b"a\x1b(Bb"), "ab");
+        assert_eq!(strip(b"a\x1bbcd"), "a bcd");
+        assert_eq!(strip(b"a\x1b"), "a ");
+        assert_eq!(strip(b"a\x1b\nb"), "a \nb");
+        assert_eq!(strip(b"a\x1b(Bb"), "a b");
+        assert_eq!(strip("x\u{9b}gsk".as_bytes()), "x gsk");
+        assert_eq!(strip(b"x\x1b[2~gsk"), "x gsk");
+        assert_eq!(strip(b"x\x1b[@eyJ"), "x eyJ");
     }
 
     #[test]
     fn test_unterminated_sequences_are_removed_to_the_end() {
-        assert_eq!(strip(b"abc\x1b["), "abc");
-        assert_eq!(strip(b"abc\x1b[31"), "abc");
-        assert_eq!(strip(b"abc\x1b]0;title"), "abc");
+        assert_eq!(strip(b"abc\x1b["), "abc ");
+        assert_eq!(strip(b"abc\x1b[31"), "abc ");
+        assert_eq!(strip(b"abc\x1b]0;title"), "abc ");
     }
 
     #[test]
     fn test_unterminated_sequence_keeps_the_line_break() {
-        assert_eq!(strip(b"a\x1b[3\nsecret"), "a\nsecret");
-        assert_eq!(strip(b"a\x1b]0;t\r\nb"), "a\r\nb");
+        assert_eq!(strip(b"a\x1b[3\nsecret"), "a \nsecret");
+        assert_eq!(strip(b"a\x1b]0;t\r\nb"), "a \r\nb");
     }
 
     #[test]
@@ -180,22 +198,67 @@ mod tests {
     // ---- Redaction of coloured output (issue #1605) ----
 
     use crate::ai::redactor_generators::secret_snippet;
+    use crate::ai::redactor_reference::OutputRedactor as ReferenceTrait;
     use crate::ai::{DefaultOutputRedactor, OutputRedactor};
     use proptest::prelude::*;
 
+    static REDACTOR: std::sync::LazyLock<DefaultOutputRedactor> =
+        std::sync::LazyLock::new(DefaultOutputRedactor::new);
+
     fn red(text: &str) -> String {
-        DefaultOutputRedactor::new().redact_text(text)
+        REDACTOR.redact_text(text)
+    }
+
+    static REFERENCE: std::sync::LazyLock<crate::ai::redactor_reference::DefaultOutputRedactor> =
+        std::sync::LazyLock::new(crate::ai::redactor_reference::DefaultOutputRedactor::new);
+
+    #[test]
+    fn test_non_sgr_escapes_before_secrets_do_not_leak() {
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnopqrstuvwxyz";
+        let gsk = "gsk_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ";
+        let inputs = [
+            format!("x\x1b{gsk}"),
+            format!("x\u{9b}{gsk}"),
+            format!("x\x1b[2~{gsk}"),
+            format!("x\x1b]0;t\x07{gsk}"),
+            format!("x\x1b]8;;http://e\x1b\\{gsk}"),
+            format!("x\x1b[@{jwt}"),
+            "my\x1b[2~api-key: supersecret123".to_string(),
+        ];
+        for input in &inputs {
+            let out = red(input);
+            for needle in ["abcdefghijklmnop", "eyJhbGci", "supersecret123"] {
+                assert!(!out.contains(needle), "{input:?} -> {out:?}");
+            }
+        }
+    }
+
+    /// Any escape sequence (not only SGR) around or in front of a secret.
+    fn any_escape() -> impl Strategy<Value = &'static str> {
+        proptest::sample::select(vec![
+            "\x1b",
+            "\u{9b}",
+            "\x1b[2~",
+            "\x1b[@",
+            "\x1b[1;5H",
+            "\x1b]0;t\x07",
+            "\x1b]8;;http://e\x1b\\",
+            "\x1bP1$r\x1b\\",
+            "\x1b(B",
+            "\x1b[0m",
+            "\x1b[K",
+        ])
     }
 
     #[test]
     fn test_introducer_before_secret_keeps_placeholder_and_absorbs_tail() {
         assert_eq!(
             red("id \x1bAKIAIOSFODNN7EXAMPLEtailsecret99 y"),
-            "id [REDACTED] y"
+            "id  [REDACTED] y"
         );
         assert_eq!(
             red("id \u{9b}AKIAIOSFODNN7EXAMPLEtailsecret99 y"),
-            "id [REDACTED] y"
+            "id  [REDACTED] y"
         );
     }
 
@@ -289,6 +352,26 @@ mod tests {
 
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(300))]
+
+        /// Arbitrary escapes in front of and behind a snippet never leave a
+        /// secret the reference masks in the same input. (Inside a
+        /// space-free token only SGR/erase is transparent; any other
+        /// sequence becomes a space by design, see `sgr_wrapped_equals_plain`.)
+        #[test]
+        fn any_escape_never_leaks_what_reference_masks(
+            snip in secret_snippet(), a in any_escape(), c in any_escape(),
+        ) {
+            // `ESC` followed by one of `] P X ^ _ [` is by definition the
+            // start of a string/CSI sequence and swallows what follows.
+            let starts_seq = |t: &str| t.starts_with([']', 'P', 'X', '^', '_', '[']);
+            prop_assume!(!starts_seq(&snip.text));
+            let text = format!("{a}{}{c}", snip.text);
+            let reference = ReferenceTrait::redact_text(&*REFERENCE, &text);
+            let out = red(&text);
+            for secret in snip.secrets.iter().filter(|s| !reference.contains(s.as_str())) {
+                prop_assert!(!out.contains(secret.as_str()), "{secret:?} in {out:?} (input {text:?})");
+            }
+        }
 
         /// SGR-wrapped secret redacts exactly like the plain text.
         #[test]
