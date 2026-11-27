@@ -20,7 +20,7 @@ pub(crate) fn strip(data: &[u8]) -> String {
 }
 
 /// Lossy UTF-8 decoding without removing any escape sequence.
-fn decode(data: &[u8]) -> String {
+pub(crate) fn decode(data: &[u8]) -> String {
     let mut text = String::with_capacity(data.len());
     for chunk in data.utf8_chunks() {
         text.push_str(chunk.valid());
@@ -33,30 +33,11 @@ fn decode(data: &[u8]) -> String {
     text
 }
 
-/// Decodes `data` and runs `apply` before stripping escape sequences (a lone
-/// ESC would eat the first character of a following secret) and again after
-/// it (secrets split by escapes), issue #1605.
-pub(crate) fn around_strip(data: &[u8], apply: impl Fn(&mut String)) -> String {
-    let mut text = decode(data);
-    apply(&mut text);
-    if text.contains(['\u{1B}', '\u{9B}']) {
-        text = strip_text(text);
-        apply(&mut text);
-    }
-    text
-}
-
 /// Removes terminal escape sequences from already decoded text.
 pub(crate) fn strip_text(text: String) -> String {
     if !text.contains(['\u{1B}', '\u{9B}']) {
         return text;
     }
-    // An introducer right before an already inserted placeholder would
-    // otherwise form `ESC [` + `R` and eat the placeholder's start; drop
-    // only the introducer (issue #1605 review).
-    let text = text
-        .replace("\u{1B}[REDACTED]", "[REDACTED]")
-        .replace("\u{9B}[REDACTED]", "[REDACTED]");
     strip_str(&text)
 }
 
@@ -65,7 +46,14 @@ fn strip_str(text: &str) -> String {
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
         match c {
-            '\u{9B}' => skip_csi(&mut it),
+            // A bare 0x9B is dropped alone; only with a parameter byte
+            // (`0x9B 3 1 m`) is it a sequence, so a secret's first
+            // character is never taken for the final byte.
+            '\u{9B}' => {
+                if matches!(it.peek(), Some(n) if ('\u{20}'..='\u{3F}').contains(n)) {
+                    skip_csi(&mut it);
+                }
+            }
             '\u{1B}' => match it.peek().copied() {
                 Some('[') => {
                     it.next();
@@ -75,19 +63,19 @@ fn strip_str(text: &str) -> String {
                     it.next();
                     skip_string(&mut it);
                 }
-                Some(n) if ('\u{20}'..='\u{2F}').contains(&n) => {
+                // `-` and `.` stay out (a PEM header starts with dashes).
+                Some(' ' | '#' | '%' | '(' | ')' | '*' | '+') => {
                     // Intermediates (`ESC ( B`), then one final byte.
-                    while matches!(it.peek(), Some(n) if ('\u{20}'..='\u{2F}').contains(n)) {
+                    while matches!(it.peek(), Some(' ' | '#' | '%' | '(' | ')' | '*' | '+')) {
                         it.next();
                     }
                     if matches!(it.peek(), Some(n) if ('\u{30}'..='\u{7E}').contains(n)) {
                         it.next();
                     }
                 }
-                Some(n) if ('\u{30}'..='\u{7E}').contains(&n) => {
-                    it.next();
-                }
-                // Lone ESC (end of text, line break, other byte).
+                // Lone ESC (end of text, line break, printable character):
+                // drop only the ESC, never the character after it, which
+                // may be the first character of a secret.
                 _ => {}
             },
             _ => out.push(c),
@@ -142,12 +130,6 @@ mod tests {
     use super::strip;
 
     #[test]
-    fn test_introducer_before_placeholder_keeps_placeholder() {
-        assert_eq!(strip(b"a\x1b[REDACTED]b"), "a[REDACTED]b");
-        assert_eq!(strip(b"a\x9b[REDACTED]b"), "a[REDACTED]b");
-    }
-
-    #[test]
     fn test_sgr_and_erase_are_removed() {
         assert_eq!(
             strip(b"\x1b[01;31m\x1b[Kpassword \x1b[m\x1b[K= hunter2"),
@@ -163,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_lone_esc_and_two_byte_sequences_are_removed() {
-        assert_eq!(strip(b"a\x1bb"), "a");
+        assert_eq!(strip(b"a\x1bbcd"), "abcd");
         assert_eq!(strip(b"a\x1b"), "a");
         assert_eq!(strip(b"a\x1b\nb"), "a\nb");
         assert_eq!(strip(b"a\x1b(Bb"), "ab");
@@ -214,6 +196,22 @@ mod tests {
         assert_eq!(
             red("id \u{9b}AKIAIOSFODNN7EXAMPLEtailsecret99 y"),
             "id [REDACTED] y"
+        );
+    }
+
+    #[test]
+    fn test_sgr_around_secret_leaves_exact_placeholder() {
+        assert_eq!(
+            red("x \x1b[31mAKIAIOSFODNN7EXAMPLE\x1b[0m y"),
+            "x [REDACTED] y"
+        );
+    }
+
+    #[test]
+    fn test_sgr_coloured_tail_is_absorbed() {
+        assert_eq!(
+            red("k AKIAIOSFODNN7EXAMPLE\x1b[1mtailsecret99"),
+            "k [REDACTED]"
         );
     }
 
@@ -291,6 +289,16 @@ mod tests {
 
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(300))]
+
+        /// SGR-wrapped secret redacts exactly like the plain text.
+        #[test]
+        fn sgr_wrapped_equals_plain(snip in secret_snippet(), a in sgr(), c in sgr()) {
+            let mut wrapped = snip.text.clone();
+            for secret in &snip.secrets {
+                wrapped = wrapped.replace(secret.as_str(), &format!("{a}{secret}{c}"));
+            }
+            prop_assert_eq!(red(&wrapped), red(&snip.text), "input {:?}", wrapped);
+        }
 
         /// Random SGR around key, separator and value never lets a secret
         /// through.
