@@ -26,6 +26,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 app-shell = { workspace = true }
 tauri = { workspace = true }
+# Issue #1607: `generate_context!` expands to `serde_json::json!` once
+# `tauri.conf.json` has a `plugins` section.
+serde_json = { workspace = true }
 # `tauri-build`'s ACL-/Capability-Auflösung (in `build.rs`, läuft für dieses
 # Binary-Crate) scannt nur die eigenen, direkten Abhängigkeiten dieser
 # Crate nach Plugin-Berechtigungen — eine rein transitive Abhängigkeit über
@@ -59,6 +62,9 @@ tauri-plugin-android-host = { workspace = true }
 # Dieselbe Fassung, die `app-shell` ohnehin nutzt, keine neue Crate im Baum.
 serde_json = { workspace = true }
 toml = { workspace = true }
+# Issue #1607: `tests/opener_dotfile_scope.rs` builds a `tauri::fs::Scope`
+# against the mock runtime.
+tauri = { workspace = true, features = ["test"] }
 
 [lints]
 workspace = true
