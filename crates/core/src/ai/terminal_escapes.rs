@@ -603,30 +603,17 @@ mod tests {
             }
         }
 
-        /// Escapes inserted at arbitrary char positions (also inside a secret)
-        /// never leave a literally present secret the reference masks.
+        /// Escapes inserted at any char position (also inside or before a secret)
+        /// never leave a literally present secret the reference masks in the
+        /// same escaped input.
         #[test]
         fn escapes_at_random_positions_never_leak(
             snip in secret_snippet(),
             inserts in proptest::collection::vec((any::<usize>(), any_escape()), 1..6),
         ) {
             let mut chars: Vec<char> = snip.text.chars().collect();
-            // Allowed positions: inside a secret or right after it, or at the
-            // end (an escape right before it is a known gap, see the PR). An escape swallows a following character, so one in the
-            // context (`account`, `-b`) would destroy the context, not leak.
-            let mut allowed = vec![false; chars.len() + 1];
-            for secret in &snip.secrets {
-                let mut from = 0;
-                while let Some(off) = snip.text[from..].find(secret.as_str()) {
-                    let start = snip.text[..from + off].chars().count();
-                    for slot in &mut allowed[start + 1..=start + secret.chars().count()] {
-                        *slot = true;
-                    }
-                    from += off + secret.len();
-                }
-            }
-            allowed[chars.len()] = true;
-            let slots: Vec<usize> = (0..=chars.len()).filter(|i| allowed[*i]).collect();
+            // Any insertion slot, including before secrets and in context words.
+            let slots: Vec<usize> = (0..=chars.len()).collect();
             // Insert from the back so earlier positions stay valid.
             let mut picks: Vec<(usize, &str)> =
                 inserts.iter().map(|(p, e)| (slots[p % slots.len()], *e)).collect();
@@ -637,7 +624,7 @@ mod tests {
                 }
             }
             let text: String = chars.into_iter().collect();
-            let reference = ReferenceTrait::redact_text(&*REFERENCE, &snip.text);
+            let reference = ReferenceTrait::redact_text(&*REFERENCE, &text);
             let out = red(&text);
             for secret in snip
                 .secrets
