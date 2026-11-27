@@ -30,6 +30,7 @@ mod redactor_property;
 mod redactor_reference;
 mod rejection;
 mod second_opinion;
+mod terminal_escapes;
 mod types;
 
 #[cfg(test)]

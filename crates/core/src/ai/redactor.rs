@@ -1409,12 +1409,9 @@ impl OutputRedactor for DefaultOutputRedactor {
 /// erkannt" dem Fail-safe-Prinzip (Spec 0002 Abschnitt 1) angemessener als
 /// die Redaction bei Nicht-UTF-8-Output ganz zu überspringen.
 fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
-    let mut text = String::from_utf8_lossy(data).into_owned();
-    for rule in patterns {
-        if rule.regex.is_match(&text) {
-            text = rule.regex.replace_all(&text, rule.replacement).into_owned();
-        }
-    }
+    let rules = patterns.iter().map(|r| (&r.regex, r.replacement));
+    // Issue #1605: escape sequences are handled in `terminal_escapes`.
+    let text = super::terminal_escapes::redact_decoded(data, rules, REDACTED_PLACEHOLDER);
     absorb_fragments_next_to_placeholders(&text).into_bytes()
 }
 
