@@ -48,6 +48,27 @@ pub(crate) fn has_introducer(text: &str) -> bool {
 /// Redaction rules: pattern and replacement (as for `Regex::replace_all`).
 pub(crate) type Rules<'a> = [(&'a regex::Regex, &'a str)];
 
+/// Decodes `data` and applies the rules in order. Without an escape
+/// introducer that is exactly the plain patterns, byte for byte; otherwise
+/// see [`redact_escaped`].
+pub(crate) fn redact_decoded<'a>(
+    data: &[u8],
+    rules: impl Iterator<Item = (&'a regex::Regex, &'a str)>,
+    placeholder: &str,
+) -> String {
+    let mut text = decode(data);
+    if has_introducer(&text) {
+        let rules: Vec<_> = rules.collect();
+        return redact_escaped(&text, &rules, placeholder);
+    }
+    for (re, replacement) in rules {
+        if re.is_match(&text) {
+            text = re.replace_all(&text, replacement).into_owned();
+        }
+    }
+    text
+}
+
 /// Text after the rules ran, with the origin of every byte.
 struct Tracked {
     text: String,
