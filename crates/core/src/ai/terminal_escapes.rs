@@ -2,9 +2,10 @@
 //! Spec 0068 Part 1).
 //!
 //! Colour and cursor codes between a key and its value, inside a PEM header
-//! or in front of a token break every redaction pattern. [`strip`] removes
-//! them first, in one place, so every caller of the redactor sees stripped
-//! text. Removed: CSI (`ESC [` … final byte `0x40–0x7E`, also the 8-bit
+//! or in front of a token break every redaction pattern. The redactor masks
+//! the union of the patterns on the raw text and on the text with the
+//! sequences removed ([`redact_escaped`]); the output never carries an
+//! escape sequence. Removed: CSI (`ESC [` … final byte `0x40–0x7E`, also the 8-bit
 //! `0x9B` form), string sequences (OSC `ESC ]`, DCS, SOS, PM, APC up to
 //! `BEL` or `ESC \`), other two- and three-byte `ESC` sequences and a lone
 //! `ESC`. SGR (`m`) and erase (`K`) leave no trace; every other sequence
@@ -17,7 +18,11 @@
 /// returned unchanged.
 #[cfg(test)]
 pub(crate) fn strip(data: &[u8]) -> String {
-    strip_text(decode(data))
+    let text = decode(data);
+    if !has_introducer(&text) {
+        return text;
+    }
+    strip_tracked(&text).text
 }
 
 /// Lossy UTF-8 decoding without removing any escape sequence.
@@ -34,105 +39,211 @@ pub(crate) fn decode(data: &[u8]) -> String {
     text
 }
 
-/// Removes terminal escape sequences from already decoded text.
-#[cfg(test)]
-pub(crate) fn strip_text(text: String) -> String {
-    if !text.contains(['\u{1B}', '\u{9B}']) {
-        return text;
+/// True if `text` contains an escape introducer (`ESC` or `0x9B`). Text
+/// without one takes the plain redaction path, byte for byte as before.
+pub(crate) fn has_introducer(text: &str) -> bool {
+    text.contains(['\u{1B}', '\u{9B}'])
+}
+
+/// Redaction rules: pattern and replacement (as for `Regex::replace_all`).
+pub(crate) type Rules<'a> = [(&'a regex::Regex, &'a str)];
+
+/// Text after the rules ran, with the origin of every byte.
+struct Tracked {
+    text: String,
+    /// Per byte of `text`: the byte range of the input it stems from (a
+    /// replacement carries the range of the whole match).
+    prov: Vec<(usize, usize)>,
+    /// Per byte of `text`: produced by a replacement.
+    replaced: Vec<bool>,
+}
+
+/// Applies the rules in order, exactly like repeated `replace_all`, and
+/// records where every output byte comes from.
+fn track(input: &str, rules: &Rules<'_>) -> Tracked {
+    let mut t = Tracked {
+        text: input.to_string(),
+        prov: (0..input.len()).map(|i| (i, i + 1)).collect(),
+        replaced: vec![false; input.len()],
+    };
+    for (re, replacement) in rules {
+        if !re.is_match(&t.text) {
+            continue;
+        }
+        let mut text = String::with_capacity(t.text.len());
+        let mut prov = Vec::with_capacity(t.prov.len());
+        let mut replaced = Vec::with_capacity(t.replaced.len());
+        let mut last = 0;
+        for caps in re.captures_iter(&t.text) {
+            let Some(m) = caps.get(0) else { continue };
+            text.push_str(&t.text[last..m.start()]);
+            prov.extend_from_slice(&t.prov[last..m.start()]);
+            replaced.extend_from_slice(&t.replaced[last..m.start()]);
+            let range = t.prov[m.start()..m.end()]
+                .iter()
+                .fold((usize::MAX, 0), |(lo, hi), &(l, h)| (lo.min(l), hi.max(h)));
+            let range = if m.is_empty() { (0, 0) } else { range };
+            let mut dst = String::new();
+            caps.expand(replacement, &mut dst);
+            prov.extend(std::iter::repeat_n(range, dst.len()));
+            replaced.extend(std::iter::repeat_n(true, dst.len()));
+            text.push_str(&dst);
+            last = m.end();
+        }
+        text.push_str(&t.text[last..]);
+        prov.extend_from_slice(&t.prov[last..]);
+        replaced.extend_from_slice(&t.replaced[last..]);
+        t = Tracked {
+            text,
+            prov,
+            replaced,
+        };
     }
-    strip_str(&text, ' ')
+    t
 }
 
-/// Placeholder for a removed non-SGR sequence while the patterns run: not a
-/// word character and not whitespace, so a secret value is not cut short by
-/// an escape inside it (private-use code point).
-pub(crate) const SEPARATOR: char = '\u{E000}';
-
-/// Decodes and strips `data` for the redaction patterns (see [`SEPARATOR`]).
-pub(crate) fn strip_for_matching(data: &[u8]) -> String {
-    strip_text_for_matching(decode(data))
-}
-
-/// Turns leftover [`SEPARATOR`]s (after redaction) into one space each.
-pub(crate) fn restore_separators(text: &str) -> String {
-    text.replace(SEPARATOR, " ")
-}
-
-/// Like [`strip_text`], but removed non-SGR sequences leave [`SEPARATOR`];
-/// the caller turns leftovers into spaces after redaction.
-fn strip_text_for_matching(text: String) -> String {
-    if !text.contains(['\u{1B}', '\u{9B}']) {
-        return text;
+/// Redacts decoded text that contains an escape introducer (issue #1605).
+///
+/// The result masks the union of two views: (a) the patterns on the raw
+/// text, as before escape handling existed, so nothing masked there can
+/// leak; (b) the patterns on the stripped text, which finds secrets that an
+/// escape sequence cut apart. Matches of (a) are mapped onto the stripped
+/// text by offsets; a match that touches part of a removed sequence masks
+/// the whole stripped span it touches. The output carries no escape
+/// sequence.
+pub(crate) fn redact_escaped(raw: &str, rules: &Rules<'_>, placeholder: &str) -> String {
+    let raw_pass = track(raw, rules);
+    let mut spans: Vec<(usize, usize)> = raw_pass
+        .prov
+        .iter()
+        .zip(&raw_pass.replaced)
+        .filter(|(_, r)| **r)
+        .map(|(p, _)| *p)
+        .filter(|(lo, hi)| lo < hi)
+        .collect();
+    spans.sort_unstable();
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for (lo, hi) in spans {
+        match merged.last_mut() {
+            Some(last) if lo <= last.1 => last.1 = last.1.max(hi),
+            _ => merged.push((lo, hi)),
+        }
     }
-    strip_str(&text, SEPARATOR)
-}
+    let touches = |(lo, hi): (usize, usize)| {
+        let i = merged.partition_point(|s| s.1 <= lo);
+        merged.get(i).is_some_and(|s| s.0 < hi)
+    };
 
-fn strip_str(text: &str, sep: char) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut it = text.chars().peekable();
-    while let Some(c) = it.next() {
-        match c {
-            // `0x9B` followed by a parameter byte is a CSI; a bare one is
-            // only the introducer, so a secret's first character is never
-            // taken for the final byte.
-            '\u{9B}' => {
-                if matches!(it.peek(), Some(n) if ('\u{20}'..='\u{3F}').contains(n)) {
-                    push_unless_silent(&mut out, sep, skip_csi(&mut it));
-                } else {
-                    out.push(sep);
-                }
+    let stripped = strip_tracked(raw);
+    let masked: Vec<bool> = stripped.raw.iter().map(|r| touches(*r)).collect();
+    let pass = track(&stripped.text, rules);
+
+    let mut out = String::with_capacity(pass.text.len());
+    let mut in_run = false;
+    for (b, c) in pass.text.char_indices() {
+        let extra = !pass.replaced[b] && masked[pass.prov[b].0];
+        if extra {
+            if !in_run && !out.ends_with(placeholder) {
+                out.push_str(placeholder);
             }
-            '\u{1B}' => match it.peek().copied() {
-                Some('[') => {
-                    it.next();
-                    push_unless_silent(&mut out, sep, skip_csi(&mut it));
-                }
-                Some(']' | 'P' | 'X' | '^' | '_') => {
-                    it.next();
-                    skip_string(&mut it);
-                    out.push(sep);
-                }
-                // `-` and `.` stay out (a PEM header starts with dashes).
-                Some(' ' | '#' | '%' | '(' | ')' | '*' | '+') => {
-                    // Intermediates (`ESC ( B`), then one final byte.
-                    while matches!(it.peek(), Some(' ' | '#' | '%' | '(' | ')' | '*' | '+')) {
-                        it.next();
-                    }
-                    if matches!(it.peek(), Some(n) if ('\u{30}'..='\u{7E}').contains(n)) {
-                        it.next();
-                    }
-                    out.push(sep);
-                }
-                // Lone ESC (end of text, line break, printable character):
-                // becomes a space and never eats the character after it,
-                // which may be the first character of a secret.
-                _ => out.push(sep),
-            },
-            _ => out.push(c),
+            in_run = true;
+        } else {
+            out.push(c);
+            in_run = false;
         }
     }
     out
 }
 
-/// Only SGR (`m`) and erase (`K`) leave no trace; every other sequence
-/// becomes one space so that it still separates a key from its value.
-fn push_unless_silent(out: &mut String, sep: char, silent: bool) {
-    if !silent {
-        out.push(sep);
+/// Stripped text with the raw byte range of every output byte.
+struct Stripped {
+    text: String,
+    raw: Vec<(usize, usize)>,
+}
+
+type Cs = [(usize, char)];
+
+fn strip_tracked(text: &str) -> Stripped {
+    let cs: Vec<(usize, char)> = text.char_indices().collect();
+    let end_of = |k: usize| cs.get(k).map_or(text.len(), |x| x.0);
+    let mut out = Stripped {
+        text: String::with_capacity(text.len()),
+        raw: Vec::with_capacity(text.len()),
+    };
+    // A removed sequence becomes one space carrying its whole raw range.
+    let sep = |out: &mut Stripped, start: usize, end: usize| {
+        out.text.push(' ');
+        out.raw.push((start, end));
+    };
+    let mut i = 0;
+    while i < cs.len() {
+        let (start, c) = cs[i];
+        i += 1;
+        match c {
+            // `0x9B` followed by a parameter byte is a CSI; a bare one is
+            // only the introducer, so a secret's first character is never
+            // taken for the final byte.
+            '\u{9B}' => {
+                if matches!(cs.get(i), Some(&(_, n)) if ('\u{20}'..='\u{3F}').contains(&n)) {
+                    if !skip_csi(&cs, &mut i) {
+                        sep(&mut out, start, end_of(i));
+                    }
+                } else {
+                    sep(&mut out, start, end_of(i));
+                }
+            }
+            '\u{1B}' => match cs.get(i).map(|x| x.1) {
+                Some('[') => {
+                    i += 1;
+                    if !skip_csi(&cs, &mut i) {
+                        sep(&mut out, start, end_of(i));
+                    }
+                }
+                Some(']' | 'P' | 'X' | '^' | '_') => {
+                    i += 1;
+                    skip_string(&cs, &mut i);
+                    sep(&mut out, start, end_of(i));
+                }
+                // `-` and `.` stay out (a PEM header starts with dashes).
+                Some(' ' | '#' | '%' | '(' | ')' | '*' | '+') => {
+                    // Intermediates (`ESC ( B`), then one final byte.
+                    while matches!(
+                        cs.get(i),
+                        Some(&(_, ' ' | '#' | '%' | '(' | ')' | '*' | '+'))
+                    ) {
+                        i += 1;
+                    }
+                    if matches!(cs.get(i), Some(&(_, n)) if ('\u{30}'..='\u{7E}').contains(&n)) {
+                        i += 1;
+                    }
+                    sep(&mut out, start, end_of(i));
+                }
+                // Lone ESC (end of text, line break, printable character):
+                // becomes a space and never eats the character after it,
+                // which may be the first character of a secret.
+                _ => sep(&mut out, start, end_of(i)),
+            },
+            _ => {
+                out.text.push(c);
+                let end = end_of(i);
+                out.raw.extend((start..end).map(|b| (b, b + 1)));
+            }
+        }
     }
+    out
 }
 
 /// CSI body: parameter/intermediate bytes, then a final byte. Any other
 /// character (a line break, say) ends the sequence without being consumed.
-/// Returns true for an SGR/erase sequence (final byte `m` or `K`).
-fn skip_csi(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> bool {
-    while let Some(&c) = it.peek() {
+/// Returns true for an SGR/erase sequence (final byte `m` or `K`), which
+/// leaves no trace; every other sequence becomes one space so that it still
+/// separates a key from its value.
+fn skip_csi(cs: &Cs, i: &mut usize) -> bool {
+    while let Some(&(_, c)) = cs.get(*i) {
         match c {
-            '\u{20}'..='\u{3F}' => {
-                it.next();
-            }
+            '\u{20}'..='\u{3F}' => *i += 1,
             '\u{40}'..='\u{7E}' => {
-                it.next();
+                *i += 1;
                 return matches!(c, 'm' | 'K');
             }
             _ => return false,
@@ -143,24 +254,22 @@ fn skip_csi(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> bool {
 
 /// String sequence body: up to `BEL` or `ESC \` (both consumed). A line
 /// break ends it unconsumed; so does an `ESC` not followed by `\`.
-fn skip_string(it: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    while let Some(&c) = it.peek() {
+fn skip_string(cs: &Cs, i: &mut usize) {
+    while let Some(&(_, c)) = cs.get(*i) {
         match c {
             '\u{7}' => {
-                it.next();
+                *i += 1;
                 return;
             }
             '\u{1B}' => {
-                it.next();
-                if it.peek() == Some(&'\\') {
-                    it.next();
+                *i += 1;
+                if cs.get(*i).map(|x| x.1) == Some('\\') {
+                    *i += 1;
                 }
                 return;
             }
             '\n' | '\r' => return,
-            _ => {
-                it.next();
-            }
+            _ => *i += 1,
         }
     }
 }
@@ -271,7 +380,8 @@ mod tests {
             ("token: abcd\x1b]0;t\x07efghsecretvalue", "[REDACTED]"),
             (
                 "https://user:\x1b[2~hunter2pass@host/x",
-                "https://user:[REDACTED]@host/x",
+                // The raw view masks the whole URL, so the union does too.
+                "[REDACTED]",
             ),
         ] {
             assert_eq!(red(input), want, "{input:?}");
@@ -292,7 +402,46 @@ mod tests {
             "\x1b(B",
             "\x1b[0m",
             "\x1b[K",
+            "\x1b ",
+            "\x1b(",
+            "\x1b[",
+            "\x1b[31;",
+            "\x1b[ ",
+            "\u{9b} ",
         ])
+    }
+
+    #[test]
+    fn test_incomplete_sequence_before_secret_leaks_nothing() {
+        let tok = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+        let akia = "AKIAIOSFODNN7EXAMPLE";
+        let cases: Vec<(String, &str)> = vec![
+            (format!("x\x1b {tok}"), "abcdefghijkl"),
+            (format!("x\x1b({tok}"), "abcdefghijkl"),
+            (format!("x \x1b({akia}"), "IOSFODNN7"),
+            (format!("x \x1b[{akia}"), "IOSFODNN7"),
+            (format!("x\x1b[{tok}"), "abcdefghijkl"),
+            ("\x1b[31;password=hunter2secret".to_string(), "hunter2"),
+            ("\x1b[ password=hunter2secret".to_string(), "hunter2"),
+            ("\u{9b} password=hunter2secret".to_string(), "hunter2"),
+            ("\u{9b} password=hunter2secret".to_string(), "assword"),
+        ];
+        for (input, secret) in cases {
+            let out = red(&input);
+            assert!(!out.contains(secret), "{input:?} -> {out:?}");
+            assert!(out.contains("[REDACTED]"), "{input:?} -> {out:?}");
+        }
+        assert_eq!(
+            red("x\x1b ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
+            "[REDACTED]"
+        );
+    }
+
+    #[test]
+    fn test_private_use_characters_without_escape_are_unchanged() {
+        let s = "\u{E000} icon \u{F101} file \u{E0B0}";
+        assert_eq!(red(s), s);
+        assert_eq!(red("\u{E000}password=hunter2secret"), "\u{E000}[REDACTED]");
     }
 
     #[test]
@@ -398,18 +547,12 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(300))]
 
-        /// Arbitrary escapes in front of and behind a snippet never leave a
-        /// secret the reference masks in the same input. (Inside a
-        /// space-free token only SGR/erase is transparent; any other
-        /// sequence becomes a space by design, see `sgr_wrapped_equals_plain`.)
+        /// Arbitrary (also incomplete) escapes in front of and behind a snippet
+        /// never leave a secret the reference masks in the same input.
         #[test]
         fn any_escape_never_leaks_what_reference_masks(
             snip in secret_snippet(), a in any_escape(), c in any_escape(),
         ) {
-            // `ESC` followed by one of `] P X ^ _ [` is by definition the
-            // start of a string/CSI sequence and swallows what follows.
-            let starts_seq = |t: &str| t.starts_with([']', 'P', 'X', '^', '_', '[']);
-            prop_assume!(!starts_seq(&snip.text));
             let mut text = snip.text.clone();
             for secret in &snip.secrets {
                 text = text.replace(secret.as_str(), &format!("{a}{secret}{c}"));

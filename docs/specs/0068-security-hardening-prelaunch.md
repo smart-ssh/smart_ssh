@@ -54,8 +54,16 @@ Regeln dafür:
   anderem Endbyte, OSC/DCS/APC …, ein einzelnes `ESC` oder `0x9B`) wird durch
   genau ein Leerzeichen ersetzt, damit sie Schlüssel und Wert weiterhin
   trennt und nie ein folgendes Zeichen verschluckt. Text ohne `ESC` bleibt
-  unverändert, Zeilenumbrüche bleiben erhalten. Das gilt auch für die
+  unverändert (auch Zeichen aus dem privaten Unicode-Bereich, etwa
+  Icon-Fonts), Zeilenumbrüche bleiben erhalten. Das gilt auch für die
   Live-Ausgabe.
+- **Nie weniger maskiert als ohne Escape-Behandlung.** Enthält die Ausgabe
+  eine Escape-Einleitung, gilt die Vereinigung zweier Sichten: die Muster auf
+  dem Rohtext (wie ohne Escape-Behandlung) und auf dem bereinigten Text. Was
+  eine Sicht trifft, ist im Ergebnis maskiert; trifft ein Rohtext-Treffer nur
+  einen Teil einer entfernten Folge, wird der ganze berührte Abschnitt des
+  bereinigten Textes maskiert. So bleibt auch ein Geheimnis direkt hinter einer
+  unvollständigen Folge (`ESC␠`, `ESC(`, `ESC[31;`) nicht im Klartext.
 
 ## Teil 2 — Lesebefehle auf Secret-Pfade verlangen Bestätigung
 

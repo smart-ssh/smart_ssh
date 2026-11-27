@@ -1409,14 +1409,22 @@ impl OutputRedactor for DefaultOutputRedactor {
 /// erkannt" dem Fail-safe-Prinzip (Spec 0002 Abschnitt 1) angemessener als
 /// die Redaction bei Nicht-UTF-8-Output ganz zu überspringen.
 fn redact_bytes(data: &[u8], patterns: &[PatternRule]) -> Vec<u8> {
-    let mut text = super::terminal_escapes::strip_for_matching(data); // #1605
+    let text = super::terminal_escapes::decode(data);
+    // Issue #1605: with an escape introducer, mask the union of the raw and
+    // the stripped view; without one, exactly the plain patterns.
+    if super::terminal_escapes::has_introducer(&text) {
+        let rules: Vec<(&Regex, &str)> =
+            patterns.iter().map(|r| (&r.regex, r.replacement)).collect();
+        let masked = super::terminal_escapes::redact_escaped(&text, &rules, REDACTED_PLACEHOLDER);
+        return absorb_fragments_next_to_placeholders(&masked).into_bytes();
+    }
+    let mut text = text;
     for rule in patterns {
         if rule.regex.is_match(&text) {
             text = rule.regex.replace_all(&text, rule.replacement).into_owned();
         }
     }
-    super::terminal_escapes::restore_separators(&absorb_fragments_next_to_placeholders(&text))
-        .into_bytes()
+    absorb_fragments_next_to_placeholders(&text).into_bytes()
 }
 
 /// Spec 0068 (dritte Review-Runde, ERHÖHT): hat ein Muster nur einen Teil
