@@ -48,9 +48,19 @@ pub(crate) fn strip_text(text: String) -> String {
 /// an escape inside it (private-use code point).
 pub(crate) const SEPARATOR: char = '\u{E000}';
 
+/// Decodes and strips `data` for the redaction patterns (see [`SEPARATOR`]).
+pub(crate) fn strip_for_matching(data: &[u8]) -> String {
+    strip_text_for_matching(decode(data))
+}
+
+/// Turns leftover [`SEPARATOR`]s (after redaction) into one space each.
+pub(crate) fn restore_separators(text: &str) -> String {
+    text.replace(SEPARATOR, " ")
+}
+
 /// Like [`strip_text`], but removed non-SGR sequences leave [`SEPARATOR`];
 /// the caller turns leftovers into spaces after redaction.
-pub(crate) fn strip_text_for_matching(text: String) -> String {
+fn strip_text_for_matching(text: String) -> String {
     if !text.contains(['\u{1B}', '\u{9B}']) {
         return text;
     }
