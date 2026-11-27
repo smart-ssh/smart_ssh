@@ -4,6 +4,8 @@
 //! matches a component starting with `.`. `tauri.conf.json` switches that off
 //! for the opener plugin; the scope itself stays the edit-session folder.
 
+#![allow(clippy::unwrap_used)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::test::{mock_builder, mock_context, noop_assets};
