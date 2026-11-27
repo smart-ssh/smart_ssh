@@ -35,14 +35,29 @@ pub(crate) fn decode(data: &[u8]) -> String {
 }
 
 /// Removes terminal escape sequences from already decoded text.
+#[cfg(test)]
 pub(crate) fn strip_text(text: String) -> String {
     if !text.contains(['\u{1B}', '\u{9B}']) {
         return text;
     }
-    strip_str(&text)
+    strip_str(&text, ' ')
 }
 
-fn strip_str(text: &str) -> String {
+/// Placeholder for a removed non-SGR sequence while the patterns run: not a
+/// word character and not whitespace, so a secret value is not cut short by
+/// an escape inside it (private-use code point).
+pub(crate) const SEPARATOR: char = '\u{E000}';
+
+/// Like [`strip_text`], but removed non-SGR sequences leave [`SEPARATOR`];
+/// the caller turns leftovers into spaces after redaction.
+pub(crate) fn strip_text_for_matching(text: String) -> String {
+    if !text.contains(['\u{1B}', '\u{9B}']) {
+        return text;
+    }
+    strip_str(&text, SEPARATOR)
+}
+
+fn strip_str(text: &str, sep: char) -> String {
     let mut out = String::with_capacity(text.len());
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
@@ -52,20 +67,20 @@ fn strip_str(text: &str) -> String {
             // taken for the final byte.
             '\u{9B}' => {
                 if matches!(it.peek(), Some(n) if ('\u{20}'..='\u{3F}').contains(n)) {
-                    push_unless_silent(&mut out, skip_csi(&mut it));
+                    push_unless_silent(&mut out, sep, skip_csi(&mut it));
                 } else {
-                    out.push(' ');
+                    out.push(sep);
                 }
             }
             '\u{1B}' => match it.peek().copied() {
                 Some('[') => {
                     it.next();
-                    push_unless_silent(&mut out, skip_csi(&mut it));
+                    push_unless_silent(&mut out, sep, skip_csi(&mut it));
                 }
                 Some(']' | 'P' | 'X' | '^' | '_') => {
                     it.next();
                     skip_string(&mut it);
-                    out.push(' ');
+                    out.push(sep);
                 }
                 // `-` and `.` stay out (a PEM header starts with dashes).
                 Some(' ' | '#' | '%' | '(' | ')' | '*' | '+') => {
@@ -76,12 +91,12 @@ fn strip_str(text: &str) -> String {
                     if matches!(it.peek(), Some(n) if ('\u{30}'..='\u{7E}').contains(n)) {
                         it.next();
                     }
-                    out.push(' ');
+                    out.push(sep);
                 }
                 // Lone ESC (end of text, line break, printable character):
                 // becomes a space and never eats the character after it,
                 // which may be the first character of a secret.
-                _ => out.push(' '),
+                _ => out.push(sep),
             },
             _ => out.push(c),
         }
@@ -91,9 +106,9 @@ fn strip_str(text: &str) -> String {
 
 /// Only SGR (`m`) and erase (`K`) leave no trace; every other sequence
 /// becomes one space so that it still separates a key from its value.
-fn push_unless_silent(out: &mut String, silent: bool) {
+fn push_unless_silent(out: &mut String, sep: char, silent: bool) {
     if !silent {
-        out.push(' ');
+        out.push(sep);
     }
 }
 
@@ -225,11 +240,31 @@ mod tests {
             format!("x\x1b[@{jwt}"),
             "my\x1b[2~api-key: supersecret123".to_string(),
         ];
-        for input in &inputs {
-            let out = red(input);
-            for needle in ["abcdefghijklmnop", "eyJhbGci", "supersecret123"] {
-                assert!(!out.contains(needle), "{input:?} -> {out:?}");
-            }
+        let expected = [
+            "x [REDACTED]",
+            "x [REDACTED]",
+            "x [REDACTED]",
+            "x [REDACTED]",
+            "x [REDACTED]",
+            "x [REDACTED]",
+            "my [REDACTED]",
+        ];
+        for (input, want) in inputs.iter().zip(expected) {
+            assert_eq!(red(input), want, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn test_non_sgr_escape_inside_secret_value_does_not_cut_it() {
+        for (input, want) in [
+            ("password=hun\x1b[2~ter2secret", "[REDACTED]"),
+            ("token: abcd\x1b]0;t\x07efghsecretvalue", "[REDACTED]"),
+            (
+                "https://user:\x1b[2~hunter2pass@host/x",
+                "https://user:[REDACTED]@host/x",
+            ),
+        ] {
+            assert_eq!(red(input), want, "{input:?}");
         }
     }
 
@@ -365,7 +400,11 @@ mod tests {
             // start of a string/CSI sequence and swallows what follows.
             let starts_seq = |t: &str| t.starts_with([']', 'P', 'X', '^', '_', '[']);
             prop_assume!(!starts_seq(&snip.text));
-            let text = format!("{a}{}{c}", snip.text);
+            let mut text = snip.text.clone();
+            for secret in &snip.secrets {
+                text = text.replace(secret.as_str(), &format!("{a}{secret}{c}"));
+            }
+            let text = format!("{a}{text}{c}");
             let reference = ReferenceTrait::redact_text(&*REFERENCE, &text);
             let out = red(&text);
             for secret in snip.secrets.iter().filter(|s| !reference.contains(s.as_str())) {
