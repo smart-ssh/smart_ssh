@@ -30,11 +30,18 @@ pub(crate) fn decode(data: &[u8]) -> String {
     let mut text = String::with_capacity(data.len());
     for chunk in data.utf8_chunks() {
         text.push_str(chunk.valid());
-        for b in chunk.invalid() {
-            // A raw 0x9B is the 8-bit CSI introducer; it cannot be part of
-            // valid UTF-8 here. Keep it distinguishable from U+FFFD.
-            text.push(if *b == 0x9B { '\u{9B}' } else { '\u{FFFD}' });
+        let invalid = chunk.invalid();
+        if invalid.is_empty() {
+            continue;
         }
+        // One U+FFFD per invalid sequence, as `from_utf8_lossy`. A raw 0x9B
+        // is the 8-bit CSI introducer (a lone continuation byte, so its own
+        // chunk); keep it distinguishable from U+FFFD.
+        text.push(if invalid == [0x9B] {
+            '\u{9B}'
+        } else {
+            '\u{FFFD}'
+        });
     }
     text
 }
@@ -350,6 +357,23 @@ mod tests {
         assert_eq!(strip(b"a\xffb"), "a\u{FFFD}b");
     }
 
+    #[test]
+    fn test_decode_matches_lossy_without_escape() {
+        for data in [
+            &b"abc\xE2\x82 def"[..],
+            b"\xF0\x9F\x98",
+            b"a\xffb\xC3",
+            b"\xE2\x82\xE2\x82\xAC",
+        ] {
+            assert_eq!(
+                super::decode(data),
+                String::from_utf8_lossy(data),
+                "{data:?}"
+            );
+        }
+        assert_eq!(super::decode(b"x\x9by"), "x\u{9b}y");
+    }
+
     // ---- Redaction of coloured output (issue #1605) ----
 
     use crate::ai::redactor_generators::secret_snippet;
@@ -437,25 +461,18 @@ mod tests {
         let tok = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
         let akia = "AKIAIOSFODNN7EXAMPLE";
         let cases: Vec<(String, &str)> = vec![
-            (format!("x\x1b {tok}"), "abcdefghijkl"),
-            (format!("x\x1b({tok}"), "abcdefghijkl"),
-            (format!("x \x1b({akia}"), "IOSFODNN7"),
-            (format!("x \x1b[{akia}"), "IOSFODNN7"),
-            (format!("x\x1b[{tok}"), "abcdefghijkl"),
-            ("\x1b[31;password=hunter2secret".to_string(), "hunter2"),
-            ("\x1b[ password=hunter2secret".to_string(), "hunter2"),
-            ("\u{9b} password=hunter2secret".to_string(), "hunter2"),
-            ("\u{9b} password=hunter2secret".to_string(), "assword"),
+            (format!("x\x1b {tok}"), "[REDACTED]"),
+            (format!("x\x1b({tok}"), "[REDACTED]"),
+            (format!("x \x1b({akia}"), "x [REDACTED]"),
+            (format!("x \x1b[{akia}"), "x [REDACTED]"),
+            (format!("x\x1b[{tok}"), "[REDACTED]"),
+            ("\x1b[31;password=hunter2secret".to_string(), "[REDACTED]"),
+            ("\x1b[ password=hunter2secret".to_string(), "[REDACTED]"),
+            ("\u{9b} password=hunter2secret".to_string(), "[REDACTED]"),
         ];
-        for (input, secret) in cases {
-            let out = red(&input);
-            assert!(!out.contains(secret), "{input:?} -> {out:?}");
-            assert!(out.contains("[REDACTED]"), "{input:?} -> {out:?}");
+        for (input, expected) in cases {
+            assert_eq!(red(&input), expected, "{input:?}");
         }
-        assert_eq!(
-            red("x\x1b ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
-            "[REDACTED]"
-        );
     }
 
     #[test]
@@ -582,6 +599,51 @@ mod tests {
             let reference = ReferenceTrait::redact_text(&*REFERENCE, &text);
             let out = red(&text);
             for secret in snip.secrets.iter().filter(|s| !reference.contains(s.as_str())) {
+                prop_assert!(!out.contains(secret.as_str()), "{secret:?} in {out:?} (input {text:?})");
+            }
+        }
+
+        /// Escapes inserted at arbitrary char positions (also inside a secret)
+        /// never leave a literally present secret the reference masks.
+        #[test]
+        fn escapes_at_random_positions_never_leak(
+            snip in secret_snippet(),
+            inserts in proptest::collection::vec((any::<usize>(), any_escape()), 1..6),
+        ) {
+            let mut chars: Vec<char> = snip.text.chars().collect();
+            // Allowed positions: inside a secret or right after it, or at the
+            // end (an escape right before it is a known gap, see the PR). An escape swallows a following character, so one in the
+            // context (`account`, `-b`) would destroy the context, not leak.
+            let mut allowed = vec![false; chars.len() + 1];
+            for secret in &snip.secrets {
+                let mut from = 0;
+                while let Some(off) = snip.text[from..].find(secret.as_str()) {
+                    let start = snip.text[..from + off].chars().count();
+                    for slot in &mut allowed[start + 1..=start + secret.chars().count()] {
+                        *slot = true;
+                    }
+                    from += off + secret.len();
+                }
+            }
+            allowed[chars.len()] = true;
+            let slots: Vec<usize> = (0..=chars.len()).filter(|i| allowed[*i]).collect();
+            // Insert from the back so earlier positions stay valid.
+            let mut picks: Vec<(usize, &str)> =
+                inserts.iter().map(|(p, e)| (slots[p % slots.len()], *e)).collect();
+            picks.sort_by_key(|x| std::cmp::Reverse(x.0));
+            for (at, esc) in picks {
+                for (i, ch) in esc.chars().enumerate() {
+                    chars.insert(at + i, ch);
+                }
+            }
+            let text: String = chars.into_iter().collect();
+            let reference = ReferenceTrait::redact_text(&*REFERENCE, &snip.text);
+            let out = red(&text);
+            for secret in snip
+                .secrets
+                .iter()
+                .filter(|s| text.contains(s.as_str()) && !reference.contains(s.as_str()))
+            {
                 prop_assert!(!out.contains(secret.as_str()), "{secret:?} in {out:?} (input {text:?})");
             }
         }
