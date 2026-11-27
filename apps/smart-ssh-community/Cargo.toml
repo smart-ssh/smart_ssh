@@ -63,7 +63,10 @@ tauri-plugin-android-host = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 # Issue #1607: `tests/opener_dotfile_scope.rs` builds a `tauri::fs::Scope`
-# against the mock runtime.
+# against the mock runtime. Unix only: the literal-leading-dot rule exists only
+# there, and a Windows test binary linking tauri's webview needs an app
+# manifest and aborts at load (0xc0000139).
+[target.'cfg(unix)'.dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
 
 [lints]
