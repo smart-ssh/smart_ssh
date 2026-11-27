@@ -3,6 +3,10 @@
 //!
 //! A failure means a redactor change redacts less than before. Fix the
 //! redactor, not the reference.
+//!
+//! The generated documents contain no terminal escape sequences (issue
+//! #1605), so the current redactor's escape stripping changes nothing here and
+//! both sides see the same text; the reference is intentionally unchanged.
 
 use proptest::prelude::*;
 
